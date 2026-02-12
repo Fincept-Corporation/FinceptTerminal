@@ -82,6 +82,22 @@ def _make_request(endpoint: str, params: Optional[Dict[str, Any]] = None, format
         response = requests.get(url, params=params, timeout=TIMEOUT)
         response.raise_for_status()
 
+        # Check if response is an XML error (ADB returns XML for errors even when JSON requested)
+        if response.text.strip().startswith('<?xml') or response.text.strip().startswith('<'):
+            # Extract error message from XML
+            import re
+            error_match = re.search(r'<com:Text>([^<]+)</com:Text>', response.text)
+            error_msg = error_match.group(1) if error_match else "Unknown API error"
+            return {
+                "data": [],
+                "metadata": {
+                    "source": "Asian Development Bank (ADB) - Key Indicators Database",
+                    "endpoint": endpoint,
+                    "parameters": params
+                },
+                "error": f"ADB API Error: {error_msg}"
+            }
+
         # Process response based on format
         if format_type == "sdmx-json":
             data = response.json()
@@ -171,7 +187,7 @@ def _parse_sdmx_data(sdmx_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         sdmx_data: Raw SDMX-JSON response
 
     Returns:
-        List of parsed data points
+        List of parsed data points with date and value
     """
     if not sdmx_data or 'data' not in sdmx_data:
         return []
@@ -179,41 +195,60 @@ def _parse_sdmx_data(sdmx_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     parsed_data = []
 
     try:
-        # Extract data from SDMX structure
-        data_sets = sdmx_data.get('data', {}).get('dataSets', [])
-        series = sdmx_data.get('data', {}).get('series', {})
-        structure = sdmx_data.get('data', {}).get('structure', {})
+        data_section = sdmx_data.get('data', {})
+        datasets = data_section.get('datasets', [])
+        structures = data_section.get('structures', [])
 
-        if not data_sets or not series:
+        if not datasets:
             return parsed_data
 
-        # Get series information
-        for series_key, series_data in series.items():
-            observations = series_data.get('observations', {})
-            series_attributes = series_data.get('seriesAttributes', {})
+        # Extract time periods from structure
+        time_periods = []
+        if structures:
+            struct = structures[0]
+            obs_dims = struct.get('dimensions', {}).get('observation', [])
+            for od in obs_dims:
+                if od.get('id') == 'TIME_PERIOD':
+                    time_periods = [v.get('value') or v.get('id') for v in od.get('values', [])]
+                    break
 
-            # Extract dimensions from series key
-            dimensions = series_key.split(':') if ':' in series_key else [series_key]
+        # Parse datasets
+        for dataset in datasets:
+            series_dict = dataset.get('series', {})
 
-            # Parse each observation
-            for obs_key, obs_value in observations.items():
-                if obs_value and len(obs_value) > 0:
-                    time_period = obs_key  # Usually in format like "2020"
-                    value = obs_value[0] if isinstance(obs_value, list) else obs_value
+            for series_key, series_data in series_dict.items():
+                observations = series_data.get('observations', {})
 
-                    data_point = {
-                        "series_key": series_key,
-                        "time_period": time_period,
-                        "value": value,
-                        "dimensions": dimensions,
-                        "attributes": series_attributes
-                    }
-                    parsed_data.append(data_point)
+                # Parse each observation
+                for obs_idx, obs_value in observations.items():
+                    if obs_value and len(obs_value) > 0:
+                        # Get time period from index
+                        idx = int(obs_idx)
+                        time_period = time_periods[idx] if idx < len(time_periods) else str(2000 + idx)
+
+                        # First element is the value
+                        value = obs_value[0] if isinstance(obs_value, list) else obs_value
+
+                        # Convert value to float
+                        try:
+                            numeric_value = float(value) if value is not None else None
+                        except (ValueError, TypeError):
+                            numeric_value = None
+
+                        if numeric_value is not None:
+                            data_point = {
+                                "time_period": time_period,
+                                "date": time_period,
+                                "value": numeric_value,
+                                "series_key": series_key
+                            }
+                            parsed_data.append(data_point)
+
+        # Sort by time period
+        parsed_data.sort(key=lambda x: x.get('time_period', ''))
 
     except Exception as e:
-        print(f"Error parsing SDMX data: {e}")
-        # Return empty list if parsing fails
-        pass
+        print(f"Error parsing SDMX data: {e}", file=sys.stderr)
 
     return parsed_data
 
@@ -267,17 +302,21 @@ def get_dataflow_details(dataflow_code: str) -> Dict[str, Any]:
 
     return result
 
-def get_population_data(economy: str = "all", start_period: Optional[str] = None, end_period: Optional[str] = None) -> Dict[str, Any]:
+def get_population_data(economy: str = "all", indicator: Optional[str] = None, start_period: Optional[str] = None, end_period: Optional[str] = None) -> Dict[str, Any]:
     """
     Get population data for specified economy/economies
     Args:
         economy: Economy code (e.g., 'PHI', 'SGP', or 'all')
+        indicator: Optional indicator code (e.g., 'LP_PE_NUM_MOP' for total population)
         start_period: Start year (e.g., '2010')
         end_period: End year (e.g., '2020')
     Returns: {"data": [...], "metadata": {...}, "error": None/error_msg}
     """
-    # Build SDMX key: A.PPL_POP.FREQUENCY.all.ECONOMY
-    sdmx_key = f"A..{economy}"
+    # Build SDMX key: A.INDICATOR.ECONOMY or A..ECONOMY for all indicators
+    if indicator:
+        sdmx_key = f"A.{indicator}.{economy}"
+    else:
+        sdmx_key = f"A..{economy}"
     endpoint = f"data/ADB,PPL_POP/{sdmx_key}"
 
     params = {}
@@ -296,10 +335,11 @@ def get_population_data(economy: str = "all", start_period: Optional[str] = None
     if result['metadata']:
         result['metadata']['economy'] = economy
         result['metadata']['economy_name'] = ECONOMIES.get(economy, 'Unknown')
+        result['metadata']['indicator'] = indicator
         result['metadata']['start_period'] = start_period
         result['metadata']['end_period'] = end_period
         result['metadata']['dataflow'] = 'PPL_POP'
-        result['metadata']['description'] = f"Population data for {ECONOMIES.get(economy, economy)}"
+        result['metadata']['description'] = f"Population data for {ECONOMIES.get(economy, economy)}" + (f" - {indicator}" if indicator else "")
         result['metadata']['total_records'] = len(result['data']) if isinstance(result['data'], list) else 0
 
     return result
@@ -564,7 +604,7 @@ def main(args=None):
                 "get_dataflows",
                 "get_codelists",
                 "get_dataflow_details <dataflow_code>",
-                "get_population <economy_code> [start_year] [end_year]",
+                "get_population <economy_code> [indicator] [start_year] [end_year]",
                 "get_gdp <economy_code> [indicator] [start_year] [end_year]",
                 "get_multiple_indicators <economy_code> <indicator1,indicator2,...> [start_year] [end_year]",
                 "get_multiple_economies <indicator> <economy1,economy2,...> [start_year] [end_year]",
@@ -574,7 +614,7 @@ def main(args=None):
             ],
             "examples": [
                 "python adb_data.py get_dataflows",
-                "python adb_data.py get_population PHI 2010 2020",
+                "python adb_data.py get_population PHI LP_PE_NUM_MOP 2010 2020",
                 "python adb_data.py get_gdp SGP NGDP_XDC 2015 2020",
                 "python adb_data.py get_multiple_indicators PHI NGDP_XDC,NGDPVA_XDC 2010 2020",
                 "python adb_data.py get_multiple_economies NGDP_XDC PHI,SGP,JPN 2015 2020",
@@ -601,9 +641,10 @@ def main(args=None):
 
         elif command == "get_population":
             economy = args[1] if len(args) + 1 > 2 else "all"
-            start_period = args[2] if len(args) + 1 > 3 else None
-            end_period = args[3] if len(args) + 1 > 4 else None
-            result = get_population_data(economy, start_period, end_period)
+            indicator = args[2] if len(args) + 1 > 3 else None
+            start_period = args[3] if len(args) + 1 > 4 else None
+            end_period = args[4] if len(args) + 1 > 5 else None
+            result = get_population_data(economy, indicator, start_period, end_period)
 
         elif command == "get_gdp":
             economy = args[1] if len(args) + 1 > 2 else None

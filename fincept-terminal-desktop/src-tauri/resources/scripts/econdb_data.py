@@ -176,7 +176,8 @@ async def get_economic_indicators(
 
         # Build ticker symbol (e.g., GDPUS, CPICN)
         ticker = f"{indicator}{country_code}"
-        if transform and transform.lower() in TRANSFORMATIONS:
+        # Only add transform suffix if it's not "level" (level means no transformation)
+        if transform and transform.lower() in TRANSFORMATIONS and transform.lower() != "level":
             ticker += f"~{transform.upper()}"
 
         # Build URL
@@ -470,9 +471,10 @@ def main():
 
             symbol = sys.argv[2]
             country = sys.argv[3]
-            start_date = sys.argv[4] if len(sys.argv) > 4 else None
-            end_date = sys.argv[5] if len(sys.argv) > 5 else None
-            transform = sys.argv[6] if len(sys.argv) > 6 else None
+            # Convert empty strings to None
+            start_date = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            end_date = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5].strip() else None
+            transform = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6].strip() else None
 
             result = asyncio.run(get_economic_indicators(symbol, country, start_date, end_date, transform))
             print(json.dumps(result, indent=2))

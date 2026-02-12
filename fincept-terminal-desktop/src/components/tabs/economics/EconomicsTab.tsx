@@ -1,676 +1,497 @@
-import { useTerminalTheme } from '@/contexts/ThemeContext';
-import React, { useState, useCallback } from 'react';
-import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
-import { RefreshCw, Download, Globe, TrendingUp, BarChart3, PieChart } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
-import bisDataService from '@/services/data-sources/bisDataService';
-import { TabFooter } from '@/components/common/TabFooter';
-import { useTranslation } from 'react-i18next';
+// EconomicsTab - Main component for economic data visualization
+// Refactored to use modular components, hooks, and constants
 
-interface Indicator {
-  code: string;
-  name: string;
-  description: string;
-}
+import React, { useRef, useState } from 'react';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import {
+  RefreshCw,
+  Download,
+  Globe,
+  AlertCircle,
+  Database,
+  Image,
+  CheckCircle,
+  FolderOpen,
+  Key,
+} from 'lucide-react';
 
-interface Country {
-  code: string;
-  name: string;
-}
+// Local imports
+import { FINCEPT, DATA_SOURCES, getIndicatorsForSource } from './constants';
+import type { DataSource } from './types';
+import { useEconomicsData, useExport } from './hooks';
+import {
+  EconomicsChart,
+  StatsBar,
+  DataTable,
+  ApiKeyPanel,
+  CountrySelector,
+  IndicatorSelector,
+  DateRangePicker,
+} from './components';
 
-interface Observation {
-  date: string;
-  value: number;
-}
-
-interface IndicatorData {
-  indicator: string;
-  country: string;
-  transform: string;
-  observations: Observation[];
-  observation_count?: number;
-  metadata: any;
-}
-
-interface ProfileData {
-  country: string;
-  indicators: Record<string, { date: string; value: number }>;
-}
+// Utility function for formatting values
+const formatValue = (val: number): string => {
+  if (Math.abs(val) >= 1e12) return `${(val / 1e12).toFixed(2)}T`;
+  if (Math.abs(val) >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
+  if (Math.abs(val) >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
+  if (Math.abs(val) >= 1e3) return `${(val / 1e3).toFixed(2)}K`;
+  if (Math.abs(val) < 0.01 && val !== 0) return val.toExponential(2);
+  return val.toFixed(2);
+};
 
 export default function EconomicsTab() {
-  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
-  const { t } = useTranslation('economics');
-  const [dataSource, setDataSource] = useState<'econdb' | 'bis'>('econdb');
-  const [view, setView] = useState<'indicator' | 'profile' | 'countries'>('indicator');
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('Ready');
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [searchCountry, setSearchCountry] = useState('');
+  const [searchIndicator, setSearchIndicator] = useState('');
 
-  // Indicator view state
-  const [selectedIndicator, setSelectedIndicator] = useState('GDP');
-  const [selectedCountry, setSelectedCountry] = useState('US');
-  const [selectedTransform, setSelectedTransform] = useState('level');
-  const [indicatorData, setIndicatorData] = useState<IndicatorData | null>(null);
+  // Use custom hooks
+  const {
+    dataSource,
+    setDataSource,
+    selectedCountry,
+    setSelectedCountry,
+    selectedIndicator,
+    setSelectedIndicator,
+    data,
+    loading,
+    error,
+    fetchData,
+    stats,
+    wtoApiKey,
+    setWtoApiKey,
+    eiaApiKey,
+    setEiaApiKey,
+    showApiKeyInput,
+    setShowApiKeyInput,
+    apiKeySaving,
+    saveApiKey,
+    // Date range
+    dateRangePreset,
+    setDateRangePreset,
+    startDate,
+    endDate,
+    setStartDate,
+    setEndDate,
+  } = useEconomicsData();
 
-  // BIS-specific state
-  const [bisDataType, setBisDataType] = useState<
-    'policy_rates' | 'effective_exchange' | 'property_prices' | 'total_credit' |
-    'consumer_prices' | 'credit_gap' | 'debt_service' | 'cb_assets'
-  >('policy_rates');
-  const [bisStartDate, setBisStartDate] = useState(() => {
-    const date = new Date();
-    date.setFullYear(date.getFullYear() - 1); // 1 year ago
-    return date.toISOString().split('T')[0];
-  });
-  const [bisEndDate, setBisEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const currentSourceConfig = DATA_SOURCES.find(s => s.id === dataSource)!;
+  const indicators = getIndicatorsForSource(dataSource);
 
-  // Workspace tab state
-  const getWorkspaceState = useCallback(() => ({
-    dataSource, view, selectedIndicator, selectedCountry, selectedTransform, bisDataType,
-  }), [dataSource, view, selectedIndicator, selectedCountry, selectedTransform, bisDataType]);
+  const {
+    saveNotification,
+    setSaveNotification,
+    exportCSV,
+    exportImage,
+  } = useExport(data, currentSourceConfig, chartContainerRef);
 
-  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
-    if (state.dataSource === "econdb" || state.dataSource === "bis") setDataSource(state.dataSource);
-    if (state.view === "indicator" || state.view === "profile" || state.view === "countries") setView(state.view);
-    if (typeof state.selectedIndicator === "string") setSelectedIndicator(state.selectedIndicator);
-    if (typeof state.selectedCountry === "string") setSelectedCountry(state.selectedCountry);
-    if (typeof state.selectedTransform === "string") setSelectedTransform(state.selectedTransform);
-    if (typeof state.bisDataType === "string") setBisDataType(state.bisDataType as any);
-  }, []);
-
-  useWorkspaceTabState("economics", getWorkspaceState, setWorkspaceState);
-
-  // BIS available countries (only major economies with data)
-  const bisCountries = [
-    { code: 'US', name: 'United States' },
-    { code: 'CN', name: 'China' },
-    { code: 'JP', name: 'Japan' },
-    { code: 'GB', name: 'United Kingdom' },
-    { code: 'IN', name: 'India' },
-    { code: 'BR', name: 'Brazil' },
-    { code: 'CA', name: 'Canada' },
-    { code: 'KR', name: 'South Korea' },
-    { code: 'RU', name: 'Russia' },
-    { code: 'AU', name: 'Australia' },
-    { code: 'MX', name: 'Mexico' },
-    { code: 'ID', name: 'Indonesia' },
-    { code: 'SA', name: 'Saudi Arabia' },
-    { code: 'TR', name: 'Turkey' },
-    { code: 'CH', name: 'Switzerland' },
-    { code: 'ZA', name: 'South Africa' },
-    { code: 'AR', name: 'Argentina' },
-    { code: 'SE', name: 'Sweden' },
-    { code: 'NO', name: 'Norway' },
-    { code: 'PL', name: 'Poland' },
-    { code: 'TH', name: 'Thailand' },
-    { code: 'MY', name: 'Malaysia' },
-    { code: 'SG', name: 'Singapore' },
-    { code: 'HK', name: 'Hong Kong' },
-    { code: 'NZ', name: 'New Zealand' },
-  ];
-
-  // Profile view state
-  const [profileCountry, setProfileCountry] = useState('US');
-  const [profileData, setProfileData] = useState<ProfileData | null>(null);
-
-  // Available options
-  const indicators: Indicator[] = [
-    { code: 'GDP', name: 'GDP (Nominal)', description: 'Gross Domestic Product' },
-    { code: 'RGDP', name: 'GDP (Real)', description: 'Real GDP' },
-    { code: 'CPI', name: 'CPI', description: 'Consumer Price Index' },
-    { code: 'PPI', name: 'PPI', description: 'Producer Price Index' },
-    { code: 'CORE', name: 'Core CPI', description: 'Core Inflation' },
-    { code: 'URATE', name: 'Unemployment', description: 'Unemployment Rate' },
-    { code: 'EMP', name: 'Employment', description: 'Employment Level' },
-    { code: 'IP', name: 'Industrial Production', description: 'Industrial Production Index' },
-    { code: 'RETA', name: 'Retail Sales', description: 'Retail Sales' },
-    { code: 'CONF', name: 'Consumer Confidence', description: 'Consumer Confidence Index' },
-    { code: 'POLIR', name: 'Policy Rate', description: 'Policy Interest Rate' },
-    { code: 'Y10YD', name: '10Y Yield', description: '10-Year Government Bond Yield' },
-    { code: 'M3YD', name: '3M Yield', description: '3-Month Treasury Yield' },
-    { code: 'GDEBT', name: 'Government Debt', description: 'Government Debt' },
-    { code: 'CA', name: 'Current Account', description: 'Current Account Balance' },
-    { code: 'TB', name: 'Trade Balance', description: 'Trade Balance' },
-    { code: 'POP', name: 'Population', description: 'Total Population' },
-  ];
-
-  const countries: Country[] = [
-    { code: 'US', name: 'United States' },
-    { code: 'CN', name: 'China' },
-    { code: 'JP', name: 'Japan' },
-    { code: 'DE', name: 'Germany' },
-    { code: 'UK', name: 'United Kingdom' },
-    { code: 'FR', name: 'France' },
-    { code: 'IN', name: 'India' },
-    { code: 'IT', name: 'Italy' },
-    { code: 'BR', name: 'Brazil' },
-    { code: 'CA', name: 'Canada' },
-    { code: 'KR', name: 'South Korea' },
-    { code: 'RU', name: 'Russia' },
-    { code: 'AU', name: 'Australia' },
-    { code: 'ES', name: 'Spain' },
-    { code: 'MX', name: 'Mexico' },
-    { code: 'ID', name: 'Indonesia' },
-    { code: 'NL', name: 'Netherlands' },
-    { code: 'SA', name: 'Saudi Arabia' },
-    { code: 'TR', name: 'Turkey' },
-    { code: 'CH', name: 'Switzerland' },
-  ];
-
-  const transforms = [
-    { code: 'level', name: 'Level', description: 'No transformation' },
-    { code: 'toya', name: 'YoY %', description: 'Year-over-year change' },
-    { code: 'tpop', name: 'QoQ %', description: 'Quarter-over-quarter change' },
-    { code: 'tusd', name: 'USD', description: 'Convert to USD' },
-    { code: 'tpgp', name: '% of GDP', description: 'As percent of GDP' },
-  ];
-
-  const fetchIndicator = async () => {
-    setLoading(true);
-    setStatus(`Fetching data for ${selectedCountry}...`);
-
-    try {
-      if (dataSource === 'bis') {
-        // Fetch from BIS based on selected data type with date range
-        let result;
-
-        // Map data type to BIS dataset and frequency
-        const bisDatasetMap: Record<string, { flow: string; freq: string }> = {
-          policy_rates: { flow: 'WS_CBPOL', freq: 'D' },
-          effective_exchange: { flow: 'WS_EER', freq: 'M' },
-          property_prices: { flow: 'WS_SPP', freq: 'Q' },
-          total_credit: { flow: 'WS_TC', freq: 'Q' },
-          consumer_prices: { flow: 'WS_LONG_CPI', freq: 'M' },
-          credit_gap: { flow: 'WS_CREDIT_GAP', freq: 'Q' },
-          debt_service: { flow: 'WS_DSR', freq: 'Q' },
-          cb_assets: { flow: 'WS_CBTA', freq: 'M' },
-        };
-
-        const dataset = bisDatasetMap[bisDataType];
-
-        if (bisDataType === 'policy_rates') {
-          result = await bisDataService.getCentralBankPolicyRates([selectedCountry], bisStartDate, bisEndDate);
-        } else if (bisDataType === 'effective_exchange') {
-          result = await bisDataService.getEffectiveExchangeRates([selectedCountry], bisStartDate, bisEndDate);
-        } else {
-          // Use generic get_data for other datasets
-          result = await bisDataService.getData(
-            dataset.flow,
-            `${dataset.freq}.${selectedCountry}`,
-            bisStartDate,
-            bisEndDate
-          );
-        }
-
-        if (result.success && result.data) {
-          // Transform BIS SDMX-JSON data to match indicatorData format
-          let observations: Observation[] = [];
-
-          try {
-            // BIS returns SDMX-JSON format: data.data.dataSets[0].series["0:0"].observations
-            const dataSets = result.data.data?.dataSets || [];
-            if (dataSets.length > 0) {
-              const dataSet = dataSets[0];
-              const series = dataSet.series;
-              const seriesKey = Object.keys(series || {})[0];
-
-              if (seriesKey && series[seriesKey]) {
-                const obsData = series[seriesKey].observations;
-
-                // Try to get TIME_PERIOD dimension values from structure
-                const timeDimension = result.data.structure?.dimensions?.observation?.find(
-                  (d: any) => d.id === 'TIME_PERIOD'
-                );
-                const timeValues = timeDimension?.values || [];
-
-                // Convert SDMX observations to our format
-                observations = Object.entries(obsData || {}).map(([index, value]: [string, any]) => {
-                  const timeIndex = parseInt(index);
-                  let dateValue: string;
-
-                  // Use TIME_PERIOD values if available, otherwise generate from reportingBegin
-                  if (timeValues.length > timeIndex) {
-                    dateValue = timeValues[timeIndex].id || timeValues[timeIndex].name;
-                  } else {
-                    // Fallback: generate date from reportingBegin
-                    const reportingBegin = dataSet.reportingBegin || '2020-01-01';
-                    const startDate = new Date(reportingBegin.split('T')[0]);
-                    const obsDate = new Date(startDate);
-                    obsDate.setDate(obsDate.getDate() + timeIndex);
-                    dateValue = obsDate.toISOString().split('T')[0];
-                  }
-
-                  const numValue = Array.isArray(value) ? parseFloat(value[0]) : parseFloat(value);
-
-                  return {
-                    date: dateValue,
-                    value: isNaN(numValue) ? 0 : numValue
-                  };
-                });
-              }
-            }
-          } catch (parseError) {
-            console.error('Error parsing BIS data:', parseError);
-            setStatus(`Error parsing BIS data: ${parseError}`);
-            return;
-          }
-
-          if (observations.length === 0) {
-            setStatus('No observations found in BIS data');
-            return;
-          }
-
-          setIndicatorData({
-            indicator: bisDataType,
-            country: selectedCountry,
-            transform: 'level',
-            observations: observations,
-            observation_count: observations.length,
-            metadata: result.data
-          });
-          setStatus(`Loaded ${observations.length} observations from BIS`);
-        } else {
-          setStatus(`Error: ${result.error || 'Failed to fetch BIS data'}`);
-        }
-      } else {
-        // Fetch from EconDB
-        const result = await invoke('execute_python_script', {
-          scriptName: 'econdb_data.py',
-          args: ['indicator', selectedIndicator, selectedCountry, '', '', selectedTransform]
-        }) as string;
-
-        const data = JSON.parse(result);
-
-        if (data.error) {
-          setStatus(`Error: ${data.error}`);
-        } else {
-          setIndicatorData(data);
-          setStatus(`Loaded ${data.observation_count} observations from EconDB`);
-        }
-      }
-    } catch (error) {
-      setStatus(`Error: ${error}`);
-    } finally {
-      setLoading(false);
+  // Get API key portal URL based on source
+  const getApiKeyPortalUrl = (source: DataSource): string => {
+    switch (source) {
+      case 'wto': return 'https://apiportal.wto.org/';
+      case 'eia': return 'https://www.eia.gov/opendata/register.php';
+      default: return '';
     }
   };
 
-  const fetchProfile = async () => {
-    setLoading(true);
-    setStatus(`Fetching profile for ${profileCountry}...`);
-
-    try {
-      const result = await invoke('execute_python_script', {
-        scriptName: 'econdb_data.py',
-        args: ['profile', profileCountry, 'true']
-      }) as string;
-
-      const data = JSON.parse(result);
-
-      if (data.error) {
-        setStatus(`Error: ${data.error}`);
-      } else {
-        setProfileData(data);
-        setStatus(`Profile loaded for ${profileCountry}`);
-      }
-    } catch (error) {
-      setStatus(`Error: ${error}`);
-    } finally {
-      setLoading(false);
+  // Get current API key value
+  const getCurrentApiKey = (): string => {
+    switch (dataSource) {
+      case 'wto': return wtoApiKey;
+      case 'eia': return eiaApiKey;
+      default: return '';
     }
   };
 
-  const exportData = () => {
-    if (!indicatorData) return;
-
-    const csv = [
-      'Date,Value',
-      ...indicatorData.observations.map(obs => `${obs.date},${obs.value}`)
-    ].join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `econdb_${selectedIndicator}_${selectedCountry}_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setStatus('Data exported');
+  // Set current API key
+  const setCurrentApiKey = (value: string) => {
+    switch (dataSource) {
+      case 'wto': setWtoApiKey(value); break;
+      case 'eia': setEiaApiKey(value); break;
+    }
   };
 
-  const renderChart = (data: Observation[]) => {
-    if (data.length === 0) return null;
-
-    const w = 800;
-    const h = 300;
-    const ml = 70;
-    const mr = 20;
-    const mt = 20;
-    const mb = 50;
-    const pw = w - ml - mr;
-    const ph = h - mt - mb;
-
-    const values = data.map(d => d.value);
-    const yMin = Math.min(...values) * 0.95;
-    const yMax = Math.max(...values) * 1.05;
-    const yRange = yMax - yMin;
-
-    return (
-      <svg width={w} height={h} style={{ backgroundColor: 'colors.panel', width: '100%', height: 'auto' }}>
-        {/* Axes */}
-        <line x1={ml} y1={mt} x2={ml} y2={h - mb} stroke="#404040" strokeWidth="1" />
-        <line x1={ml} y1={h - mb} x2={w - mr} y2={h - mb} stroke="#404040" strokeWidth="1" />
-
-        {/* Y-axis grid and labels */}
-        {[0, 1, 2, 3, 4].map(i => {
-          const val = yMin + (yRange * i) / 4;
-          const y = h - mb - (ph * i) / 4;
-          return (
-            <g key={i}>
-              <line x1={ml} y1={y} x2={w - mr} y2={y} stroke="#1a1a1a" strokeDasharray="2,2" />
-              <text x={ml - 10} y={y + 4} textAnchor="end" fill="#737373" fontSize="10" fontFamily="monospace">
-                {val.toFixed(2)}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Line and points */}
-        {data.map((obs, idx) => {
-          const x = ml + (pw * idx) / (data.length - 1 || 1);
-          const y = h - mb - (ph * ((obs.value - yMin) / yRange));
-
-          return (
-            <g key={idx}>
-              <circle cx={x} cy={y} r="3" fill="#ea580c" />
-              {idx < data.length - 1 && (
-                <line
-                  x1={x}
-                  y1={y}
-                  x2={ml + (pw * (idx + 1)) / (data.length - 1 || 1)}
-                  y2={h - mb - (ph * ((data[idx + 1].value - yMin) / yRange))}
-                  stroke="#ea580c"
-                  strokeWidth="2"
-                />
-              )}
-            </g>
-          );
-        })}
-
-        {/* X-axis labels */}
-        {data.map((obs, idx) => {
-          if (idx % Math.max(1, Math.floor(data.length / 8)) !== 0 && idx !== data.length - 1) return null;
-          const x = ml + (pw * idx) / (data.length - 1 || 1);
-          return (
-            <text key={idx} x={x} y={h - mb + 20} textAnchor="middle" fill="#737373" fontSize="9" fontFamily="monospace">
-              {obs.date.substring(0, 10)}
-            </text>
-          );
-        })}
-      </svg>
-    );
+  // Save current API key
+  const handleSaveApiKey = () => {
+    const keyName = currentSourceConfig.apiKeyName;
+    if (keyName) {
+      saveApiKey(keyName, getCurrentApiKey());
+    }
   };
 
   return (
-    <div style={{ width: '100%', height: '100%', backgroundColor: 'colors.background', color: '#d4d4d4', fontFamily: 'Consolas, monospace', fontSize: '11px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        backgroundColor: FINCEPT.DARK_BG,
+        color: FINCEPT.WHITE,
+        fontFamily: '"IBM Plex Mono", monospace',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
       {/* Header */}
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #404040', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-        <span style={{ color: '#ea580c', fontWeight: 'bold' }}>{t('title')} - {dataSource.toUpperCase()}</span>
-        <span style={{ color: '#10b981', fontSize: '10px' }}>● {status}</span>
-        <div style={{ flex: 1 }}></div>
+      <div
+        style={{
+          padding: '10px 16px',
+          backgroundColor: FINCEPT.HEADER_BG,
+          borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Globe size={18} color={FINCEPT.ORANGE} />
+          <span style={{ fontSize: '14px', fontWeight: 700, color: FINCEPT.WHITE }}>ECONOMIC DATA</span>
 
-        {/* Data Source Toggle */}
-        <div style={{ display: 'flex', gap: '4px', marginRight: '12px' }}>
-          <button
-            onClick={() => setDataSource('econdb')}
+          {/* Data source dropdown selector */}
+          <select
+            value={dataSource}
+            onChange={(e) => setDataSource(e.target.value as DataSource)}
             style={{
-              padding: '4px 8px',
-              backgroundColor: dataSource === 'econdb' ? '#3b82f6' : '#2d2d2d',
-              color: colors.text,
-              border: 'none',
+              padding: '6px 12px',
+              backgroundColor: FINCEPT.DARK_BG,
+              color: currentSourceConfig.color,
+              border: `1px solid ${currentSourceConfig.color}`,
+              borderRadius: '2px',
+              fontSize: '11px',
+              fontWeight: 600,
               cursor: 'pointer',
-              fontSize: '9px',
-              borderRadius: '2px'
+              outline: 'none',
+              minWidth: '220px',
             }}
           >
-            EconDB
-          </button>
-          <button
-            onClick={() => setDataSource('bis')}
-            style={{
-              padding: '4px 8px',
-              backgroundColor: dataSource === 'bis' ? '#3b82f6' : '#2d2d2d',
-              color: colors.text,
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '9px',
-              borderRadius: '2px'
-            }}
-          >
-            BIS
-          </button>
+            {DATA_SOURCES.map((source) => (
+              <option key={source.id} value={source.id} style={{ backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.WHITE }}>
+                {source.fullName} {source.requiresApiKey ? '(API Key)' : ''}
+              </option>
+            ))}
+          </select>
+
+          {/* API Key indicator for sources that require it */}
+          {currentSourceConfig.requiresApiKey && (
+            <button
+              onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+              title={getCurrentApiKey() ? 'API Key configured - Click to edit' : `Configure ${currentSourceConfig.name} API Key`}
+              style={{
+                padding: '4px 8px',
+                backgroundColor: getCurrentApiKey() ? `${FINCEPT.GREEN}20` : `${FINCEPT.RED}20`,
+                color: getCurrentApiKey() ? FINCEPT.GREEN : FINCEPT.RED,
+                border: `1px solid ${getCurrentApiKey() ? FINCEPT.GREEN : FINCEPT.RED}`,
+                borderRadius: '2px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <Key size={12} />
+              {getCurrentApiKey() ? 'API KEY SET' : 'SET API KEY'}
+            </button>
+          )}
+
+          {/* Date Range Picker */}
+          <DateRangePicker
+            dateRangePreset={dateRangePreset}
+            setDateRangePreset={setDateRangePreset}
+            startDate={startDate}
+            endDate={endDate}
+            setStartDate={setStartDate}
+            setEndDate={setEndDate}
+            sourceColor={currentSourceConfig.color}
+          />
         </div>
 
-        <button onClick={() => setView('indicator')} style={{ padding: '4px 10px', backgroundColor: view === 'indicator' ? '#ea580c' : '#2d2d2d', color: 'colors.text', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
-          <BarChart3 size={10} style={{ display: 'inline', marginRight: '4px' }} />{t('header.indicators')}
-        </button>
-        <button onClick={() => setView('profile')} style={{ padding: '4px 10px', backgroundColor: view === 'profile' ? '#ea580c' : '#2d2d2d', color: 'colors.text', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
-          <PieChart size={10} style={{ display: 'inline', marginRight: '4px' }} />{t('header.overview')}
-        </button>
-        <button onClick={() => setView('countries')} style={{ padding: '4px 10px', backgroundColor: view === 'countries' ? '#ea580c' : '#2d2d2d', color: 'colors.text', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
-          <Globe size={10} style={{ display: 'inline', marginRight: '4px' }} />{t('header.countries')}
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: FINCEPT.ORANGE,
+              color: FINCEPT.DARK_BG,
+              border: 'none',
+              borderRadius: '2px',
+              fontSize: '10px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            FETCH DATA
+          </button>
+          <button
+            onClick={exportCSV}
+            disabled={!data || data.data.length === 0}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: 'transparent',
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              borderRadius: '2px',
+              fontSize: '10px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: data && data.data.length > 0 ? 1 : 0.5,
+            }}
+          >
+            <Download size={12} />
+            CSV
+          </button>
+          <button
+            onClick={exportImage}
+            disabled={!data || data.data.length === 0}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: 'transparent',
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              borderRadius: '2px',
+              fontSize: '10px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: data && data.data.length > 0 ? 1 : 0.5,
+            }}
+          >
+            <Image size={12} />
+            IMAGE
+          </button>
+        </div>
       </div>
 
-      {/* Main Content */}
+      {/* Save Success Notification */}
+      {saveNotification?.show && (
+        <div
+          style={{
+            padding: '12px 16px',
+            backgroundColor: `${FINCEPT.GREEN}15`,
+            borderBottom: `1px solid ${FINCEPT.GREEN}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <CheckCircle size={18} color={FINCEPT.GREEN} />
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>
+                {saveNotification.type === 'image' ? 'Image' : 'CSV'} saved successfully!
+              </div>
+              <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginTop: '2px' }}>
+                {saveNotification.path}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={async () => {
+                try {
+                  await revealItemInDir(saveNotification.path);
+                } catch (err) {
+                  console.error('Failed to open path:', err);
+                }
+              }}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: FINCEPT.GREEN,
+                color: FINCEPT.DARK_BG,
+                border: 'none',
+                borderRadius: '2px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <FolderOpen size={12} />
+              OPEN FILE
+            </button>
+            <button
+              onClick={() => setSaveNotification(null)}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: 'transparent',
+                color: FINCEPT.GRAY,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderRadius: '2px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              DISMISS
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* API Key Configuration Panel */}
+      {showApiKeyInput && currentSourceConfig.requiresApiKey && (
+        <ApiKeyPanel
+          apiKey={getCurrentApiKey()}
+          setApiKey={setCurrentApiKey}
+          onSave={handleSaveApiKey}
+          onClose={() => setShowApiKeyInput(false)}
+          saving={apiKeySaving}
+          sourceName={currentSourceConfig.name}
+          sourceColor={currentSourceConfig.color}
+          portalUrl={getApiKeyPortalUrl(dataSource)}
+        />
+      )}
+
+      {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left Panel - Controls */}
-        <div style={{ width: '300px', borderRight: '1px solid #404040', display: 'flex', flexDirection: 'column', backgroundColor: 'colors.panel', overflowY: 'auto' }}>
-          {view === 'indicator' && (
-            <div style={{ padding: '12px' }}>
-              {dataSource === 'bis' ? (
-                <>
-                  {/* BIS-specific controls */}
-                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>BIS DATA TYPE</div>
-                  <select value={bisDataType} onChange={(e) => setBisDataType(e.target.value as any)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}>
-                    <optgroup label="Interest Rates & FX">
-                      <option value="policy_rates">Central Bank Policy Rates (Daily)</option>
-                      <option value="effective_exchange">Effective Exchange Rates (Monthly)</option>
-                    </optgroup>
-                    <optgroup label="Property & Credit">
-                      <option value="property_prices">Property Prices (Quarterly)</option>
-                      <option value="total_credit">Total Credit (Quarterly)</option>
-                      <option value="credit_gap">Credit-to-GDP Gaps (Quarterly)</option>
-                      <option value="debt_service">Debt Service Ratios (Quarterly)</option>
-                    </optgroup>
-                    <optgroup label="Other Indicators">
-                      <option value="consumer_prices">Consumer Prices (Monthly)</option>
-                      <option value="cb_assets">Central Bank Assets (Monthly)</option>
-                    </optgroup>
-                  </select>
+        {/* Left Panel - Selectors */}
+        <div
+          style={{
+            width: '280px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            borderRight: `1px solid ${FINCEPT.BORDER}`,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Country selector */}
+          <CountrySelector
+            selectedCountry={selectedCountry}
+            setSelectedCountry={setSelectedCountry}
+            searchCountry={searchCountry}
+            setSearchCountry={setSearchCountry}
+          />
 
-                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>COUNTRY (G20 + Major Economies)</div>
-                  <select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}>
-                    {bisCountries.map(c => (
-                      <option key={c.code} value={c.code}>{c.name}</option>
-                    ))}
-                  </select>
-
-                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>START DATE</div>
-                  <input
-                    type="date"
-                    value={bisStartDate}
-                    onChange={(e) => setBisStartDate(e.target.value)}
-                    style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}
-                  />
-
-                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>END DATE</div>
-                  <input
-                    type="date"
-                    value={bisEndDate}
-                    onChange={(e) => setBisEndDate(e.target.value)}
-                    style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}
-                  />
-
-                  <div style={{ padding: '8px', backgroundColor: '#1a1a1a', border: '1px solid #404040', fontSize: '9px', marginBottom: '12px' }}>
-                    <div style={{ color: '#3b82f6', marginBottom: '4px' }}>ℹ️ BIS Data Info</div>
-                    <div style={{ color: '#737373', lineHeight: '1.4' }}>
-                      Limit date range to avoid slow loading. Recommended: 1-2 years max.
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* EconDB controls */}
-                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>INDICATOR</div>
-                  <select value={selectedIndicator} onChange={(e) => setSelectedIndicator(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}>
-                    {indicators.map(ind => (
-                      <option key={ind.code} value={ind.code}>{ind.name}</option>
-                    ))}
-                  </select>
-
-                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>COUNTRY</div>
-                  <select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}>
-                    {countries.map(c => (
-                      <option key={c.code} value={c.code}>{c.name}</option>
-                    ))}
-                  </select>
-
-                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>TRANSFORM</div>
-                  <select value={selectedTransform} onChange={(e) => setSelectedTransform(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '16px', fontSize: '10px' }}>
-                    {transforms.map(t => (
-                      <option key={t.code} value={t.code}>{t.name}</option>
-                    ))}
-                  </select>
-                </>
-              )}
-
-              <button onClick={fetchIndicator} disabled={loading} style={{ width: '100%', padding: '8px', backgroundColor: '#ea580c', color: 'colors.text', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '10px', marginBottom: '8px' }}>
-                {loading ? 'Loading...' : 'FETCH DATA'}
-              </button>
-
-              <button onClick={exportData} disabled={!indicatorData} style={{ width: '100%', padding: '8px', backgroundColor: '#2d2d2d', color: '#d4d4d4', border: '1px solid #404040', cursor: !indicatorData ? 'not-allowed' : 'pointer', fontSize: '10px' }}>
-                <Download size={10} style={{ display: 'inline', marginRight: '4px' }} />EXPORT CSV
-              </button>
-
-              {indicatorData && (
-                <div style={{ marginTop: '16px', padding: '8px', backgroundColor: '#1a1a1a', border: '1px solid #404040', fontSize: '9px' }}>
-                  <div style={{ color: '#fbbf24', marginBottom: '4px' }}>METADATA</div>
-                  <div style={{ color: '#737373' }}>Country: {indicatorData.country}</div>
-                  <div style={{ color: '#737373' }}>Indicator: {indicatorData.indicator}</div>
-                  <div style={{ color: '#737373' }}>Transform: {indicatorData.transform}</div>
-                  <div style={{ color: '#737373' }}>Points: {indicatorData.observation_count}</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {view === 'profile' && (
-            <div style={{ padding: '12px' }}>
-              <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>SELECT COUNTRY</div>
-              <select value={profileCountry} onChange={(e) => setProfileCountry(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '16px', fontSize: '10px' }}>
-                {countries.map(c => (
-                  <option key={c.code} value={c.code}>{c.name}</option>
-                ))}
-              </select>
-
-              <button onClick={fetchProfile} disabled={loading} style={{ width: '100%', padding: '8px', backgroundColor: '#ea580c', color: 'colors.text', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '10px' }}>
-                {loading ? 'Loading...' : 'LOAD PROFILE'}
-              </button>
-            </div>
-          )}
-
-          {view === 'countries' && (
-            <div style={{ padding: '12px' }}>
-              <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>AVAILABLE COUNTRIES ({countries.length})</div>
-              {countries.map(c => (
-                <div key={c.code} style={{ padding: '6px 8px', backgroundColor: '#1a1a1a', border: '1px solid #404040', marginBottom: '4px', fontSize: '10px' }}>
-                  <span style={{ color: '#fbbf24' }}>{c.code}</span> - {c.name}
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Indicator selector */}
+          <IndicatorSelector
+            indicators={indicators}
+            selectedIndicator={selectedIndicator}
+            setSelectedIndicator={setSelectedIndicator}
+            searchIndicator={searchIndicator}
+            setSearchIndicator={setSearchIndicator}
+            sourceName={currentSourceConfig.name}
+            sourceColor={currentSourceConfig.color}
+          />
         </div>
 
-        {/* Right Panel - Data Display */}
+        {/* Right Panel - Chart and Data */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-            {view === 'indicator' && indicatorData && (
-              <>
-                <div style={{ marginBottom: '16px' }}>
-                  <div style={{ color: '#ea580c', fontSize: '12px', marginBottom: '8px' }}>
-                    {indicatorData.metadata.description || indicatorData.indicator}
-                  </div>
-                  <div style={{ color: '#737373', fontSize: '10px' }}>
-                    {indicatorData.country} • {indicatorData.observation_count} observations
-                  </div>
-                </div>
+          {/* Stats bar */}
+          {stats && (
+            <StatsBar
+              stats={stats}
+              sourceColor={currentSourceConfig.color}
+              formatValue={formatValue}
+            />
+          )}
 
-                {renderChart(indicatorData.observations)}
-
-                <div style={{ marginTop: '24px' }}>
-                  <div style={{ color: '#ea580c', fontSize: '11px', marginBottom: '8px' }}>DATA TABLE</div>
-                  <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #404040', backgroundColor: 'colors.panel' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
-                      <thead style={{ position: 'sticky', top: 0, backgroundColor: '#1a1a1a' }}>
-                        <tr>
-                          <th style={{ padding: '8px', textAlign: 'left', color: '#ea580c', borderBottom: '2px solid #404040' }}>Date</th>
-                          <th style={{ padding: '8px', textAlign: 'right', color: '#ea580c', borderBottom: '2px solid #404040' }}>Value</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {indicatorData.observations.slice().reverse().map((obs, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid #1a1a1a' }}>
-                            <td style={{ padding: '6px 8px', color: '#d4d4d4' }}>{obs.date}</td>
-                            <td style={{ padding: '6px 8px', textAlign: 'right', color: '#a3a3a3' }}>{obs.value.toFixed(4)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {view === 'profile' && profileData && (
-              <div>
-                <div style={{ color: '#ea580c', fontSize: '12px', marginBottom: '16px' }}>
-                  ECONOMIC PROFILE - {profileData.country}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
-                  {Object.entries(profileData.indicators).map(([name, data]) => (
-                    <div key={name} style={{ padding: '12px', backgroundColor: 'colors.panel', border: '1px solid #404040' }}>
-                      <div style={{ color: '#fbbf24', fontSize: '10px', marginBottom: '8px' }}>{name}</div>
-                      <div style={{ color: 'colors.text', fontSize: '20px', fontWeight: 'bold', marginBottom: '4px' }}>
-                        {typeof data.value === 'number' ? data.value.toFixed(4) : data.value}
-                      </div>
-                      <div style={{ color: '#737373', fontSize: '9px' }}>{data.date}</div>
-                    </div>
-                  ))}
-                </div>
+          {/* Chart area */}
+          <div style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
+            {loading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <RefreshCw size={32} className="animate-spin" style={{ color: currentSourceConfig.color, marginBottom: '16px' }} />
+                <div style={{ fontSize: '12px', color: FINCEPT.WHITE }}>Loading data from {currentSourceConfig.fullName}...</div>
               </div>
-            )}
+            ) : error ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <AlertCircle size={32} style={{ color: FINCEPT.RED, marginBottom: '16px' }} />
+                <div style={{ fontSize: '12px', color: FINCEPT.RED, marginBottom: '8px' }}>Error loading data</div>
+                <div style={{ fontSize: '10px', color: FINCEPT.GRAY, textAlign: 'center', maxWidth: '400px' }}>{error}</div>
+                <button
+                  onClick={fetchData}
+                  style={{
+                    marginTop: '16px',
+                    padding: '8px 16px',
+                    backgroundColor: FINCEPT.ORANGE,
+                    color: FINCEPT.DARK_BG,
+                    border: 'none',
+                    borderRadius: '2px',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  TRY AGAIN
+                </button>
+              </div>
+            ) : data && data.data.length > 0 ? (
+              <>
+                {/* Title */}
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: FINCEPT.WHITE }}>{data.metadata?.indicator_name || data.indicator}</div>
+                  <div style={{ fontSize: '11px', color: FINCEPT.GRAY }}>
+                    {data.metadata?.country_name || data.country} • Source: <span style={{ color: currentSourceConfig.color }}>{currentSourceConfig.fullName}</span>
+                  </div>
+                </div>
 
-            {!indicatorData && !profileData && view !== 'countries' && (
-              <div style={{ textAlign: 'center', color: '#737373', paddingTop: '80px' }}>
-                <TrendingUp size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
-                <div>Select parameters and fetch data to begin</div>
+                {/* Chart */}
+                <div ref={chartContainerRef} style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', padding: '16px', marginBottom: '16px' }}>
+                  <EconomicsChart
+                    data={data.data}
+                    sourceColor={currentSourceConfig.color}
+                    formatValue={formatValue}
+                  />
+                </div>
+
+                {/* Data table */}
+                <DataTable
+                  data={data.data}
+                  sourceColor={currentSourceConfig.color}
+                  formatValue={formatValue}
+                />
+              </>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <Database size={48} style={{ color: FINCEPT.MUTED, marginBottom: '16px', opacity: 0.5 }} />
+                <div style={{ fontSize: '12px', color: FINCEPT.WHITE, marginBottom: '8px' }}>Select data and click FETCH DATA</div>
+                <div style={{ fontSize: '10px', color: FINCEPT.GRAY, textAlign: 'center', maxWidth: '300px' }}>
+                  Choose a country and indicator from the left panel, then click the FETCH DATA button to load economic data from {currentSourceConfig.fullName}.
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <TabFooter
-        tabName="ECONOMIC INDICATORS"
-        leftInfo={[
-          { label: `Source: ${dataSource.toUpperCase()}`, color: colors.textMuted },
-          { label: `View: ${view.toUpperCase()}`, color: colors.textMuted },
-          ...(indicatorData ? [{ label: `Data points: ${indicatorData.observations.length}`, color: colors.textMuted }] : [])
-        ]}
-        statusInfo={status}
-        backgroundColor={colors.panel}
-        borderColor={colors.textMuted}
-      />
+      {/* Status bar */}
+      <div
+        style={{
+          padding: '6px 16px',
+          backgroundColor: FINCEPT.HEADER_BG,
+          borderTop: `1px solid ${FINCEPT.BORDER}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '9px',
+        }}
+      >
+        <div style={{ display: 'flex', gap: '16px', color: FINCEPT.WHITE, flexWrap: 'wrap' }}>
+          <span title={currentSourceConfig.fullName}><span style={{ color: FINCEPT.GRAY }}>SOURCE:</span> <span style={{ color: currentSourceConfig.color }}>{currentSourceConfig.name}</span></span>
+          <span><span style={{ color: FINCEPT.GRAY }}>COUNTRY:</span> {selectedCountry}</span>
+          <span><span style={{ color: FINCEPT.GRAY }}>INDICATOR:</span> {selectedIndicator}</span>
+          {data && <span><span style={{ color: FINCEPT.GRAY }}>POINTS:</span> {data.data.length}</span>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: loading ? FINCEPT.YELLOW : error ? FINCEPT.RED : FINCEPT.GREEN }} />
+          <span style={{ color: loading ? FINCEPT.YELLOW : error ? FINCEPT.RED : FINCEPT.GREEN }}>
+            {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

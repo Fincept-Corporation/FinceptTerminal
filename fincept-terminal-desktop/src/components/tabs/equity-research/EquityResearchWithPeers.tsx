@@ -6,7 +6,8 @@ import { PeerComparisonPanel } from './components/PeerComparisonPanel';
 import { SectorHeatmap, SectorPerformance } from './components/SectorHeatmap';
 import { PercentileRankChart, PercentileTable } from './components/PercentileRankChart';
 import { StockScreenerPanel } from './components/StockScreenerPanel';
-import { usePeerComparison } from '../../../hooks/usePeerComparison';
+import { usePeerComparison } from '@/hooks/usePeerComparison';
+import type { PeerCompany, PercentileRanking } from '@/types/peer';
 
 interface EquityResearchWithPeersProps {
   symbol: string;
@@ -45,8 +46,8 @@ export const EquityResearchWithPeers: React.FC<EquityResearchWithPeersProps> = (
   ];
 
   // Extract percentile rankings from comparison data
-  const percentileRankings = comparisonData?.percentileRanks
-    ? Object.values(comparisonData.percentileRanks)
+  const percentileRankings: PercentileRanking[] = comparisonData?.percentileRanks
+    ? (Object.values(comparisonData.percentileRanks) as PercentileRanking[])
     : [];
 
   return (
@@ -157,7 +158,7 @@ export const EquityResearchWithPeers: React.FC<EquityResearchWithPeersProps> = (
                         <span className="text-white font-semibold">
                           {selectedPeers.length > 0
                             ? `${(
-                                (selectedPeers.reduce((sum, p) => sum + p.similarityScore, 0) /
+                                (selectedPeers.reduce((sum: number, p: PeerCompany) => sum + p.similarityScore, 0) /
                                   selectedPeers.length) *
                                 100
                               ).toFixed(1)}%`

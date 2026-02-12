@@ -1,9 +1,11 @@
 /**
  * useCrossExchange - Cross-exchange portfolio aggregation and arbitrage detection
+ * Uses real data from connected brokers and paper trading
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { useBrokerContext } from '../../../../contexts/BrokerContext';
+import { getMarketDataService } from '../../../../services/trading/UnifiedMarketDataService';
 
 // Types
 export interface CrossExchangeBalance {
@@ -51,9 +53,10 @@ export interface CrossExchangePosition {
 
 /**
  * Hook for cross-exchange portfolio aggregation
+ * Fetches real balances from paper trading and connected exchanges
  */
 export function useCrossExchangePortfolio() {
-  const { availableBrokers } = useBrokerContext();
+  const { activeAdapter, tradingMode, paperTradingApi, paperPortfolio, activeBroker } = useBrokerContext();
   const [balances, setBalances] = useState<CrossExchangeBalance[]>([]);
   const [aggregatedBalances, setAggregatedBalances] = useState<AggregatedBalance[]>([]);
   const [totalPortfolioValue, setTotalPortfolioValue] = useState<number>(0);
@@ -67,20 +70,81 @@ export function useCrossExchangePortfolio() {
     try {
       const allBalances: CrossExchangeBalance[] = [];
 
-      // Mock data for demonstration (in production, fetch from all connected exchanges)
-      const mockBalances: CrossExchangeBalance[] = [
-        // Kraken
-        { exchange: 'kraken', currency: 'BTC', total: 0.5, free: 0.3, used: 0.2, usdValue: 21625 },
-        { exchange: 'kraken', currency: 'ETH', total: 10, free: 8, used: 2, usdValue: 23456 },
-        { exchange: 'kraken', currency: 'USDC', total: 5000, free: 4500, used: 500, usdValue: 5000 },
+      // Fetch from paper trading if in paper mode
+      if (tradingMode === 'paper' && paperPortfolio && paperTradingApi) {
+        try {
+          const portfolio = await paperTradingApi.getPortfolio(paperPortfolio.id);
+          const positions = await paperTradingApi.getPositions(paperPortfolio.id);
 
-        // HyperLiquid
-        { exchange: 'hyperliquid', currency: 'BTC', total: 0.3, free: 0.3, used: 0, usdValue: 12975 },
-        { exchange: 'hyperliquid', currency: 'ETH', total: 5, free: 3, used: 2, usdValue: 11728 },
-        { exchange: 'hyperliquid', currency: 'USDC', total: 10000, free: 8000, used: 2000, usdValue: 10000 },
-      ];
+          // Calculate total unrealized P&L
+          let totalUnrealizedPnl = 0;
+          for (const pos of positions) {
+            totalUnrealizedPnl += pos.unrealized_pnl || 0;
+          }
 
-      allBalances.push(...mockBalances);
+          // For derivatives/margin trading:
+          // - Balance = Available cash (what you can use for new trades)
+          // - Equity = Balance + Unrealized P&L (total account value)
+          const equity = portfolio.balance + totalUnrealizedPnl;
+
+          // Show equity as the total portfolio value
+          allBalances.push({
+            exchange: 'paper',
+            currency: 'USD',
+            total: equity,
+            free: portfolio.balance,
+            used: totalUnrealizedPnl,
+            usdValue: equity,
+          });
+        } catch (err) {
+          console.warn('[useCrossExchangePortfolio] Paper trading fetch error:', err);
+        }
+      }
+
+      // Fetch from real adapter if connected
+      if (activeAdapter && activeAdapter.isConnected() && tradingMode === 'live') {
+        try {
+          const balance = await activeAdapter.fetchBalance();
+
+          if (balance) {
+            // Process free balances
+            const freeBalances = balance.free || {};
+            const usedBalances = balance.used || {};
+            const totalBalances = balance.total || {};
+
+            for (const [currency, amount] of Object.entries(totalBalances)) {
+              const total = typeof amount === 'number' ? amount : 0;
+              if (total <= 0) continue;
+
+              const free = (freeBalances as any)[currency] || 0;
+              const used = (usedBalances as any)[currency] || 0;
+
+              // Get USD value - for stablecoins use 1:1, for others try to get price
+              let usdValue = total;
+              if (!['USD', 'USDT', 'USDC', 'DAI', 'BUSD'].includes(currency)) {
+                const marketData = getMarketDataService();
+                const priceData = marketData.getCurrentPrice(`${currency}/USD`, activeBroker || undefined) ||
+                                  marketData.getCurrentPrice(`${currency}/USDT`, activeBroker || undefined);
+                if (priceData) {
+                  usdValue = total * priceData.last;
+                }
+              }
+
+              allBalances.push({
+                exchange: activeBroker || 'unknown',
+                currency,
+                total,
+                free,
+                used,
+                usdValue,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[useCrossExchangePortfolio] Live adapter fetch error:', err);
+        }
+      }
+
       setBalances(allBalances);
 
       // Aggregate by currency
@@ -113,17 +177,20 @@ export function useCrossExchangePortfolio() {
       const totalValue = aggregatedArray.reduce((sum, bal) => sum + bal.totalUsdValue, 0);
       setTotalPortfolioValue(totalValue);
 
+      if (allBalances.length === 0) {
+        setError('No balances found. Connect an exchange or start paper trading.');
+      }
+
     } catch (err: any) {
       setError(err?.message || 'Failed to fetch cross-exchange balances');
-      console.error('Cross-exchange balance error:', err);
+      console.error('[useCrossExchangePortfolio] Error:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [availableBrokers]);
+  }, [activeAdapter, tradingMode, paperTradingApi, paperPortfolio, activeBroker]);
 
   useEffect(() => {
     fetchCrossExchangeBalances();
-    // Auto-refresh every 30 seconds
     const interval = setInterval(fetchCrossExchangeBalances, 30000);
     return () => clearInterval(interval);
   }, [fetchCrossExchangeBalances]);
@@ -140,56 +207,77 @@ export function useCrossExchangePortfolio() {
 
 /**
  * Hook for arbitrage opportunity detection
+ * Compares prices across multiple providers using UnifiedMarketDataService
  */
-export function useArbitrageDetection(symbols: string[] = ['BTC/USDC', 'ETH/USDC']) {
+export function useArbitrageDetection(symbols: string[] = ['BTC/USD', 'ETH/USD', 'SOL/USD']) {
   const { availableBrokers } = useBrokerContext();
   const [opportunities, setOpportunities] = useState<ArbitrageOpportunity[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [lastScanTime, setLastScanTime] = useState<number | null>(null);
 
   const scanArbitrageOpportunities = useCallback(async () => {
+    if (availableBrokers.length < 2) {
+      setOpportunities([]);
+      return;
+    }
+
     setIsScanning(true);
 
     try {
       const foundOpportunities: ArbitrageOpportunity[] = [];
+      const marketData = getMarketDataService();
 
-      // Mock arbitrage opportunities (in production, fetch real prices from all exchanges)
-      const mockOpportunities: ArbitrageOpportunity[] = [
-        {
-          symbol: 'BTC/USDC',
-          buyExchange: 'hyperliquid',
-          sellExchange: 'kraken',
-          buyPrice: 43150.50,
-          sellPrice: 43285.75,
-          spread: 135.25,
-          spreadPercent: 0.31,
-          potentialProfit: 135.25,
-          timestamp: Date.now(),
-        },
-        {
-          symbol: 'ETH/USDC',
-          buyExchange: 'kraken',
-          sellExchange: 'hyperliquid',
-          buyPrice: 2340.25,
-          sellPrice: 2358.50,
-          spread: 18.25,
-          spreadPercent: 0.78,
-          potentialProfit: 18.25,
-          timestamp: Date.now(),
-        },
-      ];
+      for (const symbol of symbols) {
+        const prices: { exchange: string; price: number }[] = [];
 
-      // Filter opportunities with spread > 0.2%
-      const viableOpportunities = mockOpportunities.filter(
-        (opp) => opp.spreadPercent > 0.2
-      );
+        // Get prices from all available providers
+        const allPrices = marketData.getAllPrices(symbol);
 
-      foundOpportunities.push(...viableOpportunities);
+        for (const [provider, priceData] of allPrices) {
+          if (priceData.last > 0) {
+            prices.push({
+              exchange: provider,
+              price: priceData.last,
+            });
+          }
+        }
+
+        // Need at least 2 prices to find arbitrage
+        if (prices.length < 2) continue;
+
+        // Sort by price to find min and max
+        prices.sort((a, b) => a.price - b.price);
+
+        const lowest = prices[0];
+        const highest = prices[prices.length - 1];
+
+        const spread = highest.price - lowest.price;
+        const spreadPercent = (spread / lowest.price) * 100;
+
+        // Only report opportunities with spread > 0.2%
+        if (spreadPercent > 0.2) {
+          foundOpportunities.push({
+            symbol,
+            buyExchange: lowest.exchange,
+            sellExchange: highest.exchange,
+            buyPrice: lowest.price,
+            sellPrice: highest.price,
+            spread,
+            spreadPercent,
+            potentialProfit: spread, // Per unit profit
+            timestamp: Date.now(),
+          });
+        }
+      }
+
+      // Sort by spread percent descending
+      foundOpportunities.sort((a, b) => b.spreadPercent - a.spreadPercent);
+
       setOpportunities(foundOpportunities);
       setLastScanTime(Date.now());
 
     } catch (err) {
-      console.error('Arbitrage scan error:', err);
+      console.error('[useArbitrageDetection] Scan error:', err);
     } finally {
       setIsScanning(false);
     }
@@ -197,7 +285,6 @@ export function useArbitrageDetection(symbols: string[] = ['BTC/USDC', 'ETH/USDC
 
   useEffect(() => {
     scanArbitrageOpportunities();
-    // Auto-scan every 10 seconds
     const interval = setInterval(scanArbitrageOpportunities, 10000);
     return () => clearInterval(interval);
   }, [scanArbitrageOpportunities]);
@@ -212,9 +299,10 @@ export function useArbitrageDetection(symbols: string[] = ['BTC/USDC', 'ETH/USDC
 
 /**
  * Hook for cross-exchange positions aggregation
+ * Fetches real positions from paper trading and connected exchanges
  */
 export function useCrossExchangePositions() {
-  const { availableBrokers } = useBrokerContext();
+  const { activeAdapter, tradingMode, paperTradingApi, paperPortfolio, activeBroker } = useBrokerContext();
   const [positions, setPositions] = useState<CrossExchangePosition[]>([]);
   const [totalUnrealizedPnl, setTotalUnrealizedPnl] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -223,55 +311,72 @@ export function useCrossExchangePositions() {
     setIsLoading(true);
 
     try {
-      // Mock positions (in production, fetch from all connected exchanges)
-      const mockPositions: CrossExchangePosition[] = [
-        {
-          symbol: 'BTC/USDC',
-          exchange: 'kraken',
-          side: 'long',
-          quantity: 0.2,
-          entryPrice: 42500,
-          currentPrice: 43250,
-          unrealizedPnl: 150,
-          pnlPercent: 1.76,
-        },
-        {
-          symbol: 'ETH/USDC',
-          exchange: 'hyperliquid',
-          side: 'long',
-          quantity: 2,
-          entryPrice: 2300,
-          currentPrice: 2345,
-          unrealizedPnl: 90,
-          pnlPercent: 1.96,
-        },
-        {
-          symbol: 'SOL/USDC',
-          exchange: 'kraken',
-          side: 'short',
-          quantity: 10,
-          entryPrice: 105,
-          currentPrice: 98,
-          unrealizedPnl: 70,
-          pnlPercent: 6.67,
-        },
-      ];
+      const allPositions: CrossExchangePosition[] = [];
 
-      setPositions(mockPositions);
+      // Fetch from paper trading
+      if (tradingMode === 'paper' && paperPortfolio && paperTradingApi) {
+        try {
+          const paperPositions = await paperTradingApi.getPositions(paperPortfolio.id);
 
-      const totalPnl = mockPositions.reduce((sum, pos) => sum + pos.unrealizedPnl, 0);
+          for (const pos of paperPositions) {
+            const pnlPercent = pos.entry_price > 0
+              ? ((pos.current_price - pos.entry_price) / pos.entry_price) * 100
+              : 0;
+
+            allPositions.push({
+              symbol: pos.symbol,
+              exchange: 'paper',
+              side: pos.side,
+              quantity: pos.quantity,
+              entryPrice: pos.entry_price,
+              currentPrice: pos.current_price,
+              unrealizedPnl: pos.unrealized_pnl,
+              pnlPercent: pos.side === 'short' ? -pnlPercent : pnlPercent,
+            });
+          }
+        } catch (err) {
+          console.warn('[useCrossExchangePositions] Paper trading fetch error:', err);
+        }
+      }
+
+      // Fetch from real adapter
+      if (activeAdapter && activeAdapter.isConnected() && tradingMode === 'live') {
+        try {
+          if (typeof (activeAdapter as any).fetchPositions === 'function') {
+            const livePositions = await (activeAdapter as any).fetchPositions();
+
+            for (const pos of livePositions || []) {
+              allPositions.push({
+                symbol: pos.symbol,
+                exchange: activeBroker || 'unknown',
+                side: pos.side,
+                quantity: pos.contracts || pos.quantity || 0,
+                entryPrice: pos.entryPrice || pos.entry_price || 0,
+                currentPrice: pos.markPrice || pos.current_price || 0,
+                unrealizedPnl: pos.unrealizedPnl || pos.unrealized_pnl || 0,
+                pnlPercent: pos.percentage || 0,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[useCrossExchangePositions] Live adapter fetch error:', err);
+        }
+      }
+
+      setPositions(allPositions);
+
+      const totalPnl = allPositions.reduce((sum, pos) => sum + pos.unrealizedPnl, 0);
       setTotalUnrealizedPnl(totalPnl);
 
     } catch (err) {
-      console.error('Cross-exchange positions error:', err);
+      console.error('[useCrossExchangePositions] Error:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [availableBrokers]);
+  }, [activeAdapter, tradingMode, paperTradingApi, paperPortfolio, activeBroker]);
 
   useEffect(() => {
     fetchCrossExchangePositions();
-    // Auto-refresh every 5 seconds
     const interval = setInterval(fetchCrossExchangePositions, 5000);
     return () => clearInterval(interval);
   }, [fetchCrossExchangePositions]);

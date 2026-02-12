@@ -25,20 +25,22 @@ export interface UnifiedTrade {
 }
 
 export function useTrades(symbol?: string, limit: number = 50, autoRefresh: boolean = false) {
-  const { activeAdapter, activeBroker } = useBrokerContext();
+  const { activeAdapter, activeBroker, tradingMode, paperAdapter } = useBrokerContext();
   const [trades, setTrades] = useState<UnifiedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [isSupported, setIsSupported] = useState(true);
 
   const fetchTrades = useCallback(async () => {
-    if (!activeAdapter || !activeAdapter.isConnected()) {
-      setTrades([]);
+    // In paper trading mode, we can use the paperAdapter even if activeAdapter check fails
+    const adapter = tradingMode === 'paper' && paperAdapter?.isConnected() ? paperAdapter : activeAdapter;
+
+    if (!adapter || !adapter.isConnected()) {
       return;
     }
 
     // Check if exchange supports fetchMyTrades
-    if (typeof (activeAdapter as any).fetchMyTrades !== 'function') {
+    if (typeof (adapter as any).fetchMyTrades !== 'function') {
       setIsSupported(false);
       setTrades([]);
       return;
@@ -48,7 +50,7 @@ export function useTrades(symbol?: string, limit: number = 50, autoRefresh: bool
     setError(null);
 
     try {
-      const rawTrades = await (activeAdapter as any).fetchMyTrades(symbol, undefined, limit);
+      const rawTrades = await (adapter as any).fetchMyTrades(symbol, undefined, limit);
 
       const normalized: UnifiedTrade[] = (rawTrades || []).map((trade: any) => ({
         id: trade.id,
@@ -84,7 +86,7 @@ export function useTrades(symbol?: string, limit: number = 50, autoRefresh: bool
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter, symbol, limit]);
+  }, [activeAdapter, paperAdapter, tradingMode, symbol, limit]);
 
   // Fetch on mount and when dependencies change
   useEffect(() => {
@@ -110,18 +112,21 @@ export function useTrades(symbol?: string, limit: number = 50, autoRefresh: bool
  * Hook to fetch trades for a specific order
  */
 export function useOrderTrades(orderId: string, symbol: string) {
-  const { activeAdapter } = useBrokerContext();
+  const { activeAdapter, tradingMode, paperAdapter } = useBrokerContext();
   const [trades, setTrades] = useState<UnifiedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchOrderTrades = useCallback(async () => {
-    if (!activeAdapter || !activeAdapter.isConnected() || !orderId || !symbol) {
+    // In paper trading mode, use paperAdapter
+    const adapter = tradingMode === 'paper' && paperAdapter?.isConnected() ? paperAdapter : activeAdapter;
+
+    if (!adapter || !adapter.isConnected() || !orderId || !symbol) {
       setTrades([]);
       return;
     }
 
-    if (typeof (activeAdapter as any).fetchOrderTrades !== 'function') {
+    if (typeof (adapter as any).fetchOrderTrades !== 'function') {
       setTrades([]);
       return;
     }
@@ -130,7 +135,7 @@ export function useOrderTrades(orderId: string, symbol: string) {
     setError(null);
 
     try {
-      const rawTrades = await (activeAdapter as any).fetchOrderTrades(orderId, symbol);
+      const rawTrades = await (adapter as any).fetchOrderTrades(orderId, symbol);
 
       const normalized: UnifiedTrade[] = (rawTrades || []).map((trade: any) => ({
         id: trade.id,
@@ -158,7 +163,7 @@ export function useOrderTrades(orderId: string, symbol: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter, orderId, symbol]);
+  }, [activeAdapter, tradingMode, paperAdapter, orderId, symbol]);
 
   useEffect(() => {
     fetchOrderTrades();

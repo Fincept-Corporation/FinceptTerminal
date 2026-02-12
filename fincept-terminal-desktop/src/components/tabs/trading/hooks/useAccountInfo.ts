@@ -12,14 +12,17 @@ import type { UnifiedBalance, UnifiedAccount, TradingStatistics } from '../types
 // ============================================================================
 
 export function useBalance(autoRefresh: boolean = true, refreshInterval: number = 5000) {
-  const { activeAdapter } = useBrokerContext();
+  const { activeAdapter, tradingMode, paperAdapter } = useBrokerContext();
   const [balances, setBalances] = useState<UnifiedBalance[]>([]);
   const [totalEquity, setTotalEquity] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchBalance = useCallback(async () => {
-    if (!activeAdapter || !activeAdapter.isConnected()) {
+    // In paper trading mode, use paperAdapter
+    const adapter = tradingMode === 'paper' && paperAdapter?.isConnected() ? paperAdapter : activeAdapter;
+
+    if (!adapter || !adapter.isConnected()) {
       setBalances([]);
       setTotalEquity(0);
       return;
@@ -29,7 +32,7 @@ export function useBalance(autoRefresh: boolean = true, refreshInterval: number 
     setError(null);
 
     try {
-      const rawBalance = await activeAdapter.fetchBalance();
+      const rawBalance = await adapter.fetchBalance();
 
       // Normalize balances
       const normalizedBalances: UnifiedBalance[] = Object.entries(rawBalance || {})
@@ -58,7 +61,7 @@ export function useBalance(autoRefresh: boolean = true, refreshInterval: number 
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter]);
+  }, [activeAdapter, tradingMode, paperAdapter]);
 
   useEffect(() => {
     fetchBalance();
@@ -90,13 +93,16 @@ export interface FeeStructure {
 }
 
 export function useFees() {
-  const { activeAdapter, activeBroker } = useBrokerContext();
+  const { activeAdapter, activeBroker, tradingMode, paperAdapter } = useBrokerContext();
   const [fees, setFees] = useState<FeeStructure | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchFees = useCallback(async () => {
-    if (!activeAdapter) {
+    // In paper trading mode, use paperAdapter
+    const adapter = tradingMode === 'paper' && paperAdapter ? paperAdapter : activeAdapter;
+
+    if (!adapter) {
       setFees(null);
       return;
     }
@@ -106,7 +112,7 @@ export function useFees() {
 
     try {
       // Try to fetch trading fees from adapter
-      const tradingFees = (activeAdapter as any).getTradingFees?.() || null;
+      const tradingFees = (adapter as any).getTradingFees?.() || null;
 
       if (tradingFees) {
         setFees({
@@ -133,7 +139,7 @@ export function useFees() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter, activeBroker]);
+  }, [activeAdapter, tradingMode, paperAdapter, activeBroker]);
 
   useEffect(() => {
     fetchFees();
@@ -161,13 +167,16 @@ export interface MarginInfo {
 }
 
 export function useMarginInfo(autoRefresh: boolean = true) {
-  const { activeAdapter } = useBrokerContext();
+  const { activeAdapter, tradingMode, paperAdapter } = useBrokerContext();
   const [marginInfo, setMarginInfo] = useState<MarginInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchMarginInfo = useCallback(async () => {
-    if (!activeAdapter || !activeAdapter.isConnected()) {
+    // In paper trading mode, use paperAdapter
+    const adapter = tradingMode === 'paper' && paperAdapter?.isConnected() ? paperAdapter : activeAdapter;
+
+    if (!adapter || !adapter.isConnected()) {
       setMarginInfo(null);
       return;
     }
@@ -177,7 +186,7 @@ export function useMarginInfo(autoRefresh: boolean = true) {
 
     try {
       // Check if adapter supports margin info
-      const balance = await activeAdapter.fetchBalance();
+      const balance = await adapter.fetchBalance();
 
       // Extract margin info if available
       const info = (balance as any).info;
@@ -209,7 +218,7 @@ export function useMarginInfo(autoRefresh: boolean = true) {
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter]);
+  }, [activeAdapter, tradingMode, paperAdapter]);
 
   useEffect(() => {
     fetchMarginInfo();
@@ -240,7 +249,7 @@ export interface LeverageInfo {
 }
 
 export function useLeverage(symbol?: string) {
-  const { activeAdapter, activeBroker } = useBrokerContext();
+  const { activeAdapter, activeBroker, tradingMode, paperAdapter } = useBrokerContext();
   const [leverageInfo, setLeverageInfo] = useState<LeverageInfo | null>(null);
   const [leverageTiers, setLeverageTiers] = useState<any[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -248,13 +257,16 @@ export function useLeverage(symbol?: string) {
   const [isSupported, setIsSupported] = useState(true);
 
   const fetchLeverage = useCallback(async () => {
-    if (!activeAdapter || !activeAdapter.isConnected() || !symbol) {
+    // In paper trading mode, use paperAdapter
+    const adapter = tradingMode === 'paper' && paperAdapter?.isConnected() ? paperAdapter : activeAdapter;
+
+    if (!adapter || !adapter.isConnected() || !symbol) {
       setLeverageInfo(null);
       return;
     }
 
     // Check if adapter supports fetchLeverage
-    if (typeof (activeAdapter as any).fetchLeverage !== 'function') {
+    if (typeof (adapter as any).fetchLeverage !== 'function') {
       setIsSupported(false);
       setLeverageInfo(null);
       return;
@@ -264,7 +276,7 @@ export function useLeverage(symbol?: string) {
     setError(null);
 
     try {
-      const rawLeverage = await (activeAdapter as any).fetchLeverage(symbol);
+      const rawLeverage = await (adapter as any).fetchLeverage(symbol);
 
       setLeverageInfo({
         symbol,
@@ -285,27 +297,30 @@ export function useLeverage(symbol?: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter, symbol]);
+  }, [activeAdapter, tradingMode, paperAdapter, symbol]);
 
   const fetchTiers = useCallback(async () => {
-    if (!activeAdapter || !activeAdapter.isConnected() || !symbol) {
+    // In paper trading mode, use paperAdapter
+    const adapter = tradingMode === 'paper' && paperAdapter?.isConnected() ? paperAdapter : activeAdapter;
+
+    if (!adapter || !adapter.isConnected() || !symbol) {
       setLeverageTiers(null);
       return;
     }
 
-    if (typeof (activeAdapter as any).fetchLeverageTiers !== 'function') {
+    if (typeof (adapter as any).fetchLeverageTiers !== 'function') {
       setLeverageTiers(null);
       return;
     }
 
     try {
-      const tiers = await (activeAdapter as any).fetchLeverageTiers([symbol]);
+      const tiers = await (adapter as any).fetchLeverageTiers([symbol]);
       setLeverageTiers(tiers?.[symbol] || null);
     } catch (err) {
       console.error('[useLeverage] Failed to fetch leverage tiers:', err);
       setLeverageTiers(null);
     }
-  }, [activeAdapter, symbol]);
+  }, [activeAdapter, tradingMode, paperAdapter, symbol]);
 
   useEffect(() => {
     fetchLeverage();
@@ -347,22 +362,37 @@ export function useTradingStats() {
         const rustStats = await paperTradingApi.getStats(paperPortfolio.id);
         // Get fresh portfolio data for balance info
         const portfolio = await paperTradingApi.getPortfolio(paperPortfolio.id);
+        // Get positions for unrealized P&L
+        const positions = await paperTradingApi.getPositions(paperPortfolio.id);
+        // Get trades for fee calculation
+        const trades = await paperTradingApi.getTrades(paperPortfolio.id, 1000);
 
         const totalPnL = rustStats.total_pnl;
         const currentBalance = portfolio.balance;
         const initialBalance = portfolio.initial_balance;
-        const returnPercent = initialBalance > 0 ? ((currentBalance - initialBalance) / initialBalance) * 100 : 0;
+
+        // Calculate unrealized P&L from open positions
+        const unrealizedPnL = positions.reduce((sum, pos) => sum + (pos.unrealized_pnl || 0), 0);
+
+        // Calculate total fees from trades
+        const totalFees = trades.reduce((sum, trade) => sum + (trade.fee || 0), 0);
+
+        // Calculate equity = balance + unrealized P&L
+        const totalEquity = currentBalance + unrealizedPnL;
+
+        // Calculate return percent based on equity vs initial
+        const returnPercent = initialBalance > 0 ? ((totalEquity - initialBalance) / initialBalance) * 100 : 0;
 
         setStats({
           // Account
           initialBalance,
           currentBalance,
-          totalEquity: currentBalance,
+          totalEquity,
 
           // P&L
-          totalPnL,
-          realizedPnL: totalPnL, // For paper trading, total = realized
-          unrealizedPnL: 0, // Would need to sum position unrealized P&L
+          totalPnL: totalPnL + unrealizedPnL,
+          realizedPnL: totalPnL,
+          unrealizedPnL,
           returnPercent,
 
           // Trading
@@ -376,7 +406,7 @@ export function useTradingStats() {
           largestLoss: rustStats.largest_loss,
 
           // Fees
-          totalFees: 0, // Could accumulate from trades
+          totalFees,
         });
       } else {
         // For live trading, calculate stats from closed orders

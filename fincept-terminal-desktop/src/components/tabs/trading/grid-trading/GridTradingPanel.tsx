@@ -1,12 +1,10 @@
 /**
  * Grid Trading Panel
- *
- * Main component for grid trading that integrates all grid trading sub-components.
- * Can be embedded in TradingTab or used standalone.
+ * Fincept Terminal Style - Inline styles matching the trading UI design
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Grid, Plus, List, BarChart3, Settings, X, ChevronDown, AlertCircle } from 'lucide-react';
+import { Grid, Plus, ChevronLeft, AlertCircle, X, Loader, RefreshCw } from 'lucide-react';
 import { GridConfigPanel } from './GridConfigPanel';
 import { GridStatusPanel } from './GridStatusPanel';
 import { GridVisualization } from './GridVisualization';
@@ -23,24 +21,31 @@ import type {
 import type { IExchangeAdapter } from '../../../../brokers/crypto/types';
 import type { IStockBrokerAdapter } from '../../../../brokers/stocks/types';
 
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+};
+
 interface GridTradingPanelProps {
-  // Current symbol/price context
   symbol: string;
   exchange?: string;
   currentPrice: number;
-
-  // Broker info
   brokerType: 'crypto' | 'stock';
   brokerId: string;
-
-  // Broker adapters - pass one of these
   cryptoAdapter?: IExchangeAdapter;
   stockAdapter?: IStockBrokerAdapter;
-
-  // Layout
   variant?: 'compact' | 'full';
-
-  // Callbacks
   onGridCreated?: (grid: GridState) => void;
   onGridStarted?: (gridId: string) => void;
   onGridStopped?: (gridId: string) => void;
@@ -70,7 +75,6 @@ export function GridTradingPanel({
 
   const service = getGridTradingService();
 
-  // Register adapter on mount
   useEffect(() => {
     let adapter: IGridBrokerAdapter | null = null;
 
@@ -82,8 +86,6 @@ export function GridTradingPanel({
 
     if (adapter) {
       service.registerAdapter(adapter);
-
-      // Fetch available balance
       adapter.getAvailableBalance().then(balance => {
         setAvailableBalance(balance);
       }).catch(console.error);
@@ -99,7 +101,6 @@ export function GridTradingPanel({
     };
   }, [brokerType, cryptoAdapter, stockAdapter, service]);
 
-  // Load grids for this broker
   useEffect(() => {
     const loadGrids = () => {
       const allGrids = service.getGridsForBroker(brokerId);
@@ -107,8 +108,6 @@ export function GridTradingPanel({
     };
 
     loadGrids();
-
-    // Subscribe to updates
     const unsubscribe = service.onGridUpdate((grid) => {
       if (grid.config.brokerId === brokerId) {
         loadGrids();
@@ -118,10 +117,8 @@ export function GridTradingPanel({
     return unsubscribe;
   }, [brokerId, service]);
 
-  // Get selected grid
   const selectedGrid = selectedGridId ? grids.find(g => g.config.id === selectedGridId) : null;
 
-  // Handlers
   const handleCreateGrid = useCallback(async (config: GridConfig) => {
     setIsLoading(true);
     setError(null);
@@ -186,115 +183,212 @@ export function GridTradingPanel({
     }
   }, [service, brokerId, selectedGridId]);
 
-  // Render list view
-  const renderList = () => (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Grid className="w-5 h-5 text-[#FF8800]" />
-          <span className="text-white font-semibold">Grid Bots</span>
-          <span className="text-xs text-[#787878]">({grids.length})</span>
-        </div>
-        <button
-          onClick={() => setView('create')}
-          className="flex items-center gap-1 px-3 py-1.5 bg-[#FF8800] hover:bg-[#FF9900] text-black text-sm font-semibold rounded transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          New Grid
-        </button>
-      </div>
+  const btnStyle: React.CSSProperties = {
+    padding: '6px 12px',
+    border: `1px solid ${FINCEPT.BORDER}`,
+    backgroundColor: 'transparent',
+    color: FINCEPT.GRAY,
+    cursor: 'pointer',
+    fontSize: '10px',
+    fontWeight: 700,
+    fontFamily: '"IBM Plex Mono", monospace',
+    transition: 'all 0.15s',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  };
 
-      {/* Grid list */}
-      {grids.length === 0 ? (
-        <div className="bg-[#1A1A1A] rounded-lg p-8 text-center">
-          <Grid className="w-12 h-12 text-[#4A4A4A] mx-auto mb-3" />
-          <div className="text-white mb-1">No Grid Bots</div>
-          <div className="text-sm text-[#787878] mb-4">
-            Create your first grid trading bot to automate trading
-          </div>
+  const renderList = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px 12px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Grid size={14} color={FINCEPT.ORANGE} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+            GRID BOTS
+          </span>
+          <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>({grids.length})</span>
+        </div>
+        <div style={{ display: 'flex', gap: '6px' }}>
           <button
             onClick={() => setView('create')}
-            className="px-4 py-2 bg-[#FF8800] hover:bg-[#FF9900] text-black font-semibold rounded transition-colors"
+            style={{
+              ...btnStyle,
+              backgroundColor: FINCEPT.GREEN,
+              color: FINCEPT.DARK_BG,
+              borderColor: FINCEPT.GREEN,
+            }}
           >
-            Create Grid Bot
+            <Plus size={12} />
+            NEW GRID
+          </button>
+          <button
+            onClick={() => setGrids(service.getGridsForBroker(brokerId))}
+            style={{ ...btnStyle, padding: '6px 8px' }}
+            title="Refresh"
+          >
+            <RefreshCw size={12} />
           </button>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {grids.map(grid => (
-            <div
-              key={grid.config.id}
-              onClick={() => {
-                setSelectedGridId(grid.config.id);
-                setView('details');
-              }}
-              className="bg-[#1A1A1A] hover:bg-[#2A2A2A] border border-[#2A2A2A] rounded-lg p-3 cursor-pointer transition-colors"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-white font-medium">{grid.config.symbol}</span>
-                  <div
-                    className="px-2 py-0.5 rounded text-xs font-medium"
-                    style={{
-                      backgroundColor: grid.status === 'running' ? '#00D66F20' : '#78787820',
-                      color: grid.status === 'running' ? '#00D66F' : '#787878',
-                    }}
-                  >
-                    {grid.status.toUpperCase()}
-                  </div>
-                </div>
-                <ChevronDown className="w-4 h-4 text-[#787878] -rotate-90" />
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div>
-                  <div className="text-[#787878]">P&L</div>
-                  <div className={grid.totalPnl >= 0 ? 'text-[#00D66F]' : 'text-[#FF3B3B]'}>
-                    {grid.totalPnl >= 0 ? '+' : ''}{grid.totalPnl.toFixed(2)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[#787878]">Trades</div>
-                  <div className="text-white">{grid.totalBuys + grid.totalSells}</div>
-                </div>
-                <div>
-                  <div className="text-[#787878]">Levels</div>
-                  <div className="text-white">{grid.config.gridLevels}</div>
-                </div>
-              </div>
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+        {grids.length === 0 ? (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '40px 20px',
+            textAlign: 'center',
+          }}>
+            <Grid size={40} color={FINCEPT.BORDER} style={{ marginBottom: 12 }} />
+            <div style={{ fontSize: '12px', fontWeight: 600, color: FINCEPT.WHITE, marginBottom: 4 }}>
+              NO GRID BOTS
             </div>
-          ))}
-        </div>
-      )}
+            <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: 16 }}>
+              Create your first grid trading bot to automate trading
+            </div>
+            <button
+              onClick={() => setView('create')}
+              style={{
+                ...btnStyle,
+                backgroundColor: FINCEPT.ORANGE,
+                color: FINCEPT.DARK_BG,
+                borderColor: FINCEPT.ORANGE,
+                padding: '8px 16px',
+              }}
+            >
+              <Grid size={12} />
+              CREATE GRID BOT
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {grids.map(grid => {
+              const statusColor = grid.status === 'running' ? FINCEPT.GREEN :
+                                  grid.status === 'paused' ? FINCEPT.YELLOW :
+                                  grid.status === 'error' ? FINCEPT.RED : FINCEPT.GRAY;
+              return (
+                <div
+                  key={grid.config.id}
+                  onClick={() => {
+                    setSelectedGridId(grid.config.id);
+                    setView('details');
+                  }}
+                  style={{
+                    padding: '12px',
+                    backgroundColor: FINCEPT.HEADER_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: FINCEPT.WHITE }}>
+                        {grid.config.symbol}
+                      </span>
+                      <span style={{
+                        padding: '2px 6px',
+                        backgroundColor: `${statusColor}20`,
+                        color: statusColor,
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                      }}>
+                        {grid.status}
+                      </span>
+                    </div>
+                    <ChevronLeft size={14} color={FINCEPT.GRAY} style={{ transform: 'rotate(180deg)' }} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', fontSize: '10px' }}>
+                    <div>
+                      <div style={{ color: FINCEPT.GRAY, marginBottom: 2 }}>P&L</div>
+                      <div style={{ color: grid.totalPnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED, fontWeight: 600 }}>
+                        {grid.totalPnl >= 0 ? '+' : ''}{grid.totalPnl.toFixed(2)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ color: FINCEPT.GRAY, marginBottom: 2 }}>TRADES</div>
+                      <div style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>
+                        {grid.totalBuys + grid.totalSells}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ color: FINCEPT.GRAY, marginBottom: 2 }}>LEVELS</div>
+                      <div style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>
+                        {grid.config.gridLevels}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 
-  // Render create view
   const renderCreate = () => (
-    <div>
-      <div className="flex items-center gap-2 mb-4">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '8px 12px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+      }}>
         <button
           onClick={() => setView('list')}
-          className="p-1 hover:bg-[#2A2A2A] rounded transition-colors"
+          style={{
+            background: 'none',
+            border: 'none',
+            color: FINCEPT.GRAY,
+            cursor: 'pointer',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+          }}
         >
-          <X className="w-5 h-5 text-[#787878]" />
+          <ChevronLeft size={16} />
         </button>
-        <span className="text-white font-semibold">Create Grid Bot</span>
+        <Grid size={14} color={FINCEPT.ORANGE} />
+        <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+          CREATE GRID BOT
+        </span>
       </div>
-      <GridConfigPanel
-        symbol={symbol}
-        exchange={exchange}
-        currentPrice={currentPrice}
-        brokerType={brokerType}
-        brokerId={brokerId}
-        availableBalance={availableBalance}
-        onCreateGrid={handleCreateGrid}
-        onCancel={() => setView('list')}
-      />
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <GridConfigPanel
+          symbol={symbol}
+          exchange={exchange}
+          currentPrice={currentPrice}
+          brokerType={brokerType}
+          brokerId={brokerId}
+          availableBalance={availableBalance}
+          onCreateGrid={handleCreateGrid}
+          onCancel={() => setView('list')}
+        />
+      </div>
     </div>
   );
 
-  // Render details view
   const renderDetails = () => {
     if (!selectedGrid) {
       setView('list');
@@ -302,30 +396,57 @@ export function GridTradingPanel({
     }
 
     return (
-      <div>
-        <div className="flex items-center gap-2 mb-4">
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.HEADER_BG,
+        }}>
           <button
             onClick={() => {
               setSelectedGridId(null);
               setView('list');
             }}
-            className="p-1 hover:bg-[#2A2A2A] rounded transition-colors"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: FINCEPT.GRAY,
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
           >
-            <X className="w-5 h-5 text-[#787878]" />
+            <ChevronLeft size={16} />
           </button>
-          <span className="text-white font-semibold">Grid Details</span>
+          <Grid size={14} color={FINCEPT.ORANGE} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+            {selectedGrid.config.symbol} GRID
+          </span>
         </div>
-
-        <div className={variant === 'full' ? 'grid grid-cols-2 gap-4' : 'space-y-4'}>
-          <GridStatusPanel
-            grid={selectedGrid}
-            onStart={() => handleStartGrid(selectedGrid.config.id)}
-            onPause={() => handlePauseGrid(selectedGrid.config.id)}
-            onStop={() => handleStopGrid(selectedGrid.config.id)}
-            onDelete={() => handleDeleteGrid(selectedGrid.config.id)}
-          />
-          {variant === 'full' && (
-            <GridVisualization grid={selectedGrid} height={400} />
+        <div style={{ flex: 1, overflow: 'auto', padding: variant === 'full' ? '12px' : '0' }}>
+          {variant === 'full' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <GridStatusPanel
+                grid={selectedGrid}
+                onStart={() => handleStartGrid(selectedGrid.config.id)}
+                onPause={() => handlePauseGrid(selectedGrid.config.id)}
+                onStop={() => handleStopGrid(selectedGrid.config.id)}
+                onDelete={() => handleDeleteGrid(selectedGrid.config.id)}
+              />
+              <GridVisualization grid={selectedGrid} height={400} />
+            </div>
+          ) : (
+            <GridStatusPanel
+              grid={selectedGrid}
+              onStart={() => handleStartGrid(selectedGrid.config.id)}
+              onPause={() => handlePauseGrid(selectedGrid.config.id)}
+              onStop={() => handleStopGrid(selectedGrid.config.id)}
+              onDelete={() => handleDeleteGrid(selectedGrid.config.id)}
+            />
           )}
         </div>
       </div>
@@ -333,31 +454,49 @@ export function GridTradingPanel({
   };
 
   return (
-    <div className="bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg p-4">
-      {/* Error display */}
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      backgroundColor: FINCEPT.PANEL_BG,
+      fontFamily: '"IBM Plex Mono", monospace',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
       {error && (
-        <div className="bg-[#FF3B3B]/10 border border-[#FF3B3B]/30 rounded p-3 mb-4 flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 text-[#FF3B3B] flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <div className="text-sm text-[#FF3B3B]">{error}</div>
-          </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          backgroundColor: `${FINCEPT.RED}15`,
+          borderBottom: `1px solid ${FINCEPT.RED}30`,
+        }}>
+          <AlertCircle size={14} color={FINCEPT.RED} />
+          <span style={{ flex: 1, fontSize: '10px', color: FINCEPT.RED }}>{error}</span>
           <button
             onClick={() => setError(null)}
-            className="text-[#FF3B3B] hover:text-white"
+            style={{ background: 'none', border: 'none', color: FINCEPT.RED, cursor: 'pointer', padding: '2px' }}
           >
-            <X className="w-4 h-4" />
+            <X size={12} />
           </button>
         </div>
       )}
 
-      {/* Loading overlay */}
       {isLoading && (
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
-          <div className="animate-spin w-8 h-8 border-2 border-[#FF8800] border-t-transparent rounded-full" />
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10,
+        }}>
+          <Loader size={24} color={FINCEPT.ORANGE} style={{ animation: 'spin 1s linear infinite' }} />
         </div>
       )}
 
-      {/* Content */}
       {view === 'list' && renderList()}
       {view === 'create' && renderCreate()}
       {view === 'details' && renderDetails()}

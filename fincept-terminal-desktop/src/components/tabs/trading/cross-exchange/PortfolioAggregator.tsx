@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Wallet, TrendingUp, RefreshCw, Loader, PieChart } from 'lucide-react';
+import { Wallet, RefreshCw, Loader, PieChart } from 'lucide-react';
 import { useCrossExchangePortfolio } from '../hooks/useCrossExchange';
 
 // Fincept Professional Color Palette
@@ -152,13 +152,9 @@ export function PortfolioAggregator() {
           <div style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
             ${formatCurrency(totalPortfolioValue)}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: FINCEPT.GREEN, fontSize: '11px' }}>
-            <TrendingUp style={{ width: 14, height: 14 }} />
-            <span>+2.45%</span>
-          </div>
         </div>
         <div style={{ fontSize: '10px', color: FINCEPT.MUTED, marginTop: '6px' }}>
-          ACROSS {aggregatedBalances.length} ASSETS
+          {aggregatedBalances.length > 0 ? `ACROSS ${aggregatedBalances.length} ASSETS` : 'NO ASSETS'}
         </div>
       </div>
 

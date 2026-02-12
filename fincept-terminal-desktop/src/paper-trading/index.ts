@@ -92,6 +92,8 @@ export const placeOrder = (portfolioId: string, symbol: string, side: 'buy' | 's
   invoke<Order>('pt_place_order', { portfolioId, symbol, side, orderType, quantity, price, stopPrice, reduceOnly });
 
 export const cancelOrder = (orderId: string) => invoke<void>('pt_cancel_order', { orderId });
+// Internal alias for use in PaperTradingAdapter to avoid name collision
+const cancelOrderInBackend = cancelOrder;
 export const getOrders = (portfolioId: string, status?: string) => invoke<Order[]>('pt_get_orders', { portfolioId, status });
 export const fillOrder = (orderId: string, fillPrice: number, fillQty?: number) => invoke<Trade>('pt_fill_order', { orderId, fillPrice, fillQty });
 
@@ -230,6 +232,12 @@ export class PaperTradingAdapter {
   private subscribeToSymbol(symbol: string): void {
     if (this.priceUnsubscribers.has(symbol)) return; // Already subscribed
 
+    // First, subscribe via WebSocket to actually receive price updates
+    // This ensures we get real-time data for ALL position symbols, not just the chart symbol
+    this.marketDataService.subscribeViaWebSocket(this.config.provider, symbol).catch((err) => {
+      console.warn(`[PaperTradingAdapter] Failed to subscribe to ${symbol} via WebSocket:`, err);
+    });
+
     const unsubscribe = this.marketDataService.subscribeToPrice(symbol, async (price: PriceData) => {
       // 1. Update position P&L in Rust backend
       try {
@@ -262,6 +270,10 @@ export class PaperTradingAdapter {
         unsubscribe();
         this.priceUnsubscribers.delete(symbol);
         this.trackedSymbols.delete(symbol);
+
+        // Also unsubscribe from WebSocket
+        this.marketDataService.unsubscribeViaWebSocket(this.config.provider, symbol).catch(() => {});
+
         console.log(`[PaperTradingAdapter] Unsubscribed from ${symbol} - no longer needed`);
       }
     }
@@ -303,14 +315,17 @@ export class PaperTradingAdapter {
       }
     }
 
-    // Balance = available cash (after margin reserved for positions)
-    // Equity = Balance + Margin Used + Unrealized P&L = Total account value
-    const equity = portfolio.balance + totalMarginUsed + totalUnrealizedPnl;
+    // Derivatives-style balance calculation:
+    // - Wallet Balance: Cash in account (doesn't change when opening positions)
+    // - Available Balance: Wallet Balance - Margin Used (what can be used for new positions)
+    // - Equity: Wallet Balance + Unrealized P&L (actual account value)
+    const availableBalance = portfolio.balance - totalMarginUsed;
+    const equity = portfolio.balance + totalUnrealizedPnl;
 
     return {
-      free: { USD: portfolio.balance },           // Available margin (cash)
-      used: { USD: totalMarginUsed },             // Margin locked in positions
-      total: { USD: equity },                     // Total equity (balance + margin + unrealized P&L)
+      free: { USD: Math.max(0, availableBalance) },  // Available margin (cash minus locked margin)
+      used: { USD: totalMarginUsed },                // Margin locked in positions
+      total: { USD: equity },                        // Total equity (wallet + unrealized P&L)
     };
   }
 
@@ -319,7 +334,24 @@ export class PaperTradingAdapter {
   }
 
   async fetchOpenOrders(): Promise<any[]> {
-    return getOrders(this.portfolioId, 'pending');
+    const orders = await getOrders(this.portfolioId, 'pending');
+    // Normalize to CCXT-style format expected by UI components
+    return orders.map(order => ({
+      id: order.id,
+      symbol: order.symbol,
+      type: order.order_type,
+      side: order.side,
+      amount: order.quantity,
+      price: order.price,
+      stopPrice: order.stop_price,
+      filled: order.filled_qty,
+      remaining: order.quantity - order.filled_qty,
+      average: order.avg_price,
+      status: order.status,
+      datetime: order.created_at,
+      timestamp: new Date(order.created_at).getTime(),
+      reduceOnly: order.reduce_only,
+    }));
   }
 
   async fetchMyTrades(_symbol?: string, _since?: number, limit?: number): Promise<any[]> {
@@ -416,13 +448,21 @@ export class PaperTradingAdapter {
   }
 
   async cancelOrder(orderId: string, _symbol?: string): Promise<any> {
-    // Remove from matcher
-    this.orderMatcher.removeOrder(orderId);
+    console.log(`[PaperTradingAdapter] Canceling order: ${orderId}`);
 
-    // Cancel in Rust backend
-    await cancelOrder(orderId);
+    try {
+      // Remove from matcher first
+      this.orderMatcher.removeOrder(orderId);
 
-    return { id: orderId, status: 'cancelled' };
+      // Cancel in Rust backend
+      await cancelOrderInBackend(orderId);
+
+      console.log(`[PaperTradingAdapter] Order ${orderId} canceled successfully`);
+      return { id: orderId, status: 'cancelled' };
+    } catch (error) {
+      console.error(`[PaperTradingAdapter] Failed to cancel order ${orderId}:`, error);
+      throw error;
+    }
   }
 
   async fetchOrder(orderId: string, _symbol?: string): Promise<any> {

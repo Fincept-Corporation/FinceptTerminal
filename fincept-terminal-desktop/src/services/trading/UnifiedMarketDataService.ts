@@ -20,6 +20,15 @@ export interface PriceData {
   changePercent?: number;
 }
 
+/**
+ * Normalize a symbol for consistent lookup
+ * Removes slashes, dashes, underscores and converts to uppercase
+ * E.g., "BTC/USD", "BTC-USD", "BTCUSD" all become "BTCUSD"
+ */
+function normalizeSymbol(symbol: string): string {
+  return symbol.replace(/[/\-_]/g, '').toUpperCase();
+}
+
 // Event types emitted by the service
 export interface MarketDataEvents {
   priceUpdate: (data: PriceData & { symbol: string }) => void;
@@ -45,14 +54,18 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
   // Cache: Map<"provider:symbol", PriceData>
   private priceCache: Map<string, PriceData> = new Map();
 
-  // Symbol -> providers that support it
+  // Symbol (normalized) -> providers that support it
   private symbolProviders: Map<string, Set<string>> = new Map();
 
-  // Symbol -> preferred provider
+  // Symbol (normalized) -> preferred provider
   private symbolPreferredProvider: Map<string, string> = new Map();
 
-  // Symbol -> array of callbacks
+  // Symbol (normalized) -> array of callbacks
+  // We use normalized symbols as keys for consistent lookup
   private subscriptions: Map<string, Set<PriceCallback>> = new Map();
+
+  // Map original symbol -> normalized symbol for reverse lookup
+  private symbolNormalizationMap: Map<string, string> = new Map();
 
   // Active WebSocket subscriptions
   private activeWsSubscriptions: Map<string, boolean> = new Map();
@@ -118,21 +131,30 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
       changePercent: ticker.change_percent,
     };
 
-    // Update cache
+    // Normalize symbol for consistent lookup
+    const normalizedSymbol = normalizeSymbol(ticker.symbol);
+
+    // Update cache with both original and normalized keys for flexibility
     const cacheKey = `${ticker.provider}:${ticker.symbol}`;
+    const normalizedCacheKey = `${ticker.provider}:${normalizedSymbol}`;
     this.priceCache.set(cacheKey, price);
+    this.priceCache.set(normalizedCacheKey, price);
 
-    // Track which providers support this symbol
-    if (!this.symbolProviders.has(ticker.symbol)) {
-      this.symbolProviders.set(ticker.symbol, new Set());
+    // Track which providers support this symbol (using normalized key)
+    if (!this.symbolProviders.has(normalizedSymbol)) {
+      this.symbolProviders.set(normalizedSymbol, new Set());
     }
-    this.symbolProviders.get(ticker.symbol)!.add(ticker.provider);
+    this.symbolProviders.get(normalizedSymbol)!.add(ticker.provider);
 
-    // Emit to EventEmitter listeners
+    // Also track original symbol
+    this.symbolNormalizationMap.set(ticker.symbol, normalizedSymbol);
+
+    // Emit to EventEmitter listeners (with original symbol for backward compatibility)
     this.emit('priceUpdate', { ...price, symbol: ticker.symbol });
 
-    // Notify direct subscribers for this symbol
-    const callbacks = this.subscriptions.get(ticker.symbol);
+    // Notify direct subscribers for this symbol (using NORMALIZED key)
+    // This ensures "BTC/USD", "BTC-USD", and "BTCUSD" all match
+    const callbacks = this.subscriptions.get(normalizedSymbol);
     if (callbacks) {
       for (const callback of callbacks) {
         try {
@@ -151,18 +173,23 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
    * @returns Price data or undefined if not available
    */
   getCurrentPrice(symbol: string, preferredProvider?: string): PriceData | undefined {
-    // Try preferred provider first
-    const provider = preferredProvider || this.symbolPreferredProvider.get(symbol);
+    const normalizedSymbol = normalizeSymbol(symbol);
+
+    // Try preferred provider first (using normalized symbol)
+    const provider = preferredProvider || this.symbolPreferredProvider.get(normalizedSymbol);
     if (provider) {
-      const price = this.priceCache.get(`${provider}:${symbol}`);
+      // Try normalized key first, then original
+      const price = this.priceCache.get(`${provider}:${normalizedSymbol}`) ||
+                   this.priceCache.get(`${provider}:${symbol}`);
       if (price) return price;
     }
 
-    // Try any available provider
-    const providers = this.symbolProviders.get(symbol);
+    // Try any available provider (using normalized lookup)
+    const providers = this.symbolProviders.get(normalizedSymbol);
     if (providers) {
       for (const p of providers) {
-        const price = this.priceCache.get(`${p}:${symbol}`);
+        const price = this.priceCache.get(`${p}:${normalizedSymbol}`) ||
+                     this.priceCache.get(`${p}:${symbol}`);
         if (price) return price;
       }
     }
@@ -175,11 +202,13 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
    */
   getAllPrices(symbol: string): Map<string, PriceData> {
     const result = new Map<string, PriceData>();
-    const providers = this.symbolProviders.get(symbol);
+    const normalizedSymbol = normalizeSymbol(symbol);
+    const providers = this.symbolProviders.get(normalizedSymbol);
 
     if (providers) {
       for (const provider of providers) {
-        const price = this.priceCache.get(`${provider}:${symbol}`);
+        const price = this.priceCache.get(`${provider}:${normalizedSymbol}`) ||
+                     this.priceCache.get(`${provider}:${symbol}`);
         if (price) {
           result.set(provider, price);
         }
@@ -193,26 +222,30 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
    * Set preferred provider for a symbol
    */
   setPreferredProvider(symbol: string, provider: string): void {
-    this.symbolPreferredProvider.set(symbol, provider);
+    const normalizedSymbol = normalizeSymbol(symbol);
+    this.symbolPreferredProvider.set(normalizedSymbol, provider);
   }
 
   /**
    * Subscribe to price updates for a symbol
    * Returns an unsubscribe function
+   * Note: Uses normalized symbol internally for consistent matching
    */
   subscribeToPrice(symbol: string, callback: PriceCallback): () => void {
-    if (!this.subscriptions.has(symbol)) {
-      this.subscriptions.set(symbol, new Set());
-    }
-    this.subscriptions.get(symbol)!.add(callback);
+    const normalizedSymbol = normalizeSymbol(symbol);
 
-    // Return unsubscribe function
+    if (!this.subscriptions.has(normalizedSymbol)) {
+      this.subscriptions.set(normalizedSymbol, new Set());
+    }
+    this.subscriptions.get(normalizedSymbol)!.add(callback);
+
+    // Return unsubscribe function (uses normalized symbol)
     return () => {
-      const callbacks = this.subscriptions.get(symbol);
+      const callbacks = this.subscriptions.get(normalizedSymbol);
       if (callbacks) {
         callbacks.delete(callback);
         if (callbacks.size === 0) {
-          this.subscriptions.delete(symbol);
+          this.subscriptions.delete(normalizedSymbol);
         }
       }
     };
@@ -245,13 +278,18 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
    * This actually connects to the provider's WebSocket
    */
   async subscribeViaWebSocket(provider: string, symbol: string): Promise<void> {
-    const key = `${provider}:${symbol}`;
-    if (this.activeWsSubscriptions.has(key)) return;
+    // Use original symbol for WebSocket subscription (provider expects specific format)
+    // But track using normalized key to prevent duplicate subscriptions
+    const normalizedKey = `${provider}:${normalizeSymbol(symbol)}`;
+    if (this.activeWsSubscriptions.has(normalizedKey)) {
+      console.log(`[UnifiedMarketDataService] Already subscribed to ${provider}:${symbol} (normalized: ${normalizedKey})`);
+      return;
+    }
 
     try {
       await websocketBridge.subscribe(provider, symbol, 'ticker');
-      this.activeWsSubscriptions.set(key, true);
-      console.log(`[UnifiedMarketDataService] Subscribed to ${provider}:${symbol}`);
+      this.activeWsSubscriptions.set(normalizedKey, true);
+      console.log(`[UnifiedMarketDataService] Subscribed to ${provider}:${symbol} (normalized: ${normalizedKey})`);
     } catch (error) {
       console.error(`[UnifiedMarketDataService] Failed to subscribe to ${provider}:${symbol}:`, error);
       throw error;
@@ -262,12 +300,12 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
    * Unsubscribe from WebSocket feed for a symbol
    */
   async unsubscribeViaWebSocket(provider: string, symbol: string): Promise<void> {
-    const key = `${provider}:${symbol}`;
-    if (!this.activeWsSubscriptions.has(key)) return;
+    const normalizedKey = `${provider}:${normalizeSymbol(symbol)}`;
+    if (!this.activeWsSubscriptions.has(normalizedKey)) return;
 
     try {
       await websocketBridge.unsubscribe(provider, symbol, 'ticker');
-      this.activeWsSubscriptions.delete(key);
+      this.activeWsSubscriptions.delete(normalizedKey);
       console.log(`[UnifiedMarketDataService] Unsubscribed from ${provider}:${symbol}`);
     } catch (error) {
       console.error(`[UnifiedMarketDataService] Failed to unsubscribe from ${provider}:${symbol}:`, error);
@@ -286,7 +324,7 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
   }
 
   /**
-   * Get all symbols with price data
+   * Get all symbols with price data (returns normalized symbols)
    */
   getAvailableSymbols(): string[] {
     return Array.from(this.symbolProviders.keys());
@@ -296,7 +334,8 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
    * Get all providers for a symbol
    */
   getProvidersForSymbol(symbol: string): string[] {
-    const providers = this.symbolProviders.get(symbol);
+    const normalizedSymbol = normalizeSymbol(symbol);
+    const providers = this.symbolProviders.get(normalizedSymbol);
     return providers ? Array.from(providers) : [];
   }
 
@@ -312,10 +351,20 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
    */
   async destroy(): Promise<void> {
     // Unsubscribe from all WebSocket feeds
+    // Note: Keys are in normalized format (provider:NORMALIZEDSYMBOL)
     for (const key of this.activeWsSubscriptions.keys()) {
-      const [provider, symbol] = key.split(':');
-      await this.unsubscribeViaWebSocket(provider, symbol);
+      const colonIndex = key.indexOf(':');
+      if (colonIndex > 0) {
+        const provider = key.substring(0, colonIndex);
+        const normalizedSymbol = key.substring(colonIndex + 1);
+        try {
+          await websocketBridge.unsubscribe(provider, normalizedSymbol, 'ticker');
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
     }
+    this.activeWsSubscriptions.clear();
 
     // Remove WebSocket listeners
     for (const unlisten of this.wsUnlisteners) {
@@ -328,6 +377,7 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
     this.subscriptions.clear();
     this.symbolProviders.clear();
     this.symbolPreferredProvider.clear();
+    this.symbolNormalizationMap.clear();
     this.initialized = false;
 
     this.removeAllListeners();

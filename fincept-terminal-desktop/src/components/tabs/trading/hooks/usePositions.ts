@@ -10,7 +10,7 @@ import { getMarketDataService } from '../../../../services/trading/UnifiedMarket
 import type { UnifiedPosition } from '../types';
 
 export function usePositions(symbol?: string, autoRefresh: boolean = true, refreshInterval: number = 2000) {
-  const { activeAdapter, activeBroker } = useBrokerContext();
+  const { activeAdapter, activeBroker, tradingMode, paperAdapter } = useBrokerContext();
   const [positions, setPositions] = useState<UnifiedPosition[]>([]);
   // Start with loading false - only set true when actually fetching
   const [isLoading, setIsLoading] = useState(false);
@@ -25,8 +25,11 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
   const fetchPositionsRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   const fetchPositions = useCallback(async () => {
+    // In paper trading mode, use paperAdapter
+    const adapter = tradingMode === 'paper' && paperAdapter?.isConnected() ? paperAdapter : activeAdapter;
+
     // Quick early exit if no adapter - don't set loading state
-    if (!activeAdapter) {
+    if (!adapter) {
       setPositions([]);
       setIsLoading(false);
       return;
@@ -40,7 +43,7 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
 
     try {
       // Fetch positions from adapter (removed timeout - let it complete naturally)
-      const rawPositions = await activeAdapter.fetchPositions(symbol ? [symbol] : undefined);
+      const rawPositions = await adapter.fetchPositions(symbol ? [symbol] : undefined);
 
       // Get market data service for live prices
       const marketDataService = getMarketDataService();
@@ -100,7 +103,7 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter, symbol, activeBroker]);
+  }, [activeAdapter, paperAdapter, tradingMode, symbol, activeBroker]);
 
   fetchPositionsRef.current = fetchPositions;
 
@@ -187,13 +190,16 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
  * Hook to close a position
  */
 export function useClosePosition() {
-  const { activeAdapter } = useBrokerContext();
+  const { activeAdapter, tradingMode, paperAdapter } = useBrokerContext();
   const [isClosing, setIsClosing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const closePosition = useCallback(
     async (position: UnifiedPosition) => {
-      if (!activeAdapter || !activeAdapter.isConnected()) {
+      // In paper trading mode, use paperAdapter
+      const adapter = tradingMode === 'paper' && paperAdapter?.isConnected() ? paperAdapter : activeAdapter;
+
+      if (!adapter || !adapter.isConnected()) {
         throw new Error('Exchange not connected');
       }
 
@@ -206,12 +212,12 @@ export function useClosePosition() {
         // Create opposite order to close position
         const closeSide = position.side === 'long' ? 'sell' : 'buy';
 
-        await activeAdapter.createOrder(
+        await adapter.createOrder(
           position.symbol,
           'market',
           closeSide,
           position.quantity,
-          undefined,
+          position.currentPrice, // Use position's current price as fallback for paper trading
           { reduceOnly: true }
         );
 
@@ -224,7 +230,7 @@ export function useClosePosition() {
         setIsClosing(false);
       }
     },
-    [activeAdapter]
+    [activeAdapter, tradingMode, paperAdapter]
   );
 
   return { closePosition, isClosing, error };

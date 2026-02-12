@@ -81,23 +81,40 @@ def _make_request(endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dic
         # World Bank API returns array where first element contains metadata
         if isinstance(data, list) and len(data) >= 2:
             metadata = data[0] if data[0] else {}
-            actual_data = data[1] if len(data) > 1 else []
+            actual_data = data[1] if len(data) > 1 and data[1] is not None else []
+
+            # Ensure actual_data is a list
+            if actual_data is None:
+                actual_data = []
 
             return {
                 "data": actual_data,
                 "metadata": {
-                    "page": metadata.get("page", 1),
-                    "pages": metadata.get("pages", 1),
-                    "per_page": metadata.get("per_page", 50),
-                    "total": metadata.get("total", 0),
-                    "source": metadata.get("source", "World Bank"),
-                    "last_updated": metadata.get("lastupdated", datetime.now().isoformat())
+                    "page": metadata.get("page", 1) if isinstance(metadata, dict) else 1,
+                    "pages": metadata.get("pages", 1) if isinstance(metadata, dict) else 1,
+                    "per_page": metadata.get("per_page", 50) if isinstance(metadata, dict) else 50,
+                    "total": metadata.get("total", 0) if isinstance(metadata, dict) else 0,
+                    "source": metadata.get("source", "World Bank") if isinstance(metadata, dict) else "World Bank",
+                    "last_updated": metadata.get("lastupdated", datetime.now().isoformat()) if isinstance(metadata, dict) else datetime.now().isoformat()
                 },
+                "error": None
+            }
+        elif isinstance(data, list) and len(data) == 1:
+            # Single element response - check if it's metadata with message (no data found)
+            if isinstance(data[0], dict) and "message" in data[0]:
+                return {
+                    "data": [],
+                    "metadata": {"source": "World Bank", "last_updated": datetime.now().isoformat()},
+                    "error": f"API message: {data[0].get('message', [{}])[0].get('value', 'No data available')}"
+                }
+            return {
+                "data": [],
+                "metadata": {"source": "World Bank", "last_updated": datetime.now().isoformat()},
                 "error": None
             }
         else:
             return {
-                "data": data,
+                "data": data if data is not None else [],
                 "metadata": {"source": "World Bank", "last_updated": datetime.now().isoformat()},
                 "error": None
             }
@@ -249,6 +266,49 @@ def get_sources() -> Dict[str, Any]:
             "error": f"Error fetching sources: {str(e)}"
         }
 
+def get_all_indicators(per_page: int = 5000) -> Dict[str, Any]:
+    """
+    Get list of all available indicators from World Bank database
+
+    Args:
+        per_page: Number of results per page (default: 5000)
+
+    Returns:
+        JSON response with all indicator information
+    """
+    try:
+        endpoint = "indicators"
+        params = {"per_page": per_page}
+
+        result = _make_request(endpoint, params)
+
+        if result["error"]:
+            return result
+
+        # Enhance indicator data
+        enhanced_data = []
+        for indicator in result.get("data", []):
+            enhanced_indicator = {
+                "id": indicator.get("id"),
+                "name": indicator.get("name"),
+                "source": indicator.get("source"),
+                "sourceNote": indicator.get("sourceNote"),
+                "sourceOrganization": indicator.get("sourceOrganization")
+            }
+            enhanced_data.append(enhanced_indicator)
+
+        result["data"] = enhanced_data
+        result["metadata"]["count"] = len(enhanced_data)
+
+        return result
+
+    except Exception as e:
+        return {
+            "data": [],
+            "metadata": {},
+            "error": f"Error fetching all indicators: {str(e)}"
+        }
+
 def get_indicators(country_code: str = "all", indicator: str = GDP_PER_CAPITA,
                   date_range: Optional[str] = None, per_page: int = 1000) -> Dict[str, Any]:
     """
@@ -280,14 +340,20 @@ def get_indicators(country_code: str = "all", indicator: str = GDP_PER_CAPITA,
         if result["error"]:
             return result
 
-        # Enhance indicator data
+        # Enhance indicator data - handle None case
+        raw_data = result.get("data") or []
+        if raw_data is None:
+            raw_data = []
+
         enhanced_data = []
-        for item in result.get("data", []):
+        for item in raw_data:
+            if item is None:
+                continue
             enhanced_item = {
-                "indicator_id": item.get("indicator", {}).get("id"),
-                "indicator_name": item.get("indicator", {}).get("value"),
-                "country_id": item.get("country", {}).get("id"),
-                "country_name": item.get("country", {}).get("value"),
+                "indicator_id": item.get("indicator", {}).get("id") if isinstance(item.get("indicator"), dict) else None,
+                "indicator_name": item.get("indicator", {}).get("value") if isinstance(item.get("indicator"), dict) else None,
+                "country_id": item.get("country", {}).get("id") if isinstance(item.get("country"), dict) else None,
+                "country_name": item.get("country", {}).get("value") if isinstance(item.get("country"), dict) else None,
                 "date": item.get("date"),
                 "value": item.get("value"),
                 "unit": item.get("unit"),
@@ -297,6 +363,7 @@ def get_indicators(country_code: str = "all", indicator: str = GDP_PER_CAPITA,
             enhanced_data.append(enhanced_item)
 
         result["data"] = enhanced_data
+        result["metadata"] = result.get("metadata") or {}
         result["metadata"]["indicator"] = indicator
         result["metadata"]["countries"] = country_code
         result["metadata"]["observation_count"] = len(enhanced_data)
@@ -537,6 +604,7 @@ def main():
             "available_commands": [
                 "countries [region_code]",
                 "sources",
+                "all_indicators",
                 "indicators <country_code> <indicator_code> [date_range]",
                 "gdp_per_capita <country_codes> [years]",
                 "commodity_prices <commodity_code> [years]",
@@ -555,6 +623,9 @@ def main():
 
         elif command == "sources":
             result = get_sources()
+
+        elif command == "all_indicators":
+            result = get_all_indicators()
 
         elif command == "indicators":
             if len(sys.argv) < 3:

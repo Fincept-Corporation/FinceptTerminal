@@ -3,10 +3,19 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Check, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { FINCEPT } from '../constants';
 
+interface Position {
+  symbol: string;
+  side: 'long' | 'short';
+  quantity: number;
+  entryPrice: number;
+  currentPrice: number;
+}
+
 interface CryptoOrderEntryProps {
   selectedSymbol: string;
   currentPrice: number;
   balance: number;
+  positions?: Position[];
   tradingMode: 'paper' | 'live';
   activeBroker: string | null;
   isLoading: boolean;
@@ -25,6 +34,7 @@ export function CryptoOrderEntry({
   selectedSymbol,
   currentPrice,
   balance,
+  positions = [],
   tradingMode,
   activeBroker,
   isLoading,
@@ -89,6 +99,13 @@ export function CryptoOrderEntry({
   const effectivePriceForMax = priceNum > 0 ? priceNum : currentPrice;
   const maxBuyQuantity = balance > 0 && effectivePriceForMax > 0 ? balance / effectivePriceForMax : 0;
 
+  // For sell orders, find current position quantity for this symbol
+  const currentPosition = positions.find(p => p.symbol === selectedSymbol);
+  const positionQuantity = currentPosition?.quantity || 0;
+  const positionSide = currentPosition?.side || 'long';
+  // Max sell quantity is the position size (can only sell what you hold)
+  const maxSellQuantity = positionQuantity;
+
   // Format helpers
   const formatNum = (num: number, decimals = 2) => {
     if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
@@ -117,20 +134,27 @@ export function CryptoOrderEntry({
   // Handle percentage buttons
   const handlePercentage = useCallback((percent: number) => {
     const effectivePrice = priceNum > 0 ? priceNum : currentPrice;
-    if (effectivePrice <= 0) return;
 
     if (side === 'buy') {
       // Buy: how much base asset can we afford with balance
+      if (effectivePrice <= 0 || balance <= 0) return;
       const maxQty = balance / effectivePrice;
       const qty = maxQty * percent;
       setQuantity(qty > 0 ? qty.toFixed(6) : '');
     } else {
-      // Sell: percentage of balance (balance here is USD, not holdings)
-      // For sell side the percentage is of available holdings, not USD balance
-      const qty = balance * percent / effectivePrice;
-      setQuantity(qty > 0 ? qty.toFixed(6) : '');
+      // Sell/Short: percentage of current position holdings OR percentage of balance for new shorts
+      if (positionQuantity > 0 && positionSide === 'long') {
+        // If we have a long position, sell percentage of that position
+        const qty = positionQuantity * percent;
+        setQuantity(qty > 0 ? qty.toFixed(6) : '');
+      } else if (effectivePrice > 0 && balance > 0) {
+        // No position or short position - calculate short size based on available margin
+        const maxQty = balance / effectivePrice;
+        const qty = maxQty * percent;
+        setQuantity(qty > 0 ? qty.toFixed(6) : '');
+      }
     }
-  }, [balance, currentPrice, priceNum, side]);
+  }, [balance, currentPrice, priceNum, side, positionQuantity, positionSide]);
 
   // Handle order submission
   const handleSubmit = useCallback(async () => {
@@ -470,7 +494,15 @@ export function CryptoOrderEntry({
         <div style={{ marginBottom: '12px' }}>
           <div className="oe-label">
             <span>Amount</span>
-            <span>Max: {formatNum(maxBuyQuantity, 6)} {baseAsset}</span>
+            <span>
+              {side === 'buy' ? (
+                <>Max: {formatNum(maxBuyQuantity, 6)} {baseAsset}</>
+              ) : positionQuantity > 0 && positionSide === 'long' ? (
+                <>Position: {formatNum(positionQuantity, 6)} {baseAsset}</>
+              ) : (
+                <>Max Short: {formatNum(maxBuyQuantity, 6)} {baseAsset}</>
+              )}
+            </span>
           </div>
           <div style={{ position: 'relative' }}>
             <input

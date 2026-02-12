@@ -1,9 +1,9 @@
 // File: src/components/tabs/trading/AdvancedFeaturesPanel.tsx
 // Advanced trading features panel with leverage, margin mode, and broker-specific controls
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useBrokerContext } from '../../../contexts/BrokerContext';
-import { Sliders, ArrowUpDown, Settings, Zap } from 'lucide-react';
+import { Sliders, ArrowUpDown, Settings, Zap, Loader } from 'lucide-react';
 
 const COLORS = {
   ORANGE: '#ea580c',
@@ -27,14 +27,49 @@ export function AdvancedFeaturesPanel() {
   const [leverage, setLeverage] = useState(1);
   const [marginMode, setMarginMode] = useState<'cross' | 'isolated'>('cross');
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
 
-  const { ORANGE, WHITE, GREEN, RED, GRAY, PANEL_BG, DARK_BG } = COLORS;
+  const { ORANGE, WHITE, GREEN, GRAY, PANEL_BG, DARK_BG } = COLORS;
 
   const canSetLeverage = supports?.canSetLeverage() || false;
   const canTransfer = supports?.canTransfer() || false;
   const hasVaults = supports?.hasVaults() || false;
   const hasSubaccounts = supports?.hasSubaccounts() || false;
-  const maxLeverage = activeBrokerMetadata?.advancedFeatures.maxLeverage || 1;
+  const maxLeverage = activeBrokerMetadata?.advancedFeatures?.maxLeverage || 100;
+
+  const fetchCurrentSettings = useCallback(async () => {
+    if (!activeAdapter || !canSetLeverage) return;
+
+    setIsFetching(true);
+    try {
+      if ('fetchLeverage' in activeAdapter && typeof (activeAdapter as any).fetchLeverage === 'function') {
+        const leverageData = await (activeAdapter as any).fetchLeverage();
+        if (leverageData?.leverage) {
+          setLeverage(leverageData.leverage);
+        } else if (leverageData?.longLeverage) {
+          setLeverage(leverageData.longLeverage);
+        }
+        if (leverageData?.marginMode) {
+          setMarginMode(leverageData.marginMode);
+        }
+      }
+
+      if ('fetchMarginMode' in activeAdapter && typeof (activeAdapter as any).fetchMarginMode === 'function') {
+        const modeData = await (activeAdapter as any).fetchMarginMode();
+        if (modeData?.marginMode) {
+          setMarginMode(modeData.marginMode);
+        }
+      }
+    } catch (err) {
+      console.warn('[AdvancedFeaturesPanel] Failed to fetch current settings:', err);
+    } finally {
+      setIsFetching(false);
+    }
+  }, [activeAdapter, canSetLeverage]);
+
+  useEffect(() => {
+    fetchCurrentSettings();
+  }, [fetchCurrentSettings, activeBroker]);
 
   // Handle leverage change
   const handleLeverageChange = async (newLeverage: number) => {
@@ -101,34 +136,40 @@ export function AdvancedFeaturesPanel() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Sliders size={12} style={{ color: GRAY }} />
             <span style={{ fontSize: '10px', color: GRAY }}>Leverage:</span>
-            <input
-              type="range"
-              min="1"
-              max={maxLeverage}
-              value={leverage}
-              onChange={(e) => handleLeverageChange(Number(e.target.value))}
-              disabled={isLoading}
-              style={{
-                width: '100px',
-                height: '4px',
-                accentColor: ORANGE,
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-              }}
-            />
-            <span style={{
-              fontSize: '11px',
-              fontWeight: 'bold',
-              color: leverage > 1 ? ORANGE : WHITE,
-              minWidth: '35px',
-              textAlign: 'right',
-            }}>
-              {leverage}x
-            </span>
+            {isFetching ? (
+              <Loader size={12} style={{ color: ORANGE, animation: 'spin 1s linear infinite' }} />
+            ) : (
+              <>
+                <input
+                  type="range"
+                  min="1"
+                  max={maxLeverage}
+                  value={leverage}
+                  onChange={(e) => handleLeverageChange(Number(e.target.value))}
+                  disabled={isLoading}
+                  style={{
+                    width: '100px',
+                    height: '4px',
+                    accentColor: ORANGE,
+                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                  }}
+                />
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  color: leverage > 1 ? ORANGE : WHITE,
+                  minWidth: '35px',
+                  textAlign: 'right',
+                }}>
+                  {leverage}x
+                </span>
+              </>
+            )}
           </div>
         )}
 
         {/* Margin Mode */}
-        {canSetLeverage && (
+        {canSetLeverage && !isFetching && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <ArrowUpDown size={12} style={{ color: GRAY }} />
             <span style={{ fontSize: '10px', color: GRAY }}>Margin:</span>

@@ -35,6 +35,8 @@ export interface ApiKeys {
   FINANCIAL_MODELING_PREP_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
   DATABENTO_API_KEY?: string;
+  WTO_API_KEY?: string;
+  EIA_API_KEY?: string;
   [key: string]: string | undefined;
 }
 
@@ -47,6 +49,8 @@ export const PREDEFINED_API_KEYS = [
   { key: 'FINANCIAL_MODELING_PREP_API_KEY', label: 'Financial Modeling Prep', description: 'Financial statements & ratios' },
   { key: 'DATABENTO_API_KEY', label: 'Databento API Key', description: 'Institutional-grade market data (Options, Equities, Futures)' },
   { key: 'OPENROUTER_API_KEY', label: 'OpenRouter API Key', description: 'Access 400+ AI models from all providers (Model Library)' },
+  { key: 'WTO_API_KEY', label: 'WTO API Key', description: 'World Trade Organization - Trade statistics, restrictions & notifications' },
+  { key: 'EIA_API_KEY', label: 'EIA API Key', description: 'U.S. Energy Information Administration - Petroleum, natural gas & energy data' },
 ] as const;
 
 // LLM Provider configurations

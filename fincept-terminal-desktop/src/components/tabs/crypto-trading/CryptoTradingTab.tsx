@@ -22,6 +22,7 @@ import {
   CryptoChartArea,
   CryptoBottomPanel,
   CryptoStatusBar,
+  CryptoSettingsPanel,
 } from './components';
 
 // Import constants and types
@@ -75,8 +76,7 @@ type CryptoAction =
   | { type: 'SET_SYMBOLS'; symbols: string[]; isLoading: boolean }
   | { type: 'RESET_DATA' }
   | { type: 'CLEAR_TICKER_TRADES' }
-  | { type: 'UPDATE_POSITION_PRICES'; prices: Map<string, number> }
-  | { type: 'UPDATE_FROM_TRADE'; trade: { symbol: string; side: 'buy' | 'sell'; price: number; quantity: number; timestamp: number } };
+  | { type: 'UPDATE_POSITION_PRICES'; prices: Map<string, number> };
 
 const initialState: CryptoState = {
   status: 'idle',
@@ -163,66 +163,6 @@ function cryptoReducer(state: CryptoState, action: CryptoAction): CryptoState {
             positionValue: newPrice * quantity,
           };
         }),
-      };
-    case 'UPDATE_FROM_TRADE':
-      // Handle position updates from trade execution
-      const { trade } = action;
-      const existingPos = state.positions.find(p => p.symbol === trade.symbol);
-
-      let updatedPositions = [...state.positions];
-
-      if (!existingPos) {
-        // New position opened
-        updatedPositions.push({
-          symbol: trade.symbol,
-          side: trade.side === 'buy' ? 'long' : 'short',
-          quantity: trade.quantity,
-          entryPrice: trade.price,
-          currentPrice: trade.price,
-          positionValue: trade.price * trade.quantity,
-          unrealizedPnl: 0,
-          pnlPercent: 0,
-        });
-      } else {
-        // Update existing position or close it
-        updatedPositions = updatedPositions.map(pos => {
-          if (pos.symbol !== trade.symbol) return pos;
-
-          const isSameSide = (pos.side === 'long' && trade.side === 'buy') || (pos.side === 'short' && trade.side === 'sell');
-
-          if (isSameSide) {
-            // Adding to position - recalculate average entry
-            const totalQty = pos.quantity + trade.quantity;
-            const newEntry = ((pos.entryPrice * pos.quantity) + (trade.price * trade.quantity)) / totalQty;
-
-            return {
-              ...pos,
-              quantity: totalQty,
-              entryPrice: newEntry,
-              positionValue: trade.price * totalQty,
-            };
-          } else {
-            // Reducing position
-            const newQty = pos.quantity - trade.quantity;
-
-            if (newQty <= 0) {
-              // Position closed - will be filtered out
-              return null;
-            }
-
-            return {
-              ...pos,
-              quantity: newQty,
-              positionValue: trade.price * newQty,
-            };
-          }
-        }).filter(Boolean) as Position[];
-      }
-
-      return {
-        ...state,
-        positions: updatedPositions,
-        trades: [trade, ...state.trades].slice(0, 50), // Keep last 50 trades
       };
     default:
       return state;
@@ -683,6 +623,11 @@ export function CryptoTradingTab() {
     }
   }, [tradingMode, paperAdapter, activeBroker]);
 
+  // Normalize symbol for comparison (removes slashes, dashes, converts to uppercase)
+  const normalizeSymbol = (symbol: string): string => {
+    return symbol.replace(/[/\-_]/g, '').toUpperCase();
+  };
+
   // Real-time WebSocket listeners for positions
   useEffect(() => {
     let mounted = true;
@@ -694,32 +639,24 @@ export function CryptoTradingTab() {
         if (!mounted) return;
 
         const { symbol, price } = event.payload;
+        const normalizedEventSymbol = normalizeSymbol(symbol);
 
-        // Check if we have a position for this symbol
-        const hasPosition = state.positions.some(p => p.symbol === symbol);
-        if (!hasPosition) return;
+        // Find position that matches this symbol (with normalization)
+        const matchingPosition = state.positions.find(p => normalizeSymbol(p.symbol) === normalizedEventSymbol);
+        if (!matchingPosition) return;
 
-        // Update position prices
+        // Update position prices using the position's original symbol format
         const priceMap = new Map<string, number>();
-        priceMap.set(symbol, price);
+        priceMap.set(matchingPosition.symbol, price);
 
         dispatch({ type: 'UPDATE_POSITION_PRICES', prices: priceMap });
       });
       unlisteners.push(tickerUnlisten);
 
-      // 2. Trade executions (ws_trade) - for paper trading fills
-      const tradeUnlisten = await listen<{ provider: string; symbol: string; price: number; quantity: number; side: 'buy' | 'sell'; timestamp: number }>('ws_trade', (event) => {
-        if (!mounted) return;
-
-        const { symbol, price, quantity, side, timestamp } = event.payload;
-
-        // Update positions based on trade execution
-        dispatch({
-          type: 'UPDATE_FROM_TRADE',
-          trade: { symbol, price, quantity, side, timestamp }
-        });
-      });
-      unlisteners.push(tradeUnlisten);
+      // Note: ws_trade events are market trades (all trades on the exchange)
+      // NOT the user's paper trading fills. User trades come from loadPaperTradingData.
+      // We don't need to listen to ws_trade here as it would incorrectly add
+      // market trades to the user's trade history.
     };
 
     setupWebSocketListeners();
@@ -810,6 +747,20 @@ export function CryptoTradingTab() {
   const handleSearchQueryChange = useCallback((query: string) => {
     setSearchQuery(sanitizeInput(query));
   }, []);
+
+  // Handle reset portfolio
+  const handleResetPortfolio = useCallback(async () => {
+    if (!paperAdapter || !('portfolioId' in paperAdapter)) return;
+
+    try {
+      const { resetPortfolio } = await import('@/paper-trading');
+      await resetPortfolio((paperAdapter as any).portfolioId);
+      // Reload paper trading data after reset
+      loadPaperTradingData();
+    } catch (error) {
+      console.error('[CryptoTrading] Failed to reset portfolio:', error);
+    }
+  }, [paperAdapter, loadPaperTradingData]);
 
   const currentPrice = state.tickerData?.last || state.tickerData?.price || state.orderBook.asks[0]?.price || 0;
 
@@ -948,6 +899,7 @@ export function CryptoTradingTab() {
               selectedSymbol={selectedSymbol}
               currentPrice={currentPrice}
               balance={state.balance}
+              positions={state.positions}
               tradingMode={tradingMode}
               activeBroker={activeBroker}
               isLoading={isLoading}
@@ -978,6 +930,20 @@ export function CryptoTradingTab() {
           isConnected={activeAdapter?.isConnected() || false}
         />
       </ErrorBoundary>
+
+      {/* Settings Panel */}
+      <CryptoSettingsPanel
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        slippage={slippage}
+        makerFee={makerFee}
+        takerFee={takerFee}
+        onSlippageChange={setSlippage}
+        onMakerFeeChange={setMakerFee}
+        onTakerFeeChange={setTakerFee}
+        onResetPortfolio={handleResetPortfolio}
+        tradingMode={tradingMode}
+      />
     </div>
   );
 }

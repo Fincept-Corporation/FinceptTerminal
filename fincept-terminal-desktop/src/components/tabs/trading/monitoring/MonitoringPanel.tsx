@@ -40,6 +40,7 @@ interface MonitoringPanelProps {
   provider: string;
   symbol: string;
   assetType: 'equity' | 'crypto';
+  filterByAssetType?: boolean; // If true, only show conditions matching the asset type
 }
 
 // ---------- Color palette (matches FINCEPT constants) ----------
@@ -85,9 +86,21 @@ const FIELD_ICON: Record<string, React.ReactNode> = {
 
 // ---------- Component ----------
 
-export function MonitoringPanel({ provider, symbol, assetType }: MonitoringPanelProps) {
-  const [conditions, setConditions] = useState<MonitorCondition[]>([]);
-  const [alerts, setAlerts] = useState<MonitorAlert[]>([]);
+// Helper to determine if a symbol is crypto (contains "/" like BTC/USD) or equity (plain ticker like AAPL)
+const isCryptoSymbol = (sym: string): boolean => sym.includes('/');
+
+export function MonitoringPanel({ provider, symbol, assetType, filterByAssetType = true }: MonitoringPanelProps) {
+  const [allConditions, setAllConditions] = useState<MonitorCondition[]>([]);
+  const [allAlerts, setAllAlerts] = useState<MonitorAlert[]>([]);
+
+  // Filter conditions and alerts based on asset type
+  const conditions = filterByAssetType
+    ? allConditions.filter(c => assetType === 'crypto' ? isCryptoSymbol(c.symbol) : !isCryptoSymbol(c.symbol))
+    : allConditions;
+
+  const alerts = filterByAssetType
+    ? allAlerts.filter(a => assetType === 'crypto' ? isCryptoSymbol(a.symbol) : !isCryptoSymbol(a.symbol))
+    : allAlerts;
   const [view, setView] = useState<'conditions' | 'alerts'>('conditions');
   const [showAdd, setShowAdd] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -123,8 +136,8 @@ export function MonitoringPanel({ provider, symbol, assetType }: MonitoringPanel
       await invoke('monitor_load_conditions');
       const conds = await invoke<MonitorCondition[]>('monitor_get_conditions');
       const alertList = await invoke<MonitorAlert[]>('monitor_get_alerts', { limit: 50 });
-      setConditions(conds || []);
-      setAlerts(alertList || []);
+      setAllConditions(conds || []);
+      setAllAlerts(alertList || []);
     } catch (err) {
       console.warn('[MonitoringPanel] load failed:', err);
     } finally {
@@ -141,10 +154,15 @@ export function MonitoringPanel({ provider, symbol, assetType }: MonitoringPanel
   useEffect(() => {
     const unlisten = listen<MonitorAlert>('monitor_alert', (event) => {
       const alert = event.payload;
-      setAlerts(prev => [alert, ...prev].slice(0, 100));
 
-      // Remove the triggered condition from the conditions list (it's already deleted in DB by Rust)
-      setConditions(prev => prev.filter(c => c.id !== alert.condition_id));
+      // Only process alerts matching this panel's asset type
+      const alertIsCrypto = isCryptoSymbol(alert.symbol);
+      if (filterByAssetType && ((assetType === 'crypto') !== alertIsCrypto)) {
+        return; // Skip alerts that don't match this panel's type
+      }
+
+      setAllAlerts(prev => [alert, ...prev].slice(0, 100));
+      setAllConditions(prev => prev.filter(c => c.id !== alert.condition_id));
 
       const triggerTime = new Date(alert.triggered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       toast.warning(`ALERT: ${alert.symbol} — ${alert.field.toUpperCase()} = ${alert.triggered_value.toFixed(2)} at ${triggerTime}`);
@@ -169,14 +187,12 @@ export function MonitoringPanel({ provider, symbol, assetType }: MonitoringPanel
     if (!form.symbol || !form.provider) return;
     try {
       await invoke('monitor_add_condition', { condition: form });
-      // Optimistically add to local state so it appears immediately
-      setConditions(prev => [...prev, { ...form, id: Date.now() }]);
-      toast.success('Condition added');
+      setAllConditions(prev => [...prev, { ...form, id: Date.now() }]);
+      toast.success(`${assetType === 'crypto' ? 'Crypto' : 'Equity'} alert added`);
       setShowAdd(false);
       setForm(prev => ({ ...prev, value: 0, value2: undefined, operator: '>', field: 'price' }));
       setValueStr('');
       setValue2Str('');
-      // Also reload from backend to get the real ID
       loadData().catch(() => {});
     } catch (err) {
       toast.error('Failed to add condition');
@@ -187,10 +203,10 @@ export function MonitoringPanel({ provider, symbol, assetType }: MonitoringPanel
   const deleteCondition = async (id: number) => {
     try {
       await invoke('monitor_delete_condition', { id });
-      setConditions(prev => prev.filter(c => c.id !== id));
-      toast.info('Condition deleted');
+      setAllConditions(prev => prev.filter(c => c.id !== id));
+      toast.info('Alert deleted');
     } catch (err) {
-      toast.error('Failed to delete condition');
+      toast.error('Failed to delete');
       console.error(err);
     }
   };
@@ -244,7 +260,10 @@ export function MonitoringPanel({ provider, symbol, assetType }: MonitoringPanel
         backgroundColor: C.HEADER_BG,
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '10px', fontWeight: 700, color: C.WHITE, letterSpacing: '0.5px' }}>
+            {assetType === 'crypto' ? 'CRYPTO' : 'EQUITY'} ALERTS
+          </span>
           <button
             onClick={() => setView('conditions')}
             style={{
@@ -255,7 +274,7 @@ export function MonitoringPanel({ provider, symbol, assetType }: MonitoringPanel
             }}
           >
             <Target size={9} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-            CONDITIONS ({conditions.length})
+            ACTIVE ({conditions.length})
           </button>
           <button
             onClick={() => setView('alerts')}

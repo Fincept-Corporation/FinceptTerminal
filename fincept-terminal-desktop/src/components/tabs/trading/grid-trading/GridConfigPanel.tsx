@@ -1,32 +1,30 @@
 /**
  * Grid Configuration Panel
- *
- * UI for configuring and creating new grid trading bots.
- * Works with both crypto and stock brokers.
+ * Fincept Terminal Style - Inline styles
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Grid, TrendingUp, TrendingDown, Minus, DollarSign,
-  ArrowUpRight, ArrowDownRight, AlertCircle, Info, Calculator,
-  ChevronDown, Check,
+  ArrowUpRight, ArrowDownRight, AlertCircle, Info, Calculator, CheckCircle,
 } from 'lucide-react';
 import type { GridConfig, GridType, GridDirection, GridCalculation } from '../../../../services/gridTrading/types';
 import { calculateGridDetails, validateGridConfig } from '../../../../services/gridTrading';
 
-// Fincept-style colors
-const COLORS = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
   GREEN: '#00D66F',
   GRAY: '#787878',
-  DARK_BG: '#0F0F0F',
-  PANEL_BG: '#1A1A1A',
-  BORDER: '#2A2A2A',
-  MUTED: '#4A4A4A',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
   CYAN: '#00E5FF',
   YELLOW: '#FFD700',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
 };
 
 interface GridConfigPanelProps {
@@ -50,7 +48,6 @@ export function GridConfigPanel({
   onCreateGrid,
   onCancel,
 }: GridConfigPanelProps) {
-  // Form state
   const [upperPrice, setUpperPrice] = useState(currentPrice * 1.1);
   const [lowerPrice, setLowerPrice] = useState(currentPrice * 0.9);
   const [gridLevels, setGridLevels] = useState(10);
@@ -59,12 +56,34 @@ export function GridConfigPanel({
   const [direction, setDirection] = useState<GridDirection>('neutral');
   const [stopLoss, setStopLoss] = useState<number | undefined>(undefined);
   const [takeProfit, setTakeProfit] = useState<number | undefined>(undefined);
-  const [productType, setProductType] = useState('CASH'); // For stocks
-
-  // Validation
+  const [productType, setProductType] = useState('CASH');
   const [errors, setErrors] = useState<string[]>([]);
 
-  // Calculate grid details
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 10px',
+    backgroundColor: FINCEPT.DARK_BG,
+    border: `1px solid ${FINCEPT.BORDER}`,
+    color: FINCEPT.WHITE,
+    fontSize: '11px',
+    fontFamily: '"IBM Plex Mono", monospace',
+    outline: 'none',
+  };
+
+  const selectStyle: React.CSSProperties = {
+    ...inputStyle,
+    cursor: 'pointer',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block',
+    fontSize: '9px',
+    color: FINCEPT.GRAY,
+    marginBottom: '4px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  };
+
   const gridCalculation = useMemo<GridCalculation | null>(() => {
     try {
       const config: Partial<GridConfig> = {
@@ -88,12 +107,11 @@ export function GridConfigPanel({
 
       setErrors([]);
       return calculateGridDetails(config as GridConfig);
-    } catch (error) {
+    } catch {
       return null;
     }
   }, [symbol, exchange, upperPrice, lowerPrice, gridLevels, gridType, totalInvestment, direction, brokerType, brokerId]);
 
-  // Handle form submission
   const handleCreate = useCallback(() => {
     const config: GridConfig = {
       id: `grid_${Date.now()}`,
@@ -122,7 +140,6 @@ export function GridConfigPanel({
     onCreateGrid(config);
   }, [symbol, exchange, upperPrice, lowerPrice, gridLevels, gridType, totalInvestment, direction, stopLoss, takeProfit, brokerType, brokerId, productType, gridCalculation, onCreateGrid]);
 
-  // Quick presets
   const applyPreset = (preset: 'conservative' | 'moderate' | 'aggressive') => {
     switch (preset) {
       case 'conservative':
@@ -144,235 +161,259 @@ export function GridConfigPanel({
   };
 
   return (
-    <div className="bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Grid className="w-5 h-5 text-[#FF8800]" />
-          <span className="text-white font-semibold">Grid Trading Configuration</span>
+    <div style={{ padding: '12px', fontFamily: '"IBM Plex Mono", monospace' }}>
+      {/* Symbol & Price Header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '10px 12px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        marginBottom: '12px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Grid size={14} color={FINCEPT.ORANGE} />
+          <span style={{ fontSize: '12px', fontWeight: 700, color: FINCEPT.WHITE }}>{symbol}</span>
         </div>
-        <div className="text-sm text-[#787878]">
-          {symbol} @ {currentPrice.toFixed(2)}
+        <div style={{ fontSize: '12px', color: FINCEPT.CYAN, fontWeight: 600 }}>
+          ${currentPrice.toFixed(2)}
         </div>
       </div>
 
       {/* Quick Presets */}
-      <div className="mb-4">
-        <div className="text-xs text-[#787878] mb-2">Quick Presets</div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => applyPreset('conservative')}
-            className="px-3 py-1.5 text-xs bg-[#1A1A1A] hover:bg-[#2A2A2A] text-[#00D66F] border border-[#00D66F]/30 rounded transition-colors"
-          >
-            Conservative (5%)
-          </button>
-          <button
-            onClick={() => applyPreset('moderate')}
-            className="px-3 py-1.5 text-xs bg-[#1A1A1A] hover:bg-[#2A2A2A] text-[#FF8800] border border-[#FF8800]/30 rounded transition-colors"
-          >
-            Moderate (10%)
-          </button>
-          <button
-            onClick={() => applyPreset('aggressive')}
-            className="px-3 py-1.5 text-xs bg-[#1A1A1A] hover:bg-[#2A2A2A] text-[#FF3B3B] border border-[#FF3B3B]/30 rounded transition-colors"
-          >
-            Aggressive (20%)
-          </button>
+      <div style={{ marginBottom: '12px' }}>
+        <div style={labelStyle}>QUICK PRESETS</div>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {[
+            { key: 'conservative', label: 'CONSERVATIVE (5%)', color: FINCEPT.GREEN },
+            { key: 'moderate', label: 'MODERATE (10%)', color: FINCEPT.ORANGE },
+            { key: 'aggressive', label: 'AGGRESSIVE (20%)', color: FINCEPT.RED },
+          ].map(preset => (
+            <button
+              key={preset.key}
+              onClick={() => applyPreset(preset.key as any)}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                fontSize: '9px',
+                fontWeight: 700,
+                backgroundColor: FINCEPT.HEADER_BG,
+                border: `1px solid ${preset.color}40`,
+                color: preset.color,
+                cursor: 'pointer',
+                fontFamily: '"IBM Plex Mono", monospace',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.backgroundColor = `${preset.color}15`;
+                e.currentTarget.style.borderColor = preset.color;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
+                e.currentTarget.style.borderColor = `${preset.color}40`;
+              }}
+            >
+              {preset.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Price Range */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
         <div>
-          <label className="block text-xs text-[#787878] mb-1">Upper Price</label>
-          <div className="relative">
+          <label style={labelStyle}>UPPER PRICE</label>
+          <div style={{ position: 'relative' }}>
             <input
               type="text"
               inputMode="decimal"
               value={upperPrice}
               onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setUpperPrice(parseFloat(v) || 0); }}
-              className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF8800] focus:outline-none"
+              style={inputStyle}
             />
-            <ArrowUpRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00D66F]" />
+            <ArrowUpRight size={12} color={FINCEPT.GREEN} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)' }} />
           </div>
-          <div className="text-xs text-[#787878] mt-1">
+          <div style={{ fontSize: '9px', color: FINCEPT.GREEN, marginTop: 2 }}>
             +{(((upperPrice - currentPrice) / currentPrice) * 100).toFixed(1)}%
           </div>
         </div>
         <div>
-          <label className="block text-xs text-[#787878] mb-1">Lower Price</label>
-          <div className="relative">
+          <label style={labelStyle}>LOWER PRICE</label>
+          <div style={{ position: 'relative' }}>
             <input
               type="text"
               inputMode="decimal"
               value={lowerPrice}
               onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setLowerPrice(parseFloat(v) || 0); }}
-              className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF8800] focus:outline-none"
+              style={inputStyle}
             />
-            <ArrowDownRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#FF3B3B]" />
+            <ArrowDownRight size={12} color={FINCEPT.RED} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)' }} />
           </div>
-          <div className="text-xs text-[#787878] mt-1">
+          <div style={{ fontSize: '9px', color: FINCEPT.RED, marginTop: 2 }}>
             {(((lowerPrice - currentPrice) / currentPrice) * 100).toFixed(1)}%
           </div>
         </div>
       </div>
 
       {/* Grid Settings */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
         <div>
-          <label className="block text-xs text-[#787878] mb-1">Grid Levels</label>
+          <label style={labelStyle}>GRID LEVELS</label>
           <input
             type="text"
             inputMode="numeric"
             value={gridLevels}
             onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setGridLevels(Math.min(parseInt(v) || 2, 200)); }}
-            className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF8800] focus:outline-none"
+            style={inputStyle}
           />
         </div>
         <div>
-          <label className="block text-xs text-[#787878] mb-1">Grid Type</label>
+          <label style={labelStyle}>GRID TYPE</label>
           <select
             value={gridType}
             onChange={e => setGridType(e.target.value as GridType)}
-            className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF8800] focus:outline-none"
+            style={selectStyle}
           >
-            <option value="arithmetic">Arithmetic (Equal Price)</option>
-            <option value="geometric">Geometric (Equal %)</option>
+            <option value="arithmetic">ARITHMETIC</option>
+            <option value="geometric">GEOMETRIC</option>
           </select>
         </div>
       </div>
 
       {/* Investment */}
-      <div className="mb-4">
-        <label className="block text-xs text-[#787878] mb-1">Total Investment</label>
-        <div className="relative">
+      <div style={{ marginBottom: '12px' }}>
+        <label style={labelStyle}>TOTAL INVESTMENT</label>
+        <div style={{ position: 'relative' }}>
           <input
             type="text"
             inputMode="decimal"
             value={totalInvestment}
             onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setTotalInvestment(parseFloat(v) || 0); }}
-            className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF8800] focus:outline-none"
+            style={inputStyle}
           />
-          <DollarSign className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#787878]" />
+          <DollarSign size={12} color={FINCEPT.GRAY} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)' }} />
         </div>
-        <div className="text-xs text-[#787878] mt-1">
+        <div style={{ fontSize: '9px', color: FINCEPT.MUTED, marginTop: 2 }}>
           Available: ${availableBalance.toFixed(2)}
         </div>
       </div>
 
       {/* Direction */}
-      <div className="mb-4">
-        <label className="block text-xs text-[#787878] mb-1">Trading Direction</label>
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            onClick={() => setDirection('long')}
-            className={`flex items-center justify-center gap-1 px-3 py-2 rounded text-sm transition-colors ${
-              direction === 'long'
-                ? 'bg-[#00D66F]/20 border border-[#00D66F] text-[#00D66F]'
-                : 'bg-[#1A1A1A] border border-[#2A2A2A] text-[#787878] hover:text-white'
-            }`}
-          >
-            <TrendingUp className="w-4 h-4" />
-            Long
-          </button>
-          <button
-            onClick={() => setDirection('neutral')}
-            className={`flex items-center justify-center gap-1 px-3 py-2 rounded text-sm transition-colors ${
-              direction === 'neutral'
-                ? 'bg-[#FF8800]/20 border border-[#FF8800] text-[#FF8800]'
-                : 'bg-[#1A1A1A] border border-[#2A2A2A] text-[#787878] hover:text-white'
-            }`}
-          >
-            <Minus className="w-4 h-4" />
-            Neutral
-          </button>
-          <button
-            onClick={() => setDirection('short')}
-            className={`flex items-center justify-center gap-1 px-3 py-2 rounded text-sm transition-colors ${
-              direction === 'short'
-                ? 'bg-[#FF3B3B]/20 border border-[#FF3B3B] text-[#FF3B3B]'
-                : 'bg-[#1A1A1A] border border-[#2A2A2A] text-[#787878] hover:text-white'
-            }`}
-          >
-            <TrendingDown className="w-4 h-4" />
-            Short
-          </button>
+      <div style={{ marginBottom: '12px' }}>
+        <label style={labelStyle}>TRADING DIRECTION</label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+          {[
+            { key: 'long', label: 'LONG', icon: TrendingUp, color: FINCEPT.GREEN },
+            { key: 'neutral', label: 'NEUTRAL', icon: Minus, color: FINCEPT.ORANGE },
+            { key: 'short', label: 'SHORT', icon: TrendingDown, color: FINCEPT.RED },
+          ].map(dir => {
+            const Icon = dir.icon;
+            const isActive = direction === dir.key;
+            return (
+              <button
+                key={dir.key}
+                onClick={() => setDirection(dir.key as GridDirection)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  padding: '8px',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  backgroundColor: isActive ? `${dir.color}20` : FINCEPT.HEADER_BG,
+                  border: `1px solid ${isActive ? dir.color : FINCEPT.BORDER}`,
+                  color: isActive ? dir.color : FINCEPT.GRAY,
+                  cursor: 'pointer',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <Icon size={12} />
+                {dir.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Stop Loss / Take Profit */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
         <div>
-          <label className="block text-xs text-[#787878] mb-1">Stop Loss (Optional)</label>
+          <label style={labelStyle}>STOP LOSS (OPTIONAL)</label>
           <input
             type="text"
             inputMode="decimal"
             value={stopLoss || ''}
             onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setStopLoss(v ? parseFloat(v) : undefined); }}
             placeholder={`< ${lowerPrice.toFixed(2)}`}
-            className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF3B3B] focus:outline-none placeholder-[#4A4A4A]"
+            style={{ ...inputStyle, borderColor: stopLoss ? FINCEPT.RED : FINCEPT.BORDER }}
           />
         </div>
         <div>
-          <label className="block text-xs text-[#787878] mb-1">Take Profit (Optional)</label>
+          <label style={labelStyle}>TAKE PROFIT (OPTIONAL)</label>
           <input
             type="text"
             inputMode="decimal"
             value={takeProfit || ''}
             onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setTakeProfit(v ? parseFloat(v) : undefined); }}
             placeholder={`> ${upperPrice.toFixed(2)}`}
-            className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#00D66F] focus:outline-none placeholder-[#4A4A4A]"
+            style={{ ...inputStyle, borderColor: takeProfit ? FINCEPT.GREEN : FINCEPT.BORDER }}
           />
         </div>
       </div>
 
-      {/* Stock-specific: Product Type */}
+      {/* Stock Product Type */}
       {brokerType === 'stock' && (
-        <div className="mb-4">
-          <label className="block text-xs text-[#787878] mb-1">Product Type</label>
+        <div style={{ marginBottom: '12px' }}>
+          <label style={labelStyle}>PRODUCT TYPE</label>
           <select
             value={productType}
             onChange={e => setProductType(e.target.value)}
-            className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF8800] focus:outline-none"
+            style={selectStyle}
           >
-            <option value="CASH">Cash (Delivery)</option>
-            <option value="INTRADAY">Intraday (MIS)</option>
-            <option value="MARGIN">Margin</option>
+            <option value="CASH">CASH (DELIVERY)</option>
+            <option value="INTRADAY">INTRADAY (MIS)</option>
+            <option value="MARGIN">MARGIN</option>
           </select>
         </div>
       )}
 
-      {/* Grid Calculation Summary */}
+      {/* Grid Summary */}
       {gridCalculation && (
-        <div className="bg-[#1A1A1A] rounded p-3 mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Calculator className="w-4 h-4 text-[#00E5FF]" />
-            <span className="text-sm text-white">Grid Summary</span>
+        <div style={{
+          padding: '10px 12px',
+          backgroundColor: `${FINCEPT.CYAN}10`,
+          border: `1px solid ${FINCEPT.CYAN}30`,
+          marginBottom: '12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 8 }}>
+            <Calculator size={12} color={FINCEPT.CYAN} />
+            <span style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.WHITE }}>GRID SUMMARY</span>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="flex justify-between">
-              <span className="text-[#787878]">Grid Spacing:</span>
-              <span className="text-white">
-                {gridType === 'arithmetic'
-                  ? `$${gridCalculation.gridSpacing.toFixed(2)}`
-                  : `${gridCalculation.gridSpacing.toFixed(2)}%`}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: FINCEPT.GRAY }}>Grid Spacing:</span>
+              <span style={{ color: FINCEPT.WHITE }}>
+                {gridType === 'arithmetic' ? `$${gridCalculation.gridSpacing.toFixed(2)}` : `${gridCalculation.gridSpacing.toFixed(2)}%`}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[#787878]">Qty/Level:</span>
-              <span className="text-white">{gridCalculation.quantityPerLevel.toFixed(4)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: FINCEPT.GRAY }}>Qty/Level:</span>
+              <span style={{ color: FINCEPT.WHITE }}>{gridCalculation.quantityPerLevel.toFixed(4)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[#787878]">Total Qty:</span>
-              <span className="text-white">{gridCalculation.totalQuantity.toFixed(4)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: FINCEPT.GRAY }}>Total Qty:</span>
+              <span style={{ color: FINCEPT.WHITE }}>{gridCalculation.totalQuantity.toFixed(4)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[#787878]">Break-even:</span>
-              <span className="text-white">${gridCalculation.breakEvenPrice.toFixed(2)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: FINCEPT.GRAY }}>Break-even:</span>
+              <span style={{ color: FINCEPT.WHITE }}>${gridCalculation.breakEvenPrice.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between col-span-2">
-              <span className="text-[#787878]">Potential Profit/Cycle:</span>
-              <span className="text-[#00D66F]">${gridCalculation.potentialProfit.toFixed(2)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gridColumn: 'span 2' }}>
+              <span style={{ color: FINCEPT.GRAY }}>Potential Profit/Cycle:</span>
+              <span style={{ color: FINCEPT.GREEN, fontWeight: 600 }}>${gridCalculation.potentialProfit.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -380,12 +421,17 @@ export function GridConfigPanel({
 
       {/* Errors */}
       {errors.length > 0 && (
-        <div className="bg-[#FF3B3B]/10 border border-[#FF3B3B]/30 rounded p-3 mb-4">
-          <div className="flex items-center gap-2 text-[#FF3B3B] text-sm mb-1">
-            <AlertCircle className="w-4 h-4" />
-            Validation Errors
+        <div style={{
+          padding: '10px 12px',
+          backgroundColor: `${FINCEPT.RED}15`,
+          border: `1px solid ${FINCEPT.RED}30`,
+          marginBottom: '12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 4 }}>
+            <AlertCircle size={12} color={FINCEPT.RED} />
+            <span style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.RED }}>VALIDATION ERRORS</span>
           </div>
-          <ul className="text-xs text-[#FF3B3B] list-disc list-inside">
+          <ul style={{ margin: 0, paddingLeft: 16, fontSize: '9px', color: FINCEPT.RED }}>
             {errors.map((error, i) => (
               <li key={i}>{error}</li>
             ))}
@@ -394,29 +440,67 @@ export function GridConfigPanel({
       )}
 
       {/* Actions */}
-      <div className="flex gap-2">
+      <div style={{ display: 'flex', gap: '8px' }}>
         {onCancel && (
           <button
             onClick={onCancel}
-            className="flex-1 py-2 bg-[#1A1A1A] hover:bg-[#2A2A2A] text-[#787878] hover:text-white rounded transition-colors text-sm"
+            style={{
+              flex: 1,
+              padding: '10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              cursor: 'pointer',
+              fontFamily: '"IBM Plex Mono", monospace',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = FINCEPT.WHITE}
+            onMouseLeave={e => e.currentTarget.style.color = FINCEPT.GRAY}
           >
-            Cancel
+            CANCEL
           </button>
         )}
         <button
           onClick={handleCreate}
           disabled={errors.length > 0 || !gridCalculation}
-          className="flex-1 py-2 bg-[#FF8800] hover:bg-[#FF9900] disabled:bg-[#4A4A4A] disabled:cursor-not-allowed text-black font-semibold rounded transition-colors text-sm flex items-center justify-center gap-2"
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            padding: '10px',
+            fontSize: '11px',
+            fontWeight: 700,
+            backgroundColor: errors.length > 0 || !gridCalculation ? FINCEPT.MUTED : FINCEPT.ORANGE,
+            border: 'none',
+            color: FINCEPT.DARK_BG,
+            cursor: errors.length > 0 || !gridCalculation ? 'not-allowed' : 'pointer',
+            fontFamily: '"IBM Plex Mono", monospace',
+            transition: 'all 0.15s',
+          }}
         >
-          <Grid className="w-4 h-4" />
-          Create Grid
+          <CheckCircle size={12} />
+          CREATE GRID
         </button>
       </div>
 
       {/* Info */}
-      <div className="mt-4 flex items-start gap-2 text-xs text-[#787878]">
-        <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-        <p>
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '6px',
+        marginTop: '12px',
+        padding: '10px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        fontSize: '9px',
+        color: FINCEPT.MUTED,
+        lineHeight: 1.4,
+      }}>
+        <Info size={12} style={{ flexShrink: 0, marginTop: 1 }} />
+        <p style={{ margin: 0 }}>
           Grid trading places buy orders below and sell orders above the current price.
           When orders fill, opposite orders are placed to capture profits from price oscillations.
         </p>

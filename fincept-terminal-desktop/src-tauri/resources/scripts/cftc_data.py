@@ -187,6 +187,18 @@ class CFTCDataWrapper:
         except:
             return date_str
 
+    def _safe_int(self, value) -> int:
+        """Safely convert value to integer"""
+        if value is None:
+            return 0
+        try:
+            if isinstance(value, str):
+                # Remove commas and convert
+                return int(value.replace(',', ''))
+            return int(value)
+        except (ValueError, TypeError):
+            return 0
+
     def _build_search_query(self, identifier: str) -> str:
         """Build search query for CFTC identifier"""
         if not identifier or identifier.lower() == "all":
@@ -245,14 +257,20 @@ class CFTCDataWrapper:
 
             # Build base URL
             resource_id = self.reports_dict[report_type_key]
-            date_range = f"Report_Date_as_YYYY_MM_DD between '{start_formatted}' AND '{end_formatted}'"
 
-            base_url = f"{self.base_url}/resource/{resource_id}.json?$limit={limit}&$where={date_range}&$order=Report_Date_as_YYYY_MM_DD ASC"
+            # Build the where clause
+            where_clause = f"Report_Date_as_YYYY_MM_DD between '{start_formatted}' AND '{end_formatted}'"
 
             # Add search filter if identifier is provided
             search_query = self._build_search_query(identifier)
             if search_query and search_query != "all":
-                base_url += f" AND (UPPER(contract_market_name) like UPPER('{search_query}') OR UPPER(commodity) like UPPER('{search_query}') OR UPPER(cftc_contract_market_code) like UPPER('{search_query}') OR UPPER(commodity_group_name) like UPPER('{search_query}') OR UPPER(commodity_subgroup_name) like UPPER('{search_query}'))"
+                where_clause += f" AND (UPPER(contract_market_name) like UPPER('{search_query}') OR UPPER(commodity) like UPPER('{search_query}') OR UPPER(cftc_contract_market_code) like UPPER('{search_query}') OR UPPER(commodity_group_name) like UPPER('{search_query}') OR UPPER(commodity_subgroup_name) like UPPER('{search_query}'))"
+
+            # URL encode the where clause
+            import urllib.parse
+            encoded_where = urllib.parse.quote(where_clause)
+
+            base_url = f"{self.base_url}/resource/{resource_id}.json?$limit={limit}&$where={encoded_where}&$order=Report_Date_as_YYYY_MM_DD%20ASC"
 
             # Make request
             data = self._make_request(base_url)
@@ -590,15 +608,28 @@ class CFTCDataWrapper:
             # Process trend data
             trend_data = []
             for record in cot_data:
+                # Handle different field names across report types
+                # Legacy reports use: noncomm_positions_long_all, comm_positions_long_all
+                # Disaggregated reports may use different naming
+                open_interest = self._safe_int(record.get("open_interest_all", 0))
+
+                # Commercial positions
+                comm_long = self._safe_int(record.get("comm_positions_long_all") or record.get("comm_long_all", 0))
+                comm_short = self._safe_int(record.get("comm_positions_short_all") or record.get("comm_short_all", 0))
+
+                # Non-commercial positions
+                noncomm_long = self._safe_int(record.get("noncomm_positions_long_all") or record.get("noncomm_long_all", 0))
+                noncomm_short = self._safe_int(record.get("noncomm_positions_short_all") or record.get("noncomm_short_all", 0))
+
                 trend_point = {
                     "date": record.get("report_date_as_yyyy_mm_dd"),
-                    "open_interest": record.get("open_interest_all", 0),
-                    "commercial_long": record.get("comm_long_all", 0),
-                    "commercial_short": record.get("comm_short_all", 0),
-                    "commercial_net": record.get("comm_long_all", 0) - record.get("comm_short_all", 0),
-                    "non_commercial_long": record.get("noncomm_long_all", 0),
-                    "non_commercial_short": record.get("noncomm_short_all", 0),
-                    "non_commercial_net": record.get("noncomm_long_all", 0) - record.get("noncomm_short_all", 0)
+                    "open_interest": open_interest,
+                    "commercial_long": comm_long,
+                    "commercial_short": comm_short,
+                    "commercial_net": comm_long - comm_short,
+                    "non_commercial_long": noncomm_long,
+                    "non_commercial_short": noncomm_short,
+                    "non_commercial_net": noncomm_long - noncomm_short
                 }
                 trend_data.append(trend_point)
 

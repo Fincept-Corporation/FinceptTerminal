@@ -3,9 +3,9 @@
 
 import React, { useState } from 'react';
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, ResponsiveContainer, Tooltip, ComposedChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import type { PeerCompany, CompanyMetrics, ViewMode } from '../../../../types/peer';
+import type { PeerCompany, CompanyMetrics, ViewMode, PercentileRanking } from '@/types/peer';
 import { formatMetricValue, getMetricValue, getAllMetricNames } from '../../../../types/peer';
-import { usePeerComparison } from '../../../../hooks/usePeerComparison';
+import { usePeerComparison } from '@/hooks/usePeerComparison';
 import { PercentileRankMini } from './PercentileRankChart';
 import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
 
@@ -74,18 +74,18 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
     if (!comparisonData) return;
 
     // Prepare CSV data
-    const headers = ['Metric', comparisonData.target.symbol, ...comparisonData.peers.map(p => p.symbol)];
+    const headers = ['Metric', comparisonData.target.symbol, ...comparisonData.peers.map((p: CompanyMetrics) => p.symbol)];
     const rows: string[][] = [];
 
     // Add all metrics
     const allMetrics = getAllMetricNames(comparisonData.target);
     allMetrics.forEach(metric => {
       const targetVal = getMetricValue(comparisonData.target, metric);
-      const peerVals = comparisonData.peers.map(p => getMetricValue(p, metric));
+      const peerVals = comparisonData.peers.map((p: CompanyMetrics) => getMetricValue(p, metric));
       const row = [
         metric,
         targetVal !== undefined ? targetVal.toString() : 'N/A',
-        ...peerVals.map(v => v !== undefined ? v.toString() : 'N/A')
+        ...peerVals.map((v: number | undefined) => v !== undefined ? v.toString() : 'N/A')
       ];
       rows.push(row);
     });
@@ -117,13 +117,13 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
 
       // Collect all values for this metric
       const targetValue = getMetricValue(comparisonData.target, metric) || 0;
-      const peerValues = comparisonData.peers.map((peer, index) => ({
+      const peerValues = comparisonData.peers.map((peer: CompanyMetrics, index: number) => ({
         index,
         value: getMetricValue(peer, metric) || 0,
       }));
 
       // Find min and max for normalization
-      const allValues = [targetValue, ...peerValues.map(p => p.value)];
+      const allValues = [targetValue, ...peerValues.map((p: { index: number; value: number }) => p.value)];
       const minVal = Math.min(...allValues);
       const maxVal = Math.max(...allValues);
       const range = maxVal - minVal;
@@ -135,13 +135,13 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
       };
 
       data.target = normalize(targetValue);
-      peerValues.forEach(({ index, value }) => {
+      peerValues.forEach(({ index, value }: { index: number; value: number }) => {
         data[`peer${index + 1}`] = normalize(value);
       });
 
       // Store original values for tooltip
       data.targetOriginal = targetValue;
-      peerValues.forEach(({ index, value }) => {
+      peerValues.forEach(({ index, value }: { index: number; value: number }) => {
         data[`peer${index + 1}Original`] = value;
       });
 
@@ -284,7 +284,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
             gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
             gap: SPACING.MEDIUM,
           }}>
-            {selectedPeers.map((peer) => (
+            {selectedPeers.map((peer: PeerCompany) => (
               <div
                 key={peer.symbol}
                 style={{
@@ -405,8 +405,8 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
             </h4>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.SMALL }}>
               {availablePeers
-                .filter((peer) => !selectedPeers.find((p) => p.symbol === peer.symbol))
-                .map((peer) => (
+                .filter((peer: PeerCompany) => !selectedPeers.find((p: PeerCompany) => p.symbol === peer.symbol))
+                .map((peer: PeerCompany) => (
                   <button
                     key={peer.symbol}
                     onClick={() => addPeer(peer)}
@@ -488,9 +488,9 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
             const pbValue = comparisonData.target.valuation.pbRatio;
             const psValue = comparisonData.target.valuation.psRatio;
 
-            const pePeers = comparisonData.peers.map(p => p.valuation.peRatio).filter(v => v !== undefined) as number[];
-            const pbPeers = comparisonData.peers.map(p => p.valuation.pbRatio).filter(v => v !== undefined) as number[];
-            const psPeers = comparisonData.peers.map(p => p.valuation.psRatio).filter(v => v !== undefined) as number[];
+            const pePeers = comparisonData.peers.map((p: CompanyMetrics) => p.valuation.peRatio).filter((v: number | undefined): v is number => v !== undefined);
+            const pbPeers = comparisonData.peers.map((p: CompanyMetrics) => p.valuation.pbRatio).filter((v: number | undefined): v is number => v !== undefined);
+            const psPeers = comparisonData.peers.map((p: CompanyMetrics) => p.valuation.psRatio).filter((v: number | undefined): v is number => v !== undefined);
 
             const calcPercentile = (val: number | undefined, peers: number[]) => {
               if (val === undefined || peers.length === 0) return 50;
@@ -760,7 +760,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                       value: targetValue || 0,
                       fill: FINCEPT.ORANGE,
                     },
-                    ...comparisonData.peers.map((peer, index) => ({
+                    ...comparisonData.peers.map((peer: CompanyMetrics, index: number) => ({
                       name: peer.symbol,
                       value: getMetricValue(peer, metric) || 0,
                       fill: [FINCEPT.CYAN, FINCEPT.GREEN, FINCEPT.YELLOW, FINCEPT.PURPLE, FINCEPT.BLUE][index % 5],
@@ -861,7 +861,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                     fillOpacity={0.3}
                     strokeWidth={2}
                   />
-                  {comparisonData.peers.map((peer, index) => (
+                  {comparisonData.peers.map((peer: CompanyMetrics, index: number) => (
                     <Radar
                       key={peer.symbol}
                       name={peer.symbol}
@@ -944,7 +944,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
             <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.LARGE }}>
               {selectedMetrics.map((metric) => {
                 const targetValue = getMetricValue(comparisonData.target, metric);
-                const peerValues = comparisonData.peers.map((p) => getMetricValue(p, metric)).filter(v => v !== undefined) as number[];
+                const peerValues = comparisonData.peers.map((p: CompanyMetrics) => getMetricValue(p, metric)).filter((v: number | undefined): v is number => v !== undefined);
 
                 if (targetValue === undefined || peerValues.length === 0) return null;
 

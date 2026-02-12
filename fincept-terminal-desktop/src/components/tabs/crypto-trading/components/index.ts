@@ -7,3 +7,4 @@ export { CryptoOrderEntry } from './CryptoOrderEntry';
 export { CryptoChartArea } from './CryptoChartArea';
 export { CryptoBottomPanel } from './CryptoBottomPanel';
 export { CryptoStatusBar } from './CryptoStatusBar';
+export { CryptoSettingsPanel } from './CryptoSettingsPanel';
