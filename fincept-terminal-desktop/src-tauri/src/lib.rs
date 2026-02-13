@@ -1313,6 +1313,8 @@ pub fn run() {
             commands::adb::get_adb_indicators,
             commands::adb::search_adb_datasets,
             commands::adb::get_adb_development_data,
+            // PxWeb Statistics Finland Commands
+            commands::pxweb::execute_pxweb_command,
             // OpenAFRICA Commands
             commands::openafrica::execute_openafrica_command,
             commands::openafrica::search_openafrica_datasets,
@@ -1703,6 +1705,27 @@ pub fn run() {
             commands::alpha_arena::list_alpha_trading_styles,
             commands::alpha_arena::create_alpha_styled_agents,
             commands::alpha_arena::run_alpha_action,
+            commands::alpha_arena::get_alpha_sentiment,
+            commands::alpha_arena::get_alpha_market_mood,
+            // Alpha Arena - HITL (Human-in-the-Loop)
+            commands::alpha_arena::check_alpha_approval,
+            commands::alpha_arena::approve_alpha_decision,
+            commands::alpha_arena::reject_alpha_decision,
+            commands::alpha_arena::get_alpha_pending_approvals,
+            commands::alpha_arena::get_alpha_hitl_status,
+            commands::alpha_arena::update_alpha_hitl_rule,
+            // Alpha Arena - Portfolio & Grid
+            commands::alpha_arena::get_alpha_portfolio_metrics,
+            commands::alpha_arena::get_alpha_equity_curve,
+            commands::alpha_arena::create_alpha_grid_agent,
+            commands::alpha_arena::get_alpha_grid_status,
+            // Alpha Arena - Research & Broker
+            commands::alpha_arena::get_alpha_research,
+            commands::alpha_arena::get_alpha_sec_filings,
+            commands::alpha_arena::get_alpha_features,
+            commands::alpha_arena::list_alpha_brokers,
+            commands::alpha_arena::get_alpha_broker,
+            commands::alpha_arena::get_alpha_broker_ticker,
             // AI Quant Lab - Qlib
             commands::ai_quant_lab::qlib_list_models,
             commands::ai_quant_lab::qlib_get_factor_library,
@@ -2567,6 +2590,7 @@ pub fn run() {
             commands::algo_trading::deploy_algo_strategy,
             commands::algo_trading::stop_algo_deployment,
             commands::algo_trading::stop_all_algo_deployments,
+            commands::algo_trading::delete_algo_deployment,
             commands::algo_trading::list_algo_deployments,
             commands::algo_trading::get_algo_trades,
             commands::algo_trading::run_algo_scan,
@@ -2577,6 +2601,8 @@ pub fn run() {
             commands::algo_trading::run_algo_backtest,
             commands::algo_trading::start_order_signal_bridge,
             commands::algo_trading::stop_order_signal_bridge,
+            commands::algo_trading::get_deployment_prices,
+            commands::algo_trading::debug_algo_deployment,
             // Python Strategy Library
             commands::algo_trading::list_python_strategies,
             commands::algo_trading::get_strategy_categories,

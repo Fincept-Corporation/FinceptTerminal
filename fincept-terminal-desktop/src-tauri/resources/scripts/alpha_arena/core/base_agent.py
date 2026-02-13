@@ -364,32 +364,28 @@ class LLMTradingAgent(BaseTradingAgent):
             )
 
     async def initialize(self) -> bool:
-        """Initialize the LLM agent."""
-        self._mock_reason = None  # Track why we're in mock mode
+        """Initialize the LLM agent. Returns False if LLM cannot be created."""
+        self._init_error = None
         try:
             self._llm = await self._create_llm()
             if self._llm is None:
-                self._mock_reason = "agno library not available"
-                logger.warning(f"LLM agent '{self.name}' initialized in MOCK mode ({self._mock_reason})")
+                self._init_error = "agno library not available - install with: pip install agno"
+                logger.error(f"LLM agent '{self.name}' FAILED to initialize: {self._init_error}")
+                self._initialized = False
+                return False
             await super().initialize()
             return True
         except Exception as e:
             logger.error(f"Failed to initialize LLM agent '{self.name}': {e}")
             self._llm = None
-            self._mock_reason = str(e)
-            await super().initialize()
-            logger.warning(f"Agent '{self.name}' will use MOCK decisions: {self._mock_reason}")
-            return True
+            self._init_error = str(e)
+            self._initialized = False
+            return False
 
     @property
-    def is_mock_mode(self) -> bool:
-        """Whether this agent is running in mock mode (no real LLM)."""
-        return self._llm is None
-
-    @property
-    def mock_mode_reason(self) -> Optional[str]:
-        """Reason for being in mock mode, or None if using real LLM."""
-        return getattr(self, '_mock_reason', None)
+    def init_error(self) -> Optional[str]:
+        """Error message if initialization failed, or None if successful."""
+        return getattr(self, '_init_error', None)
 
     async def _create_llm(self):
         """Create the LLM instance based on provider."""
@@ -531,9 +527,11 @@ class LLMTradingAgent(BaseTradingAgent):
         prompt = self._build_prompt(market_data, portfolio, cycle_number)
 
         if self._llm is None:
-            # Mock decision for testing
-            logger.warning(f"Agent '{self.name}' using mock decision (no LLM available)")
-            return self._mock_decision(market_data, cycle_number)
+            init_error = getattr(self, '_init_error', 'unknown')
+            raise RuntimeError(
+                f"Agent '{self.name}' has no LLM configured and cannot make real trading decisions. "
+                f"Reason: {init_error}. Configure a valid API key and LLM provider."
+            )
 
         # Handle Fincept custom API
         if self._llm == "fincept_custom":
@@ -972,22 +970,3 @@ Respond ONLY with the JSON object, nothing else.
                 price_at_decision=market_data.price,
             )
 
-    def _mock_decision(self, market_data: MarketData, cycle_number: int) -> ModelDecision:
-        """Generate a mock decision for testing."""
-        import random
-
-        actions = [TradeAction.BUY, TradeAction.SELL, TradeAction.HOLD]
-        action = random.choice(actions)
-        mock_reason = getattr(self, '_mock_reason', 'unknown')
-
-        return ModelDecision(
-            competition_id="",
-            model_name=self.name,
-            cycle_number=cycle_number,
-            action=action,
-            symbol=market_data.symbol,
-            quantity=0.01 if action != TradeAction.HOLD else 0,
-            confidence=0.0,  # Zero confidence for mock decisions
-            reasoning=f"[MOCK MODE - {mock_reason}] Random decision: {action.value}. Configure a valid API key in Settings > LLM Config to enable real LLM decisions.",
-            price_at_decision=market_data.price,
-        )

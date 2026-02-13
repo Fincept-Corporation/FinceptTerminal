@@ -12,8 +12,8 @@
     "tauri:dev": "bun run tauri dev",
     "tauri:build": "bun run tauri build",
     "tauri:build:msstore": "bun run tauri build --config src-tauri/tauri.microsoftstore.conf.json",
-    "bump-version": "bun scripts/bump-version.js",
-    "i18n:sync": "bun scripts/sync-translations.js",
+    "bump-version": "bun scripts/bump-version.ts",
+    "i18n:sync": "bun scripts/sync-translations.ts",
     "i18n:generate": "python scripts/generate_translations.py",
     "i18n:generate:force": "python scripts/generate_translations.py --force",
     "i18n:generate:dry": "python scripts/generate_translations.py --dry-run"

@@ -17,10 +17,23 @@ import time
 import os
 import signal
 import uuid
+import logging
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from condition_evaluator import load_candles_from_db, evaluate_condition_group
+
+# ── Heavy debug logging ──────────────────────────────────────────────
+LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'algo_runner_debug.log')
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8'),
+        logging.StreamHandler(sys.stderr),
+    ],
+)
+log = logging.getLogger('algo_runner')
 
 # Graceful shutdown
 running = True
@@ -34,7 +47,7 @@ signal.signal(signal.SIGINT, signal_handler)
 
 
 TIMEFRAME_SECONDS = {
-    '1m': 60, '3m': 180, '5m': 300, '10m': 600, '15m': 900,
+    'live': 1, '1m': 60, '3m': 180, '5m': 300, '10m': 600, '15m': 900,
     '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400,
 }
 
@@ -139,15 +152,45 @@ def create_order_signal(db_path: str, deploy_id: str, symbol: str, side: str,
     return signal_id
 
 
+def _normalize_symbol(s: str) -> str:
+    """Strip slashes, dashes, underscores and uppercase for matching."""
+    return s.replace('/', '').replace('-', '').replace('_', '').replace(':', '').upper()
+
+
 def get_current_price(db_path: str, symbol: str) -> float:
-    """Get latest price from strategy_price_cache."""
+    """Get latest price from strategy_price_cache.
+
+    Tries exact match first, then normalized match to handle symbol format
+    differences (e.g., BTC/USD vs BTCUSD, NSE:RELIANCE vs RELIANCE).
+    """
     conn = sqlite3.connect(db_path)
+    # Try exact match first
     row = conn.execute(
-        "SELECT price FROM strategy_price_cache WHERE symbol = ?",
+        "SELECT price FROM strategy_price_cache WHERE symbol = ? ORDER BY updated_at DESC LIMIT 1",
         (symbol,)
     ).fetchone()
+    if row:
+        conn.close()
+        log.debug(f"  get_current_price({symbol}) = {row[0]} (exact match)")
+        return row[0]
+
+    # Try normalized match: load all symbols and compare normalized forms
+    norm = _normalize_symbol(symbol)
+    rows = conn.execute(
+        "SELECT symbol, price FROM strategy_price_cache ORDER BY updated_at DESC"
+    ).fetchall()
     conn.close()
-    return row[0] if row else 0.0
+
+    log.debug(f"  get_current_price({symbol}) exact miss. Normalized={norm}. Cache has {len(rows)} entries: {[(s, p) for s, p in rows[:10]]}")
+
+    for (cached_sym, price) in rows:
+        cached_norm = _normalize_symbol(cached_sym)
+        if cached_norm == norm or norm.startswith(cached_norm) or cached_norm.startswith(norm):
+            log.debug(f"  get_current_price({symbol}) = {price} (normalized/prefix match via '{cached_sym}')")
+            return price
+
+    log.warning(f"  get_current_price({symbol}) = 0.0 (NO MATCH in price cache)")
+    return 0.0
 
 
 def check_risk_management(current_price: float, position: dict, strategy: dict) -> str:
@@ -194,13 +237,29 @@ def main():
     parser.add_argument('--db', required=True)
     args = parser.parse_args()
 
-    sys.stderr.write(f"[algo_runner] Starting deployment {args.deploy_id} for {args.symbol}\n")
+    log.info("=" * 70)
+    log.info("ALGO LIVE RUNNER STARTING")
+    log.info(f"  deploy_id  = {args.deploy_id}")
+    log.info(f"  strategy_id= {args.strategy_id}")
+    log.info(f"  symbol     = {args.symbol}")
+    log.info(f"  provider   = {args.provider}")
+    log.info(f"  mode       = {args.mode}")
+    log.info(f"  timeframe  = {args.timeframe}")
+    log.info(f"  quantity   = {args.quantity}")
+    log.info(f"  db         = {args.db}")
+    log.info(f"  pid        = {os.getpid()}")
+    log.info("=" * 70)
 
     # Load strategy
     strategy = load_strategy(args.db, args.strategy_id)
     if not strategy:
+        log.error(f"Strategy {args.strategy_id} NOT FOUND in DB!")
         update_deployment_status(args.db, args.deploy_id, 'error', 'Strategy not found')
         sys.exit(1)
+
+    log.info(f"Strategy loaded OK. Entry conditions: {json.dumps(strategy['entry_conditions'], indent=2)}")
+    log.info(f"Exit conditions: {json.dumps(strategy['exit_conditions'], indent=2)}")
+    log.info(f"Risk: SL={strategy.get('stop_loss')}, TP={strategy.get('take_profit')}, TS={strategy.get('trailing_stop')}")
 
     update_deployment_status(args.db, args.deploy_id, 'running')
 
@@ -216,28 +275,54 @@ def main():
     max_drawdown = 0.0
     peak_pnl = 0.0
     last_candle_time = 0
+    loop_count = 0
 
-    interval = TIMEFRAME_SECONDS.get(args.timeframe, 300)
-    check_interval = max(interval // 2, 5)  # check at half the timeframe interval, min 5s
+    is_live = args.timeframe == 'live'
+    interval = 1 if is_live else TIMEFRAME_SECONDS.get(args.timeframe, 300)
+    check_interval = 1 if is_live else max(interval // 2, 5)
+    log.info(f"Timeframe interval={interval}s, check_interval={check_interval}s, live_mode={is_live}")
 
     while running:
+        loop_count += 1
         try:
-            # Load candles
-            df = load_candles_from_db(args.db, args.symbol, args.timeframe, limit=200)
-            if df.empty or len(df) < 10:
+            # Load candles (live mode needs fewer rows since each row is a tick)
+            candle_limit = 50 if is_live else 200
+            df = load_candles_from_db(args.db, args.symbol, args.timeframe, limit=candle_limit)
+            if df.empty or len(df) < 2:
+                if loop_count <= 5 or loop_count % 20 == 0:
+                    log.warning(f"[loop#{loop_count}] Candle data insufficient: {len(df)} rows (need >=2) for {args.symbol}@{args.timeframe}")
+                    # Dump what symbols exist in candle_cache
+                    try:
+                        conn_debug = sqlite3.connect(args.db)
+                        syms = conn_debug.execute("SELECT DISTINCT symbol, timeframe, COUNT(*) FROM candle_cache GROUP BY symbol, timeframe").fetchall()
+                        conn_debug.close()
+                        log.warning(f"  candle_cache contents: {syms}")
+                    except Exception as dbg_e:
+                        log.warning(f"  could not read candle_cache: {dbg_e}")
                 time.sleep(check_interval)
                 continue
 
             # Check if we have new data
             newest_time = int(df['open_time'].iloc[-1]) if 'open_time' in df.columns else 0
-            if newest_time == last_candle_time:
+            if not is_live and newest_time == last_candle_time:
+                if loop_count <= 3 or loop_count % 60 == 0:
+                    log.debug(f"[loop#{loop_count}] No new candle (last={last_candle_time}), {len(df)} candles loaded. Sleeping {check_interval}s")
                 time.sleep(check_interval)
                 continue
             last_candle_time = newest_time
+            if is_live:
+                if loop_count <= 3 or loop_count % 100 == 0:
+                    log.info(f"[loop#{loop_count}] LIVE tick eval, {len(df)} ticks, latest_price={df['close'].iloc[-1]}")
+            else:
+                log.info(f"[loop#{loop_count}] NEW candle detected! open_time={newest_time}, total candles={len(df)}")
+            log.debug(f"  Last 3 candles: {df[['open_time','open','high','low','close','volume']].tail(3).to_string()}")
 
             current_price = get_current_price(args.db, args.symbol)
+            price_source = "price_cache"
             if current_price <= 0:
                 current_price = float(df['close'].iloc[-1])
+                price_source = "last_candle_close"
+            log.info(f"  Current price = {current_price} (source: {price_source})")
 
             # Check risk management first
             if position['qty'] != 0:
@@ -247,9 +332,11 @@ def main():
                 else:
                     pnl_pct = (position['entry'] - current_price) / position['entry'] * 100
                 position['max_pnl_pct'] = max(position.get('max_pnl_pct', 0), pnl_pct)
+                log.debug(f"  Position: {position['side']} qty={position['qty']} entry={position['entry']} pnl%={pnl_pct:.2f}%")
 
                 risk_exit = check_risk_management(current_price, position, strategy)
                 if risk_exit:
+                    log.info(f"  RISK EXIT TRIGGERED: {risk_exit}")
                     # Close position
                     pnl = (current_price - position['entry']) * position['qty'] if position['side'] == 'BUY' \
                         else (position['entry'] - current_price) * position['qty']
@@ -269,10 +356,18 @@ def main():
                     position = {'qty': 0, 'side': '', 'entry': 0, 'max_pnl_pct': 0}
 
             # Evaluate conditions
+            verbose_log = not is_live or loop_count <= 3 or loop_count % 100 == 0
             if position['qty'] == 0:
                 # No position: check entry conditions
                 entry_result = evaluate_condition_group(entry_conds, df)
+                if verbose_log:
+                    log.info(f"  ENTRY eval => result={entry_result['result']}, logic={entry_result.get('logic','AND')}")
+                    for i, d in enumerate(entry_result.get('details', [])):
+                        log.info(f"    cond[{i}]: {d.get('indicator','')} {d.get('operator','')} target={d.get('target','')} "
+                                 f"computed={d.get('computed_value','')} met={d.get('met',False)} "
+                                 f"{'ERROR: '+d.get('error','') if d.get('error') else ''}")
                 if entry_result['result']:
+                    log.info(f"  >>> ENTRY SIGNAL FIRED! BUY {args.quantity} @ {current_price}")
                     # Enter position
                     position = {
                         'qty': args.quantity,
@@ -291,7 +386,14 @@ def main():
             else:
                 # In position: check exit conditions
                 exit_result = evaluate_condition_group(exit_conds, df)
+                if verbose_log:
+                    log.info(f"  EXIT eval => result={exit_result['result']}, logic={exit_result.get('logic','AND')}")
+                    for i, d in enumerate(exit_result.get('details', [])):
+                        log.info(f"    cond[{i}]: {d.get('indicator','')} {d.get('operator','')} target={d.get('target','')} "
+                                 f"computed={d.get('computed_value','')} met={d.get('met',False)} "
+                                 f"{'ERROR: '+d.get('error','') if d.get('error') else ''}")
                 if exit_result['result']:
+                    log.info(f"  >>> EXIT SIGNAL FIRED!")
                     # Exit position
                     pnl = (current_price - position['entry']) * position['qty'] if position['side'] == 'BUY' \
                         else (position['entry'] - current_price) * position['qty']
@@ -341,15 +443,18 @@ def main():
                 'current_position_entry': position['entry'],
             })
 
+            if loop_count <= 5 or loop_count % 30 == 0:
+                log.info(f"  Metrics: pnl={total_pnl:.2f} unrealized={unrealized:.2f} trades={total_trades} win%={win_rate:.1f} dd={max_drawdown:.2f}")
+
             time.sleep(check_interval)
 
         except Exception as e:
-            sys.stderr.write(f"[algo_runner] Error: {e}\n")
+            log.error(f"[loop#{loop_count}] EXCEPTION: {e}", exc_info=True)
             time.sleep(check_interval)
 
     # Shutdown: update status
     update_deployment_status(args.db, args.deploy_id, 'stopped')
-    sys.stderr.write(f"[algo_runner] Deployment {args.deploy_id} stopped\n")
+    log.info(f"Deployment {args.deploy_id} STOPPED. Total trades={total_trades}, PnL={total_pnl:.2f}")
 
 
 if __name__ == '__main__':

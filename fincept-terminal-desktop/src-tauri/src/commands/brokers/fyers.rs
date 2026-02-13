@@ -1122,6 +1122,7 @@ pub async fn fyers_ws_connect(
         match &msg {
             MarketMessage::Ticker(data) => {
                 let _ = app_handle.emit("fyers_ticker", data);
+                let _ = app_handle.emit("algo_live_ticker", data);
             }
             MarketMessage::OrderBook(data) => {
                 let _ = app_handle.emit("fyers_orderbook", data);

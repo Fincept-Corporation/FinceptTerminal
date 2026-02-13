@@ -336,7 +336,7 @@ export async function getMarketMood(
   try {
     const result = await withTimeout(
       invoke<{ success: boolean; market_mood: MarketMood }>('get_alpha_market_mood', { symbols }),
-      30000, 'Get market mood timeout'
+      60000, 'Get market mood timeout'
     );
     return result;
   } catch (error) {

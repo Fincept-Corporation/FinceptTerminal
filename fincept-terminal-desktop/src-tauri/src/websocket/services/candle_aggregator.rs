@@ -164,12 +164,39 @@ impl CandleAggregatorService {
             return;
         }
 
-        // Find all subscriptions matching this symbol
+        // Find all subscriptions matching this symbol (exact, normalized, or prefix/contains)
+        fn normalize_sym(s: &str) -> String {
+            s.replace('/', "").replace('-', "").replace('_', "").replace(':', "").to_uppercase()
+        }
+        let tick_norm = normalize_sym(&ticker.symbol);
+
         let matching_keys: Vec<AggregationKey> = subs
             .keys()
-            .filter(|k| k.symbol == ticker.symbol)
+            .filter(|k| {
+                if k.symbol == ticker.symbol {
+                    return true;
+                }
+                let sub_norm = normalize_sym(&k.symbol);
+                if sub_norm == tick_norm {
+                    return true;
+                }
+                // Handle broker symbol truncation (e.g., Angel One truncates to 10 chars)
+                // "AVANTIFEEDS" subscription should match "AVANTIFEED" tick
+                if sub_norm.starts_with(&tick_norm) || tick_norm.starts_with(&sub_norm) {
+                    return true;
+                }
+                false
+            })
             .cloned()
             .collect();
+
+        // Debug: log subscription mismatches periodically
+        static TICK_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let tc = TICK_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if matching_keys.is_empty() && tc % 500 == 0 {
+            let sub_syms: Vec<&String> = subs.keys().map(|k| &k.symbol).collect();
+            println!("[CandleAggregator] Tick #{} for '{}' (norm='{}') — NO subscription match. Subscriptions: {:?}", tc, ticker.symbol, tick_norm, sub_syms);
+        }
         drop(subs);
 
         if matching_keys.is_empty() {
@@ -178,9 +205,46 @@ impl CandleAggregatorService {
 
         let price = ticker.price;
         let volume = ticker.volume.unwrap_or(0.0);
-        let tick_ts = ticker.timestamp; // epoch seconds
+        // Normalize timestamp to epoch seconds.
+        // Some brokers (e.g., Angel One) send timestamps in milliseconds.
+        // Heuristic: if ts > 1 trillion, it's milliseconds (year ~2001 in seconds is ~1e9).
+        let tick_ts = if ticker.timestamp > 1_000_000_000_000 {
+            ticker.timestamp / 1000
+        } else if ticker.timestamp == 0 {
+            // No timestamp provided -- use current wall-clock time
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0)
+        } else {
+            ticker.timestamp
+        };
+
+        if tc % 200 == 0 {
+            println!("[CandleAggregator] Tick #{} matched {} sub(s) for '{}' price={:.2} raw_ts={} norm_ts={}", tc, matching_keys.len(), ticker.symbol, ticker.price, ticker.timestamp, tick_ts);
+        }
 
         for key in matching_keys {
+            // "live" timeframe: write every tick immediately as a closed candle
+            if key.timeframe == "live" {
+                let closed = ClosedCandle {
+                    symbol: key.symbol.clone(),
+                    provider: ticker.provider.clone(),
+                    timeframe: "live".to_string(),
+                    open_time: tick_ts,
+                    o: price,
+                    h: price,
+                    l: price,
+                    c: price,
+                    volume,
+                };
+                Self::write_candle_to_db(&closed);
+                if let Some(ref handle) = app_handle {
+                    let _ = handle.emit("algo_candle_closed", &closed);
+                }
+                continue;
+            }
+
             let tf_seconds = timeframe_to_seconds(&key.timeframe);
             if tf_seconds == 0 {
                 continue;
@@ -192,7 +256,7 @@ impl CandleAggregatorService {
 
             if let Some(existing) = candle_map.get_mut(&key) {
                 if candle_open_time == existing.open_time {
-                    // Same candle window — update OHLCV
+                    // Same candle window -- update OHLCV
                     if price > existing.h {
                         existing.h = price;
                     }
@@ -203,7 +267,7 @@ impl CandleAggregatorService {
                     existing.volume += volume;
                     existing.tick_count += 1;
                 } else {
-                    // New candle window — close the old one
+                    // New candle window -- close the old one
                     let closed = ClosedCandle {
                         symbol: existing.symbol.clone(),
                         provider: existing.provider.clone(),
@@ -226,7 +290,7 @@ impl CandleAggregatorService {
 
                     // Start new candle
                     *existing = CandleState {
-                        symbol: ticker.symbol.clone(),
+                        symbol: key.symbol.clone(),
                         provider: ticker.provider.clone(),
                         timeframe: key.timeframe.clone(),
                         open_time: candle_open_time,
@@ -239,11 +303,11 @@ impl CandleAggregatorService {
                     };
                 }
             } else {
-                // First tick for this key — start new candle
+                // First tick for this key -- start new candle
                 candle_map.insert(
                     key.clone(),
                     CandleState {
-                        symbol: ticker.symbol.clone(),
+                        symbol: key.symbol.clone(),
                         provider: ticker.provider.clone(),
                         timeframe: key.timeframe.clone(),
                         open_time: candle_open_time,
@@ -279,7 +343,7 @@ impl CandleAggregatorService {
                 }
             };
 
-            if let Err(e) = conn.execute(
+            match conn.execute(
                 "INSERT OR REPLACE INTO candle_cache
                     (symbol, provider, timeframe, open_time, o, h, l, c, volume, is_closed)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1)",
@@ -295,7 +359,13 @@ impl CandleAggregatorService {
                     candle.volume,
                 ],
             ) {
-                eprintln!("[CandleAggregator] DB write error: {}", e);
+                Ok(_) => {
+                    println!("[CandleAggregator] Wrote candle: {} {} open_time={} O={:.2} H={:.2} L={:.2} C={:.2} V={:.0}",
+                        candle.symbol, candle.timeframe, candle.open_time, candle.o, candle.h, candle.l, candle.c, candle.volume);
+                }
+                Err(e) => {
+                    eprintln!("[CandleAggregator] DB write error: {}", e);
+                }
             }
         });
     }

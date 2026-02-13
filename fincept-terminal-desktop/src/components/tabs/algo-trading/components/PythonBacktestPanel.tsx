@@ -130,7 +130,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
           maxHeight: '90vh',
           backgroundColor: F.PANEL_BG,
           border: `1px solid ${F.BORDER}`,
-          borderRadius: '8px',
+          borderRadius: '2px',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -195,7 +195,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
                   padding: '8px',
                   backgroundColor: F.DARK_BG,
                   border: `1px solid ${F.BORDER}`,
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   color: F.WHITE,
                   fontSize: '11px',
                 }}
@@ -217,7 +217,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
                   padding: '8px',
                   backgroundColor: F.DARK_BG,
                   border: `1px solid ${F.BORDER}`,
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   color: F.WHITE,
                   fontSize: '11px',
                 }}
@@ -238,7 +238,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
                   padding: '8px',
                   backgroundColor: F.DARK_BG,
                   border: `1px solid ${F.BORDER}`,
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   color: F.WHITE,
                   fontSize: '11px',
                 }}
@@ -259,7 +259,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
                   padding: '8px',
                   backgroundColor: F.DARK_BG,
                   border: `1px solid ${F.BORDER}`,
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   color: F.WHITE,
                   fontSize: '11px',
                 }}
@@ -281,7 +281,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
                   padding: '8px',
                   backgroundColor: F.DARK_BG,
                   border: `1px solid ${F.BORDER}`,
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   color: F.WHITE,
                   fontSize: '11px',
                 }}
@@ -302,7 +302,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
                   backgroundColor: loading ? F.GRAY : F.ORANGE,
                   color: F.DARK_BG,
                   border: 'none',
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   fontSize: '11px',
                   fontWeight: 700,
                   cursor: loading ? 'not-allowed' : 'pointer',
@@ -336,7 +336,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
               padding: '10px 12px',
               backgroundColor: F.DARK_BG,
               border: `1px solid ${F.BORDER}`,
-              borderRadius: '4px',
+              borderRadius: '2px',
               color: F.GRAY,
               fontSize: '10px',
               cursor: 'pointer',
@@ -372,7 +372,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
                 padding: '12px',
                 backgroundColor: `${F.RED}20`,
                 border: `1px solid ${F.RED}`,
-                borderRadius: '4px',
+                borderRadius: '2px',
                 marginBottom: '16px',
                 display: 'flex',
                 alignItems: 'center',
@@ -452,7 +452,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
                     marginBottom: '16px',
                     padding: '12px',
                     backgroundColor: F.DARK_BG,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     border: `1px solid ${F.BORDER}`,
                   }}
                 >
@@ -469,7 +469,7 @@ const PythonBacktestPanel: React.FC<PythonBacktestPanelProps> = ({ strategy, onC
                   style={{
                     padding: '12px',
                     backgroundColor: F.DARK_BG,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     border: `1px solid ${F.BORDER}`,
                   }}
                 >
@@ -546,7 +546,7 @@ const MetricCard: React.FC<{
     style={{
       padding: '12px',
       backgroundColor: F.DARK_BG,
-      borderRadius: '4px',
+      borderRadius: '2px',
       border: `1px solid ${F.BORDER}`,
     }}
   >

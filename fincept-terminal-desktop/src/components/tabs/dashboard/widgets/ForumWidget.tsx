@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { ForumApiService } from '../../../../services/forum/forumApi';
 import { saveSetting } from '@/services/core/sqliteService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCache } from '@/hooks/useCache';
 
 
 interface ForumPost {
@@ -34,26 +35,30 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
   onNavigateToTab
 }) => {
   const { t } = useTranslation('dashboard');
-  const { session } = useAuth(); // Centralized API key access
-  const [posts, setPosts] = useState<ForumPost[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const mountedRef = useRef(true);
+  const { session } = useAuth();
 
-  const loadPosts = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Use centralized session from AuthContext - automatically updates when key changes
+  const targetCategoryId = categoryId || 3;
+
+  const {
+    data: posts,
+    isLoading: loading,
+    error,
+    refresh
+  } = useCache<ForumPost[]>({
+    key: `widget:forum:${targetCategoryId}:${limit}`,
+    category: 'api-response',
+    ttl: '10m',
+    refetchInterval: 10 * 60 * 1000,
+    staleWhileRevalidate: true,
+    fetcher: async () => {
       const apiKey = session?.api_key || undefined;
       const deviceId = session?.device_id || undefined;
-      const targetCategoryId = categoryId || 3;
 
       const response = await ForumApiService.getPostsByCategory(targetCategoryId, 'latest', limit, apiKey, deviceId);
 
       if (response.success) {
         const postsData = (response.data as any)?.data?.posts || (response.data as any)?.posts || [];
-        const formattedPosts = postsData.map((post: any) => ({
+        return postsData.map((post: any) => ({
           id: post.post_uuid,
           title: post.title,
           author: post.author_display_name || 'Anonymous',
@@ -62,57 +67,34 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
           replies: post.reply_count || 0,
           time: new Date(post.created_at).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })
         }));
-
-        setPosts(formattedPosts);
-      } else {
-        setError(response.error || `HTTP ${response.status_code || 'error'}`);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load forum posts');
-    } finally {
-      setLoading(false);
+      throw new Error(response.error || `HTTP ${response.status_code || 'error'}`);
     }
-  };
+  });
 
-  // Cleanup on unmount
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    loadPosts();
-    const interval = setInterval(() => {
-      if (mountedRef.current) loadPosts();
-    }, 10 * 60 * 1000); // Refresh every 10 minutes
-    return () => clearInterval(interval);
-  }, [categoryId, limit, session?.api_key]); // Re-fetch when API key changes
-
+  const displayPosts = posts || [];
 
   return (
     <BaseWidget
       id={id}
       title={`${t('widgets.forum')} - ${categoryName}`}
       onRemove={onRemove}
-      onRefresh={loadPosts}
-      isLoading={loading}
-      error={error}
+      onRefresh={refresh}
+      isLoading={loading && !posts}
+      error={error?.message || null}
     >
       <div style={{ padding: '8px' }}>
-        {posts.map((post, index) => (
+        {displayPosts.map((post, index) => (
           <div
             key={post.id}
             onClick={async () => {
-              // PURE SQLite - Save selected post ID to SQLite
               await saveSetting('forum_selected_post_id', post.id, 'forum_widget');
               onNavigateToTab?.('Forum');
             }}
             style={{
               marginBottom: '8px',
               paddingBottom: '8px',
-              borderBottom: index < posts.length - 1 ? '1px solid var(--ft-border-color)' : 'none',
+              borderBottom: index < displayPosts.length - 1 ? '1px solid var(--ft-border-color)' : 'none',
               cursor: 'pointer'
             }}
             onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.7'; }}
@@ -132,7 +114,7 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
             </div>
           </div>
         ))}
-        {posts.length === 0 && !loading && !error && (
+        {displayPosts.length === 0 && !loading && !error && (
           <div style={{ color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-small)', textAlign: 'center', padding: '12px' }}>
             {t('widgets.noForumPosts')}
           </div>

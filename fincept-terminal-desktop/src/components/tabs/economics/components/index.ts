@@ -1,9 +1,10 @@
 // Economics Tab Components
+// Shared components come from the common charts library.
 
-export { EconomicsChart } from './EconomicsChart';
-export { StatsBar } from './StatsBar';
-export { DataTable } from './DataTable';
+export { DataChart as EconomicsChart } from '@/components/common/charts';
+export { StatsBar } from '@/components/common/charts';
+export { DataTable } from '@/components/common/charts';
+export { DateRangePicker } from '@/components/common/charts';
 export { ApiKeyPanel } from './ApiKeyPanel';
 export { CountrySelector } from './CountrySelector';
 export { IndicatorSelector } from './IndicatorSelector';
-export { DateRangePicker } from './DateRangePicker';

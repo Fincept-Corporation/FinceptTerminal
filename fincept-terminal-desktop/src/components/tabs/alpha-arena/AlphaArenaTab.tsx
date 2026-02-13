@@ -1,99 +1,72 @@
 /**
- * Alpha Arena Tab - Fincept Terminal Design (v2.1)
+ * Alpha Arena Tab - Fincept Terminal Design (v3.0)
  *
- * AI Trading Competition Platform with:
- * - LLM configuration from Settings
- * - Professional terminal-style UI
- * - Real-time leaderboard & performance charts
- * - Repository integration for trade decisions
+ * AI Trading Competition Platform - Render-only component.
+ * All state/logic lives in useAlphaArena hook.
+ * Right panel extracted to AlphaArenaRightPanel.
+ *
+ * UI matches Fincept terminal aesthetic: sharp edges, monospace font,
+ * inline styles, FINCEPT color palette.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { showConfirm } from '@/utils/notifications';
+import React from 'react';
 import {
-  Bot, Trophy, Play, Pause, RotateCcw, Plus, Settings,
+  Trophy, Play, Pause, RotateCcw, Plus,
   TrendingUp, TrendingDown, Activity, Zap, AlertCircle, CheckCircle,
-  ChevronRight, Loader2, BarChart3, Clock, Target, Brain,
-  RefreshCw, Eye, Users, Sparkles, Check, Circle, History, Trash2, PlayCircle,
-  StopCircle, XCircle, Shield, Newspaper, Grid3X3, FileSearch, Building,
+  ChevronRight, Loader2, Clock, Brain,
+  RefreshCw, Check, Circle, History, Trash2, PlayCircle,
+  StopCircle, XCircle,
 } from 'lucide-react';
-import { TabFooter } from '@/components/common/TabFooter';
 import { withErrorBoundary } from '@/components/common/ErrorBoundary';
-import { sqliteService, type LLMModelConfig, type LLMConfig, type LLMGlobalSettings } from '@/services/core/sqliteService';
-import { withTimeout } from '@/services/core/apiUtils';
-import { validateString } from '@/services/core/validators';
-import { useCache, cacheKey } from '@/hooks/useCache';
-import alphaArenaService, { type StoredCompetition } from './services/alphaArenaService';
-import { useAuth } from '@/contexts/AuthContext';
-
-// Enhanced Components
-import {
-  HITLApprovalPanel,
-  SentimentPanel,
-  PortfolioMetricsPanel,
-  GridStrategyPanel,
-  ResearchPanel,
-  BrokerSelector,
-} from './components';
-import { alphaArenaEnhancedService } from './services/alphaArenaEnhancedService';
-
-// Extended model type for Alpha Arena with API key
-interface AlphaArenaModel {
-  id: string;
-  provider: string;
-  model_id: string;
-  display_name: string;
-  api_key?: string;
-  is_enabled: boolean;
-}
-
-// Progress event type from Rust backend
-interface AlphaArenaProgress {
-  event_type: 'step' | 'info' | 'warning' | 'error' | 'complete';
-  step: number;
-  total_steps: number;
-  message: string;
-  details?: unknown;
-}
-import type {
-  CompetitionStatus,
-  LeaderboardEntry,
-  ModelDecision,
-  PerformanceSnapshot,
-  CompetitionMode,
-} from './types';
+import { APP_VERSION } from '@/constants/version';
+import { useAlphaArena, type AlphaArenaModel } from './useAlphaArena';
+import AlphaArenaRightPanel from './AlphaArenaRightPanel';
+import PerformanceChart from './components/PerformanceChart';
 import { formatCurrency, formatPercent, getModelColor } from './types';
-
-// Competition data shape for useCache
-interface CompetitionData {
-  leaderboard: LeaderboardEntry[];
-  decisions: ModelDecision[];
-  snapshots: PerformanceSnapshot[];
-}
+import type { CompetitionMode } from './types';
 
 // =============================================================================
-// Design Constants - Fincept Terminal Style
+// Fincept Terminal Design Constants
 // =============================================================================
 
-const COLORS = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   ORANGE_HOVER: '#FF9900',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
   GREEN: '#00D66F',
-  BLUE: '#3B82F6',
-  PURPLE: '#8B5CF6',
-  YELLOW: '#EAB308',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+  YELLOW: '#FFD700',
+  CYAN: '#00E5FF',
   GRAY: '#787878',
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
   CARD_BG: '#0A0A0A',
   BORDER: '#2A2A2A',
   BORDER_LIGHT: '#3A3A3A',
-  HOVER: '#1A1A1A',
+  HOVER: '#1F1F1F',
   MUTED: '#4A4A4A',
-};
+} as const;
+
+const TERMINAL_FONT = '"IBM Plex Mono", "Consolas", "Monaco", monospace';
+
+const TERMINAL_STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+  .alpha-arena-terminal *::-webkit-scrollbar { width: 6px; height: 6px; }
+  .alpha-arena-terminal *::-webkit-scrollbar-track { background: ${FINCEPT.DARK_BG}; }
+  .alpha-arena-terminal *::-webkit-scrollbar-thumb { background: ${FINCEPT.BORDER}; }
+  .alpha-arena-terminal *::-webkit-scrollbar-thumb:hover { background: ${FINCEPT.MUTED}; }
+  @keyframes alpha-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  @keyframes alpha-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+`;
 
 const TRADING_SYMBOLS = [
   { value: 'BTC/USD', label: 'Bitcoin (BTC/USD)' },
@@ -140,707 +113,210 @@ const COMPETITION_MODES: { value: CompetitionMode; label: string; desc: string }
 // =============================================================================
 
 const AlphaArenaTab: React.FC = () => {
-  // Auth context for Fincept API key
-  const { session } = useAuth();
-
-  // Competition state
-  const [competitionId, setCompetitionId] = useState<string | null>(null);
-  const [status, setStatus] = useState<CompetitionStatus | null>(null);
-  const [cycleCount, setCycleCount] = useState(0);
-
-  // Data state
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [decisions, setDecisions] = useState<ModelDecision[]>([]);
-  const [snapshots, setSnapshots] = useState<PerformanceSnapshot[]>([]);
-
-  // LLM state - from Settings
-  const [configuredLLMs, setConfiguredLLMs] = useState<AlphaArenaModel[]>([]);
-  const [selectedModels, setSelectedModels] = useState<AlphaArenaModel[]>([]);
-  const [llmGlobalSettings, setLlmGlobalSettings] = useState<LLMGlobalSettings>({ temperature: 0.7, max_tokens: 2000, system_prompt: '' });
-
-  // UI state
-  const [isLoading, setIsLoading] = useState(false);
-  const [isAutoRunning, setIsAutoRunning] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
-  const [showCreatePanel, setShowCreatePanel] = useState(false);
-  const [showPastCompetitions, setShowPastCompetitions] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  // Enhanced features state
-  type RightPanelTab = 'decisions' | 'hitl' | 'sentiment' | 'metrics' | 'grid' | 'research' | 'broker';
-  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>('decisions');
-  const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
-  const [latestPrice, setLatestPrice] = useState<number | null>(null);
-
-  // Past competitions - managed by useCache (declared below after mountedRef)
-
-  // Progress tracking state
-  const [progressSteps, setProgressSteps] = useState<AlphaArenaProgress[]>([]);
-  const [currentProgress, setCurrentProgress] = useState<AlphaArenaProgress | null>(null);
-  const progressListenerRef = useRef<UnlistenFn | null>(null);
-
-  // Form state
-  const [competitionName, setCompetitionName] = useState('Alpha Arena Competition');
-  const [symbol, setSymbol] = useState('BTC/USD');
-  const [mode, setMode] = useState<CompetitionMode>('baseline');
-  const [initialCapital, setInitialCapital] = useState(10000);
-  const [cycleInterval, setCycleInterval] = useState(150);
-
-  // Component mounted ref for async safety
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-
-  // Auto-run ref
-  const autoRunIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Track if a cycle is currently running (to prevent overlapping cycles)
-  const cycleInProgressRef = useRef(false);
-
-  // Ref to always hold the latest handleRunCycle to avoid stale closures in setInterval
-  const handleRunCycleRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const arena = useAlphaArena();
 
   // =============================================================================
-  // Load LLM Models from Settings (llm_model_configs table)
-  // =============================================================================
-
-  const loadLLMConfigs = useCallback(async () => {
-    try {
-      // Auto-fix any Google model IDs with incorrect format
-      await withTimeout(sqliteService.fixGoogleModelIds(), 15000);
-
-      // Load from llm_model_configs table (individual models configured in Settings)
-      const modelConfigs = await withTimeout(sqliteService.getLLMModelConfigs(), 15000);
-      // Load provider configs for API key fallback and for fincept (which is auto-configured)
-      const providerConfigs = await withTimeout(sqliteService.getLLMConfigs(), 15000);
-
-      // Load global LLM settings (temperature, max_tokens, system_prompt)
-      try {
-        const globalSettings = await withTimeout(sqliteService.getLLMGlobalSettings(), 10000);
-        if (mountedRef.current && globalSettings) {
-          setLlmGlobalSettings(globalSettings);
-        }
-      } catch (settingsErr) {
-        console.warn('[AlphaArena] Failed to load global LLM settings, using defaults:', settingsErr);
-      }
-
-      // Process models - filter and validate
-      const validModels: AlphaArenaModel[] = [];
-
-      // First, add fincept from provider configs (it's auto-configured, not in llm_model_configs)
-      // Use session API key for fincept (the same key used for all Fincept backend APIs)
-      const finceptProvider = providerConfigs.find(c => (c.provider || '').toLowerCase() === 'fincept');
-      const finceptApiKey = session?.api_key || finceptProvider?.api_key;
-      if (finceptProvider || finceptApiKey) {
-        validModels.push({
-          id: 'fincept-auto',
-          provider: 'fincept',
-          model_id: finceptProvider?.model || 'fincept-llm',
-          display_name: 'Fincept LLM (Auto)',
-          api_key: finceptApiKey || undefined,
-          is_enabled: true,
-        });
-      }
-
-      // Then process models from llm_model_configs table
-      for (const model of modelConfigs) {
-        // Skip disabled models
-        if (!model.is_enabled) {
-          continue;
-        }
-
-        const providerLower = (model.provider || '').toLowerCase();
-
-        // Get API key - try model config first, then provider config
-        let apiKey = model.api_key;
-        if (!apiKey || apiKey.trim() === '') {
-          const providerConfig = providerConfigs.find(
-            c => (c.provider || '').toLowerCase() === providerLower
-          );
-          if (providerConfig?.api_key && providerConfig.api_key.trim() !== '') {
-            apiKey = providerConfig.api_key;
-          }
-        }
-
-        // Skip if no API key (except ollama and fincept which may not need one in the same way)
-        const noApiKeyRequired = providerLower === 'ollama' || providerLower === 'fincept';
-        if ((!apiKey || apiKey.trim() === '') && !noApiKeyRequired) {
-          continue;
-        }
-
-        validModels.push({
-          id: model.id,
-          provider: model.provider,
-          model_id: model.model_id,
-          display_name: model.display_name || model.model_id,
-          api_key: apiKey || undefined,
-          is_enabled: model.is_enabled,
-        });
-      }
-
-      if (!mountedRef.current) return;
-      setConfiguredLLMs(validModels);
-
-      // Pre-select first 2 models
-      if (validModels.length >= 2) {
-        setSelectedModels(validModels.slice(0, 2));
-      } else if (validModels.length === 1) {
-        setSelectedModels([validModels[0]]);
-      } else {
-        setSelectedModels([]);
-      }
-    } catch (err) {
-      if (!mountedRef.current) return;
-      console.error('[AlphaArena] Failed to load LLM configs:', err);
-    }
-  }, [session?.api_key]);
-
-  useEffect(() => {
-    loadLLMConfigs();
-  }, [loadLLMConfigs]);
-
-  // Reload LLM configs when user changes them in Settings tab
-  useEffect(() => {
-    const handler = () => {
-      loadLLMConfigs();
-    };
-    window.addEventListener('llm-config-changed', handler);
-    return () => {
-      window.removeEventListener('llm-config-changed', handler);
-    };
-  }, [loadLLMConfigs]);
-
-  // =============================================================================
-  // Past Competitions (useCache)
-  // =============================================================================
-
-  const pastCompetitionsCache = useCache<StoredCompetition[]>({
-    key: cacheKey('alpha-arena', 'past-competitions'),
-    category: 'alpha-arena',
-    fetcher: async () => {
-      const result = await alphaArenaService.listCompetitions(20);
-      if (result.success && result.competitions) {
-        return result.competitions;
-      }
-      return [];
-    },
-    ttl: 120,
-    staleWhileRevalidate: true,
-  });
-
-  const pastCompetitions = pastCompetitionsCache.data || [];
-  const loadingPastCompetitions = pastCompetitionsCache.isLoading;
-
-  // Resume a past competition
-  const handleResumeCompetition = async (comp: StoredCompetition) => {
-    setIsLoading(true);
-    setError(null);
-    setProgressSteps([]);
-
-    try {
-      // Set the competition ID - the backend will restore from DB when we run a cycle
-      setCompetitionId(comp.competition_id);
-      setCycleCount(comp.cycle_count);
-      setStatus(comp.status as CompetitionStatus);
-      setShowPastCompetitions(false);
-      setSuccess(`Loaded competition: ${comp.config.competition_name}`);
-      setTimeout(() => { if (mountedRef.current) setSuccess(null); }, 3000);
-
-      // Competition data will auto-fetch via useCache when competitionId changes
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setError(err instanceof Error ? err.message : 'Failed to resume competition');
-    } finally {
-      if (mountedRef.current) setIsLoading(false);
-    }
-  };
-
-  // Delete a competition
-  const handleDeleteCompetition = async (targetId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    const confirmed = await showConfirm(
-      'This action cannot be undone.',
-      { title: 'Delete this competition?', type: 'danger' }
-    );
-    if (!confirmed) return;
-
-    try {
-      const result = await alphaArenaService.deleteCompetition(targetId);
-      if (!mountedRef.current) return;
-      if (result.success) {
-        pastCompetitionsCache.invalidate();
-        // If deleting the active competition, reset state
-        if (competitionId === targetId) {
-          setCompetitionId(null);
-          setStatus(null);
-          setCycleCount(0);
-          setLeaderboard([]);
-          setDecisions([]);
-          setSnapshots([]);
-        }
-        setSuccess('Competition deleted');
-        setTimeout(() => { if (mountedRef.current) setSuccess(null); }, 3000);
-      } else {
-        setError(result.error || 'Failed to delete competition');
-      }
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setError(err instanceof Error ? err.message : 'Failed to delete competition');
-    }
-  };
-
-  // =============================================================================
-  // Progress Event Listener
-  // =============================================================================
-
-  useEffect(() => {
-    // Listen for progress events from Rust backend
-    const setupListener = async () => {
-      progressListenerRef.current = await listen<AlphaArenaProgress>(
-        'alpha-arena-progress',
-        (event) => {
-          const progress = event.payload;
-          setCurrentProgress(progress);
-          setProgressSteps(prev => {
-            // Avoid duplicates
-            if (prev.some(p => p.step === progress.step && p.message === progress.message)) {
-              return prev;
-            }
-            return [...prev, progress];
-          });
-
-          // Handle completion
-          if (progress.event_type === 'complete') {
-            setTimeout(() => {
-              setCurrentProgress(null);
-              setProgressSteps([]);
-            }, 2000);
-          }
-
-          // Handle errors
-          if (progress.event_type === 'error') {
-            setError(progress.message);
-          }
-        }
-      );
-    };
-
-    setupListener();
-
-    return () => {
-      if (progressListenerRef.current) {
-        progressListenerRef.current();
-      }
-    };
-  }, []);
-
-  // =============================================================================
-  // Competition Data (useCache with auto-refresh)
-  // =============================================================================
-
-  const compDataCache = useCache<CompetitionData>({
-    key: cacheKey('alpha-arena', 'comp-data', competitionId || 'none'),
-    category: 'alpha-arena',
-    fetcher: async () => {
-      const targetId = competitionId;
-      if (!targetId) return { leaderboard: [], decisions: [], snapshots: [] };
-
-      const [leaderboardResult, decisionsResult, snapshotsResult] = await Promise.all([
-        alphaArenaService.getLeaderboard(targetId),
-        alphaArenaService.getDecisions(targetId),
-        alphaArenaService.getSnapshots(targetId),
-      ]);
-
-      return {
-        leaderboard: leaderboardResult.success && leaderboardResult.leaderboard
-          ? leaderboardResult.leaderboard : [],
-        decisions: decisionsResult.success && decisionsResult.decisions
-          ? decisionsResult.decisions : [],
-        snapshots: snapshotsResult.success && snapshotsResult.snapshots
-          ? snapshotsResult.snapshots : [],
-      };
-    },
-    ttl: 30,
-    enabled: !!competitionId,
-    staleWhileRevalidate: true,
-    refetchInterval: 15000,
-  });
-
-  // Sync cache data to local state for use in render functions
-  useEffect(() => {
-    if (compDataCache.data) {
-      setLeaderboard(compDataCache.data.leaderboard);
-      setDecisions(compDataCache.data.decisions);
-      setSnapshots(compDataCache.data.snapshots);
-    }
-  }, [compDataCache.data]);
-
-  // Convenience function: refresh competition data (used after actions)
-  const refreshCompetitionData = useCallback(() => {
-    compDataCache.refresh();
-  }, [compDataCache]);
-
-  // =============================================================================
-  // Competition Actions
-  // =============================================================================
-
-  const handleCreateCompetition = async () => {
-    // Input validation
-    const nameCheck = validateString(competitionName, { minLength: 1, maxLength: 200 });
-    if (!nameCheck.valid) {
-      setError(`Competition name: ${nameCheck.error}`);
-      return;
-    }
-    if (selectedModels.length < 2) {
-      setError('Select at least 2 AI models from your configured models in Settings');
-      return;
-    }
-    if (!Number.isFinite(initialCapital) || initialCapital < 100) {
-      setError('Initial capital must be at least $100');
-      return;
-    }
-    if (!Number.isFinite(cycleInterval) || cycleInterval < 10) {
-      setError('Cycle interval must be at least 10 seconds');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setProgressSteps([]); // Reset progress
-    setCurrentProgress(null);
-
-    try {
-      const result = await alphaArenaService.createCompetition({
-        competition_name: competitionName,
-        models: selectedModels.map(m => ({
-          name: m.display_name,
-          provider: m.provider,
-          model_id: m.model_id,
-          api_key: m.api_key, // Include API key from model config
-          initial_capital: initialCapital,
-        })),
-        symbols: [symbol],
-        initial_capital: initialCapital,
-        mode,
-        cycle_interval_seconds: cycleInterval,
-        // Pass global LLM settings from Settings tab
-        llm_settings: {
-          temperature: llmGlobalSettings.temperature,
-          max_tokens: llmGlobalSettings.max_tokens,
-          system_prompt: llmGlobalSettings.system_prompt,
-        },
-      });
-
-      if (!mountedRef.current) return;
-      if (result.success && result.competition_id) {
-        setCompetitionId(result.competition_id);
-        setStatus('created');
-        setShowCreatePanel(false);
-        setSuccess('Competition created successfully');
-        setTimeout(() => { if (mountedRef.current) setSuccess(null); }, 3000);
-      } else {
-        setError(result.error || 'Failed to create competition');
-      }
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      if (mountedRef.current) setIsLoading(false);
-    }
-  };
-
-  const handleRunCycle = useCallback(async () => {
-    if (!competitionId) return;
-
-    // Prevent overlapping cycles
-    if (cycleInProgressRef.current) {
-      return;
-    }
-
-    cycleInProgressRef.current = true;
-    setIsLoading(true);
-    setError(null);
-    setProgressSteps([]);
-    setCurrentProgress(null);
-
-    try {
-      // Capture current values before async operation to prevent stale closures
-      const currentCompetitionId = competitionId;
-      const currentModels = [...selectedModels];
-      // Build API keys map from selected models for the Python backend
-      const apiKeys: Record<string, string> = {};
-      for (const model of currentModels) {
-        if (model.api_key && !apiKeys[model.provider]) {
-          apiKeys[model.provider] = model.api_key;
-        }
-      }
-      const result = await alphaArenaService.runCycle(currentCompetitionId, Object.keys(apiKeys).length > 0 ? apiKeys : undefined);
-
-      if (!mountedRef.current) return;
-      if (result.success) {
-        setCycleCount(prev => result.cycle_number || prev + 1);
-        setStatus('running');
-        refreshCompetitionData();
-        // Surface any decision save warnings
-        if (result.warnings && result.warnings.length > 0) {
-          setError(`Cycle completed with warnings: ${result.warnings[0]}`);
-          setTimeout(() => { if (mountedRef.current) setError(null); }, 5000);
-        }
-      } else {
-        setError(result.error || 'Cycle failed');
-      }
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      cycleInProgressRef.current = false;
-      if (mountedRef.current) setIsLoading(false);
-    }
-  }, [competitionId, selectedModels, refreshCompetitionData]);
-
-  // Keep ref in sync so setInterval always calls the latest version
-  useEffect(() => {
-    handleRunCycleRef.current = handleRunCycle;
-  }, [handleRunCycle]);
-
-  const handleToggleAutoRun = useCallback(() => {
-    if (isAutoRunning) {
-      if (autoRunIntervalRef.current) {
-        clearInterval(autoRunIntervalRef.current);
-        autoRunIntervalRef.current = null;
-      }
-      setIsAutoRunning(false);
-      setStatus('paused');
-    } else {
-      setIsAutoRunning(true);
-      setStatus('running');
-
-      // Run first cycle immediately
-      handleRunCycleRef.current();
-
-      // Use ref in interval to always call the latest handleRunCycle
-      autoRunIntervalRef.current = setInterval(() => {
-        handleRunCycleRef.current();
-      }, cycleInterval * 1000);
-    }
-  }, [isAutoRunning, cycleInterval]);
-
-  const handleReset = useCallback(() => {
-    if (autoRunIntervalRef.current) {
-      clearInterval(autoRunIntervalRef.current);
-      autoRunIntervalRef.current = null;
-    }
-    // Cancel any ongoing operation
-    // Reset cycle in progress flag
-    cycleInProgressRef.current = false;
-    setCompetitionId(null);
-    setStatus(null);
-    setCycleCount(0);
-    setLeaderboard([]);
-    setDecisions([]);
-    setSnapshots([]);
-    setIsAutoRunning(false);
-    setIsLoading(false);
-    setIsCancelling(false);
-    setError(null);
-    setProgressSteps([]);
-    setCurrentProgress(null);
-  }, []);
-
-  // Cancel ongoing operation
-  const handleCancel = useCallback(() => {
-    setIsCancelling(true);
-
-    // Stop auto-run if active
-    if (autoRunIntervalRef.current) {
-      clearInterval(autoRunIntervalRef.current);
-      autoRunIntervalRef.current = null;
-      setIsAutoRunning(false);
-    }
-
-    // Reset cycle in progress flag
-    cycleInProgressRef.current = false;
-
-    // Reset loading states
-    setIsLoading(false);
-    setIsCancelling(false);
-    setProgressSteps([]);
-    setCurrentProgress(null);
-    setStatus('paused');
-    setSuccess('Operation cancelled');
-    setTimeout(() => setSuccess(null), 2000);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (autoRunIntervalRef.current) {
-        clearInterval(autoRunIntervalRef.current);
-      }
-    };
-  }, []);
-
-  // Continuous Binance price polling when competition is active (every 7s)
-  useEffect(() => {
-    if (!competitionId || !symbol) return;
-    let cancelled = false;
-
-    const fetchPrice = () => {
-      alphaArenaEnhancedService.getBrokerTicker(symbol).then(result => {
-        if (!cancelled && mountedRef.current && result.success && result.ticker) {
-          setLatestPrice(result.ticker.price);
-        }
-      }).catch(() => {});
-    };
-
-    fetchPrice();
-    const intervalId = setInterval(fetchPrice, 7000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(intervalId);
-    };
-  }, [competitionId, symbol]);
-
-  const toggleModelSelection = (model: AlphaArenaModel) => {
-    setSelectedModels(prev => {
-      const isSelected = prev.some(m => m.id === model.id);
-      if (isSelected) {
-        return prev.filter(m => m.id !== model.id);
-      }
-      return [...prev, model];
-    });
-  };
-
-  // =============================================================================
-  // Render: Header
+  // Render: Terminal Header
   // =============================================================================
 
   const renderHeader = () => (
-    <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER, backgroundColor: COLORS.PANEL_BG }}>
-      <div className="flex items-center gap-3">
-        <Trophy size={20} style={{ color: COLORS.ORANGE }} />
-        <h1 className="text-lg font-semibold" style={{ color: COLORS.WHITE }}>Alpha Arena</h1>
-        <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: COLORS.PURPLE + '20', color: COLORS.PURPLE }}>
-          AI Trading Competition
+    <div style={{
+      backgroundColor: FINCEPT.HEADER_BG,
+      borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+      padding: '6px 12px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexShrink: 0,
+      boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`,
+      fontFamily: TERMINAL_FONT,
+    }}>
+      {/* Left Section */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Trophy size={18} style={{ color: FINCEPT.ORANGE, filter: `drop-shadow(0 0 4px ${FINCEPT.ORANGE})` }} />
+          <span style={{
+            color: FINCEPT.ORANGE,
+            fontWeight: 700,
+            fontSize: '14px',
+            letterSpacing: '0.5px',
+            textShadow: `0 0 10px ${FINCEPT.ORANGE}40`,
+          }}>
+            ALPHA ARENA
+          </span>
+        </div>
+
+        <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
+
+        <span style={{
+          fontSize: '9px',
+          padding: '2px 8px',
+          backgroundColor: `${FINCEPT.PURPLE}20`,
+          border: `1px solid ${FINCEPT.PURPLE}40`,
+          color: FINCEPT.PURPLE,
+          fontWeight: 600,
+          letterSpacing: '0.5px',
+        }}>
+          AI TRADING COMPETITION
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
-        {competitionId && (
-          <div className="flex items-center gap-2 mr-4">
-            <div className="flex items-center gap-1 px-2 py-1 rounded" style={{ backgroundColor: COLORS.BORDER }}>
-              <Activity size={12} style={{ color: isAutoRunning ? COLORS.GREEN : COLORS.GRAY }} />
-              <span className="text-xs" style={{ color: COLORS.WHITE }}>Cycle: {cycleCount}</span>
+      {/* Right Section */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {arena.competitionId && (
+          <>
+            {arena.latestPrice !== null && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                backgroundColor: `${FINCEPT.GREEN}10`,
+                border: `1px solid ${FINCEPT.GREEN}25`,
+              }}>
+                <Zap size={10} style={{ color: FINCEPT.GREEN }} />
+                <span style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.GREEN, fontFamily: TERMINAL_FONT }}>
+                  ${arena.latestPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '3px 8px',
+              backgroundColor: FINCEPT.BORDER,
+            }}>
+              <Activity size={12} style={{ color: arena.isAutoRunning ? FINCEPT.GREEN : FINCEPT.GRAY }} />
+              <span style={{ fontSize: '10px', color: FINCEPT.WHITE, fontWeight: 600 }}>Cycle: {arena.cycleCount}</span>
             </div>
-            <div
-              className="px-2 py-1 rounded text-xs"
-              style={{
-                backgroundColor: status === 'running' ? COLORS.GREEN + '20' : COLORS.GRAY + '20',
-                color: status === 'running' ? COLORS.GREEN : COLORS.GRAY,
-              }}
-            >
-              {isAutoRunning ? 'AUTO-RUNNING' : status?.toUpperCase() || 'IDLE'}
+            <div style={{
+              padding: '3px 8px',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              backgroundColor: arena.status === 'running' ? `${FINCEPT.GREEN}20` : `${FINCEPT.GRAY}20`,
+              color: arena.status === 'running' ? FINCEPT.GREEN : FINCEPT.GRAY,
+              border: `1px solid ${arena.status === 'running' ? FINCEPT.GREEN : FINCEPT.GRAY}40`,
+            }}>
+              {arena.isAutoRunning ? 'AUTO-RUNNING' : arena.status?.toUpperCase() || 'IDLE'}
             </div>
-          </div>
+
+            <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
+          </>
         )}
         <button
-          onClick={() => loadLLMConfigs()}
-          className="p-2 rounded transition-colors hover:bg-[#1A1A1A]"
+          onClick={() => arena.loadLLMConfigs()}
+          style={{
+            padding: '5px 7px',
+            backgroundColor: 'transparent',
+            border: `1px solid ${FINCEPT.BORDER}`,
+            color: FINCEPT.GRAY,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+            e.currentTarget.style.color = FINCEPT.WHITE;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = FINCEPT.GRAY;
+          }}
           title="Refresh LLM configs"
         >
-          <RefreshCw size={16} style={{ color: COLORS.GRAY }} />
+          <RefreshCw size={14} />
         </button>
       </div>
     </div>
   );
 
   // =============================================================================
-  // Render: Progress Panel (Real-time streaming updates)
+  // Render: Progress Panel
   // =============================================================================
 
   const renderProgressPanel = () => {
-    if (!isLoading && progressSteps.length === 0) return null;
+    if (!arena.isLoading && arena.progressSteps.length === 0) return null;
 
     return (
-      <div
-        className="p-4 rounded-lg mb-4"
-        style={{
-          backgroundColor: COLORS.PANEL_BG,
-          border: `1px solid ${COLORS.ORANGE}40`,
-          boxShadow: `0 0 20px ${COLORS.ORANGE}10`
-        }}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Loader2 size={18} className="animate-spin" style={{ color: COLORS.ORANGE }} />
-            <h3 className="font-medium" style={{ color: COLORS.WHITE }}>
-              {currentProgress ? currentProgress.message : 'Processing...'}
-            </h3>
+      <div style={{
+        padding: '12px',
+        marginBottom: '8px',
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${FINCEPT.ORANGE}40`,
+        boxShadow: `0 0 20px ${FINCEPT.ORANGE}10`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Loader2 size={16} style={{ color: FINCEPT.ORANGE, animation: 'alpha-spin 1s linear infinite' }} />
+            <span style={{ fontWeight: 600, fontSize: '12px', color: FINCEPT.WHITE }}>
+              {arena.currentProgress ? arena.currentProgress.message : 'Processing...'}
+            </span>
           </div>
-          {/* STOP button in progress panel */}
           <button
-            onClick={handleCancel}
-            disabled={isCancelling}
-            className="px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 transition-colors"
+            onClick={arena.handleCancel}
+            disabled={arena.isCancelling}
             style={{
-              backgroundColor: COLORS.RED,
-              color: COLORS.WHITE,
-              opacity: isCancelling ? 0.5 : 1,
+              padding: '4px 10px',
+              backgroundColor: FINCEPT.RED,
+              color: FINCEPT.WHITE,
+              border: 'none',
+              fontSize: '10px',
+              fontWeight: 600,
+              cursor: arena.isCancelling ? 'not-allowed' : 'pointer',
+              opacity: arena.isCancelling ? 0.5 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
             }}
           >
-            {isCancelling ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
-            {isCancelling ? 'Stopping...' : 'Cancel'}
+            {arena.isCancelling ? <Loader2 size={10} style={{ animation: 'alpha-spin 1s linear infinite' }} /> : <XCircle size={10} />}
+            {arena.isCancelling ? 'Stopping...' : 'Cancel'}
           </button>
         </div>
 
-        {/* Progress Bar */}
-        {currentProgress && (
-          <div className="mb-3">
-            <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: COLORS.BORDER }}>
-              <div
-                className="h-full transition-all duration-300 ease-out"
-                style={{
-                  width: `${(currentProgress.step / currentProgress.total_steps) * 100}%`,
-                  backgroundColor: currentProgress.event_type === 'error' ? COLORS.RED :
-                                   currentProgress.event_type === 'complete' ? COLORS.GREEN : COLORS.ORANGE
-                }}
-              />
+        {arena.currentProgress && (
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ height: '4px', overflow: 'hidden', backgroundColor: FINCEPT.BORDER }}>
+              <div style={{
+                height: '100%',
+                transition: 'width 0.3s ease-out',
+                width: `${(arena.currentProgress.step / arena.currentProgress.total_steps) * 100}%`,
+                backgroundColor: arena.currentProgress.event_type === 'error' ? FINCEPT.RED :
+                                 arena.currentProgress.event_type === 'complete' ? FINCEPT.GREEN : FINCEPT.ORANGE,
+              }} />
             </div>
-            <div className="flex justify-between mt-1">
-              <span className="text-xs" style={{ color: COLORS.GRAY }}>
-                Step {currentProgress.step} of {currentProgress.total_steps}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+              <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+                Step {arena.currentProgress.step} of {arena.currentProgress.total_steps}
               </span>
-              <span className="text-xs" style={{ color: COLORS.GRAY }}>
-                {Math.round((currentProgress.step / currentProgress.total_steps) * 100)}%
+              <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+                {Math.round((arena.currentProgress.step / arena.currentProgress.total_steps) * 100)}%
               </span>
             </div>
           </div>
         )}
 
-        {/* Steps Log */}
-        <div className="space-y-1 max-h-40 overflow-y-auto">
-          {progressSteps.map((step, idx) => (
-            <div key={idx} className="flex items-center gap-2 text-xs">
+        <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
+          {arena.progressSteps.map((step, idx) => (
+            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', marginBottom: '2px' }}>
               {step.event_type === 'complete' ? (
-                <Check size={12} style={{ color: COLORS.GREEN }} />
+                <Check size={10} style={{ color: FINCEPT.GREEN }} />
               ) : step.event_type === 'error' ? (
-                <AlertCircle size={12} style={{ color: COLORS.RED }} />
+                <AlertCircle size={10} style={{ color: FINCEPT.RED }} />
               ) : step.event_type === 'warning' ? (
-                <AlertCircle size={12} style={{ color: COLORS.YELLOW }} />
+                <AlertCircle size={10} style={{ color: FINCEPT.YELLOW }} />
               ) : step.event_type === 'step' ? (
-                <Circle size={12} style={{ color: COLORS.ORANGE }} />
+                <Circle size={10} style={{ color: FINCEPT.ORANGE }} />
               ) : (
-                <ChevronRight size={12} style={{ color: COLORS.GRAY }} />
+                <ChevronRight size={10} style={{ color: FINCEPT.GRAY }} />
               )}
               <span style={{
-                color: step.event_type === 'error' ? COLORS.RED :
-                       step.event_type === 'complete' ? COLORS.GREEN :
-                       step.event_type === 'warning' ? COLORS.YELLOW : COLORS.GRAY
+                color: step.event_type === 'error' ? FINCEPT.RED :
+                       step.event_type === 'complete' ? FINCEPT.GREEN :
+                       step.event_type === 'warning' ? FINCEPT.YELLOW : FINCEPT.GRAY,
               }}>
                 {step.message}
               </span>
@@ -856,138 +332,183 @@ const AlphaArenaTab: React.FC = () => {
   // =============================================================================
 
   const renderPastCompetitions = () => (
-    <div className="p-4 rounded-lg" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <History size={18} style={{ color: COLORS.ORANGE }} />
-          <h2 className="font-semibold" style={{ color: COLORS.WHITE }}>Past Competitions</h2>
-          <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: COLORS.BORDER, color: COLORS.GRAY }}>
-            {pastCompetitions.length} saved
+    <div style={{ padding: '12px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <History size={16} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ fontWeight: 700, fontSize: '12px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>PAST COMPETITIONS</span>
+          <span style={{
+            fontSize: '9px',
+            padding: '1px 6px',
+            backgroundColor: FINCEPT.BORDER,
+            color: FINCEPT.GRAY,
+            fontWeight: 600,
+          }}>
+            {arena.pastCompetitions.length}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button
-            onClick={() => pastCompetitionsCache.refresh()}
-            disabled={loadingPastCompetitions}
-            className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
+            onClick={() => arena.pastCompetitionsCache.refresh()}
+            disabled={arena.loadingPastCompetitions}
+            style={{
+              padding: '4px 6px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
             title="Refresh"
           >
-            <RefreshCw size={14} className={loadingPastCompetitions ? 'animate-spin' : ''} style={{ color: COLORS.GRAY }} />
+            <RefreshCw size={12} style={arena.loadingPastCompetitions ? { animation: 'alpha-spin 1s linear infinite' } : {}} />
           </button>
           <button
-            onClick={() => setShowPastCompetitions(false)}
-            className="text-xs px-2 py-1 rounded"
-            style={{ backgroundColor: COLORS.BORDER, color: COLORS.WHITE }}
+            onClick={() => arena.setShowPastCompetitions(false)}
+            style={{
+              fontSize: '10px',
+              padding: '4px 10px',
+              backgroundColor: FINCEPT.BORDER,
+              color: FINCEPT.WHITE,
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
           >
             Close
           </button>
         </div>
       </div>
 
-      {loadingPastCompetitions ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 size={24} className="animate-spin" style={{ color: COLORS.ORANGE }} />
+      {arena.loadingPastCompetitions ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+          <Loader2 size={24} style={{ color: FINCEPT.ORANGE, animation: 'alpha-spin 1s linear infinite' }} />
         </div>
-      ) : pastCompetitions.length === 0 ? (
-        <div className="text-center py-8">
-          <History size={32} className="mx-auto mb-2" style={{ color: COLORS.GRAY, opacity: 0.5 }} />
-          <p className="text-sm" style={{ color: COLORS.GRAY }}>No past competitions found</p>
+      ) : arena.pastCompetitions.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '32px 0' }}>
+          <History size={32} style={{ color: FINCEPT.GRAY, opacity: 0.5, margin: '0 auto 8px' }} />
+          <p style={{ fontSize: '11px', color: FINCEPT.GRAY }}>No past competitions found</p>
         </div>
       ) : (
-        <div className="space-y-2 max-h-[400px] overflow-y-auto">
-          {pastCompetitions.map(comp => (
+        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          {arena.pastCompetitions.map(comp => (
             <div
               key={comp.competition_id}
-              onClick={() => handleResumeCompetition(comp)}
-              className="p-3 rounded cursor-pointer transition-colors"
+              onClick={() => arena.handleResumeCompetition(comp)}
               style={{
-                backgroundColor: COLORS.CARD_BG,
-                border: `1px solid ${COLORS.BORDER}`,
+                padding: '10px',
+                marginBottom: '4px',
+                cursor: 'pointer',
+                backgroundColor: FINCEPT.CARD_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                transition: 'all 0.15s',
               }}
               onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = COLORS.HOVER;
-                (e.currentTarget as HTMLElement).style.borderColor = COLORS.ORANGE + '40';
+                e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                e.currentTarget.style.borderColor = `${FINCEPT.ORANGE}40`;
               }}
               onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = COLORS.CARD_BG;
-                (e.currentTarget as HTMLElement).style.borderColor = COLORS.BORDER;
+                e.currentTarget.style.backgroundColor = FINCEPT.CARD_BG;
+                e.currentTarget.style.borderColor = FINCEPT.BORDER;
               }}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Trophy size={14} style={{ color: COLORS.ORANGE }} />
-                  <span className="font-medium text-sm" style={{ color: COLORS.WHITE }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Trophy size={12} style={{ color: FINCEPT.ORANGE }} />
+                  <span style={{ fontWeight: 600, fontSize: '11px', color: FINCEPT.WHITE }}>
                     {comp.config.competition_name}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className="text-xs px-2 py-0.5 rounded"
-                    style={{
-                      backgroundColor:
-                        comp.status === 'running' ? COLORS.GREEN + '20' :
-                        comp.status === 'completed' ? COLORS.BLUE + '20' :
-                        comp.status === 'failed' ? COLORS.RED + '20' :
-                        COLORS.GRAY + '20',
-                      color:
-                        comp.status === 'running' ? COLORS.GREEN :
-                        comp.status === 'completed' ? COLORS.BLUE :
-                        comp.status === 'failed' ? COLORS.RED :
-                        COLORS.GRAY,
-                    }}
-                  >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{
+                    fontSize: '8px',
+                    padding: '1px 6px',
+                    fontWeight: 700,
+                    letterSpacing: '0.5px',
+                    backgroundColor:
+                      comp.status === 'running' ? `${FINCEPT.GREEN}20` :
+                      comp.status === 'completed' ? `${FINCEPT.BLUE}20` :
+                      comp.status === 'failed' ? `${FINCEPT.RED}20` :
+                      `${FINCEPT.GRAY}20`,
+                    color:
+                      comp.status === 'running' ? FINCEPT.GREEN :
+                      comp.status === 'completed' ? FINCEPT.BLUE :
+                      comp.status === 'failed' ? FINCEPT.RED :
+                      FINCEPT.GRAY,
+                  }}>
                     {comp.status.toUpperCase()}
                   </span>
                   <button
-                    onClick={(e) => handleDeleteCompetition(comp.competition_id, e)}
-                    className="p-1 rounded transition-colors hover:bg-red-500/20"
+                    onClick={(e) => arena.handleDeleteCompetition(comp.competition_id, e)}
+                    style={{
+                      padding: '2px 4px',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: FINCEPT.RED,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
                     title="Delete competition"
                   >
-                    <Trash2 size={12} style={{ color: COLORS.RED }} />
+                    <Trash2 size={11} />
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-xs">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', fontSize: '10px' }}>
                 <div>
-                  <span style={{ color: COLORS.GRAY }}>Cycles: </span>
-                  <span style={{ color: COLORS.WHITE }}>{comp.cycle_count}</span>
+                  <span style={{ color: FINCEPT.GRAY }}>Cycles: </span>
+                  <span style={{ color: FINCEPT.WHITE }}>{comp.cycle_count}</span>
                 </div>
                 <div>
-                  <span style={{ color: COLORS.GRAY }}>Models: </span>
-                  <span style={{ color: COLORS.WHITE }}>{comp.config.models.length}</span>
+                  <span style={{ color: FINCEPT.GRAY }}>Models: </span>
+                  <span style={{ color: FINCEPT.WHITE }}>{comp.config.models.length}</span>
                 </div>
                 <div>
-                  <span style={{ color: COLORS.GRAY }}>Capital: </span>
-                  <span style={{ color: COLORS.WHITE }}>${comp.config.initial_capital.toLocaleString()}</span>
+                  <span style={{ color: FINCEPT.GRAY }}>Capital: </span>
+                  <span style={{ color: FINCEPT.WHITE }}>${comp.config.initial_capital.toLocaleString()}</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xs" style={{ color: COLORS.GRAY }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+                <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
                   {comp.config.symbols.join(', ')}
                 </span>
-                <span className="text-xs" style={{ color: COLORS.MUTED }}>•</span>
-                <span className="text-xs" style={{ color: COLORS.GRAY }}>
+                <span style={{ fontSize: '9px', color: FINCEPT.MUTED }}>|</span>
+                <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
                   {new Date(comp.created_at).toLocaleDateString()}
                 </span>
               </div>
 
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginTop: '6px' }}>
                 {comp.config.models.map((model, idx) => (
                   <span
                     key={idx}
-                    className="text-xs px-1.5 py-0.5 rounded"
-                    style={{ backgroundColor: COLORS.BORDER, color: COLORS.GRAY }}
+                    style={{
+                      fontSize: '8px',
+                      padding: '1px 5px',
+                      backgroundColor: FINCEPT.BORDER,
+                      color: FINCEPT.GRAY,
+                      fontWeight: 600,
+                    }}
                   >
                     {model.name}
                   </span>
                 ))}
               </div>
 
-              <div className="flex items-center justify-end mt-2 pt-2 border-t" style={{ borderColor: COLORS.BORDER }}>
-                <div className="flex items-center gap-1 text-xs" style={{ color: COLORS.ORANGE }}>
-                  <PlayCircle size={12} />
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                marginTop: '6px',
+                paddingTop: '6px',
+                borderTop: `1px solid ${FINCEPT.BORDER}`,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: FINCEPT.ORANGE }}>
+                  <PlayCircle size={10} />
                   <span>Click to resume</span>
                 </div>
               </div>
@@ -1003,161 +524,238 @@ const AlphaArenaTab: React.FC = () => {
   // =============================================================================
 
   const renderCreatePanel = () => (
-    <div className="p-4 rounded-lg" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
-      <div className="flex items-center gap-2 mb-4">
-        <Plus size={18} style={{ color: COLORS.ORANGE }} />
-        <h2 className="font-semibold" style={{ color: COLORS.WHITE }}>Create Competition</h2>
+    <div style={{ padding: '12px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+        <Plus size={16} style={{ color: FINCEPT.ORANGE }} />
+        <span style={{ fontWeight: 700, fontSize: '12px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>CREATE COMPETITION</span>
       </div>
 
-      <div className="space-y-4">
-        {/* Competition Name */}
+      {/* Competition Name */}
+      <div style={{ marginBottom: '10px' }}>
+        <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>COMPETITION NAME</label>
+        <input
+          type="text"
+          value={arena.competitionName}
+          onChange={e => arena.setCompetitionName(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '8px 10px',
+            backgroundColor: FINCEPT.HEADER_BG,
+            color: FINCEPT.WHITE,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            fontSize: '12px',
+            fontFamily: TERMINAL_FONT,
+            outline: 'none',
+            boxSizing: 'border-box',
+          }}
+          onFocus={e => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+          onBlur={e => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
+        />
+      </div>
+
+      {/* Symbol & Mode */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
         <div>
-          <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Competition Name</label>
-          <input
-            type="text"
-            value={competitionName}
-            onChange={e => setCompetitionName(e.target.value)}
-            className="w-full px-3 py-2 rounded text-sm"
-            style={{ backgroundColor: COLORS.CARD_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
-          />
-        </div>
-
-        {/* Symbol & Mode */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Trading Symbol</label>
-            <select
-              value={symbol}
-              onChange={e => setSymbol(e.target.value)}
-              className="w-full px-3 py-2 rounded text-sm"
-              style={{ backgroundColor: COLORS.CARD_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
-            >
-              {TRADING_SYMBOLS.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Competition Mode</label>
-            <select
-              value={mode}
-              onChange={e => setMode(e.target.value as CompetitionMode)}
-              className="w-full px-3 py-2 rounded text-sm"
-              style={{ backgroundColor: COLORS.CARD_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
-            >
-              {COMPETITION_MODES.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Capital & Interval */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Initial Capital (USD)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={initialCapital}
-              onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setInitialCapital(Number(v) || 0); }}
-              className="w-full px-3 py-2 rounded text-sm"
-              style={{ backgroundColor: COLORS.CARD_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
-            />
-          </div>
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Cycle Interval (seconds)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={cycleInterval}
-              onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setCycleInterval(Math.min(Number(v) || 0, 600)); }}
-              className="w-full px-3 py-2 rounded text-sm"
-              style={{ backgroundColor: COLORS.CARD_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
-            />
-          </div>
-        </div>
-
-        {/* LLM Model Selection - FROM SETTINGS */}
-        <div>
-          <label className="text-xs mb-2 block flex items-center gap-2" style={{ color: COLORS.GRAY }}>
-            <Brain size={12} />
-            SELECT AI MODELS (from Settings - min 2 required)
-          </label>
-
-          {configuredLLMs.length === 0 ? (
-            <div className="p-4 rounded text-center" style={{ backgroundColor: COLORS.CARD_BG, border: `1px solid ${COLORS.RED}40` }}>
-              <AlertCircle size={24} className="mx-auto mb-2" style={{ color: COLORS.RED }} />
-              <p className="text-sm" style={{ color: COLORS.RED }}>No AI models configured</p>
-              <p className="text-xs mt-1" style={{ color: COLORS.GRAY }}>
-                Go to Settings → LLM Config → My Model Library to add models with API keys
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {configuredLLMs.map((model) => {
-                const isSelected = selectedModels.some(m => m.id === model.id);
-                return (
-                  <button
-                    key={model.id}
-                    type="button"
-                    onClick={() => toggleModelSelection(model)}
-                    className="flex items-center gap-2 p-3 rounded text-left transition-colors"
-                    style={{
-                      backgroundColor: isSelected ? COLORS.ORANGE + '15' : COLORS.CARD_BG,
-                      border: `1px solid ${isSelected ? COLORS.ORANGE : COLORS.BORDER}`,
-                    }}
-                  >
-                    <div
-                      className="w-5 h-5 rounded flex items-center justify-center"
-                      style={{
-                        backgroundColor: isSelected ? COLORS.ORANGE : COLORS.BORDER,
-                        border: `1px solid ${isSelected ? COLORS.ORANGE : COLORS.BORDER}`,
-                      }}
-                    >
-                      {isSelected && <CheckCircle size={12} style={{ color: COLORS.DARK_BG }} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate" style={{ color: COLORS.WHITE }}>
-                        {model.display_name}
-                      </div>
-                      <div className="text-xs truncate" style={{ color: COLORS.GRAY }}>
-                        {model.provider} • {model.model_id}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <p className="text-xs mt-2" style={{ color: COLORS.GRAY }}>
-            Selected: {selectedModels.length} model(s)
-          </p>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2 pt-2">
-          <button
-            onClick={() => setShowCreatePanel(false)}
-            className="px-4 py-2 rounded text-sm"
-            style={{ backgroundColor: COLORS.BORDER, color: COLORS.GRAY }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleCreateCompetition}
-            disabled={isLoading || selectedModels.length < 2 || configuredLLMs.length === 0}
-            className="flex-1 py-2 rounded font-medium text-sm flex items-center justify-center gap-2"
+          <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>TRADING SYMBOL</label>
+          <select
+            value={arena.symbol}
+            onChange={e => arena.setSymbol(e.target.value)}
             style={{
-              backgroundColor: COLORS.ORANGE,
-              color: COLORS.DARK_BG,
-              opacity: (isLoading || selectedModels.length < 2) ? 0.5 : 1,
+              width: '100%',
+              padding: '8px 10px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              fontSize: '12px',
+              fontFamily: TERMINAL_FONT,
+              outline: 'none',
             }}
           >
-            {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
-            Create Competition
-          </button>
+            {TRADING_SYMBOLS.map(s => (
+              <option key={s.value} value={s.value} style={{ backgroundColor: FINCEPT.HEADER_BG }}>{s.label}</option>
+            ))}
+          </select>
         </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>COMPETITION MODE</label>
+          <select
+            value={arena.mode}
+            onChange={e => arena.setMode(e.target.value as CompetitionMode)}
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              fontSize: '12px',
+              fontFamily: TERMINAL_FONT,
+              outline: 'none',
+            }}
+          >
+            {COMPETITION_MODES.map(m => (
+              <option key={m.value} value={m.value} style={{ backgroundColor: FINCEPT.HEADER_BG }}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Capital & Interval */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>INITIAL CAPITAL (USD)</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={arena.initialCapital}
+            onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) arena.setInitialCapital(Number(v) || 0); }}
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              fontSize: '12px',
+              fontFamily: TERMINAL_FONT,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+            onBlur={e => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>CYCLE INTERVAL (SECONDS)</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={arena.cycleInterval}
+            onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) arena.setCycleInterval(Math.min(Number(v) || 0, 600)); }}
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              fontSize: '12px',
+              fontFamily: TERMINAL_FONT,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+            onFocus={e => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+            onBlur={e => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
+          />
+        </div>
+      </div>
+
+      {/* LLM Model Selection */}
+      <div style={{ marginBottom: '10px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '6px', fontWeight: 600, letterSpacing: '0.5px' }}>
+          <Brain size={10} />
+          SELECT AI MODELS (from Settings - min 2 required)
+        </label>
+
+        {arena.configuredLLMs.length === 0 ? (
+          <div style={{
+            padding: '16px',
+            textAlign: 'center',
+            backgroundColor: FINCEPT.CARD_BG,
+            border: `1px solid ${FINCEPT.RED}40`,
+          }}>
+            <AlertCircle size={24} style={{ color: FINCEPT.RED, margin: '0 auto 8px' }} />
+            <p style={{ fontSize: '11px', color: FINCEPT.RED, marginBottom: '4px' }}>No AI models configured</p>
+            <p style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+              Go to Settings → LLM Config → My Model Library to add models with API keys
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+            {arena.configuredLLMs.map((model: AlphaArenaModel) => {
+              const isSelected = arena.selectedModels.some(m => m.id === model.id);
+              return (
+                <button
+                  key={model.id}
+                  type="button"
+                  onClick={() => arena.toggleModelSelection(model)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 10px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    backgroundColor: isSelected ? `${FINCEPT.ORANGE}15` : FINCEPT.CARD_BG,
+                    border: `1px solid ${isSelected ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{
+                    width: '16px',
+                    height: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isSelected ? FINCEPT.ORANGE : FINCEPT.BORDER,
+                    flexShrink: 0,
+                  }}>
+                    {isSelected && <CheckCircle size={10} style={{ color: FINCEPT.DARK_BG }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {model.display_name}
+                    </div>
+                    <div style={{ fontSize: '9px', color: FINCEPT.GRAY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {model.provider} | {model.model_id}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <p style={{ fontSize: '9px', marginTop: '6px', color: FINCEPT.GRAY }}>
+          Selected: {arena.selectedModels.length} model(s)
+        </p>
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: '6px', paddingTop: '8px' }}>
+        <button
+          onClick={() => arena.setShowCreatePanel(false)}
+          style={{
+            padding: '8px 14px',
+            backgroundColor: FINCEPT.BORDER,
+            color: FINCEPT.GRAY,
+            border: 'none',
+            fontSize: '11px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          CANCEL
+        </button>
+        <button
+          onClick={arena.handleCreateCompetition}
+          disabled={arena.isLoading || arena.selectedModels.length < 2 || arena.configuredLLMs.length === 0}
+          style={{
+            flex: 1,
+            padding: '8px 14px',
+            backgroundColor: FINCEPT.ORANGE,
+            color: FINCEPT.DARK_BG,
+            border: 'none',
+            fontSize: '11px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            cursor: (arena.isLoading || arena.selectedModels.length < 2) ? 'not-allowed' : 'pointer',
+            opacity: (arena.isLoading || arena.selectedModels.length < 2) ? 0.5 : 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+          }}
+        >
+          {arena.isLoading ? <Loader2 size={14} style={{ animation: 'alpha-spin 1s linear infinite' }} /> : <Zap size={14} />}
+          CREATE COMPETITION
+        </button>
       </div>
     </div>
   );
@@ -1167,67 +765,117 @@ const AlphaArenaTab: React.FC = () => {
   // =============================================================================
 
   const renderControls = () => (
-    <div className="flex items-center gap-2 p-3 rounded-lg" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
-      {/* Show STOP button when loading, otherwise show Run Cycle */}
-      {isLoading ? (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '8px 10px',
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+    }}>
+      {arena.isLoading ? (
         <button
-          onClick={handleCancel}
-          disabled={isCancelling}
-          className="px-4 py-2 rounded text-sm font-medium flex items-center gap-2"
+          onClick={arena.handleCancel}
+          disabled={arena.isCancelling}
           style={{
-            backgroundColor: COLORS.RED,
-            color: COLORS.WHITE,
-            opacity: isCancelling ? 0.5 : 1,
+            padding: '6px 12px',
+            backgroundColor: FINCEPT.RED,
+            color: FINCEPT.WHITE,
+            border: 'none',
+            fontSize: '10px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            cursor: arena.isCancelling ? 'not-allowed' : 'pointer',
+            opacity: arena.isCancelling ? 0.5 : 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
           }}
         >
-          {isCancelling ? <Loader2 size={14} className="animate-spin" /> : <StopCircle size={14} />}
-          {isCancelling ? 'Stopping...' : 'STOP'}
+          {arena.isCancelling ? <Loader2 size={12} style={{ animation: 'alpha-spin 1s linear infinite' }} /> : <StopCircle size={12} />}
+          {arena.isCancelling ? 'STOPPING...' : 'STOP'}
         </button>
       ) : (
         <button
-          onClick={handleRunCycle}
-          disabled={isAutoRunning}
-          className="px-4 py-2 rounded text-sm font-medium flex items-center gap-2"
+          onClick={arena.handleRunCycle}
+          disabled={arena.isAutoRunning}
           style={{
-            backgroundColor: COLORS.ORANGE,
-            color: COLORS.DARK_BG,
-            opacity: isAutoRunning ? 0.5 : 1,
+            padding: '6px 12px',
+            backgroundColor: FINCEPT.ORANGE,
+            color: FINCEPT.DARK_BG,
+            border: 'none',
+            fontSize: '10px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            cursor: arena.isAutoRunning ? 'not-allowed' : 'pointer',
+            opacity: arena.isAutoRunning ? 0.5 : 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
           }}
         >
-          <Play size={14} />
-          Run Cycle
+          <Play size={12} />
+          RUN CYCLE
         </button>
       )}
 
       <button
-        onClick={handleToggleAutoRun}
-        disabled={isLoading}
-        className="px-4 py-2 rounded text-sm font-medium flex items-center gap-2"
+        onClick={arena.handleToggleAutoRun}
+        disabled={arena.isLoading}
         style={{
-          backgroundColor: isAutoRunning ? COLORS.RED + '20' : COLORS.GREEN + '20',
-          color: isAutoRunning ? COLORS.RED : COLORS.GREEN,
-          border: `1px solid ${isAutoRunning ? COLORS.RED + '40' : COLORS.GREEN + '40'}`,
-          opacity: isLoading ? 0.5 : 1,
+          padding: '6px 12px',
+          backgroundColor: arena.isAutoRunning ? `${FINCEPT.RED}20` : `${FINCEPT.GREEN}20`,
+          color: arena.isAutoRunning ? FINCEPT.RED : FINCEPT.GREEN,
+          border: `1px solid ${arena.isAutoRunning ? FINCEPT.RED : FINCEPT.GREEN}40`,
+          fontSize: '10px',
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+          cursor: arena.isLoading ? 'not-allowed' : 'pointer',
+          opacity: arena.isLoading ? 0.5 : 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
         }}
       >
-        {isAutoRunning ? <Pause size={14} /> : <Zap size={14} />}
-        {isAutoRunning ? 'Stop Auto' : 'Auto Run'}
+        {arena.isAutoRunning ? <Pause size={12} /> : <Zap size={12} />}
+        {arena.isAutoRunning ? 'STOP AUTO' : 'AUTO RUN'}
       </button>
 
       <button
-        onClick={handleReset}
-        className="px-4 py-2 rounded text-sm flex items-center gap-2"
-        style={{ backgroundColor: COLORS.BORDER, color: COLORS.GRAY }}
+        onClick={arena.handleReset}
+        style={{
+          padding: '6px 12px',
+          backgroundColor: FINCEPT.BORDER,
+          color: FINCEPT.GRAY,
+          border: 'none',
+          fontSize: '10px',
+          fontWeight: 600,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = FINCEPT.WHITE; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = FINCEPT.GRAY; }}
       >
-        <RotateCcw size={14} />
-        Reset
+        <RotateCcw size={12} />
+        RESET
       </button>
 
-      <div className="flex-1" />
+      <div style={{ flex: 1 }} />
 
-      <div className="text-xs px-3 py-1 rounded" style={{ backgroundColor: COLORS.CARD_BG, color: COLORS.GRAY }}>
-        <Clock size={12} className="inline mr-1" />
-        Interval: {cycleInterval}s
+      <div style={{
+        fontSize: '9px',
+        padding: '4px 8px',
+        backgroundColor: FINCEPT.CARD_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        color: FINCEPT.GRAY,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+      }}>
+        <Clock size={10} />
+        INTERVAL: {arena.cycleInterval}s
       </div>
     </div>
   );
@@ -1236,56 +884,98 @@ const AlphaArenaTab: React.FC = () => {
   // Render: Leaderboard
   // =============================================================================
 
-  const renderLeaderboard = () => {
-    return (
-    <div className="rounded-lg overflow-hidden" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
-      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
-        <div className="flex items-center gap-2">
-          <Trophy size={16} style={{ color: COLORS.ORANGE }} />
-          <span className="font-semibold text-sm" style={{ color: COLORS.WHITE }}>Leaderboard</span>
+  const renderLeaderboard = () => (
+    <div style={{
+      overflow: 'hidden',
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '8px 12px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Trophy size={14} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ fontWeight: 700, fontSize: '11px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>LEADERBOARD</span>
         </div>
-        <span className="text-xs" style={{ color: COLORS.GRAY }}>Cycle {cycleCount}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {arena.latestPrice !== null && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 6px',
+              backgroundColor: `${FINCEPT.GREEN}15`,
+              border: `1px solid ${FINCEPT.GREEN}30`,
+            }}>
+              <Activity size={9} style={{ color: FINCEPT.GREEN }} />
+              <span style={{ fontSize: '9px', fontWeight: 600, color: FINCEPT.GREEN, fontFamily: TERMINAL_FONT }}>
+                {arena.symbol.split('/')[0]} ${arena.latestPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+          <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Cycle {arena.cycleCount}</span>
+        </div>
       </div>
 
-      {leaderboard.length === 0 ? (
-        <div className="p-8 text-center" style={{ color: COLORS.GRAY }}>
-          <Trophy size={32} className="mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No competition data yet</p>
+      {arena.leaderboard.length === 0 ? (
+        <div style={{ padding: '32px', textAlign: 'center', color: FINCEPT.GRAY }}>
+          <Trophy size={32} style={{ opacity: 0.3, margin: '0 auto 8px' }} />
+          <p style={{ fontSize: '11px' }}>No competition data yet</p>
         </div>
       ) : (
-        <div className="divide-y" style={{ borderColor: COLORS.BORDER }}>
-          {leaderboard.map(entry => {
+        <div>
+          {arena.leaderboard.map(entry => {
             const isPositive = entry.total_pnl >= 0;
             const modelColor = getModelColor(entry.model_name);
 
             return (
               <div
                 key={entry.model_name}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-[#1A1A1A] transition-colors"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                  transition: 'background-color 0.15s',
+                  cursor: 'default',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = FINCEPT.HOVER; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
               >
                 {/* Rank */}
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-                  style={{
-                    backgroundColor: entry.rank === 1 ? COLORS.YELLOW + '20' : entry.rank === 2 ? COLORS.GRAY + '20' : entry.rank === 3 ? COLORS.ORANGE + '20' : COLORS.BORDER,
-                    color: entry.rank === 1 ? COLORS.YELLOW : entry.rank === 2 ? COLORS.GRAY : entry.rank === 3 ? COLORS.ORANGE : COLORS.GRAY,
-                  }}
-                >
+                <div style={{
+                  width: '28px',
+                  height: '28px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  backgroundColor: entry.rank === 1 ? `${FINCEPT.YELLOW}20` : entry.rank === 2 ? `${FINCEPT.GRAY}20` : entry.rank === 3 ? `${FINCEPT.ORANGE}20` : FINCEPT.BORDER,
+                  color: entry.rank === 1 ? FINCEPT.YELLOW : entry.rank === 2 ? FINCEPT.GRAY : entry.rank === 3 ? FINCEPT.ORANGE : FINCEPT.GRAY,
+                }}>
                   {entry.rank}
                 </div>
 
-                {/* Color indicator */}
-                <div className="w-1 h-10 rounded-full" style={{ backgroundColor: modelColor }} />
+                {/* Color Bar */}
+                <div style={{ width: '3px', height: '32px', backgroundColor: modelColor }} />
 
-                {/* Model info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium truncate" style={{ color: COLORS.WHITE }}>
+                {/* Model Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontWeight: 600, fontSize: '11px', color: FINCEPT.WHITE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {entry.model_name}
                     </span>
-                    {entry.rank === 1 && <Trophy size={14} style={{ color: COLORS.YELLOW }} />}
+                    {entry.rank === 1 && <Trophy size={12} style={{ color: FINCEPT.YELLOW }} />}
                   </div>
-                  <div className="flex items-center gap-3 text-xs" style={{ color: COLORS.GRAY }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '9px', color: FINCEPT.GRAY }}>
                     <span>{entry.trades_count} trades</span>
                     <span>{entry.positions_count} positions</span>
                     {entry.win_rate !== undefined && (
@@ -1295,18 +985,18 @@ const AlphaArenaTab: React.FC = () => {
                 </div>
 
                 {/* P&L */}
-                <div className="text-right">
-                  <div className="flex items-center justify-end gap-1">
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
                     {isPositive ? (
-                      <TrendingUp size={14} style={{ color: COLORS.GREEN }} />
+                      <TrendingUp size={12} style={{ color: FINCEPT.GREEN }} />
                     ) : (
-                      <TrendingDown size={14} style={{ color: COLORS.RED }} />
+                      <TrendingDown size={12} style={{ color: FINCEPT.RED }} />
                     )}
-                    <span style={{ color: isPositive ? COLORS.GREEN : COLORS.RED }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: isPositive ? FINCEPT.GREEN : FINCEPT.RED }}>
                       {formatPercent(entry.return_pct)}
                     </span>
                   </div>
-                  <span className="text-xs" style={{ color: COLORS.GRAY }}>
+                  <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
                     {formatCurrency(entry.portfolio_value)}
                   </span>
                 </div>
@@ -1317,132 +1007,67 @@ const AlphaArenaTab: React.FC = () => {
       )}
     </div>
   );
-  };
 
   // =============================================================================
-  // Render: Decisions Panel
-  // =============================================================================
-
-  const renderDecisions = () => {
-    return (
-    <div className="h-full flex flex-col" style={{ backgroundColor: COLORS.CARD_BG }}>
-      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
-        <div className="flex items-center gap-2">
-          <Brain size={16} style={{ color: COLORS.PURPLE }} />
-          <span className="font-semibold text-sm" style={{ color: COLORS.WHITE }}>AI Decisions</span>
-        </div>
-        <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: COLORS.BORDER, color: COLORS.GRAY }}>
-          {decisions.length}
-        </span>
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        {decisions.length === 0 ? (
-          <div className="p-8 text-center" style={{ color: COLORS.GRAY }}>
-            <Sparkles size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No decisions yet</p>
-            <p className="text-xs mt-1">Run a cycle to see AI trading decisions</p>
-          </div>
-        ) : (
-          <div className="divide-y" style={{ borderColor: COLORS.BORDER }}>
-            {decisions.slice(0, 50).map((decision, idx) => (
-              <div key={idx} className="p-3 hover:bg-[#0F0F0F] transition-colors">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium" style={{ color: COLORS.WHITE }}>
-                    {decision.model_name}
-                  </span>
-                  <span className="text-xs" style={{ color: COLORS.GRAY }}>
-                    Cycle {decision.cycle_number}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className="text-xs px-2 py-0.5 rounded font-medium"
-                    style={{
-                      backgroundColor: decision.action === 'buy' ? COLORS.GREEN + '20' :
-                        decision.action === 'sell' ? COLORS.RED + '20' :
-                        decision.action === 'short' ? COLORS.PURPLE + '20' :
-                        COLORS.GRAY + '20',
-                      color: decision.action === 'buy' ? COLORS.GREEN :
-                        decision.action === 'sell' ? COLORS.RED :
-                        decision.action === 'short' ? COLORS.PURPLE :
-                        COLORS.GRAY,
-                    }}
-                  >
-                    {decision.action.toUpperCase()}
-                  </span>
-                  <span className="text-xs" style={{ color: COLORS.GRAY }}>
-                    {decision.symbol}
-                  </span>
-                  <span className="text-xs" style={{ color: COLORS.GRAY }}>
-                    Qty: {decision.quantity.toFixed(4)}
-                  </span>
-                </div>
-                {decision.reasoning && (
-                  <p className="text-xs mt-1 line-clamp-2" style={{ color: COLORS.MUTED }}>
-                    {decision.reasoning}
-                  </p>
-                )}
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs" style={{ color: COLORS.GRAY }}>
-                    Confidence: {(decision.confidence * 100).toFixed(0)}%
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-  };
-
-  // =============================================================================
-  // Render: Performance Chart (Simple)
+  // Render: Performance Chart
   // =============================================================================
 
   const renderPerformanceChart = () => (
-    <div className="rounded-lg p-4" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
-      <div className="flex items-center gap-2 mb-4">
-        <BarChart3 size={16} style={{ color: COLORS.ORANGE }} />
-        <span className="font-semibold text-sm" style={{ color: COLORS.WHITE }}>Performance</span>
+    <PerformanceChart snapshots={arena.snapshots} height={250} />
+  );
+
+  // =============================================================================
+  // Render: Status Bar (Terminal Footer)
+  // =============================================================================
+
+  const renderStatusBar = () => (
+    <div style={{
+      borderTop: `1px solid ${FINCEPT.BORDER}`,
+      backgroundColor: FINCEPT.HEADER_BG,
+      padding: '4px 12px',
+      fontSize: '9px',
+      color: FINCEPT.GRAY,
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      flexShrink: 0,
+      fontFamily: TERMINAL_FONT,
+    }}>
+      {/* Left - Branding */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ color: FINCEPT.ORANGE, fontWeight: 700 }}>FINCEPT</span>
+        <span>v{APP_VERSION}</span>
+        <span style={{ color: FINCEPT.BORDER }}>|</span>
+        <span>ALPHA ARENA</span>
       </div>
 
-      {snapshots.length === 0 ? (
-        <div className="h-40 flex items-center justify-center" style={{ color: COLORS.GRAY }}>
-          <div className="text-center">
-            <BarChart3 size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No performance data yet</p>
-          </div>
+      {/* Right - Status */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{ color: FINCEPT.GRAY }}>ID:</span>
+          <span style={{ color: FINCEPT.CYAN, fontWeight: 600 }}>
+            {arena.competitionId ? arena.competitionId.slice(0, 8) + '...' : 'NONE'}
+          </span>
         </div>
-      ) : (
-        <div className="h-40 flex items-end gap-1">
-          {/* Simple bar chart */}
-          {leaderboard.map(entry => {
-            const maxVal = Math.max(...leaderboard.map(e => Math.abs(e.return_pct)), 10);
-            const height = Math.abs(entry.return_pct) / maxVal * 100;
-            const isPositive = entry.return_pct >= 0;
-
-            return (
-              <div key={entry.model_name} className="flex-1 flex flex-col items-center">
-                <div className="w-full flex-1 flex items-end justify-center">
-                  <div
-                    className="w-full max-w-8 rounded-t transition-all"
-                    style={{
-                      height: `${Math.max(height, 5)}%`,
-                      backgroundColor: isPositive ? COLORS.GREEN : COLORS.RED,
-                      opacity: 0.7,
-                    }}
-                  />
-                </div>
-                <span className="text-xs mt-1 truncate w-full text-center" style={{ color: COLORS.GRAY }}>
-                  {entry.model_name.split(' ')[0]}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+        <span style={{ color: FINCEPT.BORDER }}>|</span>
+        <span>Models: {arena.selectedModels.length}</span>
+        <span style={{ color: FINCEPT.BORDER }}>|</span>
+        <span>LLMs: {arena.configuredLLMs.length}</span>
+        {arena.selectedBroker && (
+          <>
+            <span style={{ color: FINCEPT.BORDER }}>|</span>
+            <span style={{ color: FINCEPT.ORANGE, fontWeight: 600 }}>Broker: {arena.selectedBroker}</span>
+          </>
+        )}
+        <span style={{ color: FINCEPT.BORDER }}>|</span>
+        <span>Cycle: {arena.cycleCount}</span>
+        <span style={{ color: FINCEPT.BORDER }}>|</span>
+        <span>Decisions: {arena.decisions.length}</span>
+        <span style={{ color: FINCEPT.BORDER }}>|</span>
+        <span style={{ color: FINCEPT.CYAN, fontWeight: 600 }}>
+          {arena.rightPanelTab.toUpperCase()}
+        </span>
+      </div>
     </div>
   );
 
@@ -1451,80 +1076,142 @@ const AlphaArenaTab: React.FC = () => {
   // =============================================================================
 
   return (
-    <div className="h-full flex flex-col" style={{ backgroundColor: COLORS.DARK_BG, color: COLORS.WHITE }}>
-      {/* Header */}
+    <div
+      className="alpha-arena-terminal"
+      style={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: FINCEPT.DARK_BG,
+        color: FINCEPT.WHITE,
+        fontFamily: TERMINAL_FONT,
+      }}
+    >
+      <style>{TERMINAL_STYLES}</style>
+
       {renderHeader()}
 
       {/* Notifications */}
-      {error && (
-        <div className="mx-4 mt-2 p-3 rounded flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '20', color: COLORS.RED }}>
-          <AlertCircle size={16} />
-          <span className="text-sm flex-1">{error}</span>
-          <button onClick={() => setError(null)}>×</button>
+      {arena.error && (
+        <div style={{
+          margin: '0 12px',
+          marginTop: '4px',
+          padding: '8px 10px',
+          backgroundColor: `${FINCEPT.RED}20`,
+          border: `1px solid ${FINCEPT.RED}40`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          color: FINCEPT.RED,
+        }}>
+          <AlertCircle size={14} />
+          <span style={{ fontSize: '11px', flex: 1 }}>{arena.error}</span>
+          <button
+            onClick={() => arena.setError(null)}
+            style={{ background: 'none', border: 'none', color: FINCEPT.RED, cursor: 'pointer', fontSize: '14px', fontWeight: 700 }}
+          >
+            x
+          </button>
         </div>
       )}
-      {success && (
-        <div className="mx-4 mt-2 p-3 rounded flex items-center gap-2" style={{ backgroundColor: COLORS.GREEN + '20', color: COLORS.GREEN }}>
-          <CheckCircle size={16} />
-          <span className="text-sm">{success}</span>
+      {arena.success && (
+        <div style={{
+          margin: '0 12px',
+          marginTop: '4px',
+          padding: '8px 10px',
+          backgroundColor: `${FINCEPT.GREEN}20`,
+          border: `1px solid ${FINCEPT.GREEN}40`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          color: FINCEPT.GREEN,
+        }}>
+          <CheckCircle size={14} />
+          <span style={{ fontSize: '11px' }}>{arena.success}</span>
         </div>
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left Panel */}
-        <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto">
-          {/* No Competition State */}
-          {!competitionId && !showCreatePanel && !showPastCompetitions && (
-            <div className="p-8 rounded-lg text-center" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
-              <Trophy size={48} className="mx-auto mb-4" style={{ color: COLORS.ORANGE, opacity: 0.5 }} />
-              <h3 className="text-lg font-semibold mb-2" style={{ color: COLORS.WHITE }}>No Active Competition</h3>
-              <p className="text-sm mb-4" style={{ color: COLORS.GRAY }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '8px', gap: '8px', overflowY: 'auto' }}>
+          {!arena.competitionId && !arena.showCreatePanel && !arena.showPastCompetitions && (
+            <div style={{
+              padding: '32px',
+              textAlign: 'center',
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <Trophy size={48} style={{ color: FINCEPT.ORANGE, opacity: 0.5, margin: '0 auto 16px' }} />
+              <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>NO ACTIVE COMPETITION</h3>
+              <p style={{ fontSize: '11px', marginBottom: '16px', color: FINCEPT.GRAY }}>
                 Create a new AI trading competition or resume a past competition.
               </p>
-              <div className="flex justify-center gap-3">
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
                 <button
-                  onClick={() => setShowCreatePanel(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded font-medium"
-                  style={{ backgroundColor: COLORS.ORANGE, color: COLORS.DARK_BG }}
+                  onClick={() => arena.setShowCreatePanel(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    backgroundColor: FINCEPT.ORANGE,
+                    color: FINCEPT.DARK_BG,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: '11px',
+                    letterSpacing: '0.5px',
+                    cursor: 'pointer',
+                  }}
                 >
-                  <Plus size={16} />
-                  Create Competition
+                  <Plus size={14} />
+                  CREATE COMPETITION
                 </button>
-                {pastCompetitions.length > 0 && (
+                {arena.pastCompetitions.length > 0 && (
                   <button
-                    onClick={() => setShowPastCompetitions(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded font-medium transition-colors"
+                    onClick={() => arena.setShowPastCompetitions(true)}
                     style={{
-                      backgroundColor: COLORS.CARD_BG,
-                      color: COLORS.WHITE,
-                      border: `1px solid ${COLORS.BORDER}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 16px',
+                      backgroundColor: FINCEPT.CARD_BG,
+                      color: FINCEPT.WHITE,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      fontWeight: 600,
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = `${FINCEPT.ORANGE}40`;
+                      e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                      e.currentTarget.style.backgroundColor = FINCEPT.CARD_BG;
                     }}
                   >
-                    <History size={16} />
-                    Past Competitions ({pastCompetitions.length})
+                    <History size={14} />
+                    PAST COMPETITIONS ({arena.pastCompetitions.length})
                   </button>
                 )}
               </div>
-              {configuredLLMs.length === 0 && (
-                <p className="text-xs mt-4" style={{ color: COLORS.RED }}>
+              {arena.configuredLLMs.length === 0 && (
+                <p style={{ fontSize: '9px', marginTop: '16px', color: FINCEPT.RED }}>
                   No AI models configured. Go to Settings → LLM Config → My Model Library first.
                 </p>
               )}
             </div>
           )}
 
-          {/* Past Competitions Panel */}
-          {!competitionId && showPastCompetitions && renderPastCompetitions()}
+          {!arena.competitionId && arena.showPastCompetitions && renderPastCompetitions()}
 
-          {/* Progress Panel - Shows during loading */}
           {renderProgressPanel()}
 
-          {/* Create Panel */}
-          {showCreatePanel && renderCreatePanel()}
+          {arena.showCreatePanel && renderCreatePanel()}
 
-          {/* Competition Active */}
-          {competitionId && (
+          {arena.competitionId && (
             <>
               {renderControls()}
               {renderPerformanceChart()}
@@ -1533,117 +1220,21 @@ const AlphaArenaTab: React.FC = () => {
           )}
         </div>
 
-        {/* Right Panel - Enhanced Features */}
-        <div className="w-[400px] border-l flex flex-col" style={{ borderColor: COLORS.BORDER }}>
-          {/* Right Panel Tabs */}
-          <div className="flex border-b overflow-x-auto" style={{ borderColor: COLORS.BORDER }}>
-            {[
-              { key: 'decisions', icon: Brain, label: 'Decisions' },
-              { key: 'hitl', icon: Shield, label: 'HITL' },
-              { key: 'sentiment', icon: Newspaper, label: 'Sentiment' },
-              { key: 'metrics', icon: BarChart3, label: 'Metrics' },
-              { key: 'grid', icon: Grid3X3, label: 'Grid' },
-              { key: 'research', icon: FileSearch, label: 'Research' },
-              { key: 'broker', icon: Building, label: 'Broker' },
-            ].map(({ key, icon: Icon, label }) => (
-              <button
-                key={key}
-                onClick={() => setRightPanelTab(key as RightPanelTab)}
-                className="px-3 py-2 text-xs font-medium whitespace-nowrap flex items-center gap-1 transition-colors"
-                style={{
-                  backgroundColor: rightPanelTab === key ? COLORS.CARD_BG : 'transparent',
-                  color: rightPanelTab === key ? COLORS.ORANGE : COLORS.GRAY,
-                  borderBottom: rightPanelTab === key ? `2px solid ${COLORS.ORANGE}` : '2px solid transparent',
-                }}
-              >
-                <Icon size={12} />
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Right Panel Content */}
-          <div className="flex-1 overflow-y-auto">
-            {rightPanelTab === 'decisions' && renderDecisions()}
-            {rightPanelTab === 'hitl' && (
-              <div className="p-3">
-                <HITLApprovalPanel
-                  competitionId={competitionId || undefined}
-                  onApprovalChange={() => refreshCompetitionData()}
-                />
-              </div>
-            )}
-            {rightPanelTab === 'sentiment' && (
-              <div className="p-3">
-                <SentimentPanel
-                  symbol={symbol.split('/')[0]}
-                  showMarketMood={true}
-                />
-              </div>
-            )}
-            {rightPanelTab === 'metrics' && competitionId && (
-              <div className="p-3">
-                <PortfolioMetricsPanel
-                  competitionId={competitionId}
-                />
-              </div>
-            )}
-            {rightPanelTab === 'metrics' && !competitionId && (
-              <div className="p-8 text-center" style={{ color: COLORS.GRAY }}>
-                <BarChart3 size={32} className="mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Start a competition to view metrics</p>
-              </div>
-            )}
-            {rightPanelTab === 'grid' && (
-              <div className="p-3">
-                <GridStrategyPanel
-                  symbol={symbol.split('/')[0]}
-                  currentPrice={latestPrice || undefined}
-                />
-              </div>
-            )}
-            {rightPanelTab === 'research' && (
-              <div className="p-3">
-                <ResearchPanel />
-              </div>
-            )}
-            {rightPanelTab === 'broker' && (
-              <div className="p-3">
-                <BrokerSelector
-                  selectedBrokerId={selectedBroker || undefined}
-                  onBrokerSelect={(broker) => setSelectedBroker(broker.id)}
-                />
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Right Panel */}
+        <AlphaArenaRightPanel
+          rightPanelTab={arena.rightPanelTab}
+          setRightPanelTab={arena.setRightPanelTab}
+          decisions={arena.decisions}
+          competitionId={arena.competitionId}
+          symbol={arena.symbol}
+          latestPrice={arena.latestPrice}
+          selectedBroker={arena.selectedBroker}
+          setSelectedBroker={arena.setSelectedBroker}
+          refreshCompetitionData={arena.refreshCompetitionData}
+        />
       </div>
 
-      {/* Footer */}
-      <TabFooter
-        tabName="ALPHA ARENA"
-        leftInfo={[
-          {
-            label: competitionId ? `ID: ${competitionId.slice(0, 8)}...` : 'No Competition',
-            color: COLORS.GRAY,
-          },
-          {
-            label: `Models: ${selectedModels.length}`,
-            color: COLORS.GRAY,
-          },
-          {
-            label: `AI Models: ${configuredLLMs.length} available`,
-            color: COLORS.GRAY,
-          },
-          ...(selectedBroker ? [{
-            label: `Broker: ${selectedBroker}`,
-            color: COLORS.ORANGE,
-          }] : []),
-        ]}
-        statusInfo={`Cycle: ${cycleCount} | Decisions: ${decisions.length} | Panel: ${rightPanelTab.toUpperCase()}`}
-        backgroundColor={COLORS.PANEL_BG}
-        borderColor={COLORS.BORDER}
-      />
+      {renderStatusBar()}
     </div>
   );
 };

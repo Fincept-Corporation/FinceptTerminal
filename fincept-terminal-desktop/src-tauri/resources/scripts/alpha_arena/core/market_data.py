@@ -88,38 +88,40 @@ class MarketDataProvider:
     async def get_tickers(self, symbols: List[str]) -> Dict[str, MarketData]:
         """Get ticker data for multiple symbols."""
         results = {}
+        errors = []
         for symbol in symbols:
             try:
                 results[symbol] = await self.get_ticker(symbol)
             except Exception as e:
                 logger.error(f"Failed to fetch {symbol}: {e}")
+                errors.append(f"{symbol}: {e}")
+        if errors and not results:
+            raise RuntimeError(f"Failed to fetch any market data: {'; '.join(errors)}")
         return results
 
     async def _fetch_kraken(self, symbol: str) -> MarketData:
         """Fetch data from Kraken."""
-        # Convert symbol format
+        # Convert symbol format - just strip the slash.
+        # Kraken accepts simple pairs like BTCUSD, ETHUSD, etc.
         pair = symbol.replace("/", "")
-        if pair.endswith("USD"):
-            pair = pair.replace("USD", "ZUSD")
-        if pair.startswith("BTC"):
-            pair = pair.replace("BTC", "XBT")
 
         url = f"https://api.kraken.com/0/public/Ticker?pair={pair}"
 
-        if not HTTPX_AVAILABLE or not self._client:
-            return self._mock_market_data(symbol)
+        if not HTTPX_AVAILABLE:
+            raise RuntimeError("httpx is not installed. Install it with: pip install httpx")
+        if not self._client:
+            raise RuntimeError("HTTP client not initialized. Call initialize() first.")
 
         try:
             response = await self._client.get(url)
             data = response.json()
 
             if data.get("error") and len(data["error"]) > 0:
-                logger.warning(f"Kraken API error: {data['error']}")
-                return self._mock_market_data(symbol)
+                raise RuntimeError(f"Kraken API error for {symbol}: {data['error']}")
 
             result = data.get("result", {})
             if not result:
-                return self._mock_market_data(symbol)
+                raise RuntimeError(f"No data returned from Kraken for {symbol}")
 
             # Get first result (there should only be one)
             ticker_data = list(result.values())[0]
@@ -135,17 +137,21 @@ class MarketDataProvider:
                 timestamp=datetime.now(),
             )
 
+        except RuntimeError:
+            raise
         except Exception as e:
             logger.error(f"Kraken fetch error for {symbol}: {e}")
-            return self._mock_market_data(symbol)
+            raise RuntimeError(f"Failed to fetch {symbol} from Kraken: {e}") from e
 
     async def _fetch_binance(self, symbol: str) -> MarketData:
         """Fetch data from Binance."""
         pair = symbol.replace("/", "")
         url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={pair}"
 
-        if not HTTPX_AVAILABLE or not self._client:
-            return self._mock_market_data(symbol)
+        if not HTTPX_AVAILABLE:
+            raise RuntimeError("httpx is not installed. Install it with: pip install httpx")
+        if not self._client:
+            raise RuntimeError("HTTP client not initialized. Call initialize() first.")
 
         try:
             response = await self._client.get(url)
@@ -162,41 +168,17 @@ class MarketDataProvider:
                 timestamp=datetime.now(),
             )
 
+        except RuntimeError:
+            raise
         except Exception as e:
             logger.error(f"Binance fetch error for {symbol}: {e}")
-            return self._mock_market_data(symbol)
+            raise RuntimeError(f"Failed to fetch {symbol} from Binance: {e}") from e
 
     async def _fetch_generic(self, symbol: str) -> MarketData:
-        """Fallback fetch using mock data."""
-        logger.warning(f"Using mock data for {symbol}")
-        return self._mock_market_data(symbol)
-
-    def _mock_market_data(self, symbol: str) -> MarketData:
-        """Generate mock market data for testing."""
-        import random
-
-        base_prices = {
-            "BTC/USD": 95000.0,
-            "ETH/USD": 3500.0,
-            "SOL/USD": 180.0,
-            "XRP/USD": 2.5,
-        }
-
-        base_price = base_prices.get(symbol, 100.0)
-        variation = base_price * 0.001  # 0.1% variation
-
-        price = base_price + random.uniform(-variation, variation)
-        spread = price * 0.0005  # 0.05% spread
-
-        return MarketData(
-            symbol=symbol,
-            price=price,
-            bid=price - spread,
-            ask=price + spread,
-            high_24h=price * 1.02,
-            low_24h=price * 0.98,
-            volume_24h=random.uniform(1000, 10000),
-            timestamp=datetime.now(),
+        """Fallback for unsupported exchanges - raises error."""
+        raise RuntimeError(
+            f"Unsupported exchange '{self.exchange_id}' for {symbol}. "
+            f"Supported exchanges: kraken, binance. Configure a supported exchange."
         )
 
 

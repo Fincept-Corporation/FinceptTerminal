@@ -64,6 +64,9 @@ export function ProChartWithToolkit({
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
+    // Reset isReady so the data effect re-triggers after chart re-initialization
+    setIsReady(false);
+
     const containerHeight = chartContainerRef.current.clientHeight || height;
 
     // Determine time visibility based on interval

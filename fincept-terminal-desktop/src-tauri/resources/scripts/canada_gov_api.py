@@ -207,9 +207,8 @@ def get_datasets_by_publisher(publisher_id: str, rows: int = 100) -> Dict[str, A
         JSON response with dataset list
     """
     try:
-        # Search for datasets by owner_org
-        query = f"owner_org:{publisher_id}"
-        params = {'q': query, 'rows': rows}
+        # Use fq (filter query) with organization slug — q+owner_org requires UUID
+        params = {'fq': f'organization:{publisher_id}', 'rows': rows}
 
         result = _make_request("package_search", params)
 

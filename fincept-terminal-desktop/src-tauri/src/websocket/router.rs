@@ -193,6 +193,9 @@ impl MessageRouter {
     /// Write latest tick price to strategy_price_cache table for Python live runner
     fn update_price_cache(data: &TickerData) {
         use crate::database::pool::get_pool;
+        use std::sync::atomic::{AtomicU64, Ordering as AtOrd};
+        static PRICE_CACHE_WRITES: AtomicU64 = AtomicU64::new(0);
+
         if let Ok(pool) = get_pool() {
             if let Ok(conn) = pool.get() {
                 let _ = conn.execute(
@@ -213,6 +216,12 @@ impl MessageRouter {
                         data.timestamp,
                     ],
                 );
+
+                // Log every 100th write to avoid spam
+                let count = PRICE_CACHE_WRITES.fetch_add(1, AtOrd::Relaxed);
+                if count % 100 == 0 {
+                    println!("[PriceCache] #{} {} price={:.2} provider={}", count, data.symbol, data.price, data.provider);
+                }
             }
         }
     }

@@ -106,8 +106,9 @@ class AlphaArenaCompetition:
                 )
                 logger.info(f"Market data provider initialized for {self.config.exchange_id}")
             except asyncio.TimeoutError:
-                logger.warning(f"Market data provider initialization timed out, using mock data")
-                self._market_provider = await get_market_data_provider(self.config.exchange_id)
+                logger.error(f"Market data provider initialization timed out for {self.config.exchange_id}")
+                self.status = CompetitionStatus.FAILED
+                return False
 
             # Create agents and trading engines for each model
             for model in self.config.models:
@@ -158,24 +159,25 @@ class AlphaArenaCompetition:
                     initial_capital=agent_capital,
                 )
 
-                # Initialize with timeout
+                # Initialize with timeout - agent MUST succeed with real LLM
                 try:
                     init_success = await asyncio.wait_for(
                         agent.initialize(),
                         timeout=30.0
                     )
                     if init_success:
-                        if hasattr(agent, 'is_mock_mode') and agent.is_mock_mode:
-                            reason = agent.mock_mode_reason or 'unknown'
-                            logger.warning(f"Agent {model.name} is in MOCK MODE: {reason}")
-                        else:
-                            logger.info(f"Agent {model.name} initialized successfully with real LLM")
+                        logger.info(f"Agent {model.name} initialized successfully with real LLM")
+                        self._agents[model.name] = agent
                     else:
-                        logger.warning(f"Agent {model.name} initialization returned False, using mock mode")
+                        init_error = getattr(agent, 'init_error', 'unknown')
+                        logger.error(f"Agent {model.name} failed to initialize: {init_error}")
+                        continue  # Skip this agent
                 except asyncio.TimeoutError:
-                    logger.warning(f"Agent {model.name} initialization timed out, using mock mode")
-
-                self._agents[model.name] = agent
+                    logger.error(f"Agent {model.name} initialization timed out - skipping")
+                    continue  # Skip this agent
+                except Exception as agent_init_error:
+                    logger.error(f"Agent {model.name} initialization error: {agent_init_error}")
+                    continue  # Skip this agent
 
                 # Create trading engine (database-backed bridge to main paper trading)
                 engine = create_paper_trading_bridge(
@@ -186,6 +188,16 @@ class AlphaArenaCompetition:
                 )
                 self._engines[model.name] = engine
                 logger.info(f"Trading engine (DB-backed) created for {model.name} with capital ${model.initial_capital or self.config.initial_capital}")
+
+            # Validate enough agents initialized with real LLMs
+            if len(self._agents) < 2:
+                failed_count = len(self.config.models) - len(self._agents)
+                logger.error(
+                    f"Only {len(self._agents)} agent(s) initialized successfully out of {len(self.config.models)}. "
+                    f"Need at least 2 agents for a competition."
+                )
+                self.status = CompetitionStatus.FAILED
+                return False
 
             self.status = CompetitionStatus.CREATED
             logger.info(f"Competition {self.competition_id} initialized with {len(self._agents)} agents")
@@ -237,8 +249,8 @@ class AlphaArenaCompetition:
 
             # Ensure market provider is initialized
             if self._market_provider is None:
-                logger.warning("Market provider not initialized, initializing now...")
-                self._market_provider = await get_market_data_provider(self.config.exchange_id)
+                yield error("Market data provider not initialized. Cannot run cycle without live market data.")
+                return
 
             market = await self._market_provider.get_ticker(symbol)
 

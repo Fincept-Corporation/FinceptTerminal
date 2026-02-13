@@ -213,11 +213,16 @@ class SentimentAgent(BaseAgent):
 
         try:
             import json
+            import asyncio
             # Import and use existing fetch_company_news
             sys.path.insert(0, str(scripts_dir))
             from fetch_company_news import fetch_company_news
 
-            result = fetch_company_news(query, max_results, period)
+            # Run blocking news fetch in thread executor to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, fetch_company_news, query, max_results, period
+            )
             data = json.loads(result)
 
             if not data.get("success"):
@@ -355,15 +360,37 @@ class SentimentAgent(BaseAgent):
         Returns:
             Aggregated market mood
         """
+        import asyncio
+
         results = {}
         total_score = 0.0
+        analyzed_count = 0
 
-        for symbol in symbols:
-            sentiment = await self.analyze_sentiment(symbol)
-            results[symbol] = sentiment.to_dict()
+        async def _analyze_one(sym: str) -> tuple:
+            """Analyze a single symbol with timeout."""
+            try:
+                sentiment = await asyncio.wait_for(
+                    self.analyze_sentiment(sym, max_articles=5),
+                    timeout=10.0,
+                )
+                return sym, sentiment
+            except asyncio.TimeoutError:
+                logger.warning(f"Sentiment timeout for {sym}")
+                return sym, SentimentResult(symbol=sym, confidence=0.0)
+            except Exception as e:
+                logger.warning(f"Sentiment error for {sym}: {e}")
+                return sym, SentimentResult(symbol=sym, confidence=0.0)
+
+        # Run all symbols concurrently
+        tasks = [_analyze_one(s) for s in symbols]
+        completed = await asyncio.gather(*tasks)
+
+        for sym, sentiment in completed:
+            results[sym] = sentiment.to_dict()
             total_score += sentiment.sentiment_score
+            analyzed_count += 1
 
-        avg_score = total_score / len(symbols) if symbols else 0.0
+        avg_score = total_score / analyzed_count if analyzed_count else 0.0
 
         if avg_score > 0.3:
             overall_mood = "risk_on"
@@ -373,7 +400,7 @@ class SentimentAgent(BaseAgent):
             overall_mood = "mixed"
 
         return {
-            "symbols_analyzed": len(symbols),
+            "symbols_analyzed": analyzed_count,
             "overall_mood": overall_mood,
             "average_sentiment": avg_score,
             "individual_sentiments": results,

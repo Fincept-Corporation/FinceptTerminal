@@ -1,23 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Settings, Loader2, AlertCircle, RefreshCw, Code, Hash, ToggleLeft, Type } from 'lucide-react';
 import type { StrategyParameter } from '../types';
 import { extractStrategyParameters } from '../services/algoTradingService';
 
 const F = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
+  ORANGE: '#FF8800', WHITE: '#FFFFFF', RED: '#FF3B3B', GREEN: '#00D66F',
+  GRAY: '#787878', DARK_BG: '#000000', PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A', BORDER: '#2A2A2A', HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A', CYAN: '#00E5FF', YELLOW: '#FFD700', BLUE: '#0088FF',
+};
+
+const inputBaseStyle: React.CSSProperties = {
+  width: '100%', padding: '8px 10px', backgroundColor: F.DARK_BG,
+  color: F.WHITE, border: `1px solid ${F.BORDER}`, borderRadius: '2px',
+  fontSize: '10px', fontFamily: '"IBM Plex Mono", monospace', outline: 'none',
+  transition: 'border-color 0.2s',
 };
 
 interface ParameterEditorProps {
@@ -39,33 +36,24 @@ const ParameterEditor: React.FC<ParameterEditorProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Extract parameters from code if not provided
   useEffect(() => {
     if (providedParameters) {
       setParameters(providedParameters);
       return;
     }
-
-    if (code) {
-      extractParametersFromCode(code);
-    }
+    if (code) extractParametersFromCode(code);
   }, [code, providedParameters]);
 
   const extractParametersFromCode = async (sourceCode: string) => {
     setLoading(true);
     setError(null);
-
     try {
       const result = await extractStrategyParameters(sourceCode);
       if (result.success && result.data) {
         setParameters(result.data);
-
-        // Initialize default values if not already set
         const newValues = { ...values };
         result.data.forEach((param) => {
-          if (!(param.name in newValues)) {
-            newValues[param.name] = param.default_value;
-          }
+          if (!(param.name in newValues)) newValues[param.name] = param.default_value;
         });
         onChange(newValues);
       } else {
@@ -84,125 +72,110 @@ const ParameterEditor: React.FC<ParameterEditorProps> = ({
 
   const handleReset = () => {
     const defaultValues: Record<string, string> = {};
-    parameters.forEach((param) => {
-      defaultValues[param.name] = param.default_value;
-    });
+    parameters.forEach((param) => { defaultValues[param.name] = param.default_value; });
     onChange(defaultValues);
   };
 
   if (loading) {
     return (
-      <div
-        style={{
-          padding: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          color: F.GRAY,
-          fontSize: '11px',
-        }}
-      >
-        <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-        Extracting parameters...
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <div style={{
+        padding: '24px', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', gap: '8px', color: F.GRAY,
+      }}>
+        <Loader2 size={18} className="animate-spin" style={{ color: F.ORANGE }} />
+        <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px' }}>
+          EXTRACTING PARAMETERS...
+        </span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div
-        style={{
-          padding: '12px',
-          backgroundColor: `${F.RED}20`,
-          border: `1px solid ${F.RED}`,
-          borderRadius: '4px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          color: F.RED,
-          fontSize: '11px',
-        }}
-      >
-        <AlertCircle size={14} />
-        {error}
+      <div style={{
+        padding: '12px', backgroundColor: `${F.RED}15`,
+        border: `1px solid ${F.RED}40`, borderRadius: '2px',
+        display: 'flex', alignItems: 'center', gap: '8px',
+      }}>
+        <AlertCircle size={12} color={F.RED} />
+        <span style={{ fontSize: '9px', color: F.RED, fontWeight: 700 }}>{error}</span>
       </div>
     );
   }
 
   if (parameters.length === 0) {
     return (
-      <div
-        style={{
-          padding: '16px',
-          textAlign: 'center',
-          color: F.GRAY,
-          fontSize: '11px',
-        }}
-      >
-        No configurable parameters found
+      <div style={{
+        padding: '24px', textAlign: 'center',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+      }}>
+        <Code size={18} color={F.MUTED} style={{ opacity: 0.5 }} />
+        <span style={{ fontSize: '9px', color: F.MUTED, fontWeight: 700 }}>
+          NO CONFIGURABLE PARAMETERS
+        </span>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        backgroundColor: F.PANEL_BG,
-        borderRadius: '4px',
-        border: `1px solid ${F.BORDER}`,
-        overflow: 'hidden',
-      }}
-    >
+    <div style={{
+      backgroundColor: F.PANEL_BG, borderRadius: '2px',
+      border: `1px solid ${F.BORDER}`, overflow: 'hidden',
+    }}>
       {/* Header */}
-      <div
-        style={{
-          padding: '10px 12px',
-          borderBottom: `1px solid ${F.BORDER}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          backgroundColor: F.HEADER_BG,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Settings size={12} style={{ color: F.ORANGE }} />
-          <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE }}>
+      <div style={{
+        padding: '10px 12px', borderBottom: `1px solid ${F.BORDER}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        backgroundColor: F.HEADER_BG,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Settings size={12} color={F.ORANGE} />
+          <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
             STRATEGY PARAMETERS
           </span>
-          <span style={{ fontSize: '9px', color: F.GRAY }}>({parameters.length})</span>
+          <span style={{
+            padding: '2px 6px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
+            backgroundColor: `${F.ORANGE}20`, color: F.ORANGE,
+          }}>
+            {parameters.length}
+          </span>
         </div>
         <button
           onClick={handleReset}
           disabled={disabled}
           style={{
-            padding: '4px 8px',
-            backgroundColor: 'transparent',
-            border: `1px solid ${F.BORDER}`,
-            borderRadius: '2px',
-            color: F.GRAY,
-            fontSize: '9px',
+            padding: '4px 10px', backgroundColor: 'transparent',
+            border: `1px solid ${F.BORDER}`, borderRadius: '2px',
+            color: F.GRAY, fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px',
             cursor: disabled ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            opacity: disabled ? 0.5 : 1,
+            display: 'flex', alignItems: 'center', gap: '4px',
+            opacity: disabled ? 0.5 : 1, transition: 'all 0.2s',
+          }}
+          onMouseEnter={e => {
+            if (!disabled) {
+              e.currentTarget.style.borderColor = F.ORANGE;
+              e.currentTarget.style.color = F.WHITE;
+            }
+          }}
+          onMouseLeave={e => {
+            if (!disabled) {
+              e.currentTarget.style.borderColor = F.BORDER;
+              e.currentTarget.style.color = F.GRAY;
+            }
           }}
         >
-          <RefreshCw size={10} />
-          RESET
+          <RefreshCw size={9} />
+          RESET DEFAULTS
         </button>
       </div>
 
       {/* Parameters Grid */}
-      <div
-        style={{
-          padding: '12px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: '12px',
-        }}
-      >
+      <div style={{
+        padding: '12px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+        gap: '10px',
+      }}>
         {parameters.map((param) => (
           <ParameterInput
             key={param.name}
@@ -217,6 +190,21 @@ const ParameterEditor: React.FC<ParameterEditorProps> = ({
   );
 };
 
+// Type icon mapping
+const TYPE_ICONS: Record<string, React.ElementType> = {
+  'int': Hash,
+  'float': Hash,
+  'bool': ToggleLeft,
+  'string': Type,
+};
+
+const TYPE_COLORS: Record<string, string> = {
+  'int': F.CYAN,
+  'float': F.BLUE,
+  'bool': F.GREEN,
+  'string': F.YELLOW,
+};
+
 // Parameter Input Component
 const ParameterInput: React.FC<{
   parameter: StrategyParameter;
@@ -224,7 +212,12 @@ const ParameterInput: React.FC<{
   onChange: (value: string) => void;
   disabled?: boolean;
 }> = ({ parameter, value, onChange, disabled }) => {
+  const TypeIcon = TYPE_ICONS[parameter.type] || Code;
+  const typeColor = TYPE_COLORS[parameter.type] || F.GRAY;
+
   const renderInput = () => {
+    const baseStyle = { ...inputBaseStyle, cursor: disabled ? 'not-allowed' : undefined };
+
     switch (parameter.type) {
       case 'bool':
         return (
@@ -232,122 +225,86 @@ const ParameterInput: React.FC<{
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            style={{
-              width: '100%',
-              padding: '8px',
-              backgroundColor: F.DARK_BG,
-              border: `1px solid ${F.BORDER}`,
-              borderRadius: '4px',
-              color: F.WHITE,
-              fontSize: '11px',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-            }}
+            style={{ ...baseStyle, color: value === 'true' ? F.GREEN : F.RED }}
           >
             <option value="true">True</option>
             <option value="false">False</option>
           </select>
         );
-
       case 'int':
         return (
           <input
-            type="number"
-            value={value}
+            type="number" value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            min={parameter.min}
-            max={parameter.max}
-            step={1}
-            style={{
-              width: '100%',
-              padding: '8px',
-              backgroundColor: F.DARK_BG,
-              border: `1px solid ${F.BORDER}`,
-              borderRadius: '4px',
-              color: F.WHITE,
-              fontSize: '11px',
-            }}
+            min={parameter.min} max={parameter.max} step={1}
+            style={{ ...baseStyle, color: F.CYAN }}
+            onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
+            onBlur={e => { e.currentTarget.style.borderColor = F.BORDER; }}
           />
         );
-
       case 'float':
         return (
           <input
-            type="number"
-            value={value}
+            type="number" value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            min={parameter.min}
-            max={parameter.max}
-            step={0.01}
-            style={{
-              width: '100%',
-              padding: '8px',
-              backgroundColor: F.DARK_BG,
-              border: `1px solid ${F.BORDER}`,
-              borderRadius: '4px',
-              color: F.WHITE,
-              fontSize: '11px',
-            }}
+            min={parameter.min} max={parameter.max} step={0.01}
+            style={{ ...baseStyle, color: F.BLUE }}
+            onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
+            onBlur={e => { e.currentTarget.style.borderColor = F.BORDER; }}
           />
         );
-
       default:
         return (
           <input
-            type="text"
-            value={value}
+            type="text" value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            style={{
-              width: '100%',
-              padding: '8px',
-              backgroundColor: F.DARK_BG,
-              border: `1px solid ${F.BORDER}`,
-              borderRadius: '4px',
-              color: F.WHITE,
-              fontSize: '11px',
-            }}
+            style={baseStyle}
+            onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
+            onBlur={e => { e.currentTarget.style.borderColor = F.BORDER; }}
           />
         );
     }
   };
 
   return (
-    <div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '4px',
-        }}
-      >
-        <label style={{ fontSize: '10px', color: F.GRAY, fontWeight: 600 }}>
-          {parameter.name}
+    <div style={{
+      backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`,
+      borderRadius: '2px', padding: '10px', transition: 'border-color 0.2s',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: '6px',
+      }}>
+        <label style={{
+          fontSize: '9px', fontWeight: 700, color: F.GRAY,
+          letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '4px',
+        }}>
+          {parameter.name.toUpperCase()}
         </label>
-        <span
-          style={{
-            fontSize: '8px',
-            padding: '2px 4px',
-            backgroundColor: F.HOVER,
-            color: F.CYAN,
-            borderRadius: '2px',
-          }}
-        >
-          {parameter.type}
+        <span style={{
+          fontSize: '8px', padding: '2px 6px',
+          backgroundColor: `${typeColor}15`, color: typeColor,
+          borderRadius: '2px', fontWeight: 700, letterSpacing: '0.5px',
+          display: 'flex', alignItems: 'center', gap: '3px',
+        }}>
+          <TypeIcon size={8} />
+          {parameter.type.toUpperCase()}
         </span>
       </div>
       {renderInput()}
       {parameter.description && (
-        <div
-          style={{
-            fontSize: '9px',
-            color: F.MUTED,
-            marginTop: '4px',
-          }}
-        >
+        <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '4px', lineHeight: '1.4' }}>
           {parameter.description}
+        </div>
+      )}
+      {(parameter.min !== undefined || parameter.max !== undefined) && (
+        <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>
+          {parameter.min !== undefined && `Min: ${parameter.min}`}
+          {parameter.min !== undefined && parameter.max !== undefined && ' | '}
+          {parameter.max !== undefined && `Max: ${parameter.max}`}
         </div>
       )}
     </div>

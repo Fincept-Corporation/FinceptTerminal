@@ -195,7 +195,7 @@ const initialState: State = {
   containerWidth: 1200,
   error: null,
   rightPanelCollapsed: false,
-  compactMode: false,
+  compactMode: true,
 };
 
 function reducer(state: State, action: Action): State {

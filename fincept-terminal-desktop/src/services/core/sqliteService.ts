@@ -37,6 +37,8 @@ export interface ApiKeys {
   DATABENTO_API_KEY?: string;
   WTO_API_KEY?: string;
   EIA_API_KEY?: string;
+  BLS_API_KEY?: string;
+  BEA_API_KEY?: string;
   [key: string]: string | undefined;
 }
 
@@ -51,6 +53,8 @@ export const PREDEFINED_API_KEYS = [
   { key: 'OPENROUTER_API_KEY', label: 'OpenRouter API Key', description: 'Access 400+ AI models from all providers (Model Library)' },
   { key: 'WTO_API_KEY', label: 'WTO API Key', description: 'World Trade Organization - Trade statistics, restrictions & notifications' },
   { key: 'EIA_API_KEY', label: 'EIA API Key', description: 'U.S. Energy Information Administration - Petroleum, natural gas & energy data' },
+  { key: 'BLS_API_KEY', label: 'BLS API Key', description: 'Bureau of Labor Statistics - Employment, wages, CPI & productivity data' },
+  { key: 'BEA_API_KEY', label: 'BEA API Key', description: 'Bureau of Economic Analysis - GDP, income, spending & national accounts (NIPA)' },
 ] as const;
 
 // LLM Provider configurations

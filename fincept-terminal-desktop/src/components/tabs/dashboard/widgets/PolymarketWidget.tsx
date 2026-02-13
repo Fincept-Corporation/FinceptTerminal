@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
 import polymarketService, { PolymarketMarket } from '@/services/polymarket/polymarketService';
 import { useTranslation } from 'react-i18next';
+import { useCache } from '@/hooks/useCache';
 
 interface PolymarketWidgetProps {
   id: string;
@@ -19,30 +20,25 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
   onNavigate
 }) => {
   const { t } = useTranslation('dashboard');
-  const [markets, setMarkets] = useState<PolymarketMarket[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadMarkets = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const {
+    data: markets,
+    isLoading: loading,
+    error,
+    refresh
+  } = useCache<PolymarketMarket[]>({
+    key: `widget:polymarket:${limit}`,
+    category: 'api-response',
+    ttl: '1m',
+    refetchInterval: 60 * 1000,
+    staleWhileRevalidate: true,
+    fetcher: async () => {
       const data = await polymarketService.getMarkets({ limit, active: true });
-      setMarkets(data || []);
-    } catch (err) {
-      setError('Failed to load markets');
-      console.error('Polymarket widget error:', err);
-    } finally {
-      setLoading(false);
+      return data || [];
     }
-  };
+  });
 
-  useEffect(() => {
-    loadMarkets();
-    const interval = setInterval(loadMarkets, 60000); // Refresh every minute
-    return () => clearInterval(interval);
-  }, [limit]);
-
+  const displayMarkets = markets || [];
 
   const formatVolume = (volume: number) => {
     if (volume >= 1000000) return `$${(volume / 1000000).toFixed(1)}M`;
@@ -55,13 +51,13 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
       id={id}
       title="POLYMARKET - TOP MARKETS"
       onRemove={onRemove}
-      onRefresh={loadMarkets}
-      isLoading={loading}
-      error={error}
+      onRefresh={refresh}
+      isLoading={loading && !markets}
+      error={error?.message || null}
       headerColor="var(--ft-color-purple)"
     >
       <div style={{ padding: '4px' }}>
-        {markets.slice(0, limit).map((market, index) => (
+        {displayMarkets.slice(0, limit).map((market, index) => (
           <div
             key={market.id || index}
             style={{
@@ -97,7 +93,7 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
           </div>
         ))}
 
-        {markets.length === 0 && !loading && (
+        {displayMarkets.length === 0 && !loading && (
           <div style={{ padding: '12px', textAlign: 'center', color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-small)' }}>
             {t('widgets.noActiveMarkets')}
           </div>

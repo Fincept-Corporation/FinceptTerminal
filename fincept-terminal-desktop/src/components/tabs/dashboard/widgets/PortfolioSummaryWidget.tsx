@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { TrendingUp, TrendingDown, Briefcase, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
 import { sqliteService } from '@/services/core/sqliteService';
 import { useTranslation } from 'react-i18next';
+import { useCache } from '@/hooks/useCache';
 
 interface PortfolioSummaryWidgetProps {
   id: string;
@@ -21,6 +22,11 @@ interface PortfolioData {
   currency: string;
 }
 
+interface PortfolioSummary {
+  portfolio: PortfolioData | null;
+  topPositions: any[];
+}
+
 export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
   id,
   portfolioId,
@@ -28,82 +34,75 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
   onNavigate
 }) => {
   const { t } = useTranslation('dashboard');
-  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
-  const [topPositions, setTopPositions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadPortfolio = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const {
+    data: summaryData,
+    isLoading: loading,
+    error,
+    refresh
+  } = useCache<PortfolioSummary>({
+    key: `widget:portfolio-summary:${portfolioId || 'default'}`,
+    category: 'portfolio',
+    ttl: '1m',
+    refetchInterval: 60 * 1000,
+    staleWhileRevalidate: true,
+    fetcher: async () => {
+      try {
+        const portfolios = await sqliteService.listPortfolios();
 
-      // Get portfolios from SQLite
-      const portfolios = await sqliteService.listPortfolios();
+        if (!portfolios || portfolios.length === 0) {
+          return { portfolio: null, topPositions: [] };
+        }
 
-      if (!portfolios || portfolios.length === 0) {
-        setPortfolio(null);
-        setTopPositions([]);
-        return;
+        const targetPortfolio = portfolioId
+          ? portfolios.find((p: any) => p.id === portfolioId) || portfolios[0]
+          : portfolios[0];
+
+        const positions = await sqliteService.getPortfolioPositions(targetPortfolio.id);
+
+        const totalValue = positions?.reduce((sum: number, p: any) => sum + (p.current_value || p.quantity * (p.current_price || p.entry_price || 0)), 0) || 0;
+        const totalCost = positions?.reduce((sum: number, p: any) => sum + (p.cost_basis || p.quantity * (p.entry_price || 0)), 0) || 0;
+        const totalGain = totalValue - totalCost;
+        const gainPercent = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
+
+        const portfolio: PortfolioData = {
+          name: targetPortfolio.name,
+          totalValue: totalValue || targetPortfolio.current_balance || 0,
+          totalCost: totalCost || targetPortfolio.initial_balance || 0,
+          totalGain: totalGain || (targetPortfolio as any).total_pnl || (targetPortfolio as any).totalPnL || 0,
+          gainPercent,
+          positions: positions?.length || 0,
+          currency: targetPortfolio.currency || 'USD'
+        };
+
+        const sorted = (positions || [])
+          .sort((a: any, b: any) => (b.current_value || 0) - (a.current_value || 0))
+          .slice(0, 5);
+
+        return { portfolio, topPositions: sorted };
+      } catch {
+        return {
+          portfolio: {
+            name: 'Demo Portfolio',
+            totalValue: 125430.50,
+            totalCost: 100000,
+            totalGain: 25430.50,
+            gainPercent: 25.43,
+            positions: 8,
+            currency: 'USD'
+          },
+          topPositions: [
+            { symbol: 'AAPL', name: 'Apple Inc', current_value: 35000, gain_percent: 32.5 },
+            { symbol: 'MSFT', name: 'Microsoft', current_value: 28000, gain_percent: 28.1 },
+            { symbol: 'GOOGL', name: 'Alphabet', current_value: 22000, gain_percent: 18.4 },
+          ]
+        };
       }
-
-      // Use specified portfolio or first one
-      const targetPortfolio = portfolioId
-        ? portfolios.find((p: any) => p.id === portfolioId) || portfolios[0]
-        : portfolios[0];
-
-      // Get portfolio positions to calculate summary
-      const positions = await sqliteService.getPortfolioPositions(targetPortfolio.id);
-
-      // Calculate summary from positions
-      const totalValue = positions?.reduce((sum: number, p: any) => sum + (p.current_value || p.quantity * (p.current_price || p.entry_price || 0)), 0) || 0;
-      const totalCost = positions?.reduce((sum: number, p: any) => sum + (p.cost_basis || p.quantity * (p.entry_price || 0)), 0) || 0;
-      const totalGain = totalValue - totalCost;
-      const gainPercent = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
-
-      setPortfolio({
-        name: targetPortfolio.name,
-        totalValue: totalValue || targetPortfolio.current_balance || 0,
-        totalCost: totalCost || targetPortfolio.initial_balance || 0,
-        totalGain: totalGain || (targetPortfolio as any).total_pnl || (targetPortfolio as any).totalPnL || 0,
-        gainPercent: gainPercent,
-        positions: positions?.length || 0,
-        currency: targetPortfolio.currency || 'USD'
-      });
-
-      // Get top positions
-      const sorted = (positions || [])
-        .sort((a: any, b: any) => (b.current_value || 0) - (a.current_value || 0))
-        .slice(0, 5);
-      setTopPositions(sorted);
-
-    } catch (err) {
-      console.error('Portfolio widget error:', err);
-      // Show demo data on error
-      setPortfolio({
-        name: 'Demo Portfolio',
-        totalValue: 125430.50,
-        totalCost: 100000,
-        totalGain: 25430.50,
-        gainPercent: 25.43,
-        positions: 8,
-        currency: 'USD'
-      });
-      setTopPositions([
-        { symbol: 'AAPL', name: 'Apple Inc', current_value: 35000, gain_percent: 32.5 },
-        { symbol: 'MSFT', name: 'Microsoft', current_value: 28000, gain_percent: 28.1 },
-        { symbol: 'GOOGL', name: 'Alphabet', current_value: 22000, gain_percent: 18.4 },
-      ]);
-    } finally {
-      setLoading(false);
     }
-  };
+  });
 
-  useEffect(() => {
-    loadPortfolio();
-    const interval = setInterval(loadPortfolio, 60000);
-    return () => clearInterval(interval);
-  }, [portfolioId]);
+  const portfolio = summaryData?.portfolio || null;
+  const topPositions = summaryData?.topPositions || [];
 
   const formatCurrency = (value: number, currency: string = 'USD') => {
     return new Intl.NumberFormat('en-US', {
@@ -118,9 +117,9 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
       id={id}
       title={`PORTFOLIO${portfolio ? ` - ${portfolio.name.toUpperCase()}` : ''}`}
       onRemove={onRemove}
-      onRefresh={loadPortfolio}
-      isLoading={loading}
-      error={error}
+      onRefresh={refresh}
+      isLoading={loading && !summaryData}
+      error={error?.message || null}
       headerColor="var(--ft-color-info)"
     >
       <div style={{ padding: '8px' }}>
@@ -174,7 +173,7 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
               }}>
                 TOP POSITIONS ({portfolio.positions} total)
               </div>
-              {topPositions.map((pos, idx) => (
+              {topPositions.map((pos: any) => (
                 <div
                   key={pos.symbol}
                   style={{

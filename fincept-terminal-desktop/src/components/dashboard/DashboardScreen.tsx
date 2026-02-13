@@ -53,6 +53,7 @@ const EquityTradingTab = React.lazy(() => import('@/components/tabs/equity-tradi
 const DBnomicsTab = React.lazy(() => import('@/components/tabs/dbnomics'));
 const AkShareDataTab = React.lazy(() => import('@/components/tabs/akshare-data'));
 const EconomicsTab = React.lazy(() => import('@/components/tabs/economics'));
+const GovDataTab = React.lazy(() => import('@/components/tabs/gov-data'));
 const MaritimeTab = React.lazy(() => import('@/components/tabs/maritime'));
 const ReportBuilderTab = React.lazy(() => import('@/components/tabs/report-builder'));
 const DataMappingTab = React.lazy(() => import('@/components/tabs/data-mapping'));
@@ -559,6 +560,7 @@ function FinxeptTerminalContent() {
     { label: 'Markets & Data', header: true },
     { label: 'Stock Screener', action: () => setActiveTab('screener') },
     { label: 'Economics', action: () => setActiveTab('economics') },
+    { label: 'GOVT', action: () => setActiveTab('gov-data') },
     { label: 'DBnomics', action: () => setActiveTab('dbnomics') },
     { label: 'AKShare Data', action: () => setActiveTab('akshare') },
     { label: 'Asia Markets', action: () => setActiveTab('asia-markets') },
@@ -1066,6 +1068,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="economics" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <EconomicsTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="gov-data" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <GovDataTab />
               </React.Suspense>
             </TabsContent>
             <TabsContent value="code" className="h-full m-0 p-0">

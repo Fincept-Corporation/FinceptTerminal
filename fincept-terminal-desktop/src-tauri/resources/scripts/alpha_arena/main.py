@@ -305,30 +305,36 @@ async def create_competition_handler(params: Dict, api_keys: Dict) -> Dict[str, 
                 logger.warning(f"Failed to save competition to database: {db_error}")
                 # Continue anyway - competition is functional
 
-            # Check for agents in mock mode and warn the user
-            mock_warnings = []
-            for agent_name, agent in competition._agents.items():
-                if hasattr(agent, 'is_mock_mode') and agent.is_mock_mode:
-                    reason = agent.mock_mode_reason or 'unknown'
-                    mock_warnings.append(f"{agent_name}: {reason}")
+            # Report which agents initialized successfully
+            initialized_agents = list(competition._agents.keys())
+            failed_agents = [m.name for m in models if m.name not in initialized_agents]
 
             result = {
                 "success": True,
                 "competition_id": competition_id,
                 "config": config.model_dump(),
                 "status": "created",
-                "models_count": len(models),
+                "models_count": len(initialized_agents),
+                "initialized_agents": initialized_agents,
             }
-            if mock_warnings:
-                result["warnings"] = mock_warnings
-                result["mock_mode_agents"] = len(mock_warnings)
-                logger.warning(f"{len(mock_warnings)} agent(s) in mock mode: {mock_warnings}")
+
+            if failed_agents:
+                result["warnings"] = [f"{name}: failed to initialize LLM" for name in failed_agents]
+                result["failed_agents"] = failed_agents
+                logger.warning(f"{len(failed_agents)} agent(s) failed to initialize: {failed_agents}")
 
             return result
         else:
+            # Competition init failed - not enough agents with real LLMs
+            initialized_count = len(competition._agents)
+            total_count = len(models)
             return {
                 "success": False,
-                "error": "Failed to initialize competition. Check that LLM providers are configured correctly and API keys are valid.",
+                "error": (
+                    f"Competition initialization failed. Only {initialized_count}/{total_count} agents "
+                    f"initialized successfully. At least 2 agents with valid LLM connections are required. "
+                    f"Check that API keys are valid and LLM providers are accessible."
+                ),
             }
 
     except Exception as e:
@@ -517,6 +523,31 @@ async def get_leaderboard_handler(params: Dict) -> Dict[str, Any]:
         return {
             "success": True,
             "leaderboard": leaderboard,
+        }
+
+    # No leaderboard history yet - check if competition exists and build initial leaderboard from config
+    comp_data = db.get_competition(competition_id)
+    if comp_data:
+        config = comp_data.get("config", {})
+        models = config.get("models", [])
+        initial_capital = config.get("initial_capital", 10000)
+        initial_leaderboard = []
+        for i, model in enumerate(models):
+            initial_leaderboard.append({
+                "rank": i + 1,
+                "model_name": model.get("name", f"Model {i+1}"),
+                "portfolio_value": model.get("initial_capital", initial_capital),
+                "total_pnl": 0.0,
+                "return_pct": 0.0,
+                "trades_count": 0,
+                "cash": model.get("initial_capital", initial_capital),
+                "positions_count": 0,
+                "win_rate": None,
+                "sharpe_ratio": None,
+            })
+        return {
+            "success": True,
+            "leaderboard": initial_leaderboard,
         }
 
     return {"success": False, "error": f"Competition not found: {competition_id}"}

@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useReducer, useRef } from 'react';
 import {
   Building, RefreshCw, Check, AlertTriangle, Loader2,
-  Globe, DollarSign, Percent, Zap, Settings, ChevronDown,
+  Globe, Zap, ChevronDown,
   ChevronRight, Search, Star, StarOff,
 } from 'lucide-react';
 import { withErrorBoundary } from '@/components/common/ErrorBoundary';
@@ -20,7 +20,7 @@ import {
   type TickerData,
 } from '../services/alphaArenaEnhancedService';
 
-const COLORS = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -31,14 +31,25 @@ const COLORS = {
   GRAY: '#787878',
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
   CARD_BG: '#0A0A0A',
   BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
 };
 
+const TERMINAL_FONT = '"IBM Plex Mono", "Consolas", monospace';
+
+const BROKER_STYLES = `
+  .broker-panel *::-webkit-scrollbar { width: 6px; height: 6px; }
+  .broker-panel *::-webkit-scrollbar-track { background: #000000; }
+  .broker-panel *::-webkit-scrollbar-thumb { background: #2A2A2A; }
+  @keyframes broker-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+`;
+
 const BROKER_TYPE_COLORS: Record<string, string> = {
-  crypto: COLORS.ORANGE,
-  stocks: COLORS.BLUE,
-  forex: COLORS.GREEN,
+  crypto: FINCEPT.ORANGE,
+  stocks: FINCEPT.BLUE,
+  forex: FINCEPT.GREEN,
 };
 
 const REGION_FLAGS: Record<string, string> = {
@@ -101,6 +112,8 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
   const [typeFilter, setTypeFilter] = useState<'crypto' | 'stocks' | 'forex' | null>(filterType || null);
   const [regionFilter, setRegionFilter] = useState<string | null>(filterRegion || null);
   const mountedRef = useRef(true);
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
+  const [hoveredBrokerId, setHoveredBrokerId] = useState<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -148,7 +161,6 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
     setSelectedBroker(broker);
     onBrokerSelect?.(broker);
 
-    // Fetch sample ticker data
     if (broker.default_symbols.length > 0) {
       dispatchTicker({ type: 'FETCH_START' });
       try {
@@ -192,30 +204,30 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
   });
 
   const renderBrokerFeatures = (broker: BrokerInfo) => (
-    <div className="flex flex-wrap gap-1 mt-2">
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
       {broker.supports_spot && (
-        <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: COLORS.GREEN + '20', color: COLORS.GREEN }}>
+        <span style={{ fontSize: '9px', padding: '1px 6px', backgroundColor: FINCEPT.GREEN + '20', color: FINCEPT.GREEN, fontFamily: TERMINAL_FONT }}>
           Spot
         </span>
       )}
       {broker.supports_margin && (
-        <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: COLORS.YELLOW + '20', color: COLORS.YELLOW }}>
+        <span style={{ fontSize: '9px', padding: '1px 6px', backgroundColor: FINCEPT.YELLOW + '20', color: FINCEPT.YELLOW, fontFamily: TERMINAL_FONT }}>
           Margin
         </span>
       )}
       {broker.supports_futures && (
-        <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: COLORS.PURPLE + '20', color: COLORS.PURPLE }}>
+        <span style={{ fontSize: '9px', padding: '1px 6px', backgroundColor: FINCEPT.PURPLE + '20', color: FINCEPT.PURPLE, fontFamily: TERMINAL_FONT }}>
           Futures
         </span>
       )}
       {broker.supports_options && (
-        <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: COLORS.BLUE + '20', color: COLORS.BLUE }}>
+        <span style={{ fontSize: '9px', padding: '1px 6px', backgroundColor: FINCEPT.BLUE + '20', color: FINCEPT.BLUE, fontFamily: TERMINAL_FONT }}>
           Options
         </span>
       )}
       {broker.websocket_enabled && (
-        <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: COLORS.ORANGE + '20', color: COLORS.ORANGE }}>
-          <Zap size={10} className="inline" /> WS
+        <span style={{ fontSize: '9px', padding: '1px 6px', backgroundColor: FINCEPT.ORANGE + '20', color: FINCEPT.ORANGE, fontFamily: TERMINAL_FONT, display: 'flex', alignItems: 'center', gap: '2px' }}>
+          <Zap size={8} /> WS
         </span>
       )}
     </div>
@@ -224,23 +236,47 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
   const tickerData = tickerState.data;
   const isLoadingTicker = tickerState.status === 'loading';
 
+  const selectStyle: React.CSSProperties = {
+    flex: 1,
+    padding: '4px 8px',
+    fontSize: '10px',
+    fontFamily: TERMINAL_FONT,
+    backgroundColor: FINCEPT.CARD_BG,
+    color: FINCEPT.WHITE,
+    border: `1px solid ${FINCEPT.BORDER}`,
+    outline: 'none',
+  };
+
   return (
-    <div
-      className="rounded-lg overflow-hidden"
-      style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}
-    >
+    <div className="broker-panel" style={{
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+      overflow: 'hidden',
+      fontFamily: TERMINAL_FONT,
+    }}>
+      <style>{BROKER_STYLES}</style>
+
       {/* Header */}
-      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
-        <div className="flex items-center gap-2">
-          <Building size={16} style={{ color: COLORS.ORANGE }} />
-          <span className="font-semibold text-sm" style={{ color: COLORS.WHITE }}>
-            Broker Selection
+      <div style={{
+        padding: '10px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Building size={16} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ fontWeight: 600, fontSize: '12px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+            BROKER SELECTION
           </span>
           {selectedBroker && (
-            <span
-              className="px-2 py-0.5 rounded text-xs"
-              style={{ backgroundColor: COLORS.GREEN + '20', color: COLORS.GREEN }}
-            >
+            <span style={{
+              padding: '1px 8px',
+              fontSize: '10px',
+              backgroundColor: FINCEPT.GREEN + '20',
+              color: FINCEPT.GREEN,
+              fontFamily: TERMINAL_FONT,
+            }}>
               {selectedBroker.display_name}
             </span>
           )}
@@ -248,60 +284,66 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
         <button
           onClick={() => brokersCache.refresh()}
           disabled={isLoading}
-          className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
+          onMouseEnter={() => setHoveredBtn('refresh')}
+          onMouseLeave={() => setHoveredBtn(null)}
+          style={{
+            padding: '4px',
+            backgroundColor: hoveredBtn === 'refresh' ? FINCEPT.HOVER : 'transparent',
+            border: 'none',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+          }}
         >
           <RefreshCw
             size={14}
-            className={isLoading ? 'animate-spin' : ''}
-            style={{ color: COLORS.GRAY }}
+            style={{
+              color: FINCEPT.GRAY,
+              animation: isLoading ? 'broker-spin 1s linear infinite' : 'none',
+            }}
           />
         </button>
       </div>
 
       {/* Search and Filters */}
-      <div className="px-4 py-3 border-b space-y-2" style={{ borderColor: COLORS.BORDER }}>
-        <div className="relative">
-          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: COLORS.GRAY }} />
+      <div style={{ padding: '12px 16px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+        <div style={{ position: 'relative', marginBottom: '8px' }}>
+          <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: FINCEPT.GRAY }} />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search brokers..."
-            className="w-full pl-8 pr-3 py-1.5 rounded text-sm"
             style={{
-              backgroundColor: COLORS.CARD_BG,
-              color: COLORS.WHITE,
-              border: `1px solid ${COLORS.BORDER}`,
+              width: '100%',
+              paddingLeft: '30px',
+              paddingRight: '12px',
+              paddingTop: '6px',
+              paddingBottom: '6px',
+              fontSize: '12px',
+              fontFamily: TERMINAL_FONT,
+              backgroundColor: FINCEPT.CARD_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              outline: 'none',
             }}
           />
         </div>
-        <div className="flex gap-2">
-          {/* Type Filter */}
+        <div style={{ display: 'flex', gap: '8px' }}>
           <select
             value={typeFilter || ''}
             onChange={(e) => setTypeFilter(e.target.value ? e.target.value as 'crypto' | 'stocks' | 'forex' : null)}
-            className="flex-1 px-2 py-1 rounded text-xs"
-            style={{
-              backgroundColor: COLORS.CARD_BG,
-              color: COLORS.WHITE,
-              border: `1px solid ${COLORS.BORDER}`,
-            }}
+            style={selectStyle}
           >
             <option value="">All Types</option>
             <option value="crypto">Crypto</option>
             <option value="stocks">Stocks</option>
             <option value="forex">Forex</option>
           </select>
-          {/* Region Filter */}
           <select
             value={regionFilter || ''}
             onChange={(e) => setRegionFilter(e.target.value || null)}
-            className="flex-1 px-2 py-1 rounded text-xs"
-            style={{
-              backgroundColor: COLORS.CARD_BG,
-              color: COLORS.WHITE,
-              border: `1px solid ${COLORS.BORDER}`,
-            }}
+            style={selectStyle}
           >
             <option value="">All Regions</option>
             <option value="global">Global</option>
@@ -315,73 +357,100 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
 
       {/* Error */}
       {error && (
-        <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '10' }}>
-          <AlertTriangle size={14} style={{ color: COLORS.RED }} />
-          <span className="text-xs" style={{ color: COLORS.RED }}>{error.message}</span>
+        <div style={{
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          backgroundColor: FINCEPT.RED + '10',
+        }}>
+          <AlertTriangle size={14} style={{ color: FINCEPT.RED }} />
+          <span style={{ fontSize: '11px', color: FINCEPT.RED, fontFamily: TERMINAL_FONT }}>{error.message}</span>
         </div>
       )}
 
       {/* Broker List */}
-      <div className="max-h-64 overflow-y-auto">
+      <div style={{ maxHeight: '256px', overflowY: 'auto' }}>
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 size={24} className="animate-spin" style={{ color: COLORS.ORANGE }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+            <Loader2 size={24} style={{ color: FINCEPT.ORANGE, animation: 'broker-spin 1s linear infinite' }} />
           </div>
         ) : sortedBrokers.length === 0 ? (
-          <div className="p-8 text-center">
-            <Building size={32} className="mx-auto mb-2 opacity-30" style={{ color: COLORS.GRAY }} />
-            <p className="text-sm" style={{ color: COLORS.GRAY }}>No brokers found</p>
-            <p className="text-xs mt-1" style={{ color: COLORS.GRAY }}>
+          <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+            <Building size={32} style={{ color: FINCEPT.GRAY, opacity: 0.3, margin: '0 auto 8px' }} />
+            <p style={{ fontSize: '12px', color: FINCEPT.GRAY }}>No brokers found</p>
+            <p style={{ fontSize: '10px', marginTop: '4px', color: FINCEPT.GRAY }}>
               Try adjusting your filters
             </p>
           </div>
         ) : (
-          <div className="divide-y" style={{ borderColor: COLORS.BORDER }}>
-            {sortedBrokers.map((broker) => (
-              <div key={broker.id} className="p-3">
+          <div>
+            {sortedBrokers.map((broker, idx) => (
+              <div key={broker.id} style={{
+                padding: '12px',
+                borderBottom: idx < sortedBrokers.length - 1 ? `1px solid ${FINCEPT.BORDER}` : 'none',
+                backgroundColor: hoveredBrokerId === broker.id ? FINCEPT.HOVER : 'transparent',
+              }}
+              onMouseEnter={() => setHoveredBrokerId(broker.id)}
+              onMouseLeave={() => setHoveredBrokerId(null)}
+              >
                 <button
                   onClick={() => handleBrokerSelect(broker)}
-                  className={`w-full text-left ${selectedBroker?.id === broker.id ? 'ring-1' : ''}`}
                   style={{
-                    outlineColor: selectedBroker?.id === broker.id ? COLORS.ORANGE : 'transparent',
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: selectedBroker?.id === broker.id ? `1px solid ${FINCEPT.ORANGE}` : 'none',
+                    cursor: 'pointer',
+                    fontFamily: TERMINAL_FONT,
+                    padding: selectedBroker?.id === broker.id ? '4px' : 0,
                   }}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{REGION_FLAGS[broker.region] || '🌐'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '16px' }}>{REGION_FLAGS[broker.region] || '🌐'}</span>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>
                             {broker.display_name}
                           </span>
-                          <span
-                            className="text-xs px-1.5 py-0.5 rounded"
-                            style={{
-                              backgroundColor: BROKER_TYPE_COLORS[broker.broker_type] + '20',
-                              color: BROKER_TYPE_COLORS[broker.broker_type],
-                            }}
-                          >
-                            {broker.broker_type}
+                          <span style={{
+                            fontSize: '9px',
+                            padding: '1px 6px',
+                            backgroundColor: BROKER_TYPE_COLORS[broker.broker_type] + '20',
+                            color: BROKER_TYPE_COLORS[broker.broker_type],
+                            fontFamily: TERMINAL_FONT,
+                          }}>
+                            {broker.broker_type.toUpperCase()}
                           </span>
                           {selectedBroker?.id === broker.id && (
-                            <Check size={14} style={{ color: COLORS.GREEN }} />
+                            <Check size={14} style={{ color: FINCEPT.GREEN }} />
                           )}
                         </div>
-                        <div className="text-xs mt-0.5" style={{ color: COLORS.GRAY }}>
+                        <div style={{ fontSize: '10px', marginTop: '2px', color: FINCEPT.GRAY }}>
                           Fees: {(broker.maker_fee * 100).toFixed(2)}% / {(broker.taker_fee * 100).toFixed(2)}%
-                          {broker.max_leverage > 1 && ` • ${broker.max_leverage}x leverage`}
+                          {broker.max_leverage > 1 && ` | ${broker.max_leverage}x leverage`}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <button
                         onClick={(e) => toggleFavorite(broker.id, e)}
-                        className="p-1 rounded hover:bg-[#1A1A1A]"
+                        onMouseEnter={() => setHoveredBtn(`fav-${broker.id}`)}
+                        onMouseLeave={() => setHoveredBtn(null)}
+                        style={{
+                          padding: '4px',
+                          backgroundColor: hoveredBtn === `fav-${broker.id}` ? FINCEPT.HEADER_BG : 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
                       >
                         {favorites.includes(broker.id) ? (
-                          <Star size={14} style={{ color: COLORS.YELLOW }} fill={COLORS.YELLOW} />
+                          <Star size={14} style={{ color: FINCEPT.YELLOW }} fill={FINCEPT.YELLOW} />
                         ) : (
-                          <StarOff size={14} style={{ color: COLORS.GRAY }} />
+                          <StarOff size={14} style={{ color: FINCEPT.GRAY }} />
                         )}
                       </button>
                       <button
@@ -389,12 +458,21 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
                           e.stopPropagation();
                           setExpandedBroker(expandedBroker === broker.id ? null : broker.id);
                         }}
-                        className="p-1 rounded hover:bg-[#1A1A1A]"
+                        onMouseEnter={() => setHoveredBtn(`expand-${broker.id}`)}
+                        onMouseLeave={() => setHoveredBtn(null)}
+                        style={{
+                          padding: '4px',
+                          backgroundColor: hoveredBtn === `expand-${broker.id}` ? FINCEPT.HEADER_BG : 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
                       >
                         {expandedBroker === broker.id ? (
-                          <ChevronDown size={14} style={{ color: COLORS.GRAY }} />
+                          <ChevronDown size={14} style={{ color: FINCEPT.GRAY }} />
                         ) : (
-                          <ChevronRight size={14} style={{ color: COLORS.GRAY }} />
+                          <ChevronRight size={14} style={{ color: FINCEPT.GRAY }} />
                         )}
                       </button>
                     </div>
@@ -406,33 +484,38 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
 
                 {/* Expanded Details */}
                 {expandedBroker === broker.id && (
-                  <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.BORDER }}>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${FINCEPT.BORDER}` }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px' }}>
                       <div>
-                        <span style={{ color: COLORS.GRAY }}>Region: </span>
-                        <span style={{ color: COLORS.WHITE }}>
+                        <span style={{ color: FINCEPT.GRAY }}>Region: </span>
+                        <span style={{ color: FINCEPT.WHITE }}>
                           {REGION_FLAGS[broker.region]} {broker.region.charAt(0).toUpperCase() + broker.region.slice(1)}
                         </span>
                       </div>
                       <div>
-                        <span style={{ color: COLORS.GRAY }}>Max Leverage: </span>
-                        <span style={{ color: COLORS.WHITE }}>{broker.max_leverage}x</span>
+                        <span style={{ color: FINCEPT.GRAY }}>Max Leverage: </span>
+                        <span style={{ color: FINCEPT.WHITE }}>{broker.max_leverage}x</span>
                       </div>
                     </div>
-                    <div className="mt-2">
-                      <span className="text-xs" style={{ color: COLORS.GRAY }}>Default Symbols:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
+                    <div style={{ marginTop: '8px' }}>
+                      <span style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Default Symbols:</span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
                         {broker.default_symbols.slice(0, 5).map((symbol) => (
                           <span
                             key={symbol}
-                            className="text-xs px-1.5 py-0.5 rounded"
-                            style={{ backgroundColor: COLORS.BORDER, color: COLORS.WHITE }}
+                            style={{
+                              fontSize: '9px',
+                              padding: '1px 6px',
+                              backgroundColor: FINCEPT.BORDER,
+                              color: FINCEPT.WHITE,
+                              fontFamily: TERMINAL_FONT,
+                            }}
                           >
                             {symbol}
                           </span>
                         ))}
                         {broker.default_symbols.length > 5 && (
-                          <span className="text-xs" style={{ color: COLORS.GRAY }}>
+                          <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
                             +{broker.default_symbols.length - 5} more
                           </span>
                         )}
@@ -448,22 +531,26 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
 
       {/* Selected Broker Ticker Preview */}
       {selectedBroker && tickerData && (
-        <div className="px-4 py-3 border-t" style={{ borderColor: COLORS.BORDER, backgroundColor: COLORS.CARD_BG }}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: COLORS.GRAY }}>Sample Price:</span>
-              <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>
+        <div style={{
+          padding: '12px 16px',
+          borderTop: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.CARD_BG,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Sample Price:</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>
                 {tickerData.symbol}
               </span>
             </div>
             {isLoadingTicker ? (
-              <Loader2 size={14} className="animate-spin" style={{ color: COLORS.GRAY }} />
+              <Loader2 size={14} style={{ color: FINCEPT.GRAY, animation: 'broker-spin 1s linear infinite' }} />
             ) : (
-              <div className="text-right">
-                <div className="text-sm font-bold" style={{ color: COLORS.WHITE }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: FINCEPT.WHITE }}>
                   ${tickerData.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div className="text-xs" style={{ color: COLORS.GRAY }}>
+                <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
                   24h Vol: {tickerData.volume_24h.toLocaleString()}
                 </div>
               </div>
@@ -473,13 +560,21 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
       )}
 
       {/* Footer */}
-      <div className="px-4 py-2 border-t text-xs flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
-        <span style={{ color: COLORS.GRAY }}>
+      <div style={{
+        padding: '6px 16px',
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        fontSize: '9px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <span style={{ color: FINCEPT.GRAY }}>
           {sortedBrokers.length} broker{sortedBrokers.length !== 1 ? 's' : ''} available
         </span>
         {favorites.length > 0 && (
-          <span style={{ color: COLORS.YELLOW }}>
-            <Star size={10} className="inline mr-1" fill={COLORS.YELLOW} />
+          <span style={{ color: FINCEPT.YELLOW, display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Star size={10} fill={FINCEPT.YELLOW} />
             {favorites.length} favorite{favorites.length !== 1 ? 's' : ''}
           </span>
         )}

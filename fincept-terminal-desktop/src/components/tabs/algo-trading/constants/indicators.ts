@@ -16,6 +16,7 @@ export const OPERATORS = [
 ];
 
 export const TIMEFRAMES = [
+  { value: 'live', label: 'Live (Tick)' },
   { value: '1m', label: '1 Min' },
   { value: '3m', label: '3 Min' },
   { value: '5m', label: '5 Min' },

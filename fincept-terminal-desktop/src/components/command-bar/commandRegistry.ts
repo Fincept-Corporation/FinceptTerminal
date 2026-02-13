@@ -182,6 +182,15 @@ export const COMMANDS: Command[] = [
     keywords: ['economics', 'indicators', 'macro', 'economic data']
   },
   {
+    id: 'govt',
+    name: 'GOVT',
+    description: 'Government securities & open data portals',
+    aliases: ['govt', 'gov', 'government', 'treasury'],
+    category: 'navigation',
+    action: 'gov-data',
+    keywords: ['government', 'treasury', 'bonds', 'auctions', 'securities', 'fiscal', 'sovereign', 'bills', 'notes', 'tips', 'open data']
+  },
+  {
     id: 'dbn',
     name: 'DBnomics',
     description: 'Economic database',

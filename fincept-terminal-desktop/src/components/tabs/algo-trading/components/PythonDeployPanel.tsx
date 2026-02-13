@@ -9,6 +9,7 @@ import {
   getPythonStrategyCode,
 } from '../services/algoTradingService';
 import { invoke } from '@tauri-apps/api/core';
+import { useStockBrokerContextOptional } from '@/contexts/StockBrokerContext';
 import ParameterEditor from './ParameterEditor';
 
 const F = {
@@ -51,8 +52,18 @@ interface DeployConfig {
 
 const BROKERS = [
   { id: 'simulator', label: 'Simulator', live: false },
+  { id: 'angelone', label: 'Angel One', live: true },
   { id: 'fyers', label: 'Fyers', live: true },
   { id: 'zerodha', label: 'Zerodha', live: true },
+  { id: 'upstox', label: 'Upstox', live: true },
+  { id: 'dhan', label: 'Dhan', live: true },
+  { id: 'kotak', label: 'Kotak Neo', live: true },
+  { id: 'groww', label: 'Groww', live: true },
+  { id: 'aliceblue', label: 'AliceBlue', live: true },
+  { id: '5paisa', label: '5Paisa', live: true },
+  { id: 'iifl', label: 'IIFL', live: true },
+  { id: 'motilal', label: 'Motilal Oswal', live: true },
+  { id: 'shoonya', label: 'Shoonya (Finvasia)', live: true },
   { id: 'kraken', label: 'Kraken (Crypto)', live: true },
 ];
 
@@ -192,6 +203,13 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
       if (parsed.success) {
         setSuccess(`Strategy deployed successfully! Deployment ID: ${parsed.deploy_id}`);
         onDeployed?.(parsed.deploy_id);
+        // Ensure WebSocket subscription for stock brokers so ticks reach candle aggregator
+        const sym = config.symbol.toUpperCase();
+        if (config.broker !== 'kraken' && config.broker !== 'simulator') {
+          invoke('angelone_ws_subscribe', {
+            symbol: `NSE:${sym}`, mode: 'ltp', symbolName: sym,
+          }).catch(() => {});
+        }
         // Auto-close after success
         setTimeout(() => {
           onClose();
@@ -243,7 +261,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
           maxHeight: '90vh',
           backgroundColor: F.PANEL_BG,
           border: `1px solid ${F.BORDER}`,
-          borderRadius: '4px',
+          borderRadius: '2px',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -261,13 +279,19 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Rocket size={18} style={{ color: F.ORANGE }} />
+            <div style={{
+              width: '28px', height: '28px', borderRadius: '2px',
+              backgroundColor: `${F.ORANGE}15`, display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Rocket size={14} color={F.ORANGE} />
+            </div>
             <div>
-              <div style={{ fontSize: '12px', fontWeight: 700, color: F.WHITE }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
                 DEPLOY PYTHON STRATEGY
               </div>
-              <div style={{ fontSize: '10px', color: F.GRAY }}>
-                {strategy.name} • {strategy.id}
+              <div style={{ fontSize: '9px', color: F.MUTED, marginTop: '2px' }}>
+                {strategy.name.toUpperCase()} • {strategy.id}
               </div>
             </div>
           </div>
@@ -290,7 +314,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
         <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
           {/* Mode Selection */}
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 700, color: F.GRAY, marginBottom: '8px', display: 'block' }}>
+            <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '8px', display: 'block' }}>
               TRADING MODE
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -303,7 +327,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                     padding: '12px',
                     backgroundColor: config.mode === mode ? (mode === 'live' ? `${F.RED}20` : `${F.GREEN}20`) : 'transparent',
                     border: `1px solid ${config.mode === mode ? (mode === 'live' ? F.RED : F.GREEN) : F.BORDER}`,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     color: config.mode === mode ? (mode === 'live' ? F.RED : F.GREEN) : F.GRAY,
                     fontSize: '11px',
                     fontWeight: 700,
@@ -329,7 +353,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {/* Symbol */}
               <div>
-                <label style={{ fontSize: '10px', fontWeight: 700, color: F.GRAY, marginBottom: '4px', display: 'block' }}>
+                <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px', display: 'block' }}>
                   SYMBOL *
                 </label>
                 <div style={{ position: 'relative' }}>
@@ -343,7 +367,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                       padding: '10px',
                       backgroundColor: F.DARK_BG,
                       border: `1px solid ${isDuplicate ? F.YELLOW : F.BORDER}`,
-                      borderRadius: '4px',
+                      borderRadius: '2px',
                       color: F.WHITE,
                       fontSize: '11px',
                     }}
@@ -371,7 +395,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
 
               {/* Broker */}
               <div>
-                <label style={{ fontSize: '10px', fontWeight: 700, color: F.GRAY, marginBottom: '4px', display: 'block' }}>
+                <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px', display: 'block' }}>
                   BROKER
                 </label>
                 <select
@@ -382,7 +406,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                     padding: '10px',
                     backgroundColor: F.DARK_BG,
                     border: `1px solid ${F.BORDER}`,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     color: F.WHITE,
                     fontSize: '11px',
                   }}
@@ -397,7 +421,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
 
               {/* Quantity */}
               <div>
-                <label style={{ fontSize: '10px', fontWeight: 700, color: F.GRAY, marginBottom: '4px', display: 'block' }}>
+                <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px', display: 'block' }}>
                   QUANTITY
                 </label>
                 <input
@@ -411,7 +435,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                     padding: '10px',
                     backgroundColor: F.DARK_BG,
                     border: `1px solid ${F.BORDER}`,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     color: F.WHITE,
                     fontSize: '11px',
                   }}
@@ -420,7 +444,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
 
               {/* Timeframe */}
               <div>
-                <label style={{ fontSize: '10px', fontWeight: 700, color: F.GRAY, marginBottom: '4px', display: 'block' }}>
+                <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px', display: 'block' }}>
                   TIMEFRAME
                 </label>
                 <select
@@ -431,7 +455,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                     padding: '10px',
                     backgroundColor: F.DARK_BG,
                     border: `1px solid ${F.BORDER}`,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     color: F.WHITE,
                     fontSize: '11px',
                   }}
@@ -446,7 +470,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
 
               {/* Initial Cash */}
               <div>
-                <label style={{ fontSize: '10px', fontWeight: 700, color: F.GRAY, marginBottom: '4px', display: 'block' }}>
+                <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px', display: 'block' }}>
                   INITIAL CASH
                 </label>
                 <input
@@ -460,7 +484,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                     padding: '10px',
                     backgroundColor: F.DARK_BG,
                     border: `1px solid ${F.BORDER}`,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     color: F.WHITE,
                     fontSize: '11px',
                   }}
@@ -474,7 +498,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
             style={{
               marginBottom: '16px',
               border: `1px solid ${F.BORDER}`,
-              borderRadius: '4px',
+              borderRadius: '2px',
               overflow: 'hidden',
             }}
           >
@@ -491,7 +515,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
             >
               {showRisk ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
               <Shield size={12} style={{ color: F.CYAN }} />
-              <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
                 RISK MANAGEMENT
               </span>
               <span style={{ fontSize: '9px', color: F.MUTED }}>(Optional)</span>
@@ -515,7 +539,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                         padding: '8px',
                         backgroundColor: F.DARK_BG,
                         border: `1px solid ${F.BORDER}`,
-                        borderRadius: '4px',
+                        borderRadius: '2px',
                         color: F.WHITE,
                         fontSize: '10px',
                       }}
@@ -537,7 +561,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                         padding: '8px',
                         backgroundColor: F.DARK_BG,
                         border: `1px solid ${F.BORDER}`,
-                        borderRadius: '4px',
+                        borderRadius: '2px',
                         color: F.WHITE,
                         fontSize: '10px',
                       }}
@@ -559,7 +583,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                         padding: '8px',
                         backgroundColor: F.DARK_BG,
                         border: `1px solid ${F.BORDER}`,
-                        borderRadius: '4px',
+                        borderRadius: '2px',
                         color: F.WHITE,
                         fontSize: '10px',
                       }}
@@ -576,7 +600,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
               style={{
                 marginBottom: '16px',
                 border: `1px solid ${F.BORDER}`,
-                borderRadius: '4px',
+                borderRadius: '2px',
                 overflow: 'hidden',
               }}
             >
@@ -593,7 +617,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
               >
                 {showParams ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 <Settings size={12} style={{ color: F.PURPLE }} />
-                <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
                   STRATEGY PARAMETERS
                 </span>
               </div>
@@ -616,7 +640,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                 padding: '10px 12px',
                 backgroundColor: `${F.RED}20`,
                 border: `1px solid ${F.RED}`,
-                borderRadius: '4px',
+                borderRadius: '2px',
                 marginBottom: '16px',
                 display: 'flex',
                 alignItems: 'center',
@@ -636,7 +660,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                 padding: '10px 12px',
                 backgroundColor: `${F.GREEN}20`,
                 border: `1px solid ${F.GREEN}`,
-                borderRadius: '4px',
+                borderRadius: '2px',
                 marginBottom: '16px',
                 display: 'flex',
                 alignItems: 'center',
@@ -657,7 +681,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
                 padding: '10px 12px',
                 backgroundColor: `${F.YELLOW}10`,
                 border: `1px solid ${F.YELLOW}`,
-                borderRadius: '4px',
+                borderRadius: '2px',
                 marginBottom: '16px',
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -693,12 +717,16 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
               padding: '10px 20px',
               backgroundColor: 'transparent',
               border: `1px solid ${F.BORDER}`,
-              borderRadius: '4px',
+              borderRadius: '2px',
               color: F.GRAY,
-              fontSize: '10px',
+              fontSize: '9px',
               fontWeight: 700,
               cursor: 'pointer',
+              letterSpacing: '0.5px',
+              transition: 'all 0.2s',
             }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = F.ORANGE; e.currentTarget.style.color = F.WHITE; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = F.BORDER; e.currentTarget.style.color = F.GRAY; }}
           >
             CANCEL
           </button>
@@ -709,10 +737,11 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
               padding: '10px 24px',
               backgroundColor: config.mode === 'live' ? F.RED : F.GREEN,
               border: 'none',
-              borderRadius: '4px',
+              borderRadius: '2px',
               color: F.WHITE,
-              fontSize: '10px',
+              fontSize: '9px',
               fontWeight: 700,
+              letterSpacing: '0.5px',
               cursor: deploying || !config.symbol.trim() ? 'not-allowed' : 'pointer',
               opacity: deploying || !config.symbol.trim() ? 0.5 : 1,
               display: 'flex',

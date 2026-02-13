@@ -8,7 +8,7 @@
 import React, { useState } from 'react';
 import {
   Newspaper, TrendingUp, TrendingDown, Minus, RefreshCw,
-  Globe, AlertCircle, ChevronRight, ExternalLink, Loader2,
+  Globe, AlertCircle, ChevronRight, Loader2,
 } from 'lucide-react';
 import { withErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useCache, cacheKey } from '@/hooks/useCache';
@@ -19,7 +19,7 @@ import {
   type MarketMood,
 } from '../services/alphaArenaEnhancedService';
 
-const COLORS = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -30,25 +30,36 @@ const COLORS = {
   GRAY: '#787878',
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
   CARD_BG: '#0A0A0A',
   BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
 };
 
+const TERMINAL_FONT = '"IBM Plex Mono", "Consolas", monospace';
+
 const SENTIMENT_COLORS: Record<string, string> = {
-  very_bearish: COLORS.RED,
+  very_bearish: FINCEPT.RED,
   bearish: '#FF6B6B',
-  neutral: COLORS.GRAY,
+  neutral: FINCEPT.GRAY,
   bullish: '#4ADE80',
-  very_bullish: COLORS.GREEN,
+  very_bullish: FINCEPT.GREEN,
 };
 
 const SENTIMENT_LABELS: Record<string, string> = {
-  very_bearish: 'Very Bearish',
-  bearish: 'Bearish',
-  neutral: 'Neutral',
-  bullish: 'Bullish',
-  very_bullish: 'Very Bullish',
+  very_bearish: 'VERY BEARISH',
+  bearish: 'BEARISH',
+  neutral: 'NEUTRAL',
+  bullish: 'BULLISH',
+  very_bullish: 'VERY BULLISH',
 };
+
+const SENTIMENT_STYLES = `
+  .sentiment-panel *::-webkit-scrollbar { width: 6px; height: 6px; }
+  .sentiment-panel *::-webkit-scrollbar-track { background: #000000; }
+  .sentiment-panel *::-webkit-scrollbar-thumb { background: #2A2A2A; }
+  @keyframes sentiment-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+`;
 
 interface SentimentPanelProps {
   symbol?: string;
@@ -60,6 +71,7 @@ const SentimentPanel: React.FC<SentimentPanelProps> = ({
   showMarketMood = true,
 }) => {
   const [activeTab, setActiveTab] = useState<'symbol' | 'market'>('symbol');
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
 
   // Cache: symbol sentiment (enabled when activeTab === 'symbol')
   const sentimentCache = useCache<SentimentResult>({
@@ -114,127 +126,194 @@ const SentimentPanel: React.FC<SentimentPanelProps> = ({
     } else if (sentimentLevel.includes('bearish')) {
       return <TrendingDown size={16} style={{ color: SENTIMENT_COLORS[sentimentLevel] }} />;
     }
-    return <Minus size={16} style={{ color: COLORS.GRAY }} />;
+    return <Minus size={16} style={{ color: FINCEPT.GRAY }} />;
   };
 
   const renderSentimentMeter = (score: number) => {
-    // Score ranges from -1 (bearish) to 1 (bullish)
     const percentage = ((score + 1) / 2) * 100;
 
     return (
-      <div className="relative h-2 rounded-full overflow-hidden" style={{ backgroundColor: COLORS.BORDER }}>
-        {/* Background gradient */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: `linear-gradient(to right, ${COLORS.RED}, ${COLORS.GRAY}, ${COLORS.GREEN})`,
-          }}
-        />
-        {/* Indicator */}
-        <div
-          className="absolute w-3 h-3 rounded-full bg-white -top-0.5 transform -translate-x-1/2"
-          style={{
-            left: `${percentage}%`,
-            boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-          }}
-        />
+      <div style={{
+        position: 'relative',
+        height: '6px',
+        overflow: 'hidden',
+        backgroundColor: FINCEPT.BORDER,
+      }}>
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: `linear-gradient(to right, ${FINCEPT.RED}, ${FINCEPT.GRAY}, ${FINCEPT.GREEN})`,
+        }} />
+        <div style={{
+          position: 'absolute',
+          width: '10px',
+          height: '10px',
+          backgroundColor: FINCEPT.WHITE,
+          top: '-2px',
+          left: `${percentage}%`,
+          transform: 'translateX(-50%)',
+          boxShadow: '0 0 4px rgba(0,0,0,0.5)',
+        }} />
       </div>
     );
   };
 
   return (
-    <div
-      className="rounded-lg overflow-hidden"
-      style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}
-    >
+    <div className="sentiment-panel" style={{
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+      overflow: 'hidden',
+      fontFamily: TERMINAL_FONT,
+    }}>
+      <style>{SENTIMENT_STYLES}</style>
+
       {/* Header */}
-      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
-        <div className="flex items-center gap-2">
-          <Newspaper size={16} style={{ color: COLORS.BLUE }} />
-          <span className="font-semibold text-sm" style={{ color: COLORS.WHITE }}>
-            Sentiment Analysis
+      <div style={{
+        padding: '10px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Newspaper size={16} style={{ color: FINCEPT.BLUE }} />
+          <span style={{ fontWeight: 600, fontSize: '12px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+            SENTIMENT ANALYSIS
           </span>
         </div>
         <button
           onClick={handleRefresh}
           disabled={isLoading}
-          className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
+          onMouseEnter={() => setHoveredBtn('refresh')}
+          onMouseLeave={() => setHoveredBtn(null)}
+          style={{
+            padding: '4px',
+            backgroundColor: hoveredBtn === 'refresh' ? FINCEPT.HOVER : 'transparent',
+            border: 'none',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+          }}
         >
           <RefreshCw
             size={14}
-            className={isLoading ? 'animate-spin' : ''}
-            style={{ color: COLORS.GRAY }}
+            style={{
+              color: FINCEPT.GRAY,
+              animation: isLoading ? 'sentiment-spin 1s linear infinite' : 'none',
+            }}
           />
         </button>
       </div>
 
       {/* Tabs */}
       {showMarketMood && (
-        <div className="flex border-b" style={{ borderColor: COLORS.BORDER }}>
+        <div style={{ display: 'flex', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
           <button
             onClick={() => setActiveTab('symbol')}
-            className="flex-1 px-4 py-2 text-xs font-medium transition-colors"
+            onMouseEnter={() => setHoveredBtn('tab-symbol')}
+            onMouseLeave={() => setHoveredBtn(null)}
             style={{
-              backgroundColor: activeTab === 'symbol' ? COLORS.CARD_BG : 'transparent',
-              color: activeTab === 'symbol' ? COLORS.ORANGE : COLORS.GRAY,
-              borderBottom: activeTab === 'symbol' ? `2px solid ${COLORS.ORANGE}` : 'none',
+              flex: 1,
+              padding: '8px 16px',
+              fontSize: '10px',
+              fontWeight: 500,
+              fontFamily: TERMINAL_FONT,
+              backgroundColor: activeTab === 'symbol' ? FINCEPT.CARD_BG : (hoveredBtn === 'tab-symbol' ? FINCEPT.HOVER : 'transparent'),
+              color: activeTab === 'symbol' ? FINCEPT.ORANGE : FINCEPT.GRAY,
+              borderBottom: activeTab === 'symbol' ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+              border: 'none',
+              borderBottomStyle: 'solid',
+              borderBottomWidth: '2px',
+              borderBottomColor: activeTab === 'symbol' ? FINCEPT.ORANGE : 'transparent',
+              cursor: 'pointer',
+              letterSpacing: '0.5px',
             }}
           >
-            {symbol} Sentiment
+            {symbol} SENTIMENT
           </button>
           <button
             onClick={() => setActiveTab('market')}
-            className="flex-1 px-4 py-2 text-xs font-medium transition-colors"
+            onMouseEnter={() => setHoveredBtn('tab-market')}
+            onMouseLeave={() => setHoveredBtn(null)}
             style={{
-              backgroundColor: activeTab === 'market' ? COLORS.CARD_BG : 'transparent',
-              color: activeTab === 'market' ? COLORS.ORANGE : COLORS.GRAY,
-              borderBottom: activeTab === 'market' ? `2px solid ${COLORS.ORANGE}` : 'none',
+              flex: 1,
+              padding: '8px 16px',
+              fontSize: '10px',
+              fontWeight: 500,
+              fontFamily: TERMINAL_FONT,
+              backgroundColor: activeTab === 'market' ? FINCEPT.CARD_BG : (hoveredBtn === 'tab-market' ? FINCEPT.HOVER : 'transparent'),
+              color: activeTab === 'market' ? FINCEPT.ORANGE : FINCEPT.GRAY,
+              border: 'none',
+              borderBottomStyle: 'solid',
+              borderBottomWidth: '2px',
+              borderBottomColor: activeTab === 'market' ? FINCEPT.ORANGE : 'transparent',
+              cursor: 'pointer',
+              letterSpacing: '0.5px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
             }}
           >
-            <Globe size={12} className="inline mr-1" />
-            Market Mood
+            <Globe size={12} />
+            MARKET MOOD
           </button>
         </div>
       )}
 
       {/* Content */}
-      <div className="p-4">
+      <div style={{ padding: '16px' }}>
         {error && (
-          <div className="flex items-center gap-2 p-2 rounded mb-3" style={{ backgroundColor: COLORS.RED + '10' }}>
-            <AlertCircle size={14} style={{ color: COLORS.RED }} />
-            <span className="text-xs" style={{ color: COLORS.RED }}>{error.message}</span>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px',
+            marginBottom: '12px',
+            backgroundColor: FINCEPT.RED + '10',
+          }}>
+            <AlertCircle size={14} style={{ color: FINCEPT.RED }} />
+            <span style={{ fontSize: '11px', color: FINCEPT.RED, fontFamily: TERMINAL_FONT }}>{error.message}</span>
           </div>
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 size={24} className="animate-spin" style={{ color: COLORS.ORANGE }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+            <Loader2 size={24} style={{ color: FINCEPT.ORANGE, animation: 'sentiment-spin 1s linear infinite' }} />
           </div>
         ) : activeTab === 'symbol' && sentiment ? (
           <>
             {/* Main Sentiment Display */}
-            <div className="text-center mb-4">
-              <div className="flex items-center justify-center gap-2 mb-2">
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
                 {getSentimentIcon(sentiment.overall_sentiment)}
-                <span
-                  className="text-lg font-bold"
-                  style={{ color: SENTIMENT_COLORS[sentiment.overall_sentiment] }}
-                >
+                <span style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: SENTIMENT_COLORS[sentiment.overall_sentiment],
+                  letterSpacing: '1px',
+                }}>
                   {SENTIMENT_LABELS[sentiment.overall_sentiment]}
                 </span>
               </div>
-              <div className="text-2xl font-bold mb-1" style={{ color: COLORS.WHITE }}>
+              <div style={{ fontSize: '24px', fontWeight: 700, marginBottom: '4px', color: FINCEPT.WHITE }}>
                 {sentiment.sentiment_score >= 0 ? '+' : ''}{(sentiment.sentiment_score * 100).toFixed(0)}%
               </div>
-              <div className="text-xs" style={{ color: COLORS.GRAY }}>
+              <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>
                 Confidence: {(sentiment.confidence * 100).toFixed(0)}%
               </div>
             </div>
 
             {/* Sentiment Meter */}
-            <div className="mb-4">
+            <div style={{ marginBottom: '16px' }}>
               {renderSentimentMeter(sentiment.sentiment_score)}
-              <div className="flex justify-between text-xs mt-1" style={{ color: COLORS.GRAY }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '9px',
+                marginTop: '4px',
+                color: FINCEPT.GRAY,
+              }}>
                 <span>Bearish</span>
                 <span>Neutral</span>
                 <span>Bullish</span>
@@ -242,40 +321,55 @@ const SentimentPanel: React.FC<SentimentPanelProps> = ({
             </div>
 
             {/* Article Breakdown */}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <div className="p-2 rounded text-center" style={{ backgroundColor: COLORS.GREEN + '10' }}>
-                <div className="text-lg font-bold" style={{ color: COLORS.GREEN }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+              <div style={{ padding: '8px', textAlign: 'center', backgroundColor: FINCEPT.GREEN + '10' }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.GREEN }}>
                   {sentiment.bullish_count}
                 </div>
-                <div className="text-xs" style={{ color: COLORS.GRAY }}>Bullish</div>
+                <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Bullish</div>
               </div>
-              <div className="p-2 rounded text-center" style={{ backgroundColor: COLORS.GRAY + '10' }}>
-                <div className="text-lg font-bold" style={{ color: COLORS.GRAY }}>
+              <div style={{ padding: '8px', textAlign: 'center', backgroundColor: FINCEPT.GRAY + '10' }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.GRAY }}>
                   {sentiment.neutral_count}
                 </div>
-                <div className="text-xs" style={{ color: COLORS.GRAY }}>Neutral</div>
+                <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Neutral</div>
               </div>
-              <div className="p-2 rounded text-center" style={{ backgroundColor: COLORS.RED + '10' }}>
-                <div className="text-lg font-bold" style={{ color: COLORS.RED }}>
+              <div style={{ padding: '8px', textAlign: 'center', backgroundColor: FINCEPT.RED + '10' }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.RED }}>
                   {sentiment.bearish_count}
                 </div>
-                <div className="text-xs" style={{ color: COLORS.GRAY }}>Bearish</div>
+                <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Bearish</div>
               </div>
             </div>
 
             {/* Key Headlines */}
             {sentiment.key_headlines.length > 0 && (
               <div>
-                <h4 className="text-xs font-medium mb-2" style={{ color: COLORS.GRAY }}>Key Headlines</h4>
-                <div className="space-y-2">
+                <div style={{ fontSize: '10px', fontWeight: 500, marginBottom: '8px', color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+                  KEY HEADLINES
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {sentiment.key_headlines.slice(0, 4).map((headline, idx) => (
                     <div
                       key={idx}
-                      className="flex items-start gap-2 p-2 rounded"
-                      style={{ backgroundColor: COLORS.CARD_BG }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '8px',
+                        padding: '8px',
+                        backgroundColor: FINCEPT.CARD_BG,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                      }}
                     >
-                      <ChevronRight size={12} style={{ color: COLORS.GRAY, marginTop: 2 }} />
-                      <span className="text-xs line-clamp-2" style={{ color: COLORS.WHITE }}>
+                      <ChevronRight size={12} style={{ color: FINCEPT.GRAY, marginTop: 2, flexShrink: 0 }} />
+                      <span style={{
+                        fontSize: '11px',
+                        color: FINCEPT.WHITE,
+                        overflow: 'hidden',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                      }}>
                         {headline}
                       </span>
                     </div>
@@ -286,13 +380,18 @@ const SentimentPanel: React.FC<SentimentPanelProps> = ({
 
             {/* Sources */}
             {sentiment.sources.length > 0 && (
-              <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.BORDER }}>
-                <div className="flex flex-wrap gap-1">
+              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${FINCEPT.BORDER}` }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                   {sentiment.sources.slice(0, 5).map((source, idx) => (
                     <span
                       key={idx}
-                      className="text-xs px-2 py-0.5 rounded"
-                      style={{ backgroundColor: COLORS.BORDER, color: COLORS.GRAY }}
+                      style={{
+                        fontSize: '9px',
+                        padding: '2px 8px',
+                        backgroundColor: FINCEPT.BORDER,
+                        color: FINCEPT.GRAY,
+                        fontFamily: TERMINAL_FONT,
+                      }}
                     >
                       {source}
                     </span>
@@ -304,54 +403,63 @@ const SentimentPanel: React.FC<SentimentPanelProps> = ({
         ) : activeTab === 'market' && marketMood ? (
           <>
             {/* Market Mood Overview */}
-            <div className="text-center mb-4">
-              <div
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-2"
-                style={{
-                  backgroundColor: marketMood.overall_mood === 'risk_on' ? COLORS.GREEN + '20' :
-                    marketMood.overall_mood === 'risk_off' ? COLORS.RED + '20' : COLORS.GRAY + '20',
-                }}
-              >
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                marginBottom: '8px',
+                backgroundColor: marketMood.overall_mood === 'risk_on' ? FINCEPT.GREEN + '20' :
+                  marketMood.overall_mood === 'risk_off' ? FINCEPT.RED + '20' : FINCEPT.GRAY + '20',
+              }}>
                 <Globe size={16} style={{
-                  color: marketMood.overall_mood === 'risk_on' ? COLORS.GREEN :
-                    marketMood.overall_mood === 'risk_off' ? COLORS.RED : COLORS.GRAY,
+                  color: marketMood.overall_mood === 'risk_on' ? FINCEPT.GREEN :
+                    marketMood.overall_mood === 'risk_off' ? FINCEPT.RED : FINCEPT.GRAY,
                 }} />
-                <span
-                  className="text-sm font-bold"
-                  style={{
-                    color: marketMood.overall_mood === 'risk_on' ? COLORS.GREEN :
-                      marketMood.overall_mood === 'risk_off' ? COLORS.RED : COLORS.GRAY,
-                  }}
-                >
+                <span style={{
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  letterSpacing: '1px',
+                  color: marketMood.overall_mood === 'risk_on' ? FINCEPT.GREEN :
+                    marketMood.overall_mood === 'risk_off' ? FINCEPT.RED : FINCEPT.GRAY,
+                }}>
                   {marketMood.overall_mood === 'risk_on' ? 'RISK ON' :
                     marketMood.overall_mood === 'risk_off' ? 'RISK OFF' : 'MIXED'}
                 </span>
               </div>
-              <div className="text-xs" style={{ color: COLORS.GRAY }}>
-                Avg Sentiment: {(marketMood.average_sentiment * 100).toFixed(0)}% • {marketMood.symbols_analyzed} symbols
+              <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>
+                Avg Sentiment: {(marketMood.average_sentiment * 100).toFixed(0)}% | {marketMood.symbols_analyzed} symbols
               </div>
             </div>
 
             {/* Individual Sentiments */}
-            <div className="space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {Object.entries(marketMood.individual_sentiments).map(([sym, data]) => (
                 <div
                   key={sym}
-                  className="flex items-center justify-between p-2 rounded"
-                  style={{ backgroundColor: COLORS.CARD_BG }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px',
+                    backgroundColor: FINCEPT.CARD_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                  }}
                 >
-                  <div className="flex items-center gap-2">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {getSentimentIcon(data.overall_sentiment)}
-                    <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>{sym}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>{sym}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-xs"
-                      style={{ color: SENTIMENT_COLORS[data.overall_sentiment] }}
-                    >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      fontSize: '11px',
+                      color: SENTIMENT_COLORS[data.overall_sentiment],
+                      fontFamily: TERMINAL_FONT,
+                    }}>
                       {(data.sentiment_score * 100).toFixed(0)}%
                     </span>
-                    <span className="text-xs" style={{ color: COLORS.GRAY }}>
+                    <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
                       ({data.articles_analyzed} articles)
                     </span>
                   </div>
@@ -360,18 +468,24 @@ const SentimentPanel: React.FC<SentimentPanelProps> = ({
             </div>
           </>
         ) : (
-          <div className="text-center py-8" style={{ color: COLORS.GRAY }}>
-            <Newspaper size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No sentiment data available</p>
+          <div style={{ textAlign: 'center', padding: '32px 0' }}>
+            <Newspaper size={32} style={{ color: FINCEPT.GRAY, opacity: 0.3, margin: '0 auto 8px' }} />
+            <p style={{ fontSize: '12px', color: FINCEPT.GRAY }}>No sentiment data available</p>
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-2 border-t text-xs" style={{ borderColor: COLORS.BORDER, color: COLORS.GRAY }}>
+      <div style={{
+        padding: '6px 16px',
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        fontSize: '9px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        color: FINCEPT.GRAY,
+      }}>
         {sentiment && (
           <span>
-            Analyzed {sentiment.articles_analyzed} articles • Updated {new Date(sentiment.timestamp).toLocaleTimeString()}
+            Analyzed {sentiment.articles_analyzed} articles | Updated {new Date(sentiment.timestamp).toLocaleTimeString()}
           </span>
         )}
       </div>

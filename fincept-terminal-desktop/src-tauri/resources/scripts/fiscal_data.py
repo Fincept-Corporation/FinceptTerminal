@@ -483,6 +483,209 @@ def _parse_date_range(date_str: str) -> str:
     return date_str
 
 
+def fetch(indicator_id: str, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+    """
+    Frontend integration command: returns normalized {success, data: [{date, value}], metadata}
+    Each indicator maps to a specific endpoint, filter, and value field.
+    """
+    # Indicator -> (endpoint, fields, filter_field, filter_value, value_field, sort)
+    INDICATOR_MAP = {
+        # Debt to the Penny
+        "total_public_debt": {
+            "endpoint": "v2/accounting/od/debt_to_penny",
+            "fields": "record_date,tot_pub_debt_out_amt",
+            "value_field": "tot_pub_debt_out_amt",
+            "name": "Total Public Debt Outstanding",
+        },
+        "debt_held_public": {
+            "endpoint": "v2/accounting/od/debt_to_penny",
+            "fields": "record_date,debt_held_public_amt",
+            "value_field": "debt_held_public_amt",
+            "name": "Debt Held by the Public",
+        },
+        "intragov_holdings": {
+            "endpoint": "v2/accounting/od/debt_to_penny",
+            "fields": "record_date,intragov_hold_amt",
+            "value_field": "intragov_hold_amt",
+            "name": "Intragovernmental Holdings",
+        },
+        # Average Interest Rates
+        "avg_rate_tbills": {
+            "endpoint": "v2/accounting/od/avg_interest_rates",
+            "fields": "record_date,avg_interest_rate_amt",
+            "value_field": "avg_interest_rate_amt",
+            "extra_filter": "security_desc:eq:Treasury Bills",
+            "name": "Avg Interest Rate - Treasury Bills",
+        },
+        "avg_rate_tnotes": {
+            "endpoint": "v2/accounting/od/avg_interest_rates",
+            "fields": "record_date,avg_interest_rate_amt",
+            "value_field": "avg_interest_rate_amt",
+            "extra_filter": "security_desc:eq:Treasury Notes",
+            "name": "Avg Interest Rate - Treasury Notes",
+        },
+        "avg_rate_tbonds": {
+            "endpoint": "v2/accounting/od/avg_interest_rates",
+            "fields": "record_date,avg_interest_rate_amt",
+            "value_field": "avg_interest_rate_amt",
+            "extra_filter": "security_desc:eq:Treasury Bonds",
+            "name": "Avg Interest Rate - Treasury Bonds",
+        },
+        "avg_rate_tips": {
+            "endpoint": "v2/accounting/od/avg_interest_rates",
+            "fields": "record_date,avg_interest_rate_amt",
+            "value_field": "avg_interest_rate_amt",
+            "extra_filter": "security_desc:eq:Treasury Inflation-Protected Securities (TIPS)",
+            "name": "Avg Interest Rate - TIPS",
+        },
+        "avg_rate_frn": {
+            "endpoint": "v2/accounting/od/avg_interest_rates",
+            "fields": "record_date,avg_interest_rate_amt",
+            "value_field": "avg_interest_rate_amt",
+            "extra_filter": "security_desc:eq:Treasury Floating Rate Notes (FRN)",
+            "name": "Avg Interest Rate - Floating Rate Notes",
+        },
+        # Interest Expense
+        "interest_expense_total": {
+            "endpoint": "v2/accounting/od/interest_expense",
+            "fields": "record_date,fytd_expense_amt",
+            "value_field": "fytd_expense_amt",
+            "aggregate": True,
+            "name": "Total Interest Expense (FYTD)",
+        },
+        "interest_expense_monthly": {
+            "endpoint": "v2/accounting/od/interest_expense",
+            "fields": "record_date,month_expense_amt",
+            "value_field": "month_expense_amt",
+            "aggregate": True,
+            "name": "Monthly Interest Expense (All Securities)",
+        },
+        # MTS Table 9 - Budget Summary (Outlays by function)
+        "outlays_health": {
+            "endpoint": "v1/accounting/mts/mts_table_9",
+            "fields": "record_date,classification_desc,current_fytd_rcpt_outly_amt",
+            "value_field": "current_fytd_rcpt_outly_amt",
+            "extra_filter": "classification_desc:eq:Health",
+            "name": "Federal Outlays - Health (FYTD)",
+        },
+        "outlays_defense": {
+            "endpoint": "v1/accounting/mts/mts_table_9",
+            "fields": "record_date,classification_desc,current_fytd_rcpt_outly_amt",
+            "value_field": "current_fytd_rcpt_outly_amt",
+            "extra_filter": "classification_desc:eq:National Defense",
+            "name": "Federal Outlays - National Defense (FYTD)",
+        },
+        "outlays_social_security": {
+            "endpoint": "v1/accounting/mts/mts_table_9",
+            "fields": "record_date,classification_desc,current_fytd_rcpt_outly_amt",
+            "value_field": "current_fytd_rcpt_outly_amt",
+            "extra_filter": "classification_desc:eq:Social Security",
+            "name": "Federal Outlays - Social Security (FYTD)",
+        },
+        "outlays_net_interest": {
+            "endpoint": "v1/accounting/mts/mts_table_9",
+            "fields": "record_date,classification_desc,current_fytd_rcpt_outly_amt",
+            "value_field": "current_fytd_rcpt_outly_amt",
+            "extra_filter": "classification_desc:eq:Net Interest",
+            "name": "Federal Outlays - Net Interest (FYTD)",
+        },
+        "outlays_education": {
+            "endpoint": "v1/accounting/mts/mts_table_9",
+            "fields": "record_date,classification_desc,current_fytd_rcpt_outly_amt",
+            "value_field": "current_fytd_rcpt_outly_amt",
+            "extra_filter": "classification_desc:eq:Education, Training, Employment, and Social Services",
+            "name": "Federal Outlays - Education (FYTD)",
+        },
+        # Gold Reserve
+        "gold_reserve_total": {
+            "endpoint": "v2/accounting/od/gold_reserve",
+            "fields": "record_date,book_value_amt,fine_troy_ounce_qty",
+            "value_field": "book_value_amt",
+            "aggregate": True,  # Sum across all facilities
+            "name": "U.S. Gold Reserve (Book Value)",
+        },
+        "gold_reserve_ounces": {
+            "endpoint": "v2/accounting/od/gold_reserve",
+            "fields": "record_date,fine_troy_ounce_qty",
+            "value_field": "fine_troy_ounce_qty",
+            "aggregate": True,
+            "name": "U.S. Gold Reserve (Troy Ounces)",
+        },
+    }
+
+    config = INDICATOR_MAP.get(indicator_id)
+    if not config:
+        return {
+            "success": False,
+            "error": f"Unknown indicator: {indicator_id}",
+            "available": list(INDICATOR_MAP.keys())
+        }
+
+    params = {
+        "fields": config["fields"],
+        "sort": "-record_date",
+        "page[size]": "1000",
+    }
+
+    # Build filters
+    filters = []
+    if start_date:
+        filters.append(f"record_date:gte:{start_date}")
+    if end_date:
+        filters.append(f"record_date:lte:{end_date}")
+    if config.get("extra_filter"):
+        filters.append(config["extra_filter"])
+    if filters:
+        params["filter"] = ",".join(filters)
+
+    result = _make_request(config["endpoint"], params)
+
+    if result.get("error"):
+        return {"success": False, "error": result["error"]}
+
+    records = result.get("data", [])
+    value_field = config["value_field"]
+    should_aggregate = config.get("aggregate", False)
+
+    if should_aggregate:
+        # Sum values across all rows for the same date
+        date_sums = {}
+        for rec in records:
+            date = rec.get("record_date", "")
+            val = rec.get(value_field)
+            if date and val is not None:
+                try:
+                    v = float(val)
+                    date_sums[date] = date_sums.get(date, 0) + v
+                except (ValueError, TypeError):
+                    pass
+        data_points = [{"date": d, "value": v} for d, v in date_sums.items()]
+    else:
+        data_points = []
+        for rec in records:
+            date = rec.get("record_date", "")
+            val = rec.get(value_field)
+            if date and val is not None:
+                try:
+                    data_points.append({"date": date, "value": float(val)})
+                except (ValueError, TypeError):
+                    pass
+
+    # Sort by date ascending
+    data_points.sort(key=lambda x: x["date"])
+
+    return {
+        "success": True,
+        "data": data_points,
+        "metadata": {
+            "indicator": indicator_id,
+            "indicator_name": config["name"],
+            "country": "United States",
+            "source": "U.S. Treasury FiscalData"
+        }
+    }
+
+
 def main():
     """Main CLI interface"""
     if len(sys.argv) < 2:
@@ -500,7 +703,16 @@ def main():
     command = sys.argv[1]
     result = None
 
-    if command == "debt-to-penny":
+    if command == "fetch":
+        if len(sys.argv) < 3:
+            print(json.dumps({"error": "Usage: fetch <indicator_id> [start_date] [end_date]"}))
+            sys.exit(1)
+        indicator_id = sys.argv[2]
+        s_date = sys.argv[3] if len(sys.argv) > 3 else None
+        e_date = sys.argv[4] if len(sys.argv) > 4 else None
+        result = fetch(indicator_id, s_date, e_date)
+
+    elif command == "debt-to-penny":
         fields = None
         start_date = None
         end_date = None

@@ -8,7 +8,7 @@
 import React, { useState } from 'react';
 import {
   FileText, Search, RefreshCw, AlertTriangle, ExternalLink,
-  Building2, DollarSign, TrendingUp, Loader2, ChevronDown,
+  Building2, Loader2, ChevronDown,
   ChevronUp, Calendar, FileSearch, Shield, BarChart3,
 } from 'lucide-react';
 import { withErrorBoundary } from '@/components/common/ErrorBoundary';
@@ -19,7 +19,7 @@ import {
   type ResearchReport,
 } from '../services/alphaArenaEnhancedService';
 
-const COLORS = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -30,9 +30,20 @@ const COLORS = {
   GRAY: '#787878',
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
   CARD_BG: '#0A0A0A',
   BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
 };
+
+const TERMINAL_FONT = '"IBM Plex Mono", "Consolas", monospace';
+
+const RESEARCH_STYLES = `
+  .research-panel *::-webkit-scrollbar { width: 6px; height: 6px; }
+  .research-panel *::-webkit-scrollbar-track { background: #000000; }
+  .research-panel *::-webkit-scrollbar-thumb { background: #2A2A2A; }
+  @keyframes research-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+`;
 
 interface ResearchPanelProps {
   initialTicker?: string;
@@ -40,11 +51,11 @@ interface ResearchPanelProps {
 }
 
 const FORM_TYPE_COLORS: Record<string, string> = {
-  '10-K': COLORS.BLUE,
-  '10-Q': COLORS.PURPLE,
-  '8-K': COLORS.ORANGE,
-  '4': COLORS.GREEN,
-  'DEF 14A': COLORS.YELLOW,
+  '10-K': FINCEPT.BLUE,
+  '10-Q': FINCEPT.PURPLE,
+  '8-K': FINCEPT.ORANGE,
+  '4': FINCEPT.GREEN,
+  'DEF 14A': FINCEPT.YELLOW,
 };
 
 const ResearchPanel: React.FC<ResearchPanelProps> = ({
@@ -55,6 +66,8 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
   const [confirmedTicker, setConfirmedTicker] = useState(initialTicker || '');
   const [expandedSection, setExpandedSection] = useState<string | null>('filings');
   const [selectedFormTypes, setSelectedFormTypes] = useState<string[]>([]);
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
+  const [hoveredFiling, setHoveredFiling] = useState<number | null>(null);
 
   // Cache: research report keyed on confirmedTicker
   const researchCache = useCache<ResearchReport>({
@@ -111,112 +124,161 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
   };
 
   return (
-    <div
-      className="rounded-lg overflow-hidden"
-      style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}
-    >
+    <div className="research-panel" style={{
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+      overflow: 'hidden',
+      fontFamily: TERMINAL_FONT,
+    }}>
+      <style>{RESEARCH_STYLES}</style>
+
       {/* Header */}
-      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
-        <div className="flex items-center gap-2">
-          <FileSearch size={16} style={{ color: COLORS.YELLOW }} />
-          <span className="font-semibold text-sm" style={{ color: COLORS.WHITE }}>
-            Research & SEC Filings
+      <div style={{
+        padding: '10px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <FileSearch size={16} style={{ color: FINCEPT.YELLOW }} />
+          <span style={{ fontWeight: 600, fontSize: '12px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+            RESEARCH & SEC FILINGS
           </span>
         </div>
         {report && (
           <button
             onClick={() => researchCache.refresh()}
             disabled={isLoading}
-            className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
+            onMouseEnter={() => setHoveredBtn('refresh')}
+            onMouseLeave={() => setHoveredBtn(null)}
+            style={{
+              padding: '4px',
+              backgroundColor: hoveredBtn === 'refresh' ? FINCEPT.HOVER : 'transparent',
+              border: 'none',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
           >
             <RefreshCw
               size={14}
-              className={isLoading ? 'animate-spin' : ''}
-              style={{ color: COLORS.GRAY }}
+              style={{
+                color: FINCEPT.GRAY,
+                animation: isLoading ? 'research-spin 1s linear infinite' : 'none',
+              }}
             />
           </button>
         )}
       </div>
 
       {/* Search Bar */}
-      <form onSubmit={handleSearch} className="px-4 py-3 border-b" style={{ borderColor: COLORS.BORDER }}>
-        <div className="flex gap-2">
+      <form onSubmit={handleSearch} style={{
+        padding: '12px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+      }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
           <input
             type="text"
             value={searchTicker}
             onChange={(e) => setSearchTicker(e.target.value.toUpperCase())}
             placeholder="Enter ticker (e.g., AAPL)"
-            className="flex-1 px-3 py-1.5 rounded text-sm"
             style={{
-              backgroundColor: COLORS.CARD_BG,
-              color: COLORS.WHITE,
-              border: `1px solid ${COLORS.BORDER}`,
+              flex: 1,
+              padding: '6px 12px',
+              fontSize: '12px',
+              fontFamily: TERMINAL_FONT,
+              backgroundColor: FINCEPT.CARD_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              outline: 'none',
             }}
           />
           <button
             type="submit"
             disabled={isLoading}
-            className="px-4 py-1.5 rounded text-sm font-medium flex items-center gap-1"
             style={{
-              backgroundColor: COLORS.ORANGE,
-              color: COLORS.DARK_BG,
+              padding: '6px 16px',
+              fontSize: '11px',
+              fontWeight: 600,
+              fontFamily: TERMINAL_FONT,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: FINCEPT.ORANGE,
+              color: FINCEPT.DARK_BG,
+              border: 'none',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
               opacity: isLoading ? 0.5 : 1,
+              letterSpacing: '0.5px',
             }}
           >
             {isLoading ? (
-              <Loader2 size={14} className="animate-spin" />
+              <Loader2 size={14} style={{ animation: 'research-spin 1s linear infinite' }} />
             ) : (
               <Search size={14} />
             )}
-            Search
+            SEARCH
           </button>
         </div>
       </form>
 
       {/* Error */}
       {error && (
-        <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '10' }}>
-          <AlertTriangle size={14} style={{ color: COLORS.RED }} />
-          <span className="text-xs" style={{ color: COLORS.RED }}>{error.message}</span>
+        <div style={{
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          backgroundColor: FINCEPT.RED + '10',
+        }}>
+          <AlertTriangle size={14} style={{ color: FINCEPT.RED }} />
+          <span style={{ fontSize: '11px', color: FINCEPT.RED, fontFamily: TERMINAL_FONT }}>{error.message}</span>
         </div>
       )}
 
       {/* Content */}
-      <div className="max-h-96 overflow-y-auto">
+      <div style={{ maxHeight: '384px', overflowY: 'auto' }}>
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 size={24} className="animate-spin" style={{ color: COLORS.ORANGE }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+            <Loader2 size={24} style={{ color: FINCEPT.ORANGE, animation: 'research-spin 1s linear infinite' }} />
           </div>
         ) : report ? (
           <>
             {/* Company Info */}
             {report.company_info && (
-              <div className="px-4 py-3 border-b" style={{ borderColor: COLORS.BORDER }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <Building2 size={14} style={{ color: COLORS.BLUE }} />
-                  <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>
+              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <Building2 size={14} style={{ color: FINCEPT.BLUE }} />
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>
                     {report.company_info.name}
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: COLORS.BORDER, color: COLORS.GRAY }}>
+                  <span style={{
+                    fontSize: '10px',
+                    padding: '1px 8px',
+                    backgroundColor: FINCEPT.BORDER,
+                    color: FINCEPT.GRAY,
+                    fontFamily: TERMINAL_FONT,
+                  }}>
                     {report.company_info.ticker}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px' }}>
                   <div>
-                    <span style={{ color: COLORS.GRAY }}>Industry: </span>
-                    <span style={{ color: COLORS.WHITE }}>{report.company_info.industry || 'N/A'}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>Industry: </span>
+                    <span style={{ color: FINCEPT.WHITE }}>{report.company_info.industry || 'N/A'}</span>
                   </div>
                   <div>
-                    <span style={{ color: COLORS.GRAY }}>CIK: </span>
-                    <span style={{ color: COLORS.WHITE }}>{report.company_info.cik}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>CIK: </span>
+                    <span style={{ color: FINCEPT.WHITE }}>{report.company_info.cik}</span>
                   </div>
                   <div>
-                    <span style={{ color: COLORS.GRAY }}>State: </span>
-                    <span style={{ color: COLORS.WHITE }}>{report.company_info.state || 'N/A'}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>State: </span>
+                    <span style={{ color: FINCEPT.WHITE }}>{report.company_info.state || 'N/A'}</span>
                   </div>
                   <div>
-                    <span style={{ color: COLORS.GRAY }}>Fiscal Year End: </span>
-                    <span style={{ color: COLORS.WHITE }}>{report.company_info.fiscal_year_end || 'N/A'}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>Fiscal Year End: </span>
+                    <span style={{ color: FINCEPT.WHITE }}>{report.company_info.fiscal_year_end || 'N/A'}</span>
                   </div>
                 </div>
               </div>
@@ -224,35 +286,45 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
 
             {/* Summary */}
             {report.summary && (
-              <div className="px-4 py-3 border-b" style={{ borderColor: COLORS.BORDER }}>
-                <p className="text-xs leading-relaxed" style={{ color: COLORS.GRAY }}>
+              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+                <p style={{ fontSize: '11px', lineHeight: '1.5', color: FINCEPT.GRAY }}>
                   {report.summary}
                 </p>
               </div>
             )}
 
             {/* SEC Filings Section */}
-            <div className="border-b" style={{ borderColor: COLORS.BORDER }}>
+            <div style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
               <button
                 onClick={() => toggleSection('filings')}
-                className="w-full px-4 py-2 flex items-center justify-between"
+                style={{
+                  width: '100%',
+                  padding: '8px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: TERMINAL_FONT,
+                }}
               >
-                <div className="flex items-center gap-2">
-                  <FileText size={14} style={{ color: COLORS.ORANGE }} />
-                  <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>
-                    SEC Filings ({report.recent_filings.length})
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={14} style={{ color: FINCEPT.ORANGE }} />
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>
+                    SEC FILINGS ({report.recent_filings.length})
                   </span>
                 </div>
                 {expandedSection === 'filings' ? (
-                  <ChevronUp size={14} style={{ color: COLORS.GRAY }} />
+                  <ChevronUp size={14} style={{ color: FINCEPT.GRAY }} />
                 ) : (
-                  <ChevronDown size={14} style={{ color: COLORS.GRAY }} />
+                  <ChevronDown size={14} style={{ color: FINCEPT.GRAY }} />
                 )}
               </button>
               {expandedSection === 'filings' && (
-                <div className="px-4 pb-3">
+                <div style={{ padding: '0 16px 12px' }}>
                   {/* Form Type Filters */}
-                  <div className="flex flex-wrap gap-1 mb-2">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
                     {['10-K', '10-Q', '8-K', '4', 'DEF 14A'].map((formType) => (
                       <button
                         key={formType}
@@ -263,15 +335,18 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
                               : [...prev, formType]
                           );
                         }}
-                        className="px-2 py-0.5 rounded text-xs"
                         style={{
+                          padding: '2px 8px',
+                          fontSize: '10px',
+                          fontFamily: TERMINAL_FONT,
                           backgroundColor: selectedFormTypes.includes(formType)
-                            ? (FORM_TYPE_COLORS[formType] || COLORS.GRAY) + '30'
-                            : COLORS.CARD_BG,
+                            ? (FORM_TYPE_COLORS[formType] || FINCEPT.GRAY) + '30'
+                            : FINCEPT.CARD_BG,
                           color: selectedFormTypes.includes(formType)
-                            ? FORM_TYPE_COLORS[formType] || COLORS.GRAY
-                            : COLORS.GRAY,
-                          border: `1px solid ${selectedFormTypes.includes(formType) ? FORM_TYPE_COLORS[formType] || COLORS.GRAY : COLORS.BORDER}`,
+                            ? FORM_TYPE_COLORS[formType] || FINCEPT.GRAY
+                            : FINCEPT.GRAY,
+                          border: `1px solid ${selectedFormTypes.includes(formType) ? FORM_TYPE_COLORS[formType] || FINCEPT.GRAY : FINCEPT.BORDER}`,
+                          cursor: 'pointer',
                         }}
                       >
                         {formType}
@@ -280,38 +355,54 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
                     {selectedFormTypes.length > 0 && (
                       <button
                         onClick={() => setSelectedFormTypes([])}
-                        className="px-2 py-0.5 rounded text-xs"
-                        style={{ color: COLORS.RED }}
+                        style={{
+                          padding: '2px 8px',
+                          fontSize: '10px',
+                          color: FINCEPT.RED,
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: TERMINAL_FONT,
+                        }}
                       >
                         Clear
                       </button>
                     )}
                   </div>
                   {/* Filings List */}
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                  <div style={{ maxHeight: '192px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {filterFilings(report.recent_filings).map((filing, idx) => (
                       <div
                         key={idx}
-                        className="p-2 rounded flex items-start justify-between"
-                        style={{ backgroundColor: COLORS.CARD_BG }}
+                        onMouseEnter={() => setHoveredFiling(idx)}
+                        onMouseLeave={() => setHoveredFiling(null)}
+                        style={{
+                          padding: '8px',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          backgroundColor: hoveredFiling === idx ? FINCEPT.HOVER : FINCEPT.CARD_BG,
+                          border: `1px solid ${FINCEPT.BORDER}`,
+                        }}
                       >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span
-                              className="text-xs px-1.5 py-0.5 rounded font-medium"
-                              style={{
-                                backgroundColor: (FORM_TYPE_COLORS[filing.form_type] || COLORS.GRAY) + '20',
-                                color: FORM_TYPE_COLORS[filing.form_type] || COLORS.GRAY,
-                              }}
-                            >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <span style={{
+                              fontSize: '10px',
+                              padding: '1px 6px',
+                              fontWeight: 500,
+                              fontFamily: TERMINAL_FONT,
+                              backgroundColor: (FORM_TYPE_COLORS[filing.form_type] || FINCEPT.GRAY) + '20',
+                              color: FORM_TYPE_COLORS[filing.form_type] || FINCEPT.GRAY,
+                            }}>
                               {filing.form_type}
                             </span>
-                            <span className="text-xs" style={{ color: COLORS.GRAY }}>
-                              <Calendar size={10} className="inline mr-1" />
+                            <span style={{ fontSize: '10px', color: FINCEPT.GRAY, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Calendar size={10} />
                               {formatDate(filing.filing_date)}
                             </span>
                           </div>
-                          <p className="text-xs truncate" style={{ color: COLORS.WHITE }}>
+                          <p style={{ fontSize: '11px', color: FINCEPT.WHITE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {filing.description || `Filing ${filing.accession_number}`}
                           </p>
                         </div>
@@ -319,9 +410,18 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
                           href={`https://www.sec.gov/Archives/edgar/data/${report.company_info?.cik}/${filing.accession_number.replace(/-/g, '')}/${filing.primary_document}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-1 rounded hover:bg-[#1A1A1A]"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseEnter={() => setHoveredBtn(`link-${idx}`)}
+                          onMouseLeave={() => setHoveredBtn(null)}
+                          style={{
+                            padding: '4px',
+                            backgroundColor: hoveredBtn === `link-${idx}` ? FINCEPT.HOVER : 'transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            flexShrink: 0,
+                          }}
                         >
-                          <ExternalLink size={12} style={{ color: COLORS.GRAY }} />
+                          <ExternalLink size={12} style={{ color: FINCEPT.GRAY }} />
                         </a>
                       </div>
                     ))}
@@ -332,50 +432,59 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
 
             {/* Financials Section */}
             {report.financials.length > 0 && (
-              <div className="border-b" style={{ borderColor: COLORS.BORDER }}>
+              <div style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
                 <button
                   onClick={() => toggleSection('financials')}
-                  className="w-full px-4 py-2 flex items-center justify-between"
+                  style={{
+                    width: '100%',
+                    padding: '8px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: TERMINAL_FONT,
+                  }}
                 >
-                  <div className="flex items-center gap-2">
-                    <BarChart3 size={14} style={{ color: COLORS.GREEN }} />
-                    <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>
-                      Financials
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <BarChart3 size={14} style={{ color: FINCEPT.GREEN }} />
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>
+                      FINANCIALS
                     </span>
                   </div>
                   {expandedSection === 'financials' ? (
-                    <ChevronUp size={14} style={{ color: COLORS.GRAY }} />
+                    <ChevronUp size={14} style={{ color: FINCEPT.GRAY }} />
                   ) : (
-                    <ChevronDown size={14} style={{ color: COLORS.GRAY }} />
+                    <ChevronDown size={14} style={{ color: FINCEPT.GRAY }} />
                   )}
                 </button>
                 {expandedSection === 'financials' && (
-                  <div className="px-4 pb-3">
-                    <table className="w-full text-xs">
+                  <div style={{ padding: '0 16px 12px' }}>
+                    <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ color: COLORS.GRAY }}>
-                          <th className="text-left py-1">Period</th>
-                          <th className="text-right py-1">Revenue</th>
-                          <th className="text-right py-1">Net Income</th>
-                          <th className="text-right py-1">EPS</th>
+                        <tr style={{ color: FINCEPT.GRAY }}>
+                          <th style={{ textAlign: 'left', padding: '4px 0', fontWeight: 500, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>Period</th>
+                          <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 500, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>Revenue</th>
+                          <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 500, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>Net Income</th>
+                          <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 500, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>EPS</th>
                         </tr>
                       </thead>
                       <tbody>
                         {report.financials.slice(0, 5).map((fin, idx) => (
-                          <tr key={idx} className="border-t" style={{ borderColor: COLORS.BORDER }}>
-                            <td className="py-1.5" style={{ color: COLORS.WHITE }}>{fin.period}</td>
-                            <td className="text-right py-1.5" style={{ color: COLORS.WHITE }}>
+                          <tr key={idx} style={{ borderTop: `1px solid ${FINCEPT.BORDER}` }}>
+                            <td style={{ padding: '6px 0', color: FINCEPT.WHITE }}>{fin.period}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 0', color: FINCEPT.WHITE }}>
                               {formatCurrency(fin.revenue)}
                             </td>
-                            <td
-                              className="text-right py-1.5"
-                              style={{
-                                color: fin.net_income && fin.net_income > 0 ? COLORS.GREEN : COLORS.RED,
-                              }}
-                            >
+                            <td style={{
+                              textAlign: 'right',
+                              padding: '6px 0',
+                              color: fin.net_income && fin.net_income > 0 ? FINCEPT.GREEN : FINCEPT.RED,
+                            }}>
                               {formatCurrency(fin.net_income)}
                             </td>
-                            <td className="text-right py-1.5" style={{ color: COLORS.WHITE }}>
+                            <td style={{ textAlign: 'right', padding: '6px 0', color: FINCEPT.WHITE }}>
                               {fin.eps !== null ? `$${fin.eps.toFixed(2)}` : 'N/A'}
                             </td>
                           </tr>
@@ -392,47 +501,65 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
               <div>
                 <button
                   onClick={() => toggleSection('risks')}
-                  className="w-full px-4 py-2 flex items-center justify-between"
+                  style={{
+                    width: '100%',
+                    padding: '8px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: TERMINAL_FONT,
+                  }}
                 >
-                  <div className="flex items-center gap-2">
-                    <Shield size={14} style={{ color: COLORS.RED }} />
-                    <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>
-                      Risk Factors ({report.risk_factors.length})
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Shield size={14} style={{ color: FINCEPT.RED }} />
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>
+                      RISK FACTORS ({report.risk_factors.length})
                     </span>
                   </div>
                   {expandedSection === 'risks' ? (
-                    <ChevronUp size={14} style={{ color: COLORS.GRAY }} />
+                    <ChevronUp size={14} style={{ color: FINCEPT.GRAY }} />
                   ) : (
-                    <ChevronDown size={14} style={{ color: COLORS.GRAY }} />
+                    <ChevronDown size={14} style={{ color: FINCEPT.GRAY }} />
                   )}
                 </button>
                 {expandedSection === 'risks' && (
-                  <div className="px-4 pb-3">
-                    <ul className="space-y-1">
+                  <div style={{ padding: '0 16px 12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       {report.risk_factors.map((risk, idx) => (
-                        <li
+                        <div
                           key={idx}
-                          className="text-xs pl-3 relative"
-                          style={{ color: COLORS.GRAY }}
+                          style={{
+                            fontSize: '11px',
+                            paddingLeft: '12px',
+                            position: 'relative',
+                            color: FINCEPT.GRAY,
+                          }}
                         >
-                          <span
-                            className="absolute left-0 top-1.5 w-1.5 h-1.5 rounded-full"
-                            style={{ backgroundColor: COLORS.RED }}
-                          />
+                          <span style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: '6px',
+                            width: '4px',
+                            height: '4px',
+                            backgroundColor: FINCEPT.RED,
+                          }} />
                           {risk}
-                        </li>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 )}
               </div>
             )}
           </>
         ) : (
-          <div className="p-8 text-center">
-            <FileSearch size={32} className="mx-auto mb-2 opacity-30" style={{ color: COLORS.GRAY }} />
-            <p className="text-sm" style={{ color: COLORS.GRAY }}>Search for a company</p>
-            <p className="text-xs mt-1" style={{ color: COLORS.GRAY }}>
+          <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+            <FileSearch size={32} style={{ color: FINCEPT.GRAY, opacity: 0.3, margin: '0 auto 8px' }} />
+            <p style={{ fontSize: '12px', color: FINCEPT.GRAY }}>Search for a company</p>
+            <p style={{ fontSize: '10px', marginTop: '4px', color: FINCEPT.GRAY }}>
               Enter a ticker to view SEC filings and research
             </p>
           </div>
@@ -441,8 +568,14 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
 
       {/* Footer */}
       {report && (
-        <div className="px-4 py-2 border-t text-xs" style={{ borderColor: COLORS.BORDER, color: COLORS.GRAY }}>
-          Generated: {formatDate(report.generated_at)} • Data from SEC EDGAR
+        <div style={{
+          padding: '6px 16px',
+          borderTop: `1px solid ${FINCEPT.BORDER}`,
+          fontSize: '9px',
+          backgroundColor: FINCEPT.HEADER_BG,
+          color: FINCEPT.GRAY,
+        }}>
+          Generated: {formatDate(report.generated_at)} | Data from SEC EDGAR
         </div>
       )}
     </div>

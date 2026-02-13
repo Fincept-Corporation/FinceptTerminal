@@ -19,6 +19,7 @@ use tauri::Emitter;
 
 use crate::websocket::adapters::WebSocketAdapter;
 use crate::websocket::types::MarketMessage;
+use crate::WebSocketState;
 use super::common::{ApiResponse, TokenExchangeResponse, OrderPlaceResponse};
 
 // Zerodha API Configuration
@@ -677,6 +678,7 @@ static ZERODHA_WS: Lazy<Arc<RwLock<Option<crate::websocket::adapters::ZerodhaAda
 #[tauri::command]
 pub async fn zerodha_ws_connect(
     app: tauri::AppHandle,
+    state: tauri::State<'_, WebSocketState>,
     api_key: String,
     access_token: String,
 ) -> Result<ApiResponse<bool>, String> {
@@ -702,12 +704,17 @@ pub async fn zerodha_ws_connect(
         access_token,
     );
 
-    // Set up message callback to emit Tauri events
+    // Clone the router so backend services (candle aggregation, algo trading, etc.) receive ticks
+    let router = state.router.clone();
+
+    // Set up message callback to emit Tauri events AND route through MessageRouter
     let app_handle = app.clone();
     adapter.set_message_callback(Box::new(move |msg: MarketMessage| {
+        // 1. Emit broker-specific events to frontend
         match &msg {
             MarketMessage::Ticker(data) => {
                 let _ = app_handle.emit("zerodha_ticker", data);
+                let _ = app_handle.emit("algo_live_ticker", data);
             }
             MarketMessage::OrderBook(data) => {
                 let _ = app_handle.emit("zerodha_orderbook", data);
@@ -722,6 +729,13 @@ pub async fn zerodha_ws_connect(
                 let _ = app_handle.emit("zerodha_candle", data);
             }
         }
+
+        // 2. Route through MessageRouter for backend services (candle aggregation, algo trading, etc.)
+        let router = router.clone();
+        let msg = msg.clone();
+        tokio::spawn(async move {
+            router.read().await.route(msg).await;
+        });
     }));
 
     // Connect to WebSocket

@@ -607,7 +607,78 @@ def main():
     wrapper = UISWrapper()
 
     try:
-        if command == "indicator_data":
+        if command == "fetch":
+            # Frontend integration command: fetch <indicator_code> <country_code> [start_year] [end_year]
+            # Returns normalized { success, data: [{date, value}], metadata }
+            if len(sys.argv) < 4:
+                print(json.dumps({"error": "Usage: fetch <indicator_code> <country_code> [start_year] [end_year]"}))
+                sys.exit(1)
+
+            indicator_code = sys.argv[2]
+            country_code = sys.argv[3]  # 3-letter ISO code (e.g. USA, GBR, IND)
+            start_year = int(sys.argv[4]) if len(sys.argv) > 4 else None
+            end_year = int(sys.argv[5]) if len(sys.argv) > 5 else None
+
+            # Fetch directly with correct lowercase 'true' for indicatorMetadata
+            params = {'indicator': [indicator_code], 'geoUnit': [country_code], 'indicatorMetadata': 'true'}
+            if start_year:
+                params['start'] = start_year
+            if end_year:
+                params['end'] = end_year
+            result = wrapper._make_request('/data/indicators', params)
+
+            if not result.get("success"):
+                print(json.dumps(result))
+                sys.exit(1)
+
+            records = result.get("data", {}).get("records", []) if isinstance(result.get("data"), dict) else result.get("data", [])
+
+            # Check for hints (API warnings about invalid codes)
+            hints = []
+            if isinstance(result.get("data"), dict):
+                hints = result["data"].get("hints", [])
+            if not records and hints:
+                hint_msgs = [h.get("message", "") for h in hints]
+                print(json.dumps({"success": False, "error": "API warning: " + "; ".join(hint_msgs)}))
+                sys.exit(1)
+
+            # Normalize records to [{date, value}]
+            data_points = []
+            indicator_name = indicator_code
+            for rec in records:
+                year = rec.get("year")
+                value = rec.get("value")
+                if year is not None and value is not None:
+                    try:
+                        val = float(value)
+                    except (ValueError, TypeError):
+                        continue
+                    data_points.append({"date": str(year), "value": val})
+                if not indicator_name or indicator_name == indicator_code:
+                    indicator_name = rec.get("indicatorId", indicator_code)
+
+            # Get indicator name from metadata if available
+            ind_metadata = result.get("data", {}).get("indicatorMetadata", []) if isinstance(result.get("data"), dict) else []
+            if ind_metadata and len(ind_metadata) > 0:
+                meta_name = ind_metadata[0].get("name")
+                if meta_name:
+                    indicator_name = meta_name
+
+            # Sort by date
+            data_points.sort(key=lambda x: x["date"])
+
+            print(json.dumps({
+                "success": True,
+                "data": data_points,
+                "metadata": {
+                    "indicator": indicator_code,
+                    "indicator_name": indicator_name,
+                    "country": country_code,
+                    "source": "UNESCO UIS"
+                }
+            }))
+
+        elif command == "indicator_data":
             indicators = []
             geo_units = []
             geo_unit_type = None

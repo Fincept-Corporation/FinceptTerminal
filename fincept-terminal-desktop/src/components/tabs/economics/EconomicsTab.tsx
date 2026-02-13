@@ -61,6 +61,10 @@ export default function EconomicsTab() {
     setWtoApiKey,
     eiaApiKey,
     setEiaApiKey,
+    blsApiKey,
+    setBlsApiKey,
+    beaApiKey,
+    setBeaApiKey,
     showApiKeyInput,
     setShowApiKeyInput,
     apiKeySaving,
@@ -89,6 +93,8 @@ export default function EconomicsTab() {
     switch (source) {
       case 'wto': return 'https://apiportal.wto.org/';
       case 'eia': return 'https://www.eia.gov/opendata/register.php';
+      case 'bls': return 'https://data.bls.gov/registrationEngine/';
+      case 'bea': return 'https://apps.bea.gov/API/signup/';
       default: return '';
     }
   };
@@ -98,6 +104,8 @@ export default function EconomicsTab() {
     switch (dataSource) {
       case 'wto': return wtoApiKey;
       case 'eia': return eiaApiKey;
+      case 'bls': return blsApiKey;
+      case 'bea': return beaApiKey;
       default: return '';
     }
   };
@@ -107,6 +115,8 @@ export default function EconomicsTab() {
     switch (dataSource) {
       case 'wto': setWtoApiKey(value); break;
       case 'eia': setEiaApiKey(value); break;
+      case 'bls': setBlsApiKey(value); break;
+      case 'bea': setBeaApiKey(value); break;
     }
   };
 

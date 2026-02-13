@@ -21,10 +21,6 @@ export const FINCEPT = {
   PURPLE: '#9D4EDD',
 };
 
-// Chart dimensions
-export const CHART_WIDTH = 1200;
-export const CHART_HEIGHT = 400;
-
 // Data source configurations
 export const DATA_SOURCES: DataSourceConfig[] = [
   { id: 'worldbank', name: 'World Bank', fullName: 'World Bank', description: 'Global development indicators', color: FINCEPT.CYAN, scriptName: 'worldbank_data.py' },
@@ -37,6 +33,10 @@ export const DATA_SOURCES: DataSourceConfig[] = [
   { id: 'eia', name: 'EIA', fullName: 'Energy Information Administration', description: 'U.S. energy production & prices', color: '#4CAF50', scriptName: 'eia_data.py', requiresApiKey: true, apiKeyName: 'EIA_API_KEY' },
   { id: 'adb', name: 'ADB', fullName: 'Asian Development Bank', description: 'Asia-Pacific economic indicators', color: '#0072BC', scriptName: 'adb_data.py' },
   { id: 'fed', name: 'Fed', fullName: 'Federal Reserve', description: 'US monetary policy, rates & money supply', color: '#1A5F7A', scriptName: 'federal_reserve_data.py' },
+  { id: 'bls', name: 'BLS', fullName: 'Bureau of Labor Statistics', description: 'US labor, prices, employment & productivity', color: '#AB47BC', scriptName: 'bls_data.py', requiresApiKey: true, apiKeyName: 'BLS_API_KEY' },
+  { id: 'unesco', name: 'UNESCO', fullName: 'UNESCO Institute for Statistics', description: 'Education, science, culture & demographic data', color: '#00ACC1', scriptName: 'unesco_data.py' },
+  { id: 'fiscaldata', name: 'FiscalData', fullName: 'U.S. Treasury FiscalData', description: 'US debt, interest rates, spending & gold reserves', color: '#FFA726', scriptName: 'fiscal_data.py' },
+  { id: 'bea', name: 'BEA', fullName: 'Bureau of Economic Analysis', description: 'US GDP, income, spending & national accounts (NIPA)', color: '#E65100', scriptName: 'bea_data.py', requiresApiKey: true, apiKeyName: 'BEA_API_KEY' },
 ];
 
 // World Bank indicators
@@ -58,20 +58,45 @@ export const WORLDBANK_INDICATORS: Indicator[] = [
   { id: 'BX.KLT.DINV.WD.GD.ZS', name: 'Foreign direct investment, net inflows (% of GDP)', category: 'Investment' },
 ];
 
-// BIS indicators
+// BIS indicators — mapped to real BIS SDMX dataflow IDs
+// Full coverage of all 28 BIS statistical domains (excluding release calendar)
 export const BIS_INDICATORS: Indicator[] = [
-  { id: 'CBPOL_D', name: 'Central Bank Policy Rates (Daily)', category: 'Rates' },
-  { id: 'CBPOL_M', name: 'Central Bank Policy Rates (Monthly)', category: 'Rates' },
-  { id: 'EER_B', name: 'Effective Exchange Rates (Broad)', category: 'Exchange Rates' },
-  { id: 'EER_N', name: 'Effective Exchange Rates (Narrow)', category: 'Exchange Rates' },
-  { id: 'REER_B', name: 'Real Effective Exchange Rates (Broad)', category: 'Exchange Rates' },
-  { id: 'SPP', name: 'Residential Property Prices', category: 'Property' },
-  { id: 'CPP', name: 'Commercial Property Prices', category: 'Property' },
-  { id: 'CREDIT', name: 'Credit to Non-financial Sector', category: 'Credit' },
-  { id: 'DEBT', name: 'Debt Service Ratios', category: 'Credit' },
-  { id: 'LBS', name: 'Locational Banking Statistics', category: 'Banking' },
-  { id: 'CBS', name: 'Consolidated Banking Statistics', category: 'Banking' },
-  { id: 'DSR', name: 'Debt Service Ratios', category: 'Debt' },
+  // Monetary Policy & Interest Rates
+  { id: 'WS_CBPOL', name: 'Central Bank Policy Rates', category: 'Rates' },
+  { id: 'WS_CBTA', name: 'Central Bank Total Assets', category: 'Rates' },
+  // Exchange Rates
+  { id: 'WS_EER', name: 'Effective Exchange Rates (Nominal, Broad)', category: 'Exchange Rates' },
+  { id: 'WS_XRU', name: 'US Dollar Exchange Rates', category: 'Exchange Rates' },
+  // Prices
+  { id: 'WS_LONG_CPI', name: 'Consumer Prices (CPI)', category: 'Prices' },
+  // Property
+  { id: 'WS_SPP', name: 'Selected Residential Property Prices', category: 'Property' },
+  { id: 'WS_DPP', name: 'Detailed Residential Property Prices', category: 'Property' },
+  { id: 'WS_CPP', name: 'Commercial Property Prices', category: 'Property' },
+  // Credit & Debt
+  { id: 'WS_TC', name: 'Total Credit to Non-Financial Sector', category: 'Credit' },
+  { id: 'WS_CREDIT_GAP', name: 'Credit-to-GDP Gaps', category: 'Credit' },
+  { id: 'WS_DSR', name: 'Debt Service Ratios', category: 'Credit' },
+  { id: 'WS_GLI', name: 'Global Liquidity Indicators', category: 'Credit' },
+  // Debt Securities
+  { id: 'WS_DEBT_SEC2_PUB', name: 'International Debt Securities', category: 'Debt Securities' },
+  { id: 'WS_NA_SEC_DSS', name: 'Debt Securities Statistics', category: 'Debt Securities' },
+  // Banking
+  { id: 'WS_LBS_D_PUB', name: 'Locational Banking Statistics', category: 'Banking' },
+  { id: 'WS_CBS_PUB', name: 'Consolidated Banking Statistics', category: 'Banking' },
+  // Derivatives
+  { id: 'WS_OTC_DERIV2', name: 'OTC Derivatives Outstanding', category: 'Derivatives' },
+  { id: 'WS_DER_OTC_TOV', name: 'OTC Derivatives Turnover', category: 'Derivatives' },
+  { id: 'WS_XTD_DERIV', name: 'Exchange-Traded Derivatives', category: 'Derivatives' },
+  // CPMI Payment Statistics
+  { id: 'WS_CPMI_MACRO', name: 'CPMI Macro Statistics', category: 'Payments (CPMI)' },
+  { id: 'WS_CPMI_CASHLESS', name: 'CPMI Cashless Payments', category: 'Payments (CPMI)' },
+  { id: 'WS_CPMI_CT1', name: 'CPMI Comparative Tables Type 1', category: 'Payments (CPMI)' },
+  { id: 'WS_CPMI_CT2', name: 'CPMI Comparative Tables Type 2', category: 'Payments (CPMI)' },
+  { id: 'WS_CPMI_DEVICES', name: 'CPMI Payment Devices', category: 'Payments (CPMI)' },
+  { id: 'WS_CPMI_INSTITUT', name: 'CPMI Institutions', category: 'Payments (CPMI)' },
+  { id: 'WS_CPMI_PARTICIP', name: 'CPMI Participants', category: 'Payments (CPMI)' },
+  { id: 'WS_CPMI_SYSTEMS', name: 'CPMI Systems', category: 'Payments (CPMI)' },
 ];
 
 // IMF indicators
@@ -257,6 +282,150 @@ export const FED_INDICATORS: Indicator[] = [
   { id: 'market_overview', name: 'Market Overview (Recent)', category: 'Overview' },
 ];
 
+// BLS Indicators (Bureau of Labor Statistics)
+// NOTE: Use native BLS series IDs, NOT FRED aliases (e.g. CUSR0000SA0, not CPIAUCSL)
+export const BLS_INDICATORS: Indicator[] = [
+  // Consumer Price Index
+  { id: 'CUSR0000SA0', name: 'CPI All Urban Consumers: All Items (SA)', category: 'CPI' },
+  { id: 'CUUR0000SA0', name: 'CPI All Urban Consumers: All Items (NSA)', category: 'CPI' },
+  { id: 'CUSR0000SA0L1E', name: 'CPI All Items Less Food & Energy', category: 'CPI' },
+  { id: 'CUSR0000SA0E', name: 'CPI Energy', category: 'CPI' },
+  { id: 'CUSR0000SAF1', name: 'CPI Food', category: 'CPI' },
+  // Employment
+  { id: 'CES0000000001', name: 'Total Nonfarm Payrolls', category: 'Employment' },
+  { id: 'CES0500000003', name: 'Average Hourly Earnings (Private)', category: 'Employment' },
+  { id: 'CES0500000002', name: 'Average Weekly Hours (Private)', category: 'Employment' },
+  // Unemployment
+  { id: 'LNS14000000', name: 'Unemployment Rate', category: 'Unemployment' },
+  { id: 'LNS13000000', name: 'Labor Force Participation Rate', category: 'Unemployment' },
+  { id: 'LNS11300000', name: 'Employment-Population Ratio', category: 'Unemployment' },
+  // Producer Price Index
+  { id: 'WPUFD49104', name: 'PPI Final Demand', category: 'PPI' },
+  { id: 'WPUFD49116', name: 'PPI Final Demand Less Foods & Energy', category: 'PPI' },
+  // JOLTS
+  { id: 'JTS000000000000000JOL', name: 'JOLTS Job Openings', category: 'JOLTS' },
+  { id: 'JTS000000000000000HIL', name: 'JOLTS Hires', category: 'JOLTS' },
+  { id: 'JTS000000000000000TSL', name: 'JOLTS Total Separations', category: 'JOLTS' },
+  { id: 'JTS000000000000000QUL', name: 'JOLTS Quits', category: 'JOLTS' },
+  // Productivity
+  { id: 'PRS85006092', name: 'Nonfarm Business Labor Productivity', category: 'Productivity' },
+  { id: 'PRS85006112', name: 'Nonfarm Business Unit Labor Costs', category: 'Productivity' },
+  // Employment Cost Index
+  { id: 'CIU1010000000000A', name: 'ECI Total Compensation (Private)', category: 'Wages & Costs' },
+  { id: 'CIU2020000000000A', name: 'ECI Wages & Salaries (Private)', category: 'Wages & Costs' },
+];
+
+// UNESCO UIS Indicators (UNESCO Institute for Statistics)
+// Verified indicator codes from live API: https://api.uis.unesco.org/api/public
+// Uses 3-letter ISO country codes (USA, GBR, IND, etc.)
+export const UNESCO_INDICATORS: Indicator[] = [
+  // Education - Enrollment
+  { id: 'GER.1', name: 'Gross Enrolment Ratio, Primary (%)', category: 'Education' },
+  { id: 'GER.2T3', name: 'Gross Enrolment Ratio, Secondary (%)', category: 'Education' },
+  { id: 'GER.5T8', name: 'Gross Enrolment Ratio, Tertiary (%)', category: 'Education' },
+  { id: 'NER.02.CP', name: 'Net Enrolment Rate, Pre-Primary (%)', category: 'Education' },
+  // Education - Completion & Survival
+  { id: 'CR.MOD.1', name: 'Completion Rate, Primary (%)', category: 'Education' },
+  { id: 'CR.MOD.2', name: 'Completion Rate, Lower Secondary (%)', category: 'Education' },
+  { id: 'CR.MOD.3', name: 'Completion Rate, Upper Secondary (%)', category: 'Education' },
+  { id: 'SR.1.GLAST.CP', name: 'Survival Rate to Last Grade, Primary (%)', category: 'Education' },
+  // Education - Out of School
+  { id: 'ROFST.1.CP', name: 'Out-of-School Rate, Primary (%)', category: 'Education' },
+  // Literacy
+  { id: 'LR.AG15T99', name: 'Adult Literacy Rate, 15+ (%)', category: 'Literacy' },
+  { id: 'LR.AG15T24', name: 'Youth Literacy Rate, 15-24 (%)', category: 'Literacy' },
+  { id: 'LR.AG25T64', name: 'Literacy Rate, 25-64 (%)', category: 'Literacy' },
+  // Education Expenditure
+  { id: 'XGDP.FSGOV', name: 'Government Education Expenditure (% of GDP)', category: 'Education Spending' },
+  { id: 'XGDP.1.FSGOV', name: 'Primary Education Expenditure (% of GDP)', category: 'Education Spending' },
+  { id: 'XGDP.5T8.FSGOV', name: 'Tertiary Education Expenditure (% of GDP)', category: 'Education Spending' },
+  // Pupil-Teacher Ratio
+  { id: 'PTRHC.1.TRAINED', name: 'Pupil-Teacher Ratio, Primary', category: 'Teaching' },
+  { id: 'PTRHC.2T3.TRAINED', name: 'Pupil-Teacher Ratio, Secondary', category: 'Teaching' },
+  // Science, Technology & Innovation
+  { id: 'EXPGDP.TOT', name: 'R&D Expenditure (% of GDP)', category: 'Science & Tech' },
+  { id: 'RESDEN.INHAB.TFTE', name: 'Researchers per Million (FTE)', category: 'Science & Tech' },
+  { id: 'FRESP.THC', name: 'Female Researchers (% of Total)', category: 'Science & Tech' },
+  // Demographics & Economy
+  { id: '200101', name: 'Total Population (thousands)', category: 'Demographics' },
+  { id: 'NY.GDP.MKTP.CD', name: 'GDP (current US$)', category: 'Economy' },
+  { id: 'NY.GDP.MKTP.KD.ZG', name: 'GDP Growth (annual %)', category: 'Economy' },
+  { id: 'NY.GDP.PCAP.CD', name: 'GDP per Capita (current US$)', category: 'Economy' },
+];
+
+// FiscalData Indicators (U.S. Treasury FiscalData)
+// Public API: https://api.fiscaldata.treasury.gov — no API key required
+// US-only data source
+export const FISCALDATA_INDICATORS: Indicator[] = [
+  // Public Debt
+  { id: 'total_public_debt', name: 'Total Public Debt Outstanding', category: 'Debt' },
+  { id: 'debt_held_public', name: 'Debt Held by the Public', category: 'Debt' },
+  { id: 'intragov_holdings', name: 'Intragovernmental Holdings', category: 'Debt' },
+  // Average Interest Rates on Treasury Securities
+  { id: 'avg_rate_tbills', name: 'Avg Interest Rate - Treasury Bills', category: 'Interest Rates' },
+  { id: 'avg_rate_tnotes', name: 'Avg Interest Rate - Treasury Notes', category: 'Interest Rates' },
+  { id: 'avg_rate_tbonds', name: 'Avg Interest Rate - Treasury Bonds', category: 'Interest Rates' },
+  { id: 'avg_rate_tips', name: 'Avg Interest Rate - TIPS', category: 'Interest Rates' },
+  { id: 'avg_rate_frn', name: 'Avg Interest Rate - Floating Rate Notes', category: 'Interest Rates' },
+  // Interest Expense
+  { id: 'interest_expense_total', name: 'Total Interest Expense (FYTD)', category: 'Interest Expense' },
+  { id: 'interest_expense_monthly', name: 'Monthly Interest Expense', category: 'Interest Expense' },
+  // Federal Outlays by Function (MTS Table 9)
+  { id: 'outlays_health', name: 'Federal Outlays - Health (FYTD)', category: 'Outlays' },
+  { id: 'outlays_defense', name: 'Federal Outlays - National Defense (FYTD)', category: 'Outlays' },
+  { id: 'outlays_social_security', name: 'Federal Outlays - Social Security (FYTD)', category: 'Outlays' },
+  { id: 'outlays_net_interest', name: 'Federal Outlays - Net Interest (FYTD)', category: 'Outlays' },
+  { id: 'outlays_education', name: 'Federal Outlays - Education (FYTD)', category: 'Outlays' },
+  // Gold Reserve
+  { id: 'gold_reserve_total', name: 'U.S. Gold Reserve (Book Value)', category: 'Gold Reserve' },
+  { id: 'gold_reserve_ounces', name: 'U.S. Gold Reserve (Troy Ounces)', category: 'Gold Reserve' },
+];
+
+// BEA Indicators (Bureau of Economic Analysis - NIPA tables)
+// API: https://apps.bea.gov/api/data/ — requires API key (free registration)
+// US-only data source, annual frequency
+export const BEA_INDICATORS: Indicator[] = [
+  // GDP
+  { id: 'gdp_growth', name: 'Real GDP Growth (% Change)', category: 'GDP' },
+  { id: 'nominal_gdp', name: 'Nominal GDP (Billions $)', category: 'GDP' },
+  { id: 'real_gdp', name: 'Real GDP (Chained 2017 $, Billions)', category: 'GDP' },
+  { id: 'gdp_deflator', name: 'GDP Price Index', category: 'GDP' },
+  { id: 'gdp_price_change', name: 'GDP Price Change (%)', category: 'GDP' },
+  { id: 'gdp_per_capita', name: 'GDP per Capita (Current $)', category: 'GDP' },
+  // Consumption & Investment
+  { id: 'pce', name: 'Personal Consumption Expenditures (Billions $)', category: 'Consumption' },
+  { id: 'pce_goods', name: 'PCE Goods (Billions $)', category: 'Consumption' },
+  { id: 'pce_services', name: 'PCE Services (Billions $)', category: 'Consumption' },
+  { id: 'gross_investment', name: 'Gross Private Domestic Investment (Billions $)', category: 'Investment' },
+  { id: 'fixed_investment', name: 'Fixed Investment (Billions $)', category: 'Investment' },
+  // Trade
+  { id: 'net_exports', name: 'Net Exports (Billions $)', category: 'Trade' },
+  { id: 'exports', name: 'Exports of Goods & Services (Billions $)', category: 'Trade' },
+  { id: 'imports', name: 'Imports of Goods & Services (Billions $)', category: 'Trade' },
+  { id: 'current_account', name: 'Current Account Balance (Billions $)', category: 'Trade' },
+  // Income
+  { id: 'personal_income', name: 'Personal Income (Billions $)', category: 'Income' },
+  { id: 'compensation', name: 'Compensation of Employees (Billions $)', category: 'Income' },
+  { id: 'wages_salaries', name: 'Wages and Salaries (Billions $)', category: 'Income' },
+  { id: 'disposable_income', name: 'Disposable Personal Income (Billions $)', category: 'Income' },
+  { id: 'gdi', name: 'Gross Domestic Income (Billions $)', category: 'Income' },
+  // Saving
+  { id: 'personal_saving', name: 'Personal Saving (Billions $)', category: 'Saving' },
+  { id: 'saving_rate', name: 'Personal Saving Rate (%)', category: 'Saving' },
+  { id: 'gross_saving', name: 'Gross Saving (Billions $)', category: 'Saving' },
+  { id: 'net_saving', name: 'Net Saving (Billions $)', category: 'Saving' },
+  // Inflation
+  { id: 'pce_inflation', name: 'PCE Price Index (% Change)', category: 'Inflation' },
+  { id: 'core_pce_inflation', name: 'Core PCE Price Index (% Change, ex Food & Energy)', category: 'Inflation' },
+  // Government
+  { id: 'govt_spending', name: 'Government Spending (Billions $)', category: 'Government' },
+  { id: 'federal_spending', name: 'Federal Government Spending (Billions $)', category: 'Government' },
+  { id: 'defense_spending', name: 'National Defense Spending (Billions $)', category: 'Government' },
+  { id: 'govt_receipts', name: 'Government Current Receipts (Billions $)', category: 'Government' },
+  { id: 'personal_taxes', name: 'Personal Current Taxes (Billions $)', category: 'Government' },
+  { id: 'corporate_taxes', name: 'Taxes on Corporate Income (Billions $)', category: 'Government' },
+];
+
 // EIA Indicators (U.S. Energy Information Administration)
 export const EIA_INDICATORS: Indicator[] = [
   // Petroleum Status Report Categories
@@ -351,6 +520,10 @@ export const getIndicatorsForSource = (source: DataSource): Indicator[] => {
     case 'eia': return EIA_INDICATORS;
     case 'adb': return ADB_INDICATORS;
     case 'fed': return FED_INDICATORS;
+    case 'bls': return BLS_INDICATORS;
+    case 'unesco': return UNESCO_INDICATORS;
+    case 'fiscaldata': return FISCALDATA_INDICATORS;
+    case 'bea': return BEA_INDICATORS;
     default: return WORLDBANK_INDICATORS;
   }
 };
@@ -359,7 +532,7 @@ export const getIndicatorsForSource = (source: DataSource): Indicator[] => {
 export const getDefaultIndicator = (source: DataSource): string => {
   switch (source) {
     case 'worldbank': return 'NY.GDP.MKTP.CD';
-    case 'bis': return 'CBPOL_M';
+    case 'bis': return 'WS_CBPOL';
     case 'imf': return 'NGDP_RPCH';
     case 'fred': return 'GDP';
     case 'oecd': return 'GDP';
@@ -368,6 +541,10 @@ export const getDefaultIndicator = (source: DataSource): string => {
     case 'eia': return 'crude_petroleum_stocks';
     case 'adb': return 'NGDP_XDC';
     case 'fed': return 'federal_funds_rate';
+    case 'bls': return 'CUSR0000SA0';
+    case 'unesco': return 'GER.1';
+    case 'fiscaldata': return 'total_public_debt';
+    case 'bea': return 'gdp_growth';
     default: return 'NY.GDP.MKTP.CD';
   }
 };

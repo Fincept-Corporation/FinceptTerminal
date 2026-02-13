@@ -610,7 +610,107 @@ def main(args=None):
     wrapper = BEAWrapper()
 
     try:
-        if command == "dataset_list":
+        if command == "fetch":
+            # Frontend integration command: fetch <indicator_id> <start_date> <end_date>
+            if len(args) < 4:
+                print(json.dumps({"success": False, "error": "Usage: bea_data.py fetch <indicator_id> <start_date> <end_date>"}))
+                sys.exit(1)
+
+            indicator_id = args[1]
+            start_date = args[2]  # YYYY-MM-DD
+            end_date = args[3]    # YYYY-MM-DD
+
+            # Map indicator IDs to NIPA table + line number
+            INDICATOR_MAP = {
+                "gdp_growth": {"table": "T10101", "line": "1", "name": "Real GDP Growth (% Change)"},
+                "nominal_gdp": {"table": "T10105", "line": "1", "name": "Nominal GDP (Billions $)"},
+                "real_gdp": {"table": "T10106", "line": "1", "name": "Real GDP (Chained 2017 $, Billions)"},
+                "gdp_deflator": {"table": "T10104", "line": "1", "name": "GDP Price Index"},
+                "gdp_price_change": {"table": "T10107", "line": "1", "name": "GDP Price Change (%)"},
+                "pce": {"table": "T10105", "line": "2", "name": "Personal Consumption Expenditures (Billions $)"},
+                "pce_goods": {"table": "T10105", "line": "3", "name": "PCE Goods (Billions $)"},
+                "pce_services": {"table": "T10105", "line": "6", "name": "PCE Services (Billions $)"},
+                "gross_investment": {"table": "T10105", "line": "7", "name": "Gross Private Domestic Investment (Billions $)"},
+                "fixed_investment": {"table": "T10105", "line": "8", "name": "Fixed Investment (Billions $)"},
+                "net_exports": {"table": "T10105", "line": "15", "name": "Net Exports (Billions $)"},
+                "exports": {"table": "T10105", "line": "16", "name": "Exports of Goods & Services (Billions $)"},
+                "imports": {"table": "T10105", "line": "19", "name": "Imports of Goods & Services (Billions $)"},
+                "govt_spending": {"table": "T10105", "line": "22", "name": "Government Spending (Billions $)"},
+                "federal_spending": {"table": "T10105", "line": "23", "name": "Federal Government Spending (Billions $)"},
+                "defense_spending": {"table": "T10105", "line": "24", "name": "National Defense Spending (Billions $)"},
+                "personal_income": {"table": "T20100", "line": "1", "name": "Personal Income (Billions $)"},
+                "compensation": {"table": "T20100", "line": "2", "name": "Compensation of Employees (Billions $)"},
+                "wages_salaries": {"table": "T20100", "line": "3", "name": "Wages and Salaries (Billions $)"},
+                "disposable_income": {"table": "T20100", "line": "27", "name": "Disposable Personal Income (Billions $)"},
+                "personal_saving": {"table": "T20100", "line": "34", "name": "Personal Saving (Billions $)"},
+                "saving_rate": {"table": "T20100", "line": "35", "name": "Personal Saving Rate (%)"},
+                "pce_inflation": {"table": "T20301", "line": "1", "name": "PCE Price Index (% Change)"},
+                "core_pce_inflation": {"table": "T20301", "line": "25", "name": "Core PCE Price Index (% Change, ex Food & Energy)"},
+                "gdp_per_capita": {"table": "T70100", "line": "1", "name": "GDP per Capita (Current $)"},
+                "govt_receipts": {"table": "T30100", "line": "1", "name": "Government Current Receipts (Billions $)"},
+                "personal_taxes": {"table": "T30100", "line": "3", "name": "Personal Current Taxes (Billions $)"},
+                "corporate_taxes": {"table": "T30100", "line": "5", "name": "Taxes on Corporate Income (Billions $)"},
+                "current_account": {"table": "T40100", "line": "33", "name": "Current Account Balance (Billions $)"},
+                "gross_saving": {"table": "T50100", "line": "1", "name": "Gross Saving (Billions $)"},
+                "net_saving": {"table": "T50100", "line": "2", "name": "Net Saving (Billions $)"},
+                "gdi": {"table": "T11000", "line": "1", "name": "Gross Domestic Income (Billions $)"},
+            }
+
+            if indicator_id not in INDICATOR_MAP:
+                print(json.dumps({"success": False, "error": f"Unknown indicator: {indicator_id}", "available": list(INDICATOR_MAP.keys())}))
+                sys.exit(1)
+
+            config = INDICATOR_MAP[indicator_id]
+            start_year = int(start_date[:4])
+            end_year = int(end_date[:4])
+
+            # Build year list
+            years = ','.join(str(y) for y in range(start_year, end_year + 1))
+
+            params = {
+                'DatasetName': 'NIPA',
+                'TableName': config['table'],
+                'Frequency': 'A',
+                'Year': years,
+            }
+            result = wrapper._make_request('GetData', params)
+
+            if not result.get('success'):
+                print(json.dumps(result))
+                sys.exit(1)
+
+            # Filter by LineNumber
+            target_line = config['line']
+            data_points = []
+            for row in result.get('data', []):
+                if row.get('LineNumber') == target_line:
+                    try:
+                        val_str = row.get('DataValue', '').replace(',', '')
+                        if val_str and val_str not in ('...', '(NA)', 'n.a.'):
+                            value = float(val_str)
+                            period = row.get('TimePeriod', '')
+                            data_points.append({"date": period, "value": value})
+                    except (ValueError, TypeError):
+                        continue
+
+            # Sort by date
+            data_points.sort(key=lambda x: x['date'])
+
+            print(json.dumps({
+                "success": True,
+                "data": data_points,
+                "metadata": {
+                    "indicator": indicator_id,
+                    "indicator_name": config['name'],
+                    "country": "United States",
+                    "source": "BEA NIPA",
+                    "table": config['table'],
+                    "line": config['line'],
+                }
+            }))
+            sys.exit(0)
+
+        elif command == "dataset_list":
             result = wrapper.get_dataset_list()
             print(json.dumps(result, indent=2))
 

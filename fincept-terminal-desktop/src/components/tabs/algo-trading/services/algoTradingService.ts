@@ -101,6 +101,11 @@ export async function stopAllAlgoDeployments(): Promise<ApiResult<{ stopped: num
   return parseResult(raw);
 }
 
+export async function deleteAlgoDeployment(deployId: string): Promise<ApiResult> {
+  const raw = await invoke<string>('delete_algo_deployment', { deployId });
+  return parseResult(raw);
+}
+
 export async function listAlgoDeployments(): Promise<ApiResult<AlgoDeployment[]>> {
   const raw = await invoke<string>('list_algo_deployments');
   return parseResult(raw);

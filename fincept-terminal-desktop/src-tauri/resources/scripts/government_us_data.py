@@ -167,7 +167,16 @@ class GovernmentUSWrapper:
             if response.encoding != "ISO-8859-1":
                 return GovernmentUSError('treasury_prices', f'Expected ISO-8859-1 encoding but got: {response.encoding}').to_dict()
 
-            content = response.content.decode("utf-8")
+            content = response.content.decode("utf-8").strip()
+
+            # Check for empty content (no data for this date — weekend, holiday, or not yet published)
+            if not content or len(content) < 10:
+                return GovernmentUSError(
+                    'treasury_prices',
+                    f'No price data available for {date_obj.strftime("%Y-%m-%d")}. '
+                    f'Treasury prices are published end-of-day on business days only. '
+                    f'Try a previous business day.'
+                ).to_dict()
 
             # Parse CSV data using OpenBB method
             try:

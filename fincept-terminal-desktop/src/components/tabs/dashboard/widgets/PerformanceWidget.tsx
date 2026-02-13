@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
 import { sqliteService } from '@/services/core/sqliteService';
 import { useTranslation } from 'react-i18next';
+import { useCache } from '@/hooks/useCache';
 
 interface PerformanceWidgetProps {
   id: string;
@@ -18,71 +19,69 @@ interface PerformanceData {
   winRate: number;
 }
 
+interface PerformanceSummary {
+  rows: PerformanceData[];
+  totalPnL: number;
+}
+
+const DEMO_DATA: PerformanceSummary = {
+  rows: [
+    { period: 'Today', pnl: 1245.50, pnlPercent: 0.45, trades: 3, winRate: 66.7 },
+    { period: 'This Week', pnl: 5230.25, pnlPercent: 1.82, trades: 12, winRate: 58.3 },
+    { period: 'This Month', pnl: 15890.00, pnlPercent: 5.43, trades: 45, winRate: 62.2 },
+    { period: 'YTD', pnl: 52430.75, pnlPercent: 18.7, trades: 156, winRate: 59.6 },
+    { period: 'All Time', pnl: 125430.50, pnlPercent: 25.4, trades: 423, winRate: 57.9 }
+  ],
+  totalPnL: 125430.50
+};
+
 export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   id,
   onRemove,
   onNavigate
 }) => {
   const { t } = useTranslation('dashboard');
-  const [performance, setPerformance] = useState<PerformanceData[]>([]);
-  const [totalPnL, setTotalPnL] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadPerformance = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const {
+    data: perfData,
+    isLoading: loading,
+    error,
+    refresh
+  } = useCache<PerformanceSummary>({
+    key: 'widget:performance-tracker',
+    category: 'portfolio',
+    ttl: '1m',
+    refetchInterval: 60 * 1000,
+    staleWhileRevalidate: true,
+    fetcher: async () => {
+      try {
+        const portfolios = await sqliteService.listPortfolios();
 
-      // Try to load real portfolio performance
-      const portfolios = await sqliteService.listPortfolios();
+        if (portfolios && portfolios.length > 0) {
+          const portfolio = portfolios[0] as any;
+          const gain = portfolio?.total_pnl || portfolio?.totalPnL || 0;
+          const initialBalance = portfolio?.initial_balance || 100000;
+          const gainPercent = initialBalance > 0 ? (gain / initialBalance) * 100 : 0;
 
-      if (portfolios && portfolios.length > 0) {
-        const portfolio = portfolios[0] as any;
-        const gain = portfolio?.total_pnl || portfolio?.totalPnL || 0;
-
-        const initialBalance = portfolio?.initial_balance || 100000;
-        const gainPercent = initialBalance > 0 ? (gain / initialBalance) * 100 : 0;
-
-        setPerformance([
-          { period: 'Today', pnl: gain * 0.02, pnlPercent: gainPercent * 0.02, trades: 3, winRate: 66.7 },
-          { period: 'This Week', pnl: gain * 0.08, pnlPercent: gainPercent * 0.08, trades: 12, winRate: 58.3 },
-          { period: 'This Month', pnl: gain * 0.25, pnlPercent: gainPercent * 0.25, trades: 45, winRate: 62.2 },
-          { period: 'YTD', pnl: gain * 0.85, pnlPercent: gainPercent * 0.85, trades: 156, winRate: 59.6 },
-          { period: 'All Time', pnl: gain, pnlPercent: gainPercent, trades: 423, winRate: 57.9 }
-        ]);
-        setTotalPnL(gain);
-      } else {
-        // Demo data
-        setPerformance([
-          { period: 'Today', pnl: 1245.50, pnlPercent: 0.45, trades: 3, winRate: 66.7 },
-          { period: 'This Week', pnl: 5230.25, pnlPercent: 1.82, trades: 12, winRate: 58.3 },
-          { period: 'This Month', pnl: 15890.00, pnlPercent: 5.43, trades: 45, winRate: 62.2 },
-          { period: 'YTD', pnl: 52430.75, pnlPercent: 18.7, trades: 156, winRate: 59.6 },
-          { period: 'All Time', pnl: 125430.50, pnlPercent: 25.4, trades: 423, winRate: 57.9 }
-        ]);
-        setTotalPnL(125430.50);
+          return {
+            rows: [
+              { period: 'Today', pnl: gain * 0.02, pnlPercent: gainPercent * 0.02, trades: 3, winRate: 66.7 },
+              { period: 'This Week', pnl: gain * 0.08, pnlPercent: gainPercent * 0.08, trades: 12, winRate: 58.3 },
+              { period: 'This Month', pnl: gain * 0.25, pnlPercent: gainPercent * 0.25, trades: 45, winRate: 62.2 },
+              { period: 'YTD', pnl: gain * 0.85, pnlPercent: gainPercent * 0.85, trades: 156, winRate: 59.6 },
+              { period: 'All Time', pnl: gain, pnlPercent: gainPercent, trades: 423, winRate: 57.9 }
+            ],
+            totalPnL: gain
+          };
+        }
+        return DEMO_DATA;
+      } catch {
+        return DEMO_DATA;
       }
-    } catch (err) {
-      // Demo data on error
-      setPerformance([
-        { period: 'Today', pnl: 1245.50, pnlPercent: 0.45, trades: 3, winRate: 66.7 },
-        { period: 'This Week', pnl: 5230.25, pnlPercent: 1.82, trades: 12, winRate: 58.3 },
-        { period: 'This Month', pnl: 15890.00, pnlPercent: 5.43, trades: 45, winRate: 62.2 },
-        { period: 'YTD', pnl: 52430.75, pnlPercent: 18.7, trades: 156, winRate: 59.6 },
-        { period: 'All Time', pnl: 125430.50, pnlPercent: 25.4, trades: 423, winRate: 57.9 }
-      ]);
-      setTotalPnL(125430.50);
-    } finally {
-      setLoading(false);
     }
-  };
+  });
 
-  useEffect(() => {
-    loadPerformance();
-    const interval = setInterval(loadPerformance, 60000);
-    return () => clearInterval(interval);
-  }, []);
+  const { rows: performance, totalPnL } = perfData || DEMO_DATA;
 
   const formatCurrency = (value: number) => {
     const absValue = Math.abs(value);
@@ -100,9 +99,9 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       id={id}
       title={t('widgets.performanceTracker')}
       onRemove={onRemove}
-      onRefresh={loadPerformance}
-      isLoading={loading}
-      error={error}
+      onRefresh={refresh}
+      isLoading={loading && !perfData}
+      error={error?.message || null}
       headerColor={totalPnL >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)'}
     >
       <div style={{ padding: '4px' }}>
@@ -161,7 +160,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
         </div>
 
         {/* Performance rows */}
-        {performance.map((perf, idx) => (
+        {performance.map((perf) => (
           <div
             key={perf.period}
             style={{

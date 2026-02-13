@@ -16,7 +16,7 @@ export interface IndicatorData {
   };
 }
 
-export type DataSource = 'worldbank' | 'bis' | 'imf' | 'fred' | 'oecd' | 'wto' | 'cftc' | 'eia' | 'adb' | 'fed';
+export type DataSource = 'worldbank' | 'bis' | 'imf' | 'fred' | 'oecd' | 'wto' | 'cftc' | 'eia' | 'adb' | 'fed' | 'bls' | 'unesco' | 'fiscaldata' | 'bea';
 
 export interface DataSourceConfig {
   id: DataSource;

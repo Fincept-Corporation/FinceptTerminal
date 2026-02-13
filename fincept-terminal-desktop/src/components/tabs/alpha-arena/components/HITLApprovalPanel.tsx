@@ -9,7 +9,7 @@ import React, { useState, useReducer, useRef, useEffect } from 'react';
 import {
   Shield, AlertTriangle, Check, X, Clock, RefreshCw,
   Settings, ChevronDown, ChevronUp, Loader2,
-  AlertCircle, CheckCircle, Info,
+  AlertCircle, CheckCircle,
 } from 'lucide-react';
 import { withErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useCache, cacheKey } from '@/hooks/useCache';
@@ -19,7 +19,7 @@ import {
   type HITLStatus,
 } from '../services/alphaArenaEnhancedService';
 
-const COLORS = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -30,15 +30,19 @@ const COLORS = {
   GRAY: '#787878',
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
   CARD_BG: '#0A0A0A',
   BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
 };
 
+const TERMINAL_FONT = '"IBM Plex Mono", "Consolas", monospace';
+
 const RISK_COLORS: Record<string, string> = {
-  low: COLORS.GREEN,
-  medium: COLORS.YELLOW,
-  high: COLORS.ORANGE,
-  critical: COLORS.RED,
+  low: FINCEPT.GREEN,
+  medium: FINCEPT.YELLOW,
+  high: FINCEPT.ORANGE,
+  critical: FINCEPT.RED,
 };
 
 interface HITLApprovalPanelProps {
@@ -73,6 +77,13 @@ interface HITLData {
   pending_approvals: ApprovalRequest[];
 }
 
+const HITL_STYLES = `
+  .hitl-panel *::-webkit-scrollbar { width: 6px; height: 6px; }
+  .hitl-panel *::-webkit-scrollbar-track { background: #000000; }
+  .hitl-panel *::-webkit-scrollbar-thumb { background: #2A2A2A; }
+  @keyframes hitl-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+`;
+
 const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
   competitionId,
   onApprovalChange,
@@ -81,6 +92,7 @@ const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
   const [expandedApproval, setExpandedApproval] = useState<string | null>(null);
   const [actionState, dispatchAction] = useReducer(actionReducer, { status: 'idle' });
   const mountedRef = useRef(true);
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -180,44 +192,78 @@ const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
   const error = actionState.status === 'error' ? actionState.error : fetchError?.message || null;
 
   return (
-    <div
-      className="rounded-lg overflow-hidden"
-      style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}
-    >
+    <div className="hitl-panel" style={{
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+      overflow: 'hidden',
+      fontFamily: TERMINAL_FONT,
+    }}>
+      <style>{HITL_STYLES}</style>
+
       {/* Header */}
-      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
-        <div className="flex items-center gap-2">
-          <Shield size={16} style={{ color: COLORS.ORANGE }} />
-          <span className="font-semibold text-sm" style={{ color: COLORS.WHITE }}>
-            HITL Approval
+      <div style={{
+        padding: '10px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Shield size={16} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ fontWeight: 600, fontSize: '12px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+            HITL APPROVAL
           </span>
           {pendingApprovals.length > 0 && (
-            <span
-              className="px-2 py-0.5 rounded-full text-xs font-medium"
-              style={{ backgroundColor: COLORS.RED + '20', color: COLORS.RED }}
-            >
-              {pendingApprovals.length} pending
+            <span style={{
+              padding: '1px 8px',
+              fontSize: '10px',
+              fontWeight: 600,
+              backgroundColor: FINCEPT.RED + '20',
+              color: FINCEPT.RED,
+              fontFamily: TERMINAL_FONT,
+            }}>
+              {pendingApprovals.length} PENDING
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
+            onMouseEnter={() => setHoveredBtn('settings')}
+            onMouseLeave={() => setHoveredBtn(null)}
+            style={{
+              padding: '4px',
+              backgroundColor: hoveredBtn === 'settings' ? FINCEPT.HOVER : 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
             title="Settings"
           >
-            <Settings size={14} style={{ color: COLORS.GRAY }} />
+            <Settings size={14} style={{ color: FINCEPT.GRAY }} />
           </button>
           <button
             onClick={() => hitlCache.refresh()}
             disabled={isLoading}
-            className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
+            onMouseEnter={() => setHoveredBtn('refresh')}
+            onMouseLeave={() => setHoveredBtn(null)}
+            style={{
+              padding: '4px',
+              backgroundColor: hoveredBtn === 'refresh' ? FINCEPT.HOVER : 'transparent',
+              border: 'none',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
             title="Refresh"
           >
             <RefreshCw
               size={14}
-              className={isLoading ? 'animate-spin' : ''}
-              style={{ color: COLORS.GRAY }}
+              style={{
+                color: FINCEPT.GRAY,
+                animation: isLoading ? 'hitl-spin 1s linear infinite' : 'none',
+              }}
             />
           </button>
         </div>
@@ -225,41 +271,75 @@ const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
 
       {/* Error */}
       {error && (
-        <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '10' }}>
-          <AlertCircle size={14} style={{ color: COLORS.RED }} />
-          <span className="text-xs" style={{ color: COLORS.RED }}>{error}</span>
-          <button onClick={() => dispatchAction({ type: 'CLEAR_ERROR' })} className="ml-auto">
-            <X size={12} style={{ color: COLORS.RED }} />
+        <div style={{
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          backgroundColor: FINCEPT.RED + '10',
+        }}>
+          <AlertCircle size={14} style={{ color: FINCEPT.RED }} />
+          <span style={{ fontSize: '11px', color: FINCEPT.RED, fontFamily: TERMINAL_FONT }}>{error}</span>
+          <button
+            onClick={() => dispatchAction({ type: 'CLEAR_ERROR' })}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <X size={12} style={{ color: FINCEPT.RED }} />
           </button>
         </div>
       )}
 
       {/* Settings Panel */}
       {showSettings && hitlStatus && (
-        <div className="px-4 py-3 border-b" style={{ borderColor: COLORS.BORDER, backgroundColor: COLORS.CARD_BG }}>
-          <h4 className="text-xs font-medium mb-2" style={{ color: COLORS.GRAY }}>Approval Rules</h4>
-          <div className="space-y-2">
+        <div style={{
+          padding: '12px 16px',
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.CARD_BG,
+        }}>
+          <div style={{ fontSize: '10px', fontWeight: 500, marginBottom: '8px', color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+            APPROVAL RULES
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {hitlStatus.rules.map(rule => (
-              <div key={rule.name} className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs" style={{ color: COLORS.WHITE }}>{rule.name}</span>
-                    <span
-                      className="text-xs px-1.5 py-0.5 rounded"
-                      style={{ backgroundColor: RISK_COLORS[rule.risk_level] + '20', color: RISK_COLORS[rule.risk_level] }}
-                    >
-                      {rule.risk_level}
+              <div key={rule.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '11px', color: FINCEPT.WHITE, fontFamily: TERMINAL_FONT }}>{rule.name}</span>
+                    <span style={{
+                      fontSize: '9px',
+                      padding: '1px 6px',
+                      backgroundColor: RISK_COLORS[rule.risk_level] + '20',
+                      color: RISK_COLORS[rule.risk_level],
+                      fontFamily: TERMINAL_FONT,
+                    }}>
+                      {rule.risk_level.toUpperCase()}
                     </span>
                   </div>
-                  <p className="text-xs truncate" style={{ color: COLORS.GRAY }}>{rule.description}</p>
+                  <p style={{ fontSize: '10px', color: FINCEPT.GRAY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {rule.description}
+                  </p>
                 </div>
                 <button
                   onClick={() => handleToggleRule(rule.name, rule.enabled)}
-                  className={`w-10 h-5 rounded-full transition-colors relative ${rule.enabled ? 'bg-green-500' : 'bg-gray-600'}`}
+                  style={{
+                    width: '36px',
+                    height: '18px',
+                    backgroundColor: rule.enabled ? FINCEPT.GREEN : '#444',
+                    border: 'none',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    flexShrink: 0,
+                  }}
                 >
-                  <div
-                    className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${rule.enabled ? 'translate-x-5' : 'translate-x-0.5'}`}
-                  />
+                  <div style={{
+                    width: '14px',
+                    height: '14px',
+                    backgroundColor: FINCEPT.WHITE,
+                    position: 'absolute',
+                    top: '2px',
+                    left: rule.enabled ? '20px' : '2px',
+                    transition: 'left 0.2s',
+                  }} />
                 </button>
               </div>
             ))}
@@ -268,126 +348,178 @@ const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
       )}
 
       {/* Pending Approvals */}
-      <div className="max-h-80 overflow-y-auto">
+      <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
         {pendingApprovals.length === 0 ? (
-          <div className="p-8 text-center">
-            <CheckCircle size={32} className="mx-auto mb-2" style={{ color: COLORS.GREEN, opacity: 0.5 }} />
-            <p className="text-sm" style={{ color: COLORS.GRAY }}>No pending approvals</p>
-            <p className="text-xs mt-1" style={{ color: COLORS.GRAY }}>All trading decisions approved or auto-approved</p>
+          <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+            <CheckCircle size={32} style={{ color: FINCEPT.GREEN, opacity: 0.5, margin: '0 auto 8px' }} />
+            <p style={{ fontSize: '12px', color: FINCEPT.GRAY }}>No pending approvals</p>
+            <p style={{ fontSize: '10px', marginTop: '4px', color: FINCEPT.GRAY }}>
+              All trading decisions approved or auto-approved
+            </p>
           </div>
         ) : (
-          <div className="divide-y" style={{ borderColor: COLORS.BORDER }}>
-            {pendingApprovals.map(approval => (
-              <div key={approval.id} className="p-3">
+          <div>
+            {pendingApprovals.map((approval, idx) => (
+              <div key={approval.id} style={{
+                padding: '12px',
+                borderBottom: idx < pendingApprovals.length - 1 ? `1px solid ${FINCEPT.BORDER}` : 'none',
+              }}>
                 {/* Header */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle
-                      size={14}
-                      style={{ color: RISK_COLORS[approval.risk_level] }}
-                    />
-                    <span className="text-xs font-medium" style={{ color: COLORS.WHITE }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <AlertTriangle size={14} style={{ color: RISK_COLORS[approval.risk_level] }} />
+                    <span style={{ fontSize: '11px', fontWeight: 500, color: FINCEPT.WHITE, fontFamily: TERMINAL_FONT }}>
                       {approval.decision.model_name}
                     </span>
-                    <span
-                      className="text-xs px-1.5 py-0.5 rounded font-medium"
-                      style={{
-                        backgroundColor: approval.decision.action === 'buy' ? COLORS.GREEN + '20' :
-                          approval.decision.action === 'sell' ? COLORS.RED + '20' : COLORS.GRAY + '20',
-                        color: approval.decision.action === 'buy' ? COLORS.GREEN :
-                          approval.decision.action === 'sell' ? COLORS.RED : COLORS.GRAY,
-                      }}
-                    >
+                    <span style={{
+                      fontSize: '10px',
+                      padding: '1px 6px',
+                      fontWeight: 500,
+                      fontFamily: TERMINAL_FONT,
+                      backgroundColor: approval.decision.action === 'buy' ? FINCEPT.GREEN + '20' :
+                        approval.decision.action === 'sell' ? FINCEPT.RED + '20' : FINCEPT.GRAY + '20',
+                      color: approval.decision.action === 'buy' ? FINCEPT.GREEN :
+                        approval.decision.action === 'sell' ? FINCEPT.RED : FINCEPT.GRAY,
+                    }}>
                       {approval.decision.action.toUpperCase()}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-xs" style={{ color: COLORS.GRAY }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: FINCEPT.GRAY }}>
                     <Clock size={10} />
                     {getTimeRemaining(approval.expires_at)}
                   </div>
                 </div>
 
                 {/* Trade Details */}
-                <div className="grid grid-cols-3 gap-2 mb-2 text-xs">
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr 1fr',
+                  gap: '8px',
+                  marginBottom: '8px',
+                  fontSize: '11px',
+                }}>
                   <div>
-                    <span style={{ color: COLORS.GRAY }}>Symbol: </span>
-                    <span style={{ color: COLORS.WHITE }}>{approval.decision.symbol}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>Symbol: </span>
+                    <span style={{ color: FINCEPT.WHITE }}>{approval.decision.symbol}</span>
                   </div>
                   <div>
-                    <span style={{ color: COLORS.GRAY }}>Qty: </span>
-                    <span style={{ color: COLORS.WHITE }}>{approval.decision.quantity.toFixed(4)}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>Qty: </span>
+                    <span style={{ color: FINCEPT.WHITE }}>{approval.decision.quantity.toFixed(4)}</span>
                   </div>
                   <div>
-                    <span style={{ color: COLORS.GRAY }}>Conf: </span>
-                    <span style={{ color: COLORS.WHITE }}>{(approval.decision.confidence * 100).toFixed(0)}%</span>
+                    <span style={{ color: FINCEPT.GRAY }}>Conf: </span>
+                    <span style={{ color: FINCEPT.WHITE }}>{(approval.decision.confidence * 100).toFixed(0)}%</span>
                   </div>
                 </div>
 
                 {/* Risk Level */}
-                <div
-                  className="text-xs px-2 py-1 rounded mb-2"
-                  style={{
-                    backgroundColor: RISK_COLORS[approval.risk_level] + '10',
-                    color: RISK_COLORS[approval.risk_level],
-                  }}
-                >
-                  {approval.reason.split('\n').slice(0, 2).join(' • ')}
+                <div style={{
+                  fontSize: '10px',
+                  padding: '4px 8px',
+                  marginBottom: '8px',
+                  backgroundColor: RISK_COLORS[approval.risk_level] + '10',
+                  color: RISK_COLORS[approval.risk_level],
+                  fontFamily: TERMINAL_FONT,
+                }}>
+                  {approval.reason.split('\n').slice(0, 2).join(' | ')}
                 </div>
 
                 {/* Expandable Reasoning */}
                 <button
                   onClick={() => setExpandedApproval(expandedApproval === approval.id ? null : approval.id)}
-                  className="flex items-center gap-1 text-xs mb-2"
-                  style={{ color: COLORS.GRAY }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '10px',
+                    marginBottom: '8px',
+                    color: FINCEPT.GRAY,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: TERMINAL_FONT,
+                    padding: 0,
+                  }}
                 >
                   {expandedApproval === approval.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                   {expandedApproval === approval.id ? 'Hide' : 'Show'} reasoning
                 </button>
 
                 {expandedApproval === approval.id && (
-                  <div
-                    className="text-xs p-2 rounded mb-2"
-                    style={{ backgroundColor: COLORS.CARD_BG, color: COLORS.GRAY }}
-                  >
+                  <div style={{
+                    fontSize: '10px',
+                    padding: '8px',
+                    marginBottom: '8px',
+                    backgroundColor: FINCEPT.CARD_BG,
+                    color: FINCEPT.GRAY,
+                    fontFamily: TERMINAL_FONT,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                  }}>
                     {approval.decision.reasoning || 'No reasoning provided'}
                   </div>
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={() => handleApprove(approval.id)}
                     disabled={isProcessing === approval.id}
-                    className="flex-1 py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1"
+                    onMouseEnter={() => setHoveredBtn(`approve-${approval.id}`)}
+                    onMouseLeave={() => setHoveredBtn(null)}
                     style={{
-                      backgroundColor: COLORS.GREEN,
-                      color: COLORS.DARK_BG,
+                      flex: 1,
+                      padding: '6px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      fontFamily: TERMINAL_FONT,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      backgroundColor: FINCEPT.GREEN,
+                      color: FINCEPT.DARK_BG,
+                      border: 'none',
+                      cursor: isProcessing === approval.id ? 'not-allowed' : 'pointer',
                       opacity: isProcessing === approval.id ? 0.5 : 1,
+                      letterSpacing: '0.5px',
                     }}
                   >
                     {isProcessing === approval.id ? (
-                      <Loader2 size={12} className="animate-spin" />
+                      <Loader2 size={12} style={{ animation: 'hitl-spin 1s linear infinite' }} />
                     ) : (
                       <Check size={12} />
                     )}
-                    Approve
+                    APPROVE
                   </button>
                   <button
                     onClick={() => handleReject(approval.id)}
                     disabled={isProcessing === approval.id}
-                    className="flex-1 py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1"
+                    onMouseEnter={() => setHoveredBtn(`reject-${approval.id}`)}
+                    onMouseLeave={() => setHoveredBtn(null)}
                     style={{
-                      backgroundColor: COLORS.RED,
-                      color: COLORS.WHITE,
+                      flex: 1,
+                      padding: '6px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      fontFamily: TERMINAL_FONT,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      backgroundColor: FINCEPT.RED,
+                      color: FINCEPT.WHITE,
+                      border: 'none',
+                      cursor: isProcessing === approval.id ? 'not-allowed' : 'pointer',
                       opacity: isProcessing === approval.id ? 0.5 : 1,
+                      letterSpacing: '0.5px',
                     }}
                   >
                     {isProcessing === approval.id ? (
-                      <Loader2 size={12} className="animate-spin" />
+                      <Loader2 size={12} style={{ animation: 'hitl-spin 1s linear infinite' }} />
                     ) : (
                       <X size={12} />
                     )}
-                    Reject
+                    REJECT
                   </button>
                 </div>
               </div>
@@ -398,11 +530,19 @@ const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
 
       {/* Footer Stats */}
       {hitlStatus && (
-        <div className="px-4 py-2 border-t flex items-center justify-between text-xs" style={{ borderColor: COLORS.BORDER }}>
-          <span style={{ color: COLORS.GRAY }}>
+        <div style={{
+          padding: '6px 16px',
+          borderTop: `1px solid ${FINCEPT.BORDER}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '9px',
+          backgroundColor: FINCEPT.HEADER_BG,
+        }}>
+          <span style={{ color: FINCEPT.GRAY }}>
             Rules: {hitlStatus.rules.filter(r => r.enabled).length}/{hitlStatus.rules.length} active
           </span>
-          <span style={{ color: COLORS.GRAY }}>
+          <span style={{ color: FINCEPT.GRAY }}>
             History: {hitlStatus.history_count} decisions
           </span>
         </div>

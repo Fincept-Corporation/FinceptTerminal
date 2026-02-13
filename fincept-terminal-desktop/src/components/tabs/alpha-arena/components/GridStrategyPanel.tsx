@@ -7,9 +7,9 @@
 
 import React, { useState, useEffect, useReducer, useRef } from 'react';
 import {
-  Grid3X3, Settings, RefreshCw, Play, Pause, AlertTriangle,
-  TrendingUp, TrendingDown, DollarSign, Loader2, Info,
-  ChevronDown, ChevronUp, Plus, Trash2, Check,
+  Grid3X3, RefreshCw, Play, AlertTriangle,
+  Loader2, Info,
+  ChevronDown, ChevronUp, Plus, Check,
 } from 'lucide-react';
 import { withErrorBoundary } from '@/components/common/ErrorBoundary';
 import {
@@ -17,7 +17,7 @@ import {
   type GridConfig,
 } from '../services/alphaArenaEnhancedService';
 
-const COLORS = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -28,9 +28,20 @@ const COLORS = {
   GRAY: '#787878',
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
   CARD_BG: '#0A0A0A',
   BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
 };
+
+const TERMINAL_FONT = '"IBM Plex Mono", "Consolas", monospace';
+
+const GRID_STYLES = `
+  .grid-panel *::-webkit-scrollbar { width: 6px; height: 6px; }
+  .grid-panel *::-webkit-scrollbar-track { background: #000000; }
+  .grid-panel *::-webkit-scrollbar-thumb { background: #2A2A2A; }
+  @keyframes grid-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+`;
 
 interface GridStrategyPanelProps {
   symbol?: string;
@@ -80,6 +91,7 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
   const [createState, dispatchCreate] = useReducer(createReducer, { status: 'idle' });
   const [activeGrids, setActiveGrids] = useState<GridAgentStatus[]>([]);
   const mountedRef = useRef(true);
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -131,7 +143,6 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
   const handleCreateGrid = async () => {
     if (createState.status === 'creating') return;
 
-    // Validate grid config
     if (!gridName.trim()) {
       dispatchCreate({ type: 'CREATE_ERROR', error: 'Please enter a name for the grid strategy' });
       return;
@@ -161,7 +172,6 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
         setGridName('');
         onGridCreated?.(gridName);
 
-        // Add to active grids
         setActiveGrids(prev => [...prev, {
           name: gridName,
           symbol: gridConfig.symbol,
@@ -210,7 +220,7 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
     const range = maxPrice - minPrice;
 
     return (
-      <div className="relative h-32 my-2">
+      <div style={{ position: 'relative', height: '128px', margin: '8px 0' }}>
         {levels.map((level, idx) => {
           const position = ((maxPrice - level) / range) * 100;
           const isTriggered = triggeredLevels.includes(level);
@@ -219,39 +229,48 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
           return (
             <div
               key={idx}
-              className="absolute left-0 right-0 flex items-center"
-              style={{ top: `${position}%` }}
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                display: 'flex',
+                alignItems: 'center',
+                top: `${position}%`,
+              }}
             >
-              <div
-                className="h-0.5 flex-1"
-                style={{
-                  backgroundColor: isTriggered ? COLORS.GREEN : isCurrentPrice ? COLORS.ORANGE : COLORS.BORDER,
-                }}
-              />
-              <span
-                className="text-xs ml-2 w-16 text-right"
-                style={{
-                  color: isTriggered ? COLORS.GREEN : isCurrentPrice ? COLORS.ORANGE : COLORS.GRAY,
-                }}
-              >
+              <div style={{
+                height: '1px',
+                flex: 1,
+                backgroundColor: isTriggered ? FINCEPT.GREEN : isCurrentPrice ? FINCEPT.ORANGE : FINCEPT.BORDER,
+              }} />
+              <span style={{
+                fontSize: '10px',
+                marginLeft: '8px',
+                width: '64px',
+                textAlign: 'right',
+                fontFamily: TERMINAL_FONT,
+                color: isTriggered ? FINCEPT.GREEN : isCurrentPrice ? FINCEPT.ORANGE : FINCEPT.GRAY,
+              }}>
                 ${level.toFixed(0)}
               </span>
             </div>
           );
         })}
         {/* Current price indicator */}
-        <div
-          className="absolute left-0 flex items-center"
-          style={{
-            top: `${((maxPrice - currentPrice) / range) * 100}%`,
-            transform: 'translateY(-50%)',
-          }}
-        >
-          <div
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: COLORS.ORANGE }}
-          />
-          <span className="text-xs ml-1" style={{ color: COLORS.ORANGE }}>
+        <div style={{
+          position: 'absolute',
+          left: 0,
+          display: 'flex',
+          alignItems: 'center',
+          top: `${((maxPrice - currentPrice) / range) * 100}%`,
+          transform: 'translateY(-50%)',
+        }}>
+          <div style={{
+            width: '6px',
+            height: '6px',
+            backgroundColor: FINCEPT.ORANGE,
+          }} />
+          <span style={{ fontSize: '10px', marginLeft: '4px', color: FINCEPT.ORANGE, fontFamily: TERMINAL_FONT }}>
             Current
           </span>
         </div>
@@ -259,262 +278,334 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
     );
   };
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '6px 8px',
+    fontSize: '11px',
+    fontFamily: TERMINAL_FONT,
+    backgroundColor: FINCEPT.DARK_BG,
+    color: FINCEPT.WHITE,
+    border: `1px solid ${FINCEPT.BORDER}`,
+    outline: 'none',
+  };
+
   return (
-    <div
-      className="rounded-lg overflow-hidden"
-      style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}
-    >
+    <div className="grid-panel" style={{
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+      overflow: 'hidden',
+      fontFamily: TERMINAL_FONT,
+    }}>
+      <style>{GRID_STYLES}</style>
+
       {/* Header */}
-      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
-        <div className="flex items-center gap-2">
-          <Grid3X3 size={16} style={{ color: COLORS.BLUE }} />
-          <span className="font-semibold text-sm" style={{ color: COLORS.WHITE }}>
-            Grid Trading
+      <div style={{
+        padding: '10px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Grid3X3 size={16} style={{ color: FINCEPT.BLUE }} />
+          <span style={{ fontWeight: 600, fontSize: '12px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+            GRID TRADING
           </span>
           {activeGrids.length > 0 && (
-            <span
-              className="px-2 py-0.5 rounded-full text-xs"
-              style={{ backgroundColor: COLORS.BLUE + '20', color: COLORS.BLUE }}
-            >
+            <span style={{
+              padding: '1px 8px',
+              fontSize: '10px',
+              backgroundColor: FINCEPT.BLUE + '20',
+              color: FINCEPT.BLUE,
+              fontFamily: TERMINAL_FONT,
+            }}>
               {activeGrids.length} active
             </span>
           )}
         </div>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
+          onMouseEnter={() => setHoveredBtn('add')}
+          onMouseLeave={() => setHoveredBtn(null)}
+          style={{
+            padding: '4px',
+            backgroundColor: hoveredBtn === 'add' ? FINCEPT.HOVER : 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+          }}
         >
-          <Plus size={14} style={{ color: COLORS.GRAY }} />
+          <Plus size={14} style={{ color: FINCEPT.GRAY }} />
         </button>
       </div>
 
       {/* Messages */}
       {createState.status === 'error' && (
-        <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '10' }}>
-          <AlertTriangle size={14} style={{ color: COLORS.RED }} />
-          <span className="text-xs" style={{ color: COLORS.RED }}>{createState.error}</span>
+        <div style={{
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          backgroundColor: FINCEPT.RED + '10',
+        }}>
+          <AlertTriangle size={14} style={{ color: FINCEPT.RED }} />
+          <span style={{ fontSize: '11px', color: FINCEPT.RED, fontFamily: TERMINAL_FONT }}>{createState.error}</span>
         </div>
       )}
       {createState.status === 'success' && (
-        <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: COLORS.GREEN + '10' }}>
-          <Check size={14} style={{ color: COLORS.GREEN }} />
-          <span className="text-xs" style={{ color: COLORS.GREEN }}>{createState.message}</span>
+        <div style={{
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          backgroundColor: FINCEPT.GREEN + '10',
+        }}>
+          <Check size={14} style={{ color: FINCEPT.GREEN }} />
+          <span style={{ fontSize: '11px', color: FINCEPT.GREEN, fontFamily: TERMINAL_FONT }}>{createState.message}</span>
         </div>
       )}
 
       {/* Create Form */}
       {showCreateForm && (
-        <div className="px-4 py-3 border-b" style={{ borderColor: COLORS.BORDER, backgroundColor: COLORS.CARD_BG }}>
-          <h4 className="text-xs font-medium mb-3" style={{ color: COLORS.WHITE }}>Create Grid Strategy</h4>
+        <div style={{
+          padding: '12px 16px',
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.CARD_BG,
+        }}>
+          <div style={{ fontSize: '11px', fontWeight: 500, marginBottom: '12px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+            CREATE GRID STRATEGY
+          </div>
 
           {/* Name Input */}
-          <div className="mb-3">
-            <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Strategy Name</label>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ fontSize: '10px', marginBottom: '4px', display: 'block', color: FINCEPT.GRAY }}>Strategy Name</label>
             <input
               type="text"
               value={gridName}
               onChange={(e) => setGridName(e.target.value)}
               placeholder="My Grid Strategy"
-              className="w-full px-2 py-1.5 rounded text-xs"
-              style={{
-                backgroundColor: COLORS.DARK_BG,
-                color: COLORS.WHITE,
-                border: `1px solid ${COLORS.BORDER}`,
-              }}
+              style={inputStyle}
             />
           </div>
 
           {/* Price Range */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
             <div>
-              <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Lower Price</label>
+              <label style={{ fontSize: '10px', marginBottom: '4px', display: 'block', color: FINCEPT.GRAY }}>Lower Price</label>
               <input
                 type="text"
                 inputMode="decimal"
                 value={gridConfig.lower_price}
                 onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setGridConfig(prev => ({ ...prev, lower_price: parseFloat(v) || 0 })); }}
-                className="w-full px-2 py-1.5 rounded text-xs"
-                style={{
-                  backgroundColor: COLORS.DARK_BG,
-                  color: COLORS.WHITE,
-                  border: `1px solid ${COLORS.BORDER}`,
-                }}
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Upper Price</label>
+              <label style={{ fontSize: '10px', marginBottom: '4px', display: 'block', color: FINCEPT.GRAY }}>Upper Price</label>
               <input
                 type="text"
                 inputMode="decimal"
                 value={gridConfig.upper_price}
                 onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setGridConfig(prev => ({ ...prev, upper_price: parseFloat(v) || 0 })); }}
-                className="w-full px-2 py-1.5 rounded text-xs"
-                style={{
-                  backgroundColor: COLORS.DARK_BG,
-                  color: COLORS.WHITE,
-                  border: `1px solid ${COLORS.BORDER}`,
-                }}
+                style={inputStyle}
               />
             </div>
           </div>
 
           {/* Grid Settings */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
             <div>
-              <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Number of Grids</label>
+              <label style={{ fontSize: '10px', marginBottom: '4px', display: 'block', color: FINCEPT.GRAY }}>Number of Grids</label>
               <input
                 type="text"
                 inputMode="numeric"
                 value={gridConfig.num_grids}
                 onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setGridConfig(prev => ({ ...prev, num_grids: Math.min(parseInt(v) || 5, 50) })); }}
-                className="w-full px-2 py-1.5 rounded text-xs"
-                style={{
-                  backgroundColor: COLORS.DARK_BG,
-                  color: COLORS.WHITE,
-                  border: `1px solid ${COLORS.BORDER}`,
-                }}
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Qty per Grid</label>
+              <label style={{ fontSize: '10px', marginBottom: '4px', display: 'block', color: FINCEPT.GRAY }}>Qty per Grid</label>
               <input
                 type="text"
                 inputMode="decimal"
                 value={gridConfig.quantity_per_grid}
                 onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setGridConfig(prev => ({ ...prev, quantity_per_grid: parseFloat(v) || 0.001 })); }}
-                className="w-full px-2 py-1.5 rounded text-xs"
-                style={{
-                  backgroundColor: COLORS.DARK_BG,
-                  color: COLORS.WHITE,
-                  border: `1px solid ${COLORS.BORDER}`,
-                }}
+                style={inputStyle}
               />
             </div>
           </div>
 
           {/* Summary */}
-          <div className="p-2 rounded mb-3" style={{ backgroundColor: COLORS.DARK_BG }}>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+          <div style={{
+            padding: '8px',
+            marginBottom: '12px',
+            backgroundColor: FINCEPT.DARK_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px' }}>
               <div>
-                <span style={{ color: COLORS.GRAY }}>Grid Spacing: </span>
-                <span style={{ color: COLORS.WHITE }}>${calculateGridSpacing().toFixed(2)}</span>
+                <span style={{ color: FINCEPT.GRAY }}>Grid Spacing: </span>
+                <span style={{ color: FINCEPT.WHITE }}>${calculateGridSpacing().toFixed(2)}</span>
               </div>
               <div>
-                <span style={{ color: COLORS.GRAY }}>Est. Investment: </span>
-                <span style={{ color: COLORS.WHITE }}>${calculateTotalInvestment().toFixed(2)}</span>
+                <span style={{ color: FINCEPT.GRAY }}>Est. Investment: </span>
+                <span style={{ color: FINCEPT.WHITE }}>${calculateTotalInvestment().toFixed(2)}</span>
               </div>
             </div>
           </div>
 
           {/* Preview */}
-          <div className="mb-3">
-            <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Grid Preview</label>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ fontSize: '10px', marginBottom: '4px', display: 'block', color: FINCEPT.GRAY }}>Grid Preview</label>
             {renderGridVisualization(generateGridLevels(), [])}
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2">
+          <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={() => setShowCreateForm(false)}
-              className="flex-1 py-1.5 rounded text-xs font-medium"
+              onMouseEnter={() => setHoveredBtn('cancel')}
+              onMouseLeave={() => setHoveredBtn(null)}
               style={{
-                backgroundColor: COLORS.BORDER,
-                color: COLORS.WHITE,
+                flex: 1,
+                padding: '6px',
+                fontSize: '11px',
+                fontWeight: 600,
+                fontFamily: TERMINAL_FONT,
+                backgroundColor: hoveredBtn === 'cancel' ? FINCEPT.HOVER : FINCEPT.BORDER,
+                color: FINCEPT.WHITE,
+                border: 'none',
+                cursor: 'pointer',
+                letterSpacing: '0.5px',
               }}
             >
-              Cancel
+              CANCEL
             </button>
             <button
               onClick={handleCreateGrid}
               disabled={createState.status === 'creating'}
-              className="flex-1 py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1"
               style={{
-                backgroundColor: COLORS.BLUE,
-                color: COLORS.WHITE,
+                flex: 1,
+                padding: '6px',
+                fontSize: '11px',
+                fontWeight: 600,
+                fontFamily: TERMINAL_FONT,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                backgroundColor: FINCEPT.BLUE,
+                color: FINCEPT.WHITE,
+                border: 'none',
+                cursor: createState.status === 'creating' ? 'not-allowed' : 'pointer',
                 opacity: createState.status === 'creating' ? 0.5 : 1,
+                letterSpacing: '0.5px',
               }}
             >
               {createState.status === 'creating' ? (
-                <Loader2 size={12} className="animate-spin" />
+                <Loader2 size={12} style={{ animation: 'grid-spin 1s linear infinite' }} />
               ) : (
                 <Play size={12} />
               )}
-              Create Grid
+              CREATE GRID
             </button>
           </div>
         </div>
       )}
 
       {/* Active Grids */}
-      <div className="max-h-64 overflow-y-auto">
+      <div style={{ maxHeight: '256px', overflowY: 'auto' }}>
         {activeGrids.length === 0 ? (
-          <div className="p-8 text-center">
-            <Grid3X3 size={32} className="mx-auto mb-2 opacity-30" style={{ color: COLORS.GRAY }} />
-            <p className="text-sm" style={{ color: COLORS.GRAY }}>No active grid strategies</p>
-            <p className="text-xs mt-1" style={{ color: COLORS.GRAY }}>
+          <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+            <Grid3X3 size={32} style={{ color: FINCEPT.GRAY, opacity: 0.3, margin: '0 auto 8px' }} />
+            <p style={{ fontSize: '12px', color: FINCEPT.GRAY }}>No active grid strategies</p>
+            <p style={{ fontSize: '10px', marginTop: '4px', color: FINCEPT.GRAY }}>
               Create a grid to start automated trading
             </p>
           </div>
         ) : (
-          <div className="divide-y" style={{ borderColor: COLORS.BORDER }}>
-            {activeGrids.map((grid) => (
-              <div key={grid.name} className="p-3">
-                <div className="flex items-center justify-between mb-2">
+          <div>
+            {activeGrids.map((grid, idx) => (
+              <div key={grid.name} style={{
+                padding: '12px',
+                borderBottom: idx < activeGrids.length - 1 ? `1px solid ${FINCEPT.BORDER}` : 'none',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <button
                     onClick={() => setExpandedGrid(expandedGrid === grid.name ? null : grid.name)}
-                    className="flex items-center gap-2"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontFamily: TERMINAL_FONT,
+                      padding: 0,
+                    }}
                   >
                     {expandedGrid === grid.name ? (
-                      <ChevronUp size={12} style={{ color: COLORS.GRAY }} />
+                      <ChevronUp size={12} style={{ color: FINCEPT.GRAY }} />
                     ) : (
-                      <ChevronDown size={12} style={{ color: COLORS.GRAY }} />
+                      <ChevronDown size={12} style={{ color: FINCEPT.GRAY }} />
                     )}
-                    <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>{grid.name}</span>
-                    <span
-                      className="px-1.5 py-0.5 rounded text-xs"
-                      style={{
-                        backgroundColor: grid.isActive ? COLORS.GREEN + '20' : COLORS.GRAY + '20',
-                        color: grid.isActive ? COLORS.GREEN : COLORS.GRAY,
-                      }}
-                    >
-                      {grid.isActive ? 'Active' : 'Paused'}
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>{grid.name}</span>
+                    <span style={{
+                      padding: '1px 6px',
+                      fontSize: '9px',
+                      fontFamily: TERMINAL_FONT,
+                      backgroundColor: grid.isActive ? FINCEPT.GREEN + '20' : FINCEPT.GRAY + '20',
+                      color: grid.isActive ? FINCEPT.GREEN : FINCEPT.GRAY,
+                    }}>
+                      {grid.isActive ? 'ACTIVE' : 'PAUSED'}
                     </span>
                   </button>
-                  <div className="flex items-center gap-2">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button
                       onClick={() => fetchGridStatus(grid.name)}
-                      className="p-1 rounded hover:bg-[#1A1A1A]"
+                      onMouseEnter={() => setHoveredBtn(`refresh-${grid.name}`)}
+                      onMouseLeave={() => setHoveredBtn(null)}
+                      style={{
+                        padding: '4px',
+                        backgroundColor: hoveredBtn === `refresh-${grid.name}` ? FINCEPT.HOVER : 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
                     >
-                      <RefreshCw size={12} style={{ color: COLORS.GRAY }} />
+                      <RefreshCw size={12} style={{ color: FINCEPT.GRAY }} />
                     </button>
                   </div>
                 </div>
 
                 {/* Quick Stats */}
-                <div className="grid grid-cols-3 gap-2 text-xs">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', fontSize: '11px' }}>
                   <div>
-                    <span style={{ color: COLORS.GRAY }}>Trades: </span>
-                    <span style={{ color: COLORS.WHITE }}>{grid.tradesExecuted}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>Trades: </span>
+                    <span style={{ color: FINCEPT.WHITE }}>{grid.tradesExecuted}</span>
                   </div>
                   <div>
-                    <span style={{ color: COLORS.GRAY }}>Profit: </span>
-                    <span style={{ color: grid.totalProfit >= 0 ? COLORS.GREEN : COLORS.RED }}>
+                    <span style={{ color: FINCEPT.GRAY }}>Profit: </span>
+                    <span style={{ color: grid.totalProfit >= 0 ? FINCEPT.GREEN : FINCEPT.RED }}>
                       ${grid.totalProfit.toFixed(2)}
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: COLORS.GRAY }}>Active: </span>
-                    <span style={{ color: COLORS.WHITE }}>{grid.activeOrders}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>Active: </span>
+                    <span style={{ color: FINCEPT.WHITE }}>{grid.activeOrders}</span>
                   </div>
                 </div>
 
                 {/* Expanded View */}
                 {expandedGrid === grid.name && (
-                  <div className="mt-3 pt-3 border-t" style={{ borderColor: COLORS.BORDER }}>
-                    <div className="text-xs mb-2" style={{ color: COLORS.GRAY }}>Grid Levels</div>
+                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${FINCEPT.BORDER}` }}>
+                    <div style={{ fontSize: '10px', marginBottom: '8px', color: FINCEPT.GRAY }}>Grid Levels</div>
                     {renderGridVisualization(grid.gridLevels, grid.triggeredLevels)}
-                    <div className="text-xs mt-2" style={{ color: COLORS.GRAY }}>
-                      <Info size={10} className="inline mr-1" />
+                    <div style={{ fontSize: '10px', marginTop: '8px', color: FINCEPT.GRAY, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Info size={10} />
                       {grid.triggeredLevels.length} of {grid.gridLevels.length} levels triggered
                     </div>
                   </div>
@@ -526,8 +617,17 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-2 border-t text-xs" style={{ borderColor: COLORS.BORDER, color: COLORS.GRAY }}>
-        <Info size={10} className="inline mr-1" />
+      <div style={{
+        padding: '6px 16px',
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        fontSize: '9px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        color: FINCEPT.GRAY,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+      }}>
+        <Info size={10} />
         Grid strategies execute automatically based on price levels
       </div>
     </div>

@@ -938,7 +938,131 @@ async def main():
 
     async with BISAPI() as bis:
         try:
-            if command == "get_data":
+            if command == "fetch":
+                # Simplified fetch command for Fincept Terminal Economics tab
+                # Usage: fetch <dataflow> <country_code> [start_period] [end_period]
+                # Returns flattened [{date, value}] array for charting
+                if len(args) < 3:
+                    raise ValueError("Usage: fetch <dataflow> <country_code> [start_period] [end_period]")
+
+                dataflow = args[1]
+                country_code = args[2]
+                start_period = args[3] if len(args) > 3 else None
+                end_period = args[4] if len(args) > 4 else None
+
+                # Key patterns per dataflow — each flow has different dimension layouts
+                # Format: dots separate dimension positions, country goes in the right slot
+                KEY_PATTERNS = {
+                    # FREQ.REF_AREA
+                    "WS_CBPOL": "M.{cc}",
+                    # FREQ.EER_TYPE.EER_BASKET.REF_AREA
+                    "WS_EER": "M.N.B.{cc}",
+                    "WS_EER_R": "M.R.B.{cc}",
+                    # FREQ.REF_AREA.CURRENCY.COLLECTION
+                    "WS_XRU": "M.{cc}",
+                    # FREQ.REF_AREA.UNIT_MEASURE
+                    "WS_LONG_CPI": "M.{cc}",
+                    # FREQ.REF_AREA.COMP_METHOD.UNIT_MEASURE.CURRENCY.TRANSFORMATION
+                    "WS_CBTA": "Q.{cc}",
+                    # FREQ.BORROWERS_CTY...
+                    "WS_CREDIT_GAP": "Q.{cc}",
+                    "WS_TC": "Q.{cc}",
+                    "WS_DSR": "Q.{cc}",
+                    # FREQ.CURR_DENOM.BORROWERS_CTY...
+                    "WS_GLI": "Q..{cc}",
+                    # FREQ.REF_AREA.VALUE.UNIT_MEASURE
+                    "WS_SPP": "Q.{cc}",
+                    "WS_CPP": "Q.{cc}",
+                    "WS_DPP": "Q.{cc}",
+                    # FREQ.L_MEASURE.L_REP_CTY...
+                    "WS_CBS_PUB": "Q..{cc}",
+                    "WS_LBS_D_PUB": "Q..{cc}",
+                    # FREQ.ISSUER_RES...
+                    "WS_DEBT_SEC2_PUB": "Q.{cc}",
+                    # FREQ.ADJUSTMENT.REF_AREA...
+                    "WS_NA_SEC_DSS": "Q..{cc}",
+                    # OTC/exchange-traded derivatives — global, no country filter
+                    "WS_OTC_DERIV2": "H",
+                    "WS_DER_OTC_TOV": "T",
+                    "WS_XTD_DERIV": "Q",
+                    # CPMI flows — annual, country in REP_CTY pos 2
+                    "WS_CPMI_MACRO": "A..{cc}",
+                    "WS_CPMI_CASHLESS": "A..{cc}",
+                    "WS_CPMI_CT1": "A..{cc}",
+                    "WS_CPMI_CT2": "A..{cc}",
+                    "WS_CPMI_DEVICES": "A..{cc}",
+                    "WS_CPMI_INSTITUT": "A..{cc}",
+                    "WS_CPMI_PARTICIP": "A..{cc}",
+                    "WS_CPMI_SYSTEMS": "A..{cc}",
+                }
+
+                pattern = KEY_PATTERNS.get(dataflow, "M.{cc}")
+                if country_code and country_code != "all":
+                    key = pattern.format(cc=country_code)
+                else:
+                    key = pattern.format(cc="")
+
+                raw = await bis.get_data(dataflow, key, start_period, end_period)
+
+                if not raw.get("success"):
+                    result = raw
+                else:
+                    # Flatten SDMX-JSON into simple [{date, value}] for charting
+                    flat_data = []
+                    try:
+                        resp = raw.get("data", {})
+                        sdmx_data = resp.get("data", resp)
+                        datasets = sdmx_data.get("dataSets", [])
+                        structure = sdmx_data.get("structure", resp.get("structure", {}))
+                        obs_dims = structure.get("dimensions", {}).get("observation", [])
+
+                        # Get time period values from observation dimension
+                        time_values = {}
+                        if obs_dims:
+                            time_values = {str(i): v.get("id", v.get("name", str(i)))
+                                           for i, v in enumerate(obs_dims[0].get("values", []))}
+
+                        for ds in datasets:
+                            series_map = ds.get("series", {})
+                            for _series_key, series_val in series_map.items():
+                                observations = series_val.get("observations", {})
+                                for obs_key, obs_val in observations.items():
+                                    period = time_values.get(obs_key, obs_key)
+                                    value = obs_val[0] if isinstance(obs_val, list) and obs_val else None
+                                    if value is not None:
+                                        try:
+                                            value = float(value)
+                                            import math
+                                            if math.isnan(value) or math.isinf(value):
+                                                continue
+                                        except (ValueError, TypeError):
+                                            continue
+                                        flat_data.append({"date": str(period), "value": value})
+
+                        # Deduplicate by date (average if multiple series for same date)
+                        from collections import defaultdict
+                        date_vals = defaultdict(list)
+                        for d in flat_data:
+                            date_vals[d["date"]].append(d["value"])
+                        flat_data = [{"date": dt, "value": round(sum(vs)/len(vs), 6)}
+                                     for dt, vs in sorted(date_vals.items())]
+
+                    except Exception as parse_err:
+                        result = {"success": False, "error": f"Failed to parse SDMX response: {str(parse_err)}"}
+                        print(json.dumps(result, indent=2))
+                        return
+
+                    result = {
+                        "success": True,
+                        "data": flat_data,
+                        "metadata": {
+                            "dataflow": dataflow,
+                            "country": country_code,
+                            "source": "BIS"
+                        }
+                    }
+
+            elif command == "get_data":
                 if len(args) < 2:
                     raise ValueError("Usage: get_data <flow> [key] [start_period] [end_period]")
 

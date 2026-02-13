@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * Version Bump Script
@@ -34,26 +34,34 @@ const colors = {
   blue: '\x1b[34m',
   red: '\x1b[31m',
   cyan: '\x1b[36m',
-};
+} as const;
 
-function log(message, color = colors.reset) {
+type BumpType = 'patch' | 'minor' | 'major';
+
+interface VersionParts {
+  major: number;
+  minor: number;
+  patch: number;
+}
+
+function log(message: string, color: string = colors.reset): void {
   console.log(`${color}${message}${colors.reset}`);
 }
 
-function logSuccess(message) {
-  log(`✓ ${message}`, colors.green);
+function logSuccess(message: string): void {
+  log(`\u2713 ${message}`, colors.green);
 }
 
-function logError(message) {
-  log(`✗ ${message}`, colors.red);
+function logError(message: string): void {
+  log(`\u2717 ${message}`, colors.red);
 }
 
-function logInfo(message) {
-  log(`ℹ ${message}`, colors.blue);
+function logInfo(message: string): void {
+  log(`\u2139 ${message}`, colors.blue);
 }
 
 // Parse semver version
-function parseVersion(version) {
+function parseVersion(version: string): VersionParts {
   const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
   if (!match) {
     throw new Error(`Invalid version format: ${version}`);
@@ -66,7 +74,7 @@ function parseVersion(version) {
 }
 
 // Increment version based on type
-function incrementVersion(version, type = 'patch') {
+function incrementVersion(version: string, type: BumpType = 'patch'): string {
   const parts = parseVersion(version);
 
   switch (type) {
@@ -89,26 +97,26 @@ function incrementVersion(version, type = 'patch') {
 }
 
 // Update package.json
-function updatePackageJson(newVersion) {
+function updatePackageJson(newVersion: string): string {
   const packageJsonPath = path.join(rootDir, 'package.json');
 
   try {
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-    const oldVersion = packageJson.version;
+    const oldVersion: string = packageJson.version;
 
     packageJson.version = newVersion;
     fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n', 'utf8');
 
-    logSuccess(`Updated package.json: v${oldVersion} → v${newVersion}`);
+    logSuccess(`Updated package.json: v${oldVersion} \u2192 v${newVersion}`);
     return oldVersion;
   } catch (error) {
-    logError(`Failed to update package.json: ${error.message}`);
+    logError(`Failed to update package.json: ${(error as Error).message}`);
     process.exit(1);
   }
 }
 
 // Run sync-version script
-function runSyncVersion() {
+function runSyncVersion(): void {
   try {
     logInfo('\nSyncing version across all files...\n');
     execSync('bun run sync-version', { stdio: 'inherit', cwd: rootDir });
@@ -119,9 +127,9 @@ function runSyncVersion() {
 }
 
 // Main function
-function main() {
+function main(): void {
   const args = process.argv.slice(2);
-  const bumpType = args[0] || 'patch';
+  const bumpType = (args[0] || 'patch') as string;
 
   if (!['patch', 'minor', 'major'].includes(bumpType)) {
     logError(`Invalid bump type: ${bumpType}`);
@@ -136,10 +144,10 @@ function main() {
   // Read current version
   const packageJsonPath = path.join(rootDir, 'package.json');
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-  const currentVersion = packageJson.version;
+  const currentVersion: string = packageJson.version;
 
   // Calculate new version
-  const newVersion = incrementVersion(currentVersion, bumpType);
+  const newVersion = incrementVersion(currentVersion, bumpType as BumpType);
 
   logInfo(`Bump type: ${colors.bright}${bumpType}${colors.reset}`);
   logInfo(`Current version: ${colors.yellow}v${currentVersion}${colors.reset}`);

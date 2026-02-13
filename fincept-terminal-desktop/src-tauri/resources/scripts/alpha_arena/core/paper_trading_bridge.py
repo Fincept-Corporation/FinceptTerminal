@@ -321,6 +321,20 @@ class PaperTradingBridge:
     def _link_model_portfolio(self, conn: sqlite3.Connection):
         """Link this portfolio to the Alpha Arena competition."""
         try:
+            # Ensure the table exists without foreign key constraints
+            # (competition data lives in a separate alpha_arena.db, not in this main db)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS alpha_arena_model_portfolios (
+                    id TEXT PRIMARY KEY,
+                    competition_id TEXT NOT NULL,
+                    model_name TEXT NOT NULL,
+                    portfolio_id TEXT NOT NULL,
+                    initial_capital REAL NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            conn.commit()
+
             link_id = str(uuid.uuid4())
             now = datetime.utcnow().isoformat() + "Z"
 
@@ -340,8 +354,35 @@ class PaperTradingBridge:
             conn.commit()
             logger.info(f"Linked model {self.model_name} to portfolio {self.portfolio_id}")
         except sqlite3.Error as e:
-            # Table might not exist yet, that's ok
-            logger.warning(f"Could not link model portfolio: {e}")
+            # If foreign key constraint fails due to old table schema, try to recreate
+            if "FOREIGN KEY" in str(e):
+                try:
+                    conn.execute("DROP TABLE IF EXISTS alpha_arena_model_portfolios")
+                    conn.execute("""
+                        CREATE TABLE alpha_arena_model_portfolios (
+                            id TEXT PRIMARY KEY,
+                            competition_id TEXT NOT NULL,
+                            model_name TEXT NOT NULL,
+                            portfolio_id TEXT NOT NULL,
+                            initial_capital REAL NOT NULL,
+                            created_at TEXT NOT NULL
+                        )
+                    """)
+                    link_id = str(uuid.uuid4())
+                    now = datetime.utcnow().isoformat() + "Z"
+                    conn.execute(
+                        """INSERT INTO alpha_arena_model_portfolios
+                           (id, competition_id, model_name, portfolio_id, initial_capital, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (link_id, self.competition_id, self.model_name,
+                         self.portfolio_id, self.initial_capital, now)
+                    )
+                    conn.commit()
+                    logger.info(f"Recreated table and linked model {self.model_name} to portfolio {self.portfolio_id}")
+                except sqlite3.Error as e2:
+                    logger.warning(f"Could not recreate model portfolio link: {e2}")
+            else:
+                logger.warning(f"Could not link model portfolio: {e}")
 
     def get_portfolio(self) -> Optional[Portfolio]:
         """Get current portfolio state."""

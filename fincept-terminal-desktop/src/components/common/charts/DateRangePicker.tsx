@@ -1,9 +1,9 @@
-// DateRangePicker Component - Date range selection for economic data
+// DateRangePicker — Reusable preset buttons + custom date inputs
 
 import React from 'react';
 import { Calendar } from 'lucide-react';
-import { FINCEPT } from '../constants';
-import type { DateRangePreset } from '../hooks/useEconomicsData';
+import { FINCEPT_COLORS } from './types';
+import type { DateRangePreset } from './types';
 
 interface DateRangePickerProps {
   dateRangePreset: DateRangePreset;
@@ -42,12 +42,12 @@ export function DateRangePicker({
         alignItems: 'center',
         gap: '8px',
         padding: '6px 12px',
-        backgroundColor: FINCEPT.PANEL_BG,
+        backgroundColor: FINCEPT_COLORS.PANEL_BG,
         borderRadius: '2px',
-        border: `1px solid ${FINCEPT.BORDER}`,
+        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
       }}
     >
-      <Calendar size={14} color={FINCEPT.GRAY} />
+      <Calendar size={14} color={FINCEPT_COLORS.GRAY} />
 
       {/* Preset buttons */}
       <div style={{ display: 'flex', gap: '2px' }}>
@@ -58,8 +58,8 @@ export function DateRangePicker({
             style={{
               padding: '3px 6px',
               backgroundColor: dateRangePreset === preset.value ? sourceColor : 'transparent',
-              color: dateRangePreset === preset.value ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-              border: `1px solid ${dateRangePreset === preset.value ? sourceColor : FINCEPT.BORDER}`,
+              color: dateRangePreset === preset.value ? FINCEPT_COLORS.DARK_BG : FINCEPT_COLORS.GRAY,
+              border: `1px solid ${dateRangePreset === preset.value ? sourceColor : FINCEPT_COLORS.BORDER}`,
               borderRadius: '2px',
               fontSize: '9px',
               fontWeight: 700,
@@ -73,7 +73,7 @@ export function DateRangePicker({
       </div>
 
       {/* Separator */}
-      <div style={{ width: '1px', height: '16px', backgroundColor: FINCEPT.BORDER }} />
+      <div style={{ width: '1px', height: '16px', backgroundColor: FINCEPT_COLORS.BORDER }} />
 
       {/* Custom date inputs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -83,25 +83,25 @@ export function DateRangePicker({
           onChange={(e) => setStartDate(e.target.value)}
           style={{
             padding: '3px 6px',
-            backgroundColor: FINCEPT.DARK_BG,
-            color: FINCEPT.WHITE,
-            border: `1px solid ${FINCEPT.BORDER}`,
+            backgroundColor: FINCEPT_COLORS.DARK_BG,
+            color: FINCEPT_COLORS.WHITE,
+            border: `1px solid ${FINCEPT_COLORS.BORDER}`,
             borderRadius: '2px',
             fontSize: '9px',
             fontFamily: 'inherit',
             cursor: 'pointer',
           }}
         />
-        <span style={{ color: FINCEPT.GRAY, fontSize: '9px' }}>to</span>
+        <span style={{ color: FINCEPT_COLORS.GRAY, fontSize: '9px' }}>to</span>
         <input
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
           style={{
             padding: '3px 6px',
-            backgroundColor: FINCEPT.DARK_BG,
-            color: FINCEPT.WHITE,
-            border: `1px solid ${FINCEPT.BORDER}`,
+            backgroundColor: FINCEPT_COLORS.DARK_BG,
+            color: FINCEPT_COLORS.WHITE,
+            border: `1px solid ${FINCEPT_COLORS.BORDER}`,
             borderRadius: '2px',
             fontSize: '9px',
             fontFamily: 'inherit',

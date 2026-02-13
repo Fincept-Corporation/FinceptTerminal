@@ -30,14 +30,28 @@ import sqlite3
 import pandas as pd
 import math
 import os
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from indicators import get_latest_value, get_last_n_values, get_value_at_offset
 
+log = logging.getLogger('algo_runner.evaluator')
+
+
+def _normalize_symbol(s: str) -> str:
+    """Strip slashes, dashes, underscores, colons and uppercase for matching."""
+    return s.replace('/', '').replace('-', '').replace('_', '').replace(':', '').upper()
+
 
 def load_candles_from_db(db_path: str, symbol: str, timeframe: str, limit: int = 200) -> pd.DataFrame:
-    """Load candles from candle_cache table."""
+    """Load candles from candle_cache table.
+
+    Tries exact symbol match first, then falls back to normalized matching
+    to handle format differences (e.g., BTC/USD vs BTCUSD, NSE:RELIANCE vs RELIANCE).
+    """
     conn = sqlite3.connect(db_path)
+
+    # Try exact match first
     query = """
         SELECT open_time, o, h, l, c, volume
         FROM candle_cache
@@ -46,9 +60,32 @@ def load_candles_from_db(db_path: str, symbol: str, timeframe: str, limit: int =
         LIMIT ?
     """
     df = pd.read_sql_query(query, conn, params=(symbol, timeframe, limit))
+    log.debug(f"load_candles_from_db('{symbol}', '{timeframe}', limit={limit}) exact match => {len(df)} rows")
+
+    if df.empty:
+        # Fallback: find the actual symbol name in the cache that matches when normalized
+        # Also handles broker truncation (e.g., Angel One truncates "AVANTIFEEDS" to "AVANTIFEED")
+        norm = _normalize_symbol(symbol)
+        try:
+            cached_symbols = pd.read_sql_query(
+                "SELECT DISTINCT symbol FROM candle_cache WHERE timeframe = ?",
+                conn, params=(timeframe,)
+            )
+            log.debug(f"  Exact match failed. Trying normalized={norm}. Cached symbols for tf={timeframe}: {cached_symbols['symbol'].tolist()}")
+            for _, row in cached_symbols.iterrows():
+                cached_sym = row['symbol']
+                cached_norm = _normalize_symbol(cached_sym)
+                if cached_norm == norm or norm.startswith(cached_norm) or cached_norm.startswith(norm):
+                    df = pd.read_sql_query(query, conn, params=(cached_sym, timeframe, limit))
+                    log.debug(f"  Normalized/prefix match found: '{cached_sym}' => {len(df)} rows")
+                    break
+        except Exception as e:
+            log.warning(f"  Fallback symbol search failed: {e}")
+
     conn.close()
 
     if df.empty:
+        log.warning(f"  NO candle data found for '{symbol}' @ {timeframe}")
         return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
 
     df.rename(columns={'o': 'open', 'h': 'high', 'l': 'low', 'c': 'close'}, inplace=True)
@@ -368,7 +405,7 @@ def main():
 
     # Load candle data
     df = load_candles_from_db(args.db, args.symbol, args.timeframe, args.limit)
-    if df.empty or len(df) < 5:
+    if df.empty or len(df) < 2:
         print(json.dumps({
             'success': False,
             'error': f'Insufficient candle data for {args.symbol} ({len(df)} candles)'

@@ -477,10 +477,13 @@ pub fn get_symbol_by_token(broker_id: &str, token: &str) -> Result<Option<Symbol
     Ok(result)
 }
 
-/// Get token by symbol (for WebSocket subscriptions)
+/// Get token by symbol (for WebSocket subscriptions).
+/// Tries exact match first, then prefix match to handle broker symbol truncation
+/// (e.g., Angel One truncates "AVANTIFEEDS" to "AVANTIFEED").
 pub fn get_token_by_symbol(broker_id: &str, symbol: &str, exchange: &str) -> Result<Option<String>> {
     let db = get_db()?;
 
+    // Try exact match first
     let token: Option<String> = db
         .query_row(
             "SELECT token FROM symbols WHERE broker_id = ? AND UPPER(symbol) = UPPER(?) AND exchange = ? LIMIT 1",
@@ -489,7 +492,31 @@ pub fn get_token_by_symbol(broker_id: &str, symbol: &str, exchange: &str) -> Res
         )
         .optional()?;
 
-    Ok(token)
+    if token.is_some() {
+        return Ok(token);
+    }
+
+    // Fallback: prefix match (handles broker truncation)
+    // e.g., user passes "AVANTIFEEDS" but DB has "AVANTIFEED"
+    let upper_sym = symbol.to_uppercase();
+    let like_pattern = format!("{}%", &upper_sym[..upper_sym.len().min(6)]);
+    let mut stmt = db.prepare(
+        "SELECT symbol, token FROM symbols WHERE broker_id = ? AND UPPER(symbol) LIKE ? AND exchange = ? LIMIT 20"
+    )?;
+    let rows: Vec<(String, String)> = stmt.query_map(
+        params![broker_id, like_pattern, exchange],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+    )?.filter_map(|r| r.ok()).collect();
+
+    for (db_sym, db_token) in &rows {
+        let db_upper = db_sym.to_uppercase();
+        // Match if one is a prefix of the other
+        if upper_sym.starts_with(&db_upper) || db_upper.starts_with(&upper_sym) {
+            return Ok(Some(db_token.clone()));
+        }
+    }
+
+    Ok(None)
 }
 
 /// Get symbol count for a broker

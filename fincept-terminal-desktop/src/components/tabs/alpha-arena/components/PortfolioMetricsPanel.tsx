@@ -19,7 +19,7 @@ import {
   type PortfolioMetrics,
 } from '../services/alphaArenaEnhancedService';
 
-const COLORS = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -30,9 +30,20 @@ const COLORS = {
   GRAY: '#787878',
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
   CARD_BG: '#0A0A0A',
   BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
 };
+
+const TERMINAL_FONT = '"IBM Plex Mono", "Consolas", monospace';
+
+const METRICS_STYLES = `
+  .metrics-panel *::-webkit-scrollbar { width: 6px; height: 6px; }
+  .metrics-panel *::-webkit-scrollbar-track { background: #000000; }
+  .metrics-panel *::-webkit-scrollbar-thumb { background: #2A2A2A; }
+  @keyframes metrics-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+`;
 
 interface PortfolioMetricsPanelProps {
   competitionId: string;
@@ -53,7 +64,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
   label,
   value,
   icon,
-  color = COLORS.WHITE,
+  color = FINCEPT.WHITE,
   tooltip,
   isPercentage = false,
 }) => {
@@ -67,23 +78,39 @@ const MetricCard: React.FC<MetricCardProps> = ({
 
   return (
     <div
-      className="p-3 rounded-lg relative"
-      style={{ backgroundColor: COLORS.CARD_BG }}
+      style={{
+        padding: '10px',
+        position: 'relative',
+        backgroundColor: FINCEPT.CARD_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        fontFamily: TERMINAL_FONT,
+      }}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs" style={{ color: COLORS.GRAY }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+        <span style={{ fontSize: '9px', color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>{label.toUpperCase()}</span>
         <div style={{ color }}>{icon}</div>
       </div>
-      <div className="text-lg font-bold" style={{ color }}>
+      <div style={{ fontSize: '16px', fontWeight: 700, color }}>
         {displayValue}
       </div>
       {tooltip && showTooltip && (
-        <div
-          className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 rounded text-xs whitespace-nowrap z-10"
-          style={{ backgroundColor: COLORS.BORDER, color: COLORS.WHITE }}
-        >
+        <div style={{
+          position: 'absolute',
+          bottom: '100%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          marginBottom: '8px',
+          padding: '4px 8px',
+          fontSize: '9px',
+          whiteSpace: 'nowrap',
+          zIndex: 10,
+          backgroundColor: FINCEPT.HEADER_BG,
+          color: FINCEPT.WHITE,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          fontFamily: TERMINAL_FONT,
+        }}>
           {tooltip}
         </div>
       )}
@@ -98,6 +125,8 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
 }) => {
   const [selectedModel, setSelectedModel] = useState<string | null>(modelName || null);
   const [expandedSection, setExpandedSection] = useState<string | null>('returns');
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
+  const [hoveredModel, setHoveredModel] = useState<string | null>(null);
 
   // Cache: all models overview (enabled when no model selected)
   const allModelsCache = useCache<Record<string, PortfolioMetrics>>({
@@ -162,31 +191,41 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
   };
 
   const getReturnColor = (value: number) => {
-    if (value > 0) return COLORS.GREEN;
-    if (value < 0) return COLORS.RED;
-    return COLORS.GRAY;
+    if (value > 0) return FINCEPT.GREEN;
+    if (value < 0) return FINCEPT.RED;
+    return FINCEPT.GRAY;
   };
 
   const renderMetricsSection = (metricsData: PortfolioMetrics) => (
     <>
       {/* Returns Section */}
-      <div className="border-b" style={{ borderColor: COLORS.BORDER }}>
+      <div style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
         <button
           onClick={() => toggleSection('returns')}
-          className="w-full px-4 py-2 flex items-center justify-between"
+          style={{
+            width: '100%',
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontFamily: TERMINAL_FONT,
+          }}
         >
-          <div className="flex items-center gap-2">
-            <TrendingUp size={14} style={{ color: COLORS.GREEN }} />
-            <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>Returns</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <TrendingUp size={14} style={{ color: FINCEPT.GREEN }} />
+            <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>RETURNS</span>
           </div>
           {expandedSection === 'returns' ? (
-            <ChevronUp size={14} style={{ color: COLORS.GRAY }} />
+            <ChevronUp size={14} style={{ color: FINCEPT.GRAY }} />
           ) : (
-            <ChevronDown size={14} style={{ color: COLORS.GRAY }} />
+            <ChevronDown size={14} style={{ color: FINCEPT.GRAY }} />
           )}
         </button>
         {expandedSection === 'returns' && (
-          <div className="px-4 pb-3 grid grid-cols-2 gap-2">
+          <div style={{ padding: '0 16px 12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <MetricCard
               label="Total Return"
               value={metricsData.total_return}
@@ -199,7 +238,7 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
               label="Win Rate"
               value={metricsData.win_rate}
               icon={<Target size={14} />}
-              color={metricsData.win_rate > 0.5 ? COLORS.GREEN : COLORS.RED}
+              color={metricsData.win_rate > 0.5 ? FINCEPT.GREEN : FINCEPT.RED}
               isPercentage
               tooltip="Percentage of winning trades"
             />
@@ -207,14 +246,14 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
               label="Profit Factor"
               value={metricsData.profit_factor}
               icon={<Award size={14} />}
-              color={metricsData.profit_factor > 1 ? COLORS.GREEN : COLORS.RED}
+              color={metricsData.profit_factor > 1 ? FINCEPT.GREEN : FINCEPT.RED}
               tooltip="Gross profit / Gross loss"
             />
             <MetricCard
               label="Expectancy"
               value={`$${metricsData.expectancy.toFixed(2)}`}
               icon={<BarChart3 size={14} />}
-              color={metricsData.expectancy > 0 ? COLORS.GREEN : COLORS.RED}
+              color={metricsData.expectancy > 0 ? FINCEPT.GREEN : FINCEPT.RED}
               tooltip="Expected profit per trade"
             />
           </div>
@@ -222,42 +261,52 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
       </div>
 
       {/* Risk Metrics Section */}
-      <div className="border-b" style={{ borderColor: COLORS.BORDER }}>
+      <div style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
         <button
           onClick={() => toggleSection('risk')}
-          className="w-full px-4 py-2 flex items-center justify-between"
+          style={{
+            width: '100%',
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontFamily: TERMINAL_FONT,
+          }}
         >
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={14} style={{ color: COLORS.YELLOW }} />
-            <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>Risk Metrics</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertTriangle size={14} style={{ color: FINCEPT.YELLOW }} />
+            <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>RISK METRICS</span>
           </div>
           {expandedSection === 'risk' ? (
-            <ChevronUp size={14} style={{ color: COLORS.GRAY }} />
+            <ChevronUp size={14} style={{ color: FINCEPT.GRAY }} />
           ) : (
-            <ChevronDown size={14} style={{ color: COLORS.GRAY }} />
+            <ChevronDown size={14} style={{ color: FINCEPT.GRAY }} />
           )}
         </button>
         {expandedSection === 'risk' && (
-          <div className="px-4 pb-3 grid grid-cols-2 gap-2">
+          <div style={{ padding: '0 16px 12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <MetricCard
               label="Sharpe Ratio"
               value={metricsData.sharpe_ratio}
               icon={<BarChart3 size={14} />}
-              color={metricsData.sharpe_ratio > 1 ? COLORS.GREEN : metricsData.sharpe_ratio > 0 ? COLORS.YELLOW : COLORS.RED}
+              color={metricsData.sharpe_ratio > 1 ? FINCEPT.GREEN : metricsData.sharpe_ratio > 0 ? FINCEPT.YELLOW : FINCEPT.RED}
               tooltip="Risk-adjusted return (> 1 is good)"
             />
             <MetricCard
               label="Sortino Ratio"
               value={metricsData.sortino_ratio}
               icon={<BarChart3 size={14} />}
-              color={metricsData.sortino_ratio > 1 ? COLORS.GREEN : metricsData.sortino_ratio > 0 ? COLORS.YELLOW : COLORS.RED}
+              color={metricsData.sortino_ratio > 1 ? FINCEPT.GREEN : metricsData.sortino_ratio > 0 ? FINCEPT.YELLOW : FINCEPT.RED}
               tooltip="Downside risk-adjusted return"
             />
             <MetricCard
               label="Max Drawdown"
               value={metricsData.max_drawdown_pct}
               icon={<TrendingDown size={14} />}
-              color={COLORS.RED}
+              color={FINCEPT.RED}
               isPercentage
               tooltip="Largest peak-to-trough decline"
             />
@@ -265,7 +314,7 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
               label="Volatility"
               value={metricsData.volatility}
               icon={<AlertTriangle size={14} />}
-              color={metricsData.volatility > 0.3 ? COLORS.RED : COLORS.YELLOW}
+              color={metricsData.volatility > 0.3 ? FINCEPT.RED : FINCEPT.YELLOW}
               isPercentage
               tooltip="Standard deviation of returns"
             />
@@ -277,53 +326,63 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
       <div>
         <button
           onClick={() => toggleSection('trades')}
-          className="w-full px-4 py-2 flex items-center justify-between"
+          style={{
+            width: '100%',
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontFamily: TERMINAL_FONT,
+          }}
         >
-          <div className="flex items-center gap-2">
-            <BarChart3 size={14} style={{ color: COLORS.BLUE }} />
-            <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>Trade Statistics</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BarChart3 size={14} style={{ color: FINCEPT.BLUE }} />
+            <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>TRADE STATISTICS</span>
           </div>
           {expandedSection === 'trades' ? (
-            <ChevronUp size={14} style={{ color: COLORS.GRAY }} />
+            <ChevronUp size={14} style={{ color: FINCEPT.GRAY }} />
           ) : (
-            <ChevronDown size={14} style={{ color: COLORS.GRAY }} />
+            <ChevronDown size={14} style={{ color: FINCEPT.GRAY }} />
           )}
         </button>
         {expandedSection === 'trades' && (
-          <div className="px-4 pb-3">
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              <div className="text-center p-2 rounded" style={{ backgroundColor: COLORS.CARD_BG }}>
-                <div className="text-lg font-bold" style={{ color: COLORS.WHITE }}>
+          <div style={{ padding: '0 16px 12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+              <div style={{ textAlign: 'center', padding: '8px', backgroundColor: FINCEPT.CARD_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.WHITE }}>
                   {metricsData.total_trades}
                 </div>
-                <div className="text-xs" style={{ color: COLORS.GRAY }}>Total</div>
+                <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Total</div>
               </div>
-              <div className="text-center p-2 rounded" style={{ backgroundColor: COLORS.GREEN + '10' }}>
-                <div className="text-lg font-bold" style={{ color: COLORS.GREEN }}>
+              <div style={{ textAlign: 'center', padding: '8px', backgroundColor: FINCEPT.GREEN + '10', border: `1px solid ${FINCEPT.BORDER}` }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.GREEN }}>
                   {metricsData.winning_trades}
                 </div>
-                <div className="text-xs" style={{ color: COLORS.GRAY }}>Wins</div>
+                <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Wins</div>
               </div>
-              <div className="text-center p-2 rounded" style={{ backgroundColor: COLORS.RED + '10' }}>
-                <div className="text-lg font-bold" style={{ color: COLORS.RED }}>
+              <div style={{ textAlign: 'center', padding: '8px', backgroundColor: FINCEPT.RED + '10', border: `1px solid ${FINCEPT.BORDER}` }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.RED }}>
                   {metricsData.losing_trades}
                 </div>
-                <div className="text-xs" style={{ color: COLORS.GRAY }}>Losses</div>
+                <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Losses</div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <MetricCard
                 label="Avg Win"
                 value={`$${metricsData.avg_win.toFixed(2)}`}
                 icon={<TrendingUp size={14} />}
-                color={COLORS.GREEN}
+                color={FINCEPT.GREEN}
                 tooltip="Average winning trade"
               />
               <MetricCard
                 label="Avg Loss"
                 value={`$${Math.abs(metricsData.avg_loss).toFixed(2)}`}
                 icon={<TrendingDown size={14} />}
-                color={COLORS.RED}
+                color={FINCEPT.RED}
                 tooltip="Average losing trade"
               />
             </div>
@@ -334,42 +393,67 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
   );
 
   return (
-    <div
-      className="rounded-lg overflow-hidden"
-      style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}
-    >
+    <div className="metrics-panel" style={{
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+      overflow: 'hidden',
+      fontFamily: TERMINAL_FONT,
+    }}>
+      <style>{METRICS_STYLES}</style>
+
       {/* Header */}
-      <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
-        <div className="flex items-center gap-2">
-          <BarChart3 size={16} style={{ color: COLORS.PURPLE }} />
-          <span className="font-semibold text-sm" style={{ color: COLORS.WHITE }}>
-            Portfolio Metrics
+      <div style={{
+        padding: '10px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <BarChart3 size={16} style={{ color: FINCEPT.PURPLE }} />
+          <span style={{ fontWeight: 600, fontSize: '12px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+            PORTFOLIO METRICS
           </span>
         </div>
         <button
           onClick={handleRefresh}
           disabled={isLoading}
-          className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
+          onMouseEnter={() => setHoveredBtn('refresh')}
+          onMouseLeave={() => setHoveredBtn(null)}
+          style={{
+            padding: '4px',
+            backgroundColor: hoveredBtn === 'refresh' ? FINCEPT.HOVER : 'transparent',
+            border: 'none',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+          }}
         >
           <RefreshCw
             size={14}
-            className={isLoading ? 'animate-spin' : ''}
-            style={{ color: COLORS.GRAY }}
+            style={{
+              color: FINCEPT.GRAY,
+              animation: isLoading ? 'metrics-spin 1s linear infinite' : 'none',
+            }}
           />
         </button>
       </div>
 
       {/* Model Selector */}
       {allMetrics && Object.keys(allMetrics).length > 0 && (
-        <div className="px-4 py-2 border-b" style={{ borderColor: COLORS.BORDER }}>
+        <div style={{ padding: '8px 16px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
           <select
             value={selectedModel || ''}
             onChange={(e) => handleModelChange(e.target.value || null)}
-            className="w-full px-2 py-1.5 rounded text-xs"
             style={{
-              backgroundColor: COLORS.CARD_BG,
-              color: COLORS.WHITE,
-              border: `1px solid ${COLORS.BORDER}`,
+              width: '100%',
+              padding: '6px 8px',
+              fontSize: '11px',
+              fontFamily: TERMINAL_FONT,
+              backgroundColor: FINCEPT.CARD_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              outline: 'none',
             }}
           >
             <option value="">All Models</option>
@@ -381,45 +465,63 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
       )}
 
       {/* Content */}
-      <div className="max-h-96 overflow-y-auto">
+      <div style={{ maxHeight: '384px', overflowY: 'auto' }}>
         {error && (
-          <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '10' }}>
-            <AlertTriangle size={14} style={{ color: COLORS.RED }} />
-            <span className="text-xs" style={{ color: COLORS.RED }}>{error.message}</span>
+          <div style={{
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: FINCEPT.RED + '10',
+          }}>
+            <AlertTriangle size={14} style={{ color: FINCEPT.RED }} />
+            <span style={{ fontSize: '11px', color: FINCEPT.RED, fontFamily: TERMINAL_FONT }}>{error.message}</span>
           </div>
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 size={24} className="animate-spin" style={{ color: COLORS.ORANGE }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+            <Loader2 size={24} style={{ color: FINCEPT.ORANGE, animation: 'metrics-spin 1s linear infinite' }} />
           </div>
         ) : metrics ? (
           renderMetricsSection(metrics)
         ) : allMetrics && Object.keys(allMetrics).length > 0 ? (
-          <div className="p-4">
-            <div className="text-xs mb-3" style={{ color: COLORS.GRAY }}>
-              <Info size={12} className="inline mr-1" />
+          <div style={{ padding: '16px' }}>
+            <div style={{ fontSize: '10px', marginBottom: '12px', color: FINCEPT.GRAY, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Info size={12} />
               Showing overview for {Object.keys(allMetrics).length} models
             </div>
-            <div className="space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {Object.entries(allMetrics).map(([model, modelMetrics]) => (
                 <button
                   key={model}
                   onClick={() => handleModelChange(model)}
-                  className="w-full p-3 rounded flex items-center justify-between transition-colors hover:bg-[#1A1A1A]"
-                  style={{ backgroundColor: COLORS.CARD_BG }}
+                  onMouseEnter={() => setHoveredModel(model)}
+                  onMouseLeave={() => setHoveredModel(null)}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: hoveredModel === model ? FINCEPT.HOVER : FINCEPT.CARD_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    cursor: 'pointer',
+                    fontFamily: TERMINAL_FONT,
+                    textAlign: 'left',
+                  }}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>{model}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>{model}</span>
                   </div>
-                  <div className="flex items-center gap-4 text-xs">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '11px' }}>
                     <span style={{ color: getReturnColor(modelMetrics.total_return) }}>
                       {(modelMetrics.total_return * 100).toFixed(1)}%
                     </span>
-                    <span style={{ color: COLORS.GRAY }}>
+                    <span style={{ color: FINCEPT.GRAY }}>
                       {modelMetrics.total_trades} trades
                     </span>
-                    <span style={{ color: modelMetrics.sharpe_ratio > 1 ? COLORS.GREEN : COLORS.GRAY }}>
+                    <span style={{ color: modelMetrics.sharpe_ratio > 1 ? FINCEPT.GREEN : FINCEPT.GRAY }}>
                       SR: {modelMetrics.sharpe_ratio.toFixed(2)}
                     </span>
                   </div>
@@ -428,10 +530,10 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
             </div>
           </div>
         ) : (
-          <div className="p-8 text-center">
-            <BarChart3 size={32} className="mx-auto mb-2 opacity-30" style={{ color: COLORS.GRAY }} />
-            <p className="text-sm" style={{ color: COLORS.GRAY }}>No metrics available</p>
-            <p className="text-xs mt-1" style={{ color: COLORS.GRAY }}>
+          <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+            <BarChart3 size={32} style={{ color: FINCEPT.GRAY, opacity: 0.3, margin: '0 auto 8px' }} />
+            <p style={{ fontSize: '12px', color: FINCEPT.GRAY }}>No metrics available</p>
+            <p style={{ fontSize: '10px', marginTop: '4px', color: FINCEPT.GRAY }}>
               Start a competition to see portfolio metrics
             </p>
           </div>

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { watchlistService, WatchlistStockWithQuote } from '../../../../services/core/watchlistService';
+import { useCache } from '@/hooks/useCache';
 
 interface WatchlistWidgetProps {
   id: string;
@@ -17,35 +18,26 @@ export const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({
   onRemove
 }) => {
   const { t } = useTranslation('dashboard');
-  const [stocks, setStocks] = useState<WatchlistStockWithQuote[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadStocks = async () => {
-    if (!watchlistId) {
-      setError(t('widgets.noWatchlistSelected'));
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data: stocks,
+    isLoading: loading,
+    error,
+    refresh
+  } = useCache<WatchlistStockWithQuote[]>({
+    key: `widget:watchlist:${watchlistId || 'none'}`,
+    category: 'market-quotes',
+    ttl: '10m',
+    refetchInterval: 10 * 60 * 1000,
+    staleWhileRevalidate: true,
+    enabled: !!watchlistId,
+    fetcher: async () => {
       await watchlistService.initialize();
-      const data = await watchlistService.getWatchlistStocksWithQuotes(watchlistId);
-      setStocks(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load watchlist');
-    } finally {
-      setLoading(false);
+      return watchlistService.getWatchlistStocksWithQuotes(watchlistId!);
     }
-  };
+  });
 
-  useEffect(() => {
-    loadStocks();
-    const interval = setInterval(loadStocks, 10 * 60 * 1000); // Refresh every 10 minutes
-    return () => clearInterval(interval);
-  }, [watchlistId]);
+  const displayStocks = stocks || [];
 
   const formatChange = (value: number) => value >= 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
   const formatPercent = (value: number) => value >= 0 ? `+${value.toFixed(2)}%` : `${value.toFixed(2)}%`;
@@ -55,9 +47,9 @@ export const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({
       id={id}
       title={`${t('widgets.watchlist')} - ${watchlistName}`}
       onRemove={onRemove}
-      onRefresh={loadStocks}
-      isLoading={loading}
-      error={error}
+      onRefresh={refresh}
+      isLoading={loading && !stocks}
+      error={!watchlistId ? t('widgets.noWatchlistSelected') : (error?.message || null)}
     >
       <div style={{ padding: '4px' }}>
         <div style={{
@@ -76,7 +68,7 @@ export const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({
           <div style={{ textAlign: 'right' }}>{t('widgets.change')}</div>
           <div style={{ textAlign: 'right' }}>{t('widgets.percentChange')}</div>
         </div>
-        {stocks.map((stock, index) => (
+        {displayStocks.map((stock, index) => (
           <div
             key={index}
             style={{
@@ -106,7 +98,7 @@ export const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({
             </div>
           </div>
         ))}
-        {stocks.length === 0 && !loading && !error && (
+        {displayStocks.length === 0 && !loading && !error && watchlistId && (
           <div style={{ color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-small)', textAlign: 'center', padding: '12px' }}>
             {t('widgets.noStocksInWatchlist')}
           </div>

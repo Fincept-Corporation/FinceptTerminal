@@ -127,6 +127,14 @@ export function StockTradingChart({
     setSelectedInterval(initialInterval);
   }, [initialInterval]);
 
+  // Clear chart data when symbol/exchange changes to prevent stale data flash
+  useEffect(() => {
+    console.log(`[StockTradingChart] Symbol/exchange changed to ${exchange}:${symbol}, clearing old chart data`);
+    setChartData([]);
+    setIsLoading(true);
+    setError(null);
+  }, [symbol, exchange]);
+
   // Fetch historical data with retry for race condition handling
   const fetchHistoricalData = useCallback(async (retryCount = 0) => {
     const INIT_MAX_RETRIES = 5;   // retries for adapter/auth readiness
@@ -134,8 +142,11 @@ export function StockTradingChart({
     const FETCH_MAX_RETRIES = 2;  // retries for actual API call failures
     const FETCH_TIMEOUT = 45000;  // 45s per attempt (Rust timeout is 15s, plus overhead)
 
+    // Increment fetch ID to prevent stale responses from overwriting current data
+    const currentFetchId = ++fetchIdRef.current;
+
     // Comprehensive state logging at start of each attempt
-    console.log(`[StockTradingChart] ========== fetchHistoricalData attempt ${retryCount + 1}/${INIT_MAX_RETRIES + 1} ==========`);
+    console.log(`[StockTradingChart] ========== fetchHistoricalData attempt ${retryCount + 1}/${INIT_MAX_RETRIES + 1} (fetchId=${currentFetchId}) ==========`);
     console.log(`[StockTradingChart] State:`, {
       symbol,
       exchange,
@@ -277,6 +288,12 @@ export function StockTradingChart({
       }
 
       if (!mountedRef.current) return;
+
+      // Check if this fetch is still the latest one (prevent stale data from overwriting)
+      if (currentFetchId !== fetchIdRef.current) {
+        console.log(`[StockTradingChart] Discarding stale fetch result (fetchId=${currentFetchId}, current=${fetchIdRef.current})`);
+        return;
+      }
 
       console.log(`[StockTradingChart] Fetched ${ohlcvData.length} candles from ${adapter.brokerId}`);
 
@@ -534,6 +551,7 @@ export function StockTradingChart({
             flexDirection: 'column'
           }}>
             <ProChartWithToolkit
+              key={`${exchange}:${symbol}`}
               data={chartData}
               symbol={`${exchange}:${symbol}`}
               showVolume={true}

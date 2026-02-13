@@ -88,7 +88,7 @@ def get_historical_price(symbol, target_date):
         dict with price info or error
     """
     try:
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         # Parse target date
         target = datetime.strptime(target_date, '%Y-%m-%d')
@@ -104,7 +104,6 @@ def get_historical_price(symbol, target_date):
             return {"found": False, "error": "No data available for this date range", "symbol": symbol}
 
         # Find the closest date <= target_date
-        target_ts = target.replace(hour=23, minute=59, second=59)
         closest_date = None
         closest_price = None
 
@@ -192,7 +191,7 @@ def get_info(symbol):
             "short_percent_of_float": info.get('shortPercentOfFloat'),
             "peg_ratio": info.get('trailingPegRatio'),
             "total_assets": info.get('totalAssets'),
-            "total_liabilities": info.get('totalDebt'),
+            "total_liabilities": info.get('totalLiab', info.get('totalLiabilities')),
             "book_value_total": (info.get('bookValue') or 0) * (info.get('sharesOutstanding') or 0) if info.get('bookValue') and info.get('sharesOutstanding') else None,
             "timestamp": int(datetime.now().timestamp())
         }
@@ -240,7 +239,7 @@ def get_batch_quotes(symbols):
     """Fetch quotes for multiple symbols at once using yfinance batch download"""
     try:
         # Use yfinance download() for true batch fetching (single HTTP request)
-        data = yf.download(symbols, period="2d", group_by='ticker', progress=False, threads=True)
+        data = yf.download(symbols, period="2d", group_by='ticker', progress=False, threads=True, auto_adjust=True)
 
         if data is None or data.empty:
             return []

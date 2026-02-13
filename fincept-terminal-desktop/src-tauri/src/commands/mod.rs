@@ -50,6 +50,9 @@ pub mod swiss_gov;
 pub mod spain_data;
 pub mod adb;
 
+// Nordic / PxWeb data sources
+pub mod pxweb;
+
 // Specialized data sources
 pub mod openafrica;
 pub mod hdx;

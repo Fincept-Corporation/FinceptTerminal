@@ -20,6 +20,18 @@ import { withErrorBoundary } from '@/components/common/ErrorBoundary';
 import type { PerformanceSnapshot, ChartData } from '../types';
 import { formatCurrency, MODEL_COLORS } from '../types';
 
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+};
+
+const TERMINAL_FONT = '"IBM Plex Mono", "Consolas", monospace';
+
 interface PerformanceChartProps {
   snapshots: PerformanceSnapshot[];
   height?: number;
@@ -70,15 +82,26 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({
 
   if (chartData.length === 0) {
     return (
-      <div className="bg-[#0F0F0F] rounded-lg p-4 border border-[#2A2A2A]">
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="w-5 h-5 text-[#FF8800]" />
-          <h3 className="text-white font-semibold">Performance Chart</h3>
+      <div style={{
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        padding: '16px',
+        fontFamily: TERMINAL_FONT,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <TrendingUp size={16} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ color: FINCEPT.WHITE, fontWeight: 600, fontSize: '13px' }}>
+            PERFORMANCE CHART
+          </span>
         </div>
-        <div
-          className="flex items-center justify-center text-[#787878]"
-          style={{ height }}
-        >
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: FINCEPT.GRAY,
+          fontSize: '12px',
+          height,
+        }}>
           Run cycles to see performance data
         </div>
       </div>
@@ -86,10 +109,17 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({
   }
 
   return (
-    <div className="bg-[#0F0F0F] rounded-lg p-4 border border-[#2A2A2A]">
-      <div className="flex items-center gap-2 mb-4">
-        <TrendingUp className="w-5 h-5 text-[#FF8800]" />
-        <h3 className="text-white font-semibold">Performance Chart</h3>
+    <div style={{
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+      padding: '16px',
+      fontFamily: TERMINAL_FONT,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+        <TrendingUp size={16} style={{ color: FINCEPT.ORANGE }} />
+        <span style={{ color: FINCEPT.WHITE, fontWeight: 600, fontSize: '13px' }}>
+          PERFORMANCE CHART
+        </span>
       </div>
 
       <ResponsiveContainer width="100%" height={height}>
@@ -97,26 +127,30 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({
           data={chartData}
           margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
+          <CartesianGrid strokeDasharray="3 3" stroke={FINCEPT.BORDER} />
           <XAxis
             dataKey="cycle"
-            stroke="#787878"
-            fontSize={12}
+            stroke={FINCEPT.GRAY}
+            fontSize={10}
+            fontFamily={TERMINAL_FONT}
             tickFormatter={(value) => `#${value}`}
           />
           <YAxis
-            stroke="#787878"
-            fontSize={12}
+            stroke={FINCEPT.GRAY}
+            fontSize={10}
+            fontFamily={TERMINAL_FONT}
             tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
             domain={['dataMin - 500', 'dataMax + 500']}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#1A1A1A',
-              border: '1px solid #2A2A2A',
-              borderRadius: '8px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              borderRadius: 0,
+              fontFamily: TERMINAL_FONT,
+              fontSize: '11px',
             }}
-            labelStyle={{ color: '#FFFFFF' }}
+            labelStyle={{ color: FINCEPT.WHITE, fontFamily: TERMINAL_FONT }}
             formatter={(value: number, name: string) => [
               formatCurrency(value),
               name,
@@ -125,9 +159,9 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({
           />
           {showLegend && (
             <Legend
-              wrapperStyle={{ paddingTop: '10px' }}
+              wrapperStyle={{ paddingTop: '10px', fontFamily: TERMINAL_FONT, fontSize: '10px' }}
               formatter={(value) => (
-                <span style={{ color: '#FFFFFF' }}>{value}</span>
+                <span style={{ color: FINCEPT.WHITE, fontFamily: TERMINAL_FONT }}>{value}</span>
               )}
             />
           )}

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
 import { geopoliticsService } from '@/services/geopolitics/geopoliticsService';
 import { useTranslation } from 'react-i18next';
+import { useCache } from '@/hooks/useCache';
 
 interface GeopoliticsWidgetProps {
   id: string;
@@ -18,6 +19,21 @@ interface ThreatLevel {
   description: string;
 }
 
+interface GeopoliticsData {
+  threats: ThreatLevel[];
+  overallRisk: number;
+}
+
+const DEMO_DATA: GeopoliticsData = {
+  threats: [
+    { category: 'Trade Restrictions', level: 6.5, trend: 'up', description: '23 active restrictions' },
+    { category: 'Regulatory Changes', level: 4.2, trend: 'stable', description: '12 pending notifications' },
+    { category: 'Tariff Risk', level: 7.1, trend: 'up', description: 'Elevated tariff tensions' },
+    { category: 'Supply Chain', level: 5.3, trend: 'stable', description: 'Moderate disruption risk' },
+    { category: 'Currency Risk', level: 3.2, trend: 'down', description: 'Stable forex conditions' }
+  ],
+  overallRisk: 5.3
+};
 
 export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
   id,
@@ -26,10 +42,6 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
   onNavigate
 }) => {
   const { t } = useTranslation('dashboard');
-  const [threats, setThreats] = useState<ThreatLevel[]>([]);
-  const [overallRisk, setOverallRisk] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedCountry, setSelectedCountry] = useState(country);
 
   const countries = [
@@ -40,73 +52,66 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
     { code: '392', name: 'Japan' },
   ];
 
-  const loadGeopoliticsData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const {
+    data: geoData,
+    isLoading: loading,
+    error,
+    refresh
+  } = useCache<GeopoliticsData>({
+    key: `widget:geopolitics:${selectedCountry}`,
+    category: 'api-response',
+    ttl: '5m',
+    refetchInterval: 5 * 60 * 1000,
+    staleWhileRevalidate: true,
+    fetcher: async () => {
+      try {
+        const data = await geopoliticsService.getComprehensiveGeopoliticsData(selectedCountry);
 
-      const data = await geopoliticsService.getComprehensiveGeopoliticsData(selectedCountry);
+        const qrCount = data.qrNotifications?.length || 0;
+        const epingCount = data.epingNotifications?.length || 0;
 
-      // Calculate threat levels from data
-      const qrCount = data.qrNotifications?.length || 0;
-      const epingCount = data.epingNotifications?.length || 0;
+        const threats: ThreatLevel[] = [
+          {
+            category: 'Trade Restrictions',
+            level: Math.min(qrCount > 0 ? 2 + (qrCount / 50) * 8 : 0, 10),
+            trend: qrCount > 5 ? 'up' : 'stable',
+            description: `${qrCount} active restrictions`
+          },
+          {
+            category: 'Regulatory Changes',
+            level: Math.min(epingCount > 0 ? 2 + (epingCount / 30) * 6 : 1, 10),
+            trend: epingCount > 10 ? 'up' : 'stable',
+            description: `${epingCount} pending notifications`
+          },
+          {
+            category: 'Tariff Risk',
+            level: 5.5,
+            trend: 'up',
+            description: 'Elevated tariff tensions'
+          },
+          {
+            category: 'Supply Chain',
+            level: 4.2,
+            trend: 'stable',
+            description: 'Moderate disruption risk'
+          },
+          {
+            category: 'Currency Risk',
+            level: 3.8,
+            trend: 'down',
+            description: 'Stable forex conditions'
+          }
+        ];
 
-      const threatData: ThreatLevel[] = [
-        {
-          category: 'Trade Restrictions',
-          level: Math.min(qrCount > 0 ? 2 + (qrCount / 50) * 8 : 0, 10),
-          trend: qrCount > 5 ? 'up' : 'stable',
-          description: `${qrCount} active restrictions`
-        },
-        {
-          category: 'Regulatory Changes',
-          level: Math.min(epingCount > 0 ? 2 + (epingCount / 30) * 6 : 1, 10),
-          trend: epingCount > 10 ? 'up' : 'stable',
-          description: `${epingCount} pending notifications`
-        },
-        {
-          category: 'Tariff Risk',
-          level: 5.5,
-          trend: 'up',
-          description: 'Elevated tariff tensions'
-        },
-        {
-          category: 'Supply Chain',
-          level: 4.2,
-          trend: 'stable',
-          description: 'Moderate disruption risk'
-        },
-        {
-          category: 'Currency Risk',
-          level: 3.8,
-          trend: 'down',
-          description: 'Stable forex conditions'
-        }
-      ];
-
-      setThreats(threatData);
-      setOverallRisk(threatData.reduce((sum, t) => sum + t.level, 0) / threatData.length);
-    } catch (err) {
-      // Demo data on error
-      setThreats([
-        { category: 'Trade Restrictions', level: 6.5, trend: 'up', description: '23 active restrictions' },
-        { category: 'Regulatory Changes', level: 4.2, trend: 'stable', description: '12 pending notifications' },
-        { category: 'Tariff Risk', level: 7.1, trend: 'up', description: 'Elevated tariff tensions' },
-        { category: 'Supply Chain', level: 5.3, trend: 'stable', description: 'Moderate disruption risk' },
-        { category: 'Currency Risk', level: 3.2, trend: 'down', description: 'Stable forex conditions' }
-      ]);
-      setOverallRisk(5.3);
-    } finally {
-      setLoading(false);
+        const overallRisk = threats.reduce((sum, t) => sum + t.level, 0) / threats.length;
+        return { threats, overallRisk };
+      } catch {
+        return DEMO_DATA;
+      }
     }
-  };
+  });
 
-  useEffect(() => {
-    loadGeopoliticsData();
-    const interval = setInterval(loadGeopoliticsData, 300000);
-    return () => clearInterval(interval);
-  }, [selectedCountry]);
-
+  const { threats, overallRisk } = geoData || DEMO_DATA;
 
   const getLevelColor = (level: number) => {
     if (level >= 7) return 'var(--ft-color-alert)';
@@ -138,9 +143,9 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
       id={id}
       title="GEOPOLITICAL RISK MONITOR"
       onRemove={onRemove}
-      onRefresh={loadGeopoliticsData}
-      isLoading={loading}
-      error={error}
+      onRefresh={refresh}
+      isLoading={loading && !geoData}
+      error={error?.message || null}
       headerColor="var(--ft-color-purple)"
     >
       <div style={{ padding: '4px' }}>

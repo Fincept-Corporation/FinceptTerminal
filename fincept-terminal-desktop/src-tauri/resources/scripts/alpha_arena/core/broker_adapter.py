@@ -371,34 +371,31 @@ class MultiExchangeDataProvider:
                 return cached
 
         # Fetch based on exchange
-        try:
-            if exchange == "kraken":
-                data = await self._fetch_kraken(symbol)
-            elif exchange == "binance":
-                data = await self._fetch_binance(symbol)
-            elif exchange == "okx":
-                data = await self._fetch_okx(symbol)
-            elif exchange == "coinbase":
-                data = await self._fetch_coinbase(symbol)
-            elif exchange == "bybit":
-                data = await self._fetch_bybit(symbol)
-            elif exchange == "kucoin":
-                data = await self._fetch_kucoin(symbol)
-            elif exchange == "gateio":
-                data = await self._fetch_gateio(symbol)
-            elif exchange == "hyperliquid":
-                data = await self._fetch_hyperliquid(symbol)
-            else:
-                # For stock brokers, use mock data (live would require Rust bridge)
-                logger.info(f"Using mock data for {exchange}:{symbol} (stock broker or unsupported)")
-                data = self._mock_data(symbol)
+        if exchange == "kraken":
+            data = await self._fetch_kraken(symbol)
+        elif exchange == "binance":
+            data = await self._fetch_binance(symbol)
+        elif exchange == "okx":
+            data = await self._fetch_okx(symbol)
+        elif exchange == "coinbase":
+            data = await self._fetch_coinbase(symbol)
+        elif exchange == "bybit":
+            data = await self._fetch_bybit(symbol)
+        elif exchange == "kucoin":
+            data = await self._fetch_kucoin(symbol)
+        elif exchange == "gateio":
+            data = await self._fetch_gateio(symbol)
+        elif exchange == "hyperliquid":
+            data = await self._fetch_hyperliquid(symbol)
+        else:
+            raise RuntimeError(
+                f"Live market data not available for '{exchange}'. "
+                f"Stock brokers require Rust bridge integration. "
+                f"Supported crypto exchanges: kraken, binance, okx, coinbase, bybit, kucoin, gateio, hyperliquid."
+            )
 
-            self._cache[cache_key] = data
-            return data
-
-        except Exception as e:
-            logger.error(f"Error fetching {symbol} from {exchange}: {e}")
-            return self._mock_data(symbol)
+        self._cache[cache_key] = data
+        return data
 
     async def _fetch_kraken(self, symbol: str) -> MarketData:
         """Fetch from Kraken API."""
@@ -411,15 +408,19 @@ class MultiExchangeDataProvider:
         url = f"https://api.kraken.com/0/public/Ticker?pair={pair}"
 
         if not self._client:
-            return self._mock_data(symbol)
+            raise RuntimeError("HTTP client not initialized. Call initialize() first.")
 
         response = await self._client.get(url)
         data = response.json()
 
         if data.get("error"):
-            return self._mock_data(symbol)
+            raise RuntimeError(f"Kraken API error for {symbol}: {data['error']}")
 
-        result = list(data.get("result", {}).values())[0]
+        results = data.get("result", {})
+        if not results:
+            raise RuntimeError(f"No data returned from Kraken for {symbol}")
+
+        result = list(results.values())[0]
 
         return MarketData(
             symbol=symbol,
@@ -441,10 +442,13 @@ class MultiExchangeDataProvider:
         url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={pair}"
 
         if not self._client:
-            return self._mock_data(symbol)
+            raise RuntimeError("HTTP client not initialized. Call initialize() first.")
 
         response = await self._client.get(url)
         data = response.json()
+
+        if isinstance(data, dict) and data.get("code"):
+            raise RuntimeError(f"Binance API error for {symbol}: {data.get('msg', data)}")
 
         return MarketData(
             symbol=symbol,
@@ -463,13 +467,13 @@ class MultiExchangeDataProvider:
         url = f"https://www.okx.com/api/v5/market/ticker?instId={pair}"
 
         if not self._client:
-            return self._mock_data(symbol)
+            raise RuntimeError("HTTP client not initialized. Call initialize() first.")
 
         response = await self._client.get(url)
         data = response.json()
 
         if data.get("code") != "0" or not data.get("data"):
-            return self._mock_data(symbol)
+            raise RuntimeError(f"OKX API error for {symbol}: code={data.get('code')}, msg={data.get('msg', 'no data')}")
 
         ticker = data["data"][0]
 
@@ -490,18 +494,25 @@ class MultiExchangeDataProvider:
         url = f"https://api.exchange.coinbase.com/products/{pair}/ticker"
 
         if not self._client:
-            return self._mock_data(symbol)
+            raise RuntimeError("HTTP client not initialized. Call initialize() first.")
 
         response = await self._client.get(url)
         data = response.json()
 
+        if data.get("message"):
+            raise RuntimeError(f"Coinbase API error for {symbol}: {data['message']}")
+
+        price = float(data.get("price", 0))
+        if price == 0:
+            raise RuntimeError(f"Coinbase returned zero price for {symbol}")
+
         return MarketData(
             symbol=symbol,
-            price=float(data.get("price", 0)),
+            price=price,
             bid=float(data.get("bid", 0)),
             ask=float(data.get("ask", 0)),
-            high_24h=float(data.get("price", 0)) * 1.02,
-            low_24h=float(data.get("price", 0)) * 0.98,
+            high_24h=price * 1.02,
+            low_24h=price * 0.98,
             volume_24h=float(data.get("volume", 0)),
             timestamp=datetime.now(),
         )
@@ -512,13 +523,13 @@ class MultiExchangeDataProvider:
         url = f"https://api.bybit.com/v5/market/tickers?category=spot&symbol={pair}"
 
         if not self._client:
-            return self._mock_data(symbol)
+            raise RuntimeError("HTTP client not initialized. Call initialize() first.")
 
         response = await self._client.get(url)
         data = response.json()
 
         if data.get("retCode") != 0 or not data.get("result", {}).get("list"):
-            return self._mock_data(symbol)
+            raise RuntimeError(f"Bybit API error for {symbol}: retCode={data.get('retCode')}, msg={data.get('retMsg', 'no data')}")
 
         ticker = data["result"]["list"][0]
 
@@ -539,13 +550,13 @@ class MultiExchangeDataProvider:
         url = f"https://api.kucoin.com/api/v1/market/stats?symbol={pair}"
 
         if not self._client:
-            return self._mock_data(symbol)
+            raise RuntimeError("HTTP client not initialized. Call initialize() first.")
 
         response = await self._client.get(url)
         data = response.json()
 
         if data.get("code") != "200000" or not data.get("data"):
-            return self._mock_data(symbol)
+            raise RuntimeError(f"KuCoin API error for {symbol}: code={data.get('code')}, msg={data.get('msg', 'no data')}")
 
         ticker = data["data"]
 
@@ -566,30 +577,26 @@ class MultiExchangeDataProvider:
         url = f"https://api.gateio.ws/api/v4/spot/tickers?currency_pair={pair}"
 
         if not self._client:
-            return self._mock_data(symbol)
+            raise RuntimeError("HTTP client not initialized. Call initialize() first.")
 
-        try:
-            response = await self._client.get(url)
-            data = response.json()
+        response = await self._client.get(url)
+        data = response.json()
 
-            if not data or len(data) == 0:
-                return self._mock_data(symbol)
+        if not data or len(data) == 0:
+            raise RuntimeError(f"Gate.io returned no data for {symbol}")
 
-            ticker = data[0]
+        ticker = data[0]
 
-            return MarketData(
-                symbol=symbol,
-                price=float(ticker.get("last", 0)),
-                bid=float(ticker.get("highest_bid", 0)),
-                ask=float(ticker.get("lowest_ask", 0)),
-                high_24h=float(ticker.get("high_24h", 0)),
-                low_24h=float(ticker.get("low_24h", 0)),
-                volume_24h=float(ticker.get("base_volume", 0)),
-                timestamp=datetime.now(),
-            )
-        except Exception as e:
-            logger.error(f"Gate.io fetch error: {e}")
-            return self._mock_data(symbol)
+        return MarketData(
+            symbol=symbol,
+            price=float(ticker.get("last", 0)),
+            bid=float(ticker.get("highest_bid", 0)),
+            ask=float(ticker.get("lowest_ask", 0)),
+            high_24h=float(ticker.get("high_24h", 0)),
+            low_24h=float(ticker.get("low_24h", 0)),
+            volume_24h=float(ticker.get("base_volume", 0)),
+            timestamp=datetime.now(),
+        )
 
     async def _fetch_hyperliquid(self, symbol: str) -> MarketData:
         """Fetch from HyperLiquid API."""
@@ -598,60 +605,29 @@ class MultiExchangeDataProvider:
         url = "https://api.hyperliquid.xyz/info"
 
         if not self._client:
-            return self._mock_data(symbol)
+            raise RuntimeError("HTTP client not initialized. Call initialize() first.")
 
-        try:
-            # HyperLiquid requires POST request with JSON body
-            payload = {
-                "type": "allMids"
-            }
-            response = await self._client.post(url, json=payload)
-            data = response.json()
-
-            if base_symbol not in data:
-                return self._mock_data(symbol)
-
-            mid_price = float(data[base_symbol])
-            spread = mid_price * 0.0001  # 0.01% spread estimate
-
-            return MarketData(
-                symbol=symbol,
-                price=mid_price,
-                bid=mid_price - spread,
-                ask=mid_price + spread,
-                high_24h=mid_price * 1.02,
-                low_24h=mid_price * 0.98,
-                volume_24h=0,  # HyperLiquid doesn't provide volume in allMids
-                timestamp=datetime.now(),
-            )
-        except Exception as e:
-            logger.error(f"HyperLiquid fetch error: {e}")
-            return self._mock_data(symbol)
-
-    def _mock_data(self, symbol: str) -> MarketData:
-        """Generate mock data."""
-        import random
-
-        base_prices = {
-            "BTC/USD": 95000.0, "BTC/USDT": 95000.0,
-            "ETH/USD": 3500.0, "ETH/USDT": 3500.0,
-            "SOL/USD": 180.0, "SOL/USDT": 180.0,
-            "XRP/USD": 2.5, "XRP/USDT": 2.5,
+        # HyperLiquid requires POST request with JSON body
+        payload = {
+            "type": "allMids"
         }
+        response = await self._client.post(url, json=payload)
+        data = response.json()
 
-        base_price = base_prices.get(symbol, 100.0)
-        variation = base_price * 0.001
-        price = base_price + random.uniform(-variation, variation)
-        spread = price * 0.0005
+        if base_symbol not in data:
+            raise RuntimeError(f"HyperLiquid has no data for {base_symbol} (symbol: {symbol})")
+
+        mid_price = float(data[base_symbol])
+        spread = mid_price * 0.0001  # 0.01% spread estimate
 
         return MarketData(
             symbol=symbol,
-            price=price,
-            bid=price - spread,
-            ask=price + spread,
-            high_24h=price * 1.02,
-            low_24h=price * 0.98,
-            volume_24h=random.uniform(1000, 10000),
+            price=mid_price,
+            bid=mid_price - spread,
+            ask=mid_price + spread,
+            high_24h=mid_price * 1.02,
+            low_24h=mid_price * 0.98,
+            volume_24h=0,  # HyperLiquid doesn't provide volume in allMids
             timestamp=datetime.now(),
         )
 

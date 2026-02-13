@@ -3,20 +3,25 @@
 import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { sqliteService } from '@/services/core/sqliteService';
+import { getDateFromPreset } from '@/components/common/charts';
+import type { DateRangePreset } from '@/components/common/charts';
 import {
   COUNTRIES,
   CFTC_MARKETS,
   EIA_INDICATORS,
   ADB_INDICATORS,
   FED_INDICATORS,
+  BLS_INDICATORS,
+  UNESCO_INDICATORS,
+  FISCALDATA_INDICATORS,
+  BEA_INDICATORS,
   getIndicatorsForSource,
   getDefaultIndicator,
   DATA_SOURCES,
 } from '../constants';
 import type { DataSource, IndicatorData, DataPoint, ChartStats } from '../types';
 
-// Date range presets for quick selection
-export type DateRangePreset = '1M' | '3M' | '6M' | '1Y' | '2Y' | '5Y' | '10Y' | 'ALL';
+export type { DateRangePreset };
 
 interface UseEconomicsDataReturn {
   dataSource: DataSource;
@@ -42,48 +47,15 @@ interface UseEconomicsDataReturn {
   setWtoApiKey: (key: string) => void;
   eiaApiKey: string;
   setEiaApiKey: (key: string) => void;
+  blsApiKey: string;
+  setBlsApiKey: (key: string) => void;
+  beaApiKey: string;
+  setBeaApiKey: (key: string) => void;
   showApiKeyInput: boolean;
   setShowApiKeyInput: (show: boolean) => void;
   apiKeySaving: boolean;
   saveApiKey: (keyName: string, keyValue: string) => Promise<void>;
 }
-
-// Helper to calculate date from preset
-const getDateFromPreset = (preset: DateRangePreset): { start: string; end: string } => {
-  const now = new Date();
-  const end = now.toISOString().split('T')[0];
-  let start: Date;
-
-  switch (preset) {
-    case '1M':
-      start = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-      break;
-    case '3M':
-      start = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-      break;
-    case '6M':
-      start = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-      break;
-    case '1Y':
-      start = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-      break;
-    case '2Y':
-      start = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
-      break;
-    case '5Y':
-      start = new Date(now.getFullYear() - 5, now.getMonth(), now.getDate());
-      break;
-    case '10Y':
-      start = new Date(now.getFullYear() - 10, now.getMonth(), now.getDate());
-      break;
-    case 'ALL':
-    default:
-      start = new Date(1960, 0, 1); // Start from 1960 for historical data
-      break;
-  }
-
-  return { start: start.toISOString().split('T')[0], end };
-};
 
 export function useEconomicsData(): UseEconomicsDataReturn {
   const [dataSource, setDataSourceState] = useState<DataSource>('worldbank');
@@ -110,6 +82,8 @@ export function useEconomicsData(): UseEconomicsDataReturn {
   // API Keys
   const [wtoApiKey, setWtoApiKey] = useState<string>('');
   const [eiaApiKey, setEiaApiKey] = useState<string>('');
+  const [blsApiKey, setBlsApiKey] = useState<string>('');
+  const [beaApiKey, setBeaApiKey] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [apiKeySaving, setApiKeySaving] = useState(false);
 
@@ -122,6 +96,12 @@ export function useEconomicsData(): UseEconomicsDataReturn {
 
         const eiaKey = await sqliteService.getApiKey('EIA_API_KEY');
         if (eiaKey) setEiaApiKey(eiaKey);
+
+        const blsKey = await sqliteService.getApiKey('BLS_API_KEY');
+        if (blsKey) setBlsApiKey(blsKey);
+
+        const beaKey = await sqliteService.getApiKey('BEA_API_KEY');
+        if (beaKey) setBeaApiKey(beaKey);
       } catch (err) {
         console.error('Failed to load API keys:', err);
       }
@@ -137,8 +117,8 @@ export function useEconomicsData(): UseEconomicsDataReturn {
     if (source === 'adb') {
       // ADB is Asia-Pacific only - default to India
       setSelectedCountry('IND');
-    } else if (source === 'fred' || source === 'fed') {
-      // FRED and Federal Reserve are US-only
+    } else if (source === 'fred' || source === 'fed' || source === 'bls' || source === 'fiscaldata' || source === 'bea') {
+      // FRED, Federal Reserve, BLS, FiscalData, and BEA are US-only
       setSelectedCountry('USA');
     }
     setData(null);
@@ -196,6 +176,20 @@ export function useEconomicsData(): UseEconomicsDataReturn {
 
       if (dataSource === 'eia' && selectedIndicator.startsWith('steo_') && !eiaApiKey) {
         setError('EIA API Key required for STEO data. Click the key icon to configure.');
+        setShowApiKeyInput(true);
+        setLoading(false);
+        return;
+      }
+
+      if (dataSource === 'bls' && !blsApiKey) {
+        setError('BLS API Key required. Get one at https://data.bls.gov/registrationEngine/. Click the key icon to configure.');
+        setShowApiKeyInput(true);
+        setLoading(false);
+        return;
+      }
+
+      if (dataSource === 'bea' && !beaApiKey) {
+        setError('BEA API Key required. Register free at https://apps.bea.gov/API/signup/. Click the key icon to configure.');
         setShowApiKeyInput(true);
         setLoading(false);
         return;
@@ -368,6 +362,44 @@ export function useEconomicsData(): UseEconomicsDataReturn {
           }
           break;
 
+        case 'bls':
+          // BLS uses series IDs directly, pass start/end years
+          result = await invoke('execute_python_script', {
+            scriptName: 'bls_data.py',
+            args: ['get_series', selectedIndicator, startDate, endDate],
+            env: { BLS_API_KEY: blsApiKey },
+          }) as string;
+          break;
+
+        case 'unesco':
+          // UNESCO UIS uses 3-letter ISO country codes and year-based dates
+          const unescoStartYear = startDate.substring(0, 4);
+          const unescoEndYear = endDate.substring(0, 4);
+          result = await invoke('execute_python_script', {
+            scriptName: 'unesco_data.py',
+            args: ['fetch', selectedIndicator, countryCode, unescoStartYear, unescoEndYear],
+            env: {},
+          }) as string;
+          break;
+
+        case 'fiscaldata':
+          // FiscalData is US-only, uses full date range (YYYY-MM-DD)
+          result = await invoke('execute_python_script', {
+            scriptName: 'fiscal_data.py',
+            args: ['fetch', selectedIndicator, startDate, endDate],
+            env: {},
+          }) as string;
+          break;
+
+        case 'bea':
+          // BEA is US-only, uses full date range (YYYY-MM-DD), requires API key
+          result = await invoke('execute_python_script', {
+            scriptName: 'bea_data.py',
+            args: ['fetch', selectedIndicator, startDate, endDate],
+            env: { BEA_API_KEY: beaApiKey },
+          }) as string;
+          break;
+
         default:
           throw new Error('Unknown data source');
       }
@@ -511,6 +543,55 @@ export function useEconomicsData(): UseEconomicsDataReturn {
               indicatorName = 'Federal Funds Rate';
             }
           }
+        } else if (dataSource === 'bls') {
+          // BLS returns { data: { series_data: [...], metadata: {...} } }
+          const blsSeriesData = parsed.data?.series_data || [];
+          if (Array.isArray(blsSeriesData) && blsSeriesData.length > 0) {
+            rawData = blsSeriesData.map((d: any) => ({
+              date: String(d.date || ''),
+              value: d.value,
+            }));
+            const blsIndicator = BLS_INDICATORS.find(i => i.id === selectedIndicator);
+            // Use title from API metadata or fall back to our constant
+            indicatorName = blsSeriesData[0]?.title || blsIndicator?.name || selectedIndicator;
+            countryName = 'United States';
+          }
+        } else if (dataSource === 'unesco') {
+          // UNESCO returns { success, data: [{date, value}], metadata: {indicator_name, country} }
+          const unescoData = parsed.data || [];
+          if (Array.isArray(unescoData) && unescoData.length > 0) {
+            rawData = unescoData.map((d: any) => ({
+              date: String(d.date || ''),
+              value: d.value,
+            }));
+            const unescoIndicator = UNESCO_INDICATORS.find(i => i.id === selectedIndicator);
+            indicatorName = parsed.metadata?.indicator_name || unescoIndicator?.name || selectedIndicator;
+            countryName = country?.name || parsed.metadata?.country || '';
+          }
+        } else if (dataSource === 'fiscaldata') {
+          // FiscalData returns { success, data: [{date, value}], metadata: {indicator_name, country} }
+          const fiscalData = parsed.data || [];
+          if (Array.isArray(fiscalData) && fiscalData.length > 0) {
+            rawData = fiscalData.map((d: any) => ({
+              date: String(d.date || ''),
+              value: d.value,
+            }));
+            const fiscalIndicator = FISCALDATA_INDICATORS.find(i => i.id === selectedIndicator);
+            indicatorName = parsed.metadata?.indicator_name || fiscalIndicator?.name || selectedIndicator;
+            countryName = 'United States';
+          }
+        } else if (dataSource === 'bea') {
+          // BEA returns { success, data: [{date, value}], metadata: {indicator_name, country, source} }
+          const beaData = parsed.data || [];
+          if (Array.isArray(beaData) && beaData.length > 0) {
+            rawData = beaData.map((d: any) => ({
+              date: String(d.date || ''),
+              value: d.value,
+            }));
+            const beaIndicator = BEA_INDICATORS.find(i => i.id === selectedIndicator);
+            indicatorName = parsed.metadata?.indicator_name || beaIndicator?.name || selectedIndicator;
+            countryName = 'United States';
+          }
         } else if (parsed.data && Array.isArray(parsed.data)) {
           rawData = parsed.data.map((d: any) => ({
             date: d.date || d.period || d.year || '',
@@ -582,7 +663,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
     } finally {
       setLoading(false);
     }
-  }, [dataSource, selectedCountry, selectedIndicator, wtoApiKey, eiaApiKey, startDate, endDate]);
+  }, [dataSource, selectedCountry, selectedIndicator, wtoApiKey, eiaApiKey, blsApiKey, beaApiKey, startDate, endDate]);
 
   // Calculate stats
   const stats: ChartStats | null = data && data.data.length > 0 ? (() => {
@@ -620,6 +701,10 @@ export function useEconomicsData(): UseEconomicsDataReturn {
     setWtoApiKey,
     eiaApiKey,
     setEiaApiKey,
+    blsApiKey,
+    setBlsApiKey,
+    beaApiKey,
+    setBeaApiKey,
     showApiKeyInput,
     setShowApiKeyInput,
     apiKeySaving,

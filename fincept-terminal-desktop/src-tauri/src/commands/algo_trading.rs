@@ -266,8 +266,13 @@ pub async fn deploy_algo_strategy(
     let deploy_provider = provider.unwrap_or_default();
     let deploy_params = params.unwrap_or_else(|| "{}".to_string());
 
+    println!("[AlgoDeploy] ====================================================");
+    println!("[AlgoDeploy] Strategy: {}, Symbol: {}, Mode: {}, TF: {}, Qty: {}", strategy_id, symbol, deploy_mode, deploy_timeframe, deploy_qty);
+    println!("[AlgoDeploy] Provider: '{}', Params: {}", deploy_provider, deploy_params);
+
     // Generate deployment ID
     let deploy_id = format!("algo-{}", uuid::Uuid::new_v4());
+    println!("[AlgoDeploy] Deploy ID: {}", deploy_id);
 
     // Insert deployment record
     let conn = get_db().map_err(|e| e.to_string())?;
@@ -302,7 +307,25 @@ pub async fn deploy_algo_strategy(
         }).to_string());
     }
 
+    // Pre-fetch historical candles so the runner has data to evaluate conditions against.
+    // Without this, the candle_cache is empty and the runner just loops forever seeing no data.
+    // We do this before spawning the runner so data is available immediately.
+    let broker_for_prefetch = if deploy_provider.is_empty() { "fyers".to_string() } else { deploy_provider.clone() };
+    let symbol_list = vec![symbol.clone()];
+    match prefetch_historical_candles(&db_path, &symbol_list, &deploy_timeframe, &broker_for_prefetch, None).await {
+        Ok(_debug) => {
+            println!("[deploy] Prefetched historical candles for {} @ {}", symbol, deploy_timeframe);
+        }
+        Err(e) => {
+            // Non-fatal: log warning but proceed with deployment.
+            // The candle aggregator will build candles from live ticks going forward.
+            eprintln!("[deploy] Warning: candle prefetch failed for {}: {}", symbol, e);
+        }
+    }
+
     // Spawn the Python runner as a background process
+    println!("[AlgoDeploy] Spawning Python runner: {:?}", runner_path);
+    println!("[AlgoDeploy] DB path: {}", db_path);
     let child = Command::new("python")
         .arg(&runner_path)
         .arg("--deploy-id")
@@ -326,6 +349,7 @@ pub async fn deploy_algo_strategy(
     match child {
         Ok(child) => {
             let pid = child.id();
+            println!("[AlgoDeploy] Python runner spawned OK, PID={}", pid);
 
             // Update deployment with PID and running status
             let _ = conn.execute(
@@ -334,11 +358,83 @@ pub async fn deploy_algo_strategy(
             );
 
             // Auto-start candle aggregation for this symbol+timeframe
+            println!("[AlgoDeploy] Starting candle aggregation for {} @ {}", symbol, deploy_timeframe);
             let services = state.services.read().await;
             services
                 .candle_aggregator
                 .add_subscription(symbol.clone(), deploy_timeframe.clone())
                 .await;
+            println!("[AlgoDeploy] Candle aggregation subscription added");
+
+            // -- Auto-connect broker WebSocket if needed --
+            // When deploying for Indian stock brokers (e.g., angelone), the user may
+            // not have visited the Equity Trading tab, so the broker WS is not connected.
+            // We auto-connect from stored credentials so ticks flow to CandleAggregator.
+            if deploy_provider == "angelone" {
+                // Parse token and exchange from deploy params (sent by frontend SymbolSearch)
+                let params_json: serde_json::Value = serde_json::from_str(&deploy_params).unwrap_or_default();
+                let direct_token = params_json.get("token").and_then(|v| v.as_str()).map(String::from);
+                let direct_exchange = params_json.get("exchange").and_then(|v| v.as_str()).unwrap_or("NSE").to_string();
+
+                println!("[AlgoDeploy] Params: token={:?}, exchange={}", direct_token, direct_exchange);
+
+                let router = state.router.clone();
+                match crate::commands::brokers::websocket_commands::ensure_angelone_ws_connected(&app, router).await {
+                    Ok(_) => {
+                        println!("[AlgoDeploy] Angel One WS connected, subscribing to {}", symbol);
+                        // Use the token from frontend if available, otherwise symbol master lookup
+                        match crate::commands::brokers::websocket_commands::ensure_angelone_ws_subscribed(
+                            &symbol, &direct_exchange, direct_token.as_deref()
+                        ).await {
+                            Ok(_) => println!("[AlgoDeploy] Angel One WS subscribed to {}", symbol),
+                            Err(e) => {
+                                // If direct exchange failed and it wasn't BSE, try BSE as fallback
+                                if direct_exchange != "BSE" {
+                                    eprintln!("[AlgoDeploy] {} subscribe failed ({}), trying BSE...", direct_exchange, e);
+                                    match crate::commands::brokers::websocket_commands::ensure_angelone_ws_subscribed(
+                                        &symbol, "BSE", None
+                                    ).await {
+                                        Ok(_) => println!("[AlgoDeploy] Angel One WS subscribed to {} on BSE", symbol),
+                                        Err(e2) => eprintln!("[AlgoDeploy] WARNING: Could not subscribe: {}={}, BSE={}", direct_exchange, e, e2),
+                                    }
+                                } else {
+                                    eprintln!("[AlgoDeploy] WARNING: Could not subscribe to {}: {}", symbol, e);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[AlgoDeploy] WARNING: Could not auto-connect Angel One WS: {}", e);
+                        eprintln!("[AlgoDeploy] Ticks will not reach CandleAggregator until WS is connected from the UI");
+                    }
+                }
+            }
+
+            // Auto-start order signal bridge for live deployments
+            // (idempotent — only one instance runs regardless of how many times called)
+            if deploy_mode == "live" && !ORDER_BRIDGE_RUNNING.swap(true, Ordering::SeqCst) {
+                let bridge_app = app.clone();
+                tokio::spawn(async move {
+                    println!("[AlgoOrderBridge] Auto-started for live deployment");
+                    loop {
+                        if !ORDER_BRIDGE_RUNNING.load(Ordering::SeqCst) {
+                            break;
+                        }
+                        match poll_and_execute_signals(&bridge_app).await {
+                            Ok(count) => {
+                                if count > 0 {
+                                    println!("[AlgoOrderBridge] Executed {} order signal(s)", count);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("[AlgoOrderBridge] Error: {}", e);
+                            }
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    }
+                    ORDER_BRIDGE_RUNNING.store(false, Ordering::SeqCst);
+                });
+            }
 
             Ok(json!({
                 "success": true,
@@ -459,6 +555,71 @@ pub async fn stop_all_algo_deployments() -> Result<String, String> {
     }).to_string())
 }
 
+/// Delete an algo deployment and its associated trades/metrics
+#[tauri::command]
+pub async fn delete_algo_deployment(deploy_id: String) -> Result<String, String> {
+    let conn = get_db().map_err(|e| e.to_string())?;
+
+    // First check if deployment exists and stop it if running
+    let status_result: Result<(String, Option<i64>), _> = conn.query_row(
+        "SELECT status, pid FROM algo_deployments WHERE id = ?1",
+        rusqlite::params![deploy_id],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?)),
+    );
+
+    match status_result {
+        Ok((status, pid)) => {
+            // Kill process if still running
+            if status == "running" {
+                if let Some(pid) = pid {
+                    #[cfg(target_os = "windows")]
+                    {
+                        let _ = std::process::Command::new("taskkill")
+                            .args(["/F", "/PID", &pid.to_string()])
+                            .output();
+                    }
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        let _ = std::process::Command::new("kill")
+                            .arg(pid.to_string())
+                            .output();
+                    }
+                }
+            }
+
+            // Delete associated records (trades, metrics, order signals)
+            let _ = conn.execute(
+                "DELETE FROM algo_trades WHERE deployment_id = ?1",
+                rusqlite::params![deploy_id],
+            );
+            let _ = conn.execute(
+                "DELETE FROM algo_metrics WHERE deployment_id = ?1",
+                rusqlite::params![deploy_id],
+            );
+            let _ = conn.execute(
+                "DELETE FROM algo_order_signals WHERE deployment_id = ?1",
+                rusqlite::params![deploy_id],
+            );
+
+            // Delete the deployment itself
+            conn.execute(
+                "DELETE FROM algo_deployments WHERE id = ?1",
+                rusqlite::params![deploy_id],
+            )
+            .map_err(|e| format!("Failed to delete deployment: {}", e))?;
+
+            println!("[AlgoTrading] Deleted deployment: {}", deploy_id);
+            Ok(json!({ "success": true, "deleted": true }).to_string())
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            Ok(json!({ "success": false, "error": "Deployment not found" }).to_string())
+        }
+        Err(e) => {
+            Ok(json!({ "success": false, "error": e.to_string() }).to_string())
+        }
+    }
+}
+
 /// List all algo deployments with their metrics
 #[tauri::command]
 pub async fn list_algo_deployments() -> Result<String, String> {
@@ -514,6 +675,12 @@ pub async fn list_algo_deployments() -> Result<String, String> {
         .map_err(|e| format!("Failed to query deployments: {}", e))?;
 
     let deployments: Vec<serde_json::Value> = rows.filter_map(|r| r.ok()).collect();
+
+    // Log deployment list summary to console (only when there are running deployments)
+    let running_count = deployments.iter().filter(|d| d.get("status").and_then(|s| s.as_str()) == Some("running")).count();
+    if running_count > 0 {
+        println!("[AlgoMonitor] list_deployments: {} total, {} running", deployments.len(), running_count);
+    }
 
     Ok(json!({
         "success": true,
@@ -742,38 +909,42 @@ async fn prefetch_historical_candles(
 
     let mut debug_log: Vec<String> = Vec::new();
 
-    // Only support Fyers for now
+    // For non-Fyers brokers, fall back to Fyers API for historical data prefetch.
+    // Fyers supports all NSE/BSE symbols regardless of which broker is used for execution.
     if broker != "fyers" {
-        debug_log.push(format!("[prefetch] broker '{}' not supported for prefetch, only 'fyers' is supported", broker));
+        debug_log.push(format!("[prefetch] broker '{}' doesn't have prefetch support, falling back to Fyers API for historical data", broker));
+    }
+
+    // Get Fyers credentials (always use Fyers for historical data)
+    debug_log.push("[prefetch] fetching Fyers credentials...".to_string());
+    let creds = match brokers::get_indian_broker_credentials("fyers".to_string()).await {
+        Ok(c) => c,
+        Err(e) => {
+            debug_log.push(format!("[prefetch] could not fetch Fyers credentials: {}. Skipping prefetch — algo will rely on live ticks.", e));
+            return Ok(debug_log);
+        }
+    };
+
+    if !creds.success || creds.data.is_none() {
+        debug_log.push("[prefetch] Fyers credentials not found. Skipping prefetch — algo will rely on live ticks. For historical data, authenticate with Fyers in Settings > Brokers.".to_string());
         return Ok(debug_log);
     }
 
-    // Get Fyers credentials
-    debug_log.push("[prefetch] fetching Fyers credentials...".to_string());
-    let creds = brokers::get_indian_broker_credentials("fyers".to_string())
-        .await
-        .map_err(|e| format!("Failed to get Fyers credentials: {}", e))?;
-
-    if !creds.success || creds.data.is_none() {
-        return Err("Fyers credentials not found. Please authenticate with Fyers first (Settings > Brokers > Fyers).".to_string());
-    }
-
     let cred_data = creds.data.unwrap();
-    let api_key = cred_data.get("apiKey")
-        .and_then(|v| v.as_str())
-        .ok_or("Fyers API key not found in stored credentials")?
-        .to_string();
-    let access_token = cred_data.get("accessToken")
-        .and_then(|v| v.as_str())
-        .ok_or("Fyers access token not found. Please re-authenticate with Fyers — tokens expire daily.")?
-        .to_string();
-
-    if api_key.is_empty() {
-        return Err("Fyers API key is empty. Please re-enter credentials in Settings > Brokers.".to_string());
-    }
-    if access_token.is_empty() {
-        return Err("Fyers access token is empty. Please re-authenticate — Fyers tokens expire daily.".to_string());
-    }
+    let api_key = match cred_data.get("apiKey").and_then(|v| v.as_str()) {
+        Some(k) if !k.is_empty() => k.to_string(),
+        _ => {
+            debug_log.push("[prefetch] Fyers API key not found or empty. Skipping prefetch.".to_string());
+            return Ok(debug_log);
+        }
+    };
+    let access_token = match cred_data.get("accessToken").and_then(|v| v.as_str()) {
+        Some(t) if !t.is_empty() => t.to_string(),
+        _ => {
+            debug_log.push("[prefetch] Fyers access token not found or empty. Skipping prefetch — tokens expire daily.".to_string());
+            return Ok(debug_log);
+        }
+    };
 
     debug_log.push(format!("[prefetch] credentials OK (api_key len={}, token len={})", api_key.len(), access_token.len()));
 
@@ -1341,6 +1512,283 @@ pub async fn stop_order_signal_bridge() -> Result<String, String> {
         "success": true,
         "message": "Order bridge stopping"
     }).to_string())
+}
+
+/// Debug diagnostic command: returns the state of candle_cache, strategy_price_cache,
+/// deployment status, and Python process health for a given deployment.
+#[tauri::command]
+pub async fn debug_algo_deployment(
+    deploy_id: String,
+) -> Result<String, String> {
+    let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value, String> {
+        let conn = get_db().map_err(|e| e.to_string())?;
+        let mut diag = serde_json::Map::new();
+
+        // 1. Deployment record
+        let deploy_row = conn.query_row(
+            "SELECT id, strategy_id, symbol, provider, mode, status, timeframe, quantity, pid, error_message, created_at, updated_at
+             FROM algo_deployments WHERE id = ?1",
+            rusqlite::params![deploy_id],
+            |row| {
+                Ok(json!({
+                    "id": row.get::<_, String>(0)?,
+                    "strategy_id": row.get::<_, String>(1)?,
+                    "symbol": row.get::<_, String>(2)?,
+                    "provider": row.get::<_, String>(3)?,
+                    "mode": row.get::<_, String>(4)?,
+                    "status": row.get::<_, String>(5)?,
+                    "timeframe": row.get::<_, String>(6)?,
+                    "quantity": row.get::<_, f64>(7)?,
+                    "pid": row.get::<_, Option<i64>>(8)?,
+                    "error_message": row.get::<_, Option<String>>(9)?,
+                    "created_at": row.get::<_, String>(10)?,
+                    "updated_at": row.get::<_, String>(11)?,
+                }))
+            },
+        );
+        match deploy_row {
+            Ok(v) => { diag.insert("deployment".to_string(), v); }
+            Err(e) => { diag.insert("deployment_error".to_string(), json!(e.to_string())); }
+        }
+
+        // Extract symbol and timeframe from deployment
+        let (symbol, timeframe) = {
+            let s: String = conn.query_row(
+                "SELECT symbol FROM algo_deployments WHERE id = ?1", rusqlite::params![deploy_id], |r| r.get(0),
+            ).unwrap_or_default();
+            let t: String = conn.query_row(
+                "SELECT timeframe FROM algo_deployments WHERE id = ?1", rusqlite::params![deploy_id], |r| r.get(0),
+            ).unwrap_or_else(|_| "5m".to_string());
+            (s, t)
+        };
+
+        // 2. Check if Python process is alive (check PID)
+        let pid: Option<i64> = conn.query_row(
+            "SELECT pid FROM algo_deployments WHERE id = ?1", rusqlite::params![deploy_id], |r| r.get(0),
+        ).unwrap_or(None);
+
+        if let Some(pid_val) = pid {
+            #[cfg(target_os = "windows")]
+            {
+                let output = std::process::Command::new("tasklist")
+                    .args(["/FI", &format!("PID eq {}", pid_val), "/FO", "CSV", "/NH"])
+                    .output();
+                match output {
+                    Ok(o) => {
+                        let stdout = String::from_utf8_lossy(&o.stdout);
+                        let is_alive = stdout.contains(&pid_val.to_string());
+                        diag.insert("python_process_alive".to_string(), json!(is_alive));
+                        diag.insert("python_process_output".to_string(), json!(stdout.trim()));
+                    }
+                    Err(e) => {
+                        diag.insert("python_process_check_error".to_string(), json!(e.to_string()));
+                    }
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                let alive = std::path::Path::new(&format!("/proc/{}", pid_val)).exists();
+                diag.insert("python_process_alive".to_string(), json!(alive));
+            }
+            diag.insert("python_pid".to_string(), json!(pid_val));
+        } else {
+            diag.insert("python_pid".to_string(), json!(null));
+            diag.insert("python_process_alive".to_string(), json!(false));
+        }
+
+        // 3. Candle cache stats
+        let candle_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM candle_cache WHERE symbol = ?1 AND timeframe = ?2 AND is_closed = 1",
+            rusqlite::params![symbol, timeframe],
+            |r| r.get(0),
+        ).unwrap_or(0);
+        diag.insert("candle_cache_count".to_string(), json!(candle_count));
+
+        // Also check with normalized symbol (strip colon prefix)
+        let clean_sym = if symbol.contains(':') {
+            symbol.split(':').last().unwrap_or(&symbol).to_string()
+        } else {
+            symbol.clone()
+        };
+        let candle_count_clean: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM candle_cache WHERE symbol = ?1 AND timeframe = ?2 AND is_closed = 1",
+            rusqlite::params![clean_sym, timeframe],
+            |r| r.get(0),
+        ).unwrap_or(0);
+        diag.insert("candle_cache_count_clean_symbol".to_string(), json!(candle_count_clean));
+
+        // Get all distinct symbols in candle_cache for this timeframe
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT symbol, COUNT(*) as cnt FROM candle_cache WHERE timeframe = ?1 GROUP BY symbol"
+        ).unwrap();
+        let cached_symbols: Vec<serde_json::Value> = stmt.query_map(
+            rusqlite::params![timeframe],
+            |r| Ok(json!({"symbol": r.get::<_, String>(0)?, "count": r.get::<_, i64>(1)?}))
+        ).unwrap().filter_map(|r| r.ok()).collect();
+        diag.insert("candle_cache_symbols".to_string(), json!(cached_symbols));
+
+        // Latest candle timestamp
+        let latest_candle: Option<i64> = conn.query_row(
+            "SELECT MAX(open_time) FROM candle_cache WHERE timeframe = ?1",
+            rusqlite::params![timeframe],
+            |r| r.get(0),
+        ).unwrap_or(None);
+        diag.insert("candle_cache_latest_ts".to_string(), json!(latest_candle));
+
+        // 4. Strategy price cache
+        let price_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM strategy_price_cache",
+            [],
+            |r| r.get(0),
+        ).unwrap_or(0);
+        diag.insert("price_cache_total_entries".to_string(), json!(price_count));
+
+        let mut stmt2 = conn.prepare(
+            "SELECT symbol, price, updated_at FROM strategy_price_cache ORDER BY updated_at DESC LIMIT 20"
+        ).unwrap();
+        let price_entries: Vec<serde_json::Value> = stmt2.query_map(
+            [],
+            |r| Ok(json!({"symbol": r.get::<_, String>(0)?, "price": r.get::<_, f64>(1)?, "updated_at": r.get::<_, i64>(2)?}))
+        ).unwrap().filter_map(|r| r.ok()).collect();
+        diag.insert("price_cache_entries".to_string(), json!(price_entries));
+
+        // 5. Metrics
+        let metrics = conn.query_row(
+            "SELECT total_pnl, unrealized_pnl, total_trades, win_rate, max_drawdown, current_position_qty, current_position_side, current_position_entry, updated_at
+             FROM algo_metrics WHERE deployment_id = ?1",
+            rusqlite::params![deploy_id],
+            |r| Ok(json!({
+                "total_pnl": r.get::<_, f64>(0)?,
+                "unrealized_pnl": r.get::<_, f64>(1)?,
+                "total_trades": r.get::<_, i32>(2)?,
+                "win_rate": r.get::<_, f64>(3)?,
+                "max_drawdown": r.get::<_, f64>(4)?,
+                "current_position_qty": r.get::<_, f64>(5)?,
+                "current_position_side": r.get::<_, String>(6)?,
+                "current_position_entry": r.get::<_, f64>(7)?,
+                "updated_at": r.get::<_, String>(8)?,
+            })),
+        );
+        match metrics {
+            Ok(v) => { diag.insert("metrics".to_string(), v); }
+            Err(e) => { diag.insert("metrics_error".to_string(), json!(e.to_string())); }
+        }
+
+        // 6. Recent trades
+        let mut stmt3 = conn.prepare(
+            "SELECT id, side, quantity, price, pnl, signal_reason, created_at FROM algo_trades WHERE deployment_id = ?1 ORDER BY created_at DESC LIMIT 10"
+        ).unwrap();
+        let trades: Vec<serde_json::Value> = stmt3.query_map(
+            rusqlite::params![deploy_id],
+            |r| Ok(json!({
+                "id": r.get::<_, String>(0)?,
+                "side": r.get::<_, String>(1)?,
+                "quantity": r.get::<_, f64>(2)?,
+                "price": r.get::<_, f64>(3)?,
+                "pnl": r.get::<_, f64>(4)?,
+                "reason": r.get::<_, String>(5)?,
+                "created_at": r.get::<_, String>(6)?,
+            })),
+        ).unwrap().filter_map(|r| r.ok()).collect();
+        diag.insert("recent_trades".to_string(), json!(trades));
+
+        // 7. Pending order signals
+        let pending_signals: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM algo_order_signals WHERE deployment_id = ?1 AND status = 'pending'",
+            rusqlite::params![deploy_id],
+            |r| r.get(0),
+        ).unwrap_or(0);
+        diag.insert("pending_order_signals".to_string(), json!(pending_signals));
+
+        // 8. Order bridge status
+        diag.insert("order_bridge_running".to_string(), json!(ORDER_BRIDGE_RUNNING.load(Ordering::SeqCst)));
+
+        // 9. Strategy conditions (for context)
+        let strategy_id: String = conn.query_row(
+            "SELECT strategy_id FROM algo_deployments WHERE id = ?1", rusqlite::params![deploy_id], |r| r.get(0),
+        ).unwrap_or_default();
+        let entry_conds: Option<String> = conn.query_row(
+            "SELECT entry_conditions FROM algo_strategies WHERE id = ?1", rusqlite::params![strategy_id], |r| r.get(0),
+        ).ok();
+        let exit_conds: Option<String> = conn.query_row(
+            "SELECT exit_conditions FROM algo_strategies WHERE id = ?1", rusqlite::params![strategy_id], |r| r.get(0),
+        ).ok();
+        diag.insert("entry_conditions".to_string(), json!(entry_conds));
+        diag.insert("exit_conditions".to_string(), json!(exit_conds));
+
+        Ok(json!({"success": true, "data": diag}))
+    })
+    .await
+    .map_err(|e| format!("Spawn error: {}", e))??;
+
+    Ok(result.to_string())
+}
+
+/// Get live prices from strategy_price_cache for a list of symbols.
+/// Returns a map of symbol -> { price, bid, ask, change_percent, updated_at }.
+#[tauri::command]
+pub async fn get_deployment_prices(
+    symbols: Vec<String>,
+) -> Result<String, String> {
+    let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value, String> {
+        let conn = get_db().map_err(|e| e.to_string())?;
+        let mut prices = serde_json::Map::new();
+
+        // Normalize helper: strip /, -, _, : and uppercase
+        fn normalize(s: &str) -> String {
+            s.replace('/', "").replace('-', "").replace('_', "").replace(':', "").to_uppercase()
+        }
+
+        // Load all cached prices once
+        let mut stmt = conn.prepare(
+            "SELECT symbol, price, bid, ask, volume, high, low, open, change_percent, updated_at FROM strategy_price_cache"
+        ).map_err(|e| format!("Query failed: {}", e))?;
+
+        let rows: Vec<(String, f64, Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>, i64)> = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, f64>(1)?,
+                    row.get::<_, Option<f64>>(2)?,
+                    row.get::<_, Option<f64>>(3)?,
+                    row.get::<_, Option<f64>>(4)?,
+                    row.get::<_, Option<f64>>(5)?,
+                    row.get::<_, Option<f64>>(6)?,
+                    row.get::<_, Option<f64>>(7)?,
+                    row.get::<_, Option<f64>>(8)?,
+                    row.get::<_, i64>(9)?,
+                ))
+            })
+            .map_err(|e| format!("Read failed: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        for req_sym in &symbols {
+            let norm_req = normalize(req_sym);
+            for (cached_sym, price, bid, ask, volume, high, low, open, change_pct, updated) in &rows {
+                if normalize(cached_sym) == norm_req {
+                    prices.insert(req_sym.clone(), json!({
+                        "price": price,
+                        "bid": bid,
+                        "ask": ask,
+                        "volume": volume,
+                        "high": high,
+                        "low": low,
+                        "open": open,
+                        "change_percent": change_pct,
+                        "updated_at": updated,
+                    }));
+                    break;
+                }
+            }
+        }
+
+        Ok(json!({ "success": true, "data": prices }))
+    })
+    .await
+    .map_err(|e| format!("Spawn error: {}", e))??;
+
+    Ok(result.to_string())
 }
 
 /// Poll `algo_order_signals` for pending signals and execute them
