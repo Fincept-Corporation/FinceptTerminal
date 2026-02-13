@@ -168,19 +168,6 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 * * *
 
-## 🔗 La fonctionnalité qui tue : l'intelligence inter-domaines
-
-**Contrairement aux terminaux traditionnels où chaque module est isolé, Fincept Terminal vous permet d'intégrer des données dans TOUS les domaines :**
-
-    Supply Chain Data → Portfolio Optimization
-    Shipping Volumes → GDP Forecasts → Equity Positions
-    Geopolitical Events → Currency Moves → Options Hedging
-    Maritime Intelligence → Commodity Prices → Macro Strategies
-
-**Créez vos propres indicateurs propriétaires en combinant des sources de données disparates. Votre avantage concurrentiel.**
-
-* * *
-
 ## 📥 Télécharger
 
 **vz. 0,11**| Windows • MacOS • Linux

@@ -168,19 +168,6 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 
 * * *
 
-## 🔗 킬러 기능: 도메인 간 인텔리전스
-
-**각 모듈이 분리되어 있는 기존 터미널과 달리 Fincept 터미널을 사용하면 모든 도메인에 걸쳐 데이터를 통합할 수 있습니다.**
-
-    Supply Chain Data → Portfolio Optimization
-    Shipping Volumes → GDP Forecasts → Equity Positions
-    Geopolitical Events → Currency Moves → Options Hedging
-    Maritime Intelligence → Commodity Prices → Macro Strategies
-
-**서로 다른 데이터 소스를 결합하여 고유한 지표를 구축하세요. 귀하의 경쟁 우위.**
-
-* * *
-
 ## 📥 다운로드
 
 **vz. 0.11**| 윈도우 • macOS • 리눅스
