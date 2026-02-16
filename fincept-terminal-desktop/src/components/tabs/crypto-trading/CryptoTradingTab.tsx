@@ -4,6 +4,7 @@ import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
 import { useBrokerContext } from '@/contexts/BrokerContext';
 import { useRustTicker, useRustOrderBook, useRustTrades } from '@/hooks/useRustWebSocket';
@@ -302,84 +303,54 @@ export function CryptoTradingTab() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch watchlist prices with race condition prevention
+  // Fetch watchlist prices via CoinGecko (fast, reliable, US-accessible)
   const fetchWatchlistPrices = useCallback(async () => {
     const currentFetchId = ++watchlistFetchIdRef.current;
 
     try {
-      if (realAdapter?.isConnected() && typeof realAdapter.fetchTickers === 'function') {
-        try {
-          const tickers = await withTimeout(
-            realAdapter.fetchTickers(watchlist),
-            API_TIMEOUT_MS,
-            'Fetch tickers timeout'
-          );
+      const symbolToCoinGeckoId: Record<string, string> = {
+        'BTC/USD': 'bitcoin', 'ETH/USD': 'ethereum', 'BNB/USD': 'binancecoin',
+        'SOL/USD': 'solana', 'XRP/USD': 'ripple', 'ADA/USD': 'cardano',
+        'DOGE/USD': 'dogecoin', 'AVAX/USD': 'avalanche-2', 'DOT/USD': 'polkadot',
+        'POL/USD': 'matic-network', 'LTC/USD': 'litecoin', 'SHIB/USD': 'shiba-inu',
+        'TRX/USD': 'tron', 'LINK/USD': 'chainlink', 'UNI/USD': 'uniswap',
+        'ATOM/USD': 'cosmos', 'XLM/USD': 'stellar', 'ETC/USD': 'ethereum-classic',
+        'BCH/USD': 'bitcoin-cash', 'NEAR/USD': 'near', 'APT/USD': 'aptos',
+        'ARB/USD': 'arbitrum', 'OP/USD': 'optimism', 'LDO/USD': 'lido-dao',
+        'FIL/USD': 'filecoin', 'ICP/USD': 'internet-computer', 'INJ/USD': 'injective-protocol',
+        'STX/USD': 'blockstack', 'MKR/USD': 'maker', 'AAVE/USD': 'aave',
+      };
 
-          if (!mountedRef.current || currentFetchId !== watchlistFetchIdRef.current) return;
-
-          const prices: Record<string, WatchlistPrice> = {};
-          let hasValidData = false;
-
-          watchlist.forEach(symbol => {
-            const ticker = tickers[symbol];
-            if (ticker && ticker.last && ticker.last > 0) {
-              prices[symbol] = {
-                price: ticker.last,
-                change: ticker.percentage || 0
-              };
-              hasValidData = true;
-            }
-          });
-
-          if (hasValidData) {
-            dispatch({ type: 'SET_WATCHLIST_PRICES', prices });
-            return;
-          }
-        } catch (err) {
-          if (!mountedRef.current || currentFetchId !== watchlistFetchIdRef.current) return;
-          console.warn('[CryptoTrading] fetchTickers failed, trying fallback API');
-        }
-      }
-
-      // Fallback to public Binance API with timeout
-      const symbols = watchlist.map(s => s.replace('/USD', 'USDT').replace('/', ''));
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+      const coinIds = watchlist
+        .map(s => symbolToCoinGeckoId[s])
+        .filter(Boolean)
+        .join(',');
 
       try {
-        const response = await fetch('https://api.binance.com/api/v3/ticker/24hr', {
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
+        const response = await tauriFetch(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd&include_24hr_change=true`
+        );
 
         if (!mountedRef.current || currentFetchId !== watchlistFetchIdRef.current) return;
 
         if (!response.ok) {
-          throw new Error(`Binance API returned ${response.status}`);
+          throw new Error(`CoinGecko API returned ${response.status}`);
         }
 
-        const allTickers = await response.json();
-
-        if (!Array.isArray(allTickers)) {
-          throw new Error('Invalid response from Binance API');
-        }
-
+        const data = await response.json();
         const prices: Record<string, WatchlistPrice> = {};
         let hasValidData = false;
 
-        watchlist.forEach((symbol, idx) => {
-          const binanceSymbol = symbols[idx];
-          const ticker = allTickers.find((t: any) => t.symbol === binanceSymbol);
+        watchlist.forEach(symbol => {
+          const coinId = symbolToCoinGeckoId[symbol];
+          const coinData = coinId && data[coinId];
 
-          if (ticker && ticker.lastPrice) {
-            const price = parseFloat(ticker.lastPrice);
-            const change = parseFloat(ticker.priceChangePercent);
-
-            if (price > 0) {
-              prices[symbol] = { price, change };
-              hasValidData = true;
-            }
+          if (coinData && coinData.usd > 0) {
+            prices[symbol] = {
+              price: coinData.usd,
+              change: coinData.usd_24h_change || 0,
+            };
+            hasValidData = true;
           }
         });
 
@@ -387,15 +358,14 @@ export function CryptoTradingTab() {
           dispatch({ type: 'SET_WATCHLIST_PRICES', prices });
         }
       } catch (fetchErr) {
-        clearTimeout(timeoutId);
         if (!mountedRef.current || currentFetchId !== watchlistFetchIdRef.current) return;
-        console.warn('[CryptoTrading] Binance API fetch failed:', fetchErr);
+        console.warn('[CryptoTrading] CoinGecko API fetch failed:', fetchErr);
       }
     } catch (error) {
       if (!mountedRef.current || currentFetchId !== watchlistFetchIdRef.current) return;
       console.error('[CryptoTrading] Failed to fetch prices:', error);
     }
-  }, [realAdapter, watchlist]);
+  }, [watchlist]);
 
   useEffect(() => {
     fetchWatchlistPrices();
