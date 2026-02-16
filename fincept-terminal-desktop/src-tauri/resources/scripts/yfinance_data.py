@@ -15,7 +15,7 @@ def get_quote(symbol):
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
-        hist = ticker.history(period="1d")
+        hist = ticker.history(period="5d")
 
         if hist.empty:
             return {"error": "No data available", "symbol": symbol}
