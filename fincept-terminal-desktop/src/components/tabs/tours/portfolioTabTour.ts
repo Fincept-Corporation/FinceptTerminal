@@ -69,7 +69,7 @@ export const portfolioTabTourSteps: DriveStep[] = [
     element: '#portfolio-summary',
     popover: {
       title: 'Portfolio Summary',
-      description: 'Overview of total value, cash balance, invested capital, unrealized P&L, and overall returns. Key metrics at a glance.',
+      description: 'Overview of key metrics: total value, P&L, day change, cost basis, positions, risk scores, Sharpe ratio, volatility, and Value at Risk.',
       side: 'bottom',
       align: 'start'
     }
@@ -78,7 +78,7 @@ export const portfolioTabTourSteps: DriveStep[] = [
     element: '#portfolio-subtabs',
     popover: {
       title: 'Analysis Views',
-      description: 'Navigate between different analysis views: Positions, History, Analytics, Sectors, Performance, Risk, Optimization, Active Management, Reports, and Alerts.',
+      description: 'Navigate between different analysis views: Transactions, P&L Attribution, Exposure, Positions, History, Analytics, Sectors, Performance, Risk, Optimization, Active Management, Reports, and more.',
       side: 'bottom',
       align: 'center'
     }
@@ -172,20 +172,10 @@ export const portfolioTabTourSteps: DriveStep[] = [
       side: 'top',
       align: 'start'
     }
-  },
-  // Alerts Tab
-  {
-    element: '#alerts-view',
-    popover: {
-      title: 'Portfolio Alerts',
-      description: 'Configure alerts for price movements, P&L thresholds, rebalancing triggers, and risk limits. Stay informed of critical changes.',
-      side: 'top',
-      align: 'start'
-    }
   }
 ];
 
-export const createPortfolioTabTour = (setActiveSubTab?: (tab: string) => void) => {
+export const createPortfolioTabTour = (onTabChange?: (tab: string) => void) => {
   const driverObj = driver({
     showProgress: true,
     steps: portfolioTabTourSteps,
@@ -202,19 +192,18 @@ export const createPortfolioTabTour = (setActiveSubTab?: (tab: string) => void) 
     popoverOffset: 12,
 
     onHighlightStarted: (element, step, options) => {
-      // Navigate to appropriate sub-tab based on step
-      if (setActiveSubTab) {
+      // Navigate to appropriate sub-tab based on step element ID
+      if (onTabChange) {
         const stepElement = options.state.activeElement?.id;
-        if (stepElement === 'positions-view') setActiveSubTab('positions');
-        else if (stepElement === 'history-view') setActiveSubTab('history');
-        else if (stepElement === 'analytics-view') setActiveSubTab('analytics');
-        else if (stepElement === 'sectors-view') setActiveSubTab('sectors');
-        else if (stepElement === 'performance-view') setActiveSubTab('performance');
-        else if (stepElement === 'risk-view') setActiveSubTab('risk');
-        else if (stepElement === 'optimization-view') setActiveSubTab('optimization');
-        else if (stepElement === 'active-mgmt-view') setActiveSubTab('active-mgmt');
-        else if (stepElement === 'reports-view') setActiveSubTab('reports');
-        else if (stepElement === 'alerts-view') setActiveSubTab('alerts');
+        if (stepElement === 'positions-view') onTabChange('positions');
+        else if (stepElement === 'history-view') onTabChange('history');
+        else if (stepElement === 'analytics-view') onTabChange('analytics');
+        else if (stepElement === 'sectors-view') onTabChange('sectors');
+        else if (stepElement === 'performance-view') onTabChange('performance');
+        else if (stepElement === 'risk-view') onTabChange('risk');
+        else if (stepElement === 'optimization-view') onTabChange('optimization');
+        else if (stepElement === 'active-mgmt-view') onTabChange('active-mgmt');
+        else if (stepElement === 'reports-view') onTabChange('reports');
       }
     },
 

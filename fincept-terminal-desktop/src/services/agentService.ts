@@ -971,6 +971,61 @@ export async function createPortfolioPlan(
   });
 }
 
+/**
+ * Run AI analysis on a portfolio summary - formats data and routes to agent
+ */
+export async function runPortfolioAnalysis(
+  portfolioSummary: {
+    portfolio: { id: string; name: string; currency: string };
+    holdings: Array<{
+      symbol: string;
+      quantity: number;
+      avg_buy_price: number;
+      current_price: number;
+      market_value: number;
+      unrealized_pnl: number;
+      unrealized_pnl_percent: number;
+      day_change_percent: number;
+      weight: number;
+    }>;
+    total_market_value: number;
+    total_unrealized_pnl: number;
+    total_unrealized_pnl_percent: number;
+    total_day_change_percent: number;
+  },
+  analysisType: 'full' | 'risk' | 'rebalance' | 'opportunities' = 'full',
+  apiKeys?: Record<string, string>,
+): Promise<AgentResponse> {
+  const topHoldings = portfolioSummary.holdings
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 10)
+    .map(h => `${h.symbol} (${h.weight.toFixed(1)}%, P&L: ${h.unrealized_pnl_percent.toFixed(1)}%)`)
+    .join(', ');
+
+  const queries: Record<string, string> = {
+    full: `Analyze my portfolio "${portfolioSummary.portfolio.name}": NAV ${portfolioSummary.portfolio.currency} ${portfolioSummary.total_market_value.toFixed(2)}, Total P&L ${portfolioSummary.total_unrealized_pnl_percent.toFixed(2)}%, Day change ${portfolioSummary.total_day_change_percent.toFixed(2)}%. Top holdings: ${topHoldings}. Provide comprehensive analysis: risk assessment, diversification, key risks, and actionable recommendations.`,
+    risk: `Risk analysis for portfolio "${portfolioSummary.portfolio.name}": NAV ${portfolioSummary.portfolio.currency} ${portfolioSummary.total_market_value.toFixed(2)}. Holdings: ${topHoldings}. Assess concentration risk, correlation, volatility exposure, and suggest risk mitigation strategies.`,
+    rebalance: `Rebalancing recommendations for portfolio "${portfolioSummary.portfolio.name}": Holdings: ${topHoldings}. Suggest optimal rebalancing to improve diversification, risk-adjusted returns, and alignment with best practices.`,
+    opportunities: `Investment opportunities for portfolio "${portfolioSummary.portfolio.name}": Current holdings: ${topHoldings}. Identify gaps, sectors to add, underweighted areas, and specific buy/sell recommendations.`,
+  };
+
+  return execute({
+    action: 'route_query',
+    api_keys: apiKeys,
+    params: {
+      query: queries[analysisType],
+      portfolio_context: {
+        id: portfolioSummary.portfolio.id,
+        name: portfolioSummary.portfolio.name,
+        currency: portfolioSummary.portfolio.currency,
+        nav: portfolioSummary.total_market_value,
+        pnl_pct: portfolioSummary.total_unrealized_pnl_percent,
+        holdings_count: portfolioSummary.holdings.length,
+      },
+    },
+  });
+}
+
 // =============================================================================
 // Paper Trading
 // =============================================================================
@@ -1559,6 +1614,7 @@ export const agentService = {
   prewarmAgent,
   buildAgentConfig,
   buildTeamConfig,
+  runPortfolioAnalysis,
 };
 
 // =============================================================================

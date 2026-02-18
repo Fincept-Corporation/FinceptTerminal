@@ -87,6 +87,31 @@ class LBOModel:
             initial_equity, exit_year, ebitda_projection, debt_schedule
         )
 
+        # Build a consolidated 'returns' dict for the base exit multiple
+        base_exit_mult = self.assumptions.get('exit_multiples', [10.0])
+        base_mult_key = str(float(base_exit_mult[len(base_exit_mult) // 2])) if base_exit_mult else None
+        base_returns = returns_analysis.get(base_mult_key, {}) if base_mult_key else {}
+        if not base_returns and returns_analysis:
+            base_returns = next(iter(returns_analysis.values()))
+
+        # Build sources & uses for frontend
+        total_debt = cap_structure.get('leverage_metrics', {}).get('total_debt', 0)
+        sources_uses = {
+            'sources': {
+                'senior_debt': sum(t['amount'] for t in cap_structure.get('debt_tranches', []) if t.get('type') in ['Term Loan A', 'Term Loan B', 'Senior Notes']),
+                'subordinated_debt': sum(t['amount'] for t in cap_structure.get('debt_tranches', []) if t.get('type') in ['Subordinated', 'Mezzanine']),
+                'revolver': sum(t['amount'] for t in cap_structure.get('debt_tranches', []) if t.get('type') == 'Revolver'),
+                'sponsor_equity': cap_structure.get('leverage_metrics', {}).get('sponsor_equity_contribution', 0),
+                'rollover_equity': cap_structure.get('leverage_metrics', {}).get('rollover_equity', 0),
+                'management_equity': cap_structure.get('leverage_metrics', {}).get('management_equity', 0),
+            },
+            'uses': {
+                'enterprise_value': self.entry_ev,
+                'transaction_fees': self.entry_ev * 0.02,
+                'financing_fees': total_debt * 0.015,
+            }
+        }
+
         return {
             'transaction_summary': {
                 'target_company': self.target.get('company_name', 'Target'),
@@ -106,6 +131,13 @@ class LBOModel:
             },
             'exit_scenarios': exit_scenarios,
             'returns_analysis': returns_analysis,
+            'returns': {
+                'irr': base_returns.get('irr', 0) / 100,
+                'moic': base_returns.get('moic', 0),
+                'entry_equity': initial_equity,
+                'exit_equity': base_returns.get('exit_equity_value', 0),
+            },
+            'sources_uses': sources_uses,
             'sensitivity_analysis': sensitivity
         }
 
@@ -253,8 +285,35 @@ def main():
             revenue_growth_scenarios = json.loads(sys.argv[3])
             exit_multiple_scenarios = json.loads(sys.argv[4])
 
-            target_company = base_case.get('company_data', base_case)
-            assumptions = base_case.get('assumptions', {})
+            # Handle both formats:
+            # 1. Nested: {company_data: {...}, assumptions: {...}}
+            # 2. Flat from frontend: {revenue, ebitda_margin, exit_multiple, debt_percent, holding_period}
+            if 'company_data' in base_case:
+                target_company = base_case['company_data']
+                assumptions = base_case.get('assumptions', {})
+            else:
+                # Flat format: derive company_data and assumptions from base_case
+                revenue = base_case.get('revenue', 1000000000)
+                ebitda_margin = base_case.get('ebitda_margin', 0.25)
+                ebitda = revenue * ebitda_margin
+                target_company = {
+                    'company_name': base_case.get('company_name', 'Target'),
+                    'revenue': revenue,
+                    'ebitda': ebitda,
+                }
+                assumptions = {
+                    'entry_multiple': base_case.get('entry_multiple', 10.0),
+                    'exit_multiples': [base_case.get('exit_multiple', 10.0)],
+                    'target_leverage': (base_case.get('debt_percent', 60) / 100) * base_case.get('entry_multiple', 10.0),
+                    'revenue_growth': revenue_growth_scenarios[len(revenue_growth_scenarios) // 2] if revenue_growth_scenarios else 0.05,
+                    'ebitda_margin': ebitda_margin,
+                    'capex_pct_revenue': 0.03,
+                    'nwc_pct_revenue': 0.05,
+                    'tax_rate': 0.21,
+                    'exit_year': base_case.get('holding_period', 5),
+                    'hurdle_irr': 0.20,
+                    'projection_years': base_case.get('holding_period', 5),
+                }
 
             model = LBOModel(target_company, assumptions)
             base_results = model.build_complete_model(assumptions.get('projection_years', 5))
@@ -265,7 +324,7 @@ def main():
                 for exit_mult in exit_multiple_scenarios:
                     modified_assumptions = dict(assumptions)
                     modified_assumptions['revenue_growth'] = rev_growth
-                    modified_assumptions['exit_multiple'] = exit_mult
+                    modified_assumptions['exit_multiples'] = [exit_mult]
 
                     mod_model = LBOModel(target_company, modified_assumptions)
                     mod_results = mod_model.build_complete_model(modified_assumptions.get('projection_years', 5))
@@ -284,11 +343,28 @@ def main():
                         'equity_value': ret.get('exit_equity_value', 0)
                     })
 
+            # Build 2D matrices for frontend heatmap: rows=revenue_growth, cols=exit_multiple
+            irr_matrix = []
+            moic_matrix = []
+            idx = 0
+            for _rg in revenue_growth_scenarios:
+                irr_row = []
+                moic_row = []
+                for _em in exit_multiple_scenarios:
+                    entry = sensitivity_matrix[idx]
+                    irr_row.append(entry['irr'] / 100)  # frontend multiplies by 100
+                    moic_row.append(entry['moic'])
+                    idx += 1
+                irr_matrix.append(irr_row)
+                moic_matrix.append(moic_row)
+
             result = {
                 "success": True,
                 "data": {
                     "base_case": base_results,
                     "sensitivity_matrix": sensitivity_matrix,
+                    "irr_matrix": irr_matrix,
+                    "moic_matrix": moic_matrix,
                     "revenue_growth_range": revenue_growth_scenarios,
                     "exit_multiple_range": exit_multiple_scenarios
                 }

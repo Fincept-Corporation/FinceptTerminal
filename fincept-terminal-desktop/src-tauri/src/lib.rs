@@ -1756,9 +1756,13 @@ pub fn run() {
             commands::ai_quant_lab::qlib_rl_evaluate_agent,
             // AI Quant Lab - Online Learning
             commands::ai_quant_lab::qlib_online_initialize,
-            commands::ai_quant_lab::qlib_online_incremental_train,
+            commands::ai_quant_lab::qlib_online_create_model,
+            commands::ai_quant_lab::qlib_online_train,
             commands::ai_quant_lab::qlib_online_predict,
-            commands::ai_quant_lab::qlib_online_detect_drift,
+            commands::ai_quant_lab::qlib_online_performance,
+            commands::ai_quant_lab::qlib_online_setup_rolling,
+            commands::ai_quant_lab::qlib_online_handle_drift,
+            commands::ai_quant_lab::qlib_online_list_models,
             // AI Quant Lab - High Frequency Trading
             commands::ai_quant_lab::qlib_hft_initialize,
             commands::ai_quant_lab::qlib_hft_create_orderbook,
@@ -1768,9 +1772,11 @@ pub fn run() {
             commands::ai_quant_lab::qlib_hft_snapshot,
             commands::ai_quant_lab::qlib_hft_latency_stats,
             // AI Quant Lab - Meta Learning
-            commands::ai_quant_lab::qlib_meta_model_selection,
+            commands::ai_quant_lab::qlib_meta_list_models,
+            commands::ai_quant_lab::qlib_meta_run_selection,
             commands::ai_quant_lab::qlib_meta_create_ensemble,
-            commands::ai_quant_lab::qlib_meta_auto_tune,
+            commands::ai_quant_lab::qlib_meta_tune_hyperparameters,
+            commands::ai_quant_lab::qlib_meta_get_results,
             // AI Quant Lab - Rolling Retraining
             commands::ai_quant_lab::qlib_rolling_create_schedule,
             commands::ai_quant_lab::qlib_rolling_retrain,
@@ -1778,6 +1784,10 @@ pub fn run() {
             // AI Quant Lab - Advanced Models
             commands::ai_quant_lab::qlib_advanced_list_models,
             commands::ai_quant_lab::qlib_advanced_create_model,
+            commands::ai_quant_lab::qlib_advanced_train_model,
+            commands::ai_quant_lab::qlib_advanced_predict,
+            commands::ai_quant_lab::qlib_advanced_get_info,
+            commands::ai_quant_lab::qlib_advanced_list_created,
             // FFN Analytics - Portfolio Performance Analysis Commands
             commands::ffn_analytics::ffn_check_status,
             commands::ffn_analytics::ffn_calculate_performance,
@@ -1966,6 +1976,21 @@ pub fn run() {
             commands::database::db_delete_agent_config,
             commands::database::db_set_active_agent_config,
             commands::database::db_get_active_agent_config,
+            // Database Admin Commands (Password Protected)
+            commands::database::db_admin_check_password,
+            commands::database::db_admin_set_password,
+            commands::database::db_admin_verify_password,
+            commands::database::db_admin_check_session,
+            commands::database::db_admin_create_session,
+            commands::database::db_admin_clear_session,
+            commands::database::db_admin_get_databases,
+            commands::database::db_admin_get_tables,
+            commands::database::db_admin_get_table_data,
+            commands::database::db_admin_execute_query,
+            commands::database::db_admin_update_row,
+            commands::database::db_admin_insert_row,
+            commands::database::db_admin_delete_row,
+            commands::database::db_admin_rename_table,
             // Alpha Arena Bridge Commands
             commands::alpha_arena_bridge::paper_trading_create_portfolio,
             commands::alpha_arena_bridge::paper_trading_get_portfolio,
@@ -2614,9 +2639,10 @@ pub fn run() {
             commands::algo_trading::update_custom_python_strategy,
             commands::algo_trading::delete_custom_python_strategy,
             commands::algo_trading::validate_python_syntax,
-            // Python Strategy Backtest
+            // Python Strategy Backtest & Deployment
             commands::algo_trading::run_python_backtest,
-            commands::algo_trading::extract_strategy_parameters
+            commands::algo_trading::extract_strategy_parameters,
+            commands::algo_trading::deploy_python_strategy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

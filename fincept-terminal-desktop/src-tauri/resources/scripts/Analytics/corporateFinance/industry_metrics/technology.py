@@ -368,6 +368,8 @@ def main():
             # Determine business model from sector
             if 'saas' in sector.lower():
                 model = TechBusinessModel.SAAS
+            elif 'consumer' in sector.lower():
+                model = TechBusinessModel.CONSUMER_SOFTWARE
             elif 'marketplace' in sector.lower():
                 model = TechBusinessModel.MARKETPLACE
             elif 'semiconductor' in sector.lower():
@@ -377,21 +379,22 @@ def main():
 
             analyzer = TechnologyMetrics(model)
 
-            # Map common alternative key names for SaaS
-            saas_aliases = {
-                'revenue': 'arr', 'annual_recurring_revenue': 'arr',
-                'growth_rate': 'revenue_growth_rate', 'growth': 'revenue_growth_rate',
-                'net_retention': 'net_retention_rate', 'nrr': 'net_retention_rate',
-                'customer_acquisition_cost': 'cac',
-                'lifetime_value': 'ltv',
-            }
-            for old_key, new_key in saas_aliases.items():
-                if old_key in company_data and new_key not in company_data:
-                    company_data[new_key] = company_data.pop(old_key)
-
             # Route to appropriate calculation based on model
             if model == TechBusinessModel.SAAS:
+                # Map common alternative key names for SaaS
+                saas_aliases = {
+                    'revenue': 'arr', 'annual_recurring_revenue': 'arr',
+                    'growth_rate': 'revenue_growth_rate', 'growth': 'revenue_growth_rate',
+                    'net_retention': 'net_retention_rate', 'nrr': 'net_retention_rate',
+                    'customer_acquisition_cost': 'cac',
+                    'lifetime_value': 'ltv',
+                }
+                for old_key, new_key in saas_aliases.items():
+                    if old_key in company_data and new_key not in company_data:
+                        company_data[new_key] = company_data.pop(old_key)
                 analysis = analyzer.calculate_saas_metrics(**company_data)
+            elif model == TechBusinessModel.CONSUMER_SOFTWARE:
+                analysis = analyzer.calculate_user_metrics(**company_data)
             elif model == TechBusinessModel.MARKETPLACE:
                 analysis = analyzer.calculate_marketplace_metrics(**company_data)
             elif model == TechBusinessModel.SEMICONDUCTOR:

@@ -42,6 +42,24 @@ const injectGlobalsPlugin = (): Plugin => ({
   }
 });
 
+// Plugin to stub broken @loaders.gl/draco package (missing dist files)
+const dracoStubPlugin = (): Plugin => ({
+  name: 'draco-stub',
+  enforce: 'pre',
+  resolveId(id) {
+    if (id === '@loaders.gl/draco') {
+      return '\0draco-stub';
+    }
+    return null;
+  },
+  load(id) {
+    if (id === '\0draco-stub') {
+      return 'export const DracoLoader = null; export const DracoWorkerLoader = null; export default {};';
+    }
+    return null;
+  },
+});
+
 // Plugin to handle CCXT's .cjs files, bn.js, and module.exports
 const ccxtFixPlugin = (): Plugin => ({
   name: 'ccxt-cjs-fix',
@@ -104,6 +122,7 @@ const ccxtFixPlugin = (): Plugin => ({
 
 export default defineConfig({
   plugins: [
+    dracoStubPlugin(),      // Must be before react/vite to intercept broken draco imports
     injectGlobalsPlugin(),  // Must be first to inject globals early
     react(),
     tailwindcss(),

@@ -30,7 +30,8 @@ type OrderFillCallback = (event: OrderFillEvent) => void;
  * - Stop Limit: becomes limit order when stop is triggered
  */
 export class PaperOrderMatcher {
-  // Pending orders by symbol: Map<symbol, Order[]>
+  // Pending orders by portfolio and symbol: Map<"portfolioId:symbol", Order[]>
+  // This ensures orders are scoped to specific broker/portfolio, preventing cross-contamination
   private pendingOrders: Map<string, Order[]> = new Map();
 
   // Callbacks for order fills
@@ -42,6 +43,14 @@ export class PaperOrderMatcher {
   constructor() {}
 
   /**
+   * Generate a scoped key for order storage
+   * Format: "portfolioId:symbol" to prevent cross-broker order mixing
+   */
+  private getScopedKey(portfolioId: string, symbol: string): string {
+    return `${portfolioId}:${symbol}`;
+  }
+
+  /**
    * Add an order to the matching engine
    */
   addOrder(order: Order): void {
@@ -50,39 +59,55 @@ export class PaperOrderMatcher {
       return;
     }
 
-    const orders = this.pendingOrders.get(order.symbol) || [];
+    if (!order.portfolio_id) {
+      console.error(`[OrderMatcher] Order ${order.id} missing portfolio_id - cannot add to matcher`);
+      return;
+    }
+
+    const key = this.getScopedKey(order.portfolio_id, order.symbol);
+    const orders = this.pendingOrders.get(key) || [];
     orders.push(order);
-    this.pendingOrders.set(order.symbol, orders);
-    console.log(`[OrderMatcher] Added ${order.order_type} ${order.side} order for ${order.symbol}: ${order.id}`);
+    this.pendingOrders.set(key, orders);
+    console.log(`[OrderMatcher] Added ${order.order_type} ${order.side} order for ${order.symbol} (portfolio: ${order.portfolio_id}): ${order.id}`);
   }
 
   /**
    * Remove an order from the matching engine
    */
   removeOrder(orderId: string): void {
-    for (const [symbol, orders] of this.pendingOrders.entries()) {
+    for (const [scopedKey, orders] of this.pendingOrders.entries()) {
       const index = orders.findIndex((o) => o.id === orderId);
       if (index !== -1) {
         orders.splice(index, 1);
         if (orders.length === 0) {
-          this.pendingOrders.delete(symbol);
+          this.pendingOrders.delete(scopedKey);
         }
         this.triggeredStops.delete(orderId);
-        console.log(`[OrderMatcher] Removed order ${orderId}`);
+        console.log(`[OrderMatcher] Removed order ${orderId} from ${scopedKey}`);
         return;
       }
     }
   }
 
   /**
-   * Get pending orders for a symbol
+   * Get pending orders for a symbol (optionally scoped to a portfolio)
    */
-  getPendingOrders(symbol?: string): Order[] {
-    if (symbol) {
-      return this.pendingOrders.get(symbol) || [];
+  getPendingOrders(symbol?: string, portfolioId?: string): Order[] {
+    if (symbol && portfolioId) {
+      const key = this.getScopedKey(portfolioId, symbol);
+      return this.pendingOrders.get(key) || [];
+    } else if (symbol) {
+      // Get orders for symbol across ALL portfolios (for backward compatibility)
+      const matchingOrders: Order[] = [];
+      for (const [scopedKey, orders] of this.pendingOrders.entries()) {
+        if (scopedKey.endsWith(`:${symbol}`)) {
+          matchingOrders.push(...orders);
+        }
+      }
+      return matchingOrders;
     }
 
-    // Return all pending orders
+    // Return all pending orders across all portfolios
     const allOrders: Order[] = [];
     for (const orders of this.pendingOrders.values()) {
       allOrders.push(...orders);
@@ -92,9 +117,11 @@ export class PaperOrderMatcher {
 
   /**
    * Check orders against current price and fill if conditions met
+   * Now requires portfolioId to prevent cross-broker order filling
    */
-  async checkOrders(symbol: string, price: PriceData): Promise<void> {
-    const orders = this.pendingOrders.get(symbol);
+  async checkOrders(symbol: string, price: PriceData, portfolioId: string): Promise<void> {
+    const key = this.getScopedKey(portfolioId, symbol);
+    const orders = this.pendingOrders.get(key);
     if (!orders || orders.length === 0) return;
 
     const ordersToRemove: string[] = [];
@@ -285,6 +312,29 @@ export class PaperOrderMatcher {
     this.pendingOrders.clear();
     this.triggeredStops.clear();
     console.log('[OrderMatcher] Cleared all pending orders');
+  }
+
+  /**
+   * Clear pending orders for a specific portfolio
+   * Use this when switching brokers to prevent order cross-contamination
+   */
+  clearPortfolioOrders(portfolioId: string): void {
+    const keysToDelete: string[] = [];
+    for (const [scopedKey, orders] of this.pendingOrders.entries()) {
+      if (scopedKey.startsWith(`${portfolioId}:`)) {
+        // Also clear triggered stops for these orders
+        for (const order of orders) {
+          this.triggeredStops.delete(order.id);
+        }
+        keysToDelete.push(scopedKey);
+      }
+    }
+
+    for (const key of keysToDelete) {
+      this.pendingOrders.delete(key);
+    }
+
+    console.log(`[OrderMatcher] Cleared ${keysToDelete.length} symbol entries for portfolio ${portfolioId}`);
   }
 
   /**

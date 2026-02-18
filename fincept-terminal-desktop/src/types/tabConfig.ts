@@ -42,7 +42,6 @@ export const DEFAULT_TABS: TabDefinition[] = [
   { id: 'nodes', label: 'Node Editor', value: 'nodes', component: 'NodeEditorTab' },
   { id: 'code', label: 'Code Editor', value: 'code', component: 'CodeEditorTab' },
   { id: 'datasources', label: 'Data Sources', value: 'datasources', component: 'DataSourcesTab' },
-  { id: 'datamapping', label: 'Data Mapping', value: 'datamapping', component: 'DataMappingTab' },
   { id: 'reportbuilder', label: 'Report Builder', value: 'reportbuilder', component: 'ReportBuilderTab' },
   { id: 'contexts', label: 'Contexts', value: 'contexts', component: 'RecordedContextsManager' },
   { id: 'forum', label: 'Forum', value: 'forum', component: 'ForumTab' },
@@ -60,7 +59,7 @@ export const DEFAULT_TAB_CONFIG: TabConfiguration = {
     { id: 'markets-menu', label: 'Markets', tabs: ['economics', 'dbnomics', 'akshare'] },
     { id: 'research-menu', label: 'Research', tabs: ['geopolitics', 'maritime'] },
     { id: 'trading-menu', label: 'Trading', tabs: ['fyers', 'alpha-arena', 'ai-quant-lab'] },
-    { id: 'tools-menu', label: 'Tools', tabs: ['mcp', 'nodes', 'code', 'datasources', 'datamapping', 'reportbuilder', 'contexts'] },
+    { id: 'tools-menu', label: 'Tools', tabs: ['mcp', 'nodes', 'code', 'datasources', 'reportbuilder', 'contexts'] },
     { id: 'community-menu', label: 'Community', tabs: ['forum', 'marketplace', 'docs'] },
     { id: 'help-menu', label: 'Help', tabs: ['support'] }
   ]

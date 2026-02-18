@@ -5,10 +5,57 @@ import {
   PortfolioSummary,
   Transaction
 } from '../../../../services/portfolio/portfolioService';
+import type { PortfolioExportJSON, ImportMode, ImportResult } from '../types';
+import { cacheService, CacheService } from '../../../../services/cache/cacheService';
+
+const LAST_PORTFOLIO_KEY = 'fincept_last_selected_portfolio_id';
+const REFRESH_INTERVAL_KEY = 'fincept_portfolio_refresh_interval';
+const DEFAULT_REFRESH_MS = 60000; // 1 minute
+
+// Cache configuration
+const CACHE_CATEGORY = 'portfolio-data';
+const CACHE_TTL = 300; // 5 minutes
+
+export const REFRESH_OPTIONS = [
+  { label: '1m', ms: 60_000 },
+  { label: '5m', ms: 300_000 },
+  { label: '10m', ms: 600_000 },
+  { label: '30m', ms: 1_800_000 },
+  { label: '1h', ms: 3_600_000 },
+  { label: '3h', ms: 10_800_000 },
+  { label: '1d', ms: 86_400_000 },
+] as const;
+
+function loadRefreshInterval(): number {
+  try {
+    const saved = localStorage.getItem(REFRESH_INTERVAL_KEY);
+    if (saved) {
+      const val = parseInt(saved, 10);
+      if (val > 0) return val;
+    }
+  } catch {}
+  return DEFAULT_REFRESH_MS;
+}
 
 export const usePortfolioOperations = () => {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
+  const [selectedPortfolio, _setSelectedPortfolio] = useState<Portfolio | null>(null);
+  const [refreshIntervalMs, _setRefreshIntervalMs] = useState(loadRefreshInterval);
+
+  const setRefreshIntervalMs = useCallback((ms: number) => {
+    _setRefreshIntervalMs(ms);
+    try { localStorage.setItem(REFRESH_INTERVAL_KEY, String(ms)); } catch {}
+  }, []);
+
+  // Wrap setter to persist selection to localStorage
+  const setSelectedPortfolio = useCallback((p: Portfolio | null) => {
+    _setSelectedPortfolio(p);
+    if (p) {
+      try { localStorage.setItem(LAST_PORTFOLIO_KEY, p.id); } catch {}
+    } else {
+      try { localStorage.removeItem(LAST_PORTFOLIO_KEY); } catch {}
+    }
+  }, []);
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -19,11 +66,25 @@ export const usePortfolioOperations = () => {
 
   // ==================== FUNCTIONS (declared before useEffect) ====================
 
-  // Load portfolios
+  // Load portfolios with cache
   const loadPortfolios = useCallback(async () => {
     try {
+      const cacheKey = CacheService.key('portfolio', 'list');
+
+      // Try cache first
+      const cached = await cacheService.get<Portfolio[]>(cacheKey);
+      if (cached && !cached.isStale) {
+        setPortfolios(cached.data);
+        return cached.data;
+      }
+
+      // Fetch fresh data
       const result = await portfolioService.getPortfolios();
       setPortfolios(result);
+
+      // Update cache
+      await cacheService.set(cacheKey, result, CACHE_CATEGORY, CACHE_TTL);
+
       return result;
     } catch (error) {
       console.error('[usePortfolioOperations] Error loading portfolios:', error);
@@ -31,27 +92,51 @@ export const usePortfolioOperations = () => {
     }
   }, []);
 
-  // Load portfolio summary
+  // Load portfolio summary with cache
   const loadPortfolioSummary = useCallback(async (portfolioId: string) => {
     try {
       setRefreshing(true);
-      const summary = await portfolioService.getPortfolioSummary(portfolioId);
 
-      // Only update state if this portfolio is still the one being loaded (prevent race conditions)
-      if (loadingPortfolioIdRef.current === portfolioId) {
-        setPortfolioSummary(summary);
+      const summaryCacheKey = CacheService.key('portfolio', 'summary', portfolioId);
+      const transactionsCacheKey = CacheService.key('portfolio', 'transactions', portfolioId);
+
+      // Try cache first for summary
+      const cachedSummary = await cacheService.get<PortfolioSummary>(summaryCacheKey);
+      if (cachedSummary && !cachedSummary.isStale) {
+        if (loadingPortfolioIdRef.current === portfolioId) {
+          setPortfolioSummary(cachedSummary.data);
+        }
       } else {
-        console.log(`[usePortfolioOperations] Discarding stale data for portfolio ${portfolioId}`);
-        return; // Don't fetch transactions if portfolio changed
+        // Fetch fresh summary
+        const summary = await portfolioService.getPortfolioSummary(portfolioId);
+
+        if (loadingPortfolioIdRef.current === portfolioId) {
+          setPortfolioSummary(summary);
+          // Update cache
+          await cacheService.set(summaryCacheKey, summary, CACHE_CATEGORY, CACHE_TTL);
+        } else {
+          console.log(`[usePortfolioOperations] Discarding stale data for portfolio ${portfolioId}`);
+          return;
+        }
       }
 
-      const txns = await portfolioService.getPortfolioTransactions(portfolioId, 20);
-
-      // Only update state if this portfolio is still the one being loaded (prevent race conditions)
-      if (loadingPortfolioIdRef.current === portfolioId) {
-        setTransactions(txns);
+      // Try cache first for transactions
+      const cachedTransactions = await cacheService.get<Transaction[]>(transactionsCacheKey);
+      if (cachedTransactions && !cachedTransactions.isStale) {
+        if (loadingPortfolioIdRef.current === portfolioId) {
+          setTransactions(cachedTransactions.data);
+        }
       } else {
-        console.log(`[usePortfolioOperations] Discarding stale transactions for portfolio ${portfolioId}`);
+        // Fetch fresh transactions
+        const txns = await portfolioService.getPortfolioTransactions(portfolioId, 20);
+
+        if (loadingPortfolioIdRef.current === portfolioId) {
+          setTransactions(txns);
+          // Update cache
+          await cacheService.set(transactionsCacheKey, txns, CACHE_CATEGORY, CACHE_TTL);
+        } else {
+          console.log(`[usePortfolioOperations] Discarding stale transactions for portfolio ${portfolioId}`);
+        }
       }
     } catch (error) {
       console.error('[usePortfolioOperations] Error loading portfolio summary:', error);
@@ -60,12 +145,23 @@ export const usePortfolioOperations = () => {
     }
   }, []);
 
-  // Refresh portfolio data
-  const refreshPortfolioData = useCallback(() => {
+  // Refresh portfolio data - invalidates cache and forces fresh fetch
+  const refreshPortfolioData = useCallback(async () => {
     if (selectedPortfolio) {
+      // Invalidate all portfolio caches
+      await cacheService.invalidatePattern(`portfolio:summary:${selectedPortfolio.id}%`);
+      await cacheService.invalidatePattern(`portfolio:transactions:${selectedPortfolio.id}%`);
+
+      // Invalidate market data cache for all holdings
+      if (portfolioSummary?.holdings) {
+        for (const holding of portfolioSummary.holdings) {
+          await cacheService.invalidatePattern(`market-historical:${holding.symbol}%`);
+        }
+      }
+
       loadPortfolioSummary(selectedPortfolio.id);
     }
-  }, [selectedPortfolio, loadPortfolioSummary]);
+  }, [selectedPortfolio, loadPortfolioSummary, portfolioSummary]);
 
   // Create new portfolio
   const createPortfolio = async (name: string, owner: string, currency: string) => {
@@ -74,6 +170,10 @@ export const usePortfolioOperations = () => {
     }
 
     const portfolio = await portfolioService.createPortfolio(name, owner, currency);
+
+    // Invalidate portfolio list cache
+    await cacheService.invalidatePattern('portfolio:list%');
+
     await loadPortfolios();
     setSelectedPortfolio(portfolio);
     return portfolio;
@@ -92,6 +192,10 @@ export const usePortfolioOperations = () => {
       parseFloat(price)
     );
 
+    // Invalidate cache for this portfolio
+    await cacheService.invalidatePattern(`portfolio:summary:${selectedPortfolio.id}%`);
+    await cacheService.invalidatePattern(`portfolio:transactions:${selectedPortfolio.id}%`);
+
     await refreshPortfolioData();
   };
 
@@ -108,12 +212,22 @@ export const usePortfolioOperations = () => {
       parseFloat(price)
     );
 
+    // Invalidate cache for this portfolio
+    await cacheService.invalidatePattern(`portfolio:summary:${selectedPortfolio.id}%`);
+    await cacheService.invalidatePattern(`portfolio:transactions:${selectedPortfolio.id}%`);
+
     await refreshPortfolioData();
   };
 
   // Delete portfolio
   const deletePortfolio = async (portfolioId: string) => {
     await portfolioService.deletePortfolio(portfolioId);
+
+    // Invalidate all caches related to this portfolio
+    await cacheService.invalidatePattern('portfolio:list%');
+    await cacheService.invalidatePattern(`portfolio:summary:${portfolioId}%`);
+    await cacheService.invalidatePattern(`portfolio:transactions:${portfolioId}%`);
+
     const updatedPortfolios = await loadPortfolios();
 
     if (selectedPortfolio?.id === portfolioId) {
@@ -122,6 +236,45 @@ export const usePortfolioOperations = () => {
       setSelectedPortfolio(remaining.length > 0 ? remaining[0] : null);
       setPortfolioSummary(null);
     }
+  };
+
+  // Export to JSON
+  const exportToJSON = async () => {
+    if (!selectedPortfolio) return;
+    const json = await portfolioService.exportPortfolioJSON(selectedPortfolio.id);
+    const blob = new Blob([json], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${selectedPortfolio.name}_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Import portfolio from parsed data
+  const importPortfolio = async (
+    data: PortfolioExportJSON,
+    mode: ImportMode,
+    mergeTargetId?: string,
+    onProgress?: (current: number, total: number) => void
+  ): Promise<ImportResult> => {
+    const result = await portfolioService.importPortfolio(data, mode, mergeTargetId, onProgress);
+
+    // Invalidate caches
+    await cacheService.invalidatePattern('portfolio:list%');
+    await cacheService.invalidatePattern(`portfolio:summary:${result.portfolioId}%`);
+    await cacheService.invalidatePattern(`portfolio:transactions:${result.portfolioId}%`);
+
+    // Reload portfolio list
+    const updated = await loadPortfolios();
+
+    // Auto-select the imported/merged portfolio
+    const imported = updated.find(p => p.id === result.portfolioId);
+    if (imported) setSelectedPortfolio(imported);
+
+    return result;
   };
 
   // Export to CSV
@@ -149,18 +302,32 @@ export const usePortfolioOperations = () => {
     notes?: string
   ) => {
     await portfolioService.updateTransaction(transactionId, quantity, price, transactionDate, notes);
+
+    // Invalidate cache for current portfolio
+    if (selectedPortfolio) {
+      await cacheService.invalidatePattern(`portfolio:summary:${selectedPortfolio.id}%`);
+      await cacheService.invalidatePattern(`portfolio:transactions:${selectedPortfolio.id}%`);
+    }
+
     await refreshPortfolioData();
   };
 
   // Delete transaction
   const deleteTransaction = async (transactionId: string) => {
     await portfolioService.deleteTransaction(transactionId);
+
+    // Invalidate cache for current portfolio
+    if (selectedPortfolio) {
+      await cacheService.invalidatePattern(`portfolio:summary:${selectedPortfolio.id}%`);
+      await cacheService.invalidatePattern(`portfolio:transactions:${selectedPortfolio.id}%`);
+    }
+
     await refreshPortfolioData();
   };
 
   // ==================== EFFECTS (use functions declared above) ====================
 
-  // Initialize service and load portfolios
+  // Initialize service and load portfolios, restoring last selection
   useEffect(() => {
     const initService = async () => {
       setLoading(true);
@@ -168,9 +335,25 @@ export const usePortfolioOperations = () => {
         await portfolioService.initialize();
         const result = await portfolioService.getPortfolios();
         setPortfolios(result);
-        // Select first portfolio on initial load
+
         if (result.length > 0) {
-          setSelectedPortfolio(result[0]);
+          // Restore last selected portfolio from localStorage
+          let restored = false;
+          try {
+            const lastId = localStorage.getItem(LAST_PORTFOLIO_KEY);
+            if (lastId) {
+              const match = result.find(p => p.id === lastId);
+              if (match) {
+                setSelectedPortfolio(match);
+                restored = true;
+              }
+            }
+          } catch {}
+
+          // Fallback to first portfolio if no saved selection
+          if (!restored) {
+            setSelectedPortfolio(result[0]);
+          }
         }
       } catch (error) {
         console.error('[usePortfolioOperations] Initialization error:', error);
@@ -179,7 +362,7 @@ export const usePortfolioOperations = () => {
       }
     };
     initService();
-  }, []);
+  }, [setSelectedPortfolio]);
 
   // Auto-refresh portfolio data only when tab is visible
   useEffect(() => {
@@ -191,7 +374,7 @@ export const usePortfolioOperations = () => {
       if (!refreshTimer) {
         refreshTimer = setInterval(() => {
           refreshPortfolioData();
-        }, 10000);
+        }, refreshIntervalMs);
       }
     };
 
@@ -210,7 +393,6 @@ export const usePortfolioOperations = () => {
       }
     };
 
-    // Start refresh only if page is visible
     if (!document.hidden) {
       startRefresh();
     }
@@ -221,7 +403,7 @@ export const usePortfolioOperations = () => {
       stopRefresh();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [selectedPortfolio, refreshPortfolioData]);
+  }, [selectedPortfolio, refreshPortfolioData, refreshIntervalMs]);
 
   // Load portfolio summary when selection changes
   useEffect(() => {
@@ -253,12 +435,16 @@ export const usePortfolioOperations = () => {
     transactions,
     loading,
     refreshing,
+    refreshIntervalMs,
+    setRefreshIntervalMs,
     createPortfolio,
     addAsset,
     sellAsset,
     deletePortfolio,
     refreshPortfolioData,
     exportToCSV,
+    exportToJSON,
+    importPortfolio,
     updateTransaction,
     deleteTransaction
   };

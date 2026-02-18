@@ -205,16 +205,20 @@ class ToolkitPaneView implements IPrimitivePaneView {
           const logicalWidth = scope.bitmapSize.width / scaleX;
           const logicalHeight = scope.bitmapSize.height / scaleY;
 
-          // Draw all objects
+          // Draw all objects — save/restore per-drawing to prevent state leaks
           this._drawings.forEach(drawing => {
             if (drawing.visible !== false) {
+              ctx.save();
               this.drawObject(ctx, drawing, logicalWidth, logicalHeight);
+              ctx.restore();
             }
           });
 
           // Draw position markers
           this._positions.forEach(position => {
+            ctx.save();
             this.drawPosition(ctx, position);
+            ctx.restore();
           });
 
           ctx.restore();
@@ -496,9 +500,6 @@ class ToolkitPaneView implements IPrimitivePaneView {
     const [x2, y2] = coords[1];
     const [x3, y3] = coords[2];
 
-    // Calculate regression line (simplified - just uses two points)
-    const slope = (y2 - y1) / (x2 - x1);
-
     // Calculate channel width based on third point
     const channelWidth = Math.abs(y3 - y1);
 
@@ -729,8 +730,10 @@ class ToolkitPaneView implements IPrimitivePaneView {
       }
     });
 
-    // Main lines
+    // Main boundary lines (solid)
     ctx.strokeStyle = drawing.style.color;
+    ctx.lineWidth = drawing.style.lineWidth || 2;
+    ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y1);

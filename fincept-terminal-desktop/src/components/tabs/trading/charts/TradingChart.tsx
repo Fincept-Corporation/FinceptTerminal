@@ -202,12 +202,14 @@ export function TradingChart({
         {/* ProChartWithToolkit with drawing tools */}
         {!isLoading && !error && chartData.length > 0 && (
           <ProChartWithToolkit
+            key={`${symbol}:${selectedTimeframe}`}
             data={chartData}
             symbol={`${symbol} - ${selectedTimeframe}`}
             height={height}
             showVolume={showVolume}
             showToolbar={true}
             showHeader={false}
+            interval={selectedTimeframe}
           />
         )}
 

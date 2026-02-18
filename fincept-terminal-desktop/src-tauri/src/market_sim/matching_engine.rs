@@ -94,6 +94,7 @@ impl MatchingEngine {
         events.push(SimEvent::OrderAccepted(OrderAcceptedEvent {
             order_id: order.id,
             participant_id: order.participant_id,
+            side: order.side,
             timestamp,
         }));
 
@@ -158,12 +159,22 @@ impl MatchingEngine {
                 // Execute at best available, then rest remainder as limit at last fill price
                 let pre_fill = order.filled_quantity;
                 self.match_aggressive_order(&mut order, timestamp, &mut events);
-                if order.remaining_quantity > 0 && order.filled_quantity > pre_fill {
-                    // Set limit price to the last fill price
-                    order.order_type = OrderType::Limit;
-                    // price already set by match
-                    if let Some(book) = self.books.get_mut(&order.instrument_id) {
-                        book.insert_order(order);
+                if order.remaining_quantity > 0 {
+                    if order.filled_quantity > pre_fill {
+                        // Got fills: set limit price to the last fill price (set during matching)
+                        order.order_type = OrderType::Limit;
+                        if let Some(book) = self.books.get_mut(&order.instrument_id) {
+                            book.insert_order(order);
+                        }
+                    } else {
+                        // No fills: cancel the order (no liquidity at any price)
+                        order.status = OrderStatus::Cancelled;
+                        events.push(SimEvent::OrderCancelled(OrderCancelledEvent {
+                            order_id: order.id,
+                            participant_id: order.participant_id,
+                            remaining_quantity: order.remaining_quantity,
+                            timestamp,
+                        }));
                     }
                 }
             }
@@ -389,6 +400,66 @@ impl MatchingEngine {
         }
     }
 
+    /// Update all pegged orders when BBO changes. Returns events from any resulting matches.
+    pub fn update_pegged_orders(&mut self, instrument_id: InstrumentId, timestamp: Nanos) -> Vec<SimEvent> {
+        let mut events = Vec::new();
+
+        let book = match self.books.get(&instrument_id) {
+            Some(b) => b,
+            None => return events,
+        };
+
+        // Collect pegged orders that need repricing
+        let mut orders_to_repeg: Vec<Order> = Vec::new();
+
+        for order in book.orders.values() {
+            if matches!(order.order_type, OrderType::Pegged(_)) {
+                orders_to_repeg.push(order.clone());
+            }
+        }
+
+        // Reprice each pegged order
+        for mut order in orders_to_repeg {
+            let old_price = order.price;
+
+            // Calculate new peg price
+            if let Some(book) = self.books.get(&instrument_id) {
+                if let OrderType::Pegged(peg_type) = order.order_type {
+                    let new_price = match peg_type {
+                        PegType::Midpoint => {
+                            book.midpoint().map(|m| m as Price).unwrap_or(0)
+                        }
+                        PegType::Primary => {
+                            match order.side {
+                                Side::Buy => book.best_bid.unwrap_or(0),
+                                Side::Sell => book.best_ask.unwrap_or(0),
+                            }
+                        }
+                        PegType::Market => {
+                            match order.side {
+                                Side::Buy => book.best_ask.unwrap_or(0),
+                                Side::Sell => book.best_bid.unwrap_or(0),
+                            }
+                        }
+                    };
+
+                    if new_price != old_price && new_price > 0 {
+                        // Remove order and resubmit at new price
+                        if let Some(book_mut) = self.books.get_mut(&instrument_id) {
+                            book_mut.cancel_order(order.id);
+                        }
+                        order.price = new_price;
+                        order.id = self.allocate_order_id();
+                        let repeg_events = self.process_order(order, timestamp);
+                        events.extend(repeg_events);
+                    }
+                }
+            }
+        }
+
+        events
+    }
+
     /// Cancel an order
     pub fn cancel_order(
         &mut self,
@@ -475,6 +546,120 @@ impl MatchingEngine {
     /// Get instrument
     pub fn get_instrument(&self, id: InstrumentId) -> Option<&Instrument> {
         self.instruments.get(&id)
+    }
+
+    /// Check and trigger stop orders after a trade. Returns events from triggered orders.
+    pub fn check_stop_orders(&mut self, instrument_id: InstrumentId, timestamp: Nanos) -> Vec<SimEvent> {
+        let mut events = Vec::new();
+
+        let book = match self.books.get(&instrument_id) {
+            Some(b) => b,
+            None => return events,
+        };
+
+        let last_price = book.last_trade_price;
+        if last_price == 0 {
+            return events;
+        }
+
+        // Collect stop orders that should trigger
+        let mut orders_to_trigger: Vec<Order> = Vec::new();
+
+        for order in book.orders.values() {
+            let should_trigger = match order.order_type {
+                OrderType::Stop | OrderType::StopLimit | OrderType::TrailingStop => {
+                    match order.side {
+                        Side::Buy => last_price >= order.stop_price,
+                        Side::Sell => last_price <= order.stop_price,
+                    }
+                }
+                _ => false,
+            };
+
+            if should_trigger {
+                orders_to_trigger.push(order.clone());
+            }
+        }
+
+        // Process triggered orders
+        for mut order in orders_to_trigger {
+            // Remove from book first
+            if let Some(book) = self.books.get_mut(&instrument_id) {
+                book.cancel_order(order.id);
+            }
+
+            // Convert stop to market/limit and process
+            match order.order_type {
+                OrderType::Stop | OrderType::TrailingStop => {
+                    order.order_type = OrderType::Market;
+                    order.price = 0;
+                }
+                OrderType::StopLimit => {
+                    order.order_type = OrderType::Limit;
+                    // price already set as limit price
+                }
+                _ => {}
+            }
+
+            let triggered_events = self.process_order(order, timestamp);
+            events.extend(triggered_events);
+        }
+
+        events
+    }
+
+    /// Update trailing stop prices based on market movement
+    pub fn update_trailing_stops(&mut self, instrument_id: InstrumentId) {
+        let book = match self.books.get_mut(&instrument_id) {
+            Some(b) => b,
+            None => return,
+        };
+
+        let last_price = book.last_trade_price;
+        if last_price == 0 {
+            return;
+        }
+
+        // Collect order IDs that need updating
+        let updates: Vec<(OrderId, Price)> = book.orders.iter()
+            .filter_map(|(id, order)| {
+                if !matches!(order.order_type, OrderType::TrailingStop) {
+                    return None;
+                }
+
+                let new_stop = match order.side {
+                    Side::Buy => {
+                        // For buy stops, stop price trails below market
+                        // If market moves down, stop moves down (tighter)
+                        let potential_stop = last_price + order.trailing_offset;
+                        if potential_stop < order.stop_price {
+                            Some(potential_stop)
+                        } else {
+                            None
+                        }
+                    }
+                    Side::Sell => {
+                        // For sell stops, stop price trails above market
+                        // If market moves up, stop moves up (tighter)
+                        let potential_stop = last_price.saturating_sub(order.trailing_offset);
+                        if potential_stop > order.stop_price {
+                            Some(potential_stop)
+                        } else {
+                            None
+                        }
+                    }
+                };
+
+                new_stop.map(|s| (*id, s))
+            })
+            .collect();
+
+        // Apply updates
+        for (order_id, new_stop) in updates {
+            if let Some(order) = book.orders.get_mut(&order_id) {
+                order.stop_price = new_stop;
+            }
+        }
     }
 
     /// Reset for new trading day

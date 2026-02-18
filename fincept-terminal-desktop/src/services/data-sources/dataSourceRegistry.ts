@@ -3,8 +3,6 @@
 
 import { sqliteService, DataSource } from '../core/sqliteService';
 import { getWebSocketManager } from '../trading/websocketBridge';
-// import { mappingEngine } from '../../components/tabs/data-mapping/engine/MappingEngine';
-// import { DataMappingConfig } from '../../components/tabs/data-mapping/types';
 import { dataSourceLogger } from '../core/loggerService';
 
 export interface WebSocketSourceConfig {

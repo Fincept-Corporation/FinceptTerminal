@@ -24,6 +24,7 @@ interface ForumWidgetProps {
   limit?: number;
   onRemove?: () => void;
   onNavigateToTab?: (tabName: string, postId?: string) => void;
+  onConfigure?: () => void;
 }
 
 export const ForumWidget: React.FC<ForumWidgetProps> = ({
@@ -32,7 +33,8 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
   categoryName = 'Recent Posts',
   limit = 5,
   onRemove,
-  onNavigateToTab
+  onNavigateToTab,
+  onConfigure
 }) => {
   const { t } = useTranslation('dashboard');
   const { session } = useAuth();
@@ -42,6 +44,7 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
   const {
     data: posts,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<ForumPost[]>({
@@ -80,7 +83,8 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
       title={`${t('widgets.forum')} - ${categoryName}`}
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={loading && !posts}
+      onConfigure={onConfigure}
+      isLoading={(loading && !posts) || isFetching}
       error={error?.message || null}
     >
       <div style={{ padding: '8px' }}>

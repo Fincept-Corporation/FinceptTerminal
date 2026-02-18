@@ -10,13 +10,15 @@ interface MarketDataWidgetProps {
   category?: string;
   tickers?: string[];
   onRemove?: () => void;
+  onConfigure?: () => void;
 }
 
 export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
   id,
   category = 'Indices',
   tickers = ['^GSPC', '^IXIC', '^DJI', '^RUT'],
-  onRemove
+  onRemove,
+  onConfigure
 }) => {
   const { t } = useTranslation('dashboard');
 
@@ -24,6 +26,7 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
   const {
     data: quotes,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<QuoteData[]>({
@@ -44,7 +47,8 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
       title={`${t('widgets.markets')} - ${category}`}
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={loading}
+      onConfigure={onConfigure}
+      isLoading={(loading && !quotes) || isFetching}
       error={error?.message}
     >
       <div style={{ padding: '4px' }}>

@@ -294,7 +294,7 @@ def main():
                 margin_std = float(params.get('margin_std', 0.05))
                 discount_rate = float(params.get('discount_rate', 0.10))
                 simulations = int(params.get('num_simulations', params.get('simulations', 1000)))
-            except (json.JSONDecodeError, TypeError):
+            except (json.JSONDecodeError, TypeError, AttributeError):
                 if len(sys.argv) < 9:
                     raise ValueError("All parameters required: base_valuation, revenue_growth_mean, revenue_growth_std, margin_mean, margin_std, discount_rate, simulations")
                 base_valuation = float(sys.argv[2])

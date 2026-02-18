@@ -1,6 +1,10 @@
 """Returns Calculator - IRR and MOIC"""
 from typing import List, Dict, Any
 import numpy as np
+try:
+    import numpy_financial as npf
+except ImportError:
+    npf = None
 
 class ReturnsCalculator:
     """Calculate LBO returns metrics"""
@@ -9,8 +13,11 @@ class ReturnsCalculator:
     def calculate_irr(cash_flows: List[float]) -> float:
         """Calculate Internal Rate of Return"""
         try:
-            irr = np.irr(cash_flows)
-            return irr if not np.isnan(irr) else 0
+            if npf is not None:
+                irr = npf.irr(cash_flows)
+            else:
+                irr = np.irr(cash_flows)
+            return float(irr) if irr is not None and not np.isnan(irr) else 0
         except:
             return 0
 

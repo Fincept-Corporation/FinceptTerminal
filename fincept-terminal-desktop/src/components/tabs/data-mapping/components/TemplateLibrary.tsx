@@ -1,15 +1,17 @@
-// Template Library - Pre-built mapping templates
+// Template Library - Terminal UI/UX
 
 import React, { useState } from 'react';
-import { Star, CheckCircle, Copy, Eye } from 'lucide-react';
+import { Star, CheckCircle2, Copy, Eye, Bookmark, Search, Filter, ArrowRight, X, GitMerge, Play } from 'lucide-react';
 import { MappingTemplate } from '../types';
 import { INDIAN_BROKER_TEMPLATES } from '../templates/indian-brokers';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface TemplateLibraryProps {
   onSelectTemplate: (template: MappingTemplate) => void;
 }
 
 export function TemplateLibrary({ onSelectTemplate }: TemplateLibraryProps) {
+  const { colors } = useTerminalTheme();
   const [selectedTemplate, setSelectedTemplate] = useState<MappingTemplate | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -21,198 +23,310 @@ export function TemplateLibrary({ onSelectTemplate }: TemplateLibraryProps) {
       template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       template.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       template.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-
     const matchesCategory = categoryFilter === 'all' || template.tags.includes(categoryFilter);
-
     return matchesSearch && matchesCategory;
   });
 
-  // Get unique tags for filtering
   const allTags = Array.from(new Set(allTemplates.flatMap((t) => t.tags)));
   const brokerTags = allTags.filter((tag) =>
     ['upstox', 'fyers', 'dhan', 'zerodha', 'angelone', 'shipnext'].includes(tag)
   );
 
-  const handleUseTemplate = (template: MappingTemplate) => {
-    onSelectTemplate(template);
-  };
+  const borderColor = 'var(--ft-border-color, #2A2A2A)';
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <h3 className="text-xs font-bold text-orange-500 uppercase mb-2">Template Library</h3>
-        <p className="text-xs text-gray-500">Pre-built mappings for popular brokers and data sources</p>
-      </div>
+    <div className="flex flex-col h-full" style={{ fontFamily: 'inherit' }}>
 
-      {/* Search & Filter */}
-      <div className="flex gap-3">
-        <input
-          type="text"
-          placeholder="Search templates..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 bg-zinc-900 border border-zinc-700 text-gray-300 px-3 py-2 text-xs rounded focus:outline-none focus:border-orange-500"
-        />
+      {/* ── Search & Filter Bar ── */}
+      <div
+        className="flex items-center gap-2 px-3 py-2 mb-3 flex-shrink-0"
+        style={{ backgroundColor: colors.panel, border: `1px solid ${borderColor}` }}
+      >
+        <div className="flex items-center gap-2 flex-1" style={{ border: `1px solid ${borderColor}`, backgroundColor: colors.background, padding: '0 8px' }}>
+          <Search size={12} color={colors.textMuted} />
+          <input
+            type="text"
+            placeholder="Search templates..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1 py-1.5 text-xs font-mono bg-transparent outline-none"
+            style={{ color: colors.text }}
+          />
+          {searchTerm && (
+            <button onClick={() => setSearchTerm('')} style={{ color: colors.textMuted }}>
+              <X size={11} />
+            </button>
+          )}
+        </div>
 
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 text-gray-300 px-3 py-2 text-xs rounded focus:outline-none focus:border-orange-500"
-        >
-          <option value="all">All Brokers</option>
-          {brokerTags.map((tag) => (
-            <option key={tag} value={tag}>
-              {tag.toUpperCase()}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Templates Grid */}
-      <div className="grid grid-cols-1 gap-3 max-h-[600px] overflow-auto pr-2">
-        {filteredTemplates.map((template) => (
-          <div
-            key={template.id}
-            className={`bg-zinc-900 border rounded-lg p-4 cursor-pointer transition-all ${
-              selectedTemplate?.id === template.id
-                ? 'border-orange-500 bg-orange-900/10'
-                : 'border-zinc-700 hover:border-zinc-600'
-            }`}
-            onClick={() => setSelectedTemplate(template)}
+        <div className="flex items-center gap-1.5" style={{ border: `1px solid ${borderColor}`, backgroundColor: colors.background, padding: '0 8px' }}>
+          <Filter size={11} color={colors.textMuted} />
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="py-1.5 text-xs font-mono bg-transparent outline-none"
+            style={{ color: colors.text, minWidth: '100px' }}
           >
-            {/* Header */}
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <h4 className="text-sm font-bold text-white">{template.name}</h4>
-                  {template.verified && (
-                    <CheckCircle size={14} className="text-green-500" aria-label="Verified" />
-                  )}
-                  {template.official && <Star size={14} className="text-yellow-500" aria-label="Official" />}
-                </div>
-                <p className="text-xs text-gray-400">{template.description}</p>
+            <option value="all" style={{ backgroundColor: colors.panel }}>ALL BROKERS</option>
+            {brokerTags.map((tag) => (
+              <option key={tag} value={tag} style={{ backgroundColor: colors.panel }}>
+                {tag.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="text-[10px] font-mono flex-shrink-0" style={{ color: colors.textMuted }}>
+          {filteredTemplates.length}/{allTemplates.length} RESULTS
+        </div>
+      </div>
+
+      {/* ── Main Layout: Grid + Detail Panel ── */}
+      <div className="flex flex-1 gap-3 overflow-hidden min-h-0">
+
+        {/* Left: Templates Grid */}
+        <div className="flex-1 overflow-auto space-y-2 pr-1">
+          {filteredTemplates.length === 0 ? (
+            <div
+              className="flex items-center justify-center h-48"
+              style={{ backgroundColor: colors.background, border: `1px solid ${borderColor}` }}
+            >
+              <div className="text-center">
+                <Bookmark size={32} color={colors.textMuted} className="mx-auto mb-2 opacity-30" />
+                <p className="text-xs font-bold tracking-wider" style={{ color: colors.textMuted }}>NO TEMPLATES FOUND</p>
+                <p className="text-[11px] mt-1" style={{ color: colors.textMuted }}>Try adjusting your search or filter</p>
               </div>
             </div>
-
-            {/* Tags */}
-            <div className="flex flex-wrap gap-2 mb-3">
-              {template.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="text-xs px-2 py-1 bg-zinc-800 text-gray-400 rounded font-mono uppercase"
+          ) : (
+            filteredTemplates.map((template) => {
+              const isSelected = selectedTemplate?.id === template.id;
+              return (
+                <div
+                  key={template.id}
+                  className="group transition-all cursor-pointer"
+                  style={{
+                    backgroundColor: isSelected ? `${colors.primary}10` : colors.panel,
+                    border: `1px solid ${isSelected ? colors.primary : borderColor}`,
+                  }}
+                  onClick={() => setSelectedTemplate(isSelected ? null : template)}
+                  onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.borderColor = `${colors.primary}60`; }}
+                  onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.borderColor = borderColor; }}
                 >
-                  {tag}
-                </span>
-              ))}
-            </div>
+                  {/* Top accent bar */}
+                  <div className="h-0.5 w-full" style={{ backgroundColor: isSelected ? colors.primary : `${colors.primary}40` }} />
 
-            {/* Stats */}
-            <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
-              {template.usageCount !== undefined && (
-                <div>
-                  <Copy size={12} className="inline mr-1" />
-                  {template.usageCount} uses
-                </div>
-              )}
-              {template.rating !== undefined && (
-                <div>
-                  <Star size={12} className="inline mr-1 text-yellow-500" />
-                  {template.rating}/5
-                </div>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedTemplate(template);
-                }}
-                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-gray-300 py-2 px-3 rounded text-xs font-bold flex items-center justify-center gap-2"
-              >
-                <Eye size={12} />
-                PREVIEW
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleUseTemplate(template);
-                }}
-                className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-2 px-3 rounded text-xs font-bold"
-              >
-                USE TEMPLATE
-              </button>
-            </div>
-          </div>
-        ))}
-
-        {filteredTemplates.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            <p className="text-sm">No templates found</p>
-            <p className="text-xs mt-2">Try adjusting your search or filter</p>
-          </div>
-        )}
-      </div>
-
-      {/* Template Preview */}
-      {selectedTemplate && (
-        <div className="bg-zinc-900 border border-orange-700 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-xs font-bold text-orange-500 uppercase">Template Details</h4>
-            <button
-              onClick={() => setSelectedTemplate(null)}
-              className="text-xs text-gray-400 hover:text-white"
-            >
-              Close
-            </button>
-          </div>
-
-          {/* Instructions */}
-          {selectedTemplate.instructions && (
-            <div className="mb-4">
-              <div className="text-xs font-bold text-gray-400 mb-2">USAGE INSTRUCTIONS</div>
-              <pre className="text-xs text-gray-400 whitespace-pre-wrap bg-zinc-800 p-3 rounded">
-                {selectedTemplate.instructions}
-              </pre>
-            </div>
-          )}
-
-          {/* Field Mappings Preview */}
-          {selectedTemplate.mappingConfig.fieldMappings && (
-            <div>
-              <div className="text-xs font-bold text-gray-400 mb-2">FIELD MAPPINGS</div>
-              <div className="space-y-2">
-                {selectedTemplate.mappingConfig.fieldMappings.map((mapping, idx) => (
-                  <div key={idx} className="bg-zinc-800 p-2 rounded text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-orange-400 font-mono">{mapping.targetField}</span>
-                      <span className="text-gray-500">←</span>
-                      <span className="text-green-400 font-mono flex-1 text-right truncate">
-                        {mapping.sourceExpression}
-                      </span>
-                    </div>
-                    {mapping.transform && (
-                      <div className="text-purple-400 mt-1">
-                        Transform: {mapping.transform}
+                  <div className="p-3">
+                    {/* Row 1: Name + badges */}
+                    <div className="flex items-start justify-between mb-1.5">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="text-xs font-bold truncate" style={{ color: colors.text }}>{template.name}</span>
+                        {template.verified && (
+                          <CheckCircle2 size={12} color={colors.success} className="flex-shrink-0" />
+                        )}
+                        {template.official && (
+                          <Star size={12} color={colors.warning || '#F59E0B'} className="flex-shrink-0" />
+                        )}
                       </div>
-                    )}
+                      <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                        {template.rating !== undefined && (
+                          <div className="flex items-center gap-0.5 text-[10px] font-mono" style={{ color: colors.warning || '#F59E0B' }}>
+                            <Star size={10} />
+                            {template.rating}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Row 2: Description */}
+                    <p className="text-[11px] mb-2 line-clamp-1" style={{ color: colors.textMuted }}>{template.description}</p>
+
+                    {/* Row 3: Tags + Stats */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap gap-1">
+                        {template.tags.slice(0, 4).map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-[10px] px-1.5 py-0.5 font-mono font-bold"
+                            style={{
+                              backgroundColor: categoryFilter === tag ? `${colors.primary}20` : `${colors.textMuted}10`,
+                              color: categoryFilter === tag ? colors.primary : colors.textMuted,
+                            }}
+                          >
+                            {tag.toUpperCase()}
+                          </span>
+                        ))}
+                      </div>
+                      {template.usageCount !== undefined && (
+                        <div className="flex items-center gap-1 text-[10px] font-mono" style={{ color: colors.textMuted }}>
+                          <Copy size={10} />
+                          {template.usageCount}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Row */}
+                  <div
+                    className="flex items-center justify-between px-3 py-2 border-t"
+                    style={{ borderColor }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {template.mappingConfig.fieldMappings && (
+                        <div className="flex items-center gap-1 text-[10px] font-mono" style={{ color: colors.textMuted }}>
+                          <GitMerge size={10} color={colors.textMuted} />
+                          {template.mappingConfig.fieldMappings.length} fields
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedTemplate(template); }}
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold tracking-wide transition-all"
+                        style={{ backgroundColor: `${colors.textMuted}10`, color: colors.textMuted, border: `1px solid ${borderColor}` }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#1F1F1F'; e.currentTarget.style.color = colors.text; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = `${colors.textMuted}10`; e.currentTarget.style.color = colors.textMuted; }}
+                      >
+                        <Eye size={10} />
+                        PREVIEW
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onSelectTemplate(template); }}
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold tracking-wide transition-all"
+                        style={{ backgroundColor: colors.primary, color: colors.background }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FF8C00'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.primary}
+                      >
+                        USE
+                        <ArrowRight size={10} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Right: Detail / Preview Panel */}
+        {selectedTemplate && (
+          <div
+            className="flex-shrink-0 flex flex-col overflow-hidden"
+            style={{ width: '320px', backgroundColor: colors.panel, border: `1px solid ${colors.primary}` }}
+          >
+            {/* Detail header */}
+            <div
+              className="flex items-center justify-between px-3 py-2.5 flex-shrink-0"
+              style={{ backgroundColor: `${colors.primary}15`, borderBottom: `1px solid ${colors.primary}30` }}
+            >
+              <div className="flex items-center gap-2">
+                <Bookmark size={13} color={colors.primary} />
+                <span className="text-[11px] font-bold tracking-wider" style={{ color: colors.primary }}>TEMPLATE DETAILS</span>
+              </div>
+              <button
+                onClick={() => setSelectedTemplate(null)}
+                className="p-0.5 transition-colors"
+                style={{ color: colors.textMuted }}
+                onMouseEnter={(e) => e.currentTarget.style.color = colors.text}
+                onMouseLeave={(e) => e.currentTarget.style.color = colors.textMuted}
+              >
+                <X size={13} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-3 space-y-3">
+              {/* Name & badges */}
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold" style={{ color: colors.text }}>{selectedTemplate.name}</span>
+                  {selectedTemplate.verified && <CheckCircle2 size={12} color={colors.success} />}
+                  {selectedTemplate.official && <Star size={12} color={colors.warning || '#F59E0B'} />}
+                </div>
+                <p className="text-[11px]" style={{ color: colors.text }}>{selectedTemplate.description}</p>
+              </div>
+
+              {/* Tags */}
+              <div className="flex flex-wrap gap-1">
+                {selectedTemplate.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-[10px] px-1.5 py-0.5 font-mono font-bold"
+                    style={{ backgroundColor: `${colors.primary}15`, color: colors.primary }}
+                  >
+                    {tag.toUpperCase()}
+                  </span>
+                ))}
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Usage', value: selectedTemplate.usageCount ?? '—' },
+                  { label: 'Rating', value: selectedTemplate.rating ? `${selectedTemplate.rating}/5` : '—' },
+                  { label: 'Fields', value: selectedTemplate.mappingConfig.fieldMappings?.length ?? 0 },
+                  { label: 'Schema', value: selectedTemplate.mappingConfig.target?.schema?.toUpperCase() ?? 'CUSTOM' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="p-2" style={{ backgroundColor: colors.background, border: `1px solid ${borderColor}` }}>
+                    <div className="text-[10px]" style={{ color: colors.text }}>{label}</div>
+                    <div className="text-xs font-bold font-mono" style={{ color: colors.text }}>{String(value)}</div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
 
-          {/* Use Button */}
-          <button
-            onClick={() => handleUseTemplate(selectedTemplate)}
-            className="w-full mt-4 bg-orange-600 hover:bg-orange-700 text-white py-3 rounded font-bold text-xs"
-          >
-            USE THIS TEMPLATE
-          </button>
-        </div>
-      )}
+              {/* Instructions */}
+              {selectedTemplate.instructions && (
+                <div>
+                  <div className="text-[10px] font-bold tracking-wider mb-1.5" style={{ color: colors.text }}>USAGE INSTRUCTIONS</div>
+                  <div
+                    className="p-2.5 text-[11px] font-mono whitespace-pre-wrap max-h-32 overflow-auto"
+                    style={{ backgroundColor: colors.background, border: `1px solid ${borderColor}`, color: colors.text }}
+                  >
+                    {selectedTemplate.instructions}
+                  </div>
+                </div>
+              )}
+
+              {/* Field Mappings Preview */}
+              {selectedTemplate.mappingConfig.fieldMappings && selectedTemplate.mappingConfig.fieldMappings.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-bold tracking-wider mb-1.5" style={{ color: colors.text }}>
+                    FIELD MAPPINGS ({selectedTemplate.mappingConfig.fieldMappings.length})
+                  </div>
+                  <div className="space-y-1 max-h-48 overflow-auto">
+                    {selectedTemplate.mappingConfig.fieldMappings.map((mapping, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-mono"
+                        style={{ backgroundColor: colors.background, border: `1px solid ${borderColor}` }}
+                      >
+                        <span style={{ color: colors.primary }} className="truncate flex-1">{mapping.targetField}</span>
+                        <span style={{ color: colors.textMuted }}>←</span>
+                        <span style={{ color: colors.success }} className="truncate flex-1 text-right">
+                          {mapping.sourceExpression || mapping.source?.path || '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Use button */}
+            <div className="p-3 flex-shrink-0" style={{ borderTop: `1px solid ${borderColor}` }}>
+              <button
+                onClick={() => onSelectTemplate(selectedTemplate)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-bold tracking-wide transition-all"
+                style={{ backgroundColor: colors.primary, color: colors.background }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FF8C00'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.primary}
+              >
+                <Play size={13} />
+                USE THIS TEMPLATE
+                <ArrowRight size={13} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

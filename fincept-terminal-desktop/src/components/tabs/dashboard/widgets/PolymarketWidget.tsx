@@ -24,6 +24,7 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
   const {
     data: markets,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<PolymarketMarket[]>({
@@ -52,7 +53,7 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
       title="POLYMARKET - TOP MARKETS"
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={loading && !markets}
+      isLoading={(loading && !markets) || isFetching}
       error={error?.message || null}
       headerColor="var(--ft-color-purple)"
     >

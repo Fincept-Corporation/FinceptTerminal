@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { TrendingUp, BarChart3, PieChart, LineChart, Target, Shield, Calculator, Download, Layers } from 'lucide-react';
+import { TrendingUp, BarChart3, PieChart, LineChart, Target, Shield, Calculator, Download, Layers, Zap, AlertTriangle, GitCompare, Brain } from 'lucide-react';
 import { PortfolioSummary } from '../../../../services/portfolio/portfolioService';
 import { LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Scatter, ScatterChart, ZAxis } from 'recharts';
 import { getSetting, saveSetting } from '@/services/core/sqliteService';
@@ -166,7 +166,7 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
   const [loading, setLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null); // Track which action is loading
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'optimize' | 'frontier' | 'backtest' | 'allocation' | 'risk' | 'strategies'>('optimize');
+  const [activeTab, setActiveTab] = useState<'optimize' | 'frontier' | 'backtest' | 'allocation' | 'risk' | 'strategies' | 'stress' | 'compare' | 'blacklitterman'>('optimize');
 
   // Risk analysis state
   const [riskDecomp, setRiskDecomp] = useState<{
@@ -205,7 +205,7 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
       setConfig(savedConfig);
       setSkfolioConfig(savedSkfolioConfig);
       setResults(savedResults);
-      setActiveTab(savedActiveTab as 'optimize' | 'backtest' | 'frontier' | 'allocation' | 'risk' | 'strategies');
+      setActiveTab(savedActiveTab as typeof activeTab);
     };
     loadInitialState();
   }, []);
@@ -776,6 +776,213 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
     }
   };
 
+  // ── Stress Test state ──
+  const [stressTestResults, setStressTestResults] = useState<any>(null);
+  const [scenarioResults, setScenarioResults] = useState<any>(null);
+
+  // ── Compare / Advanced skfolio state ──
+  const [compareResults, setCompareResults] = useState<any>(null);
+  const [riskAttribution, setRiskAttribution] = useState<any>(null);
+  const [hypertuneResults, setHypertuneResults] = useState<any>(null);
+  const [skfolioRiskMetrics, setSkfolioRiskMetrics] = useState<any>(null);
+  const [validateResults, setValidateResults] = useState<any>(null);
+
+  // ── Black-Litterman state ──
+  const [blViews, setBlViews] = useState<string>('{"AAPL": 0.10, "MSFT": 0.05}');
+  const [blConfidences, setBlConfidences] = useState<string>('[0.8, 0.6]');
+  const [blResults, setBlResults] = useState<any>(null);
+  const [hrpResults, setHrpResults] = useState<any>(null);
+  const [constraintsResults, setConstraintsResults] = useState<any>(null);
+  const [viewsOptResults, setViewsOptResults] = useState<any>(null);
+  const [sectorMapper, setSectorMapper] = useState<string>('{"AAPL": "Tech", "MSFT": "Tech", "JPM": "Finance"}');
+  const [sectorLower, setSectorLower] = useState<string>('{"Tech": 0.2}');
+  const [sectorUpper, setSectorUpper] = useState<string>('{"Tech": 0.6}');
+
+  // ── Stress Test handlers ──
+  const handleStressTest = async () => {
+    if (loadingAction === 'stress') return;
+    setLoadingAction('stress'); setLoading(true); setError(null);
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      const weightsStr = JSON.stringify(results?.weights || {});
+      const response = await invoke<string>('skfolio_stress_test', {
+        pricesData: assetSymbols, weights: weightsStr, nSimulations: 10000,
+      });
+      setStressTestResults(JSON.parse(response));
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally { setLoading(false); setLoadingAction(null); }
+  };
+
+  const handleScenarioAnalysis = async () => {
+    if (loadingAction === 'scenario') return;
+    setLoadingAction('scenario'); setLoading(true); setError(null);
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      const weightsStr = JSON.stringify(results?.weights || {});
+      const scenariosStr = JSON.stringify([
+        { name: 'Market Crash (-30%)', returns: Object.fromEntries(assetSymbols.split(',').map(s => [s.trim(), -0.30])) },
+        { name: 'Bull Rally (+20%)', returns: Object.fromEntries(assetSymbols.split(',').map(s => [s.trim(), 0.20])) },
+        { name: 'Tech Selloff', returns: Object.fromEntries(assetSymbols.split(',').map(s => [s.trim(), -0.15])) },
+      ]);
+      const response = await invoke<string>('skfolio_scenario_analysis', {
+        pricesData: assetSymbols, weights: weightsStr, scenarios: scenariosStr,
+      });
+      setScenarioResults(JSON.parse(response));
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally { setLoading(false); setLoadingAction(null); }
+  };
+
+  // ── Compare handlers ──
+  const handleCompareStrategies = async () => {
+    if (loadingAction === 'compare') return;
+    setLoadingAction('compare'); setLoading(true); setError(null);
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      const strategiesStr = JSON.stringify(['mean_risk', 'risk_parity', 'hrp', 'max_div', 'equal_weight', 'inverse_vol']);
+      const response = await invoke<string>('skfolio_compare_strategies', {
+        pricesData: assetSymbols, strategies: strategiesStr, metric: 'sharpe_ratio',
+      });
+      setCompareResults(JSON.parse(response));
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally { setLoading(false); setLoadingAction(null); }
+  };
+
+  const handleRiskAttribution = async () => {
+    if (loadingAction === 'riskattr') return;
+    setLoadingAction('riskattr'); setLoading(true); setError(null);
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      const weightsStr = JSON.stringify(results?.weights || {});
+      const response = await invoke<string>('skfolio_risk_attribution', {
+        pricesData: assetSymbols, weights: weightsStr,
+      });
+      setRiskAttribution(JSON.parse(response));
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally { setLoading(false); setLoadingAction(null); }
+  };
+
+  const handleHyperparameterTuning = async () => {
+    if (loadingAction === 'hypertune') return;
+    setLoadingAction('hypertune'); setLoading(true); setError(null);
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      const response = await invoke<string>('skfolio_hyperparameter_tuning', {
+        pricesData: assetSymbols, cvMethod: 'walk_forward',
+      });
+      setHypertuneResults(JSON.parse(response));
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally { setLoading(false); setLoadingAction(null); }
+  };
+
+  const handleSkfolioRiskMetrics = async () => {
+    if (loadingAction === 'skrm') return;
+    setLoadingAction('skrm'); setLoading(true); setError(null);
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      const weightsStr = JSON.stringify(results?.weights || {});
+      const [metricsRes, validateRes] = await Promise.all([
+        invoke<string>('skfolio_risk_metrics', { pricesData: assetSymbols, weights: weightsStr }),
+        invoke<string>('skfolio_validate_model', { pricesData: assetSymbols, validationMethod: 'walk_forward', riskMeasure: skfolioConfig.risk_measure }),
+      ]);
+      setSkfolioRiskMetrics(JSON.parse(metricsRes));
+      setValidateResults(JSON.parse(validateRes));
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally { setLoading(false); setLoadingAction(null); }
+  };
+
+  // ── Black-Litterman handlers ──
+  const handleBlackLitterman = async () => {
+    if (loadingAction === 'bl') return;
+    setLoadingAction('bl'); setLoading(true); setError(null);
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      const pricesJson = JSON.stringify({ symbols: assetSymbols.split(',').map(s => s.trim()) });
+      const views = JSON.parse(blViews);
+      const viewConfidences = JSON.parse(blConfidences);
+      const pyConfig = {
+        optimization_method: config.optimization_method, objective: config.objective,
+        expected_returns_method: config.expected_returns_method, risk_model_method: config.risk_model_method,
+        risk_free_rate: config.risk_free_rate, risk_aversion: 1.0, market_neutral: false,
+        weight_bounds: [config.weight_bounds_min, config.weight_bounds_max] as [number, number],
+        gamma: config.gamma, span: 500, frequency: 252, delta: 0.95,
+        shrinkage_target: "constant_variance", beta: 0.95, tau: 0.1,
+        linkage_method: "ward", distance_metric: "euclidean",
+        total_portfolio_value: config.total_portfolio_value,
+      };
+      const response = await invoke<string>('pyportfolioopt_black_litterman', {
+        pricesJson, views, viewConfidences, config: pyConfig,
+      });
+      setBlResults(JSON.parse(response));
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally { setLoading(false); setLoadingAction(null); }
+  };
+
+  const handleHRP = async () => {
+    if (loadingAction === 'hrp') return;
+    setLoadingAction('hrp'); setLoading(true); setError(null);
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      const pricesJson = JSON.stringify({ symbols: assetSymbols.split(',').map(s => s.trim()) });
+      const pyConfig = {
+        optimization_method: 'hrp', objective: config.objective,
+        expected_returns_method: config.expected_returns_method, risk_model_method: config.risk_model_method,
+        risk_free_rate: config.risk_free_rate, risk_aversion: 1.0, market_neutral: false,
+        weight_bounds: [config.weight_bounds_min, config.weight_bounds_max] as [number, number],
+        gamma: config.gamma, span: 500, frequency: 252, delta: 0.95,
+        shrinkage_target: "constant_variance", beta: 0.95, tau: 0.1,
+        linkage_method: "ward", distance_metric: "euclidean",
+        total_portfolio_value: config.total_portfolio_value,
+      };
+      const response = await invoke<string>('pyportfolioopt_hrp', { pricesJson, config: pyConfig });
+      setHrpResults(JSON.parse(response));
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally { setLoading(false); setLoadingAction(null); }
+  };
+
+  const handleCustomConstraints = async () => {
+    if (loadingAction === 'constraints') return;
+    setLoadingAction('constraints'); setLoading(true); setError(null);
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      const pricesJson = JSON.stringify({ symbols: assetSymbols.split(',').map(s => s.trim()) });
+      const response = await invoke<string>('pyportfolioopt_custom_constraints', {
+        pricesJson, objective: config.objective,
+        sectorMapper: JSON.parse(sectorMapper),
+        sectorLower: JSON.parse(sectorLower),
+        sectorUpper: JSON.parse(sectorUpper),
+        weightBounds: [config.weight_bounds_min, config.weight_bounds_max] as [number, number],
+      });
+      setConstraintsResults(JSON.parse(response));
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally { setLoading(false); setLoadingAction(null); }
+  };
+
+  const handleViewsOptimization = async () => {
+    if (loadingAction === 'viewsopt') return;
+    setLoadingAction('viewsopt'); setLoading(true); setError(null);
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      const pricesJson = JSON.stringify({ symbols: assetSymbols.split(',').map(s => s.trim()) });
+      const views = JSON.parse(blViews);
+      const viewConfidences = JSON.parse(blConfidences);
+      const response = await invoke<string>('pyportfolioopt_views_optimization', {
+        pricesJson, views, viewConfidences, riskAversion: 1.0,
+      });
+      setViewsOptResults(JSON.parse(response));
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally { setLoading(false); setLoadingAction(null); }
+  };
+
   return (
     <div style={{
       height: '100%',
@@ -794,6 +1001,9 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
           { id: 'allocation', label: 'ALLOCATION', icon: PieChart },
           { id: 'risk', label: 'RISK ANALYSIS', icon: Shield },
           { id: 'strategies', label: 'STRATEGIES', icon: Layers },
+          { id: 'stress', label: 'STRESS TEST', icon: AlertTriangle },
+          { id: 'compare', label: 'COMPARE', icon: GitCompare },
+          { id: 'blacklitterman', label: 'BLACK-LITTERMAN', icon: Brain },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -851,6 +1061,9 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
             {activeTab === 'backtest' && 'Running Backtest...'}
             {activeTab === 'allocation' && 'Calculating...'}
             {activeTab === 'risk' && 'Analyzing...'}
+            {activeTab === 'stress' && 'Running stress test...'}
+            {activeTab === 'compare' && 'Comparing strategies...'}
+            {activeTab === 'blacklitterman' && 'Running Black-Litterman...'}
           </div>
           <style>{`
             @keyframes spin {
@@ -2096,6 +2309,311 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
               </div>
             )}
           </div>
+        </div>
+      )}
+      {/* STRESS TEST TAB */}
+      {activeTab === 'stress' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.XLARGE }}>
+          {/* Stress Test */}
+          <div>
+            <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.RED}`, paddingBottom: SPACING.MEDIUM }}>
+              MONTE CARLO STRESS TEST (skfolio)
+            </div>
+            <p style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.SMALL, marginBottom: SPACING.LARGE }}>
+              Run 10,000 simulations to stress-test your optimized portfolio weights.
+            </p>
+            <button
+              onClick={handleStressTest}
+              disabled={loadingAction === 'stress'}
+              style={{
+                width: '100%', padding: `${SPACING.DEFAULT} ${SPACING.LARGE}`,
+                backgroundColor: loadingAction === 'stress' ? FINCEPT.MUTED : FINCEPT.RED,
+                color: FINCEPT.WHITE, border: 'none', borderRadius: '2px',
+                fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD,
+                cursor: loadingAction === 'stress' ? 'not-allowed' : 'pointer', marginBottom: SPACING.LARGE,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.MEDIUM,
+              }}
+            >
+              <AlertTriangle size={14} />
+              {loadingAction === 'stress' ? 'RUNNING...' : 'RUN STRESS TEST'}
+            </button>
+            {stressTestResults && (
+              <OptResultGrid data={stressTestResults} color={FINCEPT.RED} />
+            )}
+          </div>
+
+          {/* Scenario Analysis */}
+          <div>
+            <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.YELLOW}`, paddingBottom: SPACING.MEDIUM }}>
+              SCENARIO ANALYSIS (skfolio)
+            </div>
+            <p style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.SMALL, marginBottom: SPACING.LARGE }}>
+              Predefined scenarios: Market Crash (-30%), Bull Rally (+20%), Tech Selloff (-15%).
+            </p>
+            <button
+              onClick={handleScenarioAnalysis}
+              disabled={loadingAction === 'scenario'}
+              style={{
+                width: '100%', padding: `${SPACING.DEFAULT} ${SPACING.LARGE}`,
+                backgroundColor: loadingAction === 'scenario' ? FINCEPT.MUTED : FINCEPT.YELLOW,
+                color: FINCEPT.DARK_BG, border: 'none', borderRadius: '2px',
+                fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD,
+                cursor: loadingAction === 'scenario' ? 'not-allowed' : 'pointer', marginBottom: SPACING.LARGE,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.MEDIUM,
+              }}
+            >
+              <Target size={14} />
+              {loadingAction === 'scenario' ? 'RUNNING...' : 'RUN SCENARIOS'}
+            </button>
+            {scenarioResults && (
+              <OptResultGrid data={scenarioResults} color={FINCEPT.YELLOW} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* COMPARE TAB */}
+      {activeTab === 'compare' && (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.XLARGE, marginBottom: SPACING.XLARGE }}>
+            {/* Compare Strategies */}
+            <div>
+              <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.CYAN}`, paddingBottom: SPACING.MEDIUM }}>
+                COMPARE STRATEGIES (skfolio)
+              </div>
+              <p style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.SMALL, marginBottom: SPACING.LARGE }}>
+                Compare mean-risk, risk parity, HRP, max diversification, equal weight, inverse vol.
+              </p>
+              <button onClick={handleCompareStrategies} disabled={loadingAction === 'compare'}
+                style={{ width: '100%', padding: `${SPACING.DEFAULT} ${SPACING.LARGE}`, backgroundColor: loadingAction === 'compare' ? FINCEPT.MUTED : FINCEPT.CYAN, color: FINCEPT.DARK_BG, border: 'none', borderRadius: '2px', fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD, cursor: loadingAction === 'compare' ? 'not-allowed' : 'pointer', marginBottom: SPACING.LARGE, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.MEDIUM }}
+              >
+                <GitCompare size={14} />
+                {loadingAction === 'compare' ? 'COMPARING...' : 'COMPARE ALL'}
+              </button>
+              {compareResults && <OptResultGrid data={compareResults} color={FINCEPT.CYAN} />}
+            </div>
+
+            {/* Risk Attribution */}
+            <div>
+              <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.ORANGE}`, paddingBottom: SPACING.MEDIUM }}>
+                RISK ATTRIBUTION (skfolio)
+              </div>
+              <p style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.SMALL, marginBottom: SPACING.LARGE }}>
+                Risk contribution by asset. Run optimization first to populate weights.
+              </p>
+              <button onClick={handleRiskAttribution} disabled={loadingAction === 'riskattr'}
+                style={{ width: '100%', padding: `${SPACING.DEFAULT} ${SPACING.LARGE}`, backgroundColor: loadingAction === 'riskattr' ? FINCEPT.MUTED : FINCEPT.ORANGE, color: FINCEPT.DARK_BG, border: 'none', borderRadius: '2px', fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD, cursor: loadingAction === 'riskattr' ? 'not-allowed' : 'pointer', marginBottom: SPACING.LARGE, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.MEDIUM }}
+              >
+                <Shield size={14} />
+                {loadingAction === 'riskattr' ? 'ANALYZING...' : 'RISK ATTRIBUTION'}
+              </button>
+              {riskAttribution && <OptResultGrid data={riskAttribution} color={FINCEPT.ORANGE} />}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.XLARGE }}>
+            {/* Hyperparameter Tuning */}
+            <div>
+              <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.GREEN}`, paddingBottom: SPACING.MEDIUM, fontSize: TYPOGRAPHY.TINY }}>
+                HYPERPARAMETER TUNING
+              </div>
+              <button onClick={handleHyperparameterTuning} disabled={loadingAction === 'hypertune'}
+                style={{ width: '100%', padding: SPACING.DEFAULT, backgroundColor: loadingAction === 'hypertune' ? FINCEPT.MUTED : FINCEPT.GREEN, color: FINCEPT.DARK_BG, border: 'none', borderRadius: '2px', fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.TINY, fontWeight: TYPOGRAPHY.BOLD, cursor: loadingAction === 'hypertune' ? 'not-allowed' : 'pointer', marginBottom: SPACING.MEDIUM, marginTop: SPACING.MEDIUM }}
+              >
+                {loadingAction === 'hypertune' ? 'TUNING...' : 'TUNE'}
+              </button>
+              {hypertuneResults && <OptResultGrid data={hypertuneResults} color={FINCEPT.GREEN} />}
+            </div>
+
+            {/* Risk Metrics + Validate */}
+            <div>
+              <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.YELLOW}`, paddingBottom: SPACING.MEDIUM, fontSize: TYPOGRAPHY.TINY }}>
+                RISK METRICS + VALIDATE
+              </div>
+              <button onClick={handleSkfolioRiskMetrics} disabled={loadingAction === 'skrm'}
+                style={{ width: '100%', padding: SPACING.DEFAULT, backgroundColor: loadingAction === 'skrm' ? FINCEPT.MUTED : FINCEPT.YELLOW, color: FINCEPT.DARK_BG, border: 'none', borderRadius: '2px', fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.TINY, fontWeight: TYPOGRAPHY.BOLD, cursor: loadingAction === 'skrm' ? 'not-allowed' : 'pointer', marginBottom: SPACING.MEDIUM, marginTop: SPACING.MEDIUM }}
+              >
+                {loadingAction === 'skrm' ? 'RUNNING...' : 'COMPUTE'}
+              </button>
+              {skfolioRiskMetrics && <OptResultGrid data={skfolioRiskMetrics} color={FINCEPT.YELLOW} />}
+              {validateResults && <OptResultGrid data={validateResults} color={FINCEPT.CYAN} />}
+            </div>
+
+            {/* Export Weights */}
+            <div>
+              <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.WHITE}`, paddingBottom: SPACING.MEDIUM, fontSize: TYPOGRAPHY.TINY }}>
+                EXPORT WEIGHTS
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    const weightsStr = JSON.stringify(results?.weights || {});
+                    const assetNamesStr = JSON.stringify(assetSymbols.split(',').map(s => s.trim()));
+                    const res = await invoke<string>('skfolio_export_weights', { weights: weightsStr, assetNames: assetNamesStr, format: 'json' });
+                    const blob = new Blob([res], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = `skfolio_weights_${Date.now()}.json`;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } catch (err: any) { setError(err?.message || String(err)); }
+                }}
+                style={{ width: '100%', padding: SPACING.DEFAULT, backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.ORANGE}`, color: FINCEPT.ORANGE, borderRadius: '2px', fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.TINY, fontWeight: TYPOGRAPHY.BOLD, cursor: 'pointer', marginTop: SPACING.MEDIUM, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.SMALL }}
+              >
+                <Download size={12} /> EXPORT JSON
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BLACK-LITTERMAN TAB */}
+      {activeTab === 'blacklitterman' && (
+        <div>
+          {/* Views Input */}
+          <div style={{ marginBottom: SPACING.XLARGE }}>
+            <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.CYAN}`, paddingBottom: SPACING.MEDIUM }}>
+              BLACK-LITTERMAN VIEWS (PyPortfolioOpt)
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.LARGE, marginBottom: SPACING.LARGE }}>
+              <div>
+                <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>VIEWS (JSON: symbol → expected return)</label>
+                <input type="text" value={blViews} onChange={(e) => setBlViews(e.target.value)}
+                  style={{ ...COMMON_STYLES.inputField }} placeholder='{"AAPL": 0.10, "MSFT": 0.05}' />
+              </div>
+              <div>
+                <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>CONFIDENCES (JSON array)</label>
+                <input type="text" value={blConfidences} onChange={(e) => setBlConfidences(e.target.value)}
+                  style={{ ...COMMON_STYLES.inputField }} placeholder='[0.8, 0.6]' />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.LARGE }}>
+              <button onClick={handleBlackLitterman} disabled={loadingAction === 'bl'}
+                style={{ padding: `${SPACING.DEFAULT} ${SPACING.LARGE}`, backgroundColor: loadingAction === 'bl' ? FINCEPT.MUTED : FINCEPT.CYAN, color: FINCEPT.DARK_BG, border: 'none', borderRadius: '2px', fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD, cursor: loadingAction === 'bl' ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.MEDIUM }}
+              >
+                <Brain size={14} /> {loadingAction === 'bl' ? 'RUNNING...' : 'BLACK-LITTERMAN'}
+              </button>
+              <button onClick={handleViewsOptimization} disabled={loadingAction === 'viewsopt'}
+                style={{ padding: `${SPACING.DEFAULT} ${SPACING.LARGE}`, backgroundColor: loadingAction === 'viewsopt' ? FINCEPT.MUTED : FINCEPT.ORANGE, color: FINCEPT.DARK_BG, border: 'none', borderRadius: '2px', fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD, cursor: loadingAction === 'viewsopt' ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.MEDIUM }}
+              >
+                <Target size={14} /> {loadingAction === 'viewsopt' ? 'RUNNING...' : 'VIEWS OPTIMIZATION'}
+              </button>
+            </div>
+          </div>
+
+          {/* BL Results */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.XLARGE, marginBottom: SPACING.XLARGE }}>
+            {blResults && (
+              <div>
+                <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.MEDIUM }}>BLACK-LITTERMAN RESULTS</div>
+                <OptResultGrid data={blResults} color={FINCEPT.CYAN} />
+              </div>
+            )}
+            {viewsOptResults && (
+              <div>
+                <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.MEDIUM }}>VIEWS OPTIMIZATION RESULTS</div>
+                <OptResultGrid data={viewsOptResults} color={FINCEPT.ORANGE} />
+              </div>
+            )}
+          </div>
+
+          {/* HRP */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.XLARGE, marginBottom: SPACING.XLARGE }}>
+            <div>
+              <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.GREEN}`, paddingBottom: SPACING.MEDIUM }}>
+                HIERARCHICAL RISK PARITY (PyPortfolioOpt)
+              </div>
+              <button onClick={handleHRP} disabled={loadingAction === 'hrp'}
+                style={{ width: '100%', padding: `${SPACING.DEFAULT} ${SPACING.LARGE}`, backgroundColor: loadingAction === 'hrp' ? FINCEPT.MUTED : FINCEPT.GREEN, color: FINCEPT.DARK_BG, border: 'none', borderRadius: '2px', fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD, cursor: loadingAction === 'hrp' ? 'not-allowed' : 'pointer', marginTop: SPACING.MEDIUM, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.MEDIUM }}
+              >
+                <Layers size={14} /> {loadingAction === 'hrp' ? 'RUNNING...' : 'RUN HRP'}
+              </button>
+              {hrpResults && <div style={{ marginTop: SPACING.MEDIUM }}><OptResultGrid data={hrpResults} color={FINCEPT.GREEN} /></div>}
+            </div>
+
+            {/* Custom Constraints */}
+            <div>
+              <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.YELLOW}`, paddingBottom: SPACING.MEDIUM }}>
+                SECTOR CONSTRAINTS (PyPortfolioOpt)
+              </div>
+              <div style={{ display: 'grid', gap: SPACING.MEDIUM, marginTop: SPACING.MEDIUM }}>
+                <div>
+                  <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: '2px' }}>SECTOR MAP (JSON)</label>
+                  <input type="text" value={sectorMapper} onChange={(e) => setSectorMapper(e.target.value)}
+                    style={{ ...COMMON_STYLES.inputField, fontSize: TYPOGRAPHY.TINY }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.SMALL }}>
+                  <div>
+                    <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: '2px' }}>LOWER BOUNDS</label>
+                    <input type="text" value={sectorLower} onChange={(e) => setSectorLower(e.target.value)}
+                      style={{ ...COMMON_STYLES.inputField, fontSize: TYPOGRAPHY.TINY }} />
+                  </div>
+                  <div>
+                    <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: '2px' }}>UPPER BOUNDS</label>
+                    <input type="text" value={sectorUpper} onChange={(e) => setSectorUpper(e.target.value)}
+                      style={{ ...COMMON_STYLES.inputField, fontSize: TYPOGRAPHY.TINY }} />
+                  </div>
+                </div>
+                <button onClick={handleCustomConstraints} disabled={loadingAction === 'constraints'}
+                  style={{ width: '100%', padding: SPACING.DEFAULT, backgroundColor: loadingAction === 'constraints' ? FINCEPT.MUTED : FINCEPT.YELLOW, color: FINCEPT.DARK_BG, border: 'none', borderRadius: '2px', fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD, cursor: loadingAction === 'constraints' ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.MEDIUM }}
+                >
+                  <Shield size={14} /> {loadingAction === 'constraints' ? 'RUNNING...' : 'OPTIMIZE WITH CONSTRAINTS'}
+                </button>
+              </div>
+              {constraintsResults && <div style={{ marginTop: SPACING.MEDIUM }}><OptResultGrid data={constraintsResults} color={FINCEPT.YELLOW} /></div>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** Generic result grid to display Python response data */
+const OptResultGrid: React.FC<{ data: any; color: string }> = ({ data, color }) => {
+  if (!data || typeof data !== 'object') {
+    return <div style={{ color: FINCEPT.MUTED, fontSize: TYPOGRAPHY.SMALL, fontFamily: TYPOGRAPHY.MONO, padding: SPACING.MEDIUM, backgroundColor: FINCEPT.PANEL_BG, border: BORDERS.STANDARD, whiteSpace: 'pre-wrap', maxHeight: '250px', overflow: 'auto' }}>
+      {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
+    </div>;
+  }
+
+  const flat = Object.entries(data).filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object');
+  const nested = Object.entries(data).filter(([, v]) => typeof v === 'object' && v !== null && !Array.isArray(v));
+
+  return (
+    <div>
+      {flat.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: SPACING.MEDIUM, marginBottom: SPACING.MEDIUM }}>
+          {flat.map(([k, v]) => (
+            <div key={k} style={{ ...COMMON_STYLES.metricCard, padding: SPACING.MEDIUM, borderRadius: '2px', border: `1px solid ${color}30` }}>
+              <div style={{ ...COMMON_STYLES.dataLabel, fontSize: '8px' }}>{k.replace(/_/g, ' ').toUpperCase()}</div>
+              <div style={{ color, fontSize: '12px', fontWeight: 700, fontFamily: TYPOGRAPHY.MONO }}>
+                {typeof v === 'number' ? (Math.abs(v as number) < 1 ? (v as number).toFixed(4) : (v as number).toFixed(2)) : String(v)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {nested.map(([sectionKey, sectionData]) => (
+        <div key={sectionKey} style={{ marginBottom: SPACING.MEDIUM }}>
+          <div style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, letterSpacing: '0.3px', marginBottom: SPACING.SMALL }}>
+            {sectionKey.replace(/_/g, ' ').toUpperCase()}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: SPACING.MEDIUM }}>
+            {Object.entries(sectionData as Record<string, any>).filter(([, v]) => v !== null && typeof v !== 'object').map(([k, v]) => (
+              <div key={k} style={{ ...COMMON_STYLES.metricCard, padding: SPACING.MEDIUM, borderRadius: '2px', border: `1px solid ${color}20` }}>
+                <div style={{ ...COMMON_STYLES.dataLabel, fontSize: '8px' }}>{k.replace(/_/g, ' ').toUpperCase()}</div>
+                <div style={{ color, fontSize: '11px', fontWeight: 700, fontFamily: TYPOGRAPHY.MONO }}>
+                  {typeof v === 'number' ? (Math.abs(v as number) < 1 ? (v as number).toFixed(4) : (v as number).toFixed(2)) : String(v)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {flat.length === 0 && nested.length === 0 && (
+        <div style={{ color: FINCEPT.MUTED, fontSize: TYPOGRAPHY.SMALL, fontFamily: TYPOGRAPHY.MONO, padding: SPACING.MEDIUM, backgroundColor: FINCEPT.PANEL_BG, border: BORDERS.STANDARD, whiteSpace: 'pre-wrap', maxHeight: '250px', overflow: 'auto' }}>
+          {JSON.stringify(data, null, 2)}
         </div>
       )}
     </div>

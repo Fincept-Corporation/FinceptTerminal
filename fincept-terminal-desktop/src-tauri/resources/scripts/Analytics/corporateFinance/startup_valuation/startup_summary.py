@@ -14,6 +14,33 @@ from corporateFinance.startup_valuation.vc_method import VCMethod
 from corporateFinance.startup_valuation.first_chicago_method import FirstChicagoMethod, Scenario
 from corporateFinance.startup_valuation.risk_factor_summation import RiskFactorSummation, RiskFactor
 
+
+def _coerce_berkus_scores(raw: dict) -> dict:
+    """Convert JSON string-keyed dict to BerkusFactor enum-keyed dict."""
+    key_map = {f.value: f for f in BerkusFactor}
+    return {key_map[k]: float(v) for k, v in raw.items() if k in key_map}
+
+
+def _coerce_first_chicago_scenarios(raw: list) -> list:
+    """Convert list of dicts to list of Scenario dataclass objects."""
+    return [
+        Scenario(
+            name=s.get('name', 'Scenario'),
+            probability=float(s.get('probability', 0.33)),
+            exit_year=int(s.get('exit_year', 5)),
+            exit_value=float(s.get('exit_value', 0)),
+            description=s.get('description', ''),
+        )
+        for s in raw
+    ]
+
+
+def _coerce_risk_factor_assessments(raw: dict) -> dict:
+    """Convert JSON string-keyed dict to RiskFactor enum-keyed dict."""
+    key_map = {f.value: f for f in RiskFactor}
+    return {key_map[k]: int(v) for k, v in raw.items() if k in key_map}
+
+
 class StartupValuationSummary:
     """Aggregate all startup valuation methods into comprehensive summary"""
 
@@ -37,20 +64,33 @@ class StartupValuationSummary:
         # Berkus Method (pre-revenue)
         if berkus_scores:
             berkus = BerkusMethod()
-            berkus_result = berkus.calculate_valuation(berkus_scores)
-            valuations['berkus'] = {
-                'method': 'Berkus Method',
-                'valuation': berkus_result['total_valuation'],
-                'applicability': 'pre_revenue',
-                'details': berkus_result
-            }
+            # Coerce string keys to BerkusFactor enums if needed
+            if berkus_scores and not isinstance(next(iter(berkus_scores), None), BerkusFactor):
+                berkus_scores = _coerce_berkus_scores(berkus_scores)
+            if berkus_scores:  # Re-check after coercion (may have filtered out invalid keys)
+                berkus_result = berkus.calculate_valuation(berkus_scores)
+                valuations['berkus'] = {
+                    'method': 'Berkus Method',
+                    'valuation': berkus_result['total_valuation'],
+                    'applicability': 'pre_revenue',
+                    'details': berkus_result
+                }
 
         # Scorecard Method
         if scorecard_inputs:
             scorecard = ScorecardMethod(region=scorecard_inputs.get('region', 'US'))
+            # Map alternative frontend key names to scorecard factor names
+            assessments = scorecard_inputs.get('assessments', {})
+            key_map = {
+                'market_opportunity': 'size_of_opportunity', 'market_size': 'size_of_opportunity',
+                'marketing_channels': 'marketing_sales_channels', 'sales_channels': 'marketing_sales_channels',
+                'need_for_investment': 'need_for_additional_investment',
+                'other': 'other_factors',
+            }
+            mapped_assessments = {key_map.get(k, k): v for k, v in assessments.items()}
             scorecard_result = scorecard.calculate_valuation(
                 stage=scorecard_inputs['stage'],
-                factor_assessments=scorecard_inputs['assessments']
+                factor_assessments=mapped_assessments
             )
             valuations['scorecard'] = {
                 'method': 'Scorecard Method',
@@ -73,24 +113,32 @@ class StartupValuationSummary:
         # First Chicago Method
         if first_chicago_scenarios:
             fc = FirstChicagoMethod()
-            fc_result = fc.calculate_expected_value(first_chicago_scenarios)
-            valuations['first_chicago'] = {
-                'method': 'First Chicago Method',
-                'valuation': fc_result['expected_present_value'],
-                'applicability': 'all_stages',
-                'details': fc_result
-            }
+            # Coerce dicts to Scenario objects before calling calculate_expected_value
+            if first_chicago_scenarios and not isinstance(first_chicago_scenarios[0], Scenario):
+                first_chicago_scenarios = _coerce_first_chicago_scenarios(first_chicago_scenarios)
+            if first_chicago_scenarios:
+                fc_result = fc.calculate_expected_value(first_chicago_scenarios)
+                valuations['first_chicago'] = {
+                    'method': 'First Chicago Method',
+                    'valuation': fc_result['expected_present_value'],
+                    'applicability': 'all_stages',
+                    'details': fc_result
+                }
 
         # Risk Factor Summation
         if risk_factor_assessments:
             rfs = RiskFactorSummation(base_valuation=2_000_000)
-            rfs_result = rfs.calculate_valuation(risk_factor_assessments)
-            valuations['risk_factor'] = {
-                'method': 'Risk Factor Summation',
-                'valuation': rfs_result['final_valuation'],
-                'applicability': 'early_stage',
-                'details': rfs_result
-            }
+            # Coerce string keys to RiskFactor enums before calling calculate_valuation
+            if risk_factor_assessments and not isinstance(next(iter(risk_factor_assessments), None), RiskFactor):
+                risk_factor_assessments = _coerce_risk_factor_assessments(risk_factor_assessments)
+            if risk_factor_assessments:
+                rfs_result = rfs.calculate_valuation(risk_factor_assessments)
+                valuations['risk_factor'] = {
+                    'method': 'Risk Factor Summation',
+                    'valuation': rfs_result['final_valuation'],
+                    'applicability': 'early_stage',
+                    'details': rfs_result
+                }
 
         if not valuations:
             return {'error': 'No valuation methods provided'}

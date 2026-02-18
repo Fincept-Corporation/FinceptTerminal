@@ -7,17 +7,28 @@ export { CryptoWidget } from './CryptoWidget';
 export { CommoditiesWidget } from './CommoditiesWidget';
 export { GlobalIndicesWidget } from './GlobalIndicesWidget';
 export { ForexWidget } from './ForexWidget';
-export { MaritimeWidget } from './MaritimeWidget';
 export { DataSourceWidget } from './DataSourceWidget';
-// New widgets
 export { PolymarketWidget } from './PolymarketWidget';
 export { EconomicIndicatorsWidget } from './EconomicIndicatorsWidget';
+export { EconomicCalendarWidget } from './EconomicCalendarWidget';
 export { PortfolioSummaryWidget } from './PortfolioSummaryWidget';
-export { AlertsWidget } from './AlertsWidget';
-export { CalendarWidget } from './CalendarWidget';
 export { QuickTradeWidget } from './QuickTradeWidget';
 export { GeopoliticsWidget } from './GeopoliticsWidget';
 export { PerformanceWidget } from './PerformanceWidget';
+export { NotesWidget } from './NotesWidget';
+export { StockQuoteWidget } from './StockQuoteWidget';
+export { TopMoversWidget } from './TopMoversWidget';
+export { ScreenerWidget } from './ScreenerWidget';
+export { RiskMetricsWidget } from './RiskMetricsWidget';
+export { MarketSentimentWidget } from './MarketSentimentWidget';
+export { AlgoStatusWidget } from './AlgoStatusWidget';
+export { AlphaArenaWidget } from './AlphaArenaWidget';
+export { BacktestSummaryWidget } from './BacktestSummaryWidget';
+export { WatchlistAlertsWidget } from './WatchlistAlertsWidget';
+export { LiveSignalsWidget } from './LiveSignalsWidget';
+export { DBnomicsWidget } from './DBnomicsWidget';
+export { AkShareWidget } from './AkShareWidget';
+export { MaritimeWidget } from './MaritimeWidget';
 
 // Widget type definitions
 export type WidgetType =
@@ -29,18 +40,29 @@ export type WidgetType =
   | 'commodities'
   | 'indices'
   | 'forex'
-  | 'maritime'
   | 'datasource'
-  // New widget types
   | 'polymarket'
   | 'economic'
-  | 'portfolio'
-  | 'alerts'
   | 'calendar'
+  | 'portfolio'
   | 'quicktrade'
   | 'geopolitics'
   | 'performance'
-  | 'heatmap';
+  | 'heatmap'
+  | 'notes'
+  | 'stockquote'
+  | 'topmovers'
+  | 'screener'
+  | 'riskmetrics'
+  | 'sentiment'
+  | 'algostatus'
+  | 'alphaarena'
+  | 'backtestsummary'
+  | 'watchlistalerts'
+  | 'livesignals'
+  | 'dbnomics'
+  | 'akshare'
+  | 'maritime';
 
 export interface WidgetConfig {
   id: string;
@@ -67,6 +89,31 @@ export interface WidgetConfig {
     // Data Source widget config
     dataSourceAlias?: string;
     dataSourceDisplayName?: string;
+
+    // Economic Calendar widget config
+    country?: string;
+    limit?: number;
+
+    // Notes widget config
+    notesCategory?: string;
+    notesLimit?: number;
+
+    // Performance widget config
+    portfolioId?: string;
+    portfolioName?: string;
+
+    // StockQuote widget config
+    stockSymbol?: string;
+
+    // Screener widget config
+    screenerPreset?: 'value' | 'growth' | 'momentum';
+
+    // WatchlistAlerts widget config
+    alertThreshold?: number;
+
+    // DBnomics widget config
+    dbnomicsSeriesId?: string;
+
   };
 }
 
@@ -122,11 +169,6 @@ export const DEFAULT_WIDGET_CONFIGS: Record<WidgetType, Partial<WidgetConfig>> =
     title: 'Forex - Major Pairs',
     config: {}
   },
-  maritime: {
-    type: 'maritime',
-    title: 'Maritime Intelligence',
-    config: {}
-  },
   datasource: {
     type: 'datasource',
     title: 'Data Source',
@@ -145,19 +187,14 @@ export const DEFAULT_WIDGET_CONFIGS: Record<WidgetType, Partial<WidgetConfig>> =
     title: 'Economic Indicators',
     config: {}
   },
-  portfolio: {
-    type: 'portfolio',
-    title: 'Portfolio Summary',
-    config: {}
-  },
-  alerts: {
-    type: 'alerts',
-    title: 'Price Alerts',
-    config: {}
-  },
   calendar: {
     type: 'calendar',
     title: 'Economic Calendar',
+    config: { country: 'US', limit: 10 }
+  },
+  portfolio: {
+    type: 'portfolio',
+    title: 'Portfolio Summary',
     config: {}
   },
   quicktrade: {
@@ -178,6 +215,79 @@ export const DEFAULT_WIDGET_CONFIGS: Record<WidgetType, Partial<WidgetConfig>> =
   heatmap: {
     type: 'heatmap',
     title: 'Sector Heatmap',
+    config: {}
+  },
+  notes: {
+    type: 'notes',
+    title: 'Recent Notes',
+    config: {
+      notesCategory: 'all',
+      notesLimit: 10
+    }
+  },
+  stockquote: {
+    type: 'stockquote',
+    title: 'Stock Quote',
+    config: { stockSymbol: 'AAPL' }
+  },
+  topmovers: {
+    type: 'topmovers',
+    title: 'Top Movers',
+    config: {}
+  },
+  screener: {
+    type: 'screener',
+    title: 'Stock Screener',
+    config: { screenerPreset: 'value' }
+  },
+  riskmetrics: {
+    type: 'riskmetrics',
+    title: 'Risk Metrics',
+    config: {}
+  },
+  sentiment: {
+    type: 'sentiment',
+    title: 'Market Sentiment',
+    config: {}
+  },
+  algostatus: {
+    type: 'algostatus',
+    title: 'Algo Status',
+    config: {}
+  },
+  alphaarena: {
+    type: 'alphaarena',
+    title: 'Alpha Arena',
+    config: {}
+  },
+  backtestsummary: {
+    type: 'backtestsummary',
+    title: 'Backtest Summary',
+    config: {}
+  },
+  watchlistalerts: {
+    type: 'watchlistalerts',
+    title: 'Watchlist Alerts',
+    config: { alertThreshold: 3 }
+  },
+  livesignals: {
+    type: 'livesignals',
+    title: 'Live AI Signals',
+    config: {}
+  },
+  dbnomics: {
+    type: 'dbnomics',
+    title: 'DBnomics Data',
+    config: { dbnomicsSeriesId: 'FRED/UNRATE' }
+  },
+  akshare: {
+    type: 'akshare',
+    title: 'China Markets',
+    config: {}
+  },
+  maritime: {
+    type: 'maritime',
+    title: 'Maritime Sector',
     config: {}
   }
 };

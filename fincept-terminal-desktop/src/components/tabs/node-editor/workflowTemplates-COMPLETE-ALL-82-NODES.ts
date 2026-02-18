@@ -740,10 +740,10 @@ const phase5AIDecision: Node[] = [
     position: { x: 550, y: 2300 },
     data: {
       node: {
-        type: 'GeopoliticsAgentNode',
+        type: 'aiAgent',
         typeVersion: 1,
         name: 'Geopolitics Risk Agent',
-        parameters: { region: 'global', analysisType: 'macro_risk', factors: ['trade', 'sanctions', 'conflicts'] },
+        parameters: { category: 'geopolitics', analysisType: 'macro_risk', factors: ['trade', 'sanctions', 'conflicts'] },
         disabled: false,
       },
     },
@@ -754,10 +754,10 @@ const phase5AIDecision: Node[] = [
     position: { x: 900, y: 2300 },
     data: {
       node: {
-        type: 'HedgeFundAgentNode',
+        type: 'aiAgent',
         typeVersion: 1,
         name: 'Hedge Fund Strategy',
-        parameters: { strategy: 'long_short_equity', leverage: 2.0, hedgeRatio: 0.7 },
+        parameters: { category: 'hedgeFund', strategy: 'long_short_equity', leverage: 2.0, hedgeRatio: 0.7 },
         disabled: false,
       },
     },
@@ -768,10 +768,10 @@ const phase5AIDecision: Node[] = [
     position: { x: 1250, y: 2300 },
     data: {
       node: {
-        type: 'InvestorAgentNode',
+        type: 'aiAgent',
         typeVersion: 1,
         name: 'Investor Persona (Buffett)',
-        parameters: { persona: 'warren_buffett', strategy: 'value_investing', timeHorizon: 'long_term' },
+        parameters: { category: 'investor', investor: 'warren_buffett', strategy: 'value_investing', timeHorizon: 'long_term' },
         disabled: false,
       },
     },

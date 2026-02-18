@@ -21,9 +21,11 @@ import type {
   ModelDecision,
   PerformanceSnapshot,
   CompetitionMode,
+  AgentAdvancedConfig,
 } from './types';
+import { DEFAULT_ADVANCED_CONFIG } from './types';
 
-// Extended model type for Alpha Arena with API key
+// Extended model type for Alpha Arena with API key and advanced config
 export interface AlphaArenaModel {
   id: string;
   provider: string;
@@ -31,6 +33,7 @@ export interface AlphaArenaModel {
   display_name: string;
   api_key?: string;
   is_enabled: boolean;
+  advancedConfig: AgentAdvancedConfig;
 }
 
 // Progress event type from Rust backend
@@ -94,13 +97,41 @@ export function useAlphaArena() {
   const [mode, setMode] = useState<CompetitionMode>('baseline');
   const [initialCapital, setInitialCapital] = useState(10000);
   const [cycleInterval, setCycleInterval] = useState(150);
+  const [exchangeId, setExchangeId] = useState('kraken');
 
   // Component mounted ref for async safety
   const mountedRef = useRef(true);
 
+  // Timeout refs for auto-clearing success/error messages (prevents flickering)
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+    };
+  }, []);
+
+  // Helpers that auto-clear messages and cancel any pending clear timers
+  const showSuccess = useCallback((msg: string, duration = 3000) => {
+    if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+    setSuccess(msg);
+    successTimeoutRef.current = setTimeout(() => {
+      if (mountedRef.current) setSuccess(null);
+      successTimeoutRef.current = null;
+    }, duration);
+  }, []);
+
+  const showErrorTimed = useCallback((msg: string, duration = 5000) => {
+    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+    setError(msg);
+    errorTimeoutRef.current = setTimeout(() => {
+      if (mountedRef.current) setError(null);
+      errorTimeoutRef.current = null;
+    }, duration);
   }, []);
 
   // Auto-run ref
@@ -108,6 +139,9 @@ export function useAlphaArena() {
 
   // Track if a cycle is currently running (to prevent overlapping cycles)
   const cycleInProgressRef = useRef(false);
+
+  // Cancellation flag — when true, in-flight cycles should discard their results
+  const cancelledRef = useRef(false);
 
   // Ref to always hold the latest handleRunCycle to avoid stale closures in setInterval
   const handleRunCycleRef = useRef<() => Promise<void>>(() => Promise.resolve());
@@ -150,6 +184,7 @@ export function useAlphaArena() {
           display_name: 'Fincept LLM (Auto)',
           api_key: finceptApiKey || undefined,
           is_enabled: true,
+          advancedConfig: { ...DEFAULT_ADVANCED_CONFIG },
         });
       }
 
@@ -181,6 +216,7 @@ export function useAlphaArena() {
           display_name: model.display_name || model.model_id,
           api_key: apiKey || undefined,
           is_enabled: model.is_enabled,
+          advancedConfig: { ...DEFAULT_ADVANCED_CONFIG },
         });
       }
 
@@ -241,8 +277,36 @@ export function useAlphaArena() {
       setCycleCount(comp.cycle_count);
       setStatus(comp.status as CompetitionStatus);
       setShowPastCompetitions(false);
-      setSuccess(`Loaded competition: ${comp.config.competition_name}`);
-      setTimeout(() => { if (mountedRef.current) setSuccess(null); }, 3000);
+
+      // Restore selected models from competition config so API keys are available for cycles
+      if (comp.config.models && comp.config.models.length > 0) {
+        const restoredModels: AlphaArenaModel[] = comp.config.models.map((m, idx) => ({
+          id: m.model_id ? `${m.provider}-${m.model_id}-${idx}` : `restored-${idx}`,
+          provider: m.provider,
+          model_id: m.model_id,
+          display_name: m.name,
+          api_key: m.api_key,
+          is_enabled: true,
+          advancedConfig: { ...DEFAULT_ADVANCED_CONFIG },
+        }));
+        setSelectedModels(restoredModels);
+      }
+
+      // Restore form state from competition config
+      if (comp.config.symbols?.length > 0) {
+        setSymbol(comp.config.symbols[0]);
+      }
+      if (comp.config.initial_capital) {
+        setInitialCapital(comp.config.initial_capital);
+      }
+      if (comp.config.cycle_interval_seconds) {
+        setCycleInterval(comp.config.cycle_interval_seconds);
+      }
+      if (comp.config.exchange_id) {
+        setExchangeId(comp.config.exchange_id);
+      }
+
+      showSuccess(`Loaded competition: ${comp.config.competition_name}`);
     } catch (err) {
       if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to resume competition');
@@ -273,8 +337,7 @@ export function useAlphaArena() {
           setDecisions([]);
           setSnapshots([]);
         }
-        setSuccess('Competition deleted');
-        setTimeout(() => { if (mountedRef.current) setSuccess(null); }, 3000);
+        showSuccess('Competition deleted');
       } else {
         setError(result.error || 'Failed to delete competition');
       }
@@ -403,11 +466,14 @@ export function useAlphaArena() {
           model_id: m.model_id,
           api_key: m.api_key,
           initial_capital: initialCapital,
+          trading_style: m.advancedConfig.trading_style || undefined,
+          advanced_config: m.advancedConfig,
         })),
         symbols: [symbol],
         initial_capital: initialCapital,
         mode,
         cycle_interval_seconds: cycleInterval,
+        exchange_id: exchangeId,
         llm_settings: {
           temperature: llmGlobalSettings.temperature,
           max_tokens: llmGlobalSettings.max_tokens,
@@ -420,8 +486,7 @@ export function useAlphaArena() {
         setCompetitionId(result.competition_id);
         setStatus('created');
         setShowCreatePanel(false);
-        setSuccess('Competition created successfully');
-        setTimeout(() => { if (mountedRef.current) setSuccess(null); }, 3000);
+        showSuccess('Competition created successfully');
       } else {
         setError(result.error || 'Failed to create competition');
       }
@@ -438,6 +503,7 @@ export function useAlphaArena() {
     if (cycleInProgressRef.current) return;
 
     cycleInProgressRef.current = true;
+    cancelledRef.current = false;
     setIsLoading(true);
     setError(null);
     setProgressSteps([]);
@@ -446,15 +512,22 @@ export function useAlphaArena() {
     try {
       const currentCompetitionId = competitionId;
       const currentModels = [...selectedModels];
+      // Collect API keys — use model-specific key, keyed by "provider:model_id" to support
+      // multiple models from the same provider with different keys
       const apiKeys: Record<string, string> = {};
       for (const model of currentModels) {
-        if (model.api_key && !apiKeys[model.provider]) {
-          apiKeys[model.provider] = model.api_key;
+        if (model.api_key) {
+          // Provider-level key (first one wins per provider for backend compatibility)
+          if (!apiKeys[model.provider]) {
+            apiKeys[model.provider] = model.api_key;
+          }
         }
       }
       const result = await alphaArenaService.runCycle(currentCompetitionId, Object.keys(apiKeys).length > 0 ? apiKeys : undefined);
 
-      if (!mountedRef.current) return;
+      // If cancelled or unmounted while awaiting, discard results
+      if (!mountedRef.current || cancelledRef.current) return;
+
       if (result.success) {
         setCycleCount(prev => result.cycle_number || prev + 1);
         setStatus('running');
@@ -468,7 +541,7 @@ export function useAlphaArena() {
             alphaArenaService.getDecisions(currentCompetitionId),
             alphaArenaService.getSnapshots(currentCompetitionId),
           ]);
-          if (mountedRef.current) {
+          if (mountedRef.current && !cancelledRef.current) {
             if (decisionsResult.success && decisionsResult.decisions) {
               setDecisions(decisionsResult.decisions);
             }
@@ -479,20 +552,23 @@ export function useAlphaArena() {
         } catch {
           // Fallback to cache refresh
         }
-        refreshCompetitionData();
-        if (result.warnings && result.warnings.length > 0) {
-          setError(`Cycle completed with warnings: ${result.warnings[0]}`);
-          setTimeout(() => { if (mountedRef.current) setError(null); }, 5000);
+        if (!cancelledRef.current) {
+          refreshCompetitionData();
+        }
+        if (result.warnings && result.warnings.length > 0 && !cancelledRef.current) {
+          showErrorTimed(`Cycle completed with warnings: ${result.warnings[0]}`);
         }
       } else {
-        setError(result.error || 'Cycle failed');
+        if (!cancelledRef.current) {
+          setError(result.error || 'Cycle failed');
+        }
       }
     } catch (err) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || cancelledRef.current) return;
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       cycleInProgressRef.current = false;
-      if (mountedRef.current) setIsLoading(false);
+      if (mountedRef.current && !cancelledRef.current) setIsLoading(false);
     }
   }, [competitionId, selectedModels, refreshCompetitionData]);
 
@@ -520,6 +596,8 @@ export function useAlphaArena() {
   }, [isAutoRunning, cycleInterval]);
 
   const handleReset = useCallback(() => {
+    // Signal any in-flight cycle to discard its results
+    cancelledRef.current = true;
     if (autoRunIntervalRef.current) {
       clearInterval(autoRunIntervalRef.current);
       autoRunIntervalRef.current = null;
@@ -541,20 +619,22 @@ export function useAlphaArena() {
 
   const handleCancel = useCallback(() => {
     setIsCancelling(true);
+    // Signal in-flight cycle to discard results when it completes
+    cancelledRef.current = true;
     if (autoRunIntervalRef.current) {
       clearInterval(autoRunIntervalRef.current);
       autoRunIntervalRef.current = null;
       setIsAutoRunning(false);
     }
-    cycleInProgressRef.current = false;
+    // Note: cycleInProgressRef stays true until the actual async operation finishes,
+    // but cancelledRef ensures state won't be updated from stale results
     setIsLoading(false);
     setIsCancelling(false);
     setProgressSteps([]);
     setCurrentProgress(null);
     setStatus('paused');
-    setSuccess('Operation cancelled');
-    setTimeout(() => setSuccess(null), 2000);
-  }, []);
+    showSuccess('Operation cancelled', 2000);
+  }, [showSuccess]);
 
   // Cleanup auto-run on unmount
   useEffect(() => {
@@ -563,8 +643,8 @@ export function useAlphaArena() {
     };
   }, []);
 
-  // Real-time price streaming via Rust WebSocket (Kraken ticker)
-  const tickerHook = useRustTicker('kraken', symbol, !!competitionId);
+  // Real-time price streaming via Rust WebSocket — uses competition's configured exchange
+  const tickerHook = useRustTicker(exchangeId, symbol, !!competitionId);
 
   useEffect(() => {
     if (tickerHook.data && mountedRef.current) {
@@ -576,9 +656,15 @@ export function useAlphaArena() {
     setSelectedModels(prev => {
       const isSelected = prev.some(m => m.id === model.id);
       if (isSelected) return prev.filter(m => m.id !== model.id);
-      return [...prev, model];
+      return [...prev, { ...model }];
     });
   };
+
+  const updateModelConfig = useCallback((modelId: string, config: Partial<AgentAdvancedConfig>) => {
+    setSelectedModels(prev => prev.map(m =>
+      m.id === modelId ? { ...m, advancedConfig: { ...m.advancedConfig, ...config } } : m
+    ));
+  }, []);
 
   return {
     // Competition state
@@ -631,6 +717,8 @@ export function useAlphaArena() {
     setInitialCapital,
     cycleInterval,
     setCycleInterval,
+    exchangeId,
+    setExchangeId,
 
     // Past competitions
     pastCompetitions,
@@ -647,6 +735,7 @@ export function useAlphaArena() {
     handleResumeCompetition,
     handleDeleteCompetition,
     toggleModelSelection,
+    updateModelConfig,
     refreshCompetitionData,
   };
 }

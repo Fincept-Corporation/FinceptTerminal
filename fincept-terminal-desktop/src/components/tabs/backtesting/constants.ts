@@ -1,31 +1,20 @@
 /**
- * Backtesting Tab - Design System Constants
- * Strictly follows docs/UI_DESIGN_SYSTEM.md
+ * Backtesting Tab - Constants
+ * Design system re-exported from portfolio-tab/finceptStyles for theme support.
+ * Domain-specific backtesting constants defined here.
  */
 
 import type { BacktestingProviderSlug } from './backtestingProviderConfigs';
+import {
+  FINCEPT as _FINCEPT,
+  TYPOGRAPHY,
+} from '../portfolio-tab/finceptStyles';
 
 // ============================================================================
-// FINCEPT Design System Colors (STRICT - no extras)
+// Re-export themed design system (uses CSS variables for dynamic theming)
 // ============================================================================
 
-export const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-} as const;
+export const FINCEPT = _FINCEPT;
 
 // ============================================================================
 // Provider Accent Colors
@@ -41,10 +30,10 @@ export const PROVIDER_COLORS: Record<BacktestingProviderSlug, string> = {
 };
 
 // ============================================================================
-// Typography
+// Typography (re-export MONO as FONT_FAMILY for backward compat)
 // ============================================================================
 
-export const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
+export const FONT_FAMILY = TYPOGRAPHY.MONO;
 
 // ============================================================================
 // Indicator Options

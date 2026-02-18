@@ -333,6 +333,15 @@ class MADatabase:
         where_clauses = []
         params = []
 
+        # Free-text query search across key text fields
+        if 'query' in filters and filters['query']:
+            query_val = f"%{filters['query']}%"
+            where_clauses.append(
+                "(target_name LIKE ? OR acquirer_name LIKE ? OR industry LIKE ? "
+                "OR target_ticker LIKE ? OR acquirer_ticker LIKE ? OR deal_id LIKE ?)"
+            )
+            params.extend([query_val] * 6)
+
         if 'industry' in filters:
             where_clauses.append("industry = ?")
             params.append(filters['industry'])

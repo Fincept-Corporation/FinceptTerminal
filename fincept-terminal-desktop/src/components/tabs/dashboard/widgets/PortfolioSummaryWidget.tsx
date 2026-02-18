@@ -38,6 +38,7 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
   const {
     data: summaryData,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<PortfolioSummary>({
@@ -118,7 +119,7 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
       title={`PORTFOLIO${portfolio ? ` - ${portfolio.name.toUpperCase()}` : ''}`}
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={loading && !summaryData}
+      isLoading={(loading && !summaryData) || isFetching}
       error={error?.message || null}
       headerColor="var(--ft-color-info)"
     >

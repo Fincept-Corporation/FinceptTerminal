@@ -9,13 +9,15 @@ interface DataSourceWidgetProps {
   alias: string;
   displayName?: string;
   onRemove?: () => void;
+  onConfigure?: () => void;
 }
 
 export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
   id,
   alias,
   displayName,
-  onRemove
+  onRemove,
+  onConfigure
 }) => {
   const { t } = useTranslation('dashboard');
   const { dataSources, loading, error, refreshDataSources } = useDataSource();
@@ -223,6 +225,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
       title={displayName || source?.display_name || alias}
       onRemove={onRemove}
       onRefresh={source?.type === 'rest_api' ? refreshDataSources : undefined}
+      onConfigure={onConfigure}
       isLoading={loading && !data}
       error={null}
       headerColor={source?.type === 'websocket' ? 'var(--ft-color-success)' : 'var(--ft-color-primary)'}

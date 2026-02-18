@@ -17,6 +17,44 @@ import {
 } from './plugins';
 import { ToolkitToolbar } from './ToolkitToolbar';
 
+/**
+ * Get the UTC offset in seconds for a given IANA timezone at a specific UTC timestamp.
+ * Lightweight Charts treats all timestamps as UTC internally, so we shift
+ * each bar's timestamp by the timezone offset so that UTC values represent local time.
+ * This handles DST transitions correctly per-bar.
+ */
+function getTimezoneOffsetSeconds(tz: string, utcTimestampSec: number): number {
+  const date = new Date(utcTimestampSec * 1000);
+  // Format in the target timezone and in UTC, then compute the difference
+  const localParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+
+  const utcParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes) =>
+    parseInt(parts.find(p => p.type === type)?.value || '0', 10);
+
+  const localMs = Date.UTC(
+    get(localParts, 'year'), get(localParts, 'month') - 1, get(localParts, 'day'),
+    get(localParts, 'hour'), get(localParts, 'minute'), get(localParts, 'second'),
+  );
+  const utcMs = Date.UTC(
+    get(utcParts, 'year'), get(utcParts, 'month') - 1, get(utcParts, 'day'),
+    get(utcParts, 'hour'), get(utcParts, 'minute'), get(utcParts, 'second'),
+  );
+
+  return Math.round((localMs - utcMs) / 1000);
+}
+
 interface ProChartProps {
   data: Array<{
     time: number;
@@ -53,6 +91,7 @@ export function ProChartWithToolkit({
   const volumeSeriesRef = useRef<any>(null);
   const pluginManagerRef = useRef<PluginManager | null>(null);
   const toolkitRef = useRef<TradingToolkitPlugin | null>(null);
+  const tooltipRef = useRef<TooltipPlugin | null>(null);
   const activeToolRef = useRef<DrawingTool | null>(null); // Ref to avoid stale closures
 
   const [activeTool, setActiveTool] = useState<DrawingTool | null>(null);
@@ -75,29 +114,6 @@ export function ProChartWithToolkit({
     const isIntradayTimeframe = interval ? !['1d', '1w', '1M'].includes(interval) : true;
     const showSeconds = interval ? ['1m', '3m', '5m'].includes(interval) : false;
 
-    // Build localization options for timezone
-    const localizationOptions = timezone ? {
-      locale: 'en-IN', // Use Indian locale for IST, can be customized per timezone
-      timeFormatter: (time: number) => {
-        const date = new Date(time * 1000);
-        return date.toLocaleTimeString('en-IN', {
-          timeZone: timezone,
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        });
-      },
-      dateFormatter: (time: number) => {
-        const date = new Date(time * 1000);
-        return date.toLocaleDateString('en-IN', {
-          timeZone: timezone,
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        });
-      },
-    } : {};
-
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: containerHeight,
@@ -106,7 +122,6 @@ export function ProChartWithToolkit({
         textColor: '#d1d5db',
         fontSize: 11,
       },
-      localization: localizationOptions,
       handleScroll: {
         vertTouchDrag: true,
       },
@@ -191,6 +206,7 @@ export function ProChartWithToolkit({
       showVolume: showVolume,
     });
     pluginManager.register(tooltip);
+    tooltipRef.current = tooltip;
 
     // Add trading toolkit
     const toolkit = new TradingToolkitPlugin();
@@ -216,8 +232,22 @@ export function ProChartWithToolkit({
       handleMouseMove(param);
     });
 
-    // Handle keyboard shortcuts
+    // Track whether this chart instance is focused (clicked on)
+    let isChartFocused = false;
+    const handleChartFocus = () => { isChartFocused = true; };
+    const handleChartBlur = (e: MouseEvent) => {
+      // Blur if click is outside this chart's container
+      if (chartContainerRef.current && !chartContainerRef.current.contains(e.target as Node)) {
+        isChartFocused = false;
+      }
+    };
+    chartContainerRef.current.addEventListener('mousedown', handleChartFocus);
+    window.addEventListener('mousedown', handleChartBlur);
+
+    // Handle keyboard shortcuts — only when this chart is focused
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isChartFocused) return;
+
       // Don't trigger if user is typing in an input field
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
@@ -226,7 +256,7 @@ export function ProChartWithToolkit({
 
       // Delete: Remove last drawing or selected drawing
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (toolkitRef.current && !activeTool) {
+        if (toolkitRef.current && !activeToolRef.current) {
           e.preventDefault();
           const selectedId = toolkitRef.current.getSelectedDrawingId();
           if (selectedId) {
@@ -246,7 +276,7 @@ export function ProChartWithToolkit({
       // Escape: Deactivate current tool or deselect drawing
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (activeTool) {
+        if (activeToolRef.current) {
           handleToolSelect(null);
         } else if (toolkitRef.current) {
           toolkitRef.current.selectDrawing(null);
@@ -265,7 +295,9 @@ export function ProChartWithToolkit({
     window.addEventListener('mouseup', handleMouseUp);
 
     // Handle resize - use container height if no fixed height provided
+    let isDestroyed = false;
     const handleResize = () => {
+      if (isDestroyed) return;
       if (chartContainerRef.current && chartRef.current) {
         const containerHeight = chartContainerRef.current.clientHeight || height;
         chartRef.current.resize(chartContainerRef.current.clientWidth, containerHeight, true);
@@ -282,23 +314,36 @@ export function ProChartWithToolkit({
     setIsReady(true);
 
     return () => {
+      isDestroyed = true;
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousedown', handleChartBlur);
       resizeObserver.disconnect();
       pluginManager.destroy();
       chart.remove();
     };
   }, [height, showVolume, timezone, interval]);
 
-  // Update chart data
+  // Update chart data — shift timestamps by timezone offset so x-axis shows local time.
+  // Lightweight Charts treats all timestamps as UTC internally, so we adjust each bar's
+  // timestamp to represent local time in the target timezone.
   useEffect(() => {
     if (!isReady || !candlestickSeriesRef.current || data.length === 0) return;
+
+    // For daily+ timeframes, timestamps represent calendar dates — no timezone shift needed.
+    // For intraday timeframes, shift by timezone offset so the x-axis shows local time.
+    const isIntraday = interval ? !['1d', '1w', '1M'].includes(interval) : false;
 
     const candleData: CandlestickData[] = data.map((candle) => {
       let timestamp = candle.time;
       if (timestamp > 10000000000) {
         timestamp = Math.floor(timestamp / 1000);
+      }
+
+      // Shift timestamp to local time for intraday charts
+      if (isIntraday && timezone) {
+        timestamp += getTimezoneOffsetSeconds(timezone, timestamp);
       }
 
       return {
@@ -319,6 +364,10 @@ export function ProChartWithToolkit({
           timestamp = Math.floor(timestamp / 1000);
         }
 
+        if (isIntraday && timezone) {
+          timestamp += getTimezoneOffsetSeconds(timezone, timestamp);
+        }
+
         return {
           time: timestamp as Time,
           value: candle.volume,
@@ -330,9 +379,9 @@ export function ProChartWithToolkit({
     }
 
     chartRef.current?.timeScale().fitContent();
-  }, [data, isReady, showVolume]);
+  }, [data, isReady, showVolume, timezone, interval]);
 
-  // Handle mouse move for cursor tracking, hover, and dragging
+  // Handle mouse move for cursor tracking, hover, dragging, and tooltip
   const handleMouseMove = useCallback((param: MouseEventParams) => {
     if (!candlestickSeriesRef.current || !toolkitRef.current) return;
 
@@ -341,6 +390,30 @@ export function ProChartWithToolkit({
       const price = candlestickSeriesRef.current.coordinateToPrice(param.point.y);
       if (price !== undefined && price !== null) {
         setCursorPosition({ time: param.time as Time, price });
+
+        // Feed OHLC data to the tooltip plugin
+        if (tooltipRef.current) {
+          const seriesData = param.seriesData.get(candlestickSeriesRef.current);
+          if (seriesData && 'open' in seriesData) {
+            const ohlc = seriesData as { open: number; high: number; low: number; close: number };
+            // Get volume from the volume series if available
+            let volume: number | undefined;
+            if (volumeSeriesRef.current) {
+              const volData = param.seriesData.get(volumeSeriesRef.current);
+              if (volData && 'value' in volData) {
+                volume = (volData as { value: number }).value;
+              }
+            }
+            tooltipRef.current.updateTooltip({
+              visible: true,
+              x: param.point.x,
+              y: param.point.y,
+              time: param.time,
+              ohlc,
+              volume,
+            });
+          }
+        }
 
         // Handle dragging and hover
         const point: ChartPoint<Time> = {
@@ -367,6 +440,10 @@ export function ProChartWithToolkit({
       }
     } else {
       setCursorPosition(null);
+      // Hide tooltip when cursor leaves chart area
+      if (tooltipRef.current) {
+        tooltipRef.current.updateTooltip({ visible: false });
+      }
     }
   }, []);
 

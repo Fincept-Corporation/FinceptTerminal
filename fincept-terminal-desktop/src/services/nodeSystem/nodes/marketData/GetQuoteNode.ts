@@ -1,6 +1,6 @@
 /**
  * Get Quote Node
- * Fetches real-time or delayed quotes for one or more symbols
+ * Fetches real-time quotes via Rust → yfinance Python backend.
  */
 
 import {
@@ -11,7 +11,7 @@ import {
   NodeConnectionType,
   NodePropertyType,
 } from '../../types';
-import { MarketDataBridge, DataProvider } from '../../adapters/MarketDataBridge';
+import { MarketDataBridge } from '../../adapters/MarketDataBridge';
 
 export class GetQuoteNode implements INodeType {
   description: INodeTypeDescription = {
@@ -21,7 +21,7 @@ export class GetQuoteNode implements INodeType {
     group: ['marketData'],
     version: 1,
     subtitle: '={{$parameter["symbols"]}}',
-    description: 'Fetches real-time or delayed quotes for symbols',
+    description: 'Fetches real-time quotes via yfinance',
     defaults: {
       name: 'Stock Quote',
       color: '#10b981',
@@ -36,7 +36,7 @@ export class GetQuoteNode implements INodeType {
         default: '',
         required: true,
         placeholder: 'AAPL, MSFT, GOOGL',
-        description: 'Comma-separated list of symbols (stocks, crypto, forex)',
+        description: 'Comma-separated list of symbols. Append .NS/.BO for Indian stocks.',
       },
       {
         displayName: 'Use Input Symbols',
@@ -50,72 +50,9 @@ export class GetQuoteNode implements INodeType {
         name: 'inputSymbolField',
         type: NodePropertyType.String,
         default: 'symbol',
-        description: 'Field name in input data containing symbols',
+        description: 'Field name in input data containing the symbol',
         displayOptions: {
           show: { useInputSymbols: [true] },
-        },
-      },
-      {
-        displayName: 'Asset Type',
-        name: 'assetType',
-        type: NodePropertyType.Options,
-        default: 'stock',
-        options: [
-          { name: 'Stock', value: 'stock' },
-          { name: 'Crypto', value: 'crypto' },
-          { name: 'Forex', value: 'forex' },
-          { name: 'ETF', value: 'etf' },
-          { name: 'Index', value: 'index' },
-          { name: 'Futures', value: 'futures' },
-          { name: 'Options', value: 'options' },
-        ],
-        description: 'Type of asset to quote',
-      },
-      {
-        displayName: 'Data Provider',
-        name: 'provider',
-        type: NodePropertyType.Options,
-        default: 'yahoo',
-        options: [
-          { name: 'Yahoo Finance', value: 'yahoo' },
-          { name: 'Alpha Vantage', value: 'alphavantage' },
-          { name: 'Finnhub', value: 'finnhub' },
-          { name: 'IEX Cloud', value: 'iex' },
-          { name: 'Twelve Data', value: 'twelvedata' },
-          { name: 'Binance', value: 'binance' },
-          { name: 'CoinGecko', value: 'coingecko' },
-          { name: 'Kraken', value: 'kraken' },
-        ],
-        description: 'Market data provider',
-      },
-      {
-        displayName: 'Exchange',
-        name: 'exchange',
-        type: NodePropertyType.Options,
-        default: 'auto',
-        options: [
-          { name: 'Auto-detect', value: 'auto' },
-          { name: 'NYSE', value: 'NYSE' },
-          { name: 'NASDAQ', value: 'NASDAQ' },
-          { name: 'NSE (India)', value: 'NSE' },
-          { name: 'BSE (India)', value: 'BSE' },
-          { name: 'LSE (UK)', value: 'LSE' },
-          { name: 'TSE (Tokyo)', value: 'TSE' },
-          { name: 'HKEX', value: 'HKEX' },
-        ],
-        description: 'Specific exchange (for stocks with same ticker)',
-        displayOptions: {
-          show: { assetType: ['stock', 'etf'] },
-        },
-      },
-      {
-        displayName: 'Include Extended Hours',
-        name: 'includeExtendedHours',
-        type: NodePropertyType.Boolean,
-        default: false,
-        description: 'Include pre-market and after-hours data',
-        displayOptions: {
-          show: { assetType: ['stock', 'etf'] },
         },
       },
       {
@@ -123,35 +60,24 @@ export class GetQuoteNode implements INodeType {
         name: 'includeDetails',
         type: NodePropertyType.Boolean,
         default: true,
-        description: 'Include additional details (day high/low, volume, etc.)',
-      },
-      {
-        displayName: 'Cache Duration (seconds)',
-        name: 'cacheDuration',
-        type: NodePropertyType.Number,
-        default: 15,
-        description: 'How long to cache quotes (0 for no caching)',
+        description: 'Include open/high/low/volume alongside price',
       },
     ],
   };
 
   async execute(this: IExecuteFunctions): Promise<NodeOutput> {
     const useInputSymbols = this.getNodeParameter('useInputSymbols', 0) as boolean;
-    const assetType = this.getNodeParameter('assetType', 0) as string;
-    const provider = this.getNodeParameter('provider', 0) as DataProvider;
     const includeDetails = this.getNodeParameter('includeDetails', 0) as boolean;
 
     let symbols: string[] = [];
 
     if (useInputSymbols) {
-      const inputData = this.getInputData();
       const inputSymbolField = this.getNodeParameter('inputSymbolField', 0) as string;
-
-      for (const item of inputData) {
-        if (item.json && item.json[inputSymbolField]) {
+      for (const item of this.getInputData()) {
+        if (item.json?.[inputSymbolField]) {
           const sym = item.json[inputSymbolField];
           if (Array.isArray(sym)) {
-            symbols.push(...sym.map(s => String(s).trim()));
+            symbols.push(...sym.map((s: any) => String(s).trim()));
           } else {
             symbols.push(String(sym).trim());
           }
@@ -159,47 +85,30 @@ export class GetQuoteNode implements INodeType {
       }
     } else {
       const symbolsStr = this.getNodeParameter('symbols', 0) as string;
-      symbols = symbolsStr.split(',').map(s => s.trim()).filter(Boolean);
+      symbols = symbolsStr.split(',').map((s) => s.trim()).filter(Boolean);
     }
 
     if (symbols.length === 0) {
-      return [[{
-        json: {
-          error: 'No symbols provided',
-          timestamp: new Date().toISOString(),
-        },
-      }]];
+      return [[{ json: { error: 'No symbols provided', timestamp: new Date().toISOString() } }]];
     }
 
-    // Fetch quotes using the bridge
-    
     const results: Array<{ json: Record<string, any> }> = [];
 
     for (const symbol of symbols) {
       try {
-        const quote = await MarketDataBridge.getQuote(symbol, provider);
+        const quote = await MarketDataBridge.getQuote(symbol);
 
-        if (includeDetails) {
-          results.push({
-            json: {
-              ...quote,
-              assetType,
-              provider,
-              fetchedAt: new Date().toISOString(),
-            },
-          });
-        } else {
-          // Minimal quote data
-          results.push({
-            json: {
-              symbol: quote.symbol,
-              price: quote.price,
-              change: quote.change,
-              changePercent: quote.changePercent,
-              fetchedAt: new Date().toISOString(),
-            },
-          });
-        }
+        results.push({
+          json: includeDetails
+            ? { ...quote, fetchedAt: new Date().toISOString() }
+            : {
+                symbol: quote.symbol,
+                price: quote.price,
+                change: quote.change,
+                changePercent: quote.changePercent,
+                fetchedAt: new Date().toISOString(),
+              },
+        });
       } catch (error) {
         results.push({
           json: {

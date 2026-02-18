@@ -41,7 +41,7 @@ export abstract class CoreExchangeAdapter {
       password: config.credentials?.password,
       uid: config.credentials?.uid,
       enableRateLimit: config.enableRateLimit ?? true,
-      timeout: config.timeout ?? 10000,
+      timeout: config.timeout ?? 60000, // Increased to 60s for slow network conditions
       ...(config.sandbox && { sandbox: true }),
       ...config.options,
     });
@@ -61,7 +61,7 @@ export abstract class CoreExchangeAdapter {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const originalTimeout = this.exchange.timeout;
-        this.exchange.timeout = 10000;
+        this.exchange.timeout = 60000; // Increased timeout for initial market load
         await this.exchange.loadMarkets();
         this.exchange.timeout = originalTimeout;
         this._isConnected = true;

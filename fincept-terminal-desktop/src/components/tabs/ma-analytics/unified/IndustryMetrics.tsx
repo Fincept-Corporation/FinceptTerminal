@@ -5,11 +5,22 @@
  * Financial Services (Banking, Insurance, Asset Management)
  */
 
-import React, { useState } from 'react';
-import { Cpu, HeartPulse, Building2, PlayCircle, Loader2, TrendingUp, BarChart3 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Cpu, HeartPulse, Building2, PlayCircle, Loader2, TrendingUp, BarChart3, ChevronDown, ChevronUp, Lightbulb, Target } from 'lucide-react';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
+import { MA_COLORS, CHART_STYLE, CHART_PALETTE } from '../constants';
+import { MAMetricCard } from '../components/MAMetricCard';
+import { MAChartPanel } from '../components/MAChartPanel';
+import { MASectionHeader } from '../components/MASectionHeader';
+import { MAEmptyState } from '../components/MAEmptyState';
+import { MADataTable } from '../components/MADataTable';
+import { MAExportButton } from '../components/MAExportButton';
 import { MAAnalyticsService } from '@/services/maAnalyticsService';
 import { showSuccess, showError } from '@/utils/notifications';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+} from 'recharts';
 
 type IndustryType = 'tech' | 'healthcare' | 'financial';
 
@@ -132,6 +143,7 @@ export const IndustryMetrics: React.FC = () => {
   const [financialSector, setFinancialSector] = useState<'banking' | 'insurance' | 'asset_management'>('banking');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [inputsCollapsed, setInputsCollapsed] = useState(false);
 
   const [techInputs, setTechInputs] = useState<Record<string, Record<string, number>>>({
     saas: { arr: 100, arr_growth: 40, net_retention: 115, gross_margin: 75, cac_payback: 18, ltv_cac: 3.5, rule_of_40: 55 },
@@ -224,9 +236,18 @@ export const IndustryMetrics: React.FC = () => {
         key={s.value}
         onClick={() => setSector(s.value)}
         style={{
-          ...COMMON_STYLES.tabButton(currentSector === s.value),
           padding: '4px 10px',
           fontSize: TYPOGRAPHY.TINY,
+          fontFamily: TYPOGRAPHY.MONO,
+          fontWeight: TYPOGRAPHY.BOLD,
+          letterSpacing: TYPOGRAPHY.WIDE,
+          textTransform: 'uppercase' as const,
+          backgroundColor: currentSector === s.value ? MA_COLORS.industry : 'transparent',
+          color: currentSector === s.value ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+          border: currentSector === s.value ? `1px solid ${MA_COLORS.industry}` : `1px solid ${FINCEPT.BORDER}`,
+          borderRadius: '2px',
+          cursor: 'pointer',
+          transition: 'all 0.15s',
         }}
       >
         {s.label}
@@ -234,79 +255,270 @@ export const IndustryMetrics: React.FC = () => {
     ));
   };
 
+  const currentSectorLabel = useMemo(() => {
+    if (industryType === 'tech') return TECH_SECTORS.find(s => s.value === techSector)?.label ?? '';
+    if (industryType === 'healthcare') return HEALTHCARE_SECTORS.find(s => s.value === healthcareSector)?.label ?? '';
+    return FINANCIAL_SECTORS.find(s => s.value === financialSector)?.label ?? '';
+  }, [industryType, techSector, healthcareSector, financialSector]);
+
+  // Build benchmark chart data
+  const benchmarkChartData = useMemo(() => {
+    if (!result?.benchmarks) return [];
+    const inputs = getCurrentInputs();
+    return Object.entries(result.benchmarks).map(([key, benchmark]: [string, any]) => {
+      const inputValue = inputs[key] || 0;
+      return {
+        metric: key.replace(/_/g, ' '),
+        company: inputValue,
+        p25: benchmark.p25,
+        median: benchmark.median,
+        p75: benchmark.p75,
+      };
+    });
+  }, [result, industryType, techSector, healthcareSector, financialSector]);
+
+  // Build radar chart data from valuation metrics
+  const radarChartData = useMemo(() => {
+    if (!result?.valuation_metrics) return [];
+    return Object.entries(result.valuation_metrics).slice(0, 8).map(([key, value]: [string, any]) => ({
+      metric: key.replace(/_/g, ' '),
+      value: typeof value === 'number' ? Math.min(value, 100) : 0,
+      fullMark: 100,
+    }));
+  }, [result]);
+
+  // Build benchmark table data
+  const benchmarkTableData = useMemo(() => {
+    if (!result?.benchmarks) return [];
+    const inputs = getCurrentInputs();
+    return Object.entries(result.benchmarks).map(([key, benchmark]: [string, any]) => ({
+      metric: key.replace(/_/g, ' ').toUpperCase(),
+      company: inputs[key] ?? '-',
+      p25: benchmark.p25?.toFixed(1) ?? '-',
+      median: benchmark.median?.toFixed(1) ?? '-',
+      p75: benchmark.p75?.toFixed(1) ?? '-',
+    }));
+  }, [result, industryType, techSector, healthcareSector, financialSector]);
+
+  // Build export data
+  const exportData = useMemo(() => {
+    if (!result) return [];
+    const rows: Record<string, any>[] = [];
+    if (result.valuation_metrics) {
+      Object.entries(result.valuation_metrics).forEach(([key, value]) => {
+        rows.push({ section: 'Valuation', metric: key.replace(/_/g, ' '), value: typeof value === 'number' ? value.toFixed(4) : String(value) });
+      });
+    }
+    if (result.benchmarks) {
+      const inputs = getCurrentInputs();
+      Object.entries(result.benchmarks).forEach(([key, benchmark]: [string, any]) => {
+        rows.push({
+          section: 'Benchmark',
+          metric: key.replace(/_/g, ' '),
+          company: inputs[key] ?? '',
+          p25: benchmark.p25?.toFixed(2) ?? '',
+          median: benchmark.median?.toFixed(2) ?? '',
+          p75: benchmark.p75?.toFixed(2) ?? '',
+        });
+      });
+    }
+    if (result.insights) {
+      result.insights.forEach((insight: string, idx: number) => {
+        rows.push({ section: 'Insight', metric: `#${idx + 1}`, value: insight });
+      });
+    }
+    return rows;
+  }, [result, industryType, techSector, healthcareSector, financialSector]);
+
+  const benchmarkTableColumns = [
+    { key: 'metric', label: 'Metric', width: '35%' },
+    { key: 'company', label: 'Company', align: 'right' as const, format: (v: any) => <span style={{ color: MA_COLORS.industry, fontWeight: TYPOGRAPHY.BOLD }}>{v}</span> },
+    { key: 'p25', label: 'P25', align: 'right' as const },
+    { key: 'median', label: 'Median', align: 'right' as const, format: (v: any) => <span style={{ color: FINCEPT.WHITE }}>{v}</span> },
+    { key: 'p75', label: 'P75', align: 'right' as const },
+  ];
+
   const renderResults = () => {
     if (!result) return null;
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.DEFAULT }}>
-        {/* Valuation Metrics */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.LARGE }}>
+        {/* Valuation Metrics Cards */}
         {result.valuation_metrics && (
-          <div style={{ ...COMMON_STYLES.metricCard }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-              <TrendingUp size={14} color={FINCEPT.ORANGE} />
-              <span style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE }}>VALUATION METRICS</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.SMALL }}>
+          <div>
+            <MASectionHeader
+              title="Valuation Metrics"
+              subtitle={currentSectorLabel}
+              icon={<TrendingUp size={14} />}
+              accentColor={MA_COLORS.industry}
+              action={
+                <MAExportButton
+                  data={exportData}
+                  filename={`industry_metrics_${industryType}`}
+                  accentColor={MA_COLORS.industry}
+                />
+              }
+            />
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+              gap: SPACING.MEDIUM,
+            }}>
               {Object.entries(result.valuation_metrics).map(([key, value]) => (
-                <div key={key} style={{ padding: SPACING.SMALL, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px' }}>
-                  <div style={COMMON_STYLES.dataLabel}>{key.replace(/_/g, ' ').toUpperCase()}</div>
-                  <div style={{ fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                    {typeof value === 'number' ? value.toFixed(2) : String(value)}
-                  </div>
-                </div>
+                <MAMetricCard
+                  key={key}
+                  label={key.replace(/_/g, ' ')}
+                  value={typeof value === 'number' ? value.toFixed(2) : String(value)}
+                  accentColor={MA_COLORS.industry}
+                  compact
+                />
               ))}
             </div>
           </div>
         )}
 
-        {/* Benchmarks */}
-        {result.benchmarks && (
-          <div style={{ ...COMMON_STYLES.metricCard }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-              <BarChart3 size={14} color={FINCEPT.ORANGE} />
-              <span style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE }}>INDUSTRY BENCHMARKS</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-              {Object.entries(result.benchmarks).map(([key, benchmark]: [string, any]) => (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: SPACING.SMALL, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px' }}>
-                  <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>{key.replace(/_/g, ' ')}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.DEFAULT }}>
-                    <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED }}>25th: {benchmark.p25?.toFixed(1) ?? '-'}</span>
-                    <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Median: {benchmark.median?.toFixed(1) ?? '-'}</span>
-                    <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED }}>75th: {benchmark.p75?.toFixed(1) ?? '-'}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Sector Profile Radar Chart */}
+        {result.valuation_metrics && radarChartData.length > 0 && (
+          <MAChartPanel
+            title="Sector Profile Radar"
+            icon={<Target size={14} />}
+            accentColor={MA_COLORS.industry}
+            height={300}
+          >
+            <RadarChart data={radarChartData}>
+              <PolarGrid stroke={FINCEPT.BORDER} />
+              <PolarAngleAxis dataKey="metric" tick={{ fontSize: 7, fill: FINCEPT.MUTED, fontFamily: 'var(--ft-font-family, monospace)' }} />
+              <PolarRadiusAxis tick={CHART_STYLE.axis} />
+              <Radar dataKey="value" stroke={MA_COLORS.industry} fill={MA_COLORS.industry} fillOpacity={0.3} />
+              <Tooltip contentStyle={CHART_STYLE.tooltip} />
+            </RadarChart>
+          </MAChartPanel>
+        )}
+
+        {/* Industry Benchmark Bar Chart */}
+        {result.benchmarks && benchmarkChartData.length > 0 && (
+          <MAChartPanel
+            title="Industry Benchmark Comparison"
+            icon={<BarChart3 size={14} />}
+            accentColor={MA_COLORS.industry}
+            height={300}
+          >
+            <BarChart data={benchmarkChartData}>
+              <CartesianGrid {...CHART_STYLE.grid} />
+              <XAxis
+                dataKey="metric"
+                tick={{ fontSize: 7, fill: FINCEPT.MUTED, fontFamily: 'var(--ft-font-family, monospace)' }}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis tick={CHART_STYLE.axis} />
+              <Tooltip contentStyle={CHART_STYLE.tooltip} />
+              <Legend
+                wrapperStyle={{ fontSize: '9px', fontFamily: 'var(--ft-font-family, monospace)' }}
+              />
+              <Bar dataKey="company" fill={MA_COLORS.industry} name="Company" />
+              <Bar dataKey="median" fill={FINCEPT.GRAY} name="Industry Median" fillOpacity={0.5} />
+            </BarChart>
+          </MAChartPanel>
+        )}
+
+        {/* Benchmark Data Table */}
+        {result.benchmarks && benchmarkTableData.length > 0 && (
+          <div>
+            <MASectionHeader
+              title="Benchmark Details"
+              subtitle="Percentile Distribution"
+              icon={<BarChart3 size={14} />}
+              accentColor={MA_COLORS.industry}
+            />
+            <MADataTable
+              columns={benchmarkTableColumns}
+              data={benchmarkTableData}
+              accentColor={MA_COLORS.industry}
+              compact
+              maxHeight="300px"
+            />
           </div>
         )}
 
         {/* Key Insights */}
         {result.insights && result.insights.length > 0 && (
-          <div style={{ ...COMMON_STYLES.metricCard }}>
-            <div style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE, marginBottom: SPACING.DEFAULT }}>KEY INSIGHTS</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
+          <div>
+            <MASectionHeader
+              title="Key Insights"
+              icon={<Lightbulb size={14} />}
+              accentColor={MA_COLORS.industry}
+            />
+            <div style={{
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              borderRadius: '2px',
+              padding: SPACING.DEFAULT,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: SPACING.MEDIUM,
+            }}>
               {result.insights.map((insight: string, idx: number) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.SMALL, fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>
-                  <span style={{ color: FINCEPT.ORANGE }}>•</span>
-                  {insight}
+                <div key={idx} style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: SPACING.MEDIUM,
+                  padding: SPACING.MEDIUM,
+                  backgroundColor: idx % 2 === 0 ? 'transparent' : `${FINCEPT.CHARCOAL}40`,
+                  borderRadius: '2px',
+                }}>
+                  <span style={{
+                    flexShrink: 0,
+                    width: '18px',
+                    height: '18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: `${MA_COLORS.industry}20`,
+                    color: MA_COLORS.industry,
+                    fontSize: '8px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    borderRadius: '2px',
+                  }}>
+                    {idx + 1}
+                  </span>
+                  <span style={{
+                    fontSize: TYPOGRAPHY.SMALL,
+                    fontFamily: TYPOGRAPHY.MONO,
+                    color: FINCEPT.GRAY,
+                    lineHeight: 1.5,
+                  }}>
+                    {insight}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Raw Data */}
+        {/* Raw Data (collapsed by default) */}
         <details>
-          <summary style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED, cursor: 'pointer' }}>View raw data</summary>
+          <summary style={{
+            fontSize: TYPOGRAPHY.TINY,
+            fontFamily: TYPOGRAPHY.MONO,
+            color: FINCEPT.MUTED,
+            cursor: 'pointer',
+            padding: `${SPACING.SMALL} 0`,
+          }}>
+            View raw data
+          </summary>
           <pre style={{
             marginTop: SPACING.SMALL,
             padding: SPACING.DEFAULT,
             borderRadius: '2px',
             overflow: 'auto',
             fontSize: TYPOGRAPHY.TINY,
+            fontFamily: TYPOGRAPHY.MONO,
             color: FINCEPT.GRAY,
             backgroundColor: FINCEPT.DARK_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
             maxHeight: 200,
           }}>
             {JSON.stringify(result, null, 2)}
@@ -317,25 +529,54 @@ export const IndustryMetrics: React.FC = () => {
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: FINCEPT.DARK_BG, fontFamily: TYPOGRAPHY.MONO }}>
-      {/* Header */}
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: FINCEPT.DARK_BG,
+      fontFamily: TYPOGRAPHY.MONO,
+    }}>
+      {/* Header Bar */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: SPACING.DEFAULT,
+        padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
         backgroundColor: FINCEPT.HEADER_BG,
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        borderBottom: `2px solid ${MA_COLORS.industry}`,
+        flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
-          <BarChart3 size={14} color={FINCEPT.ORANGE} />
-          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>INDUSTRY METRICS</span>
-          <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED }}>SECTOR-SPECIFIC VALUATION</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MEDIUM }}>
+          <BarChart3 size={14} color={MA_COLORS.industry} />
+          <span style={{
+            fontSize: '11px',
+            fontWeight: TYPOGRAPHY.BOLD,
+            color: MA_COLORS.industry,
+            letterSpacing: TYPOGRAPHY.WIDE,
+            textTransform: 'uppercase' as const,
+          }}>
+            INDUSTRY METRICS
+          </span>
+          <span style={{
+            fontSize: TYPOGRAPHY.TINY,
+            color: FINCEPT.MUTED,
+            fontFamily: TYPOGRAPHY.MONO,
+            letterSpacing: TYPOGRAPHY.WIDE,
+          }}>
+            SECTOR-SPECIFIC VALUATION
+          </span>
         </div>
         <button
           onClick={runAnalysis}
           disabled={loading}
-          style={{ ...COMMON_STYLES.buttonPrimary, display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}
+          style={{
+            ...COMMON_STYLES.buttonPrimary,
+            backgroundColor: MA_COLORS.industry,
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.SMALL,
+            opacity: loading ? 0.7 : 1,
+          }}
         >
           {loading ? <Loader2 size={10} className="animate-spin" /> : <PlayCircle size={10} />}
           CALCULATE METRICS
@@ -350,6 +591,7 @@ export const IndustryMetrics: React.FC = () => {
         padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
         backgroundColor: FINCEPT.HEADER_BG,
         borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        flexShrink: 0,
       }}>
         {([
           { id: 'tech', label: 'TECHNOLOGY', icon: Cpu },
@@ -357,12 +599,24 @@ export const IndustryMetrics: React.FC = () => {
           { id: 'financial', label: 'FINANCIAL SERVICES', icon: Building2 },
         ] as const).map(item => {
           const Icon = item.icon;
+          const isActive = industryType === item.id;
           return (
             <button
               key={item.id}
               onClick={() => setIndustryType(item.id)}
               style={{
-                ...COMMON_STYLES.tabButton(industryType === item.id),
+                padding: '6px 12px',
+                fontSize: '9px',
+                fontFamily: TYPOGRAPHY.MONO,
+                fontWeight: TYPOGRAPHY.BOLD,
+                letterSpacing: TYPOGRAPHY.WIDE,
+                textTransform: 'uppercase' as const,
+                backgroundColor: isActive ? `${MA_COLORS.industry}20` : 'transparent',
+                color: isActive ? MA_COLORS.industry : FINCEPT.GRAY,
+                border: isActive ? `1px solid ${MA_COLORS.industry}` : `1px solid transparent`,
+                borderRadius: '2px',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
                 display: 'flex',
                 alignItems: 'center',
                 gap: SPACING.SMALL,
@@ -383,53 +637,133 @@ export const IndustryMetrics: React.FC = () => {
         padding: `${SPACING.TINY} ${SPACING.DEFAULT}`,
         borderBottom: `1px solid ${FINCEPT.BORDER}`,
         overflowX: 'auto',
+        flexShrink: 0,
       }}>
         {renderSectorTabs()}
       </div>
 
-      {/* Content */}
+      {/* Scrollable Content Area */}
       <div style={{ flex: 1, overflow: 'auto', padding: SPACING.DEFAULT }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.DEFAULT }}>
-          {/* Input Panel */}
-          <div style={{ ...COMMON_STYLES.metricCard }}>
-            <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>
-              {industryType === 'tech' && TECH_SECTORS.find(s => s.value === techSector)?.label}
-              {industryType === 'healthcare' && HEALTHCARE_SECTORS.find(s => s.value === healthcareSector)?.label}
-              {industryType === 'financial' && FINANCIAL_SECTORS.find(s => s.value === financialSector)?.label}
-              {' '}INPUTS
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
+        {/* Collapsible Input Section */}
+        <div style={{
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          borderRadius: '2px',
+          marginBottom: SPACING.LARGE,
+          overflow: 'hidden',
+        }}>
+          {/* Input section header - clickable to collapse */}
+          <div
+            onClick={() => setInputsCollapsed(!inputsCollapsed)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.MEDIUM,
+              padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: inputsCollapsed ? 'none' : `1px solid ${FINCEPT.BORDER}`,
+              cursor: 'pointer',
+              userSelect: 'none' as const,
+            }}
+          >
+            <span style={{
+              fontSize: '10px',
+              fontFamily: TYPOGRAPHY.MONO,
+              fontWeight: TYPOGRAPHY.BOLD,
+              color: MA_COLORS.industry,
+              letterSpacing: TYPOGRAPHY.WIDE,
+              textTransform: 'uppercase' as const,
+            }}>
+              {currentSectorLabel} INPUTS
+            </span>
+            <span style={{
+              fontSize: TYPOGRAPHY.TINY,
+              fontFamily: TYPOGRAPHY.MONO,
+              color: FINCEPT.MUTED,
+            }}>
+              {getCurrentFields().length} parameters
+            </span>
+            <div style={{ flex: 1 }} />
+            {inputsCollapsed
+              ? <ChevronDown size={12} color={FINCEPT.GRAY} />
+              : <ChevronUp size={12} color={FINCEPT.GRAY} />
+            }
+          </div>
+
+          {/* 3-column input grid */}
+          {!inputsCollapsed && (
+            <div style={{
+              padding: SPACING.DEFAULT,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: SPACING.MEDIUM,
+            }}>
               {getCurrentFields().map(field => (
                 <div key={field.key}>
-                  <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, display: 'block', marginBottom: SPACING.TINY }}>{field.label}</label>
+                  <label style={{
+                    fontSize: TYPOGRAPHY.TINY,
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: TYPOGRAPHY.WIDE,
+                    textTransform: 'uppercase' as const,
+                    display: 'block',
+                    marginBottom: SPACING.TINY,
+                  }}>
+                    {field.label}
+                  </label>
                   <input
                     type="number"
                     value={getCurrentInputs()[field.key] || 0}
                     onChange={e => updateInput(field.key, parseFloat(e.target.value) || 0)}
-                    style={COMMON_STYLES.inputField}
+                    style={{
+                      ...COMMON_STYLES.inputField,
+                      borderColor: FINCEPT.BORDER,
+                      padding: '6px 8px',
+                      fontSize: TYPOGRAPHY.SMALL,
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = MA_COLORS.industry; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
                   />
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Results Panel */}
-          <div style={{ ...COMMON_STYLES.metricCard }}>
-            <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>ANALYSIS RESULTS</div>
-            {loading ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px' }}>
-                <Loader2 size={24} className="animate-spin" style={{ color: FINCEPT.ORANGE }} />
-              </div>
-            ) : result ? (
-              renderResults()
-            ) : (
-              <div style={{ ...COMMON_STYLES.emptyState, height: '200px' }}>
-                <BarChart3 size={32} style={{ opacity: 0.3, marginBottom: SPACING.SMALL }} />
-                <span style={{ fontSize: TYPOGRAPHY.SMALL, color: FINCEPT.GRAY }}>Click "CALCULATE METRICS" to analyze</span>
-              </div>
-            )}
-          </div>
+          )}
         </div>
+
+        {/* Full-Width Results Area */}
+        {loading ? (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '300px',
+            gap: SPACING.DEFAULT,
+          }}>
+            <Loader2 size={28} className="animate-spin" style={{ color: MA_COLORS.industry }} />
+            <span style={{
+              fontSize: TYPOGRAPHY.SMALL,
+              fontFamily: TYPOGRAPHY.MONO,
+              color: FINCEPT.MUTED,
+              letterSpacing: TYPOGRAPHY.WIDE,
+              textTransform: 'uppercase' as const,
+            }}>
+              Calculating industry metrics...
+            </span>
+          </div>
+        ) : result ? (
+          renderResults()
+        ) : (
+          <MAEmptyState
+            icon={<BarChart3 size={36} />}
+            title="Industry Metrics"
+            description="Select a sector and configure inputs above, then click CALCULATE METRICS to analyze"
+            accentColor={MA_COLORS.industry}
+            actionLabel="Calculate"
+            onAction={runAnalysis}
+          />
+        )}
       </div>
     </div>
   );

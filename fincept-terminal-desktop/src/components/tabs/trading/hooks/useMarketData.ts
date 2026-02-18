@@ -23,8 +23,16 @@ export function useOHLCV(symbol?: string, timeframe: Timeframe = '1h', limit: nu
   const [ohlcv, setOhlcv] = useState<OHLCV[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const fetchIdRef = useRef(0);
+
+  // Clear stale data immediately when symbol or timeframe changes
+  useEffect(() => {
+    setOhlcv([]);
+    setError(null);
+  }, [symbol, timeframe]);
 
   const fetchOHLCV = useCallback(async () => {
+    const currentFetchId = ++fetchIdRef.current;
     // Use realAdapter directly for OHLCV (paper adapter returns empty)
     if (!realAdapter || !symbol) {
       setOhlcv([]);
@@ -63,17 +71,22 @@ export function useOHLCV(symbol?: string, timeframe: Timeframe = '1h', limit: nu
         volume: candle[5],
       }));
 
+      // Guard against stale fetch (symbol/timeframe changed while awaiting)
+      if (currentFetchId !== fetchIdRef.current) return;
+
       setOhlcv(normalized);
 
       // Update cache
       ohlcvCache.set(cacheKey, { data: normalized, timestamp: Date.now() });
     } catch (err) {
+      if (currentFetchId !== fetchIdRef.current) return;
       const error = err as Error;
       console.warn('[useOHLCV] Failed to fetch OHLCV:', error.message);
       setError(error);
-      // Don't clear OHLCV on error - keep cached data
     } finally {
-      setIsLoading(false);
+      if (currentFetchId === fetchIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [realAdapter, symbol, timeframe, limit]);
 

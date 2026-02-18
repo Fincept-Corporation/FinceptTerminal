@@ -42,7 +42,6 @@ import { FactorDiscoveryPanel } from './FactorDiscoveryPanel';
 import { ModelLibraryPanel } from './ModelLibraryPanel';
 import { BacktestingPanel } from './BacktestingPanel';
 import { LiveSignalsPanel } from './LiveSignalsPanel';
-import { FFNAnalyticsPanel } from './FFNAnalyticsPanel';
 import { FunctimePanel } from './FunctimePanel';
 import { FortitudoPanel } from './FortitudoPanel';
 import { StatsmodelsPanel } from './StatsmodelsPanel';
@@ -58,7 +57,7 @@ import { GluonTSPanel } from './GluonTSPanel';
 import { GsQuantPanel } from './GsQuantPanel';
 
 
-type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_signals' | 'ffn_analytics' | 'functime' | 'fortitudo' | 'statsmodels' | 'cfa_quant' | 'deep_agent' | 'rl_trading' | 'online_learning' | 'hft' | 'meta_learning' | 'rolling_retraining' | 'advanced_models' | 'gluonts' | 'gs_quant';
+type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_signals' | 'functime' | 'fortitudo' | 'statsmodels' | 'cfa_quant' | 'deep_agent' | 'rl_trading' | 'online_learning' | 'hft' | 'meta_learning' | 'rolling_retraining' | 'advanced_models' | 'gluonts' | 'gs_quant';
 
 interface ModuleItem {
   id: ViewMode;
@@ -210,7 +209,6 @@ export default function AIQuantLabTab() {
     { id: 'advanced_models', label: 'Advanced Models', shortLabel: 'ADV', icon: Brain, category: 'Advanced', color: moduleColors.purple },
 
     // Analytics
-    { id: 'ffn_analytics', label: 'FFN Analytics', shortLabel: 'FFN', icon: TrendingUp, category: 'Analytics', color: moduleColors.green },
     { id: 'functime', label: 'Functime', shortLabel: 'FUNC', icon: Zap, category: 'Analytics', color: moduleColors.yellow },
     { id: 'fortitudo', label: 'Fortitudo', shortLabel: 'FORT', icon: Database, category: 'Analytics', color: moduleColors.blue },
     { id: 'statsmodels', label: 'Statsmodels', shortLabel: 'STATS', icon: Sigma, category: 'Analytics', color: moduleColors.cyan },
@@ -519,7 +517,6 @@ export default function AIQuantLabTab() {
             {state.activeView === 'meta_learning' && <MetaLearningPanel />}
             {state.activeView === 'rolling_retraining' && <RollingRetrainingPanel />}
             {state.activeView === 'advanced_models' && <AdvancedModelsPanel />}
-            {state.activeView === 'ffn_analytics' && <FFNAnalyticsPanel />}
             {state.activeView === 'functime' && <FunctimePanel />}
             {state.activeView === 'fortitudo' && <FortitudoPanel />}
             {state.activeView === 'statsmodels' && <StatsmodelsPanel />}

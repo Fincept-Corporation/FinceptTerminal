@@ -4,7 +4,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Newspaper, BarChart3, Eye, MessageSquare, Bitcoin,
   Package, Globe, DollarSign, Ship, Database, TrendingUp,
-  Activity, Briefcase, Bell, Calendar, Zap, Shield, LineChart } from 'lucide-react';
+  Activity, Briefcase, Bell, Calendar, Zap, Shield, LineChart, StickyNote,
+  Quote, ArrowUpDown, Search, AlertTriangle, Brain, Bot, Trophy, TestTube,
+  BellRing, Cpu, DatabaseZap, Flag, Anchor } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { WidgetType, DEFAULT_WIDGET_CONFIGS } from './widgets';
 import { watchlistService } from '../../../services/core/watchlistService';
@@ -49,20 +51,33 @@ const WIDGET_OPTIONS: WidgetOption[] = [
   { type: 'forex', label: 'FOREX', description: 'Major currency pairs and exchange rates', icon: <DollarSign size={14} />, color: FC.GREEN, category: 'markets' },
   { type: 'commodities', label: 'COMMODITIES', description: 'Gold, oil, silver and raw materials', icon: <Package size={14} />, color: FC.YELLOW, category: 'markets' },
   { type: 'crypto', label: 'CRYPTO', description: 'Cryptocurrency prices and market cap', icon: <Bitcoin size={14} />, color: FC.ORANGE, category: 'markets' },
+  { type: 'heatmap', label: 'SECTOR HEATMAP', description: 'S&P 500 sector performance visualization', icon: <BarChart3 size={14} />, color: FC.ORANGE, category: 'markets' },
   { type: 'market', label: 'MARKET DATA', description: 'Custom stock/index quotes', icon: <BarChart3 size={14} />, color: FC.BLUE, category: 'markets' },
   { type: 'news', label: 'NEWS FEED', description: 'Real-time financial news and alerts', icon: <Newspaper size={14} />, color: FC.WHITE, category: 'data' },
   { type: 'watchlist', label: 'WATCHLIST', description: 'Your saved watchlist instruments', icon: <Eye size={14} />, color: FC.CYAN, category: 'data' },
   { type: 'forum', label: 'FORUM', description: 'Community trending discussions', icon: <MessageSquare size={14} />, color: FC.PURPLE, category: 'data' },
-  { type: 'maritime', label: 'MARITIME', description: 'Shipping and maritime intelligence', icon: <Ship size={14} />, color: FC.BLUE, category: 'data' },
   { type: 'datasource', label: 'DATA SOURCE', description: 'Custom data source integration', icon: <Database size={14} />, color: FC.GRAY, category: 'data' },
+  { type: 'notes', label: 'NOTES', description: 'Financial notes and research tracker', icon: <StickyNote size={14} />, color: FC.YELLOW, category: 'data' },
   { type: 'polymarket', label: 'POLYMARKET', description: 'Prediction market probabilities', icon: <TrendingUp size={14} />, color: FC.PURPLE, category: 'analysis' },
   { type: 'economic', label: 'ECONOMICS', description: 'GDP, CPI, unemployment indicators', icon: <Activity size={14} />, color: FC.CYAN, category: 'analysis' },
+  { type: 'calendar', label: 'ECONOMIC CALENDAR', description: 'Upcoming economic events', icon: <Calendar size={14} />, color: FC.ORANGE, category: 'analysis' },
   { type: 'portfolio', label: 'PORTFOLIO', description: 'Portfolio summary and P&L', icon: <Briefcase size={14} />, color: FC.BLUE, category: 'analysis' },
   { type: 'performance', label: 'PERFORMANCE', description: 'Trading P&L and win rate tracker', icon: <LineChart size={14} />, color: FC.GREEN, category: 'analysis' },
   { type: 'geopolitics', label: 'GEOPOLITICS', description: 'Geopolitical risk monitor', icon: <Shield size={14} />, color: FC.RED, category: 'analysis' },
-  { type: 'alerts', label: 'ALERTS', description: 'Price alerts and triggered events', icon: <Bell size={14} />, color: FC.YELLOW, category: 'tools' },
-  { type: 'calendar', label: 'CALENDAR', description: 'Economic events and releases', icon: <Calendar size={14} />, color: FC.ORANGE, category: 'tools' },
   { type: 'quicktrade', label: 'QUICK TRADE', description: 'One-click trading panel', icon: <Zap size={14} />, color: FC.GREEN, category: 'tools' },
+  { type: 'stockquote', label: 'STOCK QUOTE', description: 'Single ticker price and stats', icon: <Quote size={14} />, color: FC.CYAN, category: 'markets' },
+  { type: 'topmovers', label: 'TOP MOVERS', description: 'Biggest market gainers and losers', icon: <ArrowUpDown size={14} />, color: FC.ORANGE, category: 'markets' },
+  { type: 'maritime', label: 'MARITIME', description: 'Shipping sector stocks and ETFs', icon: <Anchor size={14} />, color: FC.BLUE, category: 'markets' },
+  { type: 'akshare', label: 'CHINA MARKETS', description: 'Chinese market indices (AkShare)', icon: <Flag size={14} />, color: FC.RED, category: 'markets' },
+  { type: 'screener', label: 'SCREENER', description: 'Value/Growth/Momentum stock screener', icon: <Search size={14} />, color: FC.PURPLE, category: 'analysis' },
+  { type: 'riskmetrics', label: 'RISK METRICS', description: 'Sharpe, Beta, VaR and drawdown', icon: <AlertTriangle size={14} />, color: FC.RED, category: 'analysis' },
+  { type: 'sentiment', label: 'MARKET SENTIMENT', description: 'News-based market sentiment score', icon: <Brain size={14} />, color: FC.CYAN, category: 'analysis' },
+  { type: 'backtestsummary', label: 'BACKTEST SUMMARY', description: 'Recent backtest results overview', icon: <TestTube size={14} />, color: FC.PURPLE, category: 'analysis' },
+  { type: 'dbnomics', label: 'DBNOMICS', description: 'Economic series from DBnomics', icon: <DatabaseZap size={14} />, color: FC.CYAN, category: 'data' },
+  { type: 'algostatus', label: 'ALGO STATUS', description: 'Live algo trading deployment status', icon: <Bot size={14} />, color: FC.GREEN, category: 'tools' },
+  { type: 'alphaarena', label: 'ALPHA ARENA', description: 'AI model competition leaderboard', icon: <Trophy size={14} />, color: FC.YELLOW, category: 'tools' },
+  { type: 'watchlistalerts', label: 'WATCHLIST ALERTS', description: 'Big movers in your watchlists', icon: <BellRing size={14} />, color: FC.ORANGE, category: 'tools' },
+  { type: 'livesignals', label: 'LIVE SIGNALS', description: 'AI Quant Lab trading signals', icon: <Cpu size={14} />, color: FC.GREEN, category: 'tools' },
 ];
 
 const CATEGORIES = [
@@ -87,6 +102,10 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
   const [selectedWatchlist, setSelectedWatchlist] = useState('');
   const [forumCategory, setForumCategory] = useState('Trending');
   const [selectedDataSource, setSelectedDataSource] = useState('');
+  const [stockSymbol, setStockSymbol] = useState('AAPL');
+  const [screenerPreset, setScreenerPreset] = useState<'value' | 'growth' | 'momentum'>('value');
+  const [alertThreshold, setAlertThreshold] = useState(3);
+  const [dbnomicsSeriesId, setDbnomicsSeriesId] = useState('FRED/UNRATE');
   const { t } = useTranslation('dashboard');
 
   useEffect(() => {
@@ -138,6 +157,18 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
       case 'datasource':
         const ds = dataSources.find(d => d.alias === selectedDataSource);
         config = { dataSourceAlias: selectedDataSource, dataSourceDisplayName: ds?.display_name };
+        break;
+      case 'stockquote':
+        config = { stockSymbol };
+        break;
+      case 'screener':
+        config = { screenerPreset };
+        break;
+      case 'watchlistalerts':
+        config = { alertThreshold };
+        break;
+      case 'dbnomics':
+        config = { dbnomicsSeriesId };
         break;
     }
     onAdd(selectedType, config);
@@ -383,7 +414,83 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
             )
           )}
 
-          {!['news', 'market', 'watchlist', 'forum', 'datasource'].includes(selectedType) && (
+          {selectedType === 'stockquote' && (
+            <input
+              type="text"
+              value={stockSymbol}
+              onChange={(e) => setStockSymbol(e.target.value.toUpperCase())}
+              placeholder="e.g. AAPL, MSFT, TSLA"
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                backgroundColor: FC.DARK_BG,
+                border: `1px solid ${FC.BORDER}`,
+                color: FC.WHITE,
+                fontSize: '10px',
+                borderRadius: '2px',
+                fontFamily: '"IBM Plex Mono", monospace',
+                boxSizing: 'border-box',
+              }}
+            />
+          )}
+
+          {selectedType === 'screener' && (
+            <SelectInput
+              value={screenerPreset}
+              onChange={(v) => setScreenerPreset(v as 'value' | 'growth' | 'momentum')}
+              options={[
+                { value: 'value', label: 'VALUE — Low P/E, High Dividend Yield' },
+                { value: 'growth', label: 'GROWTH — High Revenue Growth' },
+                { value: 'momentum', label: 'MOMENTUM — Strong Price Action' },
+              ]}
+            />
+          )}
+
+          {selectedType === 'watchlistalerts' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                step="0.5"
+                value={alertThreshold}
+                onChange={(e) => setAlertThreshold(parseFloat(e.target.value))}
+                style={{
+                  width: '80px',
+                  padding: '6px 8px',
+                  backgroundColor: FC.DARK_BG,
+                  border: `1px solid ${FC.BORDER}`,
+                  color: FC.WHITE,
+                  fontSize: '10px',
+                  borderRadius: '2px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                }}
+              />
+              <span style={{ fontSize: '9px', color: FC.GRAY }}>% move threshold to trigger alert</span>
+            </div>
+          )}
+
+          {selectedType === 'dbnomics' && (
+            <input
+              type="text"
+              value={dbnomicsSeriesId}
+              onChange={(e) => setDbnomicsSeriesId(e.target.value)}
+              placeholder="e.g. FRED/UNRATE"
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                backgroundColor: FC.DARK_BG,
+                border: `1px solid ${FC.BORDER}`,
+                color: FC.WHITE,
+                fontSize: '10px',
+                borderRadius: '2px',
+                fontFamily: '"IBM Plex Mono", monospace',
+                boxSizing: 'border-box',
+              }}
+            />
+          )}
+
+          {!['news', 'market', 'watchlist', 'forum', 'datasource', 'stockquote', 'screener', 'watchlistalerts', 'dbnomics'].includes(selectedType) && (
             <InfoText text={selectedOption?.description || 'No additional configuration needed.'} />
           )}
 

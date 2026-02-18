@@ -82,19 +82,28 @@ export interface MarketMood {
 
 export interface PortfolioMetrics {
   total_return: number;
+  total_return_pct: number;
+  total_pnl: number;
   sharpe_ratio: number;
   sortino_ratio: number;
+  max_drawdown: number;
   max_drawdown_pct: number;
-  max_drawdown_value: number;
+  current_drawdown: number;
+  current_drawdown_pct: number;
   win_rate: number;
   profit_factor: number;
   expectancy: number;
   total_trades: number;
   winning_trades: number;
   losing_trades: number;
-  avg_win: number;
-  avg_loss: number;
-  volatility: number;
+  gross_profit: number;
+  gross_loss: number;
+  average_win: number;
+  average_loss: number;
+  largest_win: number;
+  largest_loss: number;
+  daily_volatility: number;
+  annualized_volatility: number;
 }
 
 export interface GridConfig {

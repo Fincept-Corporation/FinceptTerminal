@@ -4,8 +4,10 @@
  */
 
 import React from 'react';
-import { FINCEPT, FONT_FAMILY } from '../constants';
+import { FINCEPT, TYPOGRAPHY, COMMON_STYLES, EFFECTS, createFocusHandlers } from '../../portfolio-tab/finceptStyles';
 import { Maximize2, Minimize2 } from 'lucide-react';
+
+const FONT_FAMILY = TYPOGRAPHY.MONO;
 
 // ============================================================================
 // renderInput - Terminal-style input field

@@ -5,10 +5,16 @@
  */
 
 import React, { useState } from 'react';
-import { Scale, PlayCircle, Loader2, TrendingUp, CheckCircle, AlertTriangle, FileText } from 'lucide-react';
+import { Scale, PlayCircle, Loader2, TrendingUp, CheckCircle, AlertTriangle, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
+import { MA_COLORS, CHART_STYLE, CHART_PALETTE } from '../constants';
+import { MAMetricCard, MAChartPanel, MASectionHeader, MAEmptyState, MAExportButton } from '../components';
 import { MAAnalyticsService } from '@/services/maAnalyticsService';
 import { showSuccess, showError } from '@/utils/notifications';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Cell,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+} from 'recharts';
 
 type AnalysisType = 'fairness' | 'premium' | 'process';
 
@@ -36,10 +42,17 @@ const PROCESS_FACTORS = [
   { key: 'timing', label: 'Timing Adequacy', desc: 'Sufficient time for evaluation' },
 ];
 
+const ANALYSIS_TABS: { id: AnalysisType; label: string; icon: React.FC<{ size?: number }> }[] = [
+  { id: 'fairness', label: 'FAIRNESS OPINION', icon: Scale },
+  { id: 'premium', label: 'PREMIUM ANALYSIS', icon: TrendingUp },
+  { id: 'process', label: 'PROCESS QUALITY', icon: FileText },
+];
+
 export const FairnessOpinion: React.FC = () => {
   const [analysisType, setAnalysisType] = useState<AnalysisType>('fairness');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [inputsCollapsed, setInputsCollapsed] = useState(false);
 
   // Fairness Opinion inputs
   const [fairnessInputs, setFairnessInputs] = useState({
@@ -149,439 +162,840 @@ export const FairnessOpinion: React.FC = () => {
     setFairnessInputs({ ...fairnessInputs, selectedFactors: newSet });
   };
 
+  // -- Build chart data helpers --
+
+  const buildFootballFieldData = () =>
+    fairnessInputs.valuationMethods.map(m => ({
+      method: m.method,
+      min: m.range.min,
+      range: m.range.max - m.range.min,
+      valuation: m.valuation,
+    }));
+
+  const buildPremiumData = () => [
+    { name: '1-Day', value: result?.premium_1day ?? 0 },
+    { name: '1-Week', value: result?.premium_1week ?? 0 },
+    { name: '1-Month', value: result?.premium_1month ?? 0 },
+    { name: '52W High', value: result?.premium_52week_high ?? 0 },
+  ];
+
+  const buildProcessRadarData = () =>
+    result?.factor_scores
+      ? Object.entries(result.factor_scores).map(([key, score]) => ({
+          factor: key.replace(/_/g, ' '),
+          score: score as number,
+          fullMark: 5,
+        }))
+      : [];
+
+  const buildExportData = (): Record<string, any>[] => {
+    if (!result) return [];
+    if (result.is_fair !== undefined) {
+      return [
+        { metric: 'Conclusion', value: result.is_fair ? 'FAIR' : 'NOT FAIR' },
+        { metric: 'Offer Price', value: result.offer_price || fairnessInputs.offerPrice },
+        { metric: 'Average Valuation', value: result.valuation_summary?.average || 'N/A' },
+      ];
+    }
+    if (result.premium_1day !== undefined) {
+      return [
+        { metric: '1-Day Premium', value: `${result.premium_1day?.toFixed(1)}%` },
+        { metric: '1-Week Premium', value: `${result.premium_1week?.toFixed(1)}%` },
+        { metric: '1-Month Premium', value: `${result.premium_1month?.toFixed(1)}%` },
+        { metric: '52-Week High Premium', value: `${result.premium_52week_high?.toFixed(1)}%` },
+      ];
+    }
+    if (result.overall_score !== undefined) {
+      const rows: Record<string, any>[] = [
+        { metric: 'Overall Score', value: `${result.overall_score.toFixed(1)}/5` },
+      ];
+      if (result.factor_scores) {
+        Object.entries(result.factor_scores).forEach(([k, v]) => {
+          rows.push({ metric: k.replace(/_/g, ' '), value: `${v}/5` });
+        });
+      }
+      return rows;
+    }
+    return [result];
+  };
+
+  // -- Input renderers --
+
+  const renderFairnessInputs = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
+      {/* Offer Price */}
+      <div>
+        <label style={{
+          fontSize: TYPOGRAPHY.TINY,
+          fontFamily: TYPOGRAPHY.MONO,
+          fontWeight: TYPOGRAPHY.BOLD,
+          color: FINCEPT.MUTED,
+          letterSpacing: TYPOGRAPHY.WIDE,
+          textTransform: 'uppercase' as const,
+          marginBottom: '4px',
+          display: 'block',
+        }}>
+          Offer Price ($/share)
+        </label>
+        <input
+          type="number"
+          step="0.01"
+          value={fairnessInputs.offerPrice}
+          onChange={(e) => setFairnessInputs({ ...fairnessInputs, offerPrice: Number(e.target.value) })}
+          style={{ ...COMMON_STYLES.inputField, width: '100%' }}
+        />
+      </div>
+
+      {/* Valuation Methods */}
+      <div>
+        <div style={{
+          fontSize: TYPOGRAPHY.TINY,
+          fontFamily: TYPOGRAPHY.MONO,
+          fontWeight: TYPOGRAPHY.BOLD,
+          color: MA_COLORS.fairness,
+          letterSpacing: TYPOGRAPHY.WIDE,
+          textTransform: 'uppercase' as const,
+          marginBottom: SPACING.SMALL,
+        }}>
+          VALUATION METHODS
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: SPACING.MEDIUM }}>
+          {fairnessInputs.valuationMethods.map((method, idx) => (
+            <div key={idx} style={{
+              padding: SPACING.DEFAULT,
+              backgroundColor: FINCEPT.PANEL_BG,
+              borderRadius: '2px',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              borderLeft: `3px solid ${CHART_PALETTE[idx % CHART_PALETTE.length]}`,
+            }}>
+              <div style={{
+                fontSize: TYPOGRAPHY.SMALL,
+                fontFamily: TYPOGRAPHY.MONO,
+                fontWeight: TYPOGRAPHY.BOLD,
+                color: CHART_PALETTE[idx % CHART_PALETTE.length],
+                marginBottom: SPACING.SMALL,
+                letterSpacing: TYPOGRAPHY.WIDE,
+              }}>
+                {method.method}
+              </div>
+              <div style={{ display: 'flex', gap: SPACING.SMALL }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '9px', fontFamily: TYPOGRAPHY.MONO, color: FINCEPT.MUTED }}>Value</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={method.valuation}
+                    onChange={(e) => {
+                      const updated = [...fairnessInputs.valuationMethods];
+                      updated[idx].valuation = Number(e.target.value);
+                      setFairnessInputs({ ...fairnessInputs, valuationMethods: updated });
+                    }}
+                    style={{ ...COMMON_STYLES.inputField, width: '100%', fontSize: TYPOGRAPHY.TINY }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '9px', fontFamily: TYPOGRAPHY.MONO, color: FINCEPT.MUTED }}>Min</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={method.range.min}
+                    onChange={(e) => {
+                      const updated = [...fairnessInputs.valuationMethods];
+                      updated[idx].range.min = Number(e.target.value);
+                      setFairnessInputs({ ...fairnessInputs, valuationMethods: updated });
+                    }}
+                    style={{ ...COMMON_STYLES.inputField, width: '100%', fontSize: TYPOGRAPHY.TINY }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '9px', fontFamily: TYPOGRAPHY.MONO, color: FINCEPT.MUTED }}>Max</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={method.range.max}
+                    onChange={(e) => {
+                      const updated = [...fairnessInputs.valuationMethods];
+                      updated[idx].range.max = Number(e.target.value);
+                      setFairnessInputs({ ...fairnessInputs, valuationMethods: updated });
+                    }}
+                    style={{ ...COMMON_STYLES.inputField, width: '100%', fontSize: TYPOGRAPHY.TINY }}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Qualitative Factors */}
+      <div>
+        <div style={{
+          fontSize: TYPOGRAPHY.TINY,
+          fontFamily: TYPOGRAPHY.MONO,
+          fontWeight: TYPOGRAPHY.BOLD,
+          color: MA_COLORS.fairness,
+          letterSpacing: TYPOGRAPHY.WIDE,
+          textTransform: 'uppercase' as const,
+          marginBottom: SPACING.SMALL,
+        }}>
+          QUALITATIVE FACTORS ({fairnessInputs.selectedFactors.size}/{QUALITATIVE_FACTORS.length} selected)
+        </div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: '3px',
+        }}>
+          {QUALITATIVE_FACTORS.map(factor => (
+            <div
+              key={factor}
+              onClick={() => toggleFactor(factor)}
+              style={{
+                padding: '8px 10px',
+                backgroundColor: fairnessInputs.selectedFactors.has(factor) ? `${MA_COLORS.fairness}15` : FINCEPT.PANEL_BG,
+                borderRadius: '2px',
+                border: `1px solid ${fairnessInputs.selectedFactors.has(factor) ? MA_COLORS.fairness : FINCEPT.BORDER}`,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: SPACING.MEDIUM,
+                transition: 'all 0.15s',
+              }}
+            >
+              <CheckCircle
+                size={12}
+                color={fairnessInputs.selectedFactors.has(factor) ? MA_COLORS.fairness : FINCEPT.MUTED}
+              />
+              <span style={{
+                fontSize: TYPOGRAPHY.TINY,
+                fontFamily: TYPOGRAPHY.MONO,
+                color: fairnessInputs.selectedFactors.has(factor) ? FINCEPT.WHITE : FINCEPT.GRAY,
+              }}>
+                {factor}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPremiumInputs = () => (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+      gap: SPACING.DEFAULT,
+      alignItems: 'start',
+    }}>
+      <div>
+        <label style={{
+          fontSize: TYPOGRAPHY.TINY,
+          fontFamily: TYPOGRAPHY.MONO,
+          fontWeight: TYPOGRAPHY.BOLD,
+          color: FINCEPT.MUTED,
+          letterSpacing: TYPOGRAPHY.WIDE,
+          textTransform: 'uppercase' as const,
+          marginBottom: '4px',
+          display: 'block',
+        }}>
+          Offer Price ($/share)
+        </label>
+        <input
+          type="number"
+          step="0.01"
+          value={premiumInputs.offerPrice}
+          onChange={(e) => setPremiumInputs({ ...premiumInputs, offerPrice: Number(e.target.value) })}
+          style={{ ...COMMON_STYLES.inputField, width: '100%' }}
+        />
+      </div>
+      <div>
+        <label style={{
+          fontSize: TYPOGRAPHY.TINY,
+          fontFamily: TYPOGRAPHY.MONO,
+          fontWeight: TYPOGRAPHY.BOLD,
+          color: FINCEPT.MUTED,
+          letterSpacing: TYPOGRAPHY.WIDE,
+          textTransform: 'uppercase' as const,
+          marginBottom: '4px',
+          display: 'block',
+        }}>
+          Daily Prices (comma-separated, most recent last)
+        </label>
+        <textarea
+          value={premiumInputs.dailyPrices}
+          onChange={(e) => setPremiumInputs({ ...premiumInputs, dailyPrices: e.target.value })}
+          rows={3}
+          style={{ ...COMMON_STYLES.inputField, width: '100%', resize: 'vertical' }}
+        />
+      </div>
+      <div>
+        <label style={{
+          fontSize: TYPOGRAPHY.TINY,
+          fontFamily: TYPOGRAPHY.MONO,
+          fontWeight: TYPOGRAPHY.BOLD,
+          color: FINCEPT.MUTED,
+          letterSpacing: TYPOGRAPHY.WIDE,
+          textTransform: 'uppercase' as const,
+          marginBottom: '4px',
+          display: 'block',
+        }}>
+          Announcement Date (day index, 0-based)
+        </label>
+        <input
+          type="number"
+          value={premiumInputs.announcementDate}
+          onChange={(e) => setPremiumInputs({ ...premiumInputs, announcementDate: Number(e.target.value) })}
+          style={{ ...COMMON_STYLES.inputField, width: '100%' }}
+        />
+        <div style={{
+          marginTop: SPACING.SMALL,
+          padding: '6px 10px',
+          backgroundColor: `${MA_COLORS.fairness}10`,
+          borderRadius: '2px',
+          borderLeft: `2px solid ${MA_COLORS.fairness}`,
+          fontSize: TYPOGRAPHY.TINY,
+          fontFamily: TYPOGRAPHY.MONO,
+          color: FINCEPT.GRAY,
+        }}>
+          Calculates premiums vs 1-day, 1-week, 1-month, and 52-week prices
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderProcessInputs = () => (
+    <div>
+      <div style={{
+        fontSize: TYPOGRAPHY.TINY,
+        fontFamily: TYPOGRAPHY.MONO,
+        fontWeight: TYPOGRAPHY.BOLD,
+        color: MA_COLORS.fairness,
+        letterSpacing: TYPOGRAPHY.WIDE,
+        textTransform: 'uppercase' as const,
+        marginBottom: SPACING.MEDIUM,
+      }}>
+        PROCESS QUALITY ASSESSMENT (1-5 Scale)
+      </div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: SPACING.SMALL,
+      }}>
+        {PROCESS_FACTORS.map(factor => (
+          <div key={factor.key} style={{
+            padding: '8px 12px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            borderRadius: '2px',
+            border: `1px solid ${FINCEPT.BORDER}`,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: SPACING.DEFAULT,
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: TYPOGRAPHY.SMALL,
+                fontFamily: TYPOGRAPHY.MONO,
+                color: FINCEPT.WHITE,
+                fontWeight: TYPOGRAPHY.BOLD,
+              }}>
+                {factor.label}
+              </div>
+              <div style={{
+                fontSize: '9px',
+                fontFamily: TYPOGRAPHY.MONO,
+                color: FINCEPT.MUTED,
+                marginTop: '2px',
+              }}>
+                {factor.desc}
+              </div>
+            </div>
+            <select
+              value={processInputs[factor.key]}
+              onChange={(e) => setProcessInputs({ ...processInputs, [factor.key]: Number(e.target.value) })}
+              style={{
+                ...COMMON_STYLES.inputField,
+                width: '100px',
+                fontSize: TYPOGRAPHY.TINY,
+                flexShrink: 0,
+              }}
+            >
+              <option value={1}>1 - Poor</option>
+              <option value={2}>2</option>
+              <option value={3}>3 - Average</option>
+              <option value={4}>4</option>
+              <option value={5}>5 - Excellent</option>
+            </select>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   const renderInputs = () => {
     switch (analysisType) {
-      case 'fairness':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-            <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Offer Price ($/share)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={fairnessInputs.offerPrice}
-                onChange={(e) => setFairnessInputs({ ...fairnessInputs, offerPrice: Number(e.target.value) })}
-                style={{ ...COMMON_STYLES.inputField, width: '100%' }}
+      case 'fairness': return renderFairnessInputs();
+      case 'premium': return renderPremiumInputs();
+      case 'process': return renderProcessInputs();
+    }
+  };
+
+  // -- Result renderers --
+
+  const renderFairnessResults = () => {
+    if (result.is_fair === undefined) return null;
+
+    const footballFieldData = buildFootballFieldData();
+
+    return (
+      <>
+        {/* FAIR / NOT FAIR Banner */}
+        <div style={{
+          padding: SPACING.LARGE,
+          backgroundColor: result.is_fair ? `${FINCEPT.GREEN}12` : `${FINCEPT.RED}12`,
+          borderRadius: '2px',
+          border: `2px solid ${result.is_fair ? FINCEPT.GREEN : FINCEPT.RED}`,
+          textAlign: 'center',
+          marginBottom: SPACING.LARGE,
+        }}>
+          <div style={{
+            fontSize: TYPOGRAPHY.TINY,
+            fontFamily: TYPOGRAPHY.MONO,
+            fontWeight: TYPOGRAPHY.BOLD,
+            color: FINCEPT.MUTED,
+            letterSpacing: TYPOGRAPHY.WIDE,
+            marginBottom: SPACING.SMALL,
+          }}>
+            FAIRNESS OPINION
+          </div>
+          <div style={{
+            fontSize: '28px',
+            fontFamily: TYPOGRAPHY.MONO,
+            color: result.is_fair ? FINCEPT.GREEN : FINCEPT.RED,
+            fontWeight: TYPOGRAPHY.BOLD,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: SPACING.MEDIUM,
+          }}>
+            {result.is_fair ? <CheckCircle size={28} /> : <AlertTriangle size={28} />}
+            {result.is_fair ? 'FAIR' : 'NOT FAIR'}
+          </div>
+        </div>
+
+        {/* Valuation Summary Metrics */}
+        {result.valuation_summary && (
+          <>
+            <MASectionHeader
+              title="Valuation Summary"
+              icon={<Scale size={14} />}
+              accentColor={MA_COLORS.fairness}
+            />
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+              gap: SPACING.DEFAULT,
+              marginBottom: SPACING.LARGE,
+            }}>
+              <MAMetricCard
+                label="Offer Price"
+                value={formatCurrency(result.offer_price || fairnessInputs.offerPrice)}
+                accentColor="#FF6B35"
               />
+              <MAMetricCard
+                label="Avg Valuation"
+                value={formatCurrency(result.valuation_summary.average || 0)}
+                accentColor={MA_COLORS.fairness}
+              />
+              {result.valuation_summary.median !== undefined && (
+                <MAMetricCard
+                  label="Median Valuation"
+                  value={formatCurrency(result.valuation_summary.median)}
+                  accentColor={CHART_PALETTE[2]}
+                />
+              )}
+              {result.valuation_summary.range_low !== undefined && (
+                <MAMetricCard
+                  label="Range"
+                  value={`${formatCurrency(result.valuation_summary.range_low)} - ${formatCurrency(result.valuation_summary.range_high)}`}
+                  accentColor={FINCEPT.CYAN}
+                  compact
+                />
+              )}
             </div>
+          </>
+        )}
 
-            <div style={{ ...COMMON_STYLES.dataLabel, marginTop: SPACING.SMALL }}>
-              VALUATION METHODS
-            </div>
-            {fairnessInputs.valuationMethods.map((method, idx) => (
-              <div key={idx} style={{
-                padding: SPACING.SMALL,
-                backgroundColor: FINCEPT.PANEL_BG,
-                borderRadius: '2px',
-                border: `1px solid ${FINCEPT.BORDER}`,
-              }}>
-                <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.ORANGE, marginBottom: '4px' }}>
-                  {method.method}
-                </div>
-                <div style={{ display: 'flex', gap: SPACING.SMALL }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Value</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={method.valuation}
-                      onChange={(e) => {
-                        const updated = [...fairnessInputs.valuationMethods];
-                        updated[idx].valuation = Number(e.target.value);
-                        setFairnessInputs({ ...fairnessInputs, valuationMethods: updated });
-                      }}
-                      style={{ ...COMMON_STYLES.inputField, width: '100%', fontSize: TYPOGRAPHY.TINY }}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Min</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={method.range.min}
-                      onChange={(e) => {
-                        const updated = [...fairnessInputs.valuationMethods];
-                        updated[idx].range.min = Number(e.target.value);
-                        setFairnessInputs({ ...fairnessInputs, valuationMethods: updated });
-                      }}
-                      style={{ ...COMMON_STYLES.inputField, width: '100%', fontSize: TYPOGRAPHY.TINY }}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Max</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={method.range.max}
-                      onChange={(e) => {
-                        const updated = [...fairnessInputs.valuationMethods];
-                        updated[idx].range.max = Number(e.target.value);
-                        setFairnessInputs({ ...fairnessInputs, valuationMethods: updated });
-                      }}
-                      style={{ ...COMMON_STYLES.inputField, width: '100%', fontSize: TYPOGRAPHY.TINY }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
+        {/* Football Field Chart */}
+        <MAChartPanel
+          title="Valuation Range (Football Field)"
+          height={220}
+          icon={<Scale size={14} />}
+          accentColor={MA_COLORS.fairness}
+        >
+          <BarChart layout="vertical" data={footballFieldData}>
+            <YAxis type="category" dataKey="method" width={120} tick={CHART_STYLE.axis} />
+            <XAxis type="number" tick={CHART_STYLE.axis} />
+            <CartesianGrid {...CHART_STYLE.grid} />
+            <Bar dataKey="min" stackId="a" fill="transparent" />
+            <Bar dataKey="range" stackId="a" fill={MA_COLORS.fairness} fillOpacity={0.4} />
+            <ReferenceLine x={fairnessInputs.offerPrice} stroke="#FF6B35" strokeWidth={2} label={{ value: 'Offer', fill: '#FF6B35', fontSize: 9, fontFamily: 'var(--ft-font-family, monospace)' }} />
+            <Tooltip
+              contentStyle={CHART_STYLE.tooltip}
+              formatter={(value: number, name: string) => {
+                if (name === 'min') return [null, null];
+                return [`$${value.toFixed(2)}`, 'Range Width'];
+              }}
+              labelFormatter={(label: string) => {
+                const item = footballFieldData.find(d => d.method === label);
+                return item ? `${label}: $${(item.min).toFixed(2)} - $${(item.min + item.range).toFixed(2)} | Point: $${item.valuation.toFixed(2)}` : label;
+              }}
+            />
+          </BarChart>
+        </MAChartPanel>
+      </>
+    );
+  };
 
-            <div style={{ ...COMMON_STYLES.dataLabel, marginTop: SPACING.SMALL }}>
-              QUALITATIVE FACTORS
-            </div>
-            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-              {QUALITATIVE_FACTORS.map(factor => (
-                <div
-                  key={factor}
-                  onClick={() => toggleFactor(factor)}
-                  style={{
-                    padding: '6px',
-                    marginBottom: '2px',
-                    backgroundColor: fairnessInputs.selectedFactors.has(factor) ? `${FINCEPT.GREEN}20` : FINCEPT.PANEL_BG,
-                    borderRadius: '2px',
-                    border: `1px solid ${fairnessInputs.selectedFactors.has(factor) ? FINCEPT.GREEN : FINCEPT.BORDER}`,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: SPACING.SMALL,
-                  }}
-                >
-                  <CheckCircle
-                    size={12}
-                    color={fairnessInputs.selectedFactors.has(factor) ? FINCEPT.GREEN : FINCEPT.MUTED}
-                  />
-                  <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>{factor}</span>
-                </div>
+  const renderPremiumResults = () => {
+    if (result.premium_1day === undefined) return null;
+
+    const premiumData = buildPremiumData();
+
+    return (
+      <>
+        <MASectionHeader
+          title="Premium Analysis"
+          icon={<TrendingUp size={14} />}
+          accentColor={MA_COLORS.fairness}
+        />
+
+        {/* Premium Metric Cards */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: SPACING.DEFAULT,
+          marginBottom: SPACING.LARGE,
+        }}>
+          {[
+            { label: '1-Day Premium', value: result.premium_1day },
+            { label: '1-Week Premium', value: result.premium_1week },
+            { label: '1-Month Premium', value: result.premium_1month },
+            { label: '52-Week High', value: result.premium_52week_high },
+          ].map(item => (
+            <MAMetricCard
+              key={item.label}
+              label={item.label}
+              value={item.value !== undefined ? `${item.value.toFixed(1)}%` : 'N/A'}
+              accentColor={MA_COLORS.fairness}
+              trend={item.value !== undefined ? (item.value >= 0 ? 'up' : 'down') : undefined}
+            />
+          ))}
+        </div>
+
+        {/* Premium Waterfall Chart */}
+        <MAChartPanel
+          title="Premium Waterfall"
+          height={260}
+          icon={<TrendingUp size={14} />}
+          accentColor={MA_COLORS.fairness}
+        >
+          <BarChart data={premiumData}>
+            <XAxis dataKey="name" tick={CHART_STYLE.axis} />
+            <YAxis tick={CHART_STYLE.axis} tickFormatter={(v: number) => `${v.toFixed(0)}%`} />
+            <CartesianGrid {...CHART_STYLE.grid} />
+            <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+              {premiumData.map((entry, i) => (
+                <Cell key={i} fill={entry.value >= 0 ? FINCEPT.GREEN : FINCEPT.RED} fillOpacity={0.8} />
+              ))}
+            </Bar>
+            <Tooltip
+              contentStyle={CHART_STYLE.tooltip}
+              formatter={(value: number) => [`${value.toFixed(1)}%`, 'Premium']}
+            />
+          </BarChart>
+        </MAChartPanel>
+      </>
+    );
+  };
+
+  const renderProcessResults = () => {
+    if (result.overall_score === undefined) return null;
+
+    const processRadarData = buildProcessRadarData();
+    const scoreLabel = result.overall_score >= 4 ? 'Strong Process' :
+                       result.overall_score >= 3 ? 'Adequate Process' : 'Process Concerns';
+    const scoreColor = result.overall_score >= 4 ? FINCEPT.GREEN :
+                       result.overall_score >= 3 ? MA_COLORS.fairness : FINCEPT.RED;
+
+    return (
+      <>
+        {/* Overall Score Banner */}
+        <div style={{
+          padding: SPACING.LARGE,
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderRadius: '2px',
+          border: `2px solid ${scoreColor}`,
+          textAlign: 'center',
+          marginBottom: SPACING.LARGE,
+        }}>
+          <div style={{
+            fontSize: TYPOGRAPHY.TINY,
+            fontFamily: TYPOGRAPHY.MONO,
+            fontWeight: TYPOGRAPHY.BOLD,
+            color: FINCEPT.MUTED,
+            letterSpacing: TYPOGRAPHY.WIDE,
+            marginBottom: SPACING.SMALL,
+          }}>
+            PROCESS QUALITY SCORE
+          </div>
+          <div style={{
+            fontSize: '36px',
+            fontFamily: TYPOGRAPHY.MONO,
+            color: scoreColor,
+            fontWeight: TYPOGRAPHY.BOLD,
+          }}>
+            {result.overall_score.toFixed(1)} / 5
+          </div>
+          <div style={{
+            fontSize: TYPOGRAPHY.SMALL,
+            fontFamily: TYPOGRAPHY.MONO,
+            color: FINCEPT.GRAY,
+            marginTop: SPACING.SMALL,
+            letterSpacing: TYPOGRAPHY.WIDE,
+            textTransform: 'uppercase' as const,
+          }}>
+            {scoreLabel}
+          </div>
+        </div>
+
+        {/* Factor Breakdown Metrics */}
+        {result.factor_scores && (
+          <>
+            <MASectionHeader
+              title="Factor Breakdown"
+              icon={<FileText size={14} />}
+              accentColor={MA_COLORS.fairness}
+            />
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+              gap: SPACING.SMALL,
+              marginBottom: SPACING.LARGE,
+            }}>
+              {Object.entries(result.factor_scores).map(([key, score]: [string, any]) => (
+                <MAMetricCard
+                  key={key}
+                  label={key.replace(/_/g, ' ')}
+                  value={`${score}/5`}
+                  accentColor={score >= 4 ? FINCEPT.GREEN : score >= 3 ? MA_COLORS.fairness : FINCEPT.RED}
+                  compact
+                />
               ))}
             </div>
-          </div>
-        );
 
-      case 'premium':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-            <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Offer Price ($/share)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={premiumInputs.offerPrice}
-                onChange={(e) => setPremiumInputs({ ...premiumInputs, offerPrice: Number(e.target.value) })}
-                style={{ ...COMMON_STYLES.inputField, width: '100%' }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>
-                Daily Prices (comma-separated, most recent last)
-              </label>
-              <textarea
-                value={premiumInputs.dailyPrices}
-                onChange={(e) => setPremiumInputs({ ...premiumInputs, dailyPrices: e.target.value })}
-                rows={4}
-                style={{ ...COMMON_STYLES.inputField, width: '100%', resize: 'vertical' }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>
-                Announcement Date (day index, 0-based)
-              </label>
-              <input
-                type="number"
-                value={premiumInputs.announcementDate}
-                onChange={(e) => setPremiumInputs({ ...premiumInputs, announcementDate: Number(e.target.value) })}
-                style={{ ...COMMON_STYLES.inputField, width: '100%' }}
-              />
-            </div>
-            <div style={{
-              padding: SPACING.SMALL,
-              backgroundColor: `${FINCEPT.CYAN}15`,
-              borderRadius: '2px',
-              fontSize: TYPOGRAPHY.TINY,
-              color: FINCEPT.CYAN,
-            }}>
-              Calculates premiums vs 1-day, 1-week, 1-month, and 52-week prices
-            </div>
-          </div>
-        );
-
-      case 'process':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-            <div style={{ ...COMMON_STYLES.dataLabel }}>
-              PROCESS QUALITY ASSESSMENT (1-5)
-            </div>
-            {PROCESS_FACTORS.map(factor => (
-              <div key={factor.key} style={{
-                padding: SPACING.SMALL,
-                backgroundColor: FINCEPT.PANEL_BG,
-                borderRadius: '2px',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.WHITE }}>{factor.label}</div>
-                    <div style={{ fontSize: '9px', color: FINCEPT.MUTED }}>{factor.desc}</div>
-                  </div>
-                  <select
-                    value={processInputs[factor.key]}
-                    onChange={(e) => setProcessInputs({ ...processInputs, [factor.key]: Number(e.target.value) })}
-                    style={{ ...COMMON_STYLES.inputField, width: '60px', fontSize: TYPOGRAPHY.TINY }}
-                  >
-                    <option value={1}>1 - Poor</option>
-                    <option value={2}>2</option>
-                    <option value={3}>3 - Average</option>
-                    <option value={4}>4</option>
-                    <option value={5}>5 - Excellent</option>
-                  </select>
-                </div>
-              </div>
-            ))}
-          </div>
-        );
-    }
+            {/* Process Quality Radar Chart */}
+            {processRadarData.length > 0 && (
+              <MAChartPanel
+                title="Process Quality Radar"
+                height={320}
+                icon={<FileText size={14} />}
+                accentColor={MA_COLORS.fairness}
+              >
+                <RadarChart data={processRadarData}>
+                  <PolarGrid stroke={FINCEPT.BORDER} />
+                  <PolarAngleAxis
+                    dataKey="factor"
+                    tick={{
+                      ...CHART_STYLE.axis,
+                      fontSize: 8,
+                    }}
+                  />
+                  <PolarRadiusAxis
+                    domain={[0, 5]}
+                    tick={CHART_STYLE.axis}
+                  />
+                  <Radar
+                    dataKey="score"
+                    stroke={MA_COLORS.fairness}
+                    fill={MA_COLORS.fairness}
+                    fillOpacity={0.3}
+                    strokeWidth={2}
+                  />
+                </RadarChart>
+              </MAChartPanel>
+            )}
+          </>
+        )}
+      </>
+    );
   };
 
   const renderResults = () => {
     if (!result) {
       return (
-        <div style={{ ...COMMON_STYLES.emptyState }}>
-          <Scale size={32} style={{ opacity: 0.3, marginBottom: SPACING.SMALL }} />
-          <span style={{ color: FINCEPT.GRAY }}>Run analysis to see results</span>
-        </div>
+        <MAEmptyState
+          icon={<Scale size={36} />}
+          title="Fairness Opinion"
+          description="Configure valuation methods and run analysis"
+          accentColor={MA_COLORS.fairness}
+        />
       );
     }
 
     return (
-      <div style={{ padding: SPACING.DEFAULT }}>
-        {/* Fairness Opinion Result */}
-        {result.is_fair !== undefined && (
-          <>
-            <div style={{
-              padding: SPACING.DEFAULT,
-              backgroundColor: result.is_fair ? `${FINCEPT.GREEN}20` : `${FINCEPT.RED}20`,
-              borderRadius: '2px',
-              border: `2px solid ${result.is_fair ? FINCEPT.GREEN : FINCEPT.RED}`,
-              textAlign: 'center',
-              marginBottom: SPACING.DEFAULT,
-            }}>
-              <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>FAIRNESS OPINION</div>
-              <div style={{
-                fontSize: '24px',
-                color: result.is_fair ? FINCEPT.GREEN : FINCEPT.RED,
-                fontWeight: TYPOGRAPHY.BOLD,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: SPACING.SMALL,
-              }}>
-                {result.is_fair ? <CheckCircle size={24} /> : <AlertTriangle size={24} />}
-                {result.is_fair ? 'FAIR' : 'NOT FAIR'}
-              </div>
-            </div>
-
-            {result.valuation_summary && (
-              <div style={{ marginBottom: SPACING.DEFAULT }}>
-                <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>VALUATION SUMMARY</div>
-                <div style={{ display: 'flex', gap: SPACING.SMALL }}>
-                  <div style={{ flex: 1, padding: SPACING.SMALL, backgroundColor: FINCEPT.PANEL_BG, borderRadius: '4px' }}>
-                    <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>OFFER</div>
-                    <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.ORANGE }}>
-                      {formatCurrency(result.offer_price || fairnessInputs.offerPrice)}
-                    </div>
-                  </div>
-                  <div style={{ flex: 1, padding: SPACING.SMALL, backgroundColor: FINCEPT.PANEL_BG, borderRadius: '4px' }}>
-                    <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>AVG VALUATION</div>
-                    <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.GREEN }}>
-                      {formatCurrency(result.valuation_summary.average || 0)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Premium Analysis Result */}
-        {result.premium_1day !== undefined && (
-          <>
-            <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>PREMIUM ANALYSIS</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-              {[
-                { label: '1-DAY', value: result.premium_1day },
-                { label: '1-WEEK', value: result.premium_1week },
-                { label: '1-MONTH', value: result.premium_1month },
-                { label: '52-WEEK HIGH', value: result.premium_52week_high },
-              ].map(item => (
-                <div key={item.label} style={{
-                  padding: SPACING.SMALL,
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  borderRadius: '2px',
-                  textAlign: 'center',
-                }}>
-                  <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>{item.label}</div>
-                  <div style={{
-                    fontSize: TYPOGRAPHY.HEADING,
-                    color: (item.value || 0) >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                    fontWeight: TYPOGRAPHY.BOLD,
-                  }}>
-                    {item.value !== undefined ? `${item.value.toFixed(1)}%` : 'N/A'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Process Quality Result */}
-        {result.overall_score !== undefined && (
-          <>
-            <div style={{
-              padding: SPACING.DEFAULT,
-              backgroundColor: FINCEPT.PANEL_BG,
-              borderRadius: '2px',
-              border: `1px solid ${FINCEPT.ORANGE}`,
-              textAlign: 'center',
-              marginBottom: SPACING.DEFAULT,
-            }}>
-              <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>PROCESS QUALITY SCORE</div>
-              <div style={{ fontSize: '32px', color: FINCEPT.ORANGE, fontWeight: TYPOGRAPHY.BOLD }}>
-                {result.overall_score.toFixed(1)} / 5
-              </div>
-              <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED }}>
-                {result.overall_score >= 4 ? 'Strong Process' :
-                 result.overall_score >= 3 ? 'Adequate Process' : 'Process Concerns'}
-              </div>
-            </div>
-
-            {result.factor_scores && (
-              <div>
-                <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>FACTOR BREAKDOWN</div>
-                {Object.entries(result.factor_scores).map(([key, score]: [string, any]) => (
-                  <div key={key} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '4px 0',
-                    borderBottom: `1px solid ${FINCEPT.BORDER}`,
-                  }}>
-                    <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>
-                      {key.replace(/_/g, ' ').toUpperCase()}
-                    </span>
-                    <span style={{
-                      fontSize: TYPOGRAPHY.SMALL,
-                      color: score >= 4 ? FINCEPT.GREEN : score >= 3 ? FINCEPT.ORANGE : FINCEPT.RED,
-                      fontWeight: TYPOGRAPHY.BOLD,
-                    }}>
-                      {score}/5
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Raw JSON */}
-        <details style={{ marginTop: SPACING.DEFAULT }}>
-          <summary style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED, cursor: 'pointer' }}>
-            Raw Output
-          </summary>
-          <pre style={{
-            fontSize: '9px',
-            color: FINCEPT.GRAY,
-            backgroundColor: FINCEPT.PANEL_BG,
-            padding: SPACING.SMALL,
-            borderRadius: '2px',
-            overflow: 'auto',
-            maxHeight: '200px',
-          }}>
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </details>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.DEFAULT }}>
+        {renderFairnessResults()}
+        {renderPremiumResults()}
+        {renderProcessResults()}
       </div>
     );
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      {/* LEFT - Analysis Type & Inputs */}
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      backgroundColor: FINCEPT.DARK_BG,
+      fontFamily: TYPOGRAPHY.MONO,
+    }}>
+      {/* Top Tab Bar */}
       <div style={{
-        width: '380px',
-        borderRight: `1px solid ${FINCEPT.BORDER}`,
         display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
+        alignItems: 'center',
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        flexShrink: 0,
       }}>
-        {/* Analysis Type Tabs */}
-        <div style={{
-          display: 'flex',
-          backgroundColor: FINCEPT.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        }}>
-          {[
-            { id: 'fairness' as const, label: 'FAIRNESS OPINION', icon: Scale },
-            { id: 'premium' as const, label: 'PREMIUM', icon: TrendingUp },
-            { id: 'process' as const, label: 'PROCESS', icon: FileText },
-          ].map(tab => (
+        {ANALYSIS_TABS.map(tab => {
+          const isActive = analysisType === tab.id;
+          return (
             <button
               key={tab.id}
               onClick={() => { setAnalysisType(tab.id); setResult(null); }}
               style={{
-                flex: 1,
-                padding: SPACING.SMALL,
+                padding: '10px 20px',
                 backgroundColor: 'transparent',
                 border: 'none',
-                borderBottom: analysisType === tab.id ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
-                color: analysisType === tab.id ? FINCEPT.ORANGE : FINCEPT.GRAY,
+                borderBottom: isActive ? `2px solid ${MA_COLORS.fairness}` : '2px solid transparent',
+                color: isActive ? MA_COLORS.fairness : FINCEPT.GRAY,
                 cursor: 'pointer',
-                fontSize: '9px',
+                fontSize: TYPOGRAPHY.TINY,
                 fontWeight: TYPOGRAPHY.BOLD,
                 fontFamily: TYPOGRAPHY.MONO,
+                letterSpacing: TYPOGRAPHY.WIDE,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
+                gap: '6px',
+                transition: 'all 0.15s',
+                textTransform: 'uppercase' as const,
               }}
             >
               <tab.icon size={12} />
               {tab.label}
             </button>
-          ))}
-        </div>
+          );
+        })}
 
-        {/* Inputs */}
-        <div style={{ flex: 1, overflow: 'auto', padding: SPACING.DEFAULT }}>
-          {renderInputs()}
-        </div>
+        <div style={{ flex: 1 }} />
 
-        {/* Run Button */}
-        <div style={{ padding: SPACING.DEFAULT, borderTop: `1px solid ${FINCEPT.BORDER}` }}>
-          <button
-            onClick={handleRun}
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: SPACING.SMALL,
-              backgroundColor: loading ? FINCEPT.PANEL_BG : FINCEPT.ORANGE,
-              border: 'none',
-              borderRadius: '2px',
-              color: loading ? FINCEPT.GRAY : FINCEPT.DARK_BG,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: TYPOGRAPHY.SMALL,
-              fontWeight: TYPOGRAPHY.BOLD,
-              fontFamily: TYPOGRAPHY.MONO,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: SPACING.SMALL,
-            }}
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
-            {loading ? 'ANALYZING...' : 'RUN ANALYSIS'}
-          </button>
-        </div>
+        {/* Run Button in header */}
+        <button
+          onClick={handleRun}
+          disabled={loading}
+          style={{
+            margin: '0 12px',
+            padding: '6px 18px',
+            backgroundColor: loading ? FINCEPT.PANEL_BG : MA_COLORS.fairness,
+            border: 'none',
+            borderRadius: '2px',
+            color: loading ? FINCEPT.GRAY : FINCEPT.DARK_BG,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            fontSize: TYPOGRAPHY.TINY,
+            fontWeight: TYPOGRAPHY.BOLD,
+            fontFamily: TYPOGRAPHY.MONO,
+            letterSpacing: TYPOGRAPHY.WIDE,
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.SMALL,
+            transition: 'all 0.15s',
+          }}
+        >
+          {loading ? <Loader2 size={12} className="animate-spin" /> : <PlayCircle size={12} />}
+          {loading ? 'ANALYZING...' : 'RUN ANALYSIS'}
+        </button>
+
+        {result && (
+          <MAExportButton
+            data={buildExportData()}
+            filename={`fairness_${analysisType}`}
+            accentColor={MA_COLORS.fairness}
+          />
+        )}
       </div>
 
-      {/* RIGHT - Results */}
-      <div style={{ flex: 1, overflow: 'auto', backgroundColor: FINCEPT.DARK_BG }}>
+      {/* Scrollable Content Area */}
+      <div style={{ flex: 1, overflow: 'auto', padding: SPACING.DEFAULT }}>
+        {/* Collapsible Input Section */}
+        <div style={{
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          borderRadius: '2px',
+          marginBottom: SPACING.LARGE,
+          overflow: 'hidden',
+        }}>
+          {/* Input Section Header (clickable to collapse) */}
+          <div
+            onClick={() => setInputsCollapsed(!inputsCollapsed)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.MEDIUM,
+              padding: '10px 14px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: inputsCollapsed ? 'none' : `1px solid ${FINCEPT.BORDER}`,
+              cursor: 'pointer',
+              userSelect: 'none' as const,
+            }}
+          >
+            <Scale size={14} color={MA_COLORS.fairness} />
+            <span style={{
+              fontSize: TYPOGRAPHY.SMALL,
+              fontFamily: TYPOGRAPHY.MONO,
+              fontWeight: TYPOGRAPHY.BOLD,
+              color: MA_COLORS.fairness,
+              letterSpacing: TYPOGRAPHY.WIDE,
+              textTransform: 'uppercase' as const,
+            }}>
+              {analysisType === 'fairness' ? 'Valuation Configuration' :
+               analysisType === 'premium' ? 'Premium Configuration' :
+               'Process Assessment Configuration'}
+            </span>
+            <div style={{ flex: 1 }} />
+            <span style={{
+              fontSize: '9px',
+              fontFamily: TYPOGRAPHY.MONO,
+              color: FINCEPT.MUTED,
+            }}>
+              {inputsCollapsed ? 'EXPAND' : 'COLLAPSE'}
+            </span>
+            {inputsCollapsed
+              ? <ChevronDown size={14} color={FINCEPT.GRAY} />
+              : <ChevronUp size={14} color={FINCEPT.GRAY} />
+            }
+          </div>
+
+          {/* Input Content */}
+          {!inputsCollapsed && (
+            <div style={{ padding: SPACING.DEFAULT }}>
+              {renderInputs()}
+            </div>
+          )}
+        </div>
+
+        {/* Results Section */}
         {renderResults()}
       </div>
     </div>

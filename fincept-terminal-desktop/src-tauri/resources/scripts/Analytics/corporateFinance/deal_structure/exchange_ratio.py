@@ -235,11 +235,21 @@ def main():
     try:
         if command == "exchange_ratio":
             if len(sys.argv) < 5:
-                raise ValueError("Acquirer price, target price, and offer price required")
+                raise ValueError("Acquirer price, target price, and offer premium required")
 
             acquirer_price = float(sys.argv[2])
             target_price = float(sys.argv[3])
-            offer_price = float(sys.argv[4])
+            offer_premium_or_price = float(sys.argv[4])
+
+            # Rust sends offer_premium as a fraction (e.g. 0.30 for 30%).
+            # Detect: if value < target_price * 0.5, it's likely a premium fraction.
+            # If value >= target_price * 0.5, it's likely an absolute price.
+            if offer_premium_or_price < target_price * 0.5:
+                # It's a premium fraction: compute offer price
+                offer_price = target_price * (1 + offer_premium_or_price)
+            else:
+                # It's already an absolute offer price
+                offer_price = offer_premium_or_price
 
             calc = ExchangeRatioCalculator(
                 acquirer_price=acquirer_price,

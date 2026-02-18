@@ -273,7 +273,7 @@ def main():
                 acq_price = float(params.get('acquirer_share_price', 50.0))
                 tgt_shares = float(params.get('target_shares_outstanding', 20_000_000))
                 tgt_price = float(params.get('target_share_price', 30.0))
-            except (json.JSONDecodeError, TypeError):
+            except (json.JSONDecodeError, TypeError, AttributeError):
                 if len(sys.argv) < 6:
                     raise ValueError("Purchase price, cash percentage, acquirer cash, and debt capacity required")
                 total = float(sys.argv[2])

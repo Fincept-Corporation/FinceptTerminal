@@ -48,6 +48,7 @@ export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, on
   const {
     data: quotes,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<QuoteData[]>({
@@ -84,7 +85,7 @@ export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, on
       title={t('widgets.globalIndices')}
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={false}
+      isLoading={(loading && !quotes) || isFetching}
       error={error?.message}
     >
       <style>{`

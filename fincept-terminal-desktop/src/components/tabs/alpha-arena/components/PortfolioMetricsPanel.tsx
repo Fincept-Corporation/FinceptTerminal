@@ -72,8 +72,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
 
   const displayValue = typeof value === 'number'
     ? isPercentage
-      ? `${(value * 100).toFixed(2)}%`
-      : value.toFixed(2)
+      ? `${((value ?? 0) * 100).toFixed(2)}%`
+      : (value ?? 0).toFixed(2)
     : value;
 
   return (
@@ -228,32 +228,30 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
           <div style={{ padding: '0 16px 12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <MetricCard
               label="Total Return"
-              value={metricsData.total_return}
+              value={`${(metricsData.total_return_pct ?? 0).toFixed(2)}%`}
               icon={<Percent size={14} />}
-              color={getReturnColor(metricsData.total_return)}
-              isPercentage
+              color={getReturnColor(metricsData.total_return_pct ?? 0)}
               tooltip="Overall portfolio return"
             />
             <MetricCard
               label="Win Rate"
-              value={metricsData.win_rate}
+              value={`${(metricsData.win_rate ?? 0).toFixed(1)}%`}
               icon={<Target size={14} />}
-              color={metricsData.win_rate > 0.5 ? FINCEPT.GREEN : FINCEPT.RED}
-              isPercentage
+              color={(metricsData.win_rate ?? 0) > 50 ? FINCEPT.GREEN : FINCEPT.RED}
               tooltip="Percentage of winning trades"
             />
             <MetricCard
               label="Profit Factor"
-              value={metricsData.profit_factor}
+              value={metricsData.profit_factor ?? 0}
               icon={<Award size={14} />}
-              color={metricsData.profit_factor > 1 ? FINCEPT.GREEN : FINCEPT.RED}
+              color={(metricsData.profit_factor ?? 0) > 1 ? FINCEPT.GREEN : FINCEPT.RED}
               tooltip="Gross profit / Gross loss"
             />
             <MetricCard
               label="Expectancy"
-              value={`$${metricsData.expectancy.toFixed(2)}`}
+              value={`$${(metricsData.expectancy ?? 0).toFixed(2)}`}
               icon={<BarChart3 size={14} />}
-              color={metricsData.expectancy > 0 ? FINCEPT.GREEN : FINCEPT.RED}
+              color={(metricsData.expectancy ?? 0) > 0 ? FINCEPT.GREEN : FINCEPT.RED}
               tooltip="Expected profit per trade"
             />
           </div>
@@ -290,33 +288,32 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
           <div style={{ padding: '0 16px 12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <MetricCard
               label="Sharpe Ratio"
-              value={metricsData.sharpe_ratio}
+              value={metricsData.sharpe_ratio ?? 0}
               icon={<BarChart3 size={14} />}
-              color={metricsData.sharpe_ratio > 1 ? FINCEPT.GREEN : metricsData.sharpe_ratio > 0 ? FINCEPT.YELLOW : FINCEPT.RED}
+              color={(metricsData.sharpe_ratio ?? 0) > 1 ? FINCEPT.GREEN : (metricsData.sharpe_ratio ?? 0) > 0 ? FINCEPT.YELLOW : FINCEPT.RED}
               tooltip="Risk-adjusted return (> 1 is good)"
             />
             <MetricCard
               label="Sortino Ratio"
-              value={metricsData.sortino_ratio}
+              value={metricsData.sortino_ratio ?? 0}
               icon={<BarChart3 size={14} />}
-              color={metricsData.sortino_ratio > 1 ? FINCEPT.GREEN : metricsData.sortino_ratio > 0 ? FINCEPT.YELLOW : FINCEPT.RED}
+              color={(metricsData.sortino_ratio ?? 0) > 1 ? FINCEPT.GREEN : (metricsData.sortino_ratio ?? 0) > 0 ? FINCEPT.YELLOW : FINCEPT.RED}
               tooltip="Downside risk-adjusted return"
             />
             <MetricCard
               label="Max Drawdown"
-              value={metricsData.max_drawdown_pct}
+              value={`${(metricsData.max_drawdown_pct ?? 0).toFixed(2)}%`}
               icon={<TrendingDown size={14} />}
               color={FINCEPT.RED}
-              isPercentage
               tooltip="Largest peak-to-trough decline"
             />
             <MetricCard
               label="Volatility"
-              value={metricsData.volatility}
+              value={metricsData.annualized_volatility ?? 0}
               icon={<AlertTriangle size={14} />}
-              color={metricsData.volatility > 0.3 ? FINCEPT.RED : FINCEPT.YELLOW}
+              color={(metricsData.annualized_volatility ?? 0) > 0.3 ? FINCEPT.RED : FINCEPT.YELLOW}
               isPercentage
-              tooltip="Standard deviation of returns"
+              tooltip="Annualized standard deviation of returns"
             />
           </div>
         )}
@@ -373,14 +370,14 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <MetricCard
                 label="Avg Win"
-                value={`$${metricsData.avg_win.toFixed(2)}`}
+                value={`$${(metricsData.average_win ?? 0).toFixed(2)}`}
                 icon={<TrendingUp size={14} />}
                 color={FINCEPT.GREEN}
                 tooltip="Average winning trade"
               />
               <MetricCard
                 label="Avg Loss"
-                value={`$${Math.abs(metricsData.avg_loss).toFixed(2)}`}
+                value={`$${Math.abs(metricsData.average_loss ?? 0).toFixed(2)}`}
                 icon={<TrendingDown size={14} />}
                 color={FINCEPT.RED}
                 tooltip="Average losing trade"
@@ -515,14 +512,14 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
                     <span style={{ fontSize: '12px', fontWeight: 500, color: FINCEPT.WHITE }}>{model}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '11px' }}>
-                    <span style={{ color: getReturnColor(modelMetrics.total_return) }}>
-                      {(modelMetrics.total_return * 100).toFixed(1)}%
+                    <span style={{ color: getReturnColor(modelMetrics.total_return_pct ?? 0) }}>
+                      {(modelMetrics.total_return_pct ?? 0).toFixed(2)}%
                     </span>
                     <span style={{ color: FINCEPT.GRAY }}>
-                      {modelMetrics.total_trades} trades
+                      {modelMetrics.total_trades ?? 0} trades
                     </span>
-                    <span style={{ color: modelMetrics.sharpe_ratio > 1 ? FINCEPT.GREEN : FINCEPT.GRAY }}>
-                      SR: {modelMetrics.sharpe_ratio.toFixed(2)}
+                    <span style={{ color: (modelMetrics.sharpe_ratio ?? 0) > 1 ? FINCEPT.GREEN : FINCEPT.GRAY }}>
+                      SR: {(modelMetrics.sharpe_ratio ?? 0).toFixed(2)}
                     </span>
                   </div>
                 </button>

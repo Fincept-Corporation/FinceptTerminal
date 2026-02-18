@@ -40,6 +40,7 @@ from alpha_arena.core.base_agent import BaseTradingAgent, LLMTradingAgent
 from alpha_arena.core.paper_trading_bridge import PaperTradingBridge, create_paper_trading_bridge
 from alpha_arena.core.market_data import MarketDataProvider, get_market_data_provider
 from alpha_arena.core.agent_manager import AgentManager, get_agent_manager
+from alpha_arena.core.guardrails import TradingGuardrails, create_trading_guardrails
 from alpha_arena.config.agent_cards import get_agent_card
 from alpha_arena.utils.logging import get_logger
 from alpha_arena.utils.uuid import generate_snapshot_id
@@ -71,6 +72,10 @@ class AlphaArenaCompetition:
         self._agents: Dict[str, BaseTradingAgent] = {}
         self._engines: Dict[str, PaperTradingBridge] = {}
         self._market_provider: Optional[MarketDataProvider] = None
+
+        # Guardrails
+        mode_str = config.mode if isinstance(config.mode, str) else config.mode.value
+        self._guardrails = create_trading_guardrails(mode_str)
 
         # Tracking
         self._decisions: List[ModelDecision] = []
@@ -110,6 +115,22 @@ class AlphaArenaCompetition:
                 self.status = CompetitionStatus.FAILED
                 return False
 
+            # Auto-assign contrasting trading styles to models without explicit styles
+            _STYLE_ROTATION = [
+                "momentum", "contrarian", "conservative", "aggressive", "scalper",
+                "swing", "technical", "fundamental", "neutral", "value",
+            ]
+            style_idx = 0
+            for model in self.config.models:
+                has_style = (
+                    (hasattr(model, 'trading_style') and model.trading_style) or
+                    (hasattr(model, 'metadata') and model.metadata and model.metadata.get('trading_style'))
+                )
+                if not has_style:
+                    model.trading_style = _STYLE_ROTATION[style_idx % len(_STYLE_ROTATION)]
+                    logger.info(f"Auto-assigned trading style '{model.trading_style}' to {model.name}")
+                    style_idx += 1
+
             # Create agents and trading engines for each model
             for model in self.config.models:
                 logger.info(f"Initializing model: {model.name} (provider: {model.provider})")
@@ -144,7 +165,15 @@ class AlphaArenaCompetition:
                 if self.config.custom_prompt:
                     custom_instructions = [self.config.custom_prompt]
 
-                # Create agent with optional trading style
+                # Extract advanced config from model if present
+                adv_config = {}
+                if hasattr(model, 'advanced_config') and model.advanced_config:
+                    if hasattr(model.advanced_config, 'model_dump'):
+                        adv_config = model.advanced_config.model_dump()
+                    elif isinstance(model.advanced_config, dict):
+                        adv_config = model.advanced_config
+
+                # Create agent with optional trading style and advanced config
                 # Temperature and system prompt come from Settings > LLM Config global settings
                 agent_capital = model.initial_capital or self.config.initial_capital
                 agent = LLMTradingAgent(
@@ -152,11 +181,12 @@ class AlphaArenaCompetition:
                     provider=provider,
                     model_id=model_id,
                     api_key=api_key,
-                    temperature=self.config.temperature,
+                    temperature=adv_config.get("temperature", self.config.temperature),
                     instructions=custom_instructions,
                     mode=self.config.mode.value if hasattr(self.config.mode, 'value') else self.config.mode,
                     trading_style=trading_style,
                     initial_capital=agent_capital,
+                    advanced_config=adv_config,
                 )
 
                 # Initialize with timeout - agent MUST succeed with real LLM
@@ -280,6 +310,23 @@ class AlphaArenaCompetition:
                     decision.competition_id = self.competition_id
                     decision.price_at_decision = market.price
                     decision.portfolio_value_before = portfolio.portfolio_value
+
+                    # Clamp quantity to affordable/available range
+                    position_qty = 0.0
+                    if isinstance(portfolio.positions, dict):
+                        pos = portfolio.positions.get(symbol)
+                        if pos and hasattr(pos, 'quantity'):
+                            position_qty = pos.quantity
+                        elif isinstance(pos, dict):
+                            position_qty = pos.get('quantity', 0.0)
+                    clamped_qty, clamp_warnings = self._guardrails.clamp_quantity(
+                        decision, portfolio.cash, market.price, position_qty
+                    )
+                    if clamp_warnings:
+                        for w in clamp_warnings:
+                            logger.warning(f"[{model_name}] Guardrail: {w}")
+                            errors_list.append(f"{model_name}: {w}")
+                    decision.quantity = clamped_qty
 
                     # Emit reasoning
                     if decision.reasoning:

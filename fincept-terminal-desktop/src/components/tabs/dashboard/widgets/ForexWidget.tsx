@@ -30,6 +30,7 @@ export const ForexWidget: React.FC<ForexWidgetProps> = ({ id, onRemove }) => {
   const {
     data: quotes,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<QuoteData[]>({
@@ -66,7 +67,7 @@ export const ForexWidget: React.FC<ForexWidgetProps> = ({ id, onRemove }) => {
       title={t('widgets.forex')}
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={false}
+      isLoading={(loading && !quotes) || isFetching}
       error={error?.message}
     >
       <style>{`

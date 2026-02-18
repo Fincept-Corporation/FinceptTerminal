@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { NewsEventsService, NewsEvent, UniqueCity, UniqueCountry, UniqueCategory } from '@/services/news/newsEventsService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { useTimezone } from '@/contexts/TimezoneContext';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useCache, cacheKey } from '@/hooks/useCache';
 import { withTimeout } from '@/services/core/apiUtils';
@@ -204,6 +205,7 @@ const GeopoliticsTabInner: React.FC = () => {
   const { t } = useTranslation('geopolitics');
   const { session } = useAuth();
   const apiKey = session?.api_key || null;
+  const { timezone, formatTime } = useTimezone();
 
   // Point #1 & #9: Single reducer for all related state
   const [state, dispatch] = useReducer(geoReducer, initialState);
@@ -548,7 +550,10 @@ const GeopoliticsTabInner: React.FC = () => {
             {events.length} {t('header.events')}
           </div>
           <div style={{ color: colors.secondary, fontSize: fontSize.tiny }}>
-            {currentTime.toISOString().substring(0, 19)} UTC
+            {formatTime(currentTime, {
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit'
+            })} {timezone.shortLabel}
           </div>
           {eventsStale && (
             <div style={{ color: colors.warning, fontSize: fontSize.tiny }}>

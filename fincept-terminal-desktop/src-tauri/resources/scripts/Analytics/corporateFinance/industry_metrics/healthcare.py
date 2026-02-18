@@ -413,21 +413,27 @@ def main():
                         company_data.pop(old_key)
 
             # Route to appropriate calculation
+            import inspect
             if segment in (HealthcareSegment.PHARMA, HealthcareSegment.BIOTECH):
                 # Provide defaults for required params
                 company_data.setdefault('probability_of_success', 0.5)
                 company_data.setdefault('development_costs_remaining', 0)
                 # Filter to only accepted kwargs
-                import inspect
                 valid_params = set(inspect.signature(analyzer.value_drug_candidate).parameters.keys())
                 filtered = {k: v for k, v in company_data.items() if k in valid_params}
                 analysis = analyzer.value_drug_candidate(**filtered)
             elif segment == HealthcareSegment.MEDICAL_DEVICES:
-                analysis = analyzer.calculate_medical_device_metrics(**company_data)
+                valid_params = set(inspect.signature(analyzer.calculate_medical_device_metrics).parameters.keys())
+                filtered = {k: v for k, v in company_data.items() if k in valid_params}
+                analysis = analyzer.calculate_medical_device_metrics(**filtered)
             elif segment == HealthcareSegment.HEALTHCARE_SERVICES:
-                analysis = analyzer.calculate_healthcare_services_metrics(**company_data)
+                valid_params = set(inspect.signature(analyzer.calculate_healthcare_services_metrics).parameters.keys())
+                filtered = {k: v for k, v in company_data.items() if k in valid_params}
+                analysis = analyzer.calculate_healthcare_services_metrics(**filtered)
             elif segment == HealthcareSegment.HEALTHTECH:
-                analysis = analyzer.calculate_healthtech_metrics(**company_data)
+                valid_params = set(inspect.signature(analyzer.calculate_healthtech_metrics).parameters.keys())
+                filtered = {k: v for k, v in company_data.items() if k in valid_params}
+                analysis = analyzer.calculate_healthtech_metrics(**filtered)
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result))

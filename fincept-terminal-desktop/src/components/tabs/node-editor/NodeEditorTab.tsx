@@ -71,7 +71,6 @@ import type { INodeTypeDescription, NodeParameterValue } from './types';
 import type { WorkflowTemplate } from './workflowTemplates';
 
 // Services
-import { pythonAgentService, AgentMetadata } from '@/services/chat/pythonAgentService';
 import { workflowService } from '@/services/core/workflowService';
 import { nodeExecutionManager } from '@/services/core/nodeExecutionManager';
 import { NodeRegistry, NodeLoader } from '@/services/nodeSystem';
@@ -80,9 +79,8 @@ import { TabFooter } from '@/components/common/TabFooter';
 export default function NodeEditorTab() {
   const { t } = useTranslation('nodeEditor');
 
-  // MCP and agent configurations
+  // MCP configurations
   const [mcpNodeConfigs, setMcpNodeConfigs] = useState<MCPNodeConfig[]>([]);
-  const [agentConfigs, setAgentConfigs] = useState<AgentMetadata[]>([]);
 
   // Workflow management hook
   const {
@@ -169,18 +167,8 @@ export default function NodeEditorTab() {
       }
     };
 
-    const loadAgents = async () => {
-      try {
-        const agents = await pythonAgentService.getAvailableAgents();
-        setAgentConfigs(agents);
-      } catch (error) {
-        console.error('[NodeEditor] Failed to load agents:', error);
-      }
-    };
-
     initializeNodeSystem();
     loadMCPNodes();
-    loadAgents();
   }, []);
 
   // Node types configuration
@@ -239,7 +227,6 @@ export default function NodeEditorTab() {
   const addNode = useCallback(
     (config: any) => {
       const isMCPNode = config.type === 'mcp-tool';
-      const isPythonAgent = config.type === 'python-agent';
       const isResultsDisplay = config.type === 'results-display';
       const isAgentMediator = config.type === 'agent-mediator';
       const isDataSource = config.type === 'data-source';
@@ -249,91 +236,19 @@ export default function NodeEditorTab() {
 
       const newNode: Node = {
         id: nodeId,
-        type: isPythonAgent
-          ? 'python-agent'
-          : isMCPNode
-            ? 'mcp-tool'
-            : isResultsDisplay
-              ? 'results-display'
-              : isAgentMediator
-                ? 'agent-mediator'
-                : isDataSource
-                  ? 'data-source'
-                  : isTechnicalIndicator
-                    ? 'technical-indicator'
-                    : 'custom',
+        type: isMCPNode
+          ? 'mcp-tool'
+          : isResultsDisplay
+            ? 'results-display'
+            : isAgentMediator
+              ? 'agent-mediator'
+              : isDataSource
+                ? 'data-source'
+                : isTechnicalIndicator
+                  ? 'technical-indicator'
+                  : 'custom',
         position: { x: Math.random() * 400 + 100, y: Math.random() * 300 + 100 },
-        data: isPythonAgent
-          ? {
-              agentType: config.id,
-              agentCategory: config.category,
-              label: config.name,
-              icon: config.icon,
-              color: config.color,
-              parameters: config.parameters?.reduce((acc: any, param: any) => {
-                if (param.default_value !== null && param.default_value !== undefined) {
-                  acc[param.name] = param.default_value;
-                }
-                return acc;
-              }, {}) || {},
-              selectedLLM: 'active',
-              status: 'idle',
-              onExecute: async (nodeIdParam: string) => {
-                try {
-                  setNodes((nds) =>
-                    nds.map((n) =>
-                      n.id === nodeIdParam ? { ...n, data: { ...n.data, status: 'running' } } : n
-                    )
-                  );
-
-                  const result = await pythonAgentService.executeAgent(
-                    config.id,
-                    config.parameters?.reduce((acc: any, param: any) => {
-                      if (param.default_value !== null && param.default_value !== undefined) {
-                        acc[param.name] = param.default_value;
-                      }
-                      return acc;
-                    }, {}) || {},
-                    {}
-                  );
-
-                  setNodes((nds) =>
-                    nds.map((n) =>
-                      n.id === nodeIdParam
-                        ? {
-                            ...n,
-                            data: {
-                              ...n.data,
-                              status: result.success ? 'completed' : 'error',
-                              result: result.success ? result.data : undefined,
-                              error: result.success ? undefined : result.error,
-                            },
-                          }
-                        : n
-                    )
-                  );
-                } catch (error: any) {
-                  setNodes((nds) =>
-                    nds.map((n) =>
-                      n.id === nodeIdParam
-                        ? { ...n, data: { ...n.data, status: 'error', error: error.message } }
-                        : n
-                    )
-                  );
-                }
-              },
-              onParameterChange: () => {},
-              onLLMChange: (provider: string) => {
-                setNodes((nds) =>
-                  nds.map((n) =>
-                    n.id === nodeId
-                      ? { ...n, data: { ...n.data, selectedLLM: provider } }
-                      : n
-                  )
-                );
-              },
-            }
-          : isMCPNode
+        data: isMCPNode
             ? {
                 serverId: config.serverId,
                 toolName: config.toolName,
@@ -1040,7 +955,6 @@ export default function NodeEditorTab() {
             isCollapsed={isPaletteCollapsed}
             onToggleCollapse={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
             mcpNodeConfigs={mcpNodeConfigs}
-            agentConfigs={agentConfigs}
           />
 
           {/* React Flow Canvas */}

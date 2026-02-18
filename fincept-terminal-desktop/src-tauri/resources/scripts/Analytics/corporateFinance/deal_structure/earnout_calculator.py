@@ -288,18 +288,29 @@ def main():
             # Basic earnout calculation
             base_price = earnout_params.get('base_price', 0)
             tranches_data = earnout_params.get('tranches', [])
-            
+
             tranches = []
             for t in tranches_data:
+                # Handle metric: accept string or EarnoutMetric enum value
+                metric_raw = t.get('metric', 'revenue')
+                try:
+                    metric = EarnoutMetric(metric_raw)
+                except (ValueError, KeyError):
+                    metric = EarnoutMetric.CUSTOM
+
                 tranches.append(EarnoutTranche(
-                    metric=t.get('metric', ''),
-                    target_value=t.get('target_value', 0),
+                    metric=metric,
+                    threshold=t.get('threshold', t.get('target_value', 0)),
                     payment=t.get('payment', 0),
-                    measurement_period_years=t.get('measurement_period_years', 1),
+                    measurement_period_years=t.get('measurement_period_years', t.get('measurement_period', 1)),
                     description=t.get('description', '')
                 ))
 
-            probabilities = earnout_params.get('probabilities', [1.0] * len(tranches))
+            # Handle probabilities: default to equal weighting that sums to 1.0
+            probabilities = earnout_params.get('probabilities', None)
+            if probabilities is None or len(probabilities) != len(tranches):
+                n = len(tranches)
+                probabilities = [1.0 / n] * n if n > 0 else []
 
             analysis = calculator.calculate_simple_earnout(base_price, tranches, probabilities)
 

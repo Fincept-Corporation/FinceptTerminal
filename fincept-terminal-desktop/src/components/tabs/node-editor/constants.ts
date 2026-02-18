@@ -95,7 +95,6 @@ export const CATEGORY_CONFIG: Record<string, CategoryConfig> = {
   'Triggers': { icon: React.createElement(Zap, { size: 14 }), color: '#a855f7' },
   'Trading': { icon: React.createElement(TrendingUp, { size: 14 }), color: '#14b8a6' },
   'MCP Tools': { icon: React.createElement(Zap, { size: 14 }), color: '#ea580c' },
-  'Python Agents': { icon: React.createElement(Brain, { size: 14 }), color: '#22c55e' },
   // Lowercase variants for registry nodes
   'agents': { icon: React.createElement(Brain, { size: 14 }), color: '#8b5cf6' },
   'marketData': { icon: React.createElement(Activity, { size: 14 }), color: '#22c55e' },

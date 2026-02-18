@@ -310,15 +310,6 @@ export const COMMANDS: Command[] = [
     keywords: ['data', 'sources', 'connections', 'api']
   },
   {
-    id: 'datamap',
-    name: 'Data Mapping',
-    description: 'Data transformation',
-    aliases: ['datamap', 'mapping', 'transform'],
-    category: 'data',
-    action: 'datamapping',
-    keywords: ['data', 'mapping', 'transformation', 'etl']
-  },
-  {
     id: 'report',
     name: 'Report Builder',
     description: 'Create reports',
@@ -446,15 +437,6 @@ export const COMMANDS: Command[] = [
     action: 'market-sim',
     keywords: ['market', 'simulation', 'modeling', 'sim', 'scenario']
   },
-  {
-    id: 'strat',
-    name: 'Strategy Engine',
-    description: 'Trading strategy development and management',
-    aliases: ['strat', 'strategies', 'strategy', 'engine'],
-    category: 'tool',
-    action: 'strategies',
-    keywords: ['strategy', 'strategies', 'engine', 'trading', 'algo', 'algorithm']
-  }
 ];
 
 // Search and filter commands

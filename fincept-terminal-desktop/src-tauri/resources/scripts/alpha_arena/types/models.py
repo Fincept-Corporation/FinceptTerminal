@@ -61,6 +61,38 @@ class AgentConfig(BaseModel):
         use_enum_values = True
 
 
+class AgentAdvancedConfig(BaseModel):
+    """Advanced agent configuration for Agno features and trading controls."""
+
+    # LLM params
+    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
+    max_tokens: int = Field(2000, ge=100, le=8000, description="Max response tokens")
+
+    # Agno feature toggles
+    enable_memory: bool = Field(False, description="Enable trade history memory")
+    enable_reasoning: bool = Field(False, description="Enable step-by-step reasoning")
+    enable_tools: bool = Field(False, description="Enable Agno tools (tech indicators)")
+    enable_knowledge: bool = Field(False, description="Enable knowledge base")
+    enable_guardrails: bool = Field(True, description="Enable position sizing guardrails")
+    enable_features_pipeline: bool = Field(True, description="Enable technical features pipeline")
+    enable_sentiment: bool = Field(False, description="Enable sentiment analysis")
+    enable_research: bool = Field(False, description="Enable SEC research")
+
+    # Guardrail params
+    max_position_pct: float = Field(0.5, ge=0.1, le=1.0, description="Max position as % of portfolio")
+    max_single_trade_pct: float = Field(0.25, ge=0.05, le=0.5, description="Max single trade as % of portfolio")
+    stop_loss_pct: Optional[float] = Field(None, ge=0.01, le=0.5, description="Stop loss percentage")
+    take_profit_pct: Optional[float] = Field(None, ge=0.01, le=1.0, description="Take profit percentage")
+
+    # Reasoning params
+    reasoning_min_steps: int = Field(1, ge=1, le=5, description="Min reasoning steps")
+    reasoning_max_steps: int = Field(10, ge=3, le=15, description="Max reasoning steps")
+
+    # Custom prompt
+    custom_system_prompt: str = Field("", description="Custom system prompt override")
+    custom_instructions: List[str] = Field(default_factory=list, description="Custom instructions")
+
+
 class CompetitionModel(BaseModel):
     """Model configuration within a competition."""
 
@@ -78,6 +110,12 @@ class CompetitionModel(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(
         default_factory=dict,
         description="Additional metadata including style configuration"
+    )
+
+    # Advanced agent config (Agno features, guardrails, reasoning, etc.)
+    advanced_config: Optional[AgentAdvancedConfig] = Field(
+        None,
+        description="Advanced agent configuration for Agno features"
     )
 
     # Runtime state (populated during competition)

@@ -51,6 +51,13 @@ class TooltipPaneView implements IPrimitivePaneView {
 
         target.useBitmapCoordinateSpace((scope: any) => {
           const ctx = scope.context;
+
+          // Scale to logical coordinates — bitmap space is multiplied by device pixel ratio
+          const scaleX = scope.horizontalPixelRatio || 1;
+          const scaleY = scope.verticalPixelRatio || 1;
+          ctx.save();
+          ctx.scale(scaleX, scaleY);
+
           const x = this._data.x + (this._options.offsetX || 10);
           const y = this._data.y + (this._options.offsetY || 10);
 
@@ -108,6 +115,8 @@ class TooltipPaneView implements IPrimitivePaneView {
           lines.forEach((line, index) => {
             ctx.fillText(line, x + padding, y + padding + (index + 1) * lineHeight - 4);
           });
+
+          ctx.restore();
         });
       }
     };

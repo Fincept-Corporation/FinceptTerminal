@@ -3,6 +3,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ForumColors, TrendingTopic } from '../types';
+import { useTimezone } from '@/contexts/TimezoneContext';
 
 interface HeaderProps {
   colors: ForumColors;
@@ -26,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
   onRefresh
 }) => {
   const { t } = useTranslation('forum');
+  const { timezone, formatTime } = useTimezone();
 
   return (
     <div style={{
@@ -44,7 +46,12 @@ export const Header: React.FC<HeaderProps> = ({
           <span style={{ color: colors.WHITE }}>|</span>
           <span style={{ color: colors.CYAN }}>POSTS TODAY: {postsToday.toLocaleString()}</span>
           <span style={{ color: colors.WHITE }}>|</span>
-          <span style={{ color: colors.WHITE }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+          <span style={{ color: colors.WHITE }}>
+            {formatTime(currentTime, {
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit'
+            })} {timezone.shortLabel}
+          </span>
         </div>
         <button
           onClick={onRefresh}

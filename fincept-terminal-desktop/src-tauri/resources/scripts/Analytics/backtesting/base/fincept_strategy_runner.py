@@ -20,7 +20,7 @@ sys.path.insert(0, str(STRATEGIES_DIR))
 # Import Fincept Engine
 from fincept_engine import QCAlgorithm, Symbol, TradeBar, Slice
 from fincept_engine.enums import Resolution, SecurityType
-from strategies._registry import STRATEGY_REGISTRY
+from _registry import STRATEGY_REGISTRY
 
 
 class FinceptStrategyRunner:

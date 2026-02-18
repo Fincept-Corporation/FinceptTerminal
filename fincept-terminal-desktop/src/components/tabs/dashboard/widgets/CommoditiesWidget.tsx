@@ -30,6 +30,7 @@ export const CommoditiesWidget: React.FC<CommoditiesWidgetProps> = ({ id, onRemo
   const {
     data: quotes,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<QuoteData[]>({
@@ -66,7 +67,7 @@ export const CommoditiesWidget: React.FC<CommoditiesWidgetProps> = ({ id, onRemo
       title={t('widgets.commodities')}
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={false}
+      isLoading={(loading && !quotes) || isFetching}
       error={error?.message}
     >
       <style>{`

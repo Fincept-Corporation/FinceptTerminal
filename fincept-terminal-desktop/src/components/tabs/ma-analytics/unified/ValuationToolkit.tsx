@@ -2,13 +2,18 @@
  * Valuation Toolkit - Unified DCF, LBO, Trading Comps, Precedent Transactions
  *
  * Complete valuation toolkit with full LBO modeling, debt schedules, and sensitivity analysis
+ * Bloomberg-grade UI/UX with horizontal method selector, dense input grids, and rich chart visualizations
  */
 
 import React, { useState } from 'react';
-import { Calculator, TrendingUp, Building2, BarChart3, PlayCircle, Layers, Grid3X3, DollarSign, Calendar, Plus, Minus } from 'lucide-react';
+import { Calculator, TrendingUp, Building2, BarChart3, PlayCircle, Layers, Grid3X3, DollarSign, Calendar, Plus, Minus, ChevronDown, ChevronUp } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, AreaChart, Area, ScatterChart, Scatter, ReferenceLine, Legend } from 'recharts';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
 import { MAAnalyticsService, LBOInputs } from '@/services/maAnalyticsService';
 import { showSuccess, showError, showWarning } from '@/utils/notifications';
+import { MAMetricCard, MAChartPanel, MASectionHeader, MAEmptyState, MADataTable, MAExportButton } from '../components';
+import { MASensitivityHeatmap } from '../components';
+import { MA_COLORS, CHART_STYLE, CHART_PALETTE, formatDealValue } from '../constants';
 
 type ValuationMethod = 'dcf' | 'lbo' | 'lbo_model' | 'debt_schedule' | 'lbo_sensitivity' | 'comps' | 'precedent';
 type LBOSubTab = 'returns' | 'full_model' | 'debt_schedule' | 'sensitivity';
@@ -18,6 +23,7 @@ export const ValuationToolkit: React.FC = () => {
   const [lboSubTab, setLboSubTab] = useState<LBOSubTab>('returns');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [inputsCollapsed, setInputsCollapsed] = useState(false);
 
   // DCF Inputs
   const [dcfInputs, setDcfInputs] = useState({
@@ -40,6 +46,7 @@ export const ValuationToolkit: React.FC = () => {
   // Full LBO Model Inputs
   const [lboModelInputs, setLboModelInputs] = useState<LBOInputs>({
     company_data: {
+      company_name: 'Target',
       revenue: 500,
       ebitda: 100,
       ebit: 80,
@@ -52,6 +59,12 @@ export const ValuationToolkit: React.FC = () => {
       exit_multiple: 9.0,
       debt_percent: 0.60,
       equity_percent: 0.40,
+      revenue_growth: 0.05,
+      ebitda_margin: 0.20,
+      capex_pct_revenue: 0.03,
+      nwc_pct_revenue: 0.05,
+      tax_rate: 0.21,
+      hurdle_irr: 0.20,
     },
     projection_years: 5,
   });
@@ -352,14 +365,27 @@ export const ValuationToolkit: React.FC = () => {
     placeholder?: string
   ) => (
     <div>
-      <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>{label}</label>
+      <label style={{
+        fontSize: '9px',
+        fontFamily: TYPOGRAPHY.MONO,
+        fontWeight: TYPOGRAPHY.BOLD,
+        color: FINCEPT.MUTED,
+        letterSpacing: '0.5px',
+        textTransform: 'uppercase' as const,
+        display: 'block',
+        marginBottom: '3px',
+      }}>{label}</label>
       <input
         type="text"
         inputMode="decimal"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        style={COMMON_STYLES.inputField}
+        style={{
+          ...COMMON_STYLES.inputField,
+          padding: '6px 8px',
+          fontSize: '10px',
+        }}
       />
     </div>
   );
@@ -378,637 +404,1140 @@ export const ValuationToolkit: React.FC = () => {
     });
   };
 
+  // Method definitions for the top bar
+  const methods = [
+    { id: 'dcf' as const, label: 'DCF MODEL', icon: Calculator },
+    { id: 'lbo' as const, label: 'LBO ANALYSIS', icon: Building2 },
+    { id: 'comps' as const, label: 'TRADING COMPS', icon: BarChart3 },
+    { id: 'precedent' as const, label: 'PRECEDENT TXNS', icon: Layers },
+  ];
+
+  const lboSubTabs = [
+    { id: 'returns' as const, label: 'RETURNS', icon: TrendingUp },
+    { id: 'full_model' as const, label: 'FULL MODEL', icon: Layers },
+    { id: 'debt_schedule' as const, label: 'DEBT SCHEDULE', icon: Calendar },
+    { id: 'sensitivity' as const, label: 'SENSITIVITY', icon: Grid3X3 },
+  ];
+
+  const tooltipStyle = CHART_STYLE.tooltip;
+  const axisStyle = CHART_STYLE.axis;
+  const gridStyle = CHART_STYLE.grid;
+
+  // Get the current method title for the input section header
+  const getInputSectionTitle = (): string => {
+    if (method === 'dcf') return 'DCF INPUTS';
+    if (method === 'lbo') {
+      if (lboSubTab === 'returns') return 'LBO RETURNS INPUTS ($M)';
+      if (lboSubTab === 'full_model') return 'LBO MODEL INPUTS';
+      if (lboSubTab === 'debt_schedule') return 'DEBT SCHEDULE INPUTS';
+      if (lboSubTab === 'sensitivity') return 'SENSITIVITY INPUTS';
+    }
+    if (method === 'comps') return 'TRADING COMPS INPUTS';
+    if (method === 'precedent') return 'PRECEDENT TRANSACTIONS INPUTS';
+    return 'INPUTS';
+  };
+
+  // ==================== RENDER ====================
+
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      {/* LEFT - Method Selector & Inputs */}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* TOP BAR - Method Selector */}
       <div style={{
-        width: '400px',
-        backgroundColor: FINCEPT.PANEL_BG,
-        borderRight: `1px solid ${FINCEPT.BORDER}`,
         display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
+        gap: '2px',
+        padding: '8px 12px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        flexShrink: 0,
       }}>
-        {/* Method Selector */}
-        <div style={{
-          padding: SPACING.DEFAULT,
-          backgroundColor: FINCEPT.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        }}>
-          <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>
-            VALUATION METHOD
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.TINY }}>
-            {[
-              { id: 'dcf', label: 'DCF MODEL', icon: Calculator },
-              { id: 'lbo', label: 'LBO ANALYSIS', icon: Building2 },
-              { id: 'comps', label: 'TRADING COMPS', icon: BarChart3 },
-              { id: 'precedent', label: 'PRECEDENT TXNS', icon: Layers },
-            ].map((m) => {
-              const Icon = m.icon;
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => { setMethod(m.id as ValuationMethod); setResult(null); }}
-                  style={{
-                    ...COMMON_STYLES.tabButton(method === m.id || (method === 'lbo' && m.id === 'lbo')),
-                    width: '100%',
-                    justifyContent: 'flex-start',
-                  }}
-                >
-                  <Icon size={12} style={{ marginRight: SPACING.SMALL }} />
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* LBO Sub-tabs */}
-          {method === 'lbo' && (
-            <div style={{ marginTop: SPACING.DEFAULT }}>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>
-                LBO ANALYSIS TYPE
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.TINY }}>
-                {[
-                  { id: 'returns', label: 'Returns', icon: TrendingUp },
-                  { id: 'full_model', label: 'Full Model', icon: Layers },
-                  { id: 'debt_schedule', label: 'Debt Sched', icon: Calendar },
-                  { id: 'sensitivity', label: 'Sensitivity', icon: Grid3X3 },
-                ].map((t) => {
-                  const Icon = t.icon;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => { setLboSubTab(t.id as LBOSubTab); setResult(null); }}
-                      style={{
-                        ...COMMON_STYLES.tabButton(lboSubTab === t.id),
-                        padding: '6px 8px',
-                        fontSize: TYPOGRAPHY.TINY,
-                      }}
-                    >
-                      <Icon size={10} style={{ marginRight: '4px' }} />
-                      {t.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Input Forms */}
-        <div style={{ flex: 1, overflow: 'auto', padding: SPACING.DEFAULT }}>
-          {method === 'dcf' && (
-            <>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>DCF INPUTS</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-                {renderInputField('EBIT ($M)', dcfInputs.ebit, (v) => setDcfInputs({ ...dcfInputs, ebit: parseFloat(v) || 0 }))}
-                {renderInputField('Tax Rate', dcfInputs.taxRate, (v) => setDcfInputs({ ...dcfInputs, taxRate: parseFloat(v) || 0 }))}
-                {renderInputField('Risk-Free Rate', dcfInputs.riskFreeRate, (v) => setDcfInputs({ ...dcfInputs, riskFreeRate: parseFloat(v) || 0 }))}
-                {renderInputField('Beta', dcfInputs.beta, (v) => setDcfInputs({ ...dcfInputs, beta: parseFloat(v) || 0 }))}
-                {renderInputField('Terminal Growth', dcfInputs.terminalGrowth, (v) => setDcfInputs({ ...dcfInputs, terminalGrowth: parseFloat(v) || 0 }))}
-                {renderInputField('Shares Outstanding (M)', dcfInputs.shares, (v) => setDcfInputs({ ...dcfInputs, shares: parseFloat(v) || 0 }))}
-              </div>
-            </>
-          )}
-
-          {method === 'lbo' && lboSubTab === 'returns' && (
-            <>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>LBO RETURNS ($M)</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-                {renderInputField('Entry Valuation', lboInputs.entryValuation, (v) => setLboInputs({ ...lboInputs, entryValuation: parseFloat(v) || 0 }))}
-                {renderInputField('Exit Valuation', lboInputs.exitValuation, (v) => setLboInputs({ ...lboInputs, exitValuation: parseFloat(v) || 0 }))}
-                {renderInputField('Equity Invested', lboInputs.equityInvested, (v) => setLboInputs({ ...lboInputs, equityInvested: parseFloat(v) || 0 }))}
-                {renderInputField('Holding Period (Years)', lboInputs.holdingPeriod, (v) => setLboInputs({ ...lboInputs, holdingPeriod: parseInt(v) || 0 }))}
-              </div>
-            </>
-          )}
-
-          {method === 'lbo' && lboSubTab === 'full_model' && (
-            <>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>COMPANY DATA ($M)</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-                {renderInputField('Revenue', lboModelInputs.company_data.revenue, (v) => setLboModelInputs({
-                  ...lboModelInputs,
-                  company_data: { ...lboModelInputs.company_data, revenue: parseFloat(v) || 0 }
-                }))}
-                {renderInputField('EBITDA', lboModelInputs.company_data.ebitda, (v) => setLboModelInputs({
-                  ...lboModelInputs,
-                  company_data: { ...lboModelInputs.company_data, ebitda: parseFloat(v) || 0 }
-                }))}
-                {renderInputField('EBIT', lboModelInputs.company_data.ebit, (v) => setLboModelInputs({
-                  ...lboModelInputs,
-                  company_data: { ...lboModelInputs.company_data, ebit: parseFloat(v) || 0 }
-                }))}
-                {renderInputField('CapEx', lboModelInputs.company_data.capex, (v) => setLboModelInputs({
-                  ...lboModelInputs,
-                  company_data: { ...lboModelInputs.company_data, capex: parseFloat(v) || 0 }
-                }))}
-                {renderInputField('Net Working Capital', lboModelInputs.company_data.nwc, (v) => setLboModelInputs({
-                  ...lboModelInputs,
-                  company_data: { ...lboModelInputs.company_data, nwc: parseFloat(v) || 0 }
-                }))}
-              </div>
-
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>TRANSACTION ASSUMPTIONS</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-                {renderInputField('Purchase Price ($M)', lboModelInputs.transaction_assumptions.purchase_price, (v) => setLboModelInputs({
-                  ...lboModelInputs,
-                  transaction_assumptions: { ...lboModelInputs.transaction_assumptions, purchase_price: parseFloat(v) || 0 }
-                }))}
-                {renderInputField('Entry Multiple', lboModelInputs.transaction_assumptions.entry_multiple, (v) => setLboModelInputs({
-                  ...lboModelInputs,
-                  transaction_assumptions: { ...lboModelInputs.transaction_assumptions, entry_multiple: parseFloat(v) || 0 }
-                }))}
-                {renderInputField('Exit Multiple', lboModelInputs.transaction_assumptions.exit_multiple, (v) => setLboModelInputs({
-                  ...lboModelInputs,
-                  transaction_assumptions: { ...lboModelInputs.transaction_assumptions, exit_multiple: parseFloat(v) || 0 }
-                }))}
-                {renderInputField('Debt %', lboModelInputs.transaction_assumptions.debt_percent, (v) => setLboModelInputs({
-                  ...lboModelInputs,
-                  transaction_assumptions: { ...lboModelInputs.transaction_assumptions, debt_percent: parseFloat(v) || 0 }
-                }))}
-                {renderInputField('Equity %', lboModelInputs.transaction_assumptions.equity_percent, (v) => setLboModelInputs({
-                  ...lboModelInputs,
-                  transaction_assumptions: { ...lboModelInputs.transaction_assumptions, equity_percent: parseFloat(v) || 0 }
-                }))}
-              </div>
-
-              {renderInputField('Projection Years', lboModelInputs.projection_years, (v) => setLboModelInputs({
-                ...lboModelInputs,
-                projection_years: parseInt(v) || 5
-              }))}
-            </>
-          )}
-
-          {method === 'lbo' && lboSubTab === 'debt_schedule' && (
-            <>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>SENIOR DEBT</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-                {renderInputField('Amount ($M)', debtScheduleInputs.seniorDebt, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, seniorDebt: parseFloat(v) || 0 }))}
-                {renderInputField('Interest Rate', debtScheduleInputs.seniorRate, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, seniorRate: parseFloat(v) || 0 }))}
-                {renderInputField('Term (Years)', debtScheduleInputs.seniorTerm, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, seniorTerm: parseInt(v) || 0 }))}
-              </div>
-
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>SUBORDINATED DEBT</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-                {renderInputField('Amount ($M)', debtScheduleInputs.subDebt, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, subDebt: parseFloat(v) || 0 }))}
-                {renderInputField('Interest Rate', debtScheduleInputs.subRate, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, subRate: parseFloat(v) || 0 }))}
-                {renderInputField('Term (Years)', debtScheduleInputs.subTerm, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, subTerm: parseInt(v) || 0 }))}
-              </div>
-
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>REVOLVER</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-                {renderInputField('Amount ($M)', debtScheduleInputs.revolver, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, revolver: parseFloat(v) || 0 }))}
-                {renderInputField('Interest Rate', debtScheduleInputs.revolverRate, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, revolverRate: parseFloat(v) || 0 }))}
-              </div>
-
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>CASH FLOWS ($M, comma-separated)</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-                {renderInputField('EBITDA by Year', debtScheduleInputs.ebitdaYears, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, ebitdaYears: v }), '100,110,121,...')}
-                {renderInputField('CapEx by Year', debtScheduleInputs.capexYears, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, capexYears: v }), '25,27,30,...')}
-              </div>
-
-              {renderInputField('Cash Sweep %', debtScheduleInputs.sweepPct, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, sweepPct: parseFloat(v) || 0 }))}
-            </>
-          )}
-
-          {method === 'lbo' && lboSubTab === 'sensitivity' && (
-            <>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>BASE CASE</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-                {renderInputField('Base Revenue ($M)', sensitivityInputs.baseRevenue, (v) => setSensitivityInputs({ ...sensitivityInputs, baseRevenue: parseFloat(v) || 0 }))}
-                {renderInputField('EBITDA Margin', sensitivityInputs.baseEbitdaMargin, (v) => setSensitivityInputs({ ...sensitivityInputs, baseEbitdaMargin: parseFloat(v) || 0 }))}
-                {renderInputField('Exit Multiple', sensitivityInputs.baseExitMultiple, (v) => setSensitivityInputs({ ...sensitivityInputs, baseExitMultiple: parseFloat(v) || 0 }))}
-                {renderInputField('Debt %', sensitivityInputs.baseDebtPct, (v) => setSensitivityInputs({ ...sensitivityInputs, baseDebtPct: parseFloat(v) || 0 }))}
-                {renderInputField('Holding Period', sensitivityInputs.holdingPeriod, (v) => setSensitivityInputs({ ...sensitivityInputs, holdingPeriod: parseInt(v) || 0 }))}
-              </div>
-
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>SENSITIVITY SCENARIOS</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-                {renderInputField('Revenue Growth Rates (comma-sep)', sensitivityInputs.revenueGrowthScenarios, (v) => setSensitivityInputs({ ...sensitivityInputs, revenueGrowthScenarios: v }), '0.02,0.05,0.08,...')}
-                {renderInputField('Exit Multiples (comma-sep)', sensitivityInputs.exitMultipleScenarios, (v) => setSensitivityInputs({ ...sensitivityInputs, exitMultipleScenarios: v }), '7.0,8.0,9.0,...')}
-              </div>
-            </>
-          )}
-
-          {method === 'comps' && (
-            <>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>TRADING COMPS</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-                {renderInputField('Target Ticker', compsInputs.targetTicker, (v) => setCompsInputs({ ...compsInputs, targetTicker: v.toUpperCase() }), 'AAPL')}
-                {renderInputField('Comparable Tickers (comma-sep)', compsInputs.compTickers, (v) => setCompsInputs({ ...compsInputs, compTickers: v.toUpperCase() }), 'MSFT,GOOGL,META')}
-              </div>
-            </>
-          )}
-
-          {method === 'precedent' && (
-            <>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>TARGET COMPANY ($M)</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-                {renderInputField('Target Revenue', precedentInputs.targetRevenue, (v) => setPrecedentInputs({ ...precedentInputs, targetRevenue: parseFloat(v) || 0 }))}
-                {renderInputField('Target EBITDA', precedentInputs.targetEbitda, (v) => setPrecedentInputs({ ...precedentInputs, targetEbitda: parseFloat(v) || 0 }))}
-              </div>
-
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>PRECEDENT TRANSACTIONS ($M)</span>
-                <button
-                  onClick={addPrecedentTransaction}
-                  style={{ ...COMMON_STYLES.tabButton(false), padding: '4px 8px' }}
-                >
-                  <Plus size={12} />
-                </button>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-                {precedentInputs.transactions.map((txn, idx) => (
-                  <div key={idx} style={{
-                    backgroundColor: FINCEPT.HEADER_BG,
-                    padding: SPACING.SMALL,
-                    borderRadius: '2px',
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.TINY }}>
-                      <input
-                        type="text"
-                        value={txn.name}
-                        onChange={(e) => {
-                          const updated = [...precedentInputs.transactions];
-                          updated[idx].name = e.target.value;
-                          setPrecedentInputs({ ...precedentInputs, transactions: updated });
-                        }}
-                        style={{ ...COMMON_STYLES.inputField, width: '120px', marginBottom: 0 }}
-                      />
-                      <button
-                        onClick={() => removePrecedentTransaction(idx)}
-                        style={{ ...COMMON_STYLES.tabButton(false), padding: '4px', color: FINCEPT.RED }}
-                      >
-                        <Minus size={12} />
-                      </button>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.TINY }}>
-                      <div>
-                        <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>EV</label>
-                        <input
-                          type="text"
-                          value={txn.ev}
-                          onChange={(e) => {
-                            const updated = [...precedentInputs.transactions];
-                            updated[idx].ev = parseFloat(e.target.value) || 0;
-                            setPrecedentInputs({ ...precedentInputs, transactions: updated });
-                          }}
-                          style={{ ...COMMON_STYLES.inputField, padding: '4px' }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Rev</label>
-                        <input
-                          type="text"
-                          value={txn.revenue}
-                          onChange={(e) => {
-                            const updated = [...precedentInputs.transactions];
-                            updated[idx].revenue = parseFloat(e.target.value) || 0;
-                            setPrecedentInputs({ ...precedentInputs, transactions: updated });
-                          }}
-                          style={{ ...COMMON_STYLES.inputField, padding: '4px' }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>EBITDA</label>
-                        <input
-                          type="text"
-                          value={txn.ebitda}
-                          onChange={(e) => {
-                            const updated = [...precedentInputs.transactions];
-                            updated[idx].ebitda = parseFloat(e.target.value) || 0;
-                            setPrecedentInputs({ ...precedentInputs, transactions: updated });
-                          }}
-                          style={{ ...COMMON_STYLES.inputField, padding: '4px' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Run Button */}
-        <div style={{ padding: SPACING.DEFAULT, borderTop: `1px solid ${FINCEPT.BORDER}` }}>
-          <button
-            onClick={handleRun}
-            disabled={loading}
-            style={{ ...COMMON_STYLES.buttonPrimary, width: '100%' }}
-          >
-            <PlayCircle size={14} style={{ marginRight: SPACING.SMALL }} />
-            {loading ? 'CALCULATING...' : 'RUN VALUATION'}
-          </button>
-        </div>
+        {methods.map((m) => {
+          const Icon = m.icon;
+          const isActive = method === m.id || (method === 'lbo' && m.id === 'lbo');
+          return (
+            <button
+              key={m.id}
+              onClick={() => { setMethod(m.id as ValuationMethod); setResult(null); }}
+              style={{
+                padding: '6px 14px',
+                backgroundColor: isActive ? `${MA_COLORS.valuation}15` : 'transparent',
+                border: 'none',
+                borderBottom: isActive ? `2px solid ${MA_COLORS.valuation}` : '2px solid transparent',
+                color: isActive ? MA_COLORS.valuation : FINCEPT.GRAY,
+                fontSize: '10px',
+                fontFamily: TYPOGRAPHY.MONO,
+                fontWeight: isActive ? 700 : 400,
+                letterSpacing: '0.5px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.15s',
+                textTransform: 'uppercase' as const,
+              }}
+            >
+              <Icon size={12} />
+              {m.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* RIGHT - Results */}
-      <div style={{
-        flex: 1,
-        backgroundColor: FINCEPT.DARK_BG,
-        padding: SPACING.LARGE,
-        overflow: 'auto',
-      }}>
+      {/* LBO Sub-tabs (only when LBO is active) */}
+      {method === 'lbo' && (
+        <div style={{
+          display: 'flex',
+          gap: '2px',
+          padding: '4px 12px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+          flexShrink: 0,
+        }}>
+          {lboSubTabs.map((t) => {
+            const Icon = t.icon;
+            const isActive = lboSubTab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => { setLboSubTab(t.id); setResult(null); }}
+                style={{
+                  padding: '4px 10px',
+                  backgroundColor: isActive ? `${FINCEPT.CYAN}15` : 'transparent',
+                  border: 'none',
+                  borderBottom: isActive ? `2px solid ${FINCEPT.CYAN}` : '2px solid transparent',
+                  color: isActive ? FINCEPT.CYAN : FINCEPT.MUTED,
+                  fontSize: '9px',
+                  fontFamily: TYPOGRAPHY.MONO,
+                  fontWeight: isActive ? 700 : 400,
+                  letterSpacing: '0.5px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s',
+                  textTransform: 'uppercase' as const,
+                }}
+              >
+                <Icon size={10} />
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* SCROLLABLE CONTENT: Inputs + Results */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}>
+        {/* Collapsible Input Section */}
+        <div style={{
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          borderRadius: '2px',
+          marginBottom: '16px',
+          overflow: 'hidden',
+        }}>
+          {/* Input Section Header (collapsible) */}
+          <div
+            onClick={() => setInputsCollapsed(!inputsCollapsed)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: inputsCollapsed ? 'none' : `1px solid ${FINCEPT.BORDER}`,
+              cursor: 'pointer',
+              userSelect: 'none' as const,
+            }}
+          >
+            <Calculator size={12} color={MA_COLORS.valuation} />
+            <span style={{
+              fontSize: '10px',
+              fontFamily: TYPOGRAPHY.MONO,
+              fontWeight: TYPOGRAPHY.BOLD,
+              color: MA_COLORS.valuation,
+              letterSpacing: '0.5px',
+              textTransform: 'uppercase' as const,
+            }}>
+              {getInputSectionTitle()}
+            </span>
+            <div style={{ flex: 1 }} />
+            {/* Run button in header */}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleRun(); }}
+              disabled={loading}
+              style={{
+                padding: '4px 14px',
+                backgroundColor: MA_COLORS.valuation,
+                color: FINCEPT.DARK_BG,
+                border: 'none',
+                borderRadius: '2px',
+                fontSize: '9px',
+                fontFamily: TYPOGRAPHY.MONO,
+                fontWeight: TYPOGRAPHY.BOLD,
+                letterSpacing: '0.5px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                opacity: loading ? 0.6 : 1,
+                textTransform: 'uppercase' as const,
+              }}
+            >
+              <PlayCircle size={11} />
+              {loading ? 'RUNNING...' : 'RUN'}
+            </button>
+            {inputsCollapsed
+              ? <ChevronDown size={12} color={FINCEPT.GRAY} />
+              : <ChevronUp size={12} color={FINCEPT.GRAY} />
+            }
+          </div>
+
+          {/* Input Fields (collapsible body) */}
+          {!inputsCollapsed && (
+            <div style={{ padding: '12px' }}>
+              {/* DCF Inputs */}
+              {method === 'dcf' && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                  {renderInputField('EBIT ($M)', dcfInputs.ebit, (v) => setDcfInputs({ ...dcfInputs, ebit: parseFloat(v) || 0 }))}
+                  {renderInputField('TAX RATE', dcfInputs.taxRate, (v) => setDcfInputs({ ...dcfInputs, taxRate: parseFloat(v) || 0 }))}
+                  {renderInputField('RISK-FREE RATE', dcfInputs.riskFreeRate, (v) => setDcfInputs({ ...dcfInputs, riskFreeRate: parseFloat(v) || 0 }))}
+                  {renderInputField('BETA', dcfInputs.beta, (v) => setDcfInputs({ ...dcfInputs, beta: parseFloat(v) || 0 }))}
+                  {renderInputField('TERMINAL GROWTH', dcfInputs.terminalGrowth, (v) => setDcfInputs({ ...dcfInputs, terminalGrowth: parseFloat(v) || 0 }))}
+                  {renderInputField('SHARES OUTSTANDING (M)', dcfInputs.shares, (v) => setDcfInputs({ ...dcfInputs, shares: parseFloat(v) || 0 }))}
+                </div>
+              )}
+
+              {/* LBO Returns Inputs */}
+              {method === 'lbo' && lboSubTab === 'returns' && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                  {renderInputField('ENTRY VALUATION ($M)', lboInputs.entryValuation, (v) => setLboInputs({ ...lboInputs, entryValuation: parseFloat(v) || 0 }))}
+                  {renderInputField('EXIT VALUATION ($M)', lboInputs.exitValuation, (v) => setLboInputs({ ...lboInputs, exitValuation: parseFloat(v) || 0 }))}
+                  {renderInputField('EQUITY INVESTED ($M)', lboInputs.equityInvested, (v) => setLboInputs({ ...lboInputs, equityInvested: parseFloat(v) || 0 }))}
+                  {renderInputField('HOLDING PERIOD (YRS)', lboInputs.holdingPeriod, (v) => setLboInputs({ ...lboInputs, holdingPeriod: parseInt(v) || 0 }))}
+                </div>
+              )}
+
+              {/* Full LBO Model Inputs */}
+              {method === 'lbo' && lboSubTab === 'full_model' && (
+                <>
+                  <div style={{
+                    fontSize: '9px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '8px',
+                  }}>
+                    COMPANY DATA ($M)
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '14px' }}>
+                    {renderInputField('REVENUE', lboModelInputs.company_data.revenue, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      company_data: { ...lboModelInputs.company_data, revenue: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('EBITDA', lboModelInputs.company_data.ebitda, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      company_data: { ...lboModelInputs.company_data, ebitda: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('EBIT', lboModelInputs.company_data.ebit, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      company_data: { ...lboModelInputs.company_data, ebit: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('CAPEX', lboModelInputs.company_data.capex, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      company_data: { ...lboModelInputs.company_data, capex: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('NET WORKING CAPITAL', lboModelInputs.company_data.nwc, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      company_data: { ...lboModelInputs.company_data, nwc: parseFloat(v) || 0 }
+                    }))}
+                  </div>
+
+                  <div style={{
+                    fontSize: '9px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '8px',
+                  }}>
+                    TRANSACTION ASSUMPTIONS
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                    {renderInputField('PURCHASE PRICE ($M)', lboModelInputs.transaction_assumptions.purchase_price, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, purchase_price: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('ENTRY MULTIPLE', lboModelInputs.transaction_assumptions.entry_multiple, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, entry_multiple: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('EXIT MULTIPLE', lboModelInputs.transaction_assumptions.exit_multiple, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, exit_multiple: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('DEBT %', lboModelInputs.transaction_assumptions.debt_percent, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, debt_percent: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('EQUITY %', lboModelInputs.transaction_assumptions.equity_percent, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, equity_percent: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('PROJECTION YEARS', lboModelInputs.projection_years, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      projection_years: parseInt(v) || 5
+                    }))}
+                  </div>
+
+                  <div style={{
+                    fontSize: '9px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '8px',
+                    marginTop: '14px',
+                  }}>
+                    OPERATING ASSUMPTIONS
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                    {renderInputField('REVENUE GROWTH', lboModelInputs.transaction_assumptions.revenue_growth ?? 0.05, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, revenue_growth: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('EBITDA MARGIN', lboModelInputs.transaction_assumptions.ebitda_margin ?? 0.20, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, ebitda_margin: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('CAPEX % REV', lboModelInputs.transaction_assumptions.capex_pct_revenue ?? 0.03, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, capex_pct_revenue: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('NWC % REV', lboModelInputs.transaction_assumptions.nwc_pct_revenue ?? 0.05, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, nwc_pct_revenue: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('TAX RATE', lboModelInputs.transaction_assumptions.tax_rate ?? 0.21, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, tax_rate: parseFloat(v) || 0 }
+                    }))}
+                    {renderInputField('HURDLE IRR', lboModelInputs.transaction_assumptions.hurdle_irr ?? 0.20, (v) => setLboModelInputs({
+                      ...lboModelInputs,
+                      transaction_assumptions: { ...lboModelInputs.transaction_assumptions, hurdle_irr: parseFloat(v) || 0 }
+                    }))}
+                  </div>
+                </>
+              )}
+
+              {/* Debt Schedule Inputs */}
+              {method === 'lbo' && lboSubTab === 'debt_schedule' && (
+                <>
+                  <div style={{
+                    fontSize: '9px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '8px',
+                  }}>
+                    SENIOR DEBT
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '14px' }}>
+                    {renderInputField('AMOUNT ($M)', debtScheduleInputs.seniorDebt, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, seniorDebt: parseFloat(v) || 0 }))}
+                    {renderInputField('INTEREST RATE', debtScheduleInputs.seniorRate, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, seniorRate: parseFloat(v) || 0 }))}
+                    {renderInputField('TERM (YEARS)', debtScheduleInputs.seniorTerm, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, seniorTerm: parseInt(v) || 0 }))}
+                  </div>
+
+                  <div style={{
+                    fontSize: '9px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '8px',
+                  }}>
+                    SUBORDINATED DEBT
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '14px' }}>
+                    {renderInputField('AMOUNT ($M)', debtScheduleInputs.subDebt, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, subDebt: parseFloat(v) || 0 }))}
+                    {renderInputField('INTEREST RATE', debtScheduleInputs.subRate, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, subRate: parseFloat(v) || 0 }))}
+                    {renderInputField('TERM (YEARS)', debtScheduleInputs.subTerm, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, subTerm: parseInt(v) || 0 }))}
+                  </div>
+
+                  <div style={{
+                    fontSize: '9px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '8px',
+                  }}>
+                    REVOLVER & CASH FLOWS
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                    {renderInputField('REVOLVER ($M)', debtScheduleInputs.revolver, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, revolver: parseFloat(v) || 0 }))}
+                    {renderInputField('REVOLVER RATE', debtScheduleInputs.revolverRate, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, revolverRate: parseFloat(v) || 0 }))}
+                    {renderInputField('CASH SWEEP %', debtScheduleInputs.sweepPct, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, sweepPct: parseFloat(v) || 0 }))}
+                    {renderInputField('EBITDA BY YEAR ($M)', debtScheduleInputs.ebitdaYears, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, ebitdaYears: v }), '100,110,121,...')}
+                    {renderInputField('CAPEX BY YEAR ($M)', debtScheduleInputs.capexYears, (v) => setDebtScheduleInputs({ ...debtScheduleInputs, capexYears: v }), '25,27,30,...')}
+                  </div>
+                </>
+              )}
+
+              {/* Sensitivity Inputs */}
+              {method === 'lbo' && lboSubTab === 'sensitivity' && (
+                <>
+                  <div style={{
+                    fontSize: '9px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '8px',
+                  }}>
+                    BASE CASE
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '14px' }}>
+                    {renderInputField('BASE REVENUE ($M)', sensitivityInputs.baseRevenue, (v) => setSensitivityInputs({ ...sensitivityInputs, baseRevenue: parseFloat(v) || 0 }))}
+                    {renderInputField('EBITDA MARGIN', sensitivityInputs.baseEbitdaMargin, (v) => setSensitivityInputs({ ...sensitivityInputs, baseEbitdaMargin: parseFloat(v) || 0 }))}
+                    {renderInputField('EXIT MULTIPLE', sensitivityInputs.baseExitMultiple, (v) => setSensitivityInputs({ ...sensitivityInputs, baseExitMultiple: parseFloat(v) || 0 }))}
+                    {renderInputField('DEBT %', sensitivityInputs.baseDebtPct, (v) => setSensitivityInputs({ ...sensitivityInputs, baseDebtPct: parseFloat(v) || 0 }))}
+                    {renderInputField('HOLDING PERIOD', sensitivityInputs.holdingPeriod, (v) => setSensitivityInputs({ ...sensitivityInputs, holdingPeriod: parseInt(v) || 0 }))}
+                  </div>
+
+                  <div style={{
+                    fontSize: '9px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '8px',
+                  }}>
+                    SENSITIVITY SCENARIOS
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                    {renderInputField('REVENUE GROWTH RATES (COMMA-SEP)', sensitivityInputs.revenueGrowthScenarios, (v) => setSensitivityInputs({ ...sensitivityInputs, revenueGrowthScenarios: v }), '0.02,0.05,0.08,...')}
+                    {renderInputField('EXIT MULTIPLES (COMMA-SEP)', sensitivityInputs.exitMultipleScenarios, (v) => setSensitivityInputs({ ...sensitivityInputs, exitMultipleScenarios: v }), '7.0,8.0,9.0,...')}
+                  </div>
+                </>
+              )}
+
+              {/* Comps Inputs */}
+              {method === 'comps' && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                  {renderInputField('TARGET TICKER', compsInputs.targetTicker, (v) => setCompsInputs({ ...compsInputs, targetTicker: v.toUpperCase() }), 'AAPL')}
+                  {renderInputField('COMPARABLE TICKERS (COMMA-SEP)', compsInputs.compTickers, (v) => setCompsInputs({ ...compsInputs, compTickers: v.toUpperCase() }), 'MSFT,GOOGL,META')}
+                </div>
+              )}
+
+              {/* Precedent Transaction Inputs */}
+              {method === 'precedent' && (
+                <>
+                  <div style={{
+                    fontSize: '9px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '8px',
+                  }}>
+                    TARGET COMPANY ($M)
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '14px' }}>
+                    {renderInputField('TARGET REVENUE', precedentInputs.targetRevenue, (v) => setPrecedentInputs({ ...precedentInputs, targetRevenue: parseFloat(v) || 0 }))}
+                    {renderInputField('TARGET EBITDA', precedentInputs.targetEbitda, (v) => setPrecedentInputs({ ...precedentInputs, targetEbitda: parseFloat(v) || 0 }))}
+                  </div>
+
+                  <div style={{
+                    fontSize: '9px',
+                    fontFamily: TYPOGRAPHY.MONO,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}>
+                    <span>PRECEDENT TRANSACTIONS ($M)</span>
+                    <button
+                      onClick={addPrecedentTransaction}
+                      style={{
+                        padding: '3px 8px',
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        color: FINCEPT.GRAY,
+                        fontSize: '9px',
+                        fontFamily: TYPOGRAPHY.MONO,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        borderRadius: '2px',
+                      }}
+                    >
+                      <Plus size={10} /> ADD
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {precedentInputs.transactions.map((txn, idx) => (
+                      <div key={idx} style={{
+                        backgroundColor: FINCEPT.HEADER_BG,
+                        padding: '8px 10px',
+                        borderRadius: '2px',
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <input
+                            type="text"
+                            value={txn.name}
+                            onChange={(e) => {
+                              const updated = [...precedentInputs.transactions];
+                              updated[idx].name = e.target.value;
+                              setPrecedentInputs({ ...precedentInputs, transactions: updated });
+                            }}
+                            style={{ ...COMMON_STYLES.inputField, width: '120px', padding: '4px 6px', marginBottom: 0 }}
+                          />
+                          <button
+                            onClick={() => removePrecedentTransaction(idx)}
+                            style={{
+                              padding: '3px',
+                              backgroundColor: 'transparent',
+                              border: `1px solid ${FINCEPT.BORDER}`,
+                              color: FINCEPT.RED,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              borderRadius: '2px',
+                            }}
+                          >
+                            <Minus size={10} />
+                          </button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                          <div>
+                            <label style={{ fontSize: '9px', fontFamily: TYPOGRAPHY.MONO, color: FINCEPT.MUTED, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>EV</label>
+                            <input
+                              type="text"
+                              value={txn.ev}
+                              onChange={(e) => {
+                                const updated = [...precedentInputs.transactions];
+                                updated[idx].ev = parseFloat(e.target.value) || 0;
+                                setPrecedentInputs({ ...precedentInputs, transactions: updated });
+                              }}
+                              style={{ ...COMMON_STYLES.inputField, padding: '4px 6px' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '9px', fontFamily: TYPOGRAPHY.MONO, color: FINCEPT.MUTED, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>REV</label>
+                            <input
+                              type="text"
+                              value={txn.revenue}
+                              onChange={(e) => {
+                                const updated = [...precedentInputs.transactions];
+                                updated[idx].revenue = parseFloat(e.target.value) || 0;
+                                setPrecedentInputs({ ...precedentInputs, transactions: updated });
+                              }}
+                              style={{ ...COMMON_STYLES.inputField, padding: '4px 6px' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '9px', fontFamily: TYPOGRAPHY.MONO, color: FINCEPT.MUTED, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>EBITDA</label>
+                            <input
+                              type="text"
+                              value={txn.ebitda}
+                              onChange={(e) => {
+                                const updated = [...precedentInputs.transactions];
+                                updated[idx].ebitda = parseFloat(e.target.value) || 0;
+                                setPrecedentInputs({ ...precedentInputs, transactions: updated });
+                              }}
+                              style={{ ...COMMON_STYLES.inputField, padding: '4px 6px' }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* RESULTS SECTION */}
         {result ? (
           <div>
-            <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>
-              {method === 'dcf' && 'DCF VALUATION RESULTS'}
-              {method === 'lbo' && lboSubTab === 'returns' && 'LBO RETURNS'}
-              {method === 'lbo' && lboSubTab === 'full_model' && 'FULL LBO MODEL'}
-              {method === 'lbo' && lboSubTab === 'debt_schedule' && 'DEBT SCHEDULE ANALYSIS'}
-              {method === 'lbo' && lboSubTab === 'sensitivity' && 'SENSITIVITY ANALYSIS'}
-              {method === 'comps' && 'TRADING COMPS RESULTS'}
-              {method === 'precedent' && 'PRECEDENT TRANSACTIONS'}
-            </div>
-
-            {/* DCF Results */}
+            {/* ==================== DCF RESULTS ==================== */}
             {method === 'dcf' && result.equity_value_per_share && (
-              <div style={{ marginBottom: SPACING.LARGE }}>
-                <div style={{
-                  ...COMMON_STYLES.metricCard,
-                  backgroundColor: `${FINCEPT.CYAN}15`,
-                  borderLeft: `3px solid ${FINCEPT.CYAN}`,
-                  marginBottom: SPACING.DEFAULT,
-                }}>
-                  <div style={COMMON_STYLES.dataLabel}>EQUITY VALUE PER SHARE</div>
-                  <div style={{
-                    fontSize: '36px',
-                    fontWeight: TYPOGRAPHY.BOLD,
-                    color: FINCEPT.CYAN,
-                    marginTop: SPACING.SMALL,
-                  }}>
-                    ${result.equity_value_per_share.toFixed(2)}
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT }}>
-                  <div style={COMMON_STYLES.metricCard}>
-                    <div style={COMMON_STYLES.dataLabel}>ENTERPRISE VALUE</div>
-                    <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                      {formatCurrency(result.enterprise_value || 0)}
-                    </div>
-                  </div>
-                  <div style={COMMON_STYLES.metricCard}>
-                    <div style={COMMON_STYLES.dataLabel}>EQUITY VALUE</div>
-                    <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                      {formatCurrency(result.equity_value || 0)}
-                    </div>
-                  </div>
-                  <div style={COMMON_STYLES.metricCard}>
-                    <div style={COMMON_STYLES.dataLabel}>WACC</div>
-                    <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.ORANGE, marginTop: SPACING.TINY }}>
-                      {(result.wacc * 100).toFixed(2)}%
-                    </div>
-                  </div>
+              <div>
+                <MASectionHeader
+                  title="DCF VALUATION RESULTS"
+                  icon={<Calculator size={14} />}
+                  accentColor={MA_COLORS.valuation}
+                  action={
+                    <MAExportButton
+                      data={[{
+                        'Enterprise Value': formatCurrency(result.enterprise_value || 0),
+                        'Equity Value': formatCurrency(result.equity_value || 0),
+                        'WACC': `${(result.wacc * 100).toFixed(2)}%`,
+                        'Value/Share': `$${result.equity_value_per_share.toFixed(2)}`,
+                      }]}
+                      filename="dcf_valuation"
+                      accentColor={MA_COLORS.valuation}
+                    />
+                  }
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                  <MAMetricCard label="ENTERPRISE VALUE" value={formatCurrency(result.enterprise_value || 0)} accentColor={FINCEPT.CYAN} />
+                  <MAMetricCard label="EQUITY VALUE" value={formatCurrency(result.equity_value || 0)} accentColor={MA_COLORS.valuation} />
+                  <MAMetricCard label="WACC" value={`${(result.wacc * 100).toFixed(2)}%`} accentColor={FINCEPT.ORANGE} />
+                  <MAMetricCard label="VALUE / SHARE" value={`$${result.equity_value_per_share.toFixed(2)}`} accentColor={FINCEPT.GREEN} />
                 </div>
               </div>
             )}
 
-            {/* LBO Returns Results */}
-            {method === 'lbo' && lboSubTab === 'returns' && result.irr && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT, marginBottom: SPACING.LARGE }}>
-                <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.GREEN}15` }}>
-                  <div style={COMMON_STYLES.dataLabel}>IRR</div>
-                  <div style={{ fontSize: '28px', color: FINCEPT.GREEN, marginTop: SPACING.TINY }}>
-                    {result.irr.toFixed(1)}%
-                  </div>
-                </div>
-                <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.CYAN}15` }}>
-                  <div style={COMMON_STYLES.dataLabel}>MOIC</div>
-                  <div style={{ fontSize: '28px', color: FINCEPT.CYAN, marginTop: SPACING.TINY }}>
-                    {result.moic.toFixed(2)}x
-                  </div>
-                </div>
-                <div style={COMMON_STYLES.metricCard}>
-                  <div style={COMMON_STYLES.dataLabel}>ABSOLUTE GAIN</div>
-                  <div style={{ fontSize: '20px', color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                    {formatCurrency(result.absolute_gain || 0)}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* ==================== LBO RETURNS RESULTS ==================== */}
+            {method === 'lbo' && lboSubTab === 'returns' && result.irr && (() => {
+              const equityInvested = lboInputs.equityInvested;
+              const absoluteGain = (result.absolute_gain || 0) / 1e6;
+              const exitEquity = equityInvested + absoluteGain;
+              const waterfallData = [
+                { name: 'Entry Equity', value: equityInvested, fill: FINCEPT.CYAN },
+                { name: 'Gain', value: absoluteGain, fill: FINCEPT.GREEN },
+                { name: 'Exit Equity', value: exitEquity, fill: MA_COLORS.valuation },
+              ];
 
-            {/* Full LBO Model Results */}
-            {method === 'lbo' && lboSubTab === 'full_model' && result.data && (
-              <div style={{ marginBottom: SPACING.LARGE }}>
-                {result.data.returns && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: SPACING.DEFAULT, marginBottom: SPACING.DEFAULT }}>
-                    <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.GREEN}15` }}>
-                      <div style={COMMON_STYLES.dataLabel}>IRR</div>
-                      <div style={{ fontSize: '24px', color: FINCEPT.GREEN, marginTop: SPACING.TINY }}>
-                        {(result.data.returns.irr * 100).toFixed(1)}%
-                      </div>
-                    </div>
-                    <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.CYAN}15` }}>
-                      <div style={COMMON_STYLES.dataLabel}>MOIC</div>
-                      <div style={{ fontSize: '24px', color: FINCEPT.CYAN, marginTop: SPACING.TINY }}>
-                        {result.data.returns.moic.toFixed(2)}x
-                      </div>
-                    </div>
-                    <div style={COMMON_STYLES.metricCard}>
-                      <div style={COMMON_STYLES.dataLabel}>ENTRY EQUITY</div>
-                      <div style={{ fontSize: '18px', color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                        {formatCurrency(result.data.returns.entry_equity || 0)}
-                      </div>
-                    </div>
-                    <div style={COMMON_STYLES.metricCard}>
-                      <div style={COMMON_STYLES.dataLabel}>EXIT EQUITY</div>
-                      <div style={{ fontSize: '18px', color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                        {formatCurrency(result.data.returns.exit_equity || 0)}
-                      </div>
-                    </div>
+              return (
+                <div>
+                  <MASectionHeader
+                    title="LBO RETURNS"
+                    icon={<TrendingUp size={14} />}
+                    accentColor={FINCEPT.GREEN}
+                    action={
+                      <MAExportButton
+                        data={[{
+                          'IRR': `${result.irr.toFixed(1)}%`,
+                          'MOIC': `${result.moic.toFixed(2)}x`,
+                          'Absolute Gain': formatCurrency(result.absolute_gain || 0),
+                          'Gain %': `${(result.absolute_gain_pct || 0).toFixed(1)}%`,
+                          'Holding Period': `${result.holding_period || 0} yrs`,
+                          'Initial Equity': formatCurrency(result.initial_equity || 0),
+                          'Exit Equity': formatCurrency(result.exit_equity || 0),
+                        }]}
+                        filename="lbo_returns"
+                        accentColor={FINCEPT.GREEN}
+                      />
+                    }
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                    <MAMetricCard label="IRR" value={`${result.irr.toFixed(1)}%`} accentColor={FINCEPT.GREEN} />
+                    <MAMetricCard label="MOIC" value={`${result.moic.toFixed(2)}x`} accentColor={FINCEPT.CYAN} />
+                    <MAMetricCard label="ABSOLUTE GAIN" value={formatCurrency(result.absolute_gain || 0)} accentColor={MA_COLORS.valuation} />
+                    <MAMetricCard label="GAIN %" value={`${(result.absolute_gain_pct || 0).toFixed(1)}%`} accentColor={FINCEPT.ORANGE} />
                   </div>
-                )}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                    <MAMetricCard label="INITIAL EQUITY" value={formatCurrency(result.initial_equity || 0)} accentColor={FINCEPT.GRAY} />
+                    <MAMetricCard label="EXIT EQUITY" value={formatCurrency(result.exit_equity || 0)} accentColor={FINCEPT.WHITE} />
+                    <MAMetricCard label="HOLDING PERIOD" value={`${result.holding_period || 0} yrs`} accentColor={FINCEPT.MUTED} />
+                  </div>
 
-                {result.data.sources_uses && (
-                  <div style={{ marginBottom: SPACING.DEFAULT }}>
-                    <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>SOURCES & USES</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.DEFAULT }}>
-                      <div style={COMMON_STYLES.metricCard}>
-                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, marginBottom: SPACING.TINY }}>SOURCES</div>
-                        {Object.entries(result.data.sources_uses.sources || {}).map(([key, val]) => (
-                          <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: TYPOGRAPHY.TINY }}>
-                            <span style={{ color: FINCEPT.GRAY }}>{key.replace(/_/g, ' ').toUpperCase()}</span>
-                            <span style={{ color: FINCEPT.WHITE }}>{formatCurrency(val as number)}</span>
-                          </div>
+                  {/* Waterfall Chart */}
+                  <MAChartPanel
+                    title="RETURNS WATERFALL ($M)"
+                    icon={<BarChart3 size={12} />}
+                    accentColor={MA_COLORS.valuation}
+                    height={240}
+                  >
+                    <BarChart data={waterfallData}>
+                      <CartesianGrid strokeDasharray={gridStyle.strokeDasharray} stroke={gridStyle.stroke} />
+                      <XAxis dataKey="name" tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} />
+                      <YAxis tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} tickFormatter={(v: number) => `$${v.toFixed(0)}M`} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`$${value.toFixed(1)}M`, '']} />
+                      <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                        {waterfallData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
                         ))}
-                      </div>
-                      <div style={COMMON_STYLES.metricCard}>
-                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, marginBottom: SPACING.TINY }}>USES</div>
-                        {Object.entries(result.data.sources_uses.uses || {}).map(([key, val]) => (
-                          <div key={key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: TYPOGRAPHY.TINY }}>
-                            <span style={{ color: FINCEPT.GRAY }}>{key.replace(/_/g, ' ').toUpperCase()}</span>
-                            <span style={{ color: FINCEPT.WHITE }}>{formatCurrency(val as number)}</span>
-                          </div>
-                        ))}
+                      </Bar>
+                    </BarChart>
+                  </MAChartPanel>
+                </div>
+              );
+            })()}
+
+            {/* ==================== FULL LBO MODEL RESULTS ==================== */}
+            {method === 'lbo' && lboSubTab === 'full_model' && result.data && (() => {
+              const d = result.data;
+              const txnSummary = d.transaction_summary || {};
+              const capStruct = d.capital_structure || {};
+              const leverage = capStruct.leverage_metrics || {};
+              const projections = d.financial_projections || {};
+              const creditMetrics = d.credit_metrics || {};
+              const exitScenarios = d.exit_scenarios || {};
+              const returnsAnalysis = d.returns_analysis || {};
+              const debtSummary = d.debt_summary || {};
+
+              // Build financial projections array
+              const projYears = Object.keys(projections).sort((a, b) => Number(a) - Number(b));
+              const projArray = projYears.map(y => ({ year: `Y${y}`, ...projections[y] }));
+
+              // Build credit metrics array
+              const coverageData = Object.entries(creditMetrics.interest_coverage || {}).map(([y, v]) => ({
+                year: `Y${y}`, coverage: v as number,
+                leverage: (creditMetrics.leverage_progression || {})[y] || 0,
+              }));
+
+              // Build exit scenarios array
+              const exitArray = Object.entries(exitScenarios).map(([mult, scenario]: [string, any]) => {
+                const ret = returnsAnalysis[mult] || {};
+                return {
+                  multiple: `${parseFloat(mult).toFixed(1)}x`,
+                  exit_ev: scenario.exit_enterprise_value || 0,
+                  exit_equity: scenario.exit_equity_value || 0,
+                  irr: ret.annualized_return || 0,
+                  moic: ret.moic || 0,
+                  meets_hurdle: ret.hurdle_metrics?.meets_hurdle,
+                };
+              });
+
+              const kvRow = (label: string, value: string, color: string = FINCEPT.WHITE) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: TYPOGRAPHY.TINY, fontFamily: TYPOGRAPHY.MONO, padding: '2px 0' }}>
+                  <span style={{ color: FINCEPT.GRAY }}>{label}</span>
+                  <span style={{ color }}>{value}</span>
+                </div>
+              );
+
+              return (
+                <div>
+                  <MASectionHeader title="FULL LBO MODEL" icon={<Layers size={14} />} accentColor={FINCEPT.CYAN}
+                    action={<MAExportButton data={projArray.length ? projArray : [txnSummary]} filename="lbo_model" accentColor={FINCEPT.CYAN} />}
+                  />
+
+                  {/* Returns Summary */}
+                  {d.returns && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                      <MAMetricCard label="IRR" value={`${(d.returns.irr * 100).toFixed(1)}%`} accentColor={FINCEPT.GREEN} />
+                      <MAMetricCard label="MOIC" value={`${d.returns.moic.toFixed(2)}x`} accentColor={FINCEPT.CYAN} />
+                      <MAMetricCard label="ENTRY EQUITY" value={formatCurrency(d.returns.entry_equity || 0)} accentColor={MA_COLORS.valuation} />
+                      <MAMetricCard label="EXIT EQUITY" value={formatCurrency(d.returns.exit_equity || 0)} accentColor={FINCEPT.PURPLE} />
+                    </div>
+                  )}
+
+                  {/* Transaction Summary */}
+                  {txnSummary.entry_ebitda && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>TRANSACTION SUMMARY</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                        <MAMetricCard label="TARGET" value={txnSummary.target_company || 'N/A'} accentColor={FINCEPT.WHITE} />
+                        <MAMetricCard label="ENTRY EV" value={formatCurrency(txnSummary.entry_enterprise_value || 0)} accentColor={FINCEPT.CYAN} />
+                        <MAMetricCard label="ENTRY MULTIPLE" value={`${(txnSummary.entry_multiple || 0).toFixed(1)}x`} accentColor={MA_COLORS.valuation} />
+                        <MAMetricCard label="ENTRY EBITDA" value={formatCurrency(txnSummary.entry_ebitda || 0)} accentColor={FINCEPT.GREEN} />
+                        <MAMetricCard label="HOLDING PERIOD" value={`${txnSummary.holding_period || 0} yrs`} accentColor={FINCEPT.ORANGE} />
+                        <MAMetricCard label="EXIT YEAR" value={`${txnSummary.exit_year || 0}`} accentColor={FINCEPT.GRAY} />
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
 
-            {/* Debt Schedule Results */}
+                  {/* Capital Structure */}
+                  {leverage.total_debt != null && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>CAPITAL STRUCTURE</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '10px' }}>
+                        <MAMetricCard label="TOTAL DEBT" value={formatCurrency(leverage.total_debt || 0)} accentColor={FINCEPT.RED} />
+                        <MAMetricCard label="TOTAL EQUITY" value={formatCurrency(leverage.total_equity || 0)} accentColor={FINCEPT.GREEN} />
+                        <MAMetricCard label="DEBT/EBITDA" value={`${(leverage.debt_to_ebitda || 0).toFixed(1)}x`} accentColor={FINCEPT.ORANGE} />
+                        <MAMetricCard label="DEBT/CAPITAL" value={`${(leverage.total_debt_to_capital || 0).toFixed(1)}%`} accentColor={FINCEPT.CYAN} />
+                      </div>
+                      {/* Debt Tranches Table */}
+                      {capStruct.debt_tranches?.length > 0 && (
+                        <MADataTable
+                          columns={[
+                            { key: 'name', label: 'Tranche', width: '100px', align: 'left' },
+                            { key: 'type', label: 'Type', width: '90px', align: 'left' },
+                            { key: 'amount', label: 'Amount', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.WHITE }}>{formatCurrency(v)}</span> },
+                            { key: 'percentage_of_total', label: '% Total', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.CYAN }}>{`${(v || 0).toFixed(1)}%`}</span> },
+                            { key: 'interest_rate', label: 'Rate', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.ORANGE }}>{`${(v || 0).toFixed(1)}%`}</span> },
+                          ]}
+                          data={capStruct.debt_tranches}
+                          accentColor={FINCEPT.RED}
+                          compact
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Sources & Uses */}
+                  {d.sources_uses && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>SOURCES & USES</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', padding: '10px 14px' }}>
+                          <div style={{ fontSize: TYPOGRAPHY.TINY, fontFamily: TYPOGRAPHY.MONO, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.GREEN, marginBottom: '6px', letterSpacing: '0.5px' }}>SOURCES</div>
+                          {Object.entries(d.sources_uses.sources || {}).map(([key, val]) => kvRow(key.replace(/_/g, ' ').toUpperCase(), formatCurrency(val as number), FINCEPT.GREEN))}
+                        </div>
+                        <div style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', padding: '10px 14px' }}>
+                          <div style={{ fontSize: TYPOGRAPHY.TINY, fontFamily: TYPOGRAPHY.MONO, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.RED, marginBottom: '6px', letterSpacing: '0.5px' }}>USES</div>
+                          {Object.entries(d.sources_uses.uses || {}).map(([key, val]) => kvRow(key.replace(/_/g, ' ').toUpperCase(), formatCurrency(val as number), FINCEPT.RED))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Financial Projections */}
+                  {projArray.length > 0 && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>FINANCIAL PROJECTIONS</div>
+                      <MADataTable
+                        columns={[
+                          { key: 'year', label: 'Year', width: '50px', align: 'left' },
+                          { key: 'revenue', label: 'Revenue', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.WHITE }}>{formatCurrency(v)}</span> },
+                          { key: 'revenue_growth', label: 'Growth', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.GREEN }}>{`${(v || 0).toFixed(1)}%`}</span> },
+                          { key: 'ebitda', label: 'EBITDA', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.CYAN }}>{formatCurrency(v)}</span> },
+                          { key: 'ebit', label: 'EBIT', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.WHITE }}>{formatCurrency(v)}</span> },
+                          { key: 'net_income', label: 'Net Inc', align: 'right', format: (v: number) => <span style={{ color: v >= 0 ? FINCEPT.GREEN : FINCEPT.RED }}>{formatCurrency(v)}</span> },
+                          { key: 'free_cash_flow', label: 'FCF', align: 'right', format: (v: number) => <span style={{ color: v >= 0 ? FINCEPT.GREEN : FINCEPT.RED }}>{formatCurrency(v)}</span> },
+                        ]}
+                        data={projArray}
+                        accentColor={FINCEPT.CYAN}
+                        compact
+                      />
+
+                      {/* Revenue & EBITDA Chart */}
+                      <div style={{ marginTop: '12px' }}>
+                        <MAChartPanel title="REVENUE & EBITDA PROJECTION" icon={<TrendingUp size={12} />} accentColor={FINCEPT.CYAN} height={220}>
+                          <BarChart data={projArray}>
+                            <CartesianGrid strokeDasharray={gridStyle.strokeDasharray} stroke={gridStyle.stroke} />
+                            <XAxis dataKey="year" tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} />
+                            <YAxis tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} tickFormatter={(v: number) => `$${(v / 1e6).toFixed(0)}M`} />
+                            <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`$${(value / 1e6).toFixed(1)}M`, '']} />
+                            <Legend wrapperStyle={{ fontSize: '9px', fontFamily: 'var(--ft-font-family, monospace)' }} />
+                            <Bar dataKey="revenue" fill={`${FINCEPT.CYAN}80`} name="Revenue" radius={[2, 2, 0, 0]} />
+                            <Bar dataKey="ebitda" fill={`${FINCEPT.GREEN}80`} name="EBITDA" radius={[2, 2, 0, 0]} />
+                            <Bar dataKey="free_cash_flow" fill={`${MA_COLORS.valuation}80`} name="FCF" radius={[2, 2, 0, 0]} />
+                          </BarChart>
+                        </MAChartPanel>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Credit Metrics */}
+                  {coverageData.length > 0 && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>CREDIT METRICS</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '10px' }}>
+                        <MAMetricCard label="INITIAL DEBT" value={formatCurrency(debtSummary.initial_debt || 0)} accentColor={FINCEPT.RED} />
+                        <MAMetricCard label="TOTAL PAYDOWN" value={formatCurrency(debtSummary.total_paydown || 0)} accentColor={FINCEPT.GREEN} />
+                        <MAMetricCard label="PAYDOWN %" value={`${(debtSummary.paydown_percentage || 0).toFixed(1)}%`} accentColor={FINCEPT.CYAN} />
+                      </div>
+                      <MAChartPanel title="LEVERAGE & COVERAGE PROGRESSION" icon={<TrendingUp size={12} />} accentColor={FINCEPT.ORANGE} height={220}>
+                        <BarChart data={coverageData}>
+                          <CartesianGrid strokeDasharray={gridStyle.strokeDasharray} stroke={gridStyle.stroke} />
+                          <XAxis dataKey="year" tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} />
+                          <YAxis tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} tickFormatter={(v: number) => `${v.toFixed(1)}x`} />
+                          <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [`${(value as number).toFixed(2)}x`, name]} />
+                          <Legend wrapperStyle={{ fontSize: '9px', fontFamily: 'var(--ft-font-family, monospace)' }} />
+                          <Bar dataKey="coverage" fill={`${FINCEPT.GREEN}80`} name="Interest Coverage" radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="leverage" fill={`${FINCEPT.ORANGE}80`} name="Debt/EBITDA" radius={[2, 2, 0, 0]} />
+                        </BarChart>
+                      </MAChartPanel>
+                    </div>
+                  )}
+
+                  {/* Exit Scenarios */}
+                  {exitArray.length > 0 && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>EXIT SCENARIOS</div>
+                      <MADataTable
+                        columns={[
+                          { key: 'multiple', label: 'Exit Mult', width: '70px', align: 'left' },
+                          { key: 'exit_ev', label: 'Exit EV', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.WHITE }}>{formatCurrency(v)}</span> },
+                          { key: 'exit_equity', label: 'Exit Equity', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.GREEN }}>{formatCurrency(v)}</span> },
+                          { key: 'irr', label: 'IRR', align: 'right', format: (v: number) => <span style={{ color: v >= 20 ? FINCEPT.GREEN : v >= 10 ? FINCEPT.ORANGE : FINCEPT.RED }}>{`${(v || 0).toFixed(1)}%`}</span> },
+                          { key: 'moic', label: 'MOIC', align: 'right', format: (v: number) => <span style={{ color: v >= 2 ? FINCEPT.GREEN : v >= 1.5 ? FINCEPT.CYAN : FINCEPT.ORANGE }}>{`${(v || 0).toFixed(2)}x`}</span> },
+                          { key: 'meets_hurdle', label: 'Hurdle', align: 'center', format: (v: boolean) => <span style={{ color: v ? FINCEPT.GREEN : FINCEPT.RED, fontWeight: TYPOGRAPHY.BOLD }}>{v ? 'PASS' : 'FAIL'}</span> },
+                        ]}
+                        data={exitArray}
+                        accentColor={MA_COLORS.valuation}
+                        compact
+                      />
+
+                      {/* Exit IRR Bar Chart */}
+                      <div style={{ marginTop: '12px' }}>
+                        <MAChartPanel title="EXIT SCENARIO RETURNS" icon={<BarChart3 size={12} />} accentColor={FINCEPT.GREEN} height={200}>
+                          <BarChart data={exitArray}>
+                            <CartesianGrid strokeDasharray={gridStyle.strokeDasharray} stroke={gridStyle.stroke} />
+                            <XAxis dataKey="multiple" tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} />
+                            <YAxis tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} tickFormatter={(v: number) => `${v.toFixed(0)}%`} />
+                            <Tooltip contentStyle={tooltipStyle} formatter={(value: number, name: string) => [name === 'irr' ? `${value.toFixed(1)}%` : `${value.toFixed(2)}x`, name.toUpperCase()]} />
+                            <ReferenceLine y={20} stroke={FINCEPT.ORANGE} strokeDasharray="3 3" label={{ value: 'Hurdle', fill: FINCEPT.ORANGE, fontSize: 9 }} />
+                            <Bar dataKey="irr" name="irr" radius={[2, 2, 0, 0]}>
+                              {exitArray.map((entry, index) => (
+                                <Cell key={`exit-${index}`} fill={entry.irr >= 20 ? FINCEPT.GREEN : entry.irr >= 10 ? FINCEPT.ORANGE : FINCEPT.RED} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </MAChartPanel>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ==================== DEBT SCHEDULE RESULTS ==================== */}
             {method === 'lbo' && lboSubTab === 'debt_schedule' && result.data && (
-              <div style={{ marginBottom: SPACING.LARGE }}>
+              <div>
+                <MASectionHeader
+                  title="DEBT SCHEDULE ANALYSIS"
+                  icon={<Calendar size={14} />}
+                  accentColor={FINCEPT.ORANGE}
+                  action={
+                    result.data.schedule && Array.isArray(result.data.schedule) ? (
+                      <MAExportButton
+                        data={result.data.schedule.map((row: any) => ({
+                          Year: row.year,
+                          Opening: formatCurrency(row.opening || 0),
+                          Interest: formatCurrency(row.interest || 0),
+                          Paydown: formatCurrency(row.paydown || 0),
+                          Closing: formatCurrency(row.closing || 0),
+                        }))}
+                        filename="debt_schedule"
+                        accentColor={FINCEPT.ORANGE}
+                      />
+                    ) : undefined
+                  }
+                />
+
                 {result.data.summary && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: SPACING.DEFAULT, marginBottom: SPACING.DEFAULT }}>
-                    <div style={COMMON_STYLES.metricCard}>
-                      <div style={COMMON_STYLES.dataLabel}>TOTAL DEBT</div>
-                      <div style={{ fontSize: '20px', color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                        {formatCurrency(result.data.summary.total_debt || 0)}
-                      </div>
-                    </div>
-                    <div style={COMMON_STYLES.metricCard}>
-                      <div style={COMMON_STYLES.dataLabel}>TOTAL INTEREST</div>
-                      <div style={{ fontSize: '20px', color: FINCEPT.RED, marginTop: SPACING.TINY }}>
-                        {formatCurrency(result.data.summary.total_interest || 0)}
-                      </div>
-                    </div>
-                    <div style={COMMON_STYLES.metricCard}>
-                      <div style={COMMON_STYLES.dataLabel}>TOTAL PAYDOWN</div>
-                      <div style={{ fontSize: '20px', color: FINCEPT.GREEN, marginTop: SPACING.TINY }}>
-                        {formatCurrency(result.data.summary.total_paydown || 0)}
-                      </div>
-                    </div>
-                    <div style={COMMON_STYLES.metricCard}>
-                      <div style={COMMON_STYLES.dataLabel}>EXIT DEBT</div>
-                      <div style={{ fontSize: '20px', color: FINCEPT.ORANGE, marginTop: SPACING.TINY }}>
-                        {formatCurrency(result.data.summary.exit_debt || 0)}
-                      </div>
-                    </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                    <MAMetricCard label="TOTAL DEBT" value={formatCurrency(result.data.summary.total_debt || 0)} accentColor={FINCEPT.WHITE} />
+                    <MAMetricCard label="TOTAL INTEREST" value={formatCurrency(result.data.summary.total_interest || 0)} accentColor={FINCEPT.RED} />
+                    <MAMetricCard label="TOTAL PAYDOWN" value={formatCurrency(result.data.summary.total_paydown || 0)} accentColor={FINCEPT.GREEN} />
+                    <MAMetricCard label="EXIT DEBT" value={formatCurrency(result.data.summary.exit_debt || 0)} accentColor={FINCEPT.ORANGE} />
                   </div>
                 )}
 
+                {/* Debt Schedule Area Chart */}
+                {result.data.schedule && Array.isArray(result.data.schedule) && result.data.schedule.length > 0 && (() => {
+                  const debtChartData = result.data.schedule.map((row: any) => ({
+                    year: `Y${row.year}`,
+                    opening: (row.opening || 0) / 1e6,
+                    interest: (row.interest || 0) / 1e6,
+                    paydown: (row.paydown || 0) / 1e6,
+                    closing: (row.closing || 0) / 1e6,
+                  }));
+
+                  return (
+                    <div style={{ marginBottom: '16px' }}>
+                      <MAChartPanel
+                        title="DEBT PROFILE OVER TIME ($M)"
+                        icon={<TrendingUp size={12} />}
+                        accentColor={FINCEPT.ORANGE}
+                        height={260}
+                      >
+                        <AreaChart data={debtChartData}>
+                          <CartesianGrid strokeDasharray={gridStyle.strokeDasharray} stroke={gridStyle.stroke} />
+                          <XAxis dataKey="year" tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} />
+                          <YAxis tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} tickFormatter={(v: number) => `$${v.toFixed(0)}M`} />
+                          <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`$${value.toFixed(1)}M`, '']} />
+                          <Legend wrapperStyle={{ fontSize: '9px', fontFamily: 'var(--ft-font-family, monospace)' }} />
+                          <Area type="monotone" dataKey="opening" stroke={FINCEPT.CYAN} fill={`${FINCEPT.CYAN}20`} name="Opening Balance" />
+                          <Area type="monotone" dataKey="paydown" stroke={FINCEPT.GREEN} fill={`${FINCEPT.GREEN}20`} name="Paydown" />
+                        </AreaChart>
+                      </MAChartPanel>
+                    </div>
+                  );
+                })()}
+
+                {/* Debt Schedule Table */}
                 {result.data.schedule && Array.isArray(result.data.schedule) && (
-                  <div>
-                    <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>YEAR-BY-YEAR SCHEDULE</div>
-                    <div style={{
-                      backgroundColor: FINCEPT.PANEL_BG,
-                      borderRadius: '2px',
-                      overflow: 'auto',
-                    }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
-                        <thead>
-                          <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
-                            <th style={{ padding: '8px', textAlign: 'left', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>Year</th>
-                            <th style={{ padding: '8px', textAlign: 'right', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>Opening</th>
-                            <th style={{ padding: '8px', textAlign: 'right', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>Interest</th>
-                            <th style={{ padding: '8px', textAlign: 'right', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>Paydown</th>
-                            <th style={{ padding: '8px', textAlign: 'right', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>Closing</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {result.data.schedule.map((row: any, idx: number) => (
-                            <tr key={idx}>
-                              <td style={{ padding: '8px', color: FINCEPT.WHITE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>{row.year}</td>
-                              <td style={{ padding: '8px', textAlign: 'right', color: FINCEPT.WHITE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>{formatCurrency(row.opening || 0)}</td>
-                              <td style={{ padding: '8px', textAlign: 'right', color: FINCEPT.RED, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>{formatCurrency(row.interest || 0)}</td>
-                              <td style={{ padding: '8px', textAlign: 'right', color: FINCEPT.GREEN, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>{formatCurrency(row.paydown || 0)}</td>
-                              <td style={{ padding: '8px', textAlign: 'right', color: FINCEPT.WHITE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>{formatCurrency(row.closing || 0)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  <MADataTable
+                    columns={[
+                      { key: 'year', label: 'Year', width: '60px', align: 'left' },
+                      { key: 'opening', label: 'Opening', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.WHITE }}>{formatCurrency(v || 0)}</span> },
+                      { key: 'interest', label: 'Interest', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.RED }}>{formatCurrency(v || 0)}</span> },
+                      { key: 'paydown', label: 'Paydown', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.GREEN }}>{formatCurrency(v || 0)}</span> },
+                      { key: 'closing', label: 'Closing', align: 'right', format: (v: number) => <span style={{ color: FINCEPT.WHITE }}>{formatCurrency(v || 0)}</span> },
+                    ]}
+                    data={result.data.schedule}
+                    accentColor={FINCEPT.ORANGE}
+                    compact
+                  />
                 )}
               </div>
             )}
 
-            {/* Sensitivity Results */}
+            {/* ==================== SENSITIVITY RESULTS ==================== */}
             {method === 'lbo' && lboSubTab === 'sensitivity' && result.data && (
-              <div style={{ marginBottom: SPACING.LARGE }}>
-                <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>IRR SENSITIVITY TABLE</div>
-                <div style={{
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  borderRadius: '2px',
-                  overflow: 'auto',
-                  marginBottom: SPACING.DEFAULT,
-                }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
-                    <thead>
-                      <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
-                        <th style={{ padding: '8px', textAlign: 'left', color: FINCEPT.ORANGE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                          IRR
-                        </th>
-                        {result.exitMultiples?.map((m: number) => (
-                          <th key={m} style={{ padding: '8px', textAlign: 'center', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                            {m.toFixed(1)}x Exit
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.revenueGrowths?.map((g: number, gIdx: number) => (
-                        <tr key={gIdx}>
-                          <td style={{ padding: '8px', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                            {(g * 100).toFixed(0)}% Growth
-                          </td>
-                          {result.exitMultiples?.map((m: number, mIdx: number) => {
-                            const irr = result.data?.irr_matrix?.[gIdx]?.[mIdx] || 0;
-                            const color = irr >= 0.25 ? FINCEPT.GREEN : irr >= 0.15 ? FINCEPT.YELLOW : FINCEPT.RED;
-                            return (
-                              <td key={mIdx} style={{ padding: '8px', textAlign: 'center', color, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                                {(irr * 100).toFixed(1)}%
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <div>
+                <MASectionHeader
+                  title="SENSITIVITY ANALYSIS"
+                  icon={<Grid3X3 size={14} />}
+                  accentColor={MA_COLORS.valuation}
+                />
+
+                {/* IRR Heatmap */}
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: '10px' }}>IRR SENSITIVITY TABLE</div>
+                  <MASensitivityHeatmap
+                    data={result.data?.irr_matrix || []}
+                    rowLabels={result.revenueGrowths?.map((g: number) => `${(g * 100).toFixed(0)}%`) || []}
+                    colLabels={result.exitMultiples?.map((m: number) => `${m.toFixed(1)}x`) || []}
+                    rowHeader="Rev Growth"
+                    colHeader="Exit Multiple"
+                    formatValue={(v: number) => `${(v * 100).toFixed(1)}%`}
+                    accentColor={FINCEPT.GREEN}
+                  />
                 </div>
 
-                <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>MOIC SENSITIVITY TABLE</div>
-                <div style={{
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  borderRadius: '2px',
-                  overflow: 'auto',
-                }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
-                    <thead>
-                      <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
-                        <th style={{ padding: '8px', textAlign: 'left', color: FINCEPT.CYAN, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                          MOIC
-                        </th>
-                        {result.exitMultiples?.map((m: number) => (
-                          <th key={m} style={{ padding: '8px', textAlign: 'center', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                            {m.toFixed(1)}x Exit
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.revenueGrowths?.map((g: number, gIdx: number) => (
-                        <tr key={gIdx}>
-                          <td style={{ padding: '8px', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                            {(g * 100).toFixed(0)}% Growth
-                          </td>
-                          {result.exitMultiples?.map((m: number, mIdx: number) => {
-                            const moic = result.data?.moic_matrix?.[gIdx]?.[mIdx] || 0;
-                            const color = moic >= 3 ? FINCEPT.GREEN : moic >= 2 ? FINCEPT.YELLOW : FINCEPT.RED;
-                            return (
-                              <td key={mIdx} style={{ padding: '8px', textAlign: 'center', color, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                                {moic.toFixed(2)}x
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                {/* MOIC Heatmap */}
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: '10px' }}>MOIC SENSITIVITY TABLE</div>
+                  <MASensitivityHeatmap
+                    data={result.data?.moic_matrix || []}
+                    rowLabels={result.revenueGrowths?.map((g: number) => `${(g * 100).toFixed(0)}%`) || []}
+                    colLabels={result.exitMultiples?.map((m: number) => `${m.toFixed(1)}x`) || []}
+                    rowHeader="Rev Growth"
+                    colHeader="Exit Multiple"
+                    formatValue={(v: number) => `${v.toFixed(2)}x`}
+                    accentColor={FINCEPT.CYAN}
+                  />
                 </div>
               </div>
             )}
 
-            {/* Precedent Transaction Results */}
+            {/* ==================== TRADING COMPS RESULTS ==================== */}
+            {method === 'comps' && result?.data?.comparables && (
+              <div>
+                <MASectionHeader
+                  title="TRADING COMPS RESULTS"
+                  icon={<BarChart3 size={14} />}
+                  accentColor={FINCEPT.CYAN}
+                  action={
+                    <MAExportButton
+                      data={result.data.comparables}
+                      filename="trading_comps"
+                      accentColor={FINCEPT.CYAN}
+                    />
+                  }
+                />
+
+                {/* Target & Summary Header */}
+                {result.data.target_ticker && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                    <MAMetricCard label="TARGET" value={result.data.target_ticker} accentColor={FINCEPT.CYAN} />
+                    <MAMetricCard label="COMPARABLES" value={result.data.comp_count} accentColor={MA_COLORS.valuation} />
+                    <MAMetricCard label="AS OF" value={result.data.as_of_date || '--'} accentColor={FINCEPT.GRAY} />
+                  </div>
+                )}
+
+                {/* Implied Valuation from Comps */}
+                {result.data.target_valuation?.valuations && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                    <MAMetricCard label="EV/REVENUE (MEDIAN)" value={formatCurrency(result.data.target_valuation.valuations.ev_revenue_median || 0)} accentColor={FINCEPT.WHITE} />
+                    <MAMetricCard label="EV/EBITDA (MEDIAN)" value={formatCurrency(result.data.target_valuation.valuations.ev_ebitda_median || 0)} accentColor={FINCEPT.WHITE} />
+                    <MAMetricCard label="BLENDED MEDIAN" value={formatCurrency(result.data.target_valuation.valuations.blended_median || 0)} accentColor={FINCEPT.GREEN} />
+                  </div>
+                )}
+
+                {/* Comps Multiples Bar Chart */}
+                {result.data.comparables.length > 0 && (() => {
+                  const compsChartData = result.data.comparables.map((row: any) => ({
+                    name: row['Ticker'] || '',
+                    'EV/Revenue': row['EV/Revenue'] || 0,
+                    'EV/EBITDA': row['EV/EBITDA'] || 0,
+                    'P/E': row['P/E'] || 0,
+                  }));
+
+                  return (
+                    <div style={{ marginBottom: '16px' }}>
+                      <MAChartPanel
+                        title="COMPARABLE MULTIPLES"
+                        icon={<BarChart3 size={12} />}
+                        accentColor={FINCEPT.CYAN}
+                        height={280}
+                      >
+                        <BarChart data={compsChartData}>
+                          <CartesianGrid strokeDasharray={gridStyle.strokeDasharray} stroke={gridStyle.stroke} />
+                          <XAxis dataKey="name" tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} />
+                          <YAxis tick={axisStyle} axisLine={{ stroke: FINCEPT.BORDER }} tickFormatter={(v: number) => `${v.toFixed(1)}x`} />
+                          <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value.toFixed(1)}x`, '']} />
+                          <Legend wrapperStyle={{ fontSize: '9px', fontFamily: 'var(--ft-font-family, monospace)' }} />
+                          <Bar dataKey="EV/Revenue" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="EV/EBITDA" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="P/E" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} />
+                        </BarChart>
+                      </MAChartPanel>
+                    </div>
+                  );
+                })()}
+
+                {/* Comp Table */}
+                <MADataTable
+                  columns={[
+                    { key: 'Ticker', label: 'Ticker', width: '80px', align: 'left', format: (v: string) => <span style={{ color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>{v}</span> },
+                    { key: 'Company', label: 'Company', width: '140px', align: 'left' },
+                    { key: 'Market Cap ($M)', label: 'Mkt Cap ($M)', align: 'right', format: (v: number) => (v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) },
+                    { key: 'EV ($M)', label: 'EV ($M)', align: 'right', format: (v: number) => (v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) },
+                    { key: 'EV/Revenue', label: 'EV/Rev', align: 'right', format: (v: number) => `${(v || 0).toFixed(1)}x` },
+                    { key: 'EV/EBITDA', label: 'EV/EBITDA', align: 'right', format: (v: number) => `${(v || 0).toFixed(1)}x` },
+                    { key: 'EV/EBIT', label: 'EV/EBIT', align: 'right', format: (v: number) => `${(v || 0).toFixed(1)}x` },
+                    { key: 'P/E', label: 'P/E', align: 'right', format: (v: number) => `${(v || 0).toFixed(1)}x` },
+                    { key: 'Rev Growth (%)', label: 'Rev Gr.%', align: 'right', format: (v: number, row: any) => <span style={{ color: (row['Rev Growth (%)'] || 0) >= 0 ? FINCEPT.GREEN : FINCEPT.RED }}>{(v || 0).toFixed(1)}%</span> },
+                    { key: 'EBITDA Margin (%)', label: 'EBITDA Mg.%', align: 'right', format: (v: number) => `${(v || 0).toFixed(1)}%` },
+                    { key: 'Net Margin (%)', label: 'Net Mg.%', align: 'right', format: (v: number) => `${(v || 0).toFixed(1)}%` },
+                    { key: 'ROE (%)', label: 'ROE%', align: 'right', format: (v: number) => `${(v || 0).toFixed(1)}%` },
+                  ]}
+                  data={[
+                    ...result.data.comparables,
+                    ...(result.data.summary_statistics?.median ? [{
+                      'Ticker': 'MEDIAN',
+                      'Company': '--',
+                      'Market Cap ($M)': result.data.summary_statistics.median['Market Cap ($M)'] || 0,
+                      'EV ($M)': result.data.summary_statistics.median['EV ($M)'] || 0,
+                      'EV/Revenue': result.data.summary_statistics.median['EV/Revenue'] || 0,
+                      'EV/EBITDA': result.data.summary_statistics.median['EV/EBITDA'] || 0,
+                      'EV/EBIT': result.data.summary_statistics.median['EV/EBIT'] || 0,
+                      'P/E': result.data.summary_statistics.median['P/E'] || 0,
+                      'Rev Growth (%)': result.data.summary_statistics.median['Rev Growth (%)'] || 0,
+                      'EBITDA Margin (%)': result.data.summary_statistics.median['EBITDA Margin (%)'] || 0,
+                      'Net Margin (%)': result.data.summary_statistics.median['Net Margin (%)'] || 0,
+                      'ROE (%)': result.data.summary_statistics.median['ROE (%)'] || 0,
+                    }] : []),
+                  ]}
+                  accentColor={FINCEPT.CYAN}
+                  compact
+                  maxHeight="350px"
+                />
+              </div>
+            )}
+
+            {/* ==================== PRECEDENT TRANSACTIONS RESULTS ==================== */}
             {method === 'precedent' && result?.data?.comparables && (
-              <div style={{ marginBottom: SPACING.LARGE }}>
+              <div>
+                <MASectionHeader
+                  title="PRECEDENT TRANSACTIONS"
+                  icon={<Layers size={14} />}
+                  accentColor={MA_COLORS.valuation}
+                  action={
+                    <MAExportButton
+                      data={result.data.comparables}
+                      filename="precedent_transactions"
+                      accentColor={MA_COLORS.valuation}
+                    />
+                  }
+                />
+
                 {/* Implied Valuation Summary */}
                 {result.data.target_valuation?.valuations && (() => {
                   const v = result.data.target_valuation.valuations;
@@ -1016,240 +1545,146 @@ export const ValuationToolkit: React.FC = () => {
                   const mid = v.blended_median || v.ev_ebitda_median || v.ev_revenue_median || 0;
                   const high = v.ev_ebitda_q3 || v.ev_revenue_q3 || 0;
                   return (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT, marginBottom: SPACING.DEFAULT }}>
-                      <div style={COMMON_STYLES.metricCard}>
-                        <div style={COMMON_STYLES.dataLabel}>LOW IMPLIED EV (Q1)</div>
-                        <div style={{ fontSize: '20px', color: FINCEPT.RED, marginTop: SPACING.TINY }}>
-                          {formatCurrency(low)}
-                        </div>
-                      </div>
-                      <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.CYAN}15`, borderLeft: `3px solid ${FINCEPT.CYAN}` }}>
-                        <div style={COMMON_STYLES.dataLabel}>BLENDED IMPLIED EV</div>
-                        <div style={{ fontSize: '24px', color: FINCEPT.CYAN, marginTop: SPACING.TINY }}>
-                          {formatCurrency(mid)}
-                        </div>
-                      </div>
-                      <div style={COMMON_STYLES.metricCard}>
-                        <div style={COMMON_STYLES.dataLabel}>HIGH IMPLIED EV (Q3)</div>
-                        <div style={{ fontSize: '20px', color: FINCEPT.GREEN, marginTop: SPACING.TINY }}>
-                          {formatCurrency(high)}
-                        </div>
-                      </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                      <MAMetricCard label="LOW IMPLIED EV (Q1)" value={formatCurrency(low)} accentColor={FINCEPT.RED} />
+                      <MAMetricCard label="BLENDED IMPLIED EV" value={formatCurrency(mid)} accentColor={FINCEPT.CYAN} />
+                      <MAMetricCard label="HIGH IMPLIED EV (Q3)" value={formatCurrency(high)} accentColor={FINCEPT.GREEN} />
                     </div>
                   );
                 })()}
 
                 {/* Implied EV by Method */}
                 {result.data.target_valuation?.valuations && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.DEFAULT, marginBottom: SPACING.DEFAULT }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '16px' }}>
                     {result.data.target_valuation.valuations.ev_revenue_median != null && (
-                      <div style={COMMON_STYLES.metricCard}>
-                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>EV/Revenue Implied</div>
-                        <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                          {formatCurrency(result.data.target_valuation.valuations.ev_revenue_median)}
-                        </div>
-                      </div>
+                      <MAMetricCard label="EV/REVENUE IMPLIED" value={formatCurrency(result.data.target_valuation.valuations.ev_revenue_median)} accentColor={FINCEPT.WHITE} />
                     )}
                     {result.data.target_valuation.valuations.ev_ebitda_median != null && (
-                      <div style={COMMON_STYLES.metricCard}>
-                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>EV/EBITDA Implied</div>
-                        <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                          {formatCurrency(result.data.target_valuation.valuations.ev_ebitda_median)}
-                        </div>
-                      </div>
+                      <MAMetricCard label="EV/EBITDA IMPLIED" value={formatCurrency(result.data.target_valuation.valuations.ev_ebitda_median)} accentColor={FINCEPT.WHITE} />
                     )}
                   </div>
                 )}
 
                 {/* Transaction Multiples Summary */}
                 {result.data.summary_statistics && (
-                  <div style={{ marginBottom: SPACING.DEFAULT }}>
+                  <div style={{ marginBottom: '16px' }}>
                     <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>TRANSACTION MULTIPLES</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: SPACING.DEFAULT }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                       {[
-                        { label: 'EV/Revenue', median: result.data.summary_statistics.median?.['EV/Revenue'], mean: result.data.summary_statistics.mean?.['EV/Revenue'] },
-                        { label: 'EV/EBITDA', median: result.data.summary_statistics.median?.['EV/EBITDA'], mean: result.data.summary_statistics.mean?.['EV/EBITDA'] },
-                        { label: 'Premium 1D%', median: result.data.summary_statistics.median?.['Premium 1-Day (%)'], mean: result.data.summary_statistics.mean?.['Premium 1-Day (%)'] },
-                        { label: 'Deal Val ($M)', median: result.data.summary_statistics.median?.['Deal Value ($M)'], mean: result.data.summary_statistics.mean?.['Deal Value ($M)'] },
+                        { label: 'EV/Revenue', median: result.data.summary_statistics.median?.['EV/Revenue'], mean: result.data.summary_statistics.mean?.['EV/Revenue'], isPct: false, isCurrency: false },
+                        { label: 'EV/EBITDA', median: result.data.summary_statistics.median?.['EV/EBITDA'], mean: result.data.summary_statistics.mean?.['EV/EBITDA'], isPct: false, isCurrency: false },
+                        { label: 'Premium 1D%', median: result.data.summary_statistics.median?.['Premium 1-Day (%)'], mean: result.data.summary_statistics.mean?.['Premium 1-Day (%)'], isPct: true, isCurrency: false },
+                        { label: 'Deal Val ($M)', median: result.data.summary_statistics.median?.['Deal Value ($M)'], mean: result.data.summary_statistics.mean?.['Deal Value ($M)'], isPct: false, isCurrency: true },
                       ].map((m) => (
-                        <div key={m.label} style={COMMON_STYLES.metricCard}>
-                          <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, marginBottom: SPACING.TINY }}>{m.label}</div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TYPOGRAPHY.TINY }}>
+                        <div key={m.label} style={{
+                          backgroundColor: FINCEPT.PANEL_BG,
+                          border: `1px solid ${FINCEPT.BORDER}`,
+                          borderRadius: '2px',
+                          padding: '10px 12px',
+                        }}>
+                          <div style={{ fontSize: TYPOGRAPHY.TINY, fontFamily: TYPOGRAPHY.MONO, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.MUTED, marginBottom: '6px', letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>{m.label}</div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TYPOGRAPHY.TINY, fontFamily: TYPOGRAPHY.MONO, padding: '2px 0' }}>
                             <span style={{ color: FINCEPT.GRAY }}>Median:</span>
-                            <span style={{ color: FINCEPT.CYAN }}>{m.label.includes('$M') ? formatCurrency((m.median || 0) * 1_000_000) : `${(m.median || 0).toFixed(2)}${m.label.includes('%') ? '%' : 'x'}`}</span>
+                            <span style={{ color: FINCEPT.CYAN }}>{m.isCurrency ? formatCurrency((m.median || 0) * 1_000_000) : `${(m.median || 0).toFixed(2)}${m.isPct ? '%' : 'x'}`}</span>
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TYPOGRAPHY.TINY }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TYPOGRAPHY.TINY, fontFamily: TYPOGRAPHY.MONO, padding: '2px 0' }}>
                             <span style={{ color: FINCEPT.GRAY }}>Mean:</span>
-                            <span style={{ color: FINCEPT.WHITE }}>{m.label.includes('$M') ? formatCurrency((m.mean || 0) * 1_000_000) : `${(m.mean || 0).toFixed(2)}${m.label.includes('%') ? '%' : 'x'}`}</span>
+                            <span style={{ color: FINCEPT.WHITE }}>{m.isCurrency ? formatCurrency((m.mean || 0) * 1_000_000) : `${(m.mean || 0).toFixed(2)}${m.isPct ? '%' : 'x'}`}</span>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
+
+                {/* Precedent Scatter Plot */}
+                {result.data.comparables.length > 0 && (() => {
+                  const scatterData = result.data.comparables.map((row: any) => ({
+                    x: row['EV/Revenue'] || 0,
+                    y: row['EV/EBITDA'] || 0,
+                    name: row['Target'] || row['target_name'] || '',
+                    dealValue: row['Deal Value ($M)'] || 0,
+                  }));
+
+                  return (
+                    <div style={{ marginBottom: '16px' }}>
+                      <MAChartPanel
+                        title="TRANSACTION MULTIPLES SCATTER (EV/REV vs EV/EBITDA)"
+                        icon={<Grid3X3 size={12} />}
+                        accentColor={MA_COLORS.valuation}
+                        height={280}
+                      >
+                        <ScatterChart>
+                          <CartesianGrid strokeDasharray={gridStyle.strokeDasharray} stroke={gridStyle.stroke} />
+                          <XAxis
+                            type="number"
+                            dataKey="x"
+                            name="EV/Revenue"
+                            tick={axisStyle}
+                            axisLine={{ stroke: FINCEPT.BORDER }}
+                            label={{ value: 'EV/Revenue', position: 'insideBottom', offset: -5, style: { ...CHART_STYLE.label, fill: FINCEPT.GRAY } }}
+                          />
+                          <YAxis
+                            type="number"
+                            dataKey="y"
+                            name="EV/EBITDA"
+                            tick={axisStyle}
+                            axisLine={{ stroke: FINCEPT.BORDER }}
+                            label={{ value: 'EV/EBITDA', angle: -90, position: 'insideLeft', offset: 10, style: { ...CHART_STYLE.label, fill: FINCEPT.GRAY } }}
+                          />
+                          <Tooltip
+                            contentStyle={tooltipStyle}
+                            formatter={(value: number, name: string) => [
+                              `${value.toFixed(2)}x`,
+                              name === 'x' ? 'EV/Revenue' : 'EV/EBITDA'
+                            ]}
+                            labelFormatter={(label: string) => `${label}`}
+                          />
+                          <Scatter
+                            data={scatterData}
+                            fill={MA_COLORS.valuation}
+                            name="Transactions"
+                          >
+                            {scatterData.map((_: any, index: number) => (
+                              <Cell key={`cell-${index}`} fill={CHART_PALETTE[index % CHART_PALETTE.length]} />
+                            ))}
+                          </Scatter>
+                        </ScatterChart>
+                      </MAChartPanel>
+                    </div>
+                  );
+                })()}
 
                 {/* Comparable Transactions Table */}
                 <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>COMPARABLE TRANSACTIONS ({result.data.comp_count})</div>
-                <div style={{
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  borderRadius: '2px',
-                  overflow: 'auto',
-                }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
-                    <thead>
-                      <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
-                        {['Date', 'Acquirer', 'Target', 'Deal ($M)', 'EV/Rev', 'EV/EBITDA', 'Prem. 1D%', 'Payment'].map((h) => (
-                          <th key={h} style={{ padding: '8px 6px', textAlign: h === 'Date' || h === 'Acquirer' || h === 'Target' || h === 'Payment' ? 'left' : 'right', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}`, whiteSpace: 'nowrap' }}>
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.data.comparables.map((row: any, idx: number) => (
-                        <tr key={idx} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                          <td style={{ padding: '8px 6px', color: FINCEPT.GRAY }}>{row['Date']}</td>
-                          <td style={{ padding: '8px 6px', color: FINCEPT.WHITE, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row['Acquirer']}</td>
-                          <td style={{ padding: '8px 6px', color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row['Target']}</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['Deal Value ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV/Revenue'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV/EBITDA'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: (row['Premium 1-Day (%)'] || 0) > 0 ? FINCEPT.GREEN : FINCEPT.GRAY }}>{(row['Premium 1-Day (%)'] || 0).toFixed(1)}%</td>
-                          <td style={{ padding: '8px 6px', color: FINCEPT.GRAY }}>{row['Payment'] || '—'}</td>
-                        </tr>
-                      ))}
-                      {/* Median Row */}
-                      {result.data.summary_statistics?.median && (
-                        <tr style={{ backgroundColor: `${FINCEPT.CYAN}10`, borderTop: `2px solid ${FINCEPT.CYAN}` }}>
-                          <td style={{ padding: '8px 6px', color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>MEDIAN</td>
-                          <td style={{ padding: '8px 6px' }}>—</td>
-                          <td style={{ padding: '8px 6px' }}>—</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['Deal Value ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV/Revenue'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV/EBITDA'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['Premium 1-Day (%)'] || 0).toFixed(1)}%</td>
-                          <td style={{ padding: '8px 6px' }}>—</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Trading Comps Results */}
-            {method === 'comps' && result?.data?.comparables && (
-              <div style={{ marginBottom: SPACING.LARGE }}>
-                {/* Target & Summary Header */}
-                {result.data.target_ticker && (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr 1fr',
-                    gap: SPACING.DEFAULT,
-                    marginBottom: SPACING.DEFAULT,
-                  }}>
-                    <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.CYAN}15`, borderLeft: `3px solid ${FINCEPT.CYAN}` }}>
-                      <div style={COMMON_STYLES.dataLabel}>TARGET</div>
-                      <div style={{ fontSize: '24px', fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.CYAN, marginTop: SPACING.TINY }}>
-                        {result.data.target_ticker}
-                      </div>
-                    </div>
-                    <div style={COMMON_STYLES.metricCard}>
-                      <div style={COMMON_STYLES.dataLabel}>COMPARABLES</div>
-                      <div style={{ fontSize: '24px', fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                        {result.data.comp_count}
-                      </div>
-                    </div>
-                    <div style={COMMON_STYLES.metricCard}>
-                      <div style={COMMON_STYLES.dataLabel}>AS OF</div>
-                      <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                        {result.data.as_of_date}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Implied Valuation from Comps */}
-                {result.data.target_valuation?.valuations && (
-                  <div style={{ marginBottom: SPACING.DEFAULT }}>
-                    <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>IMPLIED ENTERPRISE VALUE</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT }}>
-                      <div style={COMMON_STYLES.metricCard}>
-                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>EV/Revenue (Median)</div>
-                        <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                          {formatCurrency(result.data.target_valuation.valuations.ev_revenue_median || 0)}
-                        </div>
-                      </div>
-                      <div style={COMMON_STYLES.metricCard}>
-                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>EV/EBITDA (Median)</div>
-                        <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
-                          {formatCurrency(result.data.target_valuation.valuations.ev_ebitda_median || 0)}
-                        </div>
-                      </div>
-                      <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.GREEN}15`, borderLeft: `3px solid ${FINCEPT.GREEN}` }}>
-                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Blended Median</div>
-                        <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.GREEN, marginTop: SPACING.TINY }}>
-                          {formatCurrency(result.data.target_valuation.valuations.blended_median || 0)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Comp Table */}
-                <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>COMPARABLE COMPANIES</div>
-                <div style={{
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  borderRadius: '2px',
-                  overflow: 'auto',
-                }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
-                    <thead>
-                      <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
-                        {['Ticker', 'Company', 'Mkt Cap ($M)', 'EV ($M)', 'EV/Rev', 'EV/EBITDA', 'EV/EBIT', 'P/E', 'Rev Gr.%', 'EBITDA Mg.%', 'Net Mg.%', 'ROE%'].map((h) => (
-                          <th key={h} style={{ padding: '8px 6px', textAlign: h === 'Ticker' || h === 'Company' ? 'left' : 'right', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}`, whiteSpace: 'nowrap' }}>
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.data.comparables.map((row: any, idx: number) => (
-                        <tr key={idx} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                          <td style={{ padding: '8px 6px', color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>{row['Ticker']}</td>
-                          <td style={{ padding: '8px 6px', color: FINCEPT.WHITE, maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row['Company']}</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['Market Cap ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV/Revenue'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV/EBITDA'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV/EBIT'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['P/E'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: (row['Rev Growth (%)'] || 0) >= 0 ? FINCEPT.GREEN : FINCEPT.RED }}>{(row['Rev Growth (%)'] || 0).toFixed(1)}%</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EBITDA Margin (%)'] || 0).toFixed(1)}%</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['Net Margin (%)'] || 0).toFixed(1)}%</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['ROE (%)'] || 0).toFixed(1)}%</td>
-                        </tr>
-                      ))}
-                      {/* Median Summary Row */}
-                      {result.data.summary_statistics?.median && (
-                        <tr style={{ backgroundColor: `${FINCEPT.CYAN}10`, borderTop: `2px solid ${FINCEPT.CYAN}` }}>
-                          <td style={{ padding: '8px 6px', color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>MEDIAN</td>
-                          <td style={{ padding: '8px 6px', color: FINCEPT.GRAY }}>—</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['Market Cap ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV/Revenue'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV/EBITDA'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV/EBIT'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['P/E'] || 0).toFixed(1)}x</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['Rev Growth (%)'] || 0).toFixed(1)}%</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EBITDA Margin (%)'] || 0).toFixed(1)}%</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['Net Margin (%)'] || 0).toFixed(1)}%</td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['ROE (%)'] || 0).toFixed(1)}%</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                <MADataTable
+                  columns={[
+                    { key: 'Date', label: 'Date', width: '80px', align: 'left', format: (v: string) => <span style={{ color: FINCEPT.GRAY }}>{v || '--'}</span> },
+                    { key: 'Acquirer', label: 'Acquirer', width: '120px', align: 'left' },
+                    { key: 'Target', label: 'Target', width: '120px', align: 'left', format: (v: string) => <span style={{ color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>{v}</span> },
+                    { key: 'Deal Value ($M)', label: 'Deal ($M)', align: 'right', format: (v: number) => (v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) },
+                    { key: 'EV/Revenue', label: 'EV/Rev', align: 'right', format: (v: number) => `${(v || 0).toFixed(1)}x` },
+                    { key: 'EV/EBITDA', label: 'EV/EBITDA', align: 'right', format: (v: number) => `${(v || 0).toFixed(1)}x` },
+                    { key: 'Premium 1-Day (%)', label: 'Prem. 1D%', align: 'right', format: (v: number) => <span style={{ color: (v || 0) > 0 ? FINCEPT.GREEN : FINCEPT.GRAY }}>{(v || 0).toFixed(1)}%</span> },
+                    { key: 'Payment', label: 'Payment', width: '80px', align: 'left', format: (v: string) => v || '--' },
+                  ]}
+                  data={[
+                    ...result.data.comparables,
+                    ...(result.data.summary_statistics?.median ? [{
+                      'Date': 'MEDIAN',
+                      'Acquirer': '--',
+                      'Target': '--',
+                      'Deal Value ($M)': result.data.summary_statistics.median['Deal Value ($M)'] || 0,
+                      'EV/Revenue': result.data.summary_statistics.median['EV/Revenue'] || 0,
+                      'EV/EBITDA': result.data.summary_statistics.median['EV/EBITDA'] || 0,
+                      'Premium 1-Day (%)': result.data.summary_statistics.median['Premium 1-Day (%)'] || 0,
+                      'Payment': '--',
+                    }] : []),
+                  ]}
+                  accentColor={MA_COLORS.valuation}
+                  compact
+                  maxHeight="350px"
+                />
               </div>
             )}
 
@@ -1259,15 +1694,17 @@ export const ValuationToolkit: React.FC = () => {
                (method === 'comps' && result?.data?.comparables) ||
                (method === 'precedent' && result?.data?.comparables)) && (
               <div>
-                <div style={COMMON_STYLES.dataLabel}>DETAILED RESULTS</div>
+                <MASectionHeader title="DETAILED RESULTS" icon={<DollarSign size={14} />} accentColor={FINCEPT.GRAY} />
                 <pre style={{
                   fontSize: TYPOGRAPHY.TINY,
+                  fontFamily: TYPOGRAPHY.MONO,
                   color: FINCEPT.GRAY,
                   backgroundColor: FINCEPT.PANEL_BG,
                   padding: SPACING.DEFAULT,
                   borderRadius: '2px',
                   overflow: 'auto',
                   maxHeight: '300px',
+                  border: `1px solid ${FINCEPT.BORDER}`,
                 }}>
                   {JSON.stringify(result, null, 2)}
                 </pre>
@@ -1275,15 +1712,12 @@ export const ValuationToolkit: React.FC = () => {
             )}
           </div>
         ) : (
-          <div style={COMMON_STYLES.emptyState}>
-            <Calculator size={48} style={{ opacity: 0.3, marginBottom: SPACING.DEFAULT }} />
-            <div style={{ fontSize: TYPOGRAPHY.BODY, color: FINCEPT.GRAY }}>
-              Select a valuation method and configure inputs
-            </div>
-            <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED, marginTop: SPACING.SMALL }}>
-              DCF • LBO Analysis • Trading Comps • Precedent Transactions
-            </div>
-          </div>
+          <MAEmptyState
+            icon={<Calculator size={48} />}
+            title="SELECT A VALUATION METHOD"
+            description="Configure inputs and run DCF, LBO, Trading Comps, or Precedent Transaction analysis"
+            accentColor={MA_COLORS.valuation}
+          />
         )}
       </div>
     </div>

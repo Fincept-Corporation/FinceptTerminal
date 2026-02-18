@@ -366,7 +366,7 @@ def main():
             process_factors = json.loads(sys.argv[2])
 
             # Extract process_type from input, default to 'targeted_auction'
-            process_type_str = process_factors.get('process_type', 'targeted_auction').upper()
+            process_type_str = process_factors.get('process_type', 'targeted_auction').upper().replace('-', '_').replace(' ', '_')
             process_type = ProcessType[process_type_str] if process_type_str in ProcessType.__members__ else ProcessType.TARGETED_AUCTION
 
             assessment = ProcessQualityAssessment(process_type)

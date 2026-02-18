@@ -76,15 +76,36 @@ export class BrokerMCPBridge {
 
     try {
       if (typeof adapter.fetchMarkets === 'function') {
-        const markets = await adapter.fetchMarkets();
-        this.marketsCache = markets;
-        this.marketsCacheTime = now;
-        this.buildMarketsIndex(markets);
-        console.log(`[BrokerMCPBridge] Loaded ${markets.length} markets, index has ${this.marketsIndex?.size || 0} keys`);
-        return markets;
+        // Retry logic for fetchMarkets with exponential backoff
+        let lastError: any = null;
+        const maxRetries = 2;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            const markets = await adapter.fetchMarkets();
+            this.marketsCache = markets;
+            this.marketsCacheTime = now;
+            this.buildMarketsIndex(markets);
+            console.log(`[BrokerMCPBridge] Loaded ${markets.length} markets, index has ${this.marketsIndex?.size || 0} keys`);
+            return markets;
+          } catch (err: any) {
+            lastError = err;
+            const isTimeout = err?.message?.includes('timed out') || err?.message?.includes('timeout');
+
+            if (isTimeout && attempt < maxRetries) {
+              const delay = 2000 * Math.pow(2, attempt); // 2s, 4s
+              console.warn(`[BrokerMCPBridge] Market fetch timeout (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+              throw err;
+            }
+          }
+        }
+
+        if (lastError) throw lastError;
       }
     } catch (err) {
-      console.warn('[BrokerMCPBridge] Failed to fetch markets:', err);
+      console.warn('[BrokerMCPBridge] Failed to fetch markets after retries:', err);
     }
     return this.marketsCache || [];
   }
@@ -167,6 +188,12 @@ export class BrokerMCPBridge {
     const broker = this.config?.activeBroker || '';
     if (!adapter) throw new Error('No adapter connected');
 
+    // Validate adapter belongs to current broker to prevent stale config issues
+    if (adapter && 'id' in adapter && adapter.id !== broker) {
+      console.warn(`[BrokerMCPBridge] Adapter ID (${adapter.id}) mismatch with broker (${broker}) - config may be stale`);
+      throw new Error(`Broker adapter mismatch - please retry`);
+    }
+
     const input = query.trim();
     const inputLower = input.toLowerCase();
     const marketDataService = getMarketDataService();
@@ -176,7 +203,15 @@ export class BrokerMCPBridge {
     // Tries the active adapter first, then the real exchange adapter (for paper mode).
     const fetchAndCachePrice = async (symbol: string): Promise<number | undefined> => {
       const adaptersToTry = [adapter];
-      if (marketAdapter && marketAdapter !== adapter) adaptersToTry.push(marketAdapter);
+      if (marketAdapter && marketAdapter !== adapter) {
+        // Validate market adapter also belongs to current broker
+        if ('id' in marketAdapter && marketAdapter.id !== broker) {
+          console.warn(`[BrokerMCPBridge] Market adapter ID (${marketAdapter.id}) mismatch with broker (${broker})`);
+        } else {
+          adaptersToTry.push(marketAdapter);
+        }
+      }
+
       for (const a of adaptersToTry) {
         try {
           const ticker = await a.fetchTicker(symbol);

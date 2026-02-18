@@ -23,9 +23,9 @@ import { initializeMarketDataService, getMarketDataService } from '../services/t
 import { brokerMCPBridge } from '@/services/mcp/internal';
 
 // Constants
-const CONNECTION_TIMEOUT = 10000; // 10 seconds
-const CONNECTION_RETRY_ATTEMPTS = 3;
-const CONNECTION_RETRY_DELAY = 2000; // 2 seconds
+const CONNECTION_TIMEOUT = 30000; // 30 seconds (CCXT loadMarkets can be slow)
+const CONNECTION_RETRY_ATTEMPTS = 2; // Reduced to avoid long waits on network issues
+const CONNECTION_RETRY_DELAY = 3000; // 3 seconds
 
 // Helper to validate storage values
 function validateTradingMode(value: string | null): 'live' | 'paper' | null {
@@ -302,8 +302,17 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
     let newPaperAdapter: PaperTradingAdapter | null = null;
 
     try {
-      // Clean up old adapters first
+      // Clean up old adapters first and wait for completion to prevent race conditions
       await cleanupAdapters(realAdapter);
+
+      // Also cleanup old paper adapter if exists to clear pending orders
+      if (paperAdapter) {
+        try {
+          await paperAdapter.disconnect();
+        } catch (err) {
+          console.error('[BrokerContext] Paper adapter disconnect error:', err);
+        }
+      }
 
       if (signal.aborted) return;
 
@@ -312,8 +321,11 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
       try {
         await retryConnect(() => newRealAdapter!.connect());
-      } catch (connectError) {
-        console.error(`[BrokerContext] [WARN] Failed to connect ${activeBroker} real adapter after retries:`, connectError);
+      } catch (connectError: any) {
+        // Non-fatal: paper trading can still work without real connection
+        // This commonly happens with CORS restrictions or slow networks
+        const errMsg = connectError?.message || String(connectError);
+        console.warn(`[BrokerContext] [WARN] Failed to connect ${activeBroker} real adapter after retries: ${errMsg}`);
       }
 
       if (signal.aborted) {

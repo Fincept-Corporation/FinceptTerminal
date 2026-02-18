@@ -13,9 +13,12 @@ from datetime import datetime
 def get_quote(symbol):
     """Fetch real-time quote for a single symbol"""
     try:
+        import io, contextlib
         ticker = yf.Ticker(symbol)
-        info = ticker.info
-        hist = ticker.history(period="1d")
+        _buf = io.StringIO()
+        with contextlib.redirect_stdout(_buf):
+            info = ticker.info
+            hist = ticker.history(period="1d")
 
         if hist.empty:
             return {"error": "No data available", "symbol": symbol}
@@ -54,8 +57,11 @@ def get_historical(symbol, start_date, end_date, interval='1d'):
                   Note: Intraday data (< 1d) is only available for last 60 days
     """
     try:
+        import io, contextlib
         ticker = yf.Ticker(symbol)
-        hist = ticker.history(start=start_date, end=end_date, interval=interval)
+        _buf = io.StringIO()
+        with contextlib.redirect_stdout(_buf):
+            hist = ticker.history(start=start_date, end=end_date, interval=interval)
 
         if hist.empty:
             return []
@@ -238,11 +244,19 @@ def get_financials(symbol):
 def get_batch_quotes(symbols):
     """Fetch quotes for multiple symbols at once using yfinance batch download"""
     try:
-        # Use yfinance download() for true batch fetching (single HTTP request)
-        data = yf.download(symbols, period="2d", group_by='ticker', progress=False, threads=True, auto_adjust=True)
+        import io, contextlib
+        # Suppress any stdout noise from yfinance (progress bars, deprecation notices)
+        # that would corrupt the JSON output parsed by Rust
+        _buf = io.StringIO()
+        with contextlib.redirect_stdout(_buf):
+            data = yf.download(symbols, period="5d", group_by='ticker', progress=False, threads=False, auto_adjust=True)
 
         if data is None or data.empty:
             return []
+
+        # Flatten MultiIndex columns if present (newer yfinance versions)
+        if isinstance(data.columns, pd.MultiIndex):
+            pass  # keep as-is, handled per symbol below
 
         results = []
         for symbol in symbols:
@@ -252,15 +266,22 @@ def get_batch_quotes(symbols):
                     hist = data
                 else:
                     # Multiple symbols: data columns are multi-level (symbol, OHLCV)
-                    if symbol not in data.columns.get_level_values(0):
+                    level0 = data.columns.get_level_values(0)
+                    level1 = data.columns.get_level_values(1) if data.columns.nlevels > 1 else level0
+                    # Support both (OHLCV, symbol) and (symbol, OHLCV) orderings
+                    if symbol in level0:
+                        hist = data[symbol]
+                    elif symbol in level1:
+                        hist = data.xs(symbol, axis=1, level=1)
+                    else:
                         continue
-                    hist = data[symbol]
 
                 if hist.empty or hist.dropna(how='all').empty:
                     continue
 
                 hist = hist.dropna(how='all')
                 current_price = float(hist['Close'].iloc[-1])
+                # Use previous trading day close (iloc[-2]) for accurate daily change
                 previous_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else current_price
                 change = current_price - previous_close
                 change_percent = (change / previous_close) * 100 if previous_close else 0

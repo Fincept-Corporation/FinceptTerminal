@@ -1573,55 +1573,54 @@ const completeFinancialNodes: Node[] = [
       onLLMChange: () => {},
     },
   },
-  // 48. GeopoliticsAgentNode
+  // 48. AI Agent (Geopolitics)
   {
     id: 'complete_agent_geopolitics',
     type: 'custom',
     position: { x: 1050, y: 1500 },
     data: {
       label: 'Geopolitics Agent',
-      nodeTypeName: 'geopoliticsAgent',
+      nodeTypeName: 'aiAgent',
       color: '#8b5cf6',
       hasInput: true,
       hasOutput: true,
       status: 'idle',
       parameters: {
-        region: 'global',
-        analysisType: 'risk',
+        category: 'geopolitics',
       },
     },
   },
-  // 49. HedgeFundAgentNode
+  // 49. AI Agent (Hedge Fund)
   {
     id: 'complete_agent_hedgefund',
     type: 'custom',
     position: { x: 1300, y: 1500 },
     data: {
       label: 'Hedge Fund Agent',
-      nodeTypeName: 'hedgeFundAgent',
+      nodeTypeName: 'aiAgent',
       color: '#8b5cf6',
       hasInput: true,
       hasOutput: true,
       status: 'idle',
       parameters: {
-        strategy: 'long_short_equity',
+        category: 'hedgeFund',
       },
     },
   },
-  // 50. InvestorAgentNode
+  // 50. AI Agent (Investor)
   {
     id: 'complete_agent_investor',
     type: 'custom',
     position: { x: 550, y: 1650 },
     data: {
       label: 'Investor Agent',
-      nodeTypeName: 'investorAgent',
+      nodeTypeName: 'aiAgent',
       color: '#8b5cf6',
       hasInput: true,
       hasOutput: true,
       status: 'idle',
       parameters: {
-        persona: 'warren_buffett',
+        category: 'investor',
       },
     },
   },

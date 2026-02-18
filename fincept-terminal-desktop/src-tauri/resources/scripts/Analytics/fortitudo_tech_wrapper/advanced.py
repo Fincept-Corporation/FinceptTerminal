@@ -242,6 +242,8 @@ def calculate_exposure_stacking(
     Returns:
         Dictionary with stacked portfolio and analysis
     """
+    if sample_portfolios.ndim == 1:
+        sample_portfolios = sample_portfolios.reshape(-1, 1)
     n_assets, n_samples = sample_portfolios.shape
 
     # Calculate exposure stacking portfolio

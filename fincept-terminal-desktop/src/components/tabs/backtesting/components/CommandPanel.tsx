@@ -1,11 +1,12 @@
 /**
- * CommandPanel - Left panel with command list and strategy categories
- * Design system: watchlist-style items with orange left-border, flat panels
+ * CommandPanel - Left sidebar (220px) with command list + strategy categories
+ * Matches portfolio HoldingsHeatmap sidebar pattern: dense, watchlist-style items
  */
 
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
-import { FINCEPT, FONT_FAMILY, PROVIDER_COLORS } from '../constants';
+import { FINCEPT, TYPOGRAPHY, SPACING, EFFECTS } from '../../portfolio-tab/finceptStyles';
+import { PROVIDER_COLORS } from '../constants';
 import type { BacktestingState } from '../types';
 
 interface CommandPanelProps {
@@ -22,7 +23,8 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({ state }) => {
 
   return (
     <div style={{
-      width: '280px',
+      width: '220px',
+      flexShrink: 0,
       backgroundColor: FINCEPT.PANEL_BG,
       borderRight: `1px solid ${FINCEPT.BORDER}`,
       display: 'flex',
@@ -31,7 +33,7 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({ state }) => {
     }}>
       {/* Commands Header */}
       <div style={{
-        padding: '12px',
+        padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
         backgroundColor: FINCEPT.HEADER_BG,
         borderBottom: `1px solid ${FINCEPT.BORDER}`,
         display: 'flex',
@@ -39,24 +41,27 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({ state }) => {
         justifyContent: 'space-between',
       }}>
         <span style={{
-          fontSize: '9px',
-          fontWeight: 700,
-          color: FINCEPT.GRAY,
+          fontSize: TYPOGRAPHY.TINY,
+          fontWeight: TYPOGRAPHY.BOLD,
+          color: FINCEPT.ORANGE,
           letterSpacing: '0.5px',
-          fontFamily: FONT_FAMILY,
+          textTransform: 'uppercase',
         }}>
           COMMANDS
         </span>
         <span style={{
-          fontSize: '9px',
-          fontWeight: 700,
+          fontSize: '8px',
+          fontWeight: TYPOGRAPHY.BOLD,
           color: providerColor,
+          padding: '1px 5px',
+          backgroundColor: `${providerColor}15`,
+          borderRadius: '2px',
         }}>
           {providerCommands.length}
         </span>
       </div>
 
-      {/* Command List - Watchlist style */}
+      {/* Command List */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {providerCommands.map(cmd => {
           const Icon = cmd.icon;
@@ -66,42 +71,40 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({ state }) => {
             <div
               key={cmd.id}
               onClick={() => setActiveCommand(cmd.id)}
+              className="bt-row"
               style={{
-                padding: '10px 12px',
-                backgroundColor: isActive ? `${FINCEPT.ORANGE}15` : 'transparent',
+                padding: '8px 10px',
+                backgroundColor: isActive ? `${FINCEPT.ORANGE}08` : 'transparent',
                 borderLeft: isActive ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
                 cursor: 'pointer',
-                transition: 'all 0.2s',
+                transition: EFFECTS.TRANSITION_FAST,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-              }}
-              onMouseEnter={e => {
-                if (!isActive) e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-              }}
-              onMouseLeave={e => {
-                if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
+                gap: '6px',
               }}
             >
-              <Icon size={12} color={isActive ? FINCEPT.ORANGE : FINCEPT.MUTED} />
-              <div style={{ flex: 1 }}>
+              <Icon size={10} color={isActive ? FINCEPT.ORANGE : FINCEPT.MUTED} style={isActive ? { filter: EFFECTS.ICON_GLOW_ORANGE } : undefined} />
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
                   fontSize: '10px',
-                  fontWeight: 700,
+                  fontWeight: TYPOGRAPHY.BOLD,
                   color: isActive ? FINCEPT.WHITE : FINCEPT.GRAY,
-                  fontFamily: FONT_FAMILY,
+                  letterSpacing: '0.3px',
                 }}>
                   {cmd.label}
                 </div>
                 <div style={{
                   fontSize: '8px',
                   color: FINCEPT.MUTED,
-                  marginTop: '2px',
+                  marginTop: '1px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}>
                   {cmd.description}
                 </div>
               </div>
-              <ChevronRight size={10} color={isActive ? FINCEPT.ORANGE : FINCEPT.MUTED} />
+              <ChevronRight size={9} color={isActive ? FINCEPT.ORANGE : FINCEPT.MUTED} style={{ flexShrink: 0 }} />
             </div>
           );
         })}
@@ -111,22 +114,24 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({ state }) => {
       {['backtest', 'optimize', 'walk_forward'].includes(activeCommand) && (
         <>
           <div style={{
-            padding: '12px',
+            padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
             backgroundColor: FINCEPT.HEADER_BG,
             borderTop: `1px solid ${FINCEPT.BORDER}`,
             borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}>
             <span style={{
-              fontSize: '9px',
-              fontWeight: 700,
-              color: FINCEPT.GRAY,
+              fontSize: TYPOGRAPHY.TINY,
+              fontWeight: TYPOGRAPHY.BOLD,
+              color: FINCEPT.ORANGE,
               letterSpacing: '0.5px',
-              fontFamily: FONT_FAMILY,
             }}>
               STRATEGIES
             </span>
           </div>
-          <div style={{ overflowY: 'auto', maxHeight: '280px' }}>
+          <div style={{ overflowY: 'auto', maxHeight: '260px' }}>
             {Object.entries(providerCategoryInfo).map(([key, info]: [string, any]) => {
               const CatIcon = info.icon;
               const isActive = selectedCategory === key;
@@ -136,36 +141,32 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({ state }) => {
                 <div
                   key={key}
                   onClick={() => setSelectedCategory(key)}
+                  className="bt-row"
                   style={{
-                    padding: '8px 12px',
-                    backgroundColor: isActive ? `${info.color}15` : 'transparent',
+                    padding: '6px 10px',
+                    backgroundColor: isActive ? `${info.color}08` : 'transparent',
                     borderLeft: isActive ? `2px solid ${info.color}` : '2px solid transparent',
                     cursor: 'pointer',
-                    transition: 'all 0.2s',
+                    transition: EFFECTS.TRANSITION_FAST,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
-                  }}
-                  onMouseEnter={e => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-                  }}
-                  onMouseLeave={e => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
+                    gap: '6px',
                   }}
                 >
-                  <CatIcon size={11} color={isActive ? info.color : FINCEPT.MUTED} />
+                  <CatIcon size={9} color={isActive ? info.color : FINCEPT.MUTED} />
                   <span style={{
-                    fontSize: '9px',
-                    fontWeight: 700,
+                    fontSize: TYPOGRAPHY.TINY,
+                    fontWeight: TYPOGRAPHY.BOLD,
                     color: isActive ? FINCEPT.WHITE : FINCEPT.GRAY,
-                    fontFamily: FONT_FAMILY,
                     flex: 1,
                     letterSpacing: '0.3px',
+                    textTransform: 'uppercase',
                   }}>
-                    {info.label.toUpperCase()}
+                    {info.label}
                   </span>
                   <span style={{
                     fontSize: '8px',
+                    fontWeight: TYPOGRAPHY.BOLD,
                     color: isActive ? info.color : FINCEPT.MUTED,
                   }}>
                     {count}

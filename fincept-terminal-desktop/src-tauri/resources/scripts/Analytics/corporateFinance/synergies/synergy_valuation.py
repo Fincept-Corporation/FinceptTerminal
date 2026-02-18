@@ -230,11 +230,13 @@ class SynergyValuation:
 
             synergy_realized = total_synergies * pct
 
+            # Calculate incremental before appending current entry
+            prev_synergy = yearly_realization[-1]['synergies_realized'] if yearly_realization else 0
             yearly_realization.append({
                 'year': year,
                 'realization_pct': pct * 100,
                 'synergies_realized': synergy_realized,
-                'incremental_synergies': synergy_realized - (yearly_realization[-1]['synergies_realized'] if year > 1 else 0)
+                'incremental_synergies': synergy_realized - prev_synergy
             })
 
         return {

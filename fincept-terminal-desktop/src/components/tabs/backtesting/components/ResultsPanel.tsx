@@ -1,11 +1,11 @@
 /**
- * ResultsPanel - Right panel shell that routes to result views
- * Design system: flat HEADER_BG, 2px radius, tab-style view switcher
+ * ResultsPanel - Right sidebar (320px): result view routing
+ * Dense terminal layout with tab-style view switcher, error/warning alerts
  */
 
 import React from 'react';
 import { BarChart3, Loader, AlertCircle } from 'lucide-react';
-import { FINCEPT, FONT_FAMILY } from '../constants';
+import { FINCEPT, TYPOGRAPHY, SPACING, EFFECTS, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
 import type { BacktestingState } from '../types';
 import {
   ResultSummary, ResultMetrics, ResultTrades, ResultRaw, SignalsResult, IndicatorResult,
@@ -21,8 +21,9 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ state }) => {
 
   return (
     <div style={{
-      width: '300px',
-      minWidth: '300px',
+      width: '320px',
+      minWidth: '320px',
+      flexShrink: 0,
       backgroundColor: FINCEPT.DARK_BG,
       borderLeft: `1px solid ${FINCEPT.BORDER}`,
       display: 'flex',
@@ -31,32 +32,47 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ state }) => {
     }}>
       {/* Header */}
       <div style={{
-        padding: '12px 16px',
+        padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
         backgroundColor: FINCEPT.HEADER_BG,
         borderBottom: `1px solid ${FINCEPT.BORDER}`,
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '6px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <BarChart3 size={12} color={FINCEPT.ORANGE} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <BarChart3 size={10} color={FINCEPT.ORANGE} style={{ filter: EFFECTS.ICON_GLOW_ORANGE }} />
           <span style={{
             fontSize: '11px',
-            fontWeight: 700,
+            fontWeight: TYPOGRAPHY.BOLD,
             color: FINCEPT.WHITE,
             letterSpacing: '0.5px',
-            fontFamily: FONT_FAMILY,
           }}>
             RESULTS
           </span>
+          {result && !isRunning && (
+            <span style={{
+              ...COMMON_STYLES.badgeSuccess,
+              marginLeft: 'auto',
+            }}>
+              OK
+            </span>
+          )}
+          {error && (
+            <span style={{
+              ...COMMON_STYLES.badgeError,
+              marginLeft: 'auto',
+            }}>
+              ERR
+            </span>
+          )}
         </div>
 
-        {/* View Tabs (only for backtest command with results) */}
+        {/* View Tabs (for backtest command with results) */}
         {activeCommand === 'backtest' && result && !isRunning && (
           <div style={{
             display: 'flex',
             gap: '2px',
-            padding: '3px',
+            padding: '2px',
             backgroundColor: FINCEPT.DARK_BG,
             borderRadius: '2px',
             flexWrap: 'wrap',
@@ -65,17 +81,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ state }) => {
               <button
                 key={view}
                 onClick={() => setResultView(view)}
-                style={{
-                  padding: '5px 8px',
-                  backgroundColor: resultView === view ? FINCEPT.ORANGE : 'transparent',
-                  color: resultView === view ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                  border: 'none',
-                  borderRadius: '2px',
-                  fontSize: '8px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontFamily: FONT_FAMILY,
-                }}
+                style={COMMON_STYLES.tabButton(resultView === view)}
               >
                 {view.toUpperCase()}
               </button>
@@ -85,28 +91,26 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ state }) => {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: SPACING.DEFAULT }}>
         {/* Error */}
         {error && (
           <div style={{
-            padding: '12px',
+            padding: SPACING.DEFAULT,
             backgroundColor: `${FINCEPT.RED}20`,
             border: `1px solid ${FINCEPT.RED}`,
             borderRadius: '2px',
+            marginBottom: SPACING.MEDIUM,
           }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <AlertCircle size={14} color={FINCEPT.RED} style={{ marginTop: '2px' }} />
+              <AlertCircle size={12} color={FINCEPT.RED} style={{ marginTop: '1px', flexShrink: 0 }} />
               <div>
                 <div style={{
-                  fontSize: '9px',
-                  fontWeight: 700,
-                  color: FINCEPT.RED,
-                  marginBottom: '4px',
-                  fontFamily: FONT_FAMILY,
+                  fontSize: TYPOGRAPHY.TINY, fontWeight: TYPOGRAPHY.BOLD,
+                  color: FINCEPT.RED, marginBottom: SPACING.TINY, letterSpacing: '0.5px',
                 }}>
                   ERROR
                 </div>
-                <div style={{ fontSize: '9px', color: FINCEPT.WHITE, lineHeight: 1.4, fontFamily: FONT_FAMILY }}>
+                <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.WHITE, lineHeight: 1.4 }}>
                   {error}
                 </div>
               </div>
@@ -117,16 +121,13 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ state }) => {
         {/* Loading */}
         {isRunning && (
           <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '40px 20px',
-            gap: '12px',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            padding: '40px 20px', gap: SPACING.DEFAULT,
           }}>
-            <Loader size={24} color={FINCEPT.ORANGE} className="animate-spin" />
-            <span style={{ fontSize: '10px', color: FINCEPT.GRAY, fontFamily: FONT_FAMILY }}>
-              Running {activeCommand}...
+            <Loader size={20} color={FINCEPT.ORANGE} className="animate-spin" style={{ filter: EFFECTS.ICON_GLOW_ORANGE }} />
+            <span style={{ fontSize: TYPOGRAPHY.SMALL, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+              Running {activeCommand.toUpperCase().replace('_', ' ')}...
             </span>
           </div>
         )}
@@ -137,32 +138,23 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ state }) => {
             {/* Synthetic data warning */}
             {(result?.data?.usingSyntheticData || result?.data?.syntheticDataWarning) && (
               <div style={{
-                padding: '10px 12px',
-                marginBottom: '10px',
+                padding: '8px 10px',
+                marginBottom: SPACING.MEDIUM,
                 backgroundColor: `${FINCEPT.ORANGE}15`,
                 border: `1px solid ${FINCEPT.ORANGE}`,
                 borderRadius: '2px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '8px',
+                display: 'flex', alignItems: 'flex-start', gap: '6px',
               }}>
-                <AlertCircle size={14} color={FINCEPT.ORANGE} style={{ marginTop: '2px', flexShrink: 0 }} />
+                <AlertCircle size={12} color={FINCEPT.ORANGE} style={{ marginTop: '1px', flexShrink: 0 }} />
                 <div>
                   <div style={{
-                    fontSize: '9px',
-                    fontWeight: 800,
-                    color: FINCEPT.ORANGE,
-                    marginBottom: '3px',
-                    letterSpacing: '0.5px',
-                    fontFamily: FONT_FAMILY,
+                    fontSize: '8px', fontWeight: 800, color: FINCEPT.ORANGE,
+                    marginBottom: '2px', letterSpacing: '0.5px',
                   }}>
-                    SYNTHETIC DATA WARNING
+                    SYNTHETIC DATA
                   </div>
-                  <div style={{ fontSize: '8px', color: FINCEPT.WHITE, lineHeight: 1.5, opacity: 0.85, fontFamily: FONT_FAMILY }}>
-                    {result?.data?.syntheticDataWarning ||
-                      'This backtest used SYNTHETIC (fake) data because real market data could not be loaded. ' +
-                      'Install yfinance (pip install yfinance) and ensure internet connectivity for real results. ' +
-                      'These results have NO financial meaning.'}
+                  <div style={{ fontSize: '8px', color: FINCEPT.WHITE, lineHeight: 1.5, opacity: 0.85 }}>
+                    {result?.data?.syntheticDataWarning || 'Results based on synthetic data. Install yfinance for real market data.'}
                   </div>
                 </div>
               </div>
@@ -177,58 +169,41 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ state }) => {
                 {resultView === 'trades' && <ResultTrades result={result} />}
                 {resultView === 'raw' && <ResultRaw result={result} />}
 
-                {/* Empty result warning */}
                 {!result?.data?.performance && (
                   <div style={{
-                    padding: '12px',
+                    padding: SPACING.DEFAULT,
                     backgroundColor: `${FINCEPT.YELLOW}20`,
                     border: `1px solid ${FINCEPT.YELLOW}`,
                     borderRadius: '2px',
                   }}>
                     <div style={{
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      color: FINCEPT.YELLOW,
-                      marginBottom: '4px',
-                      fontFamily: FONT_FAMILY,
+                      fontSize: TYPOGRAPHY.TINY, fontWeight: TYPOGRAPHY.BOLD,
+                      color: FINCEPT.YELLOW, marginBottom: SPACING.TINY,
                     }}>
                       EMPTY RESULT
                     </div>
-                    <div style={{ fontSize: '9px', color: FINCEPT.WHITE, lineHeight: 1.4, fontFamily: FONT_FAMILY }}>
-                      Backtest completed but returned no performance data. Check console logs for details.
+                    <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.WHITE, lineHeight: 1.4 }}>
+                      Backtest completed but returned no performance data.
                     </div>
                   </div>
                 )}
               </>
             )}
 
-            {/* Optimize / Walk Forward - show metrics + raw */}
+            {/* Other command results */}
             {(activeCommand === 'optimize' || activeCommand === 'walk_forward') && (
               <>
                 <ResultMetrics result={result} />
-                <div style={{ marginTop: '12px' }}><ResultRaw result={result} /></div>
+                <div style={{ marginTop: SPACING.DEFAULT }}><ResultRaw result={result} /></div>
               </>
             )}
-
-            {/* Indicator Signals */}
             {activeCommand === 'indicator_signals' && <SignalsResult result={result} />}
-
-            {/* Indicator */}
             {activeCommand === 'indicator' && <IndicatorResult result={result} />}
-
-            {/* Labels */}
             {activeCommand === 'labels' && <LabelsResult result={result} />}
-
-            {/* Splitters */}
             {activeCommand === 'splits' && <SplittersResult result={result} />}
-
-            {/* Returns */}
             {activeCommand === 'returns' && <ReturnsResult result={result} />}
-
-            {/* Random Signals */}
             {activeCommand === 'signals' && <SignalsGeneratorResult result={result} />}
 
-            {/* Fallback for any unknown commands */}
             {!['backtest', 'optimize', 'walk_forward', 'indicator_signals', 'indicator',
               'labels', 'splits', 'returns', 'signals'].includes(activeCommand) && <ResultRaw result={result} />}
           </div>
@@ -237,20 +212,14 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ state }) => {
         {/* Empty State */}
         {!result && !isRunning && !error && (
           <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            color: FINCEPT.MUTED,
-            fontSize: '10px',
-            textAlign: 'center',
-            gap: '8px',
-            fontFamily: FONT_FAMILY,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            height: '100%', color: FINCEPT.MUTED,
+            fontSize: TYPOGRAPHY.SMALL, textAlign: 'center', gap: '8px',
           }}>
-            <BarChart3 size={24} style={{ opacity: 0.5 }} />
-            <span>No results yet</span>
-            <span style={{ fontSize: '9px' }}>Configure and run</span>
+            <BarChart3 size={20} style={{ opacity: 0.3 }} />
+            <span style={{ letterSpacing: '0.5px' }}>NO RESULTS YET</span>
+            <span style={{ fontSize: '8px' }}>Configure and run a command</span>
           </div>
         )}
       </div>

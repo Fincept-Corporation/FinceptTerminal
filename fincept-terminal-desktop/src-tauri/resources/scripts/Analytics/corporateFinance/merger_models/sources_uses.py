@@ -230,12 +230,13 @@ def main():
             deal_structure = json.loads(sys.argv[2])
             financing_structure = json.loads(sys.argv[3])
 
+            # Handle frontend field name aliases
             builder = SourcesUsesBuilder(
                 purchase_price=deal_structure.get('purchase_price', 0),
-                target_debt_refinanced=deal_structure.get('target_debt_refinanced', 0),
-                acquirer_cash=financing_structure.get('acquirer_cash', 0),
+                target_debt_refinanced=deal_structure.get('target_debt_refinanced', deal_structure.get('target_debt', 0)),
+                acquirer_cash=financing_structure.get('acquirer_cash', financing_structure.get('cash_on_hand', 0)),
                 new_debt=financing_structure.get('new_debt', 0),
-                new_equity=financing_structure.get('new_equity', 0)
+                new_equity=financing_structure.get('new_equity', financing_structure.get('stock_issuance', 0))
             )
 
             if 'transaction_fees' in deal_structure:
@@ -243,7 +244,9 @@ def main():
             else:
                 builder.estimate_transaction_fees(deal_structure.get('purchase_price', 0))
 
-            if 'financing_fees' in financing_structure:
+            if 'financing_fees' in deal_structure:
+                builder.financing_fees = deal_structure['financing_fees']
+            elif 'financing_fees' in financing_structure:
                 builder.financing_fees = financing_structure['financing_fees']
             else:
                 builder.estimate_financing_fees(financing_structure.get('new_debt', 0))
@@ -251,7 +254,28 @@ def main():
             table = builder.auto_balance()
             financing_mix = builder.calculate_financing_mix()
 
-            result = {"success": True, "data": {"table": table, "financing_mix": financing_mix}}
+            # Flatten output for frontend: {sources: {key: amount}, uses: {key: amount}, total_sources, total_uses, ...}
+            sources_flat = {
+                k: v['amount']
+                for k, v in table.get('sources', {}).get('sources_breakdown', {}).items()
+                if v.get('amount', 0) > 0
+            }
+            uses_flat = {
+                k: v['amount']
+                for k, v in table.get('uses', {}).get('uses_breakdown', {}).items()
+                if v.get('amount', 0) > 0
+            }
+
+            result = {"success": True, "data": {
+                "sources": sources_flat,
+                "uses": uses_flat,
+                "total_sources": table.get('sources', {}).get('total_sources', 0),
+                "total_uses": table.get('uses', {}).get('total_uses', 0),
+                "balanced": table.get('balanced', False),
+                "imbalance": table.get('imbalance', 0),
+                "financing_mix": financing_mix,
+                "table": table,  # Keep raw table for detailed view
+            }}
             print(json.dumps(result))
 
         else:

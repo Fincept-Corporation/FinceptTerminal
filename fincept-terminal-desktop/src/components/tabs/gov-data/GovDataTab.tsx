@@ -14,6 +14,7 @@ import { PxWebProvider } from './providers/PxWebProvider';
 import { SwissGovProvider } from './providers/SwissGovProvider';
 import { FrenchGovProvider } from './providers/FrenchGovProvider';
 import { UniversalCkanProvider } from './providers/UniversalCkanProvider';
+import { DataGovHkProvider } from './providers/DataGovHkProvider';
 
 export default function GovDataTab() {
   const [activeProvider, setActiveProvider] = useState<GovProvider>('us-treasury');
@@ -40,6 +41,8 @@ export default function GovDataTab() {
         return <FrenchGovProvider />;
       case 'universal-ckan':
         return <UniversalCkanProvider />;
+      case 'hk':
+        return <DataGovHkProvider />;
       default:
         return (
           <div style={{

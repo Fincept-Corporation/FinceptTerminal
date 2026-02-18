@@ -297,8 +297,13 @@ def main():
                         syms = conn_debug.execute("SELECT DISTINCT symbol, timeframe, COUNT(*) FROM candle_cache GROUP BY symbol, timeframe").fetchall()
                         conn_debug.close()
                         log.warning(f"  candle_cache contents: {syms}")
+                        # Also check strategy_price_cache for recent price updates
+                        conn_debug = sqlite3.connect(args.db)
+                        prices = conn_debug.execute("SELECT symbol, price, updated_at FROM strategy_price_cache ORDER BY updated_at DESC LIMIT 10").fetchall()
+                        conn_debug.close()
+                        log.warning(f"  strategy_price_cache recent entries: {prices}")
                     except Exception as dbg_e:
-                        log.warning(f"  could not read candle_cache: {dbg_e}")
+                        log.warning(f"  could not read cache tables: {dbg_e}")
                 time.sleep(check_interval)
                 continue
 
@@ -337,9 +342,10 @@ def main():
                 risk_exit = check_risk_management(current_price, position, strategy)
                 if risk_exit:
                     log.info(f"  RISK EXIT TRIGGERED: {risk_exit}")
-                    # Close position
-                    pnl = (current_price - position['entry']) * position['qty'] if position['side'] == 'BUY' \
-                        else (position['entry'] - current_price) * position['qty']
+                    # Close position - use abs(qty) since qty is always stored positive
+                    qty = abs(position['qty'])
+                    pnl = (current_price - position['entry']) * qty if position['side'] == 'BUY' \
+                        else (position['entry'] - current_price) * qty
 
                     if args.mode == 'paper':
                         record_trade(args.db, args.deploy_id, args.symbol, 'SELL' if position['side'] == 'BUY' else 'BUY',
@@ -394,9 +400,10 @@ def main():
                                  f"{'ERROR: '+d.get('error','') if d.get('error') else ''}")
                 if exit_result['result']:
                     log.info(f"  >>> EXIT SIGNAL FIRED!")
-                    # Exit position
-                    pnl = (current_price - position['entry']) * position['qty'] if position['side'] == 'BUY' \
-                        else (position['entry'] - current_price) * position['qty']
+                    # Exit position - use abs(qty) since qty is always stored positive
+                    qty = abs(position['qty'])
+                    pnl = (current_price - position['entry']) * qty if position['side'] == 'BUY' \
+                        else (position['entry'] - current_price) * qty
 
                     if args.mode == 'paper':
                         record_trade(args.db, args.deploy_id, args.symbol,

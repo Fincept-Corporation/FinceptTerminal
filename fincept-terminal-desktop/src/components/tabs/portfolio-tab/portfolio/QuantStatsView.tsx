@@ -1,10 +1,12 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { PortfolioSummary } from '../../../../services/portfolio/portfolioService';
 import { quantstatsService, FullReport, TimeSeriesPoint, MonteCarloDistribution, MonteCarloSimulationPaths } from '../../../../services/quantstatsService';
 import { notificationService } from '../../../../services/notifications';
 import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, EFFECTS } from '../finceptStyles';
+import { cacheService } from '../../../../services/cache/cacheService';
 import {
-  BarChart3, TrendingDown, Activity, RefreshCw, Download, AlertCircle, Bell,
+  BarChart3, TrendingDown, Activity, RefreshCw, Download, AlertCircle, Bell, Zap,
 } from 'lucide-react';
 
 /** Decode a base64 string to a Uint8Array (handles non-ASCII correctly). */
@@ -86,6 +88,9 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
   const [period, setPeriod] = useState('1y');
   const [activeSection, setActiveSection] = useState<'metrics' | 'returns' | 'drawdown' | 'rolling' | 'montecarlo'>('metrics');
 
+  // ── FFN + Fortitudo state ──
+  const [fortitudoMetrics, setFortitudoMetrics] = useState<any>(null);
+
   const buildTickersWeights = useCallback(() => {
     const tickers: Record<string, number> = {};
     const validHoldings = portfolioSummary.holdings.filter(h => h.symbol && h.quantity > 0);
@@ -109,6 +114,37 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
     return tickers;
   }, [portfolioSummary.holdings]);
 
+  // ── Cache key: per portfolio composition + benchmark + period ────────────────
+  const cacheKey = useMemo(() => {
+    const validHoldings = portfolioSummary.holdings.filter(h => h.symbol && h.quantity > 0);
+    const symbols = validHoldings.map(h => h.symbol).sort().join(',');
+    const weights = validHoldings.map(h => Math.round(h.weight * 10)).join(',');
+    return `quantstats:${symbols}:${weights}:${benchmark}:${period}`;
+  }, [portfolioSummary.holdings, benchmark, period]);
+
+  const fortitudoCacheKey = useMemo(() => {
+    const validHoldings = portfolioSummary.holdings.filter(h => h.symbol && h.quantity > 0);
+    const symbols = validHoldings.map(h => h.symbol).sort().join(',');
+    const weights = validHoldings.map(h => Math.round(h.weight * 10)).join(',');
+    return `quantstats:fortitudo:${symbols}:${weights}`;
+  }, [portfolioSummary.holdings]);
+
+  // ── Restore cached results on mount / when key changes ───────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    const restore = async () => {
+      const [cachedReport, cachedFortitudo] = await Promise.all([
+        cacheService.get<FullReport>(cacheKey),
+        cacheService.get<any>(fortitudoCacheKey),
+      ]);
+      if (cancelled) return;
+      if (cachedReport) setReport(cachedReport.data);
+      if (cachedFortitudo) setFortitudoMetrics(cachedFortitudo.data);
+    };
+    restore();
+    return () => { cancelled = true; };
+  }, [cacheKey, fortitudoCacheKey]);
+
   const runAnalysis = useCallback(async () => {
     const tickers = buildTickersWeights();
     if (Object.keys(tickers).length === 0) {
@@ -122,13 +158,14 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
     try {
       const data = await quantstatsService.getFullReport(tickers, benchmark, period);
       setReport(data);
+      cacheService.set(cacheKey, data, 'api-response', '1h');
     } catch (e) {
       console.error('[QuantStats] Analysis error:', e);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [buildTickersWeights, benchmark, period]);
+  }, [buildTickersWeights, benchmark, period, cacheKey]);
 
   const generateHtmlReport = useCallback(async () => {
     const tickers = buildTickersWeights();
@@ -192,6 +229,29 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
       setSendingNotification(false);
     }
   }, [report, portfolioSummary, benchmark, period, buildTickersWeights]);
+
+  const buildReturnsJson = useCallback(() => {
+    const symbols = portfolioSummary.holdings.filter(h => h.symbol && h.quantity > 0).map(h => h.symbol);
+    return JSON.stringify(symbols.join(','));
+  }, [portfolioSummary.holdings]);
+
+  const buildWeightsJson = useCallback(() => {
+    const holdings = portfolioSummary.holdings.filter(h => h.symbol && h.quantity > 0);
+    const weights = holdings.map(h => h.weight / 100);
+    return JSON.stringify(weights);
+  }, [portfolioSummary.holdings]);
+
+  const fetchFortitudoMetrics = useCallback(async () => {
+    try {
+      const returnsJson = buildReturnsJson();
+      const weightsJson = buildWeightsJson();
+      const result = await invoke<string>('fortitudo_portfolio_metrics', { returnsJson, weightsJson, alpha: 0.05 });
+      let parsed: any;
+      try { parsed = JSON.parse(result); } catch { parsed = result; }
+      setFortitudoMetrics(parsed);
+      cacheService.set(fortitudoCacheKey, parsed, 'api-response', '1h');
+    } catch { /* silent */ }
+  }, [buildReturnsJson, buildWeightsJson, fortitudoCacheKey]);
 
   const sections = [
     { id: 'metrics' as const, label: 'METRICS', icon: BarChart3 },
@@ -694,6 +754,49 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Fortitudo Risk Metrics (Python) */}
+              <div style={{ marginBottom: SPACING.XLARGE }}>
+                <div style={{
+                  color: FINCEPT.CYAN,
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  marginBottom: SPACING.MEDIUM,
+                  paddingBottom: SPACING.SMALL,
+                  borderBottom: `1px solid ${FINCEPT.CYAN}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}>
+                  FORTITUDO VaR / CVaR
+                  <button
+                    onClick={fetchFortitudoMetrics}
+                    style={{
+                      padding: '2px 8px', backgroundColor: `${FINCEPT.CYAN}20`,
+                      border: `1px solid ${FINCEPT.CYAN}60`, color: FINCEPT.CYAN,
+                      fontSize: '8px', fontWeight: 700, cursor: 'pointer', fontFamily: 'monospace',
+                    }}
+                  >
+                    <Zap size={8} style={{ marginRight: 3 }} />
+                    RUN
+                  </button>
+                </div>
+                {fortitudoMetrics && typeof fortitudoMetrics === 'object' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: SPACING.MEDIUM }}>
+                    {Object.entries(fortitudoMetrics).filter(([k]) => typeof fortitudoMetrics[k] === 'number' || typeof fortitudoMetrics[k] === 'string').map(([key, val]) => (
+                      <div key={key} style={{ ...COMMON_STYLES.metricCard, padding: SPACING.MEDIUM, borderRadius: '2px', border: `1px solid ${FINCEPT.CYAN}30` }}>
+                        <div style={{ ...COMMON_STYLES.dataLabel, fontSize: '8px' }}>{key.replace(/_/g, ' ').toUpperCase()}</div>
+                        <div style={{ color: FINCEPT.CYAN, fontSize: '13px', fontWeight: 700, fontFamily: TYPOGRAPHY.MONO }}>
+                          {typeof val === 'number' ? (val as number).toFixed(4) : String(val)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ color: FINCEPT.MUTED, fontSize: '10px' }}>Click RUN to compute Fortitudo VaR/CVaR metrics via Python</div>
+                )}
               </div>
 
               {/* Benchmark Comparison */}
@@ -1494,6 +1597,7 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
               )}
             </div>
           )}
+
           </>
         )}
       </div>

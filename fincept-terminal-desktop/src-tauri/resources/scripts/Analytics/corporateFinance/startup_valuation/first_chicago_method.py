@@ -201,36 +201,49 @@ def main():
         if command == "first_chicago":
             if len(sys.argv) < 3:
                 raise ValueError("Scenarios required")
-            scenarios = json.loads(sys.argv[2])
-
+            raw = json.loads(sys.argv[2])
             fc = FirstChicagoMethod()
 
-            # Ensure each scenario has required 'exit_year' with sensible default
-            for key in ('best_case', 'base_case', 'worst_case'):
-                sc = scenarios.get(key, {})
-                if 'exit_year' not in sc:
-                    sc['exit_year'] = sc.get('years_to_exit', sc.get('timeline_years', 5))
-                scenarios[key] = sc
+            # Accept either a flat list [{name, probability, exit_year, exit_value, description}, ...]
+            # or the legacy dict {best_case: {...}, base_case: {...}, worst_case: {...}}
+            if isinstance(raw, list):
+                scenarios = [
+                    Scenario(
+                        name=s.get("name", "Scenario"),
+                        probability=float(s.get("probability", 0.33)),
+                        exit_year=int(s.get("exit_year", s.get("years_to_exit", 5))),
+                        exit_value=float(s.get("exit_value", 0)),
+                        description=s.get("description", ""),
+                    )
+                    for s in raw
+                ]
+                valuation = fc.calculate_expected_value(scenarios)
+            else:
+                # Legacy dict format: {best_case, base_case, worst_case}
+                for key in ("best_case", "base_case", "worst_case"):
+                    sc = raw.get(key, {})
+                    if "exit_year" not in sc:
+                        sc["exit_year"] = sc.get("years_to_exit", sc.get("timeline_years", 5))
+                    raw[key] = sc
 
-            # Extract probabilities from inline probability keys if not separate
-            probs = scenarios.get('probabilities', None)
-            if probs is None:
-                bc = scenarios.get('best_case', {})
-                ba = scenarios.get('base_case', {})
-                wc = scenarios.get('worst_case', {})
-                if 'probability' in bc or 'probability' in ba or 'probability' in wc:
-                    probs = {
-                        'best': bc.get('probability', 0.20),
-                        'base': ba.get('probability', 0.50),
-                        'worst': wc.get('probability', 0.30)
-                    }
+                probs = raw.get("probabilities", None)
+                if probs is None:
+                    bc = raw.get("best_case", {})
+                    ba = raw.get("base_case", {})
+                    wc = raw.get("worst_case", {})
+                    if "probability" in bc or "probability" in ba or "probability" in wc:
+                        probs = {
+                            "best": bc.get("probability", 0.20),
+                            "base": ba.get("probability", 0.50),
+                            "worst": wc.get("probability", 0.30)
+                        }
 
-            valuation = fc.three_scenario_valuation(
-                best_case=scenarios.get('best_case', {}),
-                base_case=scenarios.get('base_case', {}),
-                worst_case=scenarios.get('worst_case', {}),
-                probabilities=probs
-            )
+                valuation = fc.three_scenario_valuation(
+                    best_case=raw.get("best_case", {}),
+                    base_case=raw.get("base_case", {}),
+                    worst_case=raw.get("worst_case", {}),
+                    probabilities=probs
+                )
 
             result = {"success": True, "data": valuation}
             print(json.dumps(result))

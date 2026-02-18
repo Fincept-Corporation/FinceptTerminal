@@ -4,206 +4,157 @@
 import { terminalMCPProvider } from './TerminalMCPProvider';
 import { portfolioService } from '@/services/portfolio/portfolioService';
 
+// All context keys used by this bridge - single source of truth for connect/disconnect
+const CONTEXT_KEYS = [
+  'getPortfolios', 'getPortfolio', 'createPortfolio', 'deletePortfolio',
+  'addAsset', 'removeAsset', 'sellAsset', 'getPortfolioAssets',
+  'addTransaction', 'getPortfolioTransactions', 'getSymbolTransactions',
+  'updateTransaction', 'deleteTransaction', 'getTransactionById',
+  'getPortfolioSummary', 'calculateAdvancedMetrics', 'calculateRiskMetrics',
+  'optimizePortfolioWeights', 'getRebalancingRecommendations',
+  'analyzeDiversification', 'getPortfolioPerformanceHistory',
+  'exportPortfolioCSV', 'exportPortfolioJSON', 'importPortfolio',
+  'savePortfolioSnapshot', 'getPortfolioSnapshot',
+] as const;
+
 /**
- * Bridge that connects portfolioService to MCP tools
- * Allows AI to manage portfolios, assets, transactions, and analytics via chat
+ * Bridge that connects portfolioService to MCP tools.
+ * Allows AI agents to manage portfolios, assets, transactions, and analytics via chat.
  */
 export class PortfolioMCPBridge {
   private connected: boolean = false;
 
-  /**
-   * Connect portfolio service to MCP contexts
-   */
   connect(): void {
     if (this.connected) return;
 
     terminalMCPProvider.setContexts({
-      // ==================== PORTFOLIO CRUD ====================
+      // ── Portfolio CRUD ──────────────────────────────────────────────────────
+      getPortfolios: () => portfolioService.getPortfolios(),
 
-      // Get all portfolios
-      getPortfolios: async () => {
-        return await portfolioService.getPortfolios();
-      },
+      getPortfolio: (portfolioId: string) =>
+        portfolioService.getPortfolio(portfolioId),
 
-      // Get single portfolio
-      getPortfolio: async (portfolioId: string) => {
-        return await portfolioService.getPortfolio(portfolioId);
-      },
-
-      // Create portfolio
-      createPortfolio: async (params: { name: string; owner?: string; currency?: string; description?: string }) => {
-        return await portfolioService.createPortfolio(
+      createPortfolio: (params: { name: string; owner?: string; currency?: string; description?: string }) =>
+        portfolioService.createPortfolio(
           params.name,
           params.owner || 'User',
           params.currency || 'USD',
-          params.description
-        );
-      },
+          params.description,
+        ),
 
-      // Delete portfolio
-      deletePortfolio: async (portfolioId: string) => {
-        await portfolioService.deletePortfolio(portfolioId);
-      },
+      deletePortfolio: (portfolioId: string) =>
+        portfolioService.deletePortfolio(portfolioId),
 
-      // ==================== ASSET MANAGEMENT ====================
+      // ── Asset Management ────────────────────────────────────────────────────
+      addAsset: (portfolioId: string, asset: { symbol: string; quantity: number; avg_buy_price: number }) =>
+        portfolioService.addAsset(portfolioId, asset.symbol, asset.quantity, asset.avg_buy_price),
 
-      // Add asset to portfolio
-      addAsset: async (portfolioId: string, asset: { symbol: string; quantity: number; avg_buy_price: number }) => {
-        return await portfolioService.addAsset(
-          portfolioId,
-          asset.symbol,
-          asset.quantity,
-          asset.avg_buy_price
-        );
-      },
+      removeAsset: (portfolioId: string, symbol: string, sellPrice?: number) =>
+        portfolioService.removeAsset(portfolioId, symbol, sellPrice),
 
-      // Remove asset from portfolio (sells all shares)
-      removeAsset: async (portfolioId: string, symbol: string, sellPrice?: number) => {
-        await portfolioService.removeAsset(portfolioId, symbol, sellPrice);
-      },
+      sellAsset: (portfolioId: string, symbol: string, quantity: number, price: number) =>
+        portfolioService.sellAsset(portfolioId, symbol, quantity, price),
 
-      // Sell asset (partial or full)
-      sellAsset: async (portfolioId: string, symbol: string, quantity: number, price: number) => {
-        await portfolioService.sellAsset(portfolioId, symbol, quantity, price);
-      },
+      getPortfolioAssets: (portfolioId: string) =>
+        portfolioService.getPortfolioAssets(portfolioId),
 
-      // Get portfolio assets
-      getPortfolioAssets: async (portfolioId: string) => {
-        return await portfolioService.getPortfolioAssets(portfolioId);
-      },
-
-      // ==================== TRANSACTIONS ====================
-
-      // Add transaction (note: portfolioService auto-creates transactions via addAsset/sellAsset)
+      // ── Transactions ────────────────────────────────────────────────────────
       addTransaction: async (portfolioId: string, tx: {
-        type: string;
-        symbol: string;
-        quantity: number;
-        price: number;
-        date?: string;
-        notes?: string;
+        type: string; symbol: string; quantity: number; price: number; date?: string; notes?: string;
       }) => {
-        // Convert to appropriate action
-        const txType = tx.type.toUpperCase();
-        if (txType === 'BUY') {
-          return await portfolioService.addAsset(portfolioId, tx.symbol, tx.quantity, tx.price, tx.date);
-        } else if (txType === 'SELL') {
+        const type = tx.type.toUpperCase();
+        if (type === 'BUY') return portfolioService.addAsset(portfolioId, tx.symbol, tx.quantity, tx.price, tx.date);
+        if (type === 'SELL') {
           await portfolioService.sellAsset(portfolioId, tx.symbol, tx.quantity, tx.price, tx.date);
           return { success: true };
-        } else {
-          // Dividend and split are not directly supported - return info
-          return {
-            success: false,
-            message: `${txType} transactions are tracked automatically by the system`,
-          };
         }
+        return { success: false, message: `${type} transactions are tracked automatically` };
       },
 
-      // Get portfolio transactions
-      getPortfolioTransactions: async (portfolioId: string, limit?: number) => {
-        return await portfolioService.getPortfolioTransactions(portfolioId, limit || 100);
-      },
+      getPortfolioTransactions: (portfolioId: string, limit?: number) =>
+        portfolioService.getPortfolioTransactions(portfolioId, limit || 100),
 
-      // Get transactions for specific symbol
-      getSymbolTransactions: async (portfolioId: string, symbol: string) => {
-        return await portfolioService.getSymbolTransactions(portfolioId, symbol);
-      },
+      getSymbolTransactions: (portfolioId: string, symbol: string) =>
+        portfolioService.getSymbolTransactions(portfolioId, symbol),
 
-      // ==================== SUMMARY & ANALYTICS ====================
+      // ── Summary & Analytics ─────────────────────────────────────────────────
+      getPortfolioSummary: (portfolioId: string) =>
+        portfolioService.getPortfolioSummary(portfolioId),
 
-      // Get portfolio summary with holdings and P&L
-      getPortfolioSummary: async (portfolioId: string) => {
-        return await portfolioService.getPortfolioSummary(portfolioId);
-      },
+      calculateAdvancedMetrics: (portfolioId: string) =>
+        portfolioService.calculateAdvancedMetrics(portfolioId),
 
-      // Calculate advanced metrics (Sharpe, volatility, VaR, etc.)
-      calculateAdvancedMetrics: async (portfolioId: string) => {
-        return await portfolioService.calculateAdvancedMetrics(portfolioId);
-      },
+      calculateRiskMetrics: (portfolioId: string) =>
+        portfolioService.calculateRiskMetrics(portfolioId),
 
-      // Calculate risk metrics
-      calculateRiskMetrics: async (portfolioId: string) => {
-        return await portfolioService.calculateRiskMetrics(portfolioId);
-      },
+      // ── Optimization ────────────────────────────────────────────────────────
+      optimizePortfolioWeights: (portfolioId: string, method?: string) =>
+        portfolioService.optimizePortfolioWeights(portfolioId, method || 'max_sharpe'),
 
-      // ==================== OPTIMIZATION ====================
+      getRebalancingRecommendations: (portfolioId: string, targetAllocations: Record<string, number>) =>
+        portfolioService.getRebalancingRecommendations(portfolioId, targetAllocations),
 
-      // Optimize portfolio weights
-      optimizePortfolioWeights: async (portfolioId: string, method?: string) => {
-        return await portfolioService.optimizePortfolioWeights(portfolioId, method || 'max_sharpe');
-      },
+      // ── Analysis ────────────────────────────────────────────────────────────
+      analyzeDiversification: (portfolioId: string) =>
+        portfolioService.analyzeDiversification(portfolioId),
 
-      // Get rebalancing recommendations
-      getRebalancingRecommendations: async (portfolioId: string, targetAllocations: Record<string, number>) => {
-        return await portfolioService.getRebalancingRecommendations(portfolioId, targetAllocations);
-      },
+      getPortfolioPerformanceHistory: (portfolioId: string, limit?: number) =>
+        portfolioService.getPortfolioPerformanceHistory(portfolioId, limit || 30),
 
-      // ==================== ANALYSIS ====================
+      // ── Transaction management ──────────────────────────────────────────────
+      updateTransaction: (transactionId: string, quantity: number, price: number, transactionDate: string, notes?: string) =>
+        portfolioService.updateTransaction(transactionId, quantity, price, transactionDate, notes),
 
-      // Analyze diversification
-      analyzeDiversification: async (portfolioId: string) => {
-        return await portfolioService.analyzeDiversification(portfolioId);
-      },
+      deleteTransaction: (transactionId: string) =>
+        portfolioService.deleteTransaction(transactionId),
 
-      // Get performance history
-      getPortfolioPerformanceHistory: async (portfolioId: string, limit?: number) => {
-        return await portfolioService.getPortfolioPerformanceHistory(portfolioId, limit || 30);
-      },
+      getTransactionById: (transactionId: string) =>
+        portfolioService.getTransactionById(transactionId),
 
-      // ==================== EXPORT ====================
+      // ── Export ──────────────────────────────────────────────────────────────
+      exportPortfolioCSV: (portfolioId: string) =>
+        portfolioService.exportPortfolioCSV(portfolioId),
 
-      // Export portfolio to CSV
-      exportPortfolioCSV: async (portfolioId: string) => {
-        return await portfolioService.exportPortfolioCSV(portfolioId);
+      exportPortfolioJSON: (portfolioId: string) =>
+        portfolioService.exportPortfolioJSON(portfolioId),
+
+      // ── Import ──────────────────────────────────────────────────────────────
+      importPortfolio: (data: any, mode: 'new' | 'merge', mergeTargetId?: string) =>
+        portfolioService.importPortfolio(data, mode, mergeTargetId),
+
+      // ── Snapshot ────────────────────────────────────────────────────────────
+      savePortfolioSnapshot: (portfolioId: string) =>
+        portfolioService.savePortfolioSnapshot(portfolioId),
+
+      // ── Snapshot (rich formatted context for agents) ─────────────────────
+      getPortfolioSnapshot: async (portfolioId: string) => {
+        const [summary, metrics, diversification] = await Promise.allSettled([
+          portfolioService.getPortfolioSummary(portfolioId),
+          portfolioService.calculateAdvancedMetrics(portfolioId),
+          portfolioService.analyzeDiversification(portfolioId),
+        ]);
+
+        return {
+          summary: summary.status === 'fulfilled' ? summary.value : null,
+          metrics: metrics.status === 'fulfilled' ? metrics.value : null,
+          diversification: diversification.status === 'fulfilled' ? diversification.value : null,
+          fetched_at: new Date().toISOString(),
+        };
       },
     });
 
     this.connected = true;
-    console.log('[PortfolioMCPBridge] Connected portfolio service to MCP');
+    console.log('[PortfolioMCPBridge] Connected');
   }
 
-  /**
-   * Disconnect and clear contexts
-   */
   disconnect(): void {
     if (!this.connected) return;
-
-    terminalMCPProvider.setContexts({
-      // Portfolio CRUD
-      getPortfolios: undefined,
-      getPortfolio: undefined,
-      createPortfolio: undefined,
-      deletePortfolio: undefined,
-      // Asset management
-      addAsset: undefined,
-      removeAsset: undefined,
-      sellAsset: undefined,
-      getPortfolioAssets: undefined,
-      // Transactions
-      addTransaction: undefined,
-      getPortfolioTransactions: undefined,
-      getSymbolTransactions: undefined,
-      // Summary & analytics
-      getPortfolioSummary: undefined,
-      calculateAdvancedMetrics: undefined,
-      calculateRiskMetrics: undefined,
-      // Optimization
-      optimizePortfolioWeights: undefined,
-      getRebalancingRecommendations: undefined,
-      // Analysis
-      analyzeDiversification: undefined,
-      getPortfolioPerformanceHistory: undefined,
-      // Export
-      exportPortfolioCSV: undefined,
-    });
-
+    const cleared = Object.fromEntries(CONTEXT_KEYS.map(k => [k, undefined]));
+    terminalMCPProvider.setContexts(cleared);
     this.connected = false;
-    console.log('[PortfolioMCPBridge] Disconnected portfolio service from MCP');
+    console.log('[PortfolioMCPBridge] Disconnected');
   }
 
-  /**
-   * Check if bridge is connected
-   */
   isConnected(): boolean {
     return this.connected;
   }

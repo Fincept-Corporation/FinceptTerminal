@@ -23,6 +23,7 @@ import { tradeService, type ChordData, type Country } from '@/services/trading/t
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 import { TradeChordDiagram } from '@/components/visualization/TradeChordDiagram';
+import { useTimezone } from '@/contexts/TimezoneContext';
 
 // Fincept Professional Color Palette
 const FINCEPT = {
@@ -50,6 +51,7 @@ export default function TradeVisualizationTab() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const { timezone, formatTime } = useTimezone();
 
   // Data state
   const [chordData, setChordData] = useState<ChordData | null>(null);
@@ -213,7 +215,10 @@ export default function TradeVisualizationTab() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '11px', color: FINCEPT.CYAN }}>
-            {currentTime.toUTCString()}
+            {formatTime(currentTime, {
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit'
+            })} {timezone.shortLabel}
           </span>
         </div>
       </div>

@@ -60,8 +60,8 @@ pub struct OrderBook {
     bids: BTreeMap<Price, BookLevel>,
     asks: BTreeMap<Price, BookLevel>,
 
-    // Fast order lookup
-    orders: HashMap<OrderId, Order>,
+    // Fast order lookup (pub for stop order checking)
+    pub orders: HashMap<OrderId, Order>,
 
     // Market data cache
     pub best_bid: Option<Price>,
@@ -97,14 +97,20 @@ impl OrderBook {
     }
 
     /// Insert an order into the book (resting order, not matched)
-    pub fn insert_order(&mut self, order: Order) {
+    pub fn insert_order(&mut self, mut order: Order) {
         let price = order.price;
         let remaining = order.remaining_quantity;
         let display = if order.hidden {
             0
         } else {
             match order.order_type {
-                OrderType::Iceberg => order.display_quantity.min(remaining),
+                OrderType::Iceberg => {
+                    // Set initial current_display if not already set
+                    if order.current_display == 0 || order.current_display > remaining {
+                        order.current_display = order.display_quantity.min(remaining);
+                    }
+                    order.current_display
+                }
                 _ => remaining,
             }
         };
@@ -132,7 +138,7 @@ impl OrderBook {
                 0
             } else {
                 match order.order_type {
-                    OrderType::Iceberg => order.display_quantity.min(remaining),
+                    OrderType::Iceberg => order.current_display,
                     _ => remaining,
                 }
             };
@@ -165,7 +171,7 @@ impl OrderBook {
                 0
             } else {
                 match order.order_type {
-                    OrderType::Iceberg => order.display_quantity.min(old_remaining),
+                    OrderType::Iceberg => order.current_display,
                     _ => old_remaining,
                 }
             };
@@ -194,11 +200,16 @@ impl OrderBook {
                 } else {
                     match order.order_type {
                         OrderType::Iceberg => {
-                            // Iceberg: if visible portion fully consumed, reload
-                            if old_display <= fill_qty {
-                                order.display_quantity.min(new_remaining)
+                            // Iceberg: reduce current display by fill amount
+                            let remaining_display = old_display.saturating_sub(fill_qty);
+                            if remaining_display == 0 {
+                                // Reload visible portion from hidden reserve
+                                let reload = order.display_quantity.min(new_remaining);
+                                order.current_display = reload;
+                                reload
                             } else {
-                                old_display - fill_qty
+                                order.current_display = remaining_display;
+                                remaining_display
                             }
                         }
                         _ => new_remaining,

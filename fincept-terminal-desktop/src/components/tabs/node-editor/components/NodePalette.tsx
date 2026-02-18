@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Database, Search, ChevronLeft, ChevronRight, Workflow } from 'lucide-react';
+import { Layers, Search, ChevronLeft, ChevronRight, Workflow, ChevronDown } from 'lucide-react';
 import { NodeRegistry, INodeTypeDescription } from '@/services/nodeSystem';
 import { BUILTIN_NODE_CONFIGS, CATEGORY_CONFIG } from '../constants';
 import type { NodePaletteProps, PaletteNodeItem } from '../types';
@@ -16,7 +16,6 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   isCollapsed,
   onToggleCollapse,
   mcpNodeConfigs,
-  agentConfigs,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
@@ -37,7 +36,6 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   const allNodes = useMemo(() => {
     const nodes: PaletteNodeItem[] = [];
 
-    // Add builtin UI nodes
     BUILTIN_NODE_CONFIGS.forEach((config) => {
       nodes.push({
         id: config.type,
@@ -51,7 +49,6 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       });
     });
 
-    // Add registry nodes
     registryNodes.forEach((node: INodeTypeDescription) => {
       const category = node.group?.[0] || 'Core';
       const categoryConfig = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['Core'];
@@ -67,7 +64,6 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       });
     });
 
-    // Add MCP tool nodes
     mcpNodeConfigs.forEach((config) => {
       nodes.push({
         id: config.id,
@@ -81,22 +77,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       });
     });
 
-    // Add Python agent nodes
-    agentConfigs.forEach((agent) => {
-      nodes.push({
-        id: agent.id,
-        type: 'python-agent',
-        label: agent.name,
-        category: 'Python Agents',
-        color: agent.color || '#22c55e',
-        description: agent.description,
-        source: 'agent',
-        data: agent,
-      });
-    });
-
     return nodes;
-  }, [registryNodes, mcpNodeConfigs, agentConfigs]);
+  }, [registryNodes, mcpNodeConfigs]);
 
   // Group nodes by category
   const nodesByCategory = useMemo(() => {
@@ -109,7 +91,6 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       grouped.get(node.category)!.push(node);
     });
 
-    // Sort each category alphabetically
     grouped.forEach((nodes) => {
       nodes.sort((a, b) => a.label.localeCompare(b.label));
     });
@@ -153,28 +134,50 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     return (
       <div
         style={{
-          width: '40px',
-          backgroundColor: '#0a0a0a',
-          borderRight: '1px solid #2d2d2d',
+          width: '36px',
+          backgroundColor: '#000000',
+          borderRight: '1px solid #2a2a2a',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          paddingTop: '8px',
+          paddingTop: '10px',
+          gap: '12px',
         }}
       >
         <button
           onClick={onToggleCollapse}
+          title="Expand palette"
           style={{
             backgroundColor: 'transparent',
             border: 'none',
-            color: '#a3a3a3',
+            color: '#787878',
             cursor: 'pointer',
-            padding: '8px',
+            padding: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '2px',
+            transition: 'color 0.15s',
           }}
-          title="Expand palette"
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#FF8800')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = '#787878')}
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={14} />
         </button>
+        <div
+          style={{
+            color: '#FF8800',
+            fontSize: '8px',
+            fontWeight: 700,
+            letterSpacing: '1px',
+            writingMode: 'vertical-rl',
+            textOrientation: 'mixed',
+            transform: 'rotate(180deg)',
+            marginTop: '4px',
+          }}
+        >
+          NODES
+        </div>
       </div>
     );
   }
@@ -182,19 +185,21 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   return (
     <div
       style={{
-        width: '280px',
-        backgroundColor: '#0a0a0a',
-        borderRight: '1px solid #2d2d2d',
+        width: '260px',
+        backgroundColor: '#000000',
+        borderRight: '1px solid #2a2a2a',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
+        fontFamily: '"IBM Plex Mono", Consolas, monospace',
       }}
     >
-      {/* Palette Header */}
+      {/* Header */}
       <div
         style={{
-          padding: '12px',
-          borderBottom: '1px solid #2d2d2d',
+          padding: '10px 12px',
+          backgroundColor: '#0f0f0f',
+          borderBottom: '1px solid #2a2a2a',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -204,41 +209,61 @@ const NodePalette: React.FC<NodePaletteProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            color: '#ea580c',
-            fontSize: '12px',
-            fontWeight: 'bold',
+            gap: '7px',
           }}
         >
-          <Database size={14} />
-          NODE PALETTE
+          <Layers size={13} style={{ color: '#FF8800' }} />
+          <span
+            style={{
+              color: '#FF8800',
+              fontSize: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.8px',
+            }}
+          >
+            NODE PALETTE
+          </span>
         </div>
         <button
           onClick={onToggleCollapse}
+          title="Collapse palette"
           style={{
             backgroundColor: 'transparent',
             border: 'none',
-            color: '#6b7280',
+            color: '#787878',
             cursor: 'pointer',
             padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '2px',
+            transition: 'color 0.15s',
           }}
-          title="Collapse palette"
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#FF8800')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = '#787878')}
         >
-          <ChevronLeft size={14} />
+          <ChevronLeft size={13} />
         </button>
       </div>
 
       {/* Search */}
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #2d2d2d' }}>
+      <div
+        style={{
+          padding: '8px 10px',
+          borderBottom: '1px solid #2a2a2a',
+          backgroundColor: '#000000',
+        }}
+      >
         <div style={{ position: 'relative' }}>
           <Search
-            size={14}
+            size={11}
             style={{
               position: 'absolute',
-              left: '10px',
+              left: '8px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: '#6b7280',
+              color: '#787878',
+              pointerEvents: 'none',
             }}
           />
           <input
@@ -248,64 +273,109 @@ const NodePalette: React.FC<NodePaletteProps> = ({
             placeholder="Search nodes..."
             style={{
               width: '100%',
-              backgroundColor: '#1a1a1a',
-              border: '1px solid #2d2d2d',
-              borderRadius: '4px',
-              padding: '8px 8px 8px 32px',
-              color: '#fff',
-              fontSize: '11px',
+              backgroundColor: '#0f0f0f',
+              border: '1px solid #2a2a2a',
+              borderRadius: '2px',
+              padding: '6px 8px 6px 26px',
+              color: '#ffffff',
+              fontSize: '10px',
+              fontFamily: '"IBM Plex Mono", Consolas, monospace',
               outline: 'none',
+              boxSizing: 'border-box',
+              transition: 'border-color 0.15s',
             }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = '#FF8800')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = '#2a2a2a')}
           />
         </div>
-        <div style={{ color: '#6b7280', fontSize: '10px', marginTop: '6px' }}>
-          {allNodes.length} nodes available
+        <div
+          style={{
+            color: '#787878',
+            fontSize: '9px',
+            marginTop: '5px',
+            letterSpacing: '0.3px',
+          }}
+        >
+          {allNodes.length} NODES AVAILABLE
         </div>
       </div>
 
       {/* Node Categories */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         {Array.from(filteredCategories.entries()).map(([category, categoryNodes]) => {
           const catConfig = CATEGORY_CONFIG[category] || {
-            icon: <Workflow size={14} />,
-            color: '#6b7280',
+            icon: <Workflow size={12} />,
+            color: '#787878',
           };
           const isExpanded = expandedCategories.has(category);
 
           return (
-            <div key={category} style={{ borderBottom: '1px solid #1a1a1a' }}>
+            <div key={category}>
               {/* Category Header */}
               <button
                 onClick={() => toggleCategory(category)}
                 style={{
                   width: '100%',
-                  padding: '10px 12px',
-                  backgroundColor: 'transparent',
+                  padding: '7px 10px',
+                  backgroundColor: '#0f0f0f',
                   border: 'none',
+                  borderBottom: '1px solid #2a2a2a',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   cursor: 'pointer',
-                  color: '#d4d4d4',
+                  transition: 'background-color 0.15s',
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1a1a1a')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0f0f0f')}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: catConfig.color }}>{catConfig.icon}</span>
-                  <span style={{ fontSize: '11px', fontWeight: 'bold' }}>{category}</span>
-                  <span style={{ fontSize: '10px', color: '#6b7280' }}>
-                    ({categoryNodes.length})
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                  <span style={{ color: catConfig.color, display: 'flex', alignItems: 'center' }}>
+                    {catConfig.icon}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: '#d4d4d4',
+                      letterSpacing: '0.5px',
+                    }}
+                  >
+                    {category.toUpperCase()}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '8px',
+                      color: '#787878',
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #2a2a2a',
+                      borderRadius: '2px',
+                      padding: '1px 4px',
+                      letterSpacing: '0.3px',
+                    }}
+                  >
+                    {categoryNodes.length}
                   </span>
                 </div>
-                {isExpanded ? (
-                  <ChevronRight size={12} style={{ transform: 'rotate(90deg)' }} />
-                ) : (
-                  <ChevronRight size={12} />
-                )}
+                <ChevronDown
+                  size={11}
+                  style={{
+                    color: '#787878',
+                    transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    transition: 'transform 0.15s',
+                  }}
+                />
               </button>
 
               {/* Category Nodes */}
               {isExpanded && (
-                <div style={{ padding: '4px 8px 8px' }}>
+                <div
+                  style={{
+                    padding: '4px 6px 6px',
+                    backgroundColor: '#000000',
+                    borderBottom: '1px solid #1a1a1a',
+                  }}
+                >
                   {categoryNodes.map((node) => (
                     <div
                       key={node.id}
@@ -316,75 +386,72 @@ const NodePalette: React.FC<NodePaletteProps> = ({
                         e.dataTransfer.effectAllowed = 'move';
                       }}
                       style={{
-                        backgroundColor: '#1a1a1a',
-                        border: `1px solid ${node.color}30`,
-                        borderRadius: '4px',
-                        padding: '8px 10px',
-                        marginBottom: '4px',
-                        cursor: 'pointer',
+                        backgroundColor: '#0f0f0f',
+                        border: `1px solid #2a2a2a`,
+                        borderRadius: '2px',
+                        padding: '6px 8px',
+                        marginBottom: '3px',
+                        cursor: 'grab',
                         transition: 'all 0.15s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = `${node.color}15`;
-                        e.currentTarget.style.borderColor = `${node.color}60`;
+                        e.currentTarget.style.backgroundColor = `${node.color}10`;
+                        e.currentTarget.style.borderColor = `${node.color}50`;
+                        e.currentTarget.style.borderLeftColor = node.color;
+                        e.currentTarget.style.borderLeftWidth = '2px';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#1a1a1a';
-                        e.currentTarget.style.borderColor = `${node.color}30`;
+                        e.currentTarget.style.backgroundColor = '#0f0f0f';
+                        e.currentTarget.style.borderColor = '#2a2a2a';
+                        e.currentTarget.style.borderLeftWidth = '1px';
                       }}
                     >
+                      {/* Color indicator dot */}
                       <div
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: node.color,
+                          flexShrink: 0,
+                          boxShadow: `0 0 4px ${node.color}60`,
                         }}
-                      >
+                      />
+                      {/* Node info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '4px',
-                            backgroundColor: `${node.color}20`,
-                            border: `1px solid ${node.color}40`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: node.color,
+                            color: '#ffffff',
                             fontSize: '10px',
-                            fontWeight: 'bold',
+                            fontWeight: 700,
+                            letterSpacing: '0.3px',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
                           }}
                         >
-                          {node.label[0]}
+                          {node.label}
                         </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
+                        {node.description && (
                           <div
                             style={{
-                              color: node.color,
-                              fontSize: '11px',
-                              fontWeight: 'bold',
+                              color: '#787878',
+                              fontSize: '8px',
+                              letterSpacing: '0.2px',
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
+                              marginTop: '2px',
                             }}
                           >
-                            {node.label}
+                            {node.description.length > 38
+                              ? `${node.description.substring(0, 38)}...`
+                              : node.description}
                           </div>
-                          {node.description && (
-                            <div
-                              style={{
-                                color: '#6b7280',
-                                fontSize: '9px',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}
-                            >
-                              {node.description.substring(0, 40)}
-                              {node.description.length > 40 ? '...' : ''}
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -397,28 +464,58 @@ const NodePalette: React.FC<NodePaletteProps> = ({
         {filteredCategories.size === 0 && (
           <div
             style={{
-              padding: '24px',
+              padding: '32px 16px',
               textAlign: 'center',
-              color: '#6b7280',
             }}
           >
-            <Search size={24} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
-            <div style={{ fontSize: '11px' }}>No nodes found</div>
+            <Search size={20} style={{ color: '#2a2a2a', margin: '0 auto 10px' }} />
+            <div
+              style={{
+                fontSize: '9px',
+                fontWeight: 700,
+                color: '#787878',
+                letterSpacing: '0.5px',
+              }}
+            >
+              NO NODES FOUND
+            </div>
+            <div style={{ fontSize: '9px', color: '#4a4a4a', marginTop: '4px' }}>
+              Try a different search term
+            </div>
           </div>
         )}
       </div>
 
-      {/* Palette Footer */}
+      {/* Footer */}
       <div
         style={{
-          padding: '8px 12px',
-          borderTop: '1px solid #2d2d2d',
-          backgroundColor: '#0a0a0a',
+          padding: '6px 10px',
+          borderTop: '1px solid #2a2a2a',
+          backgroundColor: '#0f0f0f',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px',
         }}
       >
-        <div style={{ color: '#6b7280', fontSize: '9px', textAlign: 'center' }}>
-          Drag nodes to canvas or click to add
-        </div>
+        <div
+          style={{
+            width: '4px',
+            height: '4px',
+            borderRadius: '50%',
+            backgroundColor: '#FF8800',
+          }}
+        />
+        <span
+          style={{
+            color: '#4a4a4a',
+            fontSize: '8px',
+            letterSpacing: '0.5px',
+            fontWeight: 700,
+          }}
+        >
+          DRAG OR CLICK TO ADD
+        </span>
       </div>
     </div>
   );

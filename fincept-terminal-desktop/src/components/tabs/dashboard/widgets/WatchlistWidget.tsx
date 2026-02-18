@@ -9,19 +9,22 @@ interface WatchlistWidgetProps {
   watchlistId?: string;
   watchlistName?: string;
   onRemove?: () => void;
+  onConfigure?: () => void;
 }
 
 export const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({
   id,
   watchlistId,
   watchlistName = 'Watchlist',
-  onRemove
+  onRemove,
+  onConfigure
 }) => {
   const { t } = useTranslation('dashboard');
 
   const {
     data: stocks,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<WatchlistStockWithQuote[]>({
@@ -48,7 +51,8 @@ export const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({
       title={`${t('widgets.watchlist')} - ${watchlistName}`}
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={loading && !stocks}
+      onConfigure={onConfigure}
+      isLoading={(loading && !stocks) || isFetching}
       error={!watchlistId ? t('widgets.noWatchlistSelected') : (error?.message || null)}
     >
       <div style={{ padding: '4px' }}>

@@ -11,3 +11,4 @@ export { PxWebProvider } from './PxWebProvider';
 export { SwissGovProvider } from './SwissGovProvider';
 export { FrenchGovProvider } from './FrenchGovProvider';
 export { UniversalCkanProvider } from './UniversalCkanProvider';
+export { DataGovHkProvider } from './DataGovHkProvider';

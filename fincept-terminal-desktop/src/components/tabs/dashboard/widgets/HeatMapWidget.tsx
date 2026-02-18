@@ -95,6 +95,7 @@ export const HeatMapWidget: React.FC<HeatMapWidgetProps> = ({ id, onRemove }) =>
   const {
     data: quotes,
     isLoading,
+    isFetching,
     error,
     refresh
   } = useCache<QuoteData[]>({
@@ -177,6 +178,7 @@ export const HeatMapWidget: React.FC<HeatMapWidgetProps> = ({ id, onRemove }) =>
       title="SECTOR HEATMAP"
       onRemove={onRemove}
       onRefresh={refresh}
+      isLoading={(isLoading && !quotes) || isFetching}
       headerColor={FC.ORANGE}
       error={error?.message}
     >

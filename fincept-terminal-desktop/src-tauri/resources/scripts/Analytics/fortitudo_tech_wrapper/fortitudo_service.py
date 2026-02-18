@@ -112,9 +112,60 @@ def serialize_result(data: Any) -> str:
     return json.dumps(convert(data), default=str)
 
 
+def fetch_returns_for_tickers(tickers_str: str) -> pd.DataFrame:
+    """Fetch historical price data and compute daily returns for comma-separated tickers."""
+    try:
+        import yfinance as yf
+    except ImportError:
+        raise ValueError("yfinance not available; cannot fetch returns for tickers")
+    tickers = [t.strip() for t in tickers_str.split(',') if t.strip()]
+    if not tickers:
+        raise ValueError("No valid tickers provided")
+
+    if len(tickers) == 1:
+        data = yf.download(tickers[0], period='1y', auto_adjust=True, progress=False)
+        # Handle MultiIndex columns from newer yfinance versions
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.get_level_values(0)
+        close = data['Close']
+        df = close.pct_change().dropna().to_frame(name=tickers[0])
+    else:
+        data = yf.download(tickers, period='1y', auto_adjust=True, progress=False)
+        # yfinance returns MultiIndex columns like ('Close', 'AAPL') for multiple tickers
+        if isinstance(data.columns, pd.MultiIndex):
+            # Extract just the 'Close' level
+            if 'Close' in data.columns.get_level_values(0):
+                close = data['Close']
+            else:
+                close = data.xs('Close', axis=1, level=0) if 'Close' in data.columns.get_level_values(0) else data
+        else:
+            close = data['Close'] if 'Close' in data.columns else data
+
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=tickers[0])
+
+        # Compute returns, drop columns that are entirely NaN
+        returns = close.pct_change()
+        returns = returns.dropna(axis=1, how='all')  # drop fully-empty columns
+        returns = returns.dropna(axis=0, how='any')  # drop rows with any NaN
+        # Rename columns to match requested tickers if shape matches
+        if returns.shape[1] == len(tickers):
+            returns.columns = tickers
+        df = returns
+
+    if df.empty or df.shape[1] == 0:
+        raise ValueError(f"No valid return data available for tickers: {tickers_str}")
+    return df
+
+
 def parse_returns_json(returns_json: str) -> pd.DataFrame:
     """Parse JSON returns data into DataFrame"""
     data = json.loads(returns_json)
+
+    # Handle the case where the frontend sends a JSON-encoded ticker string
+    # e.g. JSON.stringify("AAPL,MSFT,GOOGL") → data is a plain string
+    if isinstance(data, str):
+        return fetch_returns_for_tickers(data)
 
     if isinstance(data, dict):
         first_value = next(iter(data.values()), None)
@@ -197,6 +248,53 @@ def portfolio_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": str(e)}
 
 
+def _clean_label(label) -> str:
+    """Extract a clean string label from potentially tuple/integer index values."""
+    if isinstance(label, tuple):
+        # fortitudo returns (int, 'TICKER') tuples — take the string part
+        parts = [str(p) for p in label if not isinstance(p, (int, float)) or isinstance(p, bool)]
+        if parts:
+            return parts[-1]
+        return str(label[-1])
+    return str(label)
+
+
+def _matrix_to_flat_dict(df: pd.DataFrame) -> dict:
+    """Flatten a square matrix DataFrame into labelled scalar entries for the UI.
+    Uses .iloc to avoid issues with tuple/integer index labels from fortitudo.tech."""
+    result = {}
+    if not isinstance(df, pd.DataFrame):
+        return {"raw": str(df)}
+    n = df.shape[0]
+    # Build clean row/col labels
+    row_labels = [_clean_label(idx) for idx in df.index]
+    col_labels = [_clean_label(col) for col in df.columns]
+    # If col_labels are just integers, use row_labels for columns too (square matrix)
+    all_int_cols = all(lbl.isdigit() for lbl in col_labels)
+    if all_int_cols and len(col_labels) == len(row_labels):
+        col_labels = row_labels
+    for r in range(n):
+        for c in range(n):
+            key = f"{row_labels[r]} / {col_labels[c]}"
+            val = df.iloc[r, c]
+            result[key] = round(float(val), 8) if not isinstance(val, (str, bool)) else val
+    return result
+
+
+def _moments_to_flat_dict(df: pd.DataFrame) -> dict:
+    """Flatten moments DataFrame (assets as rows, metrics as columns) into labelled scalars."""
+    result = {}
+    if not isinstance(df, pd.DataFrame):
+        return {"raw": str(df)}
+    for r in range(len(df.index)):
+        asset = _clean_label(df.index[r])
+        for c in range(len(df.columns)):
+            metric = _clean_label(df.columns[c])
+            val = df.iloc[r, c]
+            result[f"{asset} {metric}"] = round(float(val), 8) if not isinstance(val, (str, bool)) else val
+    return result
+
+
 def covariance_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate covariance and correlation matrices"""
     if not WRAPPERS_AVAILABLE:
@@ -213,12 +311,16 @@ def covariance_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
         corr_matrix = calculate_correlation_matrix(returns, probabilities)
         moments = calculate_simulation_moments(returns, probabilities)
 
+        assets = list(returns.columns) if hasattr(returns, 'columns') else []
+
         return {
             "success": True,
-            "covariance_matrix": cov_matrix.to_dict() if isinstance(cov_matrix, pd.DataFrame) else cov_matrix,
-            "correlation_matrix": corr_matrix.to_dict() if isinstance(corr_matrix, pd.DataFrame) else corr_matrix,
-            "moments": moments.to_dict() if isinstance(moments, pd.DataFrame) else moments,
-            "assets": list(returns.columns) if hasattr(returns, 'columns') else None
+            "covariance_matrix": _matrix_to_flat_dict(cov_matrix),
+            "correlation_matrix": _matrix_to_flat_dict(corr_matrix),
+            "moments": _moments_to_flat_dict(moments),
+            "assets": assets,
+            "n_assets": len(assets),
+            "n_observations": len(returns)
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -353,7 +455,30 @@ def exposure_stacking(params: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": "Wrapper modules not available"}
 
     try:
-        sample_portfolios = np.array(json.loads(params['sample_portfolios']))
+        raw = json.loads(params['sample_portfolios'])
+        sample_portfolios = np.array(raw)
+
+        # Frontend sends a 1-D weights array for a single portfolio.
+        # calculate_exposure_stacking expects shape (n_assets, n_samples).
+        # Reshape and tile to produce n_samples=8 perturbations around the
+        # submitted weights so the routine has something meaningful to stack.
+        if sample_portfolios.ndim == 1:
+            n_assets = len(sample_portfolios)
+            # Normalize so weights sum to 1
+            total = sample_portfolios.sum()
+            if total > 0:
+                sample_portfolios = sample_portfolios / total
+            # Generate 8 slightly perturbed copies to form a proper sample matrix
+            rng = np.random.default_rng(42)
+            n_samples = 8
+            noise = rng.dirichlet(np.ones(n_assets), size=n_samples).T * 0.1
+            base = sample_portfolios.reshape(-1, 1)
+            perturbed = base * 0.9 + noise          # (n_assets, n_samples)
+            # Renormalize each column
+            perturbed = perturbed / perturbed.sum(axis=0, keepdims=True)
+            # Include the original as first column
+            sample_portfolios = np.hstack([base, perturbed])  # (n_assets, n_samples+1)
+
         n_partitions = params.get('n_partitions', 4)
 
         result = calculate_exposure_stacking(sample_portfolios, n_partitions)
@@ -404,9 +529,9 @@ def full_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
             "analysis": {
                 "metrics_equal_weight": metrics_equal,
                 "metrics_exp_decay": metrics_weighted,
-                "covariance_matrix": cov_matrix.to_dict() if isinstance(cov_matrix, pd.DataFrame) else None,
-                "correlation_matrix": corr_matrix.to_dict() if isinstance(corr_matrix, pd.DataFrame) else None,
-                "moments": moments.to_dict() if isinstance(moments, pd.DataFrame) else None,
+                "covariance_matrix": _matrix_to_flat_dict(cov_matrix) if isinstance(cov_matrix, pd.DataFrame) else None,
+                "correlation_matrix": _matrix_to_flat_dict(corr_matrix) if isinstance(corr_matrix, pd.DataFrame) else None,
+                "moments": _moments_to_flat_dict(moments) if isinstance(moments, pd.DataFrame) else None,
                 "half_life": half_life,
                 "alpha": alpha,
                 "n_scenarios": len(returns),

@@ -1,10 +1,11 @@
-// Cache Settings Component - Manage caching and encryption preferences
+// Cache Settings Component - Terminal UI/UX
 
 import React, { useState, useEffect } from 'react';
-import { Trash2, Shield, Clock, Database } from 'lucide-react';
+import { Trash2, Shield, Clock, Database, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { mappingDatabase } from '../services/MappingDatabase';
 import { encryptionService } from '../services/EncryptionService';
 import { showConfirm, showSuccess, showError, showInfo } from '@/utils/notifications';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface CacheSettingsProps {
   cacheEnabled: boolean;
@@ -14,6 +15,47 @@ interface CacheSettingsProps {
   mappingId?: string;
 }
 
+// Square terminal toggle (no rounded corners)
+function TerminalToggle({
+  checked,
+  onChange,
+  activeColor,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  activeColor: string;
+}) {
+  const { colors } = useTerminalTheme();
+  const borderColor = 'var(--ft-border-color, #2A2A2A)';
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="relative flex-shrink-0 transition-all"
+      style={{
+        width: '40px',
+        height: '20px',
+        backgroundColor: checked ? activeColor : colors.background,
+        border: `1px solid ${checked ? activeColor : borderColor}`,
+        cursor: 'pointer',
+        outline: 'none',
+      }}
+    >
+      {/* Knob */}
+      <div
+        className="absolute top-0 bottom-0 transition-all"
+        style={{
+          width: '18px',
+          backgroundColor: checked ? colors.background : colors.textMuted,
+          left: checked ? 'calc(100% - 19px)' : '1px',
+          margin: '1px 0',
+        }}
+      />
+    </button>
+  );
+}
+
 export function CacheSettings({
   cacheEnabled,
   cacheTTL,
@@ -21,8 +63,12 @@ export function CacheSettings({
   onCacheTTLChange,
   mappingId,
 }: CacheSettingsProps) {
+  const { colors } = useTerminalTheme();
   const [encryptionEnabled, setEncryptionEnabled] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
+  const [ttlFocused, setTtlFocused] = useState(false);
+
+  const borderColor = 'var(--ft-border-color, #2A2A2A)';
 
   useEffect(() => {
     loadEncryptionPreference();
@@ -37,8 +83,6 @@ export function CacheSettings({
     try {
       await encryptionService.setEncryptionEnabled(enabled);
       setEncryptionEnabled(enabled);
-
-      // Show user notification
       if (enabled) {
         showInfo('Encryption enabled. New mappings will encrypt credentials.');
       } else {
@@ -51,13 +95,10 @@ export function CacheSettings({
   };
 
   const handleClearCache = async () => {
-    const confirmed = await showConfirm(
-      'This action cannot be undone.',
-      {
-        title: 'Clear cache for this mapping?',
-        type: 'warning'
-      }
-    );
+    const confirmed = await showConfirm('This action cannot be undone.', {
+      title: 'Clear cache for this mapping?',
+      type: 'warning',
+    });
     if (!confirmed) return;
 
     setIsClearing(true);
@@ -75,10 +116,7 @@ export function CacheSettings({
   const handleClearAllCache = async () => {
     const confirmed = await showConfirm(
       'This will clear ALL cached responses for all mappings. This action cannot be undone.',
-      {
-        title: 'Clear all cache?',
-        type: 'danger'
-      }
+      { title: 'Clear all cache?', type: 'danger' }
     );
     if (!confirmed) return;
 
@@ -95,40 +133,49 @@ export function CacheSettings({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Cache Settings */}
-      <div>
-        <h3 className="text-xs font-bold text-orange-500 uppercase mb-3 flex items-center gap-2">
-          <Clock size={14} />
-          Response Caching
-        </h3>
+    <div className="space-y-4">
 
-        <div className="space-y-3">
-          {/* Enable Cache Toggle */}
-          <div className="flex items-center justify-between p-3 bg-zinc-900 rounded border border-zinc-700">
+      {/* ── Response Caching Section ── */}
+      <div style={{ backgroundColor: colors.panel, border: `1px solid ${borderColor}` }}>
+        {/* Section Header */}
+        <div
+          className="flex items-center gap-2 px-3 py-2"
+          style={{ borderBottom: `1px solid ${colors.primary}40`, backgroundColor: `${colors.primary}08` }}
+        >
+          <Clock size={12} color={colors.primary} />
+          <span className="text-[10px] font-bold tracking-wider" style={{ color: colors.primary }}>
+            RESPONSE CACHING
+          </span>
+        </div>
+
+        <div className="p-3 space-y-2">
+          {/* Enable Cache Row */}
+          <div
+            className="flex items-center justify-between px-3 py-2.5"
+            style={{ backgroundColor: colors.background, border: `1px solid ${borderColor}` }}
+          >
             <div>
-              <div className="text-sm font-bold text-white">Enable Caching</div>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs font-bold" style={{ color: colors.text }}>Enable Caching</div>
+              <div className="text-[11px] font-mono mt-0.5" style={{ color: colors.textMuted }}>
                 Cache API responses to reduce requests
               </div>
             </div>
-            <label className="relative inline-block w-12 h-6">
-              <input
-                type="checkbox"
-                checked={cacheEnabled}
-                onChange={(e) => onCacheEnabledChange(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-full h-full bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
-            </label>
+            <TerminalToggle
+              checked={cacheEnabled}
+              onChange={onCacheEnabledChange}
+              activeColor={colors.primary}
+            />
           </div>
 
           {/* Cache TTL */}
           {cacheEnabled && (
-            <div className="p-3 bg-zinc-900 rounded border border-zinc-700">
-              <label className="text-sm font-bold text-white block mb-2">
-                Cache Duration (seconds)
-              </label>
+            <div
+              className="px-3 py-2.5"
+              style={{ backgroundColor: colors.background, border: `1px solid ${borderColor}` }}
+            >
+              <div className="text-[10px] font-bold tracking-wider mb-2" style={{ color: colors.text }}>
+                CACHE DURATION (SECONDS)
+              </div>
               <input
                 type="text"
                 inputMode="numeric"
@@ -139,90 +186,169 @@ export function CacheSettings({
                     onCacheTTLChange(v === '' ? 0 : Number(v));
                   }
                 }}
-                className="w-full bg-zinc-800 border border-zinc-700 text-gray-300 px-3 py-2 text-sm rounded focus:outline-none focus:border-orange-500"
+                onFocus={() => setTtlFocused(true)}
+                onBlur={() => setTtlFocused(false)}
+                className="w-full px-2 py-1.5 text-xs font-mono outline-none transition-all"
+                style={{
+                  backgroundColor: colors.panel,
+                  border: `1px solid ${ttlFocused ? colors.primary : borderColor}`,
+                  color: colors.text,
+                }}
               />
-              <div className="text-xs text-gray-500 mt-2">
-                Common values: 60 (1 min), 300 (5 min), 3600 (1 hour)
+              <div className="text-[10px] font-mono mt-1.5" style={{ color: colors.textMuted }}>
+                Common: <span style={{ color: colors.primary }}>60</span> (1 min) ·{' '}
+                <span style={{ color: colors.primary }}>300</span> (5 min) ·{' '}
+                <span style={{ color: colors.primary }}>3600</span> (1 hr)
               </div>
             </div>
           )}
 
           {/* Clear Cache Buttons */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-1">
             {mappingId && (
               <button
                 onClick={handleClearCache}
                 disabled={isClearing}
-                className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-900 text-gray-300 py-2 px-3 rounded text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold tracking-wide transition-all"
+                style={{
+                  backgroundColor: isClearing ? colors.background : 'transparent',
+                  border: `1px solid ${borderColor}`,
+                  color: isClearing ? colors.textMuted : colors.text,
+                  opacity: isClearing ? 0.6 : 1,
+                  cursor: isClearing ? 'not-allowed' : 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isClearing) {
+                    e.currentTarget.style.borderColor = colors.primary;
+                    e.currentTarget.style.color = colors.primary;
+                    e.currentTarget.style.backgroundColor = `${colors.primary}08`;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isClearing) {
+                    e.currentTarget.style.borderColor = borderColor;
+                    e.currentTarget.style.color = colors.text;
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
               >
-                <Trash2 size={12} />
-                {isClearing ? 'Clearing...' : 'Clear This Cache'}
+                <Trash2 size={11} />
+                {isClearing ? 'CLEARING...' : 'CLEAR THIS CACHE'}
               </button>
             )}
             <button
               onClick={handleClearAllCache}
               disabled={isClearing}
-              className="flex-1 bg-red-900/30 hover:bg-red-900/50 disabled:bg-zinc-900 text-red-400 hover:text-red-300 py-2 px-3 rounded text-xs font-bold flex items-center justify-center gap-2 border border-red-700 transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold tracking-wide transition-all"
+              style={{
+                backgroundColor: isClearing ? colors.background : `${colors.alert}10`,
+                border: `1px solid ${colors.alert}`,
+                color: isClearing ? colors.textMuted : colors.alert,
+                opacity: isClearing ? 0.6 : 1,
+                cursor: isClearing ? 'not-allowed' : 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                if (!isClearing) {
+                  e.currentTarget.style.backgroundColor = `${colors.alert}20`;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isClearing) {
+                  e.currentTarget.style.backgroundColor = `${colors.alert}10`;
+                }
+              }}
             >
-              <Database size={12} />
-              {isClearing ? 'Clearing...' : 'Clear All Cache'}
+              <Database size={11} />
+              {isClearing ? 'CLEARING...' : 'CLEAR ALL CACHE'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Encryption Settings */}
-      <div>
-        <h3 className="text-xs font-bold text-orange-500 uppercase mb-3 flex items-center gap-2">
-          <Shield size={14} />
-          Security
-        </h3>
+      {/* ── Security Section ── */}
+      <div style={{ backgroundColor: colors.panel, border: `1px solid ${borderColor}` }}>
+        {/* Section Header */}
+        <div
+          className="flex items-center gap-2 px-3 py-2"
+          style={{ borderBottom: `1px solid ${(colors.info || '#0088FF')}40`, backgroundColor: `${colors.info || '#0088FF'}08` }}
+        >
+          <Shield size={12} color={colors.info || '#0088FF'} />
+          <span className="text-[10px] font-bold tracking-wider" style={{ color: colors.info || '#0088FF' }}>
+            SECURITY
+          </span>
+        </div>
 
-        <div className="space-y-3">
-          {/* Encryption Toggle */}
-          <div className="flex items-center justify-between p-3 bg-zinc-900 rounded border border-zinc-700">
+        <div className="p-3 space-y-2">
+          {/* Encryption Toggle Row */}
+          <div
+            className="flex items-center justify-between px-3 py-2.5"
+            style={{ backgroundColor: colors.background, border: `1px solid ${borderColor}` }}
+          >
             <div>
-              <div className="text-sm font-bold text-white">
-                Encrypt API Credentials
-              </div>
-              <div className="text-xs text-gray-400">
-                Store API keys and tokens encrypted in local database
+              <div className="text-xs font-bold" style={{ color: colors.text }}>Encrypt API Credentials</div>
+              <div className="text-[11px] font-mono mt-0.5" style={{ color: colors.textMuted }}>
+                Store API keys encrypted in local database
               </div>
             </div>
-            <label className="relative inline-block w-12 h-6">
-              <input
-                type="checkbox"
-                checked={encryptionEnabled}
-                onChange={(e) => handleEncryptionToggle(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-full h-full bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-            </label>
+            <TerminalToggle
+              checked={encryptionEnabled}
+              onChange={handleEncryptionToggle}
+              activeColor={colors.success}
+            />
           </div>
 
-          {/* Encryption Info */}
-          <div className="p-3 bg-blue-900/20 border border-blue-700 rounded">
-            <div className="flex items-start gap-2">
-              <Shield size={14} className="text-blue-400 mt-0.5" />
-              <div className="text-xs text-blue-300">
-                {encryptionEnabled ? (
-                  <>
-                    <strong>Encryption is enabled.</strong> Your API keys and
-                    tokens are encrypted using AES-256-GCM before being stored.
-                    You can toggle this setting anytime.
-                  </>
-                ) : (
-                  <>
-                    <strong>Encryption is disabled.</strong> Your API keys and
-                    tokens will be stored in plain text. This is less secure but
-                    may be useful for debugging.
-                  </>
-                )}
-              </div>
+          {/* Encryption Info Panel */}
+          <div
+            className="flex items-start gap-2 px-3 py-2.5"
+            style={{
+              backgroundColor: encryptionEnabled
+                ? `${colors.success}08`
+                : `${colors.alert}08`,
+              border: `1px solid ${encryptionEnabled
+                ? `${colors.success}40`
+                : `${colors.alert}40`}`,
+            }}
+          >
+            {encryptionEnabled ? (
+              <CheckCircle2 size={13} color={colors.success} className="flex-shrink-0 mt-0.5" />
+            ) : (
+              <AlertTriangle size={13} color={colors.alert} className="flex-shrink-0 mt-0.5" />
+            )}
+            <div className="text-[11px] font-mono" style={{ color: encryptionEnabled ? colors.success : colors.alert }}>
+              {encryptionEnabled ? (
+                <>
+                  <span className="font-bold">ENCRYPTION ENABLED.</span>{' '}
+                  <span style={{ color: colors.textMuted }}>
+                    API keys and tokens are encrypted using AES-256-GCM before being stored locally.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="font-bold">ENCRYPTION DISABLED.</span>{' '}
+                  <span style={{ color: colors.textMuted }}>
+                    API keys and tokens stored in plain text. Enable encryption for production use.
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* AES badge row */}
+          <div className="flex items-center gap-2 px-1">
+            <div
+              className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono font-bold"
+              style={{ backgroundColor: `${colors.info || '#0088FF'}10`, border: `1px solid ${colors.info || '#0088FF'}30`, color: colors.info || '#0088FF' }}
+            >
+              <Shield size={10} />
+              AES-256-GCM
+            </div>
+            <div className="text-[10px] font-mono" style={{ color: colors.textMuted }}>
+              Industry-standard symmetric encryption
             </div>
           </div>
         </div>
       </div>
+
     </div>
   );
 }

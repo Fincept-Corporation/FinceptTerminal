@@ -2,7 +2,7 @@
  * Metric formatting utilities for backtesting results
  */
 
-import { FINCEPT } from '../constants';
+import { FINCEPT } from '../../portfolio-tab/finceptStyles';
 
 export function formatMetricValue(key: string, value: any): string {
   if (value === null || value === undefined) return 'N/A';

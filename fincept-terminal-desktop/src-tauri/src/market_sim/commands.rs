@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
+use std::time::Duration;
 use once_cell::sync::Lazy;
 use crate::market_sim::types::*;
 use crate::market_sim::exchange::{Exchange, create_default_simulation};
@@ -7,6 +8,27 @@ use crate::market_sim::analytics::AnalyticsSummary;
 
 /// Global simulation state
 static SIM_STATE: Lazy<Mutex<Option<Exchange>>> = Lazy::new(|| Mutex::new(None));
+
+/// Helper to acquire lock with retry to prevent UI freezing
+fn acquire_state_lock() -> Result<std::sync::MutexGuard<'static, Option<Exchange>>, String> {
+    // Try to acquire lock immediately first
+    match SIM_STATE.try_lock() {
+        Ok(guard) => return Ok(guard),
+        Err(std::sync::TryLockError::WouldBlock) => {
+            // Lock is held, retry a few times with small delays
+            for _ in 0..10 {
+                std::thread::sleep(Duration::from_millis(10));
+                if let Ok(guard) = SIM_STATE.try_lock() {
+                    return Ok(guard);
+                }
+            }
+            Err("Simulation is busy. Please try again.".to_string())
+        }
+        Err(std::sync::TryLockError::Poisoned(e)) => {
+            Err(format!("Lock poisoned: {}", e))
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SimStartRequest {
@@ -46,9 +68,9 @@ impl<T: Serialize> SimResponse<T> {
 /// Start a new market simulation
 #[tauri::command]
 pub fn market_sim_start(request: SimStartRequest) -> SimResponse<SimulationSnapshot> {
-    let mut state = match SIM_STATE.lock() {
+    let mut state = match acquire_state_lock() {
         Ok(s) => s,
-        Err(e) => return SimResponse::err(format!("Lock error: {}", e)),
+        Err(e) => return SimResponse::err(e),
     };
 
     // Create exchange with default config if no custom instruments
@@ -94,9 +116,9 @@ pub fn market_sim_start(request: SimStartRequest) -> SimResponse<SimulationSnaps
 /// Step the simulation forward by N ticks
 #[tauri::command]
 pub fn market_sim_step(ticks: u64) -> SimResponse<SimulationSnapshot> {
-    let mut state = match SIM_STATE.lock() {
+    let mut state = match acquire_state_lock() {
         Ok(s) => s,
-        Err(e) => return SimResponse::err(format!("Lock error: {}", e)),
+        Err(e) => return SimResponse::err(e),
     };
 
     match state.as_mut() {
@@ -111,9 +133,9 @@ pub fn market_sim_step(ticks: u64) -> SimResponse<SimulationSnapshot> {
 /// Run the full simulation to completion
 #[tauri::command]
 pub fn market_sim_run() -> SimResponse<SimulationSnapshot> {
-    let mut state = match SIM_STATE.lock() {
+    let mut state = match acquire_state_lock() {
         Ok(s) => s,
-        Err(e) => return SimResponse::err(format!("Lock error: {}", e)),
+        Err(e) => return SimResponse::err(e),
     };
 
     match state.as_mut() {
@@ -128,9 +150,9 @@ pub fn market_sim_run() -> SimResponse<SimulationSnapshot> {
 /// Get current simulation snapshot
 #[tauri::command]
 pub fn market_sim_snapshot() -> SimResponse<SimulationSnapshot> {
-    let state = match SIM_STATE.lock() {
+    let state = match acquire_state_lock() {
         Ok(s) => s,
-        Err(e) => return SimResponse::err(format!("Lock error: {}", e)),
+        Err(e) => return SimResponse::err(e),
     };
 
     match state.as_ref() {
@@ -142,9 +164,9 @@ pub fn market_sim_snapshot() -> SimResponse<SimulationSnapshot> {
 /// Get detailed analytics
 #[tauri::command]
 pub fn market_sim_analytics() -> SimResponse<AnalyticsSummary> {
-    let state = match SIM_STATE.lock() {
+    let state = match acquire_state_lock() {
         Ok(s) => s,
-        Err(e) => return SimResponse::err(format!("Lock error: {}", e)),
+        Err(e) => return SimResponse::err(e),
     };
 
     match state.as_ref() {
@@ -156,9 +178,9 @@ pub fn market_sim_analytics() -> SimResponse<AnalyticsSummary> {
 /// Get L2 order book depth for an instrument
 #[tauri::command]
 pub fn market_sim_orderbook(instrument_id: u32, depth: usize) -> SimResponse<L2Snapshot> {
-    let state = match SIM_STATE.lock() {
+    let state = match acquire_state_lock() {
         Ok(s) => s,
-        Err(e) => return SimResponse::err(format!("Lock error: {}", e)),
+        Err(e) => return SimResponse::err(e),
     };
 
     match state.as_ref() {
@@ -183,9 +205,9 @@ pub fn market_sim_inject_news(
     magnitude: f64,
     instrument_ids: Vec<u32>,
 ) -> SimResponse<String> {
-    let mut state = match SIM_STATE.lock() {
+    let mut state = match acquire_state_lock() {
         Ok(s) => s,
-        Err(e) => return SimResponse::err(format!("Lock error: {}", e)),
+        Err(e) => return SimResponse::err(e),
     };
 
     match state.as_mut() {
@@ -200,9 +222,9 @@ pub fn market_sim_inject_news(
 /// Stop and reset the simulation
 #[tauri::command]
 pub fn market_sim_stop() -> SimResponse<String> {
-    let mut state = match SIM_STATE.lock() {
+    let mut state = match acquire_state_lock() {
         Ok(s) => s,
-        Err(e) => return SimResponse::err(format!("Lock error: {}", e)),
+        Err(e) => return SimResponse::err(e),
     };
 
     *state = None;
@@ -212,9 +234,9 @@ pub fn market_sim_stop() -> SimResponse<String> {
 /// Get event log summary (last N events)
 #[tauri::command]
 pub fn market_sim_events(count: usize) -> SimResponse<Vec<String>> {
-    let state = match SIM_STATE.lock() {
+    let state = match acquire_state_lock() {
         Ok(s) => s,
-        Err(e) => return SimResponse::err(format!("Lock error: {}", e)),
+        Err(e) => return SimResponse::err(e),
     };
 
     match state.as_ref() {

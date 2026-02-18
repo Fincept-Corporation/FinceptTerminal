@@ -1,5 +1,4 @@
 // Data Source Adapter Registry
-// This file exports all adapters and provides a factory function to create the appropriate adapter
 
 import { BaseAdapter } from './BaseAdapter';
 import { PostgreSQLAdapter } from './PostgreSQLAdapter';
@@ -9,7 +8,6 @@ import { MongoDBAdapter } from './MongoDBAdapter';
 import { RedisAdapter } from './RedisAdapter';
 import { SQLiteAdapter } from './SQLiteAdapter';
 import { CSVAdapter } from './CSVAdapter';
-import { YahooFinanceAdapter } from './YahooFinanceAdapter';
 import { InfluxDBAdapter } from './InfluxDBAdapter';
 import { QuestDBAdapter } from './QuestDBAdapter';
 import { TimescaleDBAdapter } from './TimescaleDBAdapter';
@@ -17,7 +15,6 @@ import { AlphaVantageAdapter } from './AlphaVantageAdapter';
 import { ElasticsearchAdapter } from './ElasticsearchAdapter';
 import { CassandraAdapter } from './CassandraAdapter';
 import { SnowflakeAdapter } from './SnowflakeAdapter';
-import { FinnhubAdapter } from './FinnhubAdapter';
 import { BigQueryAdapter } from './BigQueryAdapter';
 import { KafkaAdapter } from './KafkaAdapter';
 import { ClickHouseAdapter } from './ClickHouseAdapter';
@@ -32,7 +29,6 @@ import { JSONAdapter } from './JSONAdapter';
 import { ParquetAdapter } from './ParquetAdapter';
 import { CoinGeckoAdapter } from './CoinGeckoAdapter';
 import { BinanceAdapter } from './BinanceAdapter';
-import { CoinbaseAdapter } from './CoinbaseAdapter';
 import { RabbitMQAdapter } from './RabbitMQAdapter';
 import { WebSocketAdapter } from './WebSocketAdapter';
 import { OracleAdapter } from './OracleAdapter';
@@ -40,14 +36,6 @@ import { SQLServerAdapter } from './SQLServerAdapter';
 import { DatabricksAdapter } from './DatabricksAdapter';
 import { GCPStorageAdapter } from './GCPStorageAdapter';
 import { AzureBlobAdapter } from './AzureBlobAdapter';
-import { IEXCloudAdapter } from './IEXCloudAdapter';
-import { CoinMarketCapAdapter } from './CoinMarketCapAdapter';
-import { TwelveDataAdapter } from './TwelveDataAdapter';
-import { QuandlAdapter } from './QuandlAdapter';
-import { EODHistoricalDataAdapter } from './EODHistoricalDataAdapter';
-import { TiingoAdapter } from './TiingoAdapter';
-import { IntrinioAdapter } from './IntrinioAdapter';
-import { MarketstackAdapter } from './MarketstackAdapter';
 import { OpenSearchAdapter } from './OpenSearchAdapter';
 import { SolrAdapter } from './SolrAdapter';
 import { VictoriaMetricsAdapter } from './VictoriaMetricsAdapter';
@@ -71,8 +59,6 @@ import { OracleCloudStorageAdapter } from './OracleCloudStorageAdapter';
 import { IBMCloudStorageAdapter } from './IBMCloudStorageAdapter';
 import { MSGraphAdapter } from './MSGraphAdapter';
 import { FinceptDataAdapter } from './FinceptDataAdapter';
-import { RefinitivAdapter } from './RefinitivAdapter';
-import { FinageAdapter } from './FinageAdapter';
 import { TradierAdapter } from './TradierAdapter';
 import { AlgoliaAdapter } from './AlgoliaAdapter';
 import { MeiliSearchAdapter } from './MeiliSearchAdapter';
@@ -94,7 +80,6 @@ import { FTPAdapter } from './FTPAdapter';
 import { SFTPAdapter } from './SFTPAdapter';
 import { DataSourceConnection } from '../types';
 
-// Map of data source types to their adapter classes
 const ADAPTER_MAP: Record<string, new (connection: any) => BaseAdapter> = {
   // Relational Databases
   postgresql: PostgreSQLAdapter,
@@ -124,7 +109,7 @@ const ADAPTER_MAP: Record<string, new (connection: any) => BaseAdapter> = {
   cosmosdb: CosmosDBAdapter,
   etcd: EtcdAdapter,
 
-  // Analytical/Columnar Databases
+  // Analytical/Columnar
   clickhouse: ClickHouseAdapter,
 
   // Data Warehouses
@@ -134,7 +119,7 @@ const ADAPTER_MAP: Record<string, new (connection: any) => BaseAdapter> = {
   databricks: DatabricksAdapter,
   synapse: AzureSynapseAdapter,
 
-  // Time Series Databases
+  // Time Series
   influxdb: InfluxDBAdapter,
   questdb: QuestDBAdapter,
   timescaledb: TimescaleDBAdapter,
@@ -183,25 +168,12 @@ const ADAPTER_MAP: Record<string, new (connection: any) => BaseAdapter> = {
   ftp: FTPAdapter,
   sftp: SFTPAdapter,
 
-  // Market Data APIs
-  'yahoo-finance': YahooFinanceAdapter,
+  // Market Data — all backed by Rust/Python commands
   'alpha-vantage': AlphaVantageAdapter,
-  finnhub: FinnhubAdapter,
   coingecko: CoinGeckoAdapter,
   binance: BinanceAdapter,
-  coinbase: CoinbaseAdapter,
-  'iex-cloud': IEXCloudAdapter,
-  coinmarketcap: CoinMarketCapAdapter,
-  'twelve-data': TwelveDataAdapter,
-  quandl: QuandlAdapter,
-  'eod-historical': EODHistoricalDataAdapter,
-  tiingo: TiingoAdapter,
-  intrinio: IntrinioAdapter,
-  marketstack: MarketstackAdapter,
-  fincept: FinceptDataAdapter,
-  reuters: RefinitivAdapter,
-  finage: FinageAdapter,
   tradier: TradierAdapter,
+  fincept: FinceptDataAdapter,
 
   // Search & Analytics
   elasticsearch: ElasticsearchAdapter,
@@ -211,54 +183,31 @@ const ADAPTER_MAP: Record<string, new (connection: any) => BaseAdapter> = {
   meilisearch: MeiliSearchAdapter,
 };
 
-/**
- * Create an adapter instance for a given data source connection
- * @param connection The data source connection configuration
- * @returns An instance of the appropriate adapter, or null if no adapter is available
- */
 export function createAdapter(connection: DataSourceConnection): BaseAdapter | null {
   const AdapterClass = ADAPTER_MAP[connection.type];
-
   if (!AdapterClass) {
     console.warn(`No adapter found for data source type: ${connection.type}`);
     return null;
   }
-
   return new AdapterClass(connection);
 }
 
-/**
- * Check if an adapter is available for a given data source type
- * @param type The data source type
- * @returns True if an adapter is available, false otherwise
- */
 export function hasAdapter(type: string): boolean {
   return type in ADAPTER_MAP;
 }
 
-/**
- * Get list of all supported data source types that have adapters
- * @returns Array of supported data source type strings
- */
 export function getSupportedTypes(): string[] {
   return Object.keys(ADAPTER_MAP);
 }
 
-/**
- * Test a connection using the appropriate adapter
- * @param connection The data source connection to test
- * @returns Test result with success status and message
- */
 export async function testConnection(connection: DataSourceConnection) {
   const adapter = createAdapter(connection);
-
   if (!adapter) {
     return {
       success: false,
-      message: `No adapter available for ${connection.type}. This data source type is not yet implemented.`,
+      message: `No adapter available for ${connection.type}.`,
     };
   }
-
   try {
     return await adapter.testConnection();
   } catch (error) {
@@ -269,100 +218,23 @@ export async function testConnection(connection: DataSourceConnection) {
   }
 }
 
-// Export all adapters for direct use if needed
 export {
   BaseAdapter,
-  PostgreSQLAdapter,
-  MySQLAdapter,
-  MariaDBAdapter,
-  MongoDBAdapter,
-  RedisAdapter,
-  SQLiteAdapter,
-  CSVAdapter,
-  YahooFinanceAdapter,
-  InfluxDBAdapter,
-  QuestDBAdapter,
-  TimescaleDBAdapter,
-  AlphaVantageAdapter,
-  ElasticsearchAdapter,
-  CassandraAdapter,
-  SnowflakeAdapter,
-  FinnhubAdapter,
-  BigQueryAdapter,
-  KafkaAdapter,
-  ClickHouseAdapter,
-  RedshiftAdapter,
-  PrometheusAdapter,
-  Neo4jAdapter,
-  S3Adapter,
-  GraphQLAdapter,
-  RESTAdapter,
-  ExcelAdapter,
-  JSONAdapter,
-  ParquetAdapter,
-  CoinGeckoAdapter,
-  BinanceAdapter,
-  CoinbaseAdapter,
-  RabbitMQAdapter,
-  WebSocketAdapter,
-  OracleAdapter,
-  SQLServerAdapter,
-  DatabricksAdapter,
-  GCPStorageAdapter,
-  AzureBlobAdapter,
-  IEXCloudAdapter,
-  CoinMarketCapAdapter,
-  TwelveDataAdapter,
-  QuandlAdapter,
-  EODHistoricalDataAdapter,
-  TiingoAdapter,
-  IntrinioAdapter,
-  MarketstackAdapter,
-  OpenSearchAdapter,
-  SolrAdapter,
-  VictoriaMetricsAdapter,
-  OpenTSDBAdapter,
-  KDBAdapter,
-  XMLAdapter,
-  AvroAdapter,
-  ORCAdapter,
-  FeatherAdapter,
-  GRPCAdapter,
-  SOAPAdapter,
-  ODataAdapter,
-  MQTTAdapter,
-  NATSAdapter,
-  DigitalOceanSpacesAdapter,
-  MinIOAdapter,
-  BackblazeB2Adapter,
-  WasabiAdapter,
-  CloudflareR2Adapter,
-  OracleCloudStorageAdapter,
-  IBMCloudStorageAdapter,
-  MSGraphAdapter,
-  FinceptDataAdapter,
-  RefinitivAdapter,
-  FinageAdapter,
-  TradierAdapter,
-  AlgoliaAdapter,
-  MeiliSearchAdapter,
-  AzureSynapseAdapter,
-  CockroachDBAdapter,
-  VerticaAdapter,
-  CouchDBAdapter,
-  DynamoDBAdapter,
-  ArangoDBAdapter,
-  MemcachedAdapter,
-  RethinkDBAdapter,
-  FirestoreAdapter,
-  HBaseAdapter,
-  ScyllaDBAdapter,
-  OrientDBAdapter,
-  CosmosDBAdapter,
-  EtcdAdapter,
-  FTPAdapter,
-  SFTPAdapter,
+  PostgreSQLAdapter, MySQLAdapter, MariaDBAdapter, MongoDBAdapter, RedisAdapter, SQLiteAdapter,
+  CSVAdapter, InfluxDBAdapter, QuestDBAdapter, TimescaleDBAdapter,
+  AlphaVantageAdapter, ElasticsearchAdapter, CassandraAdapter, SnowflakeAdapter,
+  BigQueryAdapter, KafkaAdapter, ClickHouseAdapter, RedshiftAdapter, PrometheusAdapter,
+  Neo4jAdapter, S3Adapter, GraphQLAdapter, RESTAdapter, ExcelAdapter, JSONAdapter, ParquetAdapter,
+  CoinGeckoAdapter, BinanceAdapter, RabbitMQAdapter, WebSocketAdapter,
+  OracleAdapter, SQLServerAdapter, DatabricksAdapter, GCPStorageAdapter, AzureBlobAdapter,
+  OpenSearchAdapter, SolrAdapter, VictoriaMetricsAdapter, OpenTSDBAdapter, KDBAdapter,
+  XMLAdapter, AvroAdapter, ORCAdapter, FeatherAdapter, GRPCAdapter, SOAPAdapter, ODataAdapter,
+  MQTTAdapter, NATSAdapter, DigitalOceanSpacesAdapter, MinIOAdapter, BackblazeB2Adapter,
+  WasabiAdapter, CloudflareR2Adapter, OracleCloudStorageAdapter, IBMCloudStorageAdapter,
+  MSGraphAdapter, FinceptDataAdapter, TradierAdapter, AlgoliaAdapter, MeiliSearchAdapter,
+  AzureSynapseAdapter, CockroachDBAdapter, VerticaAdapter, CouchDBAdapter, DynamoDBAdapter,
+  ArangoDBAdapter, MemcachedAdapter, RethinkDBAdapter, FirestoreAdapter, HBaseAdapter,
+  ScyllaDBAdapter, OrientDBAdapter, CosmosDBAdapter, EtcdAdapter, FTPAdapter, SFTPAdapter,
 };
 
-// Export adapter types
 export type AdapterType = InstanceType<typeof BaseAdapter>;

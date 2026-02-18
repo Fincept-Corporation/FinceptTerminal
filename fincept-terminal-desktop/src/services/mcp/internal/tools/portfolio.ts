@@ -757,4 +757,144 @@ export const portfolioTools: InternalTool[] = [
       };
     },
   },
+  {
+    name: 'export_portfolio_json',
+    description: 'Export portfolio as JSON (includes all transactions for full replay/import). Use this to back up or transfer a portfolio.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        portfolio_id: { type: 'string', description: 'Portfolio ID' },
+      },
+      required: ['portfolio_id'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.exportPortfolioJSON) {
+        return { success: false, error: 'Portfolio context not available' };
+      }
+      const json = await contexts.exportPortfolioJSON(args.portfolio_id);
+      return {
+        success: true,
+        data: { json_content: json },
+        content: json,
+        message: 'Portfolio exported to JSON successfully',
+      };
+    },
+  },
+
+  // ==================== IMPORT ====================
+  {
+    name: 'import_portfolio',
+    description: 'Import a portfolio from Fincept JSON export. Can create a new portfolio or merge into an existing one by replaying all transactions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        json_data: { type: 'string', description: 'The full JSON string from a previous export_portfolio_json call' },
+        mode: { type: 'string', description: 'Import mode', enum: ['new', 'merge'], default: 'new' },
+        merge_target_id: { type: 'string', description: 'Portfolio ID to merge into (required when mode is "merge")' },
+      },
+      required: ['json_data'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.importPortfolio) {
+        return { success: false, error: 'Portfolio context not available' };
+      }
+      let data: any;
+      try {
+        data = JSON.parse(args.json_data);
+      } catch {
+        return { success: false, error: 'Invalid JSON data' };
+      }
+      const result = await contexts.importPortfolio(data, args.mode || 'new', args.merge_target_id);
+      return {
+        success: true,
+        data: result,
+        message: `Imported "${result.portfolioName}": ${result.transactionsReplayed} transactions replayed${result.errors.length > 0 ? `, ${result.errors.length} error(s)` : ''}`,
+      };
+    },
+  },
+
+  // ==================== TRANSACTION MANAGEMENT ====================
+  {
+    name: 'update_transaction',
+    description: 'Edit an existing transaction (correct quantity, price, date, or notes). Use get_portfolio_transactions to find the transaction ID.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transaction_id: { type: 'string', description: 'Transaction ID to update' },
+        quantity: { type: 'number', description: 'New quantity' },
+        price: { type: 'number', description: 'New price per unit' },
+        date: { type: 'string', description: 'New transaction date (YYYY-MM-DD)' },
+        notes: { type: 'string', description: 'Updated notes' },
+      },
+      required: ['transaction_id', 'quantity', 'price', 'date'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.updateTransaction) {
+        return { success: false, error: 'Portfolio context not available' };
+      }
+      await contexts.updateTransaction(args.transaction_id, args.quantity, args.price, args.date, args.notes);
+      return { success: true, message: `Transaction ${args.transaction_id} updated` };
+    },
+  },
+  {
+    name: 'delete_transaction',
+    description: 'Delete a specific transaction from a portfolio. Use get_portfolio_transactions to find the transaction ID.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transaction_id: { type: 'string', description: 'Transaction ID to delete' },
+      },
+      required: ['transaction_id'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.deleteTransaction) {
+        return { success: false, error: 'Portfolio context not available' };
+      }
+      await contexts.deleteTransaction(args.transaction_id);
+      return { success: true, message: `Transaction ${args.transaction_id} deleted` };
+    },
+  },
+  {
+    name: 'get_transaction',
+    description: 'Get details of a specific transaction by ID',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transaction_id: { type: 'string', description: 'Transaction ID' },
+      },
+      required: ['transaction_id'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.getTransactionById) {
+        return { success: false, error: 'Portfolio context not available' };
+      }
+      const tx = await contexts.getTransactionById(args.transaction_id);
+      if (!tx) return { success: false, error: 'Transaction not found' };
+      return { success: true, data: tx };
+    },
+  },
+
+  // ==================== SNAPSHOT ====================
+  {
+    name: 'save_portfolio_snapshot',
+    description: 'Save a performance snapshot of the portfolio at the current moment. Snapshots are used to build historical performance charts.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        portfolio_id: { type: 'string', description: 'Portfolio ID' },
+      },
+      required: ['portfolio_id'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.savePortfolioSnapshot) {
+        return { success: false, error: 'Portfolio context not available' };
+      }
+      const snapshot = await contexts.savePortfolioSnapshot(args.portfolio_id);
+      return {
+        success: true,
+        data: snapshot,
+        message: `Snapshot saved: total value $${snapshot.total_value?.toFixed(2)} at ${snapshot.snapshot_date}`,
+      };
+    },
+  },
 ];

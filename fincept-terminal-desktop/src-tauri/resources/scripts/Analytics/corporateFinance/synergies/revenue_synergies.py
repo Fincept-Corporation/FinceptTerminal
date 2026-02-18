@@ -376,8 +376,9 @@ def main():
             elif synergy_type == "pricing_power":
                 analysis = analyzer.calculate_pricing_power_synergy(
                     combined_revenue=params.get('combined_revenue', 0),
-                    price_increase_pct=params.get('price_increase_pct', 0.02),
-                    volume_loss_pct=params.get('volume_loss_pct', 0.05),
+                    price_increase=params.get('price_increase', params.get('price_increase_pct', 0.02)),
+                    volume_elasticity=params.get('volume_elasticity', params.get('volume_loss_pct', 0.5)),
+                    market_share=params.get('market_share', 0.3),
                     ramp_years=params.get('ramp_years', 2)
                 )
             elif synergy_type == "market_expansion":

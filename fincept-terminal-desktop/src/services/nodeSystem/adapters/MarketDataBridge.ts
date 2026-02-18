@@ -1,10 +1,10 @@
 /**
  * Market Data Bridge
- * Connects workflow nodes to 100+ market data adapters
- * Provides unified interface for quotes, historical data, and real-time streaming
+ * Directly invokes Rust/Python (yfinance) Tauri commands.
+ * No HTTP adapters — uses the embedded Python runtime.
  */
 
-import { IDataObject } from '../types';
+import { invoke } from '@tauri-apps/api/core';
 
 // ================================
 // TYPES
@@ -20,6 +20,7 @@ export interface QuoteData {
   low?: number;
   close?: number;
   volume?: number;
+  previousClose?: number;
   timestamp: string;
   exchange?: string;
   currency?: string;
@@ -32,15 +33,15 @@ export interface OHLCVData {
   low: number;
   close: number;
   volume: number;
+  adjClose?: number;
 }
 
 export interface HistoricalDataRequest {
   symbol: string;
-  interval: string;
+  interval?: string;
   period?: string;
   startDate?: string;
   endDate?: string;
-  provider?: string;
 }
 
 export interface MarketDepthData {
@@ -76,456 +77,163 @@ export interface FundamentalData {
   avgVolume?: number;
 }
 
-export type DataProvider =
-  | 'yahoo'
-  | 'alphavantage'
-  | 'binance'
-  | 'coingecko'
-  | 'finnhub'
-  | 'iex'
-  | 'tradier'
-  | 'twelvedata';
-
 // ================================
 // MARKET DATA BRIDGE
 // ================================
 
 class MarketDataBridgeClass {
-  private adapterCache: Map<string, any> = new Map();
-
   /**
-   * Get a quote for a symbol
+   * Get a real-time quote via Rust get_market_quote → yfinance Python
    */
-  async getQuote(
-    symbol: string,
-    provider: DataProvider = 'yahoo',
-    exchange?: string
-  ): Promise<QuoteData> {
-    try {
-      // Dynamic import of adapter based on provider
-      const adapter = await this.getAdapter(provider);
-
-      if (!adapter) {
-        // Fallback to mock data for development
-        return this.getMockQuote(symbol);
-      }
-
-      const result = await adapter.query({
-        type: 'quote',
-        symbol,
-        exchange,
-      });
-
-      return this.normalizeQuote(result, symbol);
-    } catch (error) {
-      console.error(`[MarketDataBridge] Error fetching quote for ${symbol}:`, error);
-      throw error;
-    }
+  async getQuote(symbol: string): Promise<QuoteData> {
+    const response: any = await invoke('get_market_quote', { symbol });
+    if (!response.success) throw new Error(response.error || `Failed to fetch quote for ${symbol}`);
+    return this.normalizeQuote(response.data, symbol);
   }
 
   /**
-   * Get multiple quotes at once
+   * Get multiple quotes in one call
    */
-  async getQuotes(
-    symbols: string[],
-    provider: DataProvider = 'yahoo'
-  ): Promise<QuoteData[]> {
-    try {
-      // Parallel fetch for efficiency
-      const quotes = await Promise.all(
-        symbols.map((symbol) => this.getQuote(symbol, provider))
-      );
-      return quotes;
-    } catch (error) {
-      console.error('[MarketDataBridge] Error fetching multiple quotes:', error);
-      throw error;
-    }
+  async getQuotes(symbols: string[]): Promise<QuoteData[]> {
+    const response: any = await invoke('get_market_quotes', { symbols });
+    if (!response.success) throw new Error(response.error || 'Failed to fetch quotes');
+    return (response.data as any[]).map((d) => this.normalizeQuote(d, d.symbol));
   }
 
   /**
-   * Get historical OHLCV data
+   * Get OHLCV historical data via Rust get_historical_data → yfinance Python
    */
   async getHistoricalData(request: HistoricalDataRequest): Promise<OHLCVData[]> {
-    try {
-      const provider = request.provider || 'yahoo';
-      const adapter = await this.getAdapter(provider as DataProvider);
+    const today = new Date().toISOString().slice(0, 10);
+    const startDate = request.startDate || this.periodToStartDate(request.period || '1mo');
+    const endDate = request.endDate || today;
 
-      if (!adapter) {
-        return this.getMockHistoricalData(request.symbol, request.period || '1mo');
-      }
-
-      const result = await adapter.query({
-        type: 'historical',
-        symbol: request.symbol,
-        interval: request.interval,
-        period: request.period,
-        startDate: request.startDate,
-        endDate: request.endDate,
-      });
-
-      return this.normalizeHistoricalData(result);
-    } catch (error) {
-      console.error('[MarketDataBridge] Error fetching historical data:', error);
-      throw error;
-    }
+    const response: any = await invoke('get_historical_data', {
+      symbol: request.symbol,
+      startDate,
+      endDate,
+    });
+    if (!response.success) throw new Error(response.error || `Failed to fetch historical data for ${request.symbol}`);
+    return (response.data as any[]).map((d) => ({
+      timestamp: typeof d.timestamp === 'number' ? new Date(d.timestamp * 1000).toISOString() : d.timestamp,
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close,
+      volume: d.volume,
+      adjClose: d.adj_close,
+    }));
   }
 
   /**
-   * Get market depth (order book)
+   * Get fundamental/company info via Rust get_stock_info → yfinance Python
    */
-  async getMarketDepth(
-    symbol: string,
-    provider: DataProvider = 'binance',
-    levels: number = 10
-  ): Promise<MarketDepthData> {
-    try {
-      const adapter = await this.getAdapter(provider);
-
-      if (!adapter) {
-        return this.getMockMarketDepth(symbol);
-      }
-
-      const result = await adapter.query({
-        type: 'orderbook',
-        symbol,
-        limit: levels,
-      });
-
-      return this.normalizeMarketDepth(result, symbol);
-    } catch (error) {
-      console.error('[MarketDataBridge] Error fetching market depth:', error);
-      throw error;
-    }
+  async getFundamentals(symbol: string): Promise<FundamentalData> {
+    const response: any = await invoke('get_stock_info', { symbol });
+    if (!response.success) throw new Error(response.error || `Failed to fetch fundamentals for ${symbol}`);
+    const d = response.data;
+    return {
+      symbol: d.symbol || symbol,
+      name: d.company_name || symbol,
+      sector: d.sector,
+      industry: d.industry,
+      marketCap: d.market_cap,
+      peRatio: d.pe_ratio,
+      eps: d.eps,
+      dividendYield: d.dividend_yield,
+      beta: d.beta,
+      week52High: d.fifty_two_week_high,
+      week52Low: d.fifty_two_week_low,
+      avgVolume: d.average_volume,
+    };
   }
 
   /**
-   * Get 24h ticker statistics
+   * Ticker stats — derived from quote + period returns
    */
-  async getTickerStats(
-    symbol: string,
-    provider: DataProvider = 'binance'
-  ): Promise<TickerStats> {
-    try {
-      const adapter = await this.getAdapter(provider);
+  async getTickerStats(symbol: string): Promise<TickerStats> {
+    const [quoteResp, returnsResp] = await Promise.all([
+      invoke('get_market_quote', { symbol }) as Promise<any>,
+      invoke('get_period_returns', { symbol }) as Promise<any>,
+    ]);
 
-      if (!adapter) {
-        return this.getMockTickerStats(symbol);
-      }
+    if (!quoteResp.success) throw new Error(quoteResp.error || `Failed to fetch stats for ${symbol}`);
+    const q = quoteResp.data;
 
-      const result = await adapter.query({
-        type: 'ticker24h',
-        symbol,
-      });
-
-      return this.normalizeTickerStats(result, symbol);
-    } catch (error) {
-      console.error('[MarketDataBridge] Error fetching ticker stats:', error);
-      throw error;
-    }
+    return {
+      symbol: q.symbol || symbol,
+      lastPrice: q.price,
+      highPrice24h: q.high ?? 0,
+      lowPrice24h: q.low ?? 0,
+      volume24h: q.volume ?? 0,
+      change24h: q.change ?? 0,
+      changePercent24h: q.change_percent ?? 0,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**
-   * Get fundamental data
+   * Market depth is not available via yfinance — return empty structure.
+   * For crypto depth use the Rust WebSocket orderbook commands instead.
    */
-  async getFundamentals(
-    symbol: string,
-    provider: DataProvider = 'yahoo'
-  ): Promise<FundamentalData> {
-    try {
-      const adapter = await this.getAdapter(provider);
-
-      if (!adapter) {
-        return this.getMockFundamentals(symbol);
-      }
-
-      const result = await adapter.query({
-        type: 'fundamentals',
-        symbol,
-      });
-
-      return this.normalizeFundamentals(result, symbol);
-    } catch (error) {
-      console.error('[MarketDataBridge] Error fetching fundamentals:', error);
-      throw error;
-    }
+  async getMarketDepth(symbol: string): Promise<MarketDepthData> {
+    return { symbol, bids: [], asks: [], timestamp: new Date().toISOString() };
   }
 
   /**
-   * Search for symbols
-   */
-  async searchSymbols(
-    query: string,
-    provider: DataProvider = 'yahoo'
-  ): Promise<Array<{ symbol: string; name: string; type: string }>> {
-    try {
-      const adapter = await this.getAdapter(provider);
-
-      if (!adapter) {
-        return [];
-      }
-
-      const result = await adapter.query({
-        type: 'search',
-        query,
-      });
-
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('[MarketDataBridge] Error searching symbols:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Subscribe to real-time quotes (returns unsubscribe function)
+   * Subscribe to real-time quotes via polling (yfinance doesn't stream)
    */
   subscribeToQuotes(
     symbols: string[],
     callback: (quote: QuoteData) => void,
-    provider: DataProvider = 'binance'
+    intervalMs: number = 10000
   ): () => void {
-    // Implementation depends on WebSocket availability
-    // For now, return a mock poller
-    const interval = setInterval(async () => {
+    const timer = setInterval(async () => {
       for (const symbol of symbols) {
         try {
-          const quote = await this.getQuote(symbol, provider);
+          const quote = await this.getQuote(symbol);
           callback(quote);
-        } catch (error) {
-          console.error(`[MarketDataBridge] Error in quote subscription for ${symbol}:`, error);
+        } catch (err) {
+          console.error(`[MarketDataBridge] subscription error for ${symbol}:`, err);
         }
       }
-    }, 5000); // Poll every 5 seconds
-
-    return () => clearInterval(interval);
+    }, intervalMs);
+    return () => clearInterval(timer);
   }
 
   // ================================
-  // PRIVATE METHODS
+  // PRIVATE HELPERS
   // ================================
 
-  /**
-   * Get adapter instance (with caching)
-   */
-  private async getAdapter(provider: DataProvider): Promise<any> {
-    if (this.adapterCache.has(provider)) {
-      return this.adapterCache.get(provider);
-    }
-
-    try {
-      // Dynamic import based on provider
-      const adapterPath = this.getAdapterPath(provider);
-      const module = await import(/* @vite-ignore */ adapterPath);
-
-      // Get the adapter class and create instance
-      const AdapterClass = module.default || Object.values(module)[0];
-      if (AdapterClass) {
-        const adapter = new AdapterClass({});
-        this.adapterCache.set(provider, adapter);
-        return adapter;
-      }
-    } catch (error) {
-      console.warn(`[MarketDataBridge] Adapter for ${provider} not available:`, error);
-    }
-
-    return null;
-  }
-
-  /**
-   * Get adapter import path
-   */
-  private getAdapterPath(provider: DataProvider): string {
-    const paths: Record<DataProvider, string> = {
-      yahoo: '@/components/tabs/data-sources/adapters/YahooFinanceAdapter',
-      alphavantage: '@/components/tabs/data-sources/adapters/AlphaVantageAdapter',
-      binance: '@/components/tabs/data-sources/adapters/BinanceAdapter',
-      coingecko: '@/components/tabs/data-sources/adapters/CoinGeckoAdapter',
-      finnhub: '@/components/tabs/data-sources/adapters/FinnhubAdapter',
-      iex: '@/components/tabs/data-sources/adapters/IEXCloudAdapter',
-      tradier: '@/components/tabs/data-sources/adapters/TradierAdapter',
-      twelvedata: '@/components/tabs/data-sources/adapters/TwelveDataAdapter',
-    };
-    return paths[provider];
-  }
-
-  // ================================
-  // NORMALIZATION METHODS
-  // ================================
-
-  private normalizeQuote(data: any, symbol: string): QuoteData {
+  private normalizeQuote(d: any, symbol: string): QuoteData {
     return {
-      symbol,
-      price: data.price || data.lastPrice || data.regularMarketPrice || 0,
-      change: data.change || data.regularMarketChange || 0,
-      changePercent: data.changePercent || data.regularMarketChangePercent || 0,
-      open: data.open || data.regularMarketOpen,
-      high: data.high || data.regularMarketDayHigh,
-      low: data.low || data.regularMarketDayLow,
-      close: data.close || data.previousClose,
-      volume: data.volume || data.regularMarketVolume,
-      timestamp: data.timestamp || new Date().toISOString(),
-      exchange: data.exchange,
-      currency: data.currency,
+      symbol: d.symbol || symbol,
+      price: d.price ?? 0,
+      change: d.change ?? 0,
+      changePercent: d.change_percent ?? 0,
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.price,
+      volume: d.volume,
+      previousClose: d.previous_close,
+      timestamp: d.timestamp
+        ? new Date(typeof d.timestamp === 'number' ? d.timestamp * 1000 : d.timestamp).toISOString()
+        : new Date().toISOString(),
     };
   }
 
-  private normalizeHistoricalData(data: any): OHLCVData[] {
-    if (!Array.isArray(data)) {
-      return [];
-    }
-
-    return data.map((item: any) => ({
-      timestamp: item.timestamp || item.date || item.t,
-      open: item.open || item.o,
-      high: item.high || item.h,
-      low: item.low || item.l,
-      close: item.close || item.c,
-      volume: item.volume || item.v,
-    }));
-  }
-
-  private normalizeMarketDepth(data: any, symbol: string): MarketDepthData {
-    return {
-      symbol,
-      bids: data.bids || [],
-      asks: data.asks || [],
-      timestamp: data.timestamp || new Date().toISOString(),
+  private periodToStartDate(period: string): string {
+    const now = new Date();
+    const map: Record<string, number> = {
+      '1d': 1, '5d': 5, '1mo': 30, '3mo': 90,
+      '6mo': 180, '1y': 365, '2y': 730, '5y': 1825,
     };
-  }
-
-  private normalizeTickerStats(data: any, symbol: string): TickerStats {
-    return {
-      symbol,
-      lastPrice: data.lastPrice || data.price || 0,
-      highPrice24h: data.highPrice || data.high24h || 0,
-      lowPrice24h: data.lowPrice || data.low24h || 0,
-      volume24h: data.volume || data.volume24h || 0,
-      change24h: data.priceChange || data.change24h || 0,
-      changePercent24h: data.priceChangePercent || data.changePercent24h || 0,
-      timestamp: data.timestamp || new Date().toISOString(),
-    };
-  }
-
-  private normalizeFundamentals(data: any, symbol: string): FundamentalData {
-    return {
-      symbol,
-      name: data.name || data.shortName || symbol,
-      sector: data.sector,
-      industry: data.industry,
-      marketCap: data.marketCap,
-      peRatio: data.peRatio || data.trailingPE,
-      eps: data.eps || data.trailingEps,
-      dividendYield: data.dividendYield,
-      beta: data.beta,
-      week52High: data.week52High || data.fiftyTwoWeekHigh,
-      week52Low: data.week52Low || data.fiftyTwoWeekLow,
-      avgVolume: data.avgVolume || data.averageVolume,
-    };
-  }
-
-  // ================================
-  // MOCK DATA (for development)
-  // ================================
-
-  private getMockQuote(symbol: string): QuoteData {
-    const basePrice = 100 + Math.random() * 400;
-    const change = (Math.random() - 0.5) * 10;
-    return {
-      symbol,
-      price: basePrice,
-      change,
-      changePercent: (change / basePrice) * 100,
-      open: basePrice - Math.random() * 5,
-      high: basePrice + Math.random() * 10,
-      low: basePrice - Math.random() * 10,
-      close: basePrice,
-      volume: Math.floor(Math.random() * 10000000),
-      timestamp: new Date().toISOString(),
-    };
-  }
-
-  private getMockHistoricalData(symbol: string, period: string): OHLCVData[] {
-    const data: OHLCVData[] = [];
-    const days = period === '1mo' ? 30 : period === '3mo' ? 90 : 365;
-    let price = 100 + Math.random() * 400;
-
-    for (let i = days; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-
-      const change = (Math.random() - 0.5) * 10;
-      price += change;
-
-      data.push({
-        timestamp: date.toISOString(),
-        open: price - Math.random() * 5,
-        high: price + Math.random() * 10,
-        low: price - Math.random() * 10,
-        close: price,
-        volume: Math.floor(Math.random() * 10000000),
-      });
-    }
-
-    return data;
-  }
-
-  private getMockMarketDepth(symbol: string): MarketDepthData {
-    const basePrice = 100 + Math.random() * 400;
-    const bids = [];
-    const asks = [];
-
-    for (let i = 0; i < 10; i++) {
-      bids.push({
-        price: basePrice - (i + 1) * 0.5,
-        quantity: Math.floor(Math.random() * 1000),
-      });
-      asks.push({
-        price: basePrice + (i + 1) * 0.5,
-        quantity: Math.floor(Math.random() * 1000),
-      });
-    }
-
-    return {
-      symbol,
-      bids,
-      asks,
-      timestamp: new Date().toISOString(),
-    };
-  }
-
-  private getMockTickerStats(symbol: string): TickerStats {
-    const price = 100 + Math.random() * 400;
-    const change = (Math.random() - 0.5) * 20;
-    return {
-      symbol,
-      lastPrice: price,
-      highPrice24h: price + Math.random() * 20,
-      lowPrice24h: price - Math.random() * 20,
-      volume24h: Math.floor(Math.random() * 100000000),
-      change24h: change,
-      changePercent24h: (change / price) * 100,
-      timestamp: new Date().toISOString(),
-    };
-  }
-
-  private getMockFundamentals(symbol: string): FundamentalData {
-    return {
-      symbol,
-      name: `${symbol} Inc.`,
-      sector: 'Technology',
-      industry: 'Software',
-      marketCap: Math.floor(Math.random() * 1000000000000),
-      peRatio: 15 + Math.random() * 30,
-      eps: 1 + Math.random() * 10,
-      dividendYield: Math.random() * 5,
-      beta: 0.5 + Math.random() * 1.5,
-      week52High: 200 + Math.random() * 200,
-      week52Low: 50 + Math.random() * 100,
-      avgVolume: Math.floor(Math.random() * 50000000),
-    };
+    const days = map[period] ?? 30;
+    now.setDate(now.getDate() - days);
+    return now.toISOString().slice(0, 10);
   }
 }
 
-// Export singleton
 export const MarketDataBridge = new MarketDataBridgeClass();
 export { MarketDataBridgeClass };

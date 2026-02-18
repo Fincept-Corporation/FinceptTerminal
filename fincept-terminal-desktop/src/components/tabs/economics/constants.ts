@@ -37,6 +37,7 @@ export const DATA_SOURCES: DataSourceConfig[] = [
   { id: 'unesco', name: 'UNESCO', fullName: 'UNESCO Institute for Statistics', description: 'Education, science, culture & demographic data', color: '#00ACC1', scriptName: 'unesco_data.py' },
   { id: 'fiscaldata', name: 'FiscalData', fullName: 'U.S. Treasury FiscalData', description: 'US debt, interest rates, spending & gold reserves', color: '#FFA726', scriptName: 'fiscal_data.py' },
   { id: 'bea', name: 'BEA', fullName: 'Bureau of Economic Analysis', description: 'US GDP, income, spending & national accounts (NIPA)', color: '#E65100', scriptName: 'bea_data.py', requiresApiKey: true, apiKeyName: 'BEA_API_KEY' },
+  { id: 'fincept', name: 'Fincept', fullName: 'Fincept Macro Data', description: 'CEIC economic series, economic calendar, WGB sovereign data', color: FINCEPT.ORANGE, scriptName: '' },
 ];
 
 // World Bank indicators
@@ -448,6 +449,23 @@ export const EIA_INDICATORS: Indicator[] = [
   { id: 'steo_09a', name: 'US Macro Indicators & CO2 Emissions', category: 'STEO' },
 ];
 
+// Fincept Macro Indicators — working endpoints across CEIC Series, Economic Calendar, and WGB
+export const FINCEPT_INDICATORS: Indicator[] = [
+  // CEIC Series (working endpoints — use lowercase country slugs e.g. "united-states")
+  { id: 'ceic_series_countries', name: 'CEIC: Available Countries', category: 'CEIC Series' },
+  { id: 'ceic_series_indicators', name: 'CEIC: Indicators by Country', category: 'CEIC Series' },
+  { id: 'ceic_series', name: 'CEIC: Economic Series Data', category: 'CEIC Series' },
+  // Economic Calendar
+  { id: 'economic_calendar', name: 'Economic Calendar Events', category: 'Economic Calendar' },
+  { id: 'upcoming_events', name: 'Upcoming Economic Events (TE)', category: 'Economic Calendar' },
+  // World Government Bonds
+  { id: 'wgb_central_bank_rates', name: 'WGB: Central Bank Rates', category: 'World Gov. Bonds' },
+  { id: 'wgb_credit_ratings', name: 'WGB: Sovereign Credit Ratings', category: 'World Gov. Bonds' },
+  { id: 'wgb_sovereign_cds', name: 'WGB: Sovereign CDS Spreads', category: 'World Gov. Bonds' },
+  { id: 'wgb_bond_spreads', name: 'WGB: Government Bond Spreads', category: 'World Gov. Bonds' },
+  { id: 'wgb_inverted_yields', name: 'WGB: Inverted Yield Curves', category: 'World Gov. Bonds' },
+];
+
 // Countries list (with codes for each data source)
 export const COUNTRIES: Country[] = [
   { code: 'USA', name: 'United States', bis: 'US', imf: 'USA', fred: 'US', oecd: 'USA', wto: '840' },
@@ -524,6 +542,7 @@ export const getIndicatorsForSource = (source: DataSource): Indicator[] => {
     case 'unesco': return UNESCO_INDICATORS;
     case 'fiscaldata': return FISCALDATA_INDICATORS;
     case 'bea': return BEA_INDICATORS;
+    case 'fincept': return FINCEPT_INDICATORS;
     default: return WORLDBANK_INDICATORS;
   }
 };
@@ -545,6 +564,8 @@ export const getDefaultIndicator = (source: DataSource): string => {
     case 'unesco': return 'GER.1';
     case 'fiscaldata': return 'total_public_debt';
     case 'bea': return 'gdp_growth';
+    case 'fincept': return 'wgb_central_bank_rates';
+
     default: return 'NY.GDP.MKTP.CD';
   }
 };

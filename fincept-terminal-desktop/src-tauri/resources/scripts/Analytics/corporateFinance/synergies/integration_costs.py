@@ -372,7 +372,7 @@ def main():
                 deal_value = float(params.get('deal_size', params.get('deal_value', 0)))
                 complexity_level = str(params.get('complexity', params.get('complexity_level', 'medium')))
                 integration_plan = {k: v for k, v in params.items() if k not in ('deal_size', 'deal_value', 'complexity', 'complexity_level')}
-            except (json.JSONDecodeError, TypeError):
+            except (json.JSONDecodeError, TypeError, AttributeError):
                 if len(sys.argv) < 4:
                     raise ValueError("Deal size and complexity level required")
                 deal_value = float(sys.argv[2])

@@ -457,9 +457,7 @@ class NodeEditorMCPBridgeClass {
       'agentMediator': '#8b5cf6',
       'agent': '#8b5cf6',
       'multiAgent': '#8b5cf6',
-      'geopoliticsAgent': '#8b5cf6',
-      'hedgeFundAgent': '#8b5cf6',
-      'investorAgent': '#8b5cf6',
+      'aiAgent': '#8b5cf6',
       'filter': '#6b7280',
       'set': '#6b7280',
       'code': '#6b7280',
@@ -501,8 +499,7 @@ class NodeEditorMCPBridgeClass {
 
     // Agent nodes - these can stay as agent-mediator if they work
     const agentNodes = [
-      'agentMediator', 'agent', 'multiAgent', 'geopoliticsAgent',
-      'hedgeFundAgent', 'investorAgent'
+      'agentMediator', 'agent', 'aiAgent', 'multiAgent'
     ];
     if (agentNodes.includes(backendType)) {
       return 'custom'; // Use custom for simplicity in MCP-created workflows

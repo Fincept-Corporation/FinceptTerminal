@@ -1,7 +1,8 @@
-// Key-Value Editor Component - For headers and query parameters
+// Key-Value Editor - Terminal UI/UX
 
 import React, { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface KeyValuePair {
   key: string;
@@ -11,10 +12,7 @@ interface KeyValuePair {
 interface KeyValueEditorProps {
   items: Record<string, string>;
   onChange: (items: Record<string, string>) => void;
-  placeholder?: {
-    key?: string;
-    value?: string;
-  };
+  placeholder?: { key?: string; value?: string };
   allowPlaceholders?: boolean;
 }
 
@@ -24,83 +22,123 @@ export function KeyValueEditor({
   placeholder = { key: 'Key', value: 'Value' },
   allowPlaceholders = false,
 }: KeyValueEditorProps) {
-  const [pairs, setPairs] = useState<KeyValuePair[]>(() => {
-    return Object.entries(items).map(([key, value]) => ({ key, value }));
-  });
+  const { colors } = useTerminalTheme();
+  const [pairs, setPairs] = useState<KeyValuePair[]>(() =>
+    Object.entries(items).map(([key, value]) => ({ key, value }))
+  );
+  const [focusedCell, setFocusedCell] = useState<string | null>(null);
+
+  const borderColor = 'var(--ft-border-color, #2A2A2A)';
 
   const handleAdd = () => {
     setPairs([...pairs, { key: '', value: '' }]);
   };
 
   const handleRemove = (index: number) => {
-    const newPairs = pairs.filter((_, i) => i !== index);
-    setPairs(newPairs);
-    emitChange(newPairs);
+    const next = pairs.filter((_, i) => i !== index);
+    setPairs(next);
+    emit(next);
   };
 
   const handleKeyChange = (index: number, key: string) => {
-    const newPairs = [...pairs];
-    newPairs[index].key = key;
-    setPairs(newPairs);
-    emitChange(newPairs);
+    const next = [...pairs]; next[index].key = key; setPairs(next); emit(next);
   };
 
   const handleValueChange = (index: number, value: string) => {
-    const newPairs = [...pairs];
-    newPairs[index].value = value;
-    setPairs(newPairs);
-    emitChange(newPairs);
+    const next = [...pairs]; next[index].value = value; setPairs(next); emit(next);
   };
 
-  const emitChange = (newPairs: KeyValuePair[]) => {
-    const newItems: Record<string, string> = {};
-    newPairs.forEach(pair => {
-      if (pair.key.trim()) {
-        newItems[pair.key] = pair.value;
-      }
-    });
-    onChange(newItems);
+  const emit = (newPairs: KeyValuePair[]) => {
+    const result: Record<string, string> = {};
+    newPairs.forEach(p => { if (p.key.trim()) result[p.key] = p.value; });
+    onChange(result);
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
+      {/* Column headers */}
+      {pairs.length > 0 && (
+        <div className="grid grid-cols-[1fr_1fr_24px] gap-1 px-1">
+          <div className="text-[10px] font-bold tracking-wider" style={{ color: colors.textMuted }}>KEY</div>
+          <div className="text-[10px] font-bold tracking-wider" style={{ color: colors.textMuted }}>VALUE</div>
+          <div />
+        </div>
+      )}
+
+      {/* Pairs */}
       {pairs.map((pair, index) => (
-        <div key={index} className="flex gap-2 items-center">
+        <div key={index} className="grid grid-cols-[1fr_1fr_24px] gap-1 items-center">
           <input
             type="text"
             value={pair.key}
             onChange={(e) => handleKeyChange(index, e.target.value)}
             placeholder={placeholder.key}
-            className="flex-1 bg-zinc-900 border border-zinc-700 text-gray-300 px-3 py-2 text-xs rounded focus:outline-none focus:border-orange-500 font-mono"
+            className="px-2 py-1.5 text-xs font-mono w-full transition-all outline-none"
+            style={{
+              backgroundColor: colors.background,
+              border: `1px solid ${focusedCell === `k${index}` ? colors.primary : borderColor}`,
+              color: colors.text,
+            }}
+            onFocus={() => setFocusedCell(`k${index}`)}
+            onBlur={() => setFocusedCell(null)}
           />
           <input
             type="text"
             value={pair.value}
             onChange={(e) => handleValueChange(index, e.target.value)}
             placeholder={placeholder.value}
-            className="flex-1 bg-zinc-900 border border-zinc-700 text-gray-300 px-3 py-2 text-xs rounded focus:outline-none focus:border-orange-500 font-mono"
+            className="px-2 py-1.5 text-xs font-mono w-full transition-all outline-none"
+            style={{
+              backgroundColor: colors.background,
+              border: `1px solid ${focusedCell === `v${index}` ? colors.primary : borderColor}`,
+              color: colors.text,
+            }}
+            onFocus={() => setFocusedCell(`v${index}`)}
+            onBlur={() => setFocusedCell(null)}
           />
           <button
             onClick={() => handleRemove(index)}
-            className="p-2 text-red-500 hover:text-red-400 hover:bg-zinc-800 rounded transition-colors"
+            className="flex items-center justify-center w-6 h-6 transition-all"
+            style={{ color: colors.textMuted }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = colors.alert; e.currentTarget.style.backgroundColor = `${colors.alert}10`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; e.currentTarget.style.backgroundColor = 'transparent'; }}
             title="Remove"
           >
-            <Trash2 size={14} />
+            <X size={12} />
           </button>
         </div>
       ))}
 
+      {/* Add Button */}
       <button
         onClick={handleAdd}
-        className="w-full bg-zinc-800 hover:bg-zinc-700 text-gray-400 hover:text-white py-2 rounded text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+        className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-bold tracking-wide transition-all"
+        style={{
+          backgroundColor: 'transparent',
+          border: `1px dashed ${borderColor}`,
+          color: colors.textMuted,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.borderColor = colors.primary;
+          e.currentTarget.style.color = colors.primary;
+          e.currentTarget.style.backgroundColor = `${colors.primary}05`;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = borderColor;
+          e.currentTarget.style.color = colors.textMuted;
+          e.currentTarget.style.backgroundColor = 'transparent';
+        }}
       >
-        <Plus size={14} />
-        Add {placeholder.key || 'Item'}
+        <Plus size={12} />
+        ADD {(placeholder.key || 'ITEM').toUpperCase()}
       </button>
 
-      {allowPlaceholders && (
-        <div className="text-xs text-gray-500 mt-2">
-          💡 Use {'{'}placeholder{'}'} syntax for dynamic values (e.g., {'{'}symbol{'}'}, {'{'}from{'}'}, {'{'}to{'}'})
+      {/* Placeholder hint */}
+      {allowPlaceholders && pairs.length > 0 && (
+        <div className="text-[10px] font-mono px-1" style={{ color: colors.textMuted }}>
+          Tip: Use{' '}
+          <span style={{ color: colors.primary }} className="font-bold">{'{'+'placeholder'+'}'}</span>
+          {' '}for dynamic values (e.g., {'{'+'symbol'+'}'}, {'{'+'from'+'}'})
         </div>
       )}
     </div>

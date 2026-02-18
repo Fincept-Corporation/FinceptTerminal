@@ -96,8 +96,34 @@ export interface TerminalContexts {
   analyzeDiversification?: (portfolioId: string) => Promise<any>;
   getPortfolioPerformanceHistory?: (portfolioId: string, limit?: number) => Promise<any[]>;
 
-  // Portfolio - Export
+  // Portfolio - Transaction management
+  updateTransaction?: (transactionId: string, quantity: number, price: number, transactionDate: string, notes?: string) => Promise<void>;
+  deleteTransaction?: (transactionId: string) => Promise<void>;
+  getTransactionById?: (transactionId: string) => Promise<any | null>;
+
+  // Portfolio - Export / Import
   exportPortfolioCSV?: (portfolioId: string) => Promise<string>;
+  exportPortfolioJSON?: (portfolioId: string) => Promise<string>;
+  importPortfolio?: (data: any, mode: 'new' | 'merge', mergeTargetId?: string) => Promise<any>;
+
+  // Portfolio - Snapshot
+  savePortfolioSnapshot?: (portfolioId: string) => Promise<any>;
+
+  // Portfolio - Snapshot (rich combined context for agents)
+  getPortfolioSnapshot?: (portfolioId: string) => Promise<{ summary: any; metrics: any; diversification: any; fetched_at: string }>;
+
+  // Custom Index
+  createCustomIndex?: (params: any) => Promise<any>;
+  getAllCustomIndices?: () => Promise<any[]>;
+  getCustomIndexSummary?: (indexId: string) => Promise<any>;
+  deleteCustomIndex?: (indexId: string) => Promise<void>;
+  addIndexConstituent?: (indexId: string, config: any) => Promise<any>;
+  removeIndexConstituent?: (indexId: string, symbol: string) => Promise<void>;
+  getIndexConstituents?: (indexId: string) => Promise<any[]>;
+  saveIndexSnapshot?: (indexId: string) => Promise<any>;
+  getIndexSnapshots?: (indexId: string, limit?: number) => Promise<any[]>;
+  createIndexFromPortfolio?: (portfolioId: string, indexName: string, method: string, baseValue: number) => Promise<any>;
+  rebaseCustomIndex?: (indexId: string, newBaseValue: number) => Promise<void>;
 
   // Dashboard
   addWidget?: (widgetType: string, config?: any) => void;
@@ -231,6 +257,32 @@ export interface TerminalContexts {
   getNewsCacheStats?: () => Promise<NewsCacheStats>;
   getAvailableCategories?: () => string[];
   getAvailableRegions?: () => string[];
+
+  // ============================================================================
+  // Data Mapping
+  // ============================================================================
+
+  // CRUD
+  listDataMappings?: () => Promise<DataMappingSummary[]>;
+  getDataMapping?: (id: string) => Promise<DataMappingDetail | null>;
+  createDataMapping?: (params: CreateDataMappingParams) => Promise<DataMappingSummary>;
+  updateDataMapping?: (id: string, updates: Partial<CreateDataMappingParams>) => Promise<DataMappingSummary>;
+  deleteDataMapping?: (id: string) => Promise<void>;
+  duplicateDataMapping?: (id: string) => Promise<DataMappingSummary>;
+
+  // Execution
+  testDataMapping?: (id: string, parameters?: Record<string, string>) => Promise<DataMappingExecutionResult>;
+  executeDataMapping?: (id: string, parameters?: Record<string, string>) => Promise<DataMappingExecutionResult>;
+
+  // Templates
+  listMappingTemplates?: () => Promise<DataMappingTemplateSummary[]>;
+  applyMappingTemplate?: (templateId: string, overrides?: { name?: string; description?: string }) => Promise<DataMappingSummary>;
+
+  // Cache
+  clearDataMappingCache?: (mappingId?: string) => Promise<void>;
+
+  // Schemas
+  listMappingSchemas?: () => Promise<DataMappingSchemaSummary[]>;
 }
 
 // ============================================================================
@@ -533,4 +585,104 @@ export interface NewsCacheStats {
   hasCachedData: boolean;
   articleCount: number;
   cacheAge: number | null;
+}
+
+// ============================================================================
+// Data Mapping Types
+// ============================================================================
+
+export interface DataMappingSummary {
+  id: string;
+  name: string;
+  description: string;
+  schemaType: string;
+  schema?: string;
+  method: string;
+  baseUrl: string;
+  endpoint: string;
+  fieldCount: number;
+  cacheEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  tags: string[];
+}
+
+export interface DataMappingDetail extends DataMappingSummary {
+  authentication: {
+    type: string;
+  };
+  headers: Record<string, string>;
+  queryParams: Record<string, string>;
+  fieldMappings: Array<{
+    targetField: string;
+    sourceExpression: string;
+    parser: string;
+  }>;
+  extraction: {
+    engine: string;
+    rootPath?: string;
+    isArray: boolean;
+  };
+  validation: {
+    enabled: boolean;
+    strictMode: boolean;
+  };
+}
+
+export interface CreateDataMappingParams {
+  name: string;
+  description?: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  baseUrl: string;
+  endpoint: string;
+  authType?: 'none' | 'apikey' | 'bearer' | 'basic';
+  authToken?: string;
+  authKeyName?: string;
+  authKeyLocation?: 'header' | 'query';
+  authUsername?: string;
+  authPassword?: string;
+  headers?: Record<string, string>;
+  queryParams?: Record<string, string>;
+  schemaType?: 'predefined' | 'custom';
+  schema?: string;
+  rootPath?: string;
+  isArray?: boolean;
+  cacheEnabled?: boolean;
+  cacheTTL?: number;
+  tags?: string[];
+}
+
+export interface DataMappingExecutionResult {
+  success: boolean;
+  data?: any;
+  rawData?: any;
+  errors?: string[];
+  warnings?: string[];
+  recordsProcessed: number;
+  recordsReturned: number;
+  duration: number;
+  executedAt: string;
+}
+
+export interface DataMappingTemplateSummary {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  tags: string[];
+  fieldCount: number;
+  schema?: string;
+  verified: boolean;
+  official: boolean;
+  rating?: number;
+  usageCount?: number;
+  instructions?: string;
+}
+
+export interface DataMappingSchemaSummary {
+  name: string;
+  category: string;
+  description: string;
+  fieldCount: number;
+  requiredFields: string[];
 }

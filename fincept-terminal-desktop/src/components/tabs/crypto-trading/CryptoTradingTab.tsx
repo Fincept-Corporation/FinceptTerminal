@@ -386,9 +386,13 @@ export function CryptoTradingTab() {
         if (hasValidData && mountedRef.current && currentFetchId === watchlistFetchIdRef.current) {
           dispatch({ type: 'SET_WATCHLIST_PRICES', prices });
         }
-      } catch (fetchErr) {
+      } catch (fetchErr: any) {
         clearTimeout(timeoutId);
         if (!mountedRef.current || currentFetchId !== watchlistFetchIdRef.current) return;
+        // Ignore AbortError - it's expected when component unmounts or watchlist changes
+        if (fetchErr?.name === 'AbortError') {
+          return;
+        }
         console.warn('[CryptoTrading] Binance API fetch failed:', fetchErr);
       }
     } catch (error) {
@@ -628,7 +632,11 @@ export function CryptoTradingTab() {
     return symbol.replace(/[/\-_]/g, '').toUpperCase();
   };
 
-  // Real-time WebSocket listeners for positions
+  // Keep positions in a ref to avoid re-subscribing WS listeners on every position update
+  const positionsRef = useRef(state.positions);
+  useEffect(() => { positionsRef.current = state.positions; }, [state.positions]);
+
+  // Real-time WebSocket listeners for positions (stable — no re-subscribe loop)
   useEffect(() => {
     let mounted = true;
     const unlisteners: (() => void)[] = [];
@@ -641,8 +649,8 @@ export function CryptoTradingTab() {
         const { symbol, price } = event.payload;
         const normalizedEventSymbol = normalizeSymbol(symbol);
 
-        // Find position that matches this symbol (with normalization)
-        const matchingPosition = state.positions.find(p => normalizeSymbol(p.symbol) === normalizedEventSymbol);
+        // Find position that matches this symbol (with normalization) — read from ref, not state
+        const matchingPosition = positionsRef.current.find(p => normalizeSymbol(p.symbol) === normalizedEventSymbol);
         if (!matchingPosition) return;
 
         // Update position prices using the position's original symbol format
@@ -652,11 +660,6 @@ export function CryptoTradingTab() {
         dispatch({ type: 'UPDATE_POSITION_PRICES', prices: priceMap });
       });
       unlisteners.push(tickerUnlisten);
-
-      // Note: ws_trade events are market trades (all trades on the exchange)
-      // NOT the user's paper trading fills. User trades come from loadPaperTradingData.
-      // We don't need to listen to ws_trade here as it would incorrectly add
-      // market trades to the user's trade history.
     };
 
     setupWebSocketListeners();
@@ -665,7 +668,7 @@ export function CryptoTradingTab() {
       mounted = false;
       unlisteners.forEach(unlisten => unlisten());
     };
-  }, [state.positions]);
+  }, []); // stable — no dependency on positions
 
   useEffect(() => {
     loadPaperTradingData();

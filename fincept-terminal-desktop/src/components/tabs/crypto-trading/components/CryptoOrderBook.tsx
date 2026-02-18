@@ -14,10 +14,7 @@ const RISE_SELL_THRESHOLD = -0.15;
 const TICK_CAPTURE_INTERVAL = 1000;
 const CANVAS_VISIBLE_POINTS = 300;
 
-// Pre-allocated reusable arrays to avoid GC pressure on every frame
-const _askSortBuf: [number, number][] = [];
-const _bidSortBuf: [number, number][] = [];
-const _cumBuf: number[] = [];
+// Sort buffers are now per-instance (via refs) to avoid cross-instance corruption
 
 /** Sort order book map into a reusable buffer via insertion sort. Returns item count. */
 function sortInto(book: Record<string, number>, buf: [number, number][], asc: boolean): number {
@@ -106,6 +103,11 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
   const activeViewRef = useRef<OrderBookViewType>('orderbook');
 
+  // Per-instance sort buffers (avoids cross-instance corruption if multiple OrderBooks mount)
+  const askSortBufRef = useRef<[number, number][]>([]);
+  const bidSortBufRef = useRef<[number, number][]>([]);
+  const cumBufRef = useRef<number[]>([]);
+
   const wsRef = useRef<WebSocket | null>(null);
   const asksRef = useRef<Record<string, number>>({});
   const bidsRef = useRef<Record<string, number>>({});
@@ -156,7 +158,9 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
     if (askCount === 0 || bidCount === 0) return;
     lastTickCaptureRef.current = now;
 
-    // Use the already-sorted global buffers (filled by renderFrame)
+    // Use the already-sorted instance buffers (filled by renderFrame)
+    const _bidSortBuf = bidSortBufRef.current;
+    const _askSortBuf = askSortBufRef.current;
     let totalBidQty = 0;
     for (let i = 0; i < bidCount; i++) totalBidQty += _bidSortBuf[i][1];
     let totalAskQty = 0;
@@ -233,7 +237,8 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
     maxTotal: number,
     side: 'ask' | 'bid',
     reverse: boolean,
-    sizeCache: { w: number; h: number }
+    sizeCache: { w: number; h: number },
+    cumBuf: number[]
   ) => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -270,9 +275,9 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
     }
 
     // Compute cumulative
-    _cumBuf.length = levels;
+    cumBuf.length = levels;
     let cum = 0;
-    for (let i = 0; i < levels; i++) { cum += buf[i][1]; _cumBuf[i] = cum; }
+    for (let i = 0; i < levels; i++) { cum += buf[i][1]; cumBuf[i] = cum; }
 
     const ROW_H = Math.min(22, cssH / levels);
     const PAD_X = 8;
@@ -297,7 +302,7 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
       const dataIdx = reverse ? (levels - 1 - rowIdx) : rowIdx;
       const price = buf[dataIdx][0];
       const qty = buf[dataIdx][1];
-      const cumVal = _cumBuf[dataIdx];
+      const cumVal = cumBuf[dataIdx];
       const y = startY + rowIdx * ROW_H;
 
       // Depth bar
@@ -617,7 +622,10 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
     if (!dirtyRef.current) return;
     dirtyRef.current = false;
 
-    // Sort both sides once into shared buffers (reused by tick capture + render)
+    // Sort both sides once into instance buffers (reused by tick capture + render)
+    const _askSortBuf = askSortBufRef.current;
+    const _bidSortBuf = bidSortBufRef.current;
+    const _cumBuf = cumBufRef.current;
     const askCount = sortInto(asksRef.current, _askSortBuf, true);   // ascending
     const bidCount = sortInto(bidsRef.current, _bidSortBuf, false);  // descending
 
@@ -638,8 +646,8 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
 
       const askSizeCache = { w: obCanvasSizeRef.current.aw, h: obCanvasSizeRef.current.ah };
       const bidSizeCache = { w: obCanvasSizeRef.current.bw, h: obCanvasSizeRef.current.bh };
-      paintOrderBookCanvas(asksCanvasRef.current, _askSortBuf, askCount, maxTotal, 'ask', true, askSizeCache);
-      paintOrderBookCanvas(bidsCanvasRef.current, _bidSortBuf, bidCount, maxTotal, 'bid', false, bidSizeCache);
+      paintOrderBookCanvas(asksCanvasRef.current, _askSortBuf, askCount, maxTotal, 'ask', true, askSizeCache, _cumBuf);
+      paintOrderBookCanvas(bidsCanvasRef.current, _bidSortBuf, bidCount, maxTotal, 'bid', false, bidSizeCache, _cumBuf);
       obCanvasSizeRef.current.aw = askSizeCache.w;
       obCanvasSizeRef.current.ah = askSizeCache.h;
       obCanvasSizeRef.current.bw = bidSizeCache.w;
@@ -692,7 +700,17 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
   }, [renderFrame]);
 
   const connect = useCallback(() => {
-    if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+    // Clean up existing connection
+    if (wsRef.current) {
+      try {
+        if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
+          wsRef.current.close();
+        }
+      } catch (err) {
+        // Ignore errors during cleanup
+      }
+      wsRef.current = null;
+    }
 
     asksRef.current = {};
     bidsRef.current = {};
@@ -710,68 +728,104 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
     }
 
     setStatus('connecting');
-    const ws = new WebSocket('wss://ws.kraken.com/v2');
-    wsRef.current = ws;
 
-    ws.onopen = () => {
-      setStatus('connected');
-      ws.send(JSON.stringify({ method: 'subscribe', params: { channel: 'book', symbol: [selectedSymbol], depth: 25 } }));
-    };
+    try {
+      const ws = new WebSocket('wss://ws.kraken.com/v2');
+      wsRef.current = ws;
 
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.channel !== 'book') return;
-
-        if (msg.type === 'snapshot' && msg.data?.[0]) {
-          asksRef.current = {};
-          bidsRef.current = {};
-          const d = msg.data[0];
-          if (d.asks) for (const a of d.asks) {
-            const p = a.price ?? a[0];
-            const q = a.qty ?? a[1];
-            if (p != null && q != null) asksRef.current[String(p)] = Number(q);
-          }
-          if (d.bids) for (const b of d.bids) {
-            const p = b.price ?? b[0];
-            const q = b.qty ?? b[1];
-            if (p != null && q != null) bidsRef.current[String(p)] = Number(q);
-          }
-        } else if (msg.type === 'update' && msg.data?.[0]) {
-          const d = msg.data[0];
-          if (d.asks) for (const a of d.asks) {
-            const p = a.price ?? a[0];
-            const q = a.qty ?? a[1];
-            if (p == null) continue;
-            if (Number(q) === 0) delete asksRef.current[String(p)];
-            else asksRef.current[String(p)] = Number(q);
-          }
-          if (d.bids) for (const b of d.bids) {
-            const p = b.price ?? b[0];
-            const q = b.qty ?? b[1];
-            if (p == null) continue;
-            if (Number(q) === 0) delete bidsRef.current[String(p)];
-            else bidsRef.current[String(p)] = Number(q);
+      ws.onopen = () => {
+        if (wsRef.current === ws) { // Ensure this is still the active connection
+          setStatus('connected');
+          try {
+            ws.send(JSON.stringify({ method: 'subscribe', params: { channel: 'book', symbol: [selectedSymbol], depth: 25 } }));
+          } catch (err) {
+            console.error('[CryptoOrderBook] Failed to send subscribe message:', err);
+            setStatus('disconnected');
           }
         }
+      };
 
-        scheduleRender();
-      } catch (err) {
-        console.error('[CryptoOrderBook] WS parse error:', err);
-      }
-    };
+      ws.onmessage = (e) => {
+        if (wsRef.current !== ws) return; // Ignore messages from old connections
 
-    ws.onclose = () => setStatus('disconnected');
-    ws.onerror = (err) => {
-      console.error('[CryptoOrderBook] WS error:', err);
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.channel !== 'book') return;
+
+          if (msg.type === 'snapshot' && msg.data?.[0]) {
+            asksRef.current = {};
+            bidsRef.current = {};
+            const d = msg.data[0];
+            if (d.asks) for (const a of d.asks) {
+              const p = a.price ?? a[0];
+              const q = a.qty ?? a[1];
+              if (p != null && q != null) asksRef.current[String(p)] = Number(q);
+            }
+            if (d.bids) for (const b of d.bids) {
+              const p = b.price ?? b[0];
+              const q = b.qty ?? b[1];
+              if (p != null && q != null) bidsRef.current[String(p)] = Number(q);
+            }
+          } else if (msg.type === 'update' && msg.data?.[0]) {
+            const d = msg.data[0];
+            if (d.asks) for (const a of d.asks) {
+              const p = a.price ?? a[0];
+              const q = a.qty ?? a[1];
+              if (p == null) continue;
+              if (Number(q) === 0) delete asksRef.current[String(p)];
+              else asksRef.current[String(p)] = Number(q);
+            }
+            if (d.bids) for (const b of d.bids) {
+              const p = b.price ?? b[0];
+              const q = b.qty ?? b[1];
+              if (p == null) continue;
+              if (Number(q) === 0) delete bidsRef.current[String(p)];
+              else bidsRef.current[String(p)] = Number(q);
+            }
+          }
+
+          scheduleRender();
+        } catch (err) {
+          console.error('[CryptoOrderBook] WS parse error:', err);
+        }
+      };
+
+      ws.onclose = (event) => {
+        if (wsRef.current === ws) {
+          setStatus('disconnected');
+          // Only log non-normal closures
+          if (event.code !== 1000 && event.code !== 1001) {
+            console.warn(`[CryptoOrderBook] WS closed unexpectedly: ${event.code} ${event.reason}`);
+          }
+        }
+      };
+
+      ws.onerror = () => {
+        if (wsRef.current === ws) {
+          // Only update status, don't log error - connection failures are handled in onclose
+          setStatus('disconnected');
+        }
+      };
+    } catch (err) {
+      console.error('[CryptoOrderBook] Failed to create WebSocket:', err);
       setStatus('disconnected');
-    };
+    }
   }, [activeBroker, selectedSymbol, scheduleRender]);
 
   useEffect(() => {
     connect();
     return () => {
-      if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+      // Cleanup on unmount
+      if (wsRef.current) {
+        try {
+          if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
+            wsRef.current.close(1000, 'Component unmounting');
+          }
+        } catch (err) {
+          // Ignore cleanup errors
+        }
+        wsRef.current = null;
+      }
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
   }, [connect]);

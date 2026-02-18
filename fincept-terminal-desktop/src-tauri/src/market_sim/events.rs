@@ -72,6 +72,7 @@ pub struct OrderSubmittedEvent {
 pub struct OrderAcceptedEvent {
     pub order_id: OrderId,
     pub participant_id: ParticipantId,
+    pub side: Side,
     pub timestamp: Nanos,
 }
 

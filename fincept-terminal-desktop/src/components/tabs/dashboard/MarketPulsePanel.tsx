@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp, TrendingDown, Activity, Gauge, ArrowUpRight, ArrowDownRight,
-  BarChart3, Globe, Zap, AlertTriangle, ChevronRight, Flame, Snowflake
+  BarChart3, Globe, Zap, ChevronRight, Flame, Snowflake
 } from 'lucide-react';
 import { marketDataService, QuoteData } from '@/services/markets/marketDataService';
 import { useCache } from '@/hooks/useCache';
@@ -511,32 +511,6 @@ export const MarketPulsePanel: React.FC<MarketPulsePanelProps> = ({ onNavigateTo
           ))}
         </div>
 
-        {/* Alerts */}
-        <SectionHeader
-          title="ALERTS"
-          icon={<AlertTriangle size={10} color={FC.YELLOW} />}
-        />
-        <div style={{ padding: '8px 12px' }}>
-          <div style={{
-            padding: '6px 8px',
-            backgroundColor: `${FC.YELLOW}10`,
-            border: `1px solid ${FC.YELLOW}30`,
-            borderRadius: '2px',
-            marginBottom: '4px',
-          }}>
-            <div style={{ fontSize: '8px', color: FC.YELLOW, fontWeight: 700 }}>MARKET DATA</div>
-            <div style={{ fontSize: '8px', color: FC.GRAY }}>Live data from Yahoo Finance</div>
-          </div>
-          <div style={{
-            padding: '6px 8px',
-            backgroundColor: `${FC.CYAN}10`,
-            border: `1px solid ${FC.CYAN}30`,
-            borderRadius: '2px',
-          }}>
-            <div style={{ fontSize: '8px', color: FC.CYAN, fontWeight: 700 }}>AUTO-REFRESH</div>
-            <div style={{ fontSize: '8px', color: FC.GRAY }}>Updates every 5 minutes</div>
-          </div>
-        </div>
       </div>
     </div>
   );

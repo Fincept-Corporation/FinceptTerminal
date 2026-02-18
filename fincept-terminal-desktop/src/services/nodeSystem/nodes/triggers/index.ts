@@ -8,15 +8,12 @@ export * from './ScheduleTriggerNode';
 export * from './PriceAlertTriggerNode';
 export * from './NewsEventTriggerNode';
 export * from './MarketEventTriggerNode';
-export * from './WebhookTriggerNode';
 
-// Re-export for convenience
 import { ManualTriggerNode } from './ManualTriggerNode';
 import { ScheduleTriggerNode } from './ScheduleTriggerNode';
 import { PriceAlertTriggerNode } from './PriceAlertTriggerNode';
 import { NewsEventTriggerNode } from './NewsEventTriggerNode';
 import { MarketEventTriggerNode } from './MarketEventTriggerNode';
-import { WebhookTriggerNode } from './WebhookTriggerNode';
 
 export const TriggerNodes = {
   ManualTriggerNode,
@@ -24,7 +21,6 @@ export const TriggerNodes = {
   PriceAlertTriggerNode,
   NewsEventTriggerNode,
   MarketEventTriggerNode,
-  WebhookTriggerNode,
 };
 
 export const TriggerNodeTypes = [
@@ -33,7 +29,6 @@ export const TriggerNodeTypes = [
   'priceAlertTrigger',
   'newsEventTrigger',
   'marketEventTrigger',
-  'webhookTrigger',
 ] as const;
 
 export type TriggerNodeType = typeof TriggerNodeTypes[number];

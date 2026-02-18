@@ -106,6 +106,69 @@ class TradingGuardrails:
             warnings=warnings,
         )
 
+    def clamp_quantity(
+        self,
+        decision: ModelDecision,
+        cash: float,
+        price: float,
+        position_quantity: float = 0.0,
+    ) -> tuple[float, List[str]]:
+        """
+        Clamp trade quantity to affordable/available range.
+
+        Returns:
+            Tuple of (clamped_quantity, list_of_warnings)
+        """
+        warnings = []
+        quantity = decision.quantity
+
+        if decision.action == TradeAction.HOLD:
+            if quantity != 0:
+                warnings.append(f"HOLD action: quantity clamped from {quantity} to 0")
+            return 0.0, warnings
+
+        if decision.action == TradeAction.BUY:
+            if price <= 0:
+                warnings.append("Price is zero or negative, cannot buy")
+                return 0.0, warnings
+            max_affordable = cash / price
+            # Apply max single trade limit
+            max_by_rule = (cash + position_quantity * price) * self.max_single_trade_pct / price
+            effective_max = min(max_affordable, max_by_rule)
+            if quantity > effective_max:
+                warnings.append(
+                    f"BUY quantity clamped: {quantity:.6f} -> {effective_max:.6f} "
+                    f"(cash=${cash:.2f}, price=${price:.2f})"
+                )
+                quantity = effective_max
+            if quantity <= 0:
+                warnings.append("Insufficient cash for BUY")
+                return 0.0, warnings
+
+        elif decision.action == TradeAction.SELL:
+            if quantity > position_quantity:
+                warnings.append(
+                    f"SELL quantity clamped: {quantity:.6f} -> {position_quantity:.6f} "
+                    f"(only {position_quantity:.6f} available)"
+                )
+                quantity = position_quantity
+            if quantity <= 0:
+                warnings.append("No position to sell")
+                return 0.0, warnings
+
+        elif decision.action == TradeAction.SHORT:
+            if price <= 0:
+                warnings.append("Price is zero or negative, cannot short")
+                return 0.0, warnings
+            max_by_margin = cash / price * 0.5  # 50% margin requirement
+            if quantity > max_by_margin:
+                warnings.append(
+                    f"SHORT quantity clamped: {quantity:.6f} -> {max_by_margin:.6f}"
+                )
+                quantity = max_by_margin
+
+        return max(quantity, 0.0), warnings
+
     def sanitize_reasoning(self, reasoning: str) -> str:
         """
         Sanitize reasoning text to remove potentially harmful content.

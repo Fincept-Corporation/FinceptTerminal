@@ -16,6 +16,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { APP_VERSION } from '@/constants/version';
+import { useTimezone } from '@/contexts/TimezoneContext';
 
 // Types
 interface LoginEvent {
@@ -107,6 +108,7 @@ const LoginAuditDashboard: React.FC = () => {
     const { t } = useTranslation('loginAudit');
     const { colors } = useTerminalTheme();
     const { session } = useAuth();
+    const { timezone, formatTime } = useTimezone();
     const [currentView, setCurrentView] = useState<DashboardView>('overview');
     const [loginEvents, setLoginEvents] = useState<LoginEvent[]>(mockLoginEvents);
     const [alerts, setAlerts] = useState<SecurityAlert[]>(mockAlerts);
@@ -449,7 +451,7 @@ const LoginAuditDashboard: React.FC = () => {
             {/* Hourly distribution */}
             <div style={{ flex: 1, backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '8px', overflow: 'auto' }}>
                 <div style={{ color: colors.info, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
-                    PEAK HOURS (UTC)
+                    PEAK HOURS ({timezone.shortLabel})
                 </div>
                 {[
                     { hour: '09:00', logins: 342 },
@@ -502,7 +504,12 @@ const LoginAuditDashboard: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
                     <span style={{ color: colors.primary, fontWeight: 'bold' }}>🔐 {t('title')}</span>
                     <span style={{ color: colors.text }}>|</span>
-                    <span style={{ color: colors.text }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+                    <span style={{ color: colors.text }}>
+                        {formatTime(currentTime, {
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit'
+                        })} {timezone.shortLabel}
+                    </span>
                     <span style={{ color: colors.text }}>|</span>
                     <span style={{ color: colors.textMuted }}>Alerts:</span>
                     <span style={{ color: alerts.length > 0 ? colors.alert : colors.secondary, fontWeight: 'bold' }}>

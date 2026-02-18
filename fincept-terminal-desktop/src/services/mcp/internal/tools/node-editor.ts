@@ -105,9 +105,7 @@ const AVAILABLE_NODE_TYPES = {
   agentMediator: 'Mediate between AI agents',
   agent: 'Custom AI agent',
   multiAgent: 'Orchestrate multiple agents',
-  geopoliticsAgent: 'Geopolitical analysis',
-  hedgeFundAgent: 'Hedge fund strategy',
-  investorAgent: 'Investor persona analysis',
+  aiAgent: 'AI agent (geopolitics, hedge fund, investor, economic)',
 
   // Core
   filter: 'Basic filter node',

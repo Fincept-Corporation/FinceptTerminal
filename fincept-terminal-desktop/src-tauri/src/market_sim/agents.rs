@@ -46,7 +46,8 @@ pub struct AgentView {
 pub trait TradingAgent: Send {
     fn participant_type(&self) -> ParticipantType;
     fn on_tick(&mut self, view: &AgentView, rng: &mut Rng) -> Vec<AgentAction>;
-    fn on_fill(&mut self, trade: &Trade);
+    fn on_fill(&mut self, trade: &Trade, my_participant_id: ParticipantId);
+    fn on_order_accepted(&mut self, order_id: OrderId, side: Side);
     fn on_cancel(&mut self, order_id: OrderId);
     fn name(&self) -> &str;
 }
@@ -204,10 +205,20 @@ impl TradingAgent for MarketMakerAgent {
         actions
     }
 
-    fn on_fill(&mut self, trade: &Trade) {
+    fn on_fill(&mut self, trade: &Trade, my_participant_id: ParticipantId) {
         // Update inventory based on our role in the trade
-        // This is called by the exchange with the fill info
-        self.inventory += trade.quantity; // simplified; exchange should indicate side
+        if trade.buyer_id == my_participant_id {
+            self.inventory += trade.quantity;
+        } else if trade.seller_id == my_participant_id {
+            self.inventory -= trade.quantity;
+        }
+    }
+
+    fn on_order_accepted(&mut self, order_id: OrderId, side: Side) {
+        match side {
+            Side::Buy => self.active_bids.push(order_id),
+            Side::Sell => self.active_asks.push(order_id),
+        }
     }
 
     fn on_cancel(&mut self, order_id: OrderId) {
@@ -346,9 +357,16 @@ impl TradingAgent for HFTAgent {
         actions
     }
 
-    fn on_fill(&mut self, trade: &Trade) {
-        self.position += trade.quantity;
+    fn on_fill(&mut self, trade: &Trade, my_participant_id: ParticipantId) {
+        // Update position based on our role in the trade
+        if trade.buyer_id == my_participant_id {
+            self.position += trade.quantity;
+        } else if trade.seller_id == my_participant_id {
+            self.position -= trade.quantity;
+        }
     }
+
+    fn on_order_accepted(&mut self, _order_id: OrderId, _side: Side) {}
 
     fn on_cancel(&mut self, _order_id: OrderId) {}
 
@@ -487,9 +505,15 @@ impl TradingAgent for StatArbAgent {
         actions
     }
 
-    fn on_fill(&mut self, trade: &Trade) {
-        self.position += trade.quantity;
+    fn on_fill(&mut self, trade: &Trade, my_participant_id: ParticipantId) {
+        if trade.buyer_id == my_participant_id {
+            self.position += trade.quantity;
+        } else if trade.seller_id == my_participant_id {
+            self.position -= trade.quantity;
+        }
     }
+
+    fn on_order_accepted(&mut self, _order_id: OrderId, _side: Side) {}
 
     fn on_cancel(&mut self, _order_id: OrderId) {}
 
@@ -595,9 +619,15 @@ impl TradingAgent for MomentumAgent {
         actions
     }
 
-    fn on_fill(&mut self, trade: &Trade) {
-        self.position += trade.quantity;
+    fn on_fill(&mut self, trade: &Trade, my_participant_id: ParticipantId) {
+        if trade.buyer_id == my_participant_id {
+            self.position += trade.quantity;
+        } else if trade.seller_id == my_participant_id {
+            self.position -= trade.quantity;
+        }
     }
+
+    fn on_order_accepted(&mut self, _order_id: OrderId, _side: Side) {}
 
     fn on_cancel(&mut self, _order_id: OrderId) {}
 
@@ -708,9 +738,15 @@ impl TradingAgent for NoiseTraderAgent {
         }
     }
 
-    fn on_fill(&mut self, trade: &Trade) {
-        self.position += trade.quantity;
+    fn on_fill(&mut self, trade: &Trade, my_participant_id: ParticipantId) {
+        if trade.buyer_id == my_participant_id {
+            self.position += trade.quantity;
+        } else if trade.seller_id == my_participant_id {
+            self.position -= trade.quantity;
+        }
     }
+
+    fn on_order_accepted(&mut self, _order_id: OrderId, _side: Side) {}
 
     fn on_cancel(&mut self, _order_id: OrderId) {}
 
@@ -835,9 +871,15 @@ impl TradingAgent for InformedTraderAgent {
         actions
     }
 
-    fn on_fill(&mut self, trade: &Trade) {
-        self.position += trade.quantity;
+    fn on_fill(&mut self, trade: &Trade, my_participant_id: ParticipantId) {
+        if trade.buyer_id == my_participant_id {
+            self.position += trade.quantity;
+        } else if trade.seller_id == my_participant_id {
+            self.position -= trade.quantity;
+        }
     }
+
+    fn on_order_accepted(&mut self, _order_id: OrderId, _side: Side) {}
 
     fn on_cancel(&mut self, _order_id: OrderId) {}
 
@@ -982,9 +1024,14 @@ impl TradingAgent for InstitutionalAgent {
         }]
     }
 
-    fn on_fill(&mut self, trade: &Trade) {
-        self.executed += trade.quantity;
+    fn on_fill(&mut self, trade: &Trade, my_participant_id: ParticipantId) {
+        // Only count fills where we were the participant
+        if trade.buyer_id == my_participant_id || trade.seller_id == my_participant_id {
+            self.executed += trade.quantity;
+        }
     }
+
+    fn on_order_accepted(&mut self, _order_id: OrderId, _side: Side) {}
 
     fn on_cancel(&mut self, _order_id: OrderId) {}
 
@@ -1106,8 +1153,19 @@ impl TradingAgent for SpoofingAgent {
         actions
     }
 
-    fn on_fill(&mut self, trade: &Trade) {
-        self.position += trade.quantity;
+    fn on_fill(&mut self, trade: &Trade, my_participant_id: ParticipantId) {
+        if trade.buyer_id == my_participant_id {
+            self.position += trade.quantity;
+        } else if trade.seller_id == my_participant_id {
+            self.position -= trade.quantity;
+        }
+    }
+
+    fn on_order_accepted(&mut self, order_id: OrderId, side: Side) {
+        // Track spoof orders (buys placed in SpoofPlaced state)
+        if self.state == SpoofState::SpoofPlaced && side == Side::Buy {
+            self.active_spoof_orders.push(order_id);
+        }
     }
 
     fn on_cancel(&mut self, order_id: OrderId) {
@@ -1213,9 +1271,15 @@ impl TradingAgent for SniperAgent {
         vec![]
     }
 
-    fn on_fill(&mut self, trade: &Trade) {
-        self.position += trade.quantity;
+    fn on_fill(&mut self, trade: &Trade, my_participant_id: ParticipantId) {
+        if trade.buyer_id == my_participant_id {
+            self.position += trade.quantity;
+        } else if trade.seller_id == my_participant_id {
+            self.position -= trade.quantity;
+        }
     }
+
+    fn on_order_accepted(&mut self, _order_id: OrderId, _side: Side) {}
 
     fn on_cancel(&mut self, _order_id: OrderId) {}
 

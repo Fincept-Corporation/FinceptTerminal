@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle, MessageSquare, Terminal, Bot, ArrowUpCircle, X } from 'lucide-react';
+import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle, MessageSquare, Terminal, Bot, ArrowUpCircle, X, StickyNote } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { InterfaceModeProvider, useInterfaceMode } from '@/contexts/InterfaceModeContext';
@@ -56,7 +56,6 @@ const EconomicsTab = React.lazy(() => import('@/components/tabs/economics'));
 const GovDataTab = React.lazy(() => import('@/components/tabs/gov-data'));
 const MaritimeTab = React.lazy(() => import('@/components/tabs/maritime'));
 const ReportBuilderTab = React.lazy(() => import('@/components/tabs/report-builder'));
-const DataMappingTab = React.lazy(() => import('@/components/tabs/data-mapping'));
 const ExcelTab = React.lazy(() => import('@/components/tabs/excel'));
 const SurfaceAnalyticsTab = React.lazy(() => import('@/components/tabs/surface-analytics'));
 const PolymarketTab = React.lazy(() => import('@/components/tabs/polymarket'));
@@ -66,7 +65,6 @@ const AlphaArenaTab = React.lazy(() => import('@/components/tabs/alpha-arena'));
 const NotesTab = React.lazy(() => import('@/components/tabs/notes').then(m => ({ default: m.NotesTab })));
 const AlternativeInvestmentsTab = React.lazy(() => import('@/components/tabs/alternative-investments').then(m => ({ default: m.AlternativeInvestmentsTab })));
 const MarketSimTab = React.lazy(() => import('@/components/tabs/market-sim').then(m => ({ default: m.MarketSimTab })));
-const StrategiesTab = React.lazy(() => import('@/components/tabs/strategies'));
 const AlgoTradingTab = React.lazy(() => import('@/components/tabs/algo-trading'));
 const QuantLibCoreTab = React.lazy(() => import('@/components/tabs/quantlib-core'));
 
@@ -584,13 +582,11 @@ function FinxeptTerminalContent() {
     { label: 'Market Simulation', action: () => setActiveTab('market-sim') },
     // Tools
     { label: 'Tools', header: true },
-    { label: 'Strategy Engine', action: () => setActiveTab('strategies') },
     { label: 'Algo Trading', action: () => setActiveTab('algo-trading') },
     { label: 'Agent Config', action: () => setActiveTab('agents') },
     { label: 'MCP Servers', action: () => setActiveTab('mcp') },
     { label: 'QuantLib', action: () => setActiveTab('quantlib-core') },
     { label: 'Data Sources', action: () => setActiveTab('datasources') },
-    { label: 'Data Mapping', action: () => setActiveTab('datamapping') },
     { label: 'Report Builder', action: () => setActiveTab('reportbuilder') },
     { label: 'Excel Workbook', action: () => setActiveTab('excel') },
     { label: 'Trade Visualization', action: () => setActiveTab('trade-viz') },
@@ -762,6 +758,30 @@ function FinxeptTerminalContent() {
             title={isFullscreen ? 'Exit Fullscreen (F11)' : 'Enter Fullscreen (F11)'}
           >
             {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+          </button>
+          <button
+            onClick={() => setActiveTab('notes')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#a3a3a3',
+              cursor: 'pointer',
+              padding: '2px',
+              borderRadius: '2px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#404040';
+              e.currentTarget.style.color = '#fbbf24';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#a3a3a3';
+            }}
+            title="Open Notes"
+          >
+            <StickyNote size={14} />
           </button>
           <HeaderSupportButtons />
           <button
@@ -1025,11 +1045,6 @@ function FinxeptTerminalContent() {
             <TabsContent value="portfolio" className="h-full m-0 p-0">
               <PortfolioTab />
             </TabsContent>
-            <TabsContent value="strategies" className="h-full m-0 p-0">
-              <React.Suspense fallback={<TabLoadingFallback />}>
-                <StrategiesTab />
-              </React.Suspense>
-            </TabsContent>
             <TabsContent value="algo-trading" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <AlgoTradingTab />
@@ -1124,11 +1139,6 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="support" className="h-full m-0 p-0">
               <SupportTicketTab />
-            </TabsContent>
-            <TabsContent value="datamapping" className="h-full m-0 p-0">
-              <React.Suspense fallback={<TabLoadingFallback />}>
-                <DataMappingTab />
-              </React.Suspense>
             </TabsContent>
             <TabsContent value="contexts" className="h-full m-0 p-0">
               <RecordedContextsManager />

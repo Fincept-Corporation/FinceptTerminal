@@ -7,6 +7,8 @@ Supports rolling updates, concept drift detection, and adaptive retraining
 import json
 import sys
 import os
+import pickle
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Union
 import warnings
@@ -48,6 +50,7 @@ class OnlineLearningManager:
     Online Learning Manager for real-time model updates
     Handles incremental training, concept drift detection, and model adaptation
     """
+    CACHE_DIR = Path.home() / '.fincept' / 'online_learning'
 
     def __init__(self):
         self.qlib_initialized = False
@@ -55,6 +58,36 @@ class OnlineLearningManager:
         self.drift_detectors = {}
         self.performance_history = []
         self.update_schedule = None
+
+        # Create cache directory
+        self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Load existing models from disk
+        self._load_models()
+
+    def _load_models(self):
+        """Load all saved models from disk"""
+        cache_file = self.CACHE_DIR / 'models.pkl'
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'rb') as f:
+                    data = pickle.load(f)
+                    self.online_models = data.get('models', {})
+                    self.drift_detectors = data.get('detectors', {})
+            except Exception as e:
+                print(f"Warning: Could not load cached models: {e}", file=sys.stderr)
+
+    def _save_models(self):
+        """Save all models to disk"""
+        cache_file = self.CACHE_DIR / 'models.pkl'
+        try:
+            with open(cache_file, 'wb') as f:
+                pickle.dump({
+                    'models': self.online_models,
+                    'detectors': self.drift_detectors
+                }, f)
+        except Exception as e:
+            print(f"Warning: Could not save models: {e}", file=sys.stderr)
 
     def initialize(self,
                   provider_uri: str = "~/.qlib/qlib_data/cn_data",
@@ -86,7 +119,8 @@ class OnlineLearningManager:
         Create online learning model
 
         Args:
-            model_type: 'linear', 'tree', 'adaptive_random_forest'
+            model_type: 'linear', 'bayesian_linear', 'pa', 'tree', 'adaptive_tree',
+                       'isoup_tree', 'bagging', 'ewa', 'srp'
             model_id: Unique identifier for model
             **kwargs: Model-specific parameters
         """
@@ -97,19 +131,44 @@ class OnlineLearningManager:
             model_id = model_id or f"online_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
             # Create model based on type
+            # Linear models
             if model_type == 'linear':
-                model = linear_model.LinearRegression(
-                    optimizer=preprocessing.StandardScaler() | linear_model.LinearRegression()
-                )
+                model = linear_model.LinearRegression()
+            elif model_type == 'bayesian_linear':
+                model = linear_model.BayesianLinearRegression()
+            elif model_type == 'pa':
+                model = linear_model.PARegressor()
+
+            # Tree models
             elif model_type == 'tree':
                 model = tree.HoeffdingTreeRegressor()
-            elif model_type == 'adaptive_random_forest':
-                model = ensemble.AdaptiveRandomForestRegressor(
-                    n_models=kwargs.get('n_models', 10),
-                    max_features=kwargs.get('max_features', 'sqrt')
+            elif model_type == 'adaptive_tree':
+                model = tree.HoeffdingAdaptiveTreeRegressor()
+            elif model_type == 'isoup_tree':
+                model = tree.iSOUPTreeRegressor()
+
+            # Ensemble models
+            elif model_type == 'bagging':
+                model = ensemble.BaggingRegressor(
+                    model=tree.HoeffdingTreeRegressor(),
+                    n_models=kwargs.get('n_models', 10)
                 )
-            elif model_type == 'logistic':
-                model = linear_model.LogisticRegression()
+            elif model_type == 'ewa':
+                model = ensemble.EWARegressor(
+                    [linear_model.LinearRegression() for _ in range(3)]
+                )
+            elif model_type == 'srp':
+                model = ensemble.SRPRegressor(
+                    model=tree.HoeffdingTreeRegressor(),
+                    n_models=kwargs.get('n_models', 10)
+                )
+
+            # Legacy aliases
+            elif model_type == 'adaptive_random_forest':
+                model = ensemble.BaggingRegressor(
+                    model=tree.HoeffdingTreeRegressor(),
+                    n_models=kwargs.get('n_models', 10)
+                )
             else:
                 return {'success': False, 'error': f'Unknown model type: {model_type}'}
 
@@ -126,6 +185,9 @@ class OnlineLearningManager:
             }
 
             self.drift_detectors[model_id] = drift_detector
+
+            # Save to disk
+            self._save_models()
 
             return {
                 'success': True,
@@ -187,6 +249,9 @@ class OnlineLearningManager:
                 model_info['samples_trained'] += samples_trained
                 model_info['last_updated'] = datetime.now().isoformat()
 
+                # Save to disk
+                self._save_models()
+
                 return {
                     'success': True,
                     'model_id': model_id,
@@ -214,6 +279,9 @@ class OnlineLearningManager:
 
                 model_info['samples_trained'] += 1
                 model_info['last_updated'] = datetime.now().isoformat()
+
+                # Save to disk
+                self._save_models()
 
                 return {
                     'success': True,

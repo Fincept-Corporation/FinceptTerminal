@@ -175,7 +175,11 @@ export async function toggleUserRSSFeed(id: string, enabled: boolean): Promise<v
  */
 export async function testRSSFeedUrl(url: string): Promise<boolean> {
   try {
-    return await invoke<boolean>('test_rss_feed_url', { url });
+    const result = await invoke<{ valid: boolean; error?: string }>('test_rss_feed_url', { url });
+    if (!result.valid && result.error) {
+      console.warn('[RSSFeedService] Feed test failed:', result.error);
+    }
+    return result.valid;
   } catch (error) {
     console.error('[RSSFeedService] Failed to test feed URL:', error);
     return false;

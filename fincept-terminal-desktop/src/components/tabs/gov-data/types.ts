@@ -2,7 +2,7 @@
 
 // ===== Provider Types =====
 
-export type GovProvider = 'us-treasury' | 'canada-gov' | 'us-congress' | 'openafrica' | 'spain' | 'finland-pxweb' | 'swiss' | 'france' | 'universal-ckan';
+export type GovProvider = 'us-treasury' | 'canada-gov' | 'us-congress' | 'openafrica' | 'spain' | 'finland-pxweb' | 'swiss' | 'france' | 'universal-ckan' | 'hk';
 
 export interface GovProviderConfig {
   id: GovProvider;
@@ -574,6 +574,61 @@ export interface CkanResource {
 }
 
 export interface CkanResponse<T> {
+  data: T;
+  metadata: Record<string, any>;
+  error: string | null;
+}
+
+// ===== Hong Kong Government (data.gov.hk) Types =====
+
+export type HkGovView = 'categories' | 'datasets' | 'resources' | 'historical' | 'search';
+
+export interface HkCategory {
+  id: string;
+  name: string;
+  display_name: string;
+  title: string;
+  description: string;
+  dataset_count: number;
+}
+
+export interface HkDataset {
+  id: string;
+  name: string;
+  title: string;
+  notes: string;
+  organization?: Record<string, any>;
+  num_resources: number;
+  metadata_created: string | null;
+  metadata_modified: string | null;
+  tags: string[];
+  resources?: any[];
+}
+
+export interface HkResource {
+  id: string;
+  name: string;
+  description: string;
+  format: string;
+  url: string;
+  size: number | null;
+  mimetype: string | null;
+  created: string | null;
+  last_modified: string | null;
+  package_id: string;
+}
+
+export interface HkHistoricalFile {
+  name: string;
+  url: string;
+  format: string;
+  category: string;
+  date: string;
+  size: number | null;
+  [key: string]: any;
+}
+
+export interface HkGovResponse<T> {
   data: T;
   metadata: Record<string, any>;
   error: string | null;

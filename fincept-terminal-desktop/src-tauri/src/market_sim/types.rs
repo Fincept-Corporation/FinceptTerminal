@@ -174,7 +174,8 @@ pub struct Order {
     pub filled_quantity: Qty,
     pub remaining_quantity: Qty,
     pub stop_price: Price,       // for stop/stop-limit
-    pub display_quantity: Qty,   // for iceberg (visible portion)
+    pub display_quantity: Qty,   // for iceberg (max visible portion per reload)
+    pub current_display: Qty,    // for iceberg (currently visible portion)
     pub hidden: bool,            // fully hidden order
     pub trailing_offset: Price,  // for trailing stop
     pub status: OrderStatus,
@@ -207,6 +208,7 @@ impl Order {
             remaining_quantity: quantity,
             stop_price: 0,
             display_quantity: quantity,
+            current_display: quantity,
             hidden: false,
             trailing_offset: 0,
             status: OrderStatus::New,
@@ -237,6 +239,7 @@ impl Order {
             remaining_quantity: quantity,
             stop_price: 0,
             display_quantity: quantity,
+            current_display: quantity,
             hidden: false,
             trailing_offset: 0,
             status: OrderStatus::New,
@@ -257,6 +260,7 @@ impl Order {
         tif: TimeInForce,
         timestamp: Nanos,
     ) -> Self {
+        let initial_display = display_quantity.min(total_quantity);
         Self {
             id,
             participant_id,
@@ -270,6 +274,7 @@ impl Order {
             remaining_quantity: total_quantity,
             stop_price: 0,
             display_quantity,
+            current_display: initial_display,
             hidden: false,
             trailing_offset: 0,
             status: OrderStatus::New,

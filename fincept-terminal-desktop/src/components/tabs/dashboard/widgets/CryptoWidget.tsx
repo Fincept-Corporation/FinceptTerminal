@@ -10,7 +10,7 @@ interface CryptoWidgetProps {
   onRemove?: () => void;
 }
 
-const TOP_CRYPTOS = ['BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'SOL-USD', 'DOT-USD', 'MATIC-USD', 'LTC-USD'];
+const TOP_CRYPTOS = ['BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'SOL-USD', 'DOT-USD', 'LTC-USD'];
 
 export const CryptoWidget: React.FC<CryptoWidgetProps> = ({ id, onRemove }) => {
   const { t } = useTranslation('dashboard');
@@ -19,6 +19,7 @@ export const CryptoWidget: React.FC<CryptoWidgetProps> = ({ id, onRemove }) => {
   const {
     data: quotes,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<QuoteData[]>({
@@ -39,7 +40,7 @@ export const CryptoWidget: React.FC<CryptoWidgetProps> = ({ id, onRemove }) => {
       title={t('widgets.crypto')}
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={loading}
+      isLoading={(loading && !quotes) || isFetching}
       error={error?.message}
     >
       <div style={{ padding: '4px' }}>

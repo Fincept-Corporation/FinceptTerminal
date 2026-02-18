@@ -11,7 +11,7 @@ import {
   NodeConnectionType,
   NodePropertyType,
 } from '../../types';
-import { MarketDataBridge, DataProvider } from '../../adapters/MarketDataBridge';
+import { MarketDataBridge } from '../../adapters/MarketDataBridge';
 
 export class GetTickerStatsNode implements INodeType {
   description: INodeTypeDescription = {
@@ -132,7 +132,7 @@ export class GetTickerStatsNode implements INodeType {
   async execute(this: IExecuteFunctions): Promise<NodeOutput> {
     const useInputSymbols = this.getNodeParameter('useInputSymbols', 0) as boolean;
     const statsType = this.getNodeParameter('statsType', 0) as string;
-    const provider = this.getNodeParameter('provider', 0) as DataProvider;
+    const provider = this.getNodeParameter('provider', 0) as string;
     const includeTechnical = this.getNodeParameter('includeTechnical', 0) as boolean;
     const includeBeta = this.getNodeParameter('includeBeta', 0) as boolean;
 
@@ -164,7 +164,7 @@ export class GetTickerStatsNode implements INodeType {
 
     for (const symbol of symbols) {
       try {
-        const stats = await MarketDataBridge.getTickerStats(symbol, provider);
+        const stats = await MarketDataBridge.getTickerStats(symbol);
 
         const result: Record<string, any> = {
           symbol,

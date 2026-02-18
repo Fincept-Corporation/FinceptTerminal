@@ -87,29 +87,33 @@ from base.base_provider import (
 )
 
 # Import fast-trade wrapper modules
-from .ft_backtest import (
+# Fix: Use absolute imports instead of relative imports for CLI execution
+ft_module_path = Path(__file__).parent
+sys.path.insert(0, str(ft_module_path))
+
+from ft_backtest import (
     run_backtest as ft_run,
     validate_backtest as ft_validate,
     run_multiple_backtests,
 )
-from .ft_data import (
+from ft_data import (
     generate_synthetic_ohlcv,
     load_basic_df_from_csv,
     standardize_df,
     load_yfinance_data,
 )
-from .ft_summary import (
+from ft_summary import (
     build_summary,
     calculate_drawdown_metrics,
     calculate_trade_quality,
     calculate_trade_streaks,
     create_trade_log,
 )
-from .ft_indicators import (
+from ft_indicators import (
     list_available_indicators,
     get_transformer_map,
 )
-from .ft_strategies import (
+from ft_strategies import (
     sma_crossover as sma_crossover_config,
     ema_crossover as ema_crossover_config,
     rsi_strategy as rsi_config,
@@ -118,8 +122,8 @@ from .ft_strategies import (
     build_custom_strategy,
     list_strategies,
 )
-from .ft_evaluate import evaluate_rules
-from .ft_utils import resample, trending_up, trending_down
+from ft_evaluate import evaluate_rules
+from ft_utils import resample, trending_up, trending_down
 
 
 class FastTradeProvider(BacktestingProviderBase):
@@ -223,7 +227,8 @@ class FastTradeProvider(BacktestingProviderBase):
             BacktestResult with performance metrics, trades, equity curve
         """
         try:
-            from fast_trade import run_backtest as ft_run_backtest, validate_backtest as ft_validate_backtest
+            # Use our custom wrapper instead of library's run_backtest
+            # This allows passing data directly without download
             self._log('Starting Fast-Trade backtest execution')
 
             # Extract request parameters
@@ -237,20 +242,28 @@ class FastTradeProvider(BacktestingProviderBase):
             # Generate or load data
             data = self._prepare_data(assets, start_date, end_date)
 
-            # Build fast-trade configuration
+            # Build fast-trade configuration (without data in config)
             ft_config = self._build_fasttrade_config(
-                strategy_def, parameters, initial_capital, data
+                strategy_def, parameters, initial_capital, None, start_date, end_date
             )
 
             # Validate configuration
-            validation = ft_validate_backtest(ft_config)
+            validation = ft_validate(ft_config)
             if not validation.get('valid', True):
                 errors = validation.get('errors', [])
                 return self._create_error_result(f'Strategy validation failed: {errors}')
 
-            # Run backtest
+            # Prepare data for fast-trade (needs 'date' column, not index)
+            if 'date' not in data.columns:
+                data_ft = data.reset_index()
+                if data_ft.columns[0] != 'date':
+                    data_ft = data_ft.rename(columns={data_ft.columns[0]: 'date'})
+            else:
+                data_ft = data.copy()
+
+            # Run backtest using our wrapper (pass data separately)
             self._log('Executing fast-trade backtest...')
-            result = ft_run_backtest(ft_config)
+            result = ft_run(backtest=ft_config, df=data_ft, summary=True)
 
             # Convert result to standard format
             backtest_result = self._convert_result(
@@ -350,7 +363,9 @@ class FastTradeProvider(BacktestingProviderBase):
         strategy_def: Dict[str, Any],
         parameters: Dict[str, Any],
         initial_capital: float,
-        data: pd.DataFrame
+        data: pd.DataFrame,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Build fast-trade backtest configuration from strategy definition
@@ -419,7 +434,13 @@ class FastTradeProvider(BacktestingProviderBase):
                 'exit': [['close', '<', 0]],
             }
 
-        config['data'] = data
+        # Do NOT add data to config - it will be passed separately to ft_run(backtest, df=data)
+        # This prevents fast-trade from trying to download data
+
+        # Add start_date for validation purposes only (won't trigger download without symbol)
+        if start_date:
+            config['start_date'] = start_date
+
         return config
 
     # ========================================================================

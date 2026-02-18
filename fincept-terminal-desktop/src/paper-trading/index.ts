@@ -218,6 +218,10 @@ export class PaperTradingAdapter {
     }
     this.priceUnsubscribers.clear();
     this.trackedSymbols.clear();
+
+    // Clear pending orders for this portfolio to prevent cross-broker contamination
+    this.orderMatcher.clearPortfolioOrders(this.portfolioId);
+
     this.connected = false;
   }
 
@@ -234,9 +238,15 @@ export class PaperTradingAdapter {
 
     // First, subscribe via WebSocket to actually receive price updates
     // This ensures we get real-time data for ALL position symbols, not just the chart symbol
-    this.marketDataService.subscribeViaWebSocket(this.config.provider, symbol).catch((err) => {
-      console.warn(`[PaperTradingAdapter] Failed to subscribe to ${symbol} via WebSocket:`, err);
-    });
+    // Use a small delay to allow WebSocket connection to establish first
+    // This is non-blocking - if it fails, we'll still get manual price updates from the chart
+    setTimeout(() => {
+      this.marketDataService.subscribeViaWebSocket(this.config.provider, symbol).catch((err) => {
+        // Only log as debug - this is expected if WebSocket isn't connected yet
+        // The chart/trading component will establish WebSocket and we'll get data that way
+        console.debug(`[PaperTradingAdapter] WebSocket subscribe deferred for ${symbol}:`, err?.message || err);
+      });
+    }, 2000);
 
     const unsubscribe = this.marketDataService.subscribeToPrice(symbol, async (price: PriceData) => {
       // 1. Update position P&L in Rust backend
@@ -246,8 +256,8 @@ export class PaperTradingAdapter {
         // Position might not exist, that's fine
       }
 
-      // 2. Check pending orders for fills
-      await this.orderMatcher.checkOrders(symbol, price);
+      // 2. Check pending orders for fills (with portfolio ID to prevent cross-broker fills)
+      await this.orderMatcher.checkOrders(symbol, price, this.portfolioId);
     });
 
     this.priceUnsubscribers.set(symbol, unsubscribe);
@@ -431,7 +441,7 @@ export class PaperTradingAdapter {
 
       // Check if it fills immediately (e.g., limit buy above market)
       if (currentPrice) {
-        await this.orderMatcher.checkOrders(symbol, currentPrice);
+        await this.orderMatcher.checkOrders(symbol, currentPrice, this.portfolioId);
       }
 
       return {

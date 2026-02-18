@@ -1,8 +1,12 @@
 # Increase stack size to 8MB to handle large invoke_handler with 600+ commands
 # This prevents stack overflow during Tauri initialization on Windows
+# Using lld linker for faster builds (2-3x faster linking)
+
+[build]
+jobs = 16  # Parallel compilation (matches CPU cores)
 
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-args=/STACK:8388608"]
+rustflags = ["-C", "link-args=/STACK:8388608", "-C", "linker=lld-link"]
 
 [target.x86_64-pc-windows-gnu]
 rustflags = ["-C", "link-args=-Wl,--stack,8388608"]

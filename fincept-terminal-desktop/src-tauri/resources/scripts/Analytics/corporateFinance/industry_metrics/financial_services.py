@@ -414,6 +414,16 @@ def main():
                 analysis = analyzer.calculate_bank_metrics(**filtered)
             elif 'wealth' in sector.lower():
                 analysis = analyzer.calculate_wealth_management_metrics(**institution_data)
+            elif 'insurance' in sector.lower():
+                import inspect
+                valid_params = set(inspect.signature(analyzer.calculate_insurance_metrics).parameters.keys())
+                filtered = {k: v for k, v in institution_data.items() if k in valid_params}
+                analysis = analyzer.calculate_insurance_metrics(**filtered)
+            elif 'fintech' in sector.lower():
+                import inspect
+                valid_params = set(inspect.signature(analyzer.calculate_fintech_metrics).parameters.keys())
+                filtered = {k: v for k, v in institution_data.items() if k in valid_params}
+                analysis = analyzer.calculate_fintech_metrics(**filtered)
             else:
                 # Default to bank metrics
                 analysis = analyzer.calculate_bank_metrics(**institution_data)

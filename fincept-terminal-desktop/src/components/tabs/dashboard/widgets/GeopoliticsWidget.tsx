@@ -55,6 +55,7 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
   const {
     data: geoData,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<GeopoliticsData>({
@@ -144,7 +145,7 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
       title="GEOPOLITICAL RISK MONITOR"
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={loading && !geoData}
+      isLoading={(loading && !geoData) || isFetching}
       error={error?.message || null}
       headerColor="var(--ft-color-purple)"
     >

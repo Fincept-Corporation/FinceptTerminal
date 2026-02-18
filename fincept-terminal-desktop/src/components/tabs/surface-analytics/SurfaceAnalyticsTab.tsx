@@ -469,6 +469,22 @@ const SurfaceAnalyticsTab: React.FC = () => {
     loadDemoData,
   ]);
 
+  // Auto-load data on mount after initialization
+  useEffect(() => {
+    // Only load data after initial load is complete
+    if (initialLoad) return;
+
+    // Load data if we have API key OR user chose demo mode explicitly
+    if (hasApiKey || useDemoModeExplicitly) {
+      if (useDemoModeExplicitly || !hasApiKey) {
+        // In demo mode, regenerate synthetic data
+        loadDemoData();
+      } else {
+        fetchRealData();
+      }
+    }
+  }, [initialLoad, hasApiKey, useDemoModeExplicitly, activeChart, loadDemoData, fetchRealData]);
+
   // Auto-refresh when API key is available and refresh interval is set
   useEffect(() => {
     if (hasApiKey && config.refreshInterval > 0) {

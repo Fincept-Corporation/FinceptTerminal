@@ -265,6 +265,41 @@ export const GOV_PROVIDERS: GovProviderConfig[] = [
     ],
   },
   {
+    id: 'hk',
+    name: 'Hong Kong Gov',
+    fullName: 'Data.gov.hk - Hong Kong Government',
+    description: 'Hong Kong government open data portal with CKAN catalog & historical archive API',
+    color: '#F43F5E',
+    country: 'Hong Kong',
+    flag: '\uD83C\uDDED\uD83C\uDDF0',
+    endpoints: [
+      {
+        id: 'categories',
+        name: 'Categories',
+        description: 'Browse data categories (groups) on Data.gov.hk',
+        command: 'categories_list',
+      },
+      {
+        id: 'datasets',
+        name: 'Datasets',
+        description: 'Browse datasets within a category',
+        command: 'datasets_list',
+      },
+      {
+        id: 'historical',
+        name: 'Historical',
+        description: 'Historical archive files by date range',
+        command: 'historical_files',
+      },
+      {
+        id: 'search',
+        name: 'Search',
+        description: 'Search across all Hong Kong government datasets',
+        command: 'datasets_list',
+      },
+    ],
+  },
+  {
     id: 'us-congress',
     name: 'US Congress',
     fullName: 'United States Congress',

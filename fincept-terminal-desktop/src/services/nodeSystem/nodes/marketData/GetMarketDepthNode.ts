@@ -127,7 +127,7 @@ export class GetMarketDepthNode implements INodeType {
     
 
     try {
-      const depth = await MarketDataBridge.getMarketDepth(symbol, provider as any, parseInt(levels) || 10);
+      const depth = await MarketDataBridge.getMarketDepth(symbol);
 
       const result: Record<string, any> = {
         symbol,

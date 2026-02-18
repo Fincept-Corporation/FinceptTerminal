@@ -10,13 +10,15 @@ interface NewsWidgetProps {
   category?: string;
   limit?: number;
   onRemove?: () => void;
+  onConfigure?: () => void;
 }
 
 export const NewsWidget: React.FC<NewsWidgetProps> = ({
   id,
   category = 'ALL',
   limit = 5,
-  onRemove
+  onRemove,
+  onConfigure
 }) => {
   const { t } = useTranslation('dashboard');
 
@@ -24,6 +26,7 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
   const {
     data: allNews,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<NewsArticle[]>({
@@ -60,7 +63,8 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
       title={`${t('widgets.news')} - ${t(`widgets.category${category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()}`, category)}`}
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={loading}
+      onConfigure={onConfigure}
+      isLoading={(loading && !allNews) || isFetching}
       error={error?.message}
     >
       <div style={{ padding: '8px' }}>

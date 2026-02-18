@@ -20,12 +20,25 @@ impl Rng {
         x
     }
 
-    /// Random value in [0, max)
+    /// Random value in [0, max) using rejection sampling to avoid modulo bias
     pub fn next_bounded(&mut self, max: u64) -> u64 {
         if max == 0 {
             return 0;
         }
-        self.next_u64() % max
+        if max == 1 {
+            return 0;
+        }
+
+        // Use rejection sampling to avoid modulo bias
+        // threshold is the largest multiple of max that fits in u64
+        let threshold = u64::MAX - (u64::MAX % max);
+
+        loop {
+            let r = self.next_u64();
+            if r < threshold {
+                return r % max;
+            }
+        }
     }
 
     /// Random f64 in [0.0, 1.0)

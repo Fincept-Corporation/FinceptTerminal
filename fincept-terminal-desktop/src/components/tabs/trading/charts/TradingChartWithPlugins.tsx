@@ -43,6 +43,8 @@ export function TradingChartWithPlugins({
     if (!chartContainerRef.current) return;
 
     const containerHeight = chartContainerRef.current.clientHeight || 400;
+    const isIntradayTimeframe = !['1d', '1w', '1M'].includes(selectedTimeframe);
+    const showSeconds = ['1m', '3m', '5m'].includes(selectedTimeframe);
 
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
@@ -77,8 +79,8 @@ export function TradingChartWithPlugins({
       },
       timeScale: {
         borderColor: '#2a2a2a',
-        timeVisible: true,
-        secondsVisible: false,
+        timeVisible: isIntradayTimeframe,
+        secondsVisible: showSeconds,
         visible: true,
         borderVisible: true,
         ticksVisible: true,
@@ -176,7 +178,7 @@ export function TradingChartWithPlugins({
 
       chart.remove();
     };
-  }, [height, showVolume, enablePlugins]);
+  }, [height, showVolume, enablePlugins, selectedTimeframe]);
 
   // Update chart data
   useEffect(() => {

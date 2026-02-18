@@ -6,7 +6,6 @@ import { mcpToolService } from '../mcp/mcpToolService';
 import { agentLLMService } from '../chat/agentLLMService';
 import { backtestingService } from '../backtesting/BacktestingService';
 import { MarketDataBridge } from '../nodeSystem/adapters/MarketDataBridge';
-import type { DataProvider } from '../nodeSystem/adapters/MarketDataBridge';
 import { nodeLogger } from './loggerService';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
@@ -535,14 +534,13 @@ class NodeExecutionManager {
     // Get Quote - fetch actual stock quote data via MarketDataBridge
     if (nodeTypeName === 'getQuote') {
       const symbol = parameters.symbol || parameters.symbols || 'AAPL';
-      const provider = (parameters.provider || 'yahoo') as DataProvider;
       try {
         // Handle comma-separated symbols
         const symbolList = String(symbol).split(',').map((s: string) => s.trim()).filter(Boolean);
         const quotes = await Promise.all(
           symbolList.map(async (sym: string) => {
             try {
-              return await MarketDataBridge.getQuote(sym, provider);
+              return await MarketDataBridge.getQuote(sym);
             } catch (err) {
               nodeLogger.warn(`Failed to fetch quote for ${sym}`, err);
               return { symbol: sym, error: String(err), price: 0, change: 0, changePercent: 0, timestamp: new Date().toISOString() };

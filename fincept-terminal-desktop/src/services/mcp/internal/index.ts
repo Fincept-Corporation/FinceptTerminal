@@ -17,6 +17,11 @@ import { reportBuilderTools } from './tools/report-builder';
 import { edgarTools } from './tools/edgar';
 import { nodeEditorTools } from './tools/node-editor';
 import { newsTools } from './tools/news';
+import { finscriptDocsTools } from './tools/finscript-docs';
+import { dataMappingTools } from './tools/data-mapping';
+import { customIndexTools } from './tools/custom-index';
+import { dataMappingMCPBridge } from './DataMappingMCPBridge';
+import { customIndexMCPBridge } from './CustomIndexMCPBridge';
 import { reportBuilderMCPBridge } from './ReportBuilderMCPBridge';
 import { brokerMCPBridge } from './BrokerMCPBridge';
 import { stockBrokerMCPBridge } from './StockBrokerMCPBridge';
@@ -56,7 +61,9 @@ export function initializeInternalMCP(): void {
     terminalMCPProvider.registerTools(edgarTools);
     terminalMCPProvider.registerTools(nodeEditorTools);
     terminalMCPProvider.registerTools(newsTools);
-
+    terminalMCPProvider.registerTools(finscriptDocsTools);
+    terminalMCPProvider.registerTools(dataMappingTools);
+    terminalMCPProvider.registerTools(customIndexTools);
 
     // Initialize global bridge contexts
     reportBuilderMCPBridge.initializeGlobalContexts();
@@ -69,6 +76,12 @@ export function initializeInternalMCP(): void {
 
     // Initialize News bridge contexts
     newsMCPBridge.connect();
+
+    // Initialize Data Mapping bridge contexts
+    dataMappingMCPBridge.connect();
+
+    // Initialize Custom Index bridge contexts
+    customIndexMCPBridge.connect();
 
     // Mark as initialized
     isInitialized = true;
@@ -93,9 +106,18 @@ export { reportBuilderMCPBridge } from './ReportBuilderMCPBridge';
 export { nodeEditorMCPBridge } from './NodeEditorMCPBridge';
 export { portfolioMCPBridge } from './PortfolioMCPBridge';
 export { newsMCPBridge } from './NewsMCPBridge';
+export { dataMappingMCPBridge } from './DataMappingMCPBridge';
+export { customIndexMCPBridge } from './CustomIndexMCPBridge';
 export { INTERNAL_SERVER_ID, INTERNAL_SERVER_NAME } from './types';
 export type { TerminalContexts, InternalTool, InternalToolResult } from './types';
 export type {
+  DataMappingSummary,
+  DataMappingDetail,
+  CreateDataMappingParams,
+  DataMappingExecutionResult,
+  DataMappingTemplateSummary,
+  DataMappingSchemaSummary,
+  // Node Editor types
   NodeTypeInfo,
   NodeTypeDetails,
   NodeCategoryInfo,

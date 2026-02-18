@@ -927,7 +927,7 @@ async def update_hitl_rule_handler(params: Dict) -> Dict[str, Any]:
 async def get_portfolio_metrics_handler(params: Dict) -> Dict[str, Any]:
     """Get portfolio metrics for a competition or model."""
     try:
-        from alpha_arena.core.portfolio_metrics import get_analyzer
+        from alpha_arena.core.portfolio_metrics import PortfolioAnalyzer
 
         competition_id = params.get("competition_id")
         model_name = params.get("model_name")
@@ -935,53 +935,41 @@ async def get_portfolio_metrics_handler(params: Dict) -> Dict[str, Any]:
         if not competition_id:
             return {"success": False, "error": "Missing competition_id"}
 
-        # Get competition to access portfolio data
-        competition = get_competition(competition_id)
-        if not competition:
-            # Try from database
-            db = get_database()
-            comp_data = db.get_competition(competition_id)
-            if not comp_data:
-                return {"success": False, "error": f"Competition not found: {competition_id}"}
+        db = get_database()
+        comp_data = db.get_competition(competition_id)
+        if not comp_data:
+            return {"success": False, "error": f"Competition not found: {competition_id}"}
 
-            # Get snapshots from database for metrics calculation
-            snapshots = db.get_snapshots(competition_id, model_name)
-            if not snapshots:
-                return {"success": False, "error": "No portfolio snapshots found"}
+        initial_capital = comp_data.get("config", {}).get("initial_capital", 10000)
 
-            # Calculate metrics from historical snapshots
-            analyzer = get_analyzer()
-            for snapshot in snapshots:
-                analyzer.record(snapshot.get("portfolio_value", 10000))
+        # Get snapshots from database
+        snapshots = db.get_snapshots(competition_id, model_name)
+        if not snapshots:
+            return {"success": False, "error": "No portfolio snapshots found"}
 
-            metrics = analyzer.calculate_metrics()
+        # Group snapshots by model
+        from collections import defaultdict
+        by_model: Dict[str, list] = defaultdict(list)
+        for snap in snapshots:
+            by_model[snap.get("model_name", "unknown")].append(snap)
+
+        # Calculate metrics per model
+        all_metrics = {}
+        for mname, model_snaps in by_model.items():
+            # Sort by cycle number
+            model_snaps.sort(key=lambda s: s.get("cycle_number", 0))
+            analyzer = PortfolioAnalyzer(initial_capital=initial_capital)
+            for snap in model_snaps:
+                analyzer.record_value(snap.get("portfolio_value", initial_capital))
+            all_metrics[mname] = analyzer.calculate_metrics().to_dict()
+
+        # If a specific model was requested, return just that
+        if model_name and model_name in all_metrics:
             return {
                 "success": True,
-                "metrics": metrics.to_dict(),
-                "from_database": True,
+                "model_name": model_name,
+                "metrics": all_metrics[model_name],
             }
-
-        # Get metrics from live competition
-        if model_name:
-            # Get specific model's metrics
-            for agent in competition._agents:
-                if agent.name == model_name:
-                    metrics = agent.get_metrics()
-                    if metrics:
-                        return {
-                            "success": True,
-                            "model_name": model_name,
-                            "metrics": metrics.to_dict(),
-                        }
-                    break
-            return {"success": False, "error": f"Model not found or no metrics: {model_name}"}
-
-        # Get all models' metrics
-        all_metrics = {}
-        for agent in competition._agents:
-            metrics = agent.get_metrics()
-            if metrics:
-                all_metrics[agent.name] = metrics.to_dict()
 
         return {
             "success": True,

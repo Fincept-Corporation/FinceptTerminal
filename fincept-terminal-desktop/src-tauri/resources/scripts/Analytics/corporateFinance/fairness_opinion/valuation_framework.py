@@ -364,6 +364,9 @@ def main():
             else:
                 methods_list = []
 
+            if not methods_list:
+                raise ValueError("No valuation methods provided. Expected a list of methods or a dict with 'methods' key.")
+
             framework = FairnessOpinionFramework(
                 company_name=company_name,
                 offer_price=offer_price

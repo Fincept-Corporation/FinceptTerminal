@@ -389,6 +389,161 @@ class PortfolioService {
     return {};
   }
 
+  // ==================== IMPORT / EXPORT HELPERS ====================
+
+  parsePortfolioCSV(csv: string): import('../../components/tabs/portfolio-tab/types').PortfolioExportJSON {
+    const lines = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+
+    let portfolioName = '';
+    let owner = '';
+    let currency = '';
+    let exportDate = new Date().toISOString();
+
+    for (const line of lines) {
+      if (line.startsWith('Portfolio Name:,')) portfolioName = line.slice('Portfolio Name:,'.length).trim();
+      else if (line.startsWith('Owner:,')) owner = line.slice('Owner:,'.length).trim();
+      else if (line.startsWith('Currency:,')) currency = line.slice('Currency:,'.length).trim();
+      else if (line.startsWith('Export Date:,')) exportDate = line.slice('Export Date:,'.length).trim();
+    }
+
+    if (!portfolioName) throw new Error('Could not find "Portfolio Name:" in CSV');
+
+    // Find Transactions section
+    const txHeader = 'Date,Symbol,Type,Quantity,Price,Total Value,Notes';
+    const txHeaderIdx = lines.findIndex(l => l.trim() === txHeader);
+    if (txHeaderIdx === -1) throw new Error('Could not find Transactions header in CSV');
+
+    const transactions: import('../../components/tabs/portfolio-tab/types').PortfolioExportTransaction[] = [];
+    for (let i = txHeaderIdx + 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      // Split into max 7 parts (notes may contain commas)
+      const parts = line.split(',');
+      if (parts.length < 6) continue;
+      const [date, symbol, type, quantityStr, priceStr, totalValueStr, ...noteParts] = parts;
+      const txType = type.trim().toUpperCase() as 'BUY' | 'SELL' | 'DIVIDEND' | 'SPLIT';
+      if (!['BUY', 'SELL', 'DIVIDEND', 'SPLIT'].includes(txType)) continue;
+      const quantity = parseFloat(quantityStr);
+      const price = parseFloat(priceStr);
+      const total_value = parseFloat(totalValueStr);
+      if (isNaN(quantity) || isNaN(price)) continue;
+      transactions.push({
+        date: date.trim(),
+        symbol: symbol.trim().toUpperCase(),
+        type: txType,
+        quantity,
+        price,
+        total_value: isNaN(total_value) ? quantity * price : total_value,
+        notes: noteParts.join(',').trim(),
+      });
+    }
+
+    return { format_version: '1.0', portfolio_name: portfolioName, owner, currency, export_date: exportDate, transactions };
+  }
+
+  parsePortfolioJSON(json: string): import('../../components/tabs/portfolio-tab/types').PortfolioExportJSON {
+    let data: any;
+    try { data = JSON.parse(json); } catch { throw new Error('Invalid JSON file'); }
+    if (!data.portfolio_name) throw new Error('Missing portfolio_name in JSON');
+    if (!Array.isArray(data.transactions)) throw new Error('Missing transactions array in JSON');
+    const validTypes = ['BUY', 'SELL', 'DIVIDEND', 'SPLIT'];
+    const transactions = data.transactions.map((t: any, i: number) => {
+      if (!t.symbol) throw new Error(`Transaction ${i}: missing symbol`);
+      if (!validTypes.includes(String(t.type).toUpperCase())) throw new Error(`Transaction ${i}: invalid type "${t.type}"`);
+      return {
+        date: t.date || new Date().toISOString(),
+        symbol: String(t.symbol).toUpperCase(),
+        type: String(t.type).toUpperCase() as 'BUY' | 'SELL' | 'DIVIDEND' | 'SPLIT',
+        quantity: parseFloat(t.quantity) || 0,
+        price: parseFloat(t.price) || 0,
+        total_value: parseFloat(t.total_value) || 0,
+        notes: t.notes || '',
+      };
+    });
+    return {
+      format_version: '1.0',
+      portfolio_name: data.portfolio_name,
+      owner: data.owner || '',
+      currency: data.currency || 'USD',
+      export_date: data.export_date || new Date().toISOString(),
+      transactions,
+    };
+  }
+
+  async exportPortfolioJSON(portfolioId: string): Promise<string> {
+    portfolioLogger.info(`Exporting portfolio ${portfolioId} to JSON`);
+    const summary = await this.getPortfolioSummary(portfolioId);
+    const transactions = await this.getPortfolioTransactions(portfolioId, 1000);
+    const data: import('../../components/tabs/portfolio-tab/types').PortfolioExportJSON = {
+      format_version: '1.0',
+      portfolio_name: summary.portfolio.name,
+      owner: summary.portfolio.owner,
+      currency: summary.portfolio.currency,
+      export_date: new Date().toISOString(),
+      transactions: transactions.map(t => ({
+        date: t.transaction_date,
+        symbol: t.symbol,
+        type: t.transaction_type,
+        quantity: t.quantity,
+        price: t.price,
+        total_value: t.total_value,
+        notes: t.notes || '',
+      })),
+    };
+    return JSON.stringify(data, null, 2);
+  }
+
+  async importPortfolio(
+    data: import('../../components/tabs/portfolio-tab/types').PortfolioExportJSON,
+    mode: import('../../components/tabs/portfolio-tab/types').ImportMode,
+    mergeTargetId?: string,
+    onProgress?: (current: number, total: number) => void
+  ): Promise<import('../../components/tabs/portfolio-tab/types').ImportResult> {
+    portfolioLogger.info(`Importing portfolio "${data.portfolio_name}" mode=${mode}`);
+
+    let targetPortfolioId: string;
+    let targetPortfolioName: string;
+
+    if (mode === 'new') {
+      const created = await this.createPortfolio(data.portfolio_name, data.owner || 'Imported', data.currency || 'USD');
+      targetPortfolioId = created.id;
+      targetPortfolioName = created.name;
+    } else {
+      if (!mergeTargetId) throw new Error('mergeTargetId required for merge mode');
+      const existing = await this.getPortfolio(mergeTargetId);
+      if (!existing) throw new Error('Target portfolio not found');
+      targetPortfolioId = mergeTargetId;
+      targetPortfolioName = existing.name;
+    }
+
+    // Sort transactions chronologically
+    const sorted = [...data.transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const errors: string[] = [];
+    let replayed = 0;
+
+    for (let i = 0; i < sorted.length; i++) {
+      const txn = sorted[i];
+      onProgress?.(i, sorted.length);
+      try {
+        if (txn.type === 'BUY') {
+          await this.addAsset(targetPortfolioId, txn.symbol, txn.quantity, txn.price);
+          replayed++;
+        } else if (txn.type === 'SELL') {
+          await this.sellAsset(targetPortfolioId, txn.symbol, txn.quantity, txn.price);
+          replayed++;
+        } else {
+          errors.push(`Skipped ${txn.type} for ${txn.symbol} on ${txn.date} (unsupported type)`);
+        }
+      } catch (err: any) {
+        errors.push(`${txn.date} ${txn.symbol} ${txn.type}: ${err?.message || String(err)}`);
+      }
+    }
+
+    onProgress?.(sorted.length, sorted.length);
+    return { portfolioId: targetPortfolioId, portfolioName: targetPortfolioName, transactionsReplayed: replayed, errors };
+  }
+
   async exportPortfolioCSV(portfolioId: string): Promise<string> {
     portfolioLogger.info(`Exporting portfolio ${portfolioId} to CSV`);
 

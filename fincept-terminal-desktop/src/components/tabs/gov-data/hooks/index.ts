@@ -9,3 +9,4 @@ export { usePxWebData } from './usePxWebData';
 export { useSwissGovData } from './useSwissGovData';
 export { useFrenchGovData } from './useFrenchGovData';
 export { useUniversalCkanData } from './useUniversalCkanData';
+export { useDataGovHkData } from './useDataGovHkData';

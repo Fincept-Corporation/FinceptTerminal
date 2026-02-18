@@ -36,6 +36,74 @@ export type CommonResponseEvent =
   | 'leaderboard_update'
   | 'portfolio_update';
 
+// Advanced Agent Configuration (maps to Python AgentAdvancedConfig)
+export interface AgentAdvancedConfig {
+  // LLM params
+  temperature: number;       // 0.0-2.0
+  max_tokens: number;        // 100-8000
+
+  // Trading style
+  trading_style: string | null;
+
+  // Agno feature toggles
+  enable_memory: boolean;
+  enable_reasoning: boolean;
+  enable_tools: boolean;
+  enable_knowledge: boolean;
+  enable_guardrails: boolean;
+  enable_features_pipeline: boolean;
+  enable_sentiment: boolean;
+  enable_research: boolean;
+
+  // Guardrail params
+  max_position_pct: number;
+  max_single_trade_pct: number;
+  stop_loss_pct: number | null;
+  take_profit_pct: number | null;
+
+  // Reasoning params
+  reasoning_min_steps: number;
+  reasoning_max_steps: number;
+
+  // Custom prompt
+  custom_system_prompt: string;
+  custom_instructions: string[];
+}
+
+export const DEFAULT_ADVANCED_CONFIG: AgentAdvancedConfig = {
+  temperature: 0.7,
+  max_tokens: 2000,
+  trading_style: null,
+  enable_memory: false,
+  enable_reasoning: false,
+  enable_tools: false,
+  enable_knowledge: false,
+  enable_guardrails: true,
+  enable_features_pipeline: true,
+  enable_sentiment: false,
+  enable_research: false,
+  max_position_pct: 0.5,
+  max_single_trade_pct: 0.25,
+  stop_loss_pct: null,
+  take_profit_pct: null,
+  reasoning_min_steps: 1,
+  reasoning_max_steps: 10,
+  custom_system_prompt: '',
+  custom_instructions: [],
+};
+
+export const FULL_AGENT_CONFIG: AgentAdvancedConfig = {
+  ...DEFAULT_ADVANCED_CONFIG,
+  enable_memory: true,
+  enable_reasoning: true,
+  enable_tools: true,
+  enable_knowledge: true,
+  enable_guardrails: true,
+  enable_features_pipeline: true,
+  enable_sentiment: true,
+  enable_research: true,
+};
+
 // Core Models
 export interface AgentConfig {
   name: string;
@@ -52,8 +120,9 @@ export interface CompetitionModel {
   model_id: string;
   api_key?: string;
   initial_capital: number;
-  trading_style?: string;  // Trading style ID (e.g., 'aggressive', 'conservative')
-  metadata?: Record<string, unknown>;  // Additional metadata including style config
+  trading_style?: string;
+  metadata?: Record<string, unknown>;
+  advanced_config?: AgentAdvancedConfig;
   capital?: number;
   total_pnl?: number;
 }
@@ -221,6 +290,7 @@ export interface CreateCompetitionRequest {
     initial_capital: number;
     trading_style?: string;
     metadata?: Record<string, unknown>;
+    advanced_config?: AgentAdvancedConfig;
   }>;
   symbols?: string[];
   initial_capital?: number;

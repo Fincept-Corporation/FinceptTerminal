@@ -304,28 +304,96 @@ def main():
             if len(sys.argv) < 3:
                 raise ValueError("CVR parameters required")
 
-            # Accept either JSON dict or positional args
+            # Rust sends: "cvr" cvr_type cvr_params_json
+            # OR legacy: "cvr" cvr_params_json (single JSON arg)
+            # Detect format: if sys.argv[2] is valid JSON dict, it's legacy single-arg
+            # If it's a plain string (e.g. "milestone"), sys.argv[3] has the JSON params
             try:
-                params = json.loads(sys.argv[2])
-                payment_if_approved = float(params.get('payment_if_approved', params.get('payout_per_share', 0)))
-                approval_probability = float(params.get('approval_probability', params.get('probability', 0.5)))
-                expected_decision_years = float(params.get('expected_decision_years', params.get('expected_timeline_years', 2)))
-                discount_rate = float(params.get('discount_rate', 0.12))
-            except (json.JSONDecodeError, TypeError):
-                if len(sys.argv) < 5:
-                    raise ValueError("Payment if approved, approval probability, and expected decision years required")
-                payment_if_approved = float(sys.argv[2])
-                approval_probability = float(sys.argv[3])
-                expected_decision_years = float(sys.argv[4])
-                discount_rate = 0.12
+                maybe_params = json.loads(sys.argv[2])
+                if isinstance(maybe_params, dict):
+                    # Legacy format: single JSON arg containing all params
+                    params = maybe_params
+                    cvr_type_str = params.get('cvr_type', 'regulatory')
+                else:
+                    raise ValueError("Not a dict")
+            except (json.JSONDecodeError, ValueError, TypeError):
+                # New format: sys.argv[2] is cvr_type string, sys.argv[3] is JSON params
+                cvr_type_str = sys.argv[2]
+                if len(sys.argv) > 3:
+                    params = json.loads(sys.argv[3])
+                else:
+                    params = {}
 
-            cvr = CVRValuation(discount_rate=discount_rate)
+            discount_rate = float(params.get('discount_rate', 0.12))
+            risk_free_rate = float(params.get('risk_free_rate', 0.04))
+            cvr = CVRValuation(discount_rate=discount_rate, risk_free_rate=risk_free_rate)
 
-            analysis = cvr.value_regulatory_cvr(
-                payment_if_approved=payment_if_approved,
-                approval_probability=approval_probability,
-                expected_decision_years=expected_decision_years
-            )
+            if cvr_type_str == "milestone":
+                triggers_data = params.get('triggers', [])
+                triggers = []
+                for t in triggers_data:
+                    triggers.append(CVRTrigger(
+                        trigger_type=CVRType(t.get('trigger_type', 'milestone')),
+                        description=t.get('description', ''),
+                        payment_if_triggered=float(t.get('payment_if_triggered', t.get('payment', 0))),
+                        probability=float(t.get('probability', 0.5)),
+                        expected_timing_years=float(t.get('expected_timing_years', t.get('timing_years', 2)))
+                    ))
+                if not triggers:
+                    # Fallback: build single trigger from flat params
+                    triggers.append(CVRTrigger(
+                        trigger_type=CVRType.MILESTONE,
+                        description=params.get('description', 'Milestone CVR'),
+                        payment_if_triggered=float(params.get('payment_if_triggered', params.get('payout_per_share', 0))),
+                        probability=float(params.get('probability', 0.5)),
+                        expected_timing_years=float(params.get('expected_timing_years', params.get('expected_timeline_years', 2)))
+                    ))
+                analysis = cvr.value_milestone_cvr(triggers)
+
+            elif cvr_type_str == "regulatory":
+                analysis = cvr.value_regulatory_cvr(
+                    payment_if_approved=float(params.get('payment_if_approved', params.get('payout_per_share', 0))),
+                    approval_probability=float(params.get('approval_probability', params.get('probability', 0.5))),
+                    expected_decision_years=float(params.get('expected_decision_years', params.get('expected_timeline_years', 2))),
+                    appeal_possible=bool(params.get('appeal_possible', False)),
+                    appeal_probability=float(params.get('appeal_probability', 0)),
+                    appeal_delay_years=float(params.get('appeal_delay_years', 0))
+                )
+
+            elif cvr_type_str == "earnout":
+                analysis = cvr.value_earnout_cvr(
+                    base_earnout=float(params.get('base_earnout', 0)),
+                    stretch_earnout=float(params.get('stretch_earnout', 0)),
+                    base_probability=float(params.get('base_probability', 0.5)),
+                    stretch_probability=float(params.get('stretch_probability', 0.2)),
+                    years_to_measurement=int(params.get('years_to_measurement', 2))
+                )
+
+            elif cvr_type_str == "litigation":
+                analysis = cvr.value_litigation_cvr(
+                    case_value=float(params.get('case_value', 0)),
+                    win_probability=float(params.get('win_probability', 0.5)),
+                    expected_resolution_years=float(params.get('expected_resolution_years', 2)),
+                    legal_costs=float(params.get('legal_costs', 0)),
+                    settlement_probability=float(params.get('settlement_probability', 0)),
+                    settlement_amount=float(params.get('settlement_amount', 0))
+                )
+
+            elif cvr_type_str == "commodity_price":
+                analysis = cvr.value_commodity_price_cvr(
+                    payment_schedule=params.get('payment_schedule', []),
+                    current_price=float(params.get('current_price', 0)),
+                    price_volatility=float(params.get('price_volatility', 0.3)),
+                    years_to_maturity=float(params.get('years_to_maturity', 2))
+                )
+
+            else:
+                # Default to regulatory for backwards compatibility
+                analysis = cvr.value_regulatory_cvr(
+                    payment_if_approved=float(params.get('payment_if_approved', params.get('payout_per_share', 0))),
+                    approval_probability=float(params.get('approval_probability', params.get('probability', 0.5))),
+                    expected_decision_years=float(params.get('expected_decision_years', params.get('expected_timeline_years', 2)))
+                )
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result))

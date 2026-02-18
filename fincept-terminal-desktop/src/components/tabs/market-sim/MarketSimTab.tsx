@@ -30,8 +30,27 @@ const F = {
 
 const FONT = '"IBM Plex Mono", "Consolas", monospace';
 
+// CSS keyframes for animations (injected once)
+const KEYFRAMES_ID = 'market-sim-keyframes';
+if (typeof document !== 'undefined' && !document.getElementById(KEYFRAMES_ID)) {
+  const style = document.createElement('style');
+  style.id = KEYFRAMES_ID;
+  style.textContent = `
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 // ============================================================================
-// Types (mirroring Rust types)
+// Types (mirroring Rust types exactly)
+// Price = i64 (cents), Qty = i64, Nanos = u64
 // ============================================================================
 interface SimResponse<T> {
   success: boolean;
@@ -40,25 +59,25 @@ interface SimResponse<T> {
 }
 
 interface L1Quote {
-  instrument_id: number;
-  bid_price: number;
-  bid_size: number;
-  ask_price: number;
-  ask_size: number;
-  last_price: number;
-  last_size: number;
-  volume: number;
-  vwap: number;
-  open: number;
-  high: number;
-  low: number;
-  timestamp: number;
+  instrument_id: number;      // u32
+  bid_price: number;          // i64 (cents)
+  bid_size: number;           // i64
+  ask_price: number;          // i64 (cents)
+  ask_size: number;           // i64
+  last_price: number;         // i64 (cents)
+  last_size: number;          // i64
+  volume: number;             // i64
+  vwap: number;               // f64
+  open: number;               // i64 (cents)
+  high: number;               // i64 (cents)
+  low: number;                // i64 (cents)
+  timestamp: number;          // u64 (nanos)
 }
 
 interface PriceLevel {
-  price: number;
-  quantity: number;
-  order_count: number;
+  price: number;              // i64 (cents)
+  quantity: number;           // i64
+  order_count: number;        // u32
 }
 
 interface L2Snapshot {
@@ -68,41 +87,69 @@ interface L2Snapshot {
   timestamp: number;
 }
 
+// Rust Side enum serializes as "Buy" or "Sell" string
+type Side = 'Buy' | 'Sell' | string | Record<string, unknown>;
+
 interface Trade {
-  id: number;
-  instrument_id: number;
-  price: number;
-  quantity: number;
-  aggressor_side: string;
-  buyer_id: number;
-  seller_id: number;
-  timestamp: number;
+  id: number;                 // u64
+  instrument_id: number;      // u32
+  price: number;              // i64 (cents)
+  quantity: number;           // i64
+  aggressor_side: Side;       // enum Side
+  buyer_id: number;           // u32
+  seller_id: number;          // u32
+  buyer_order_id?: number;    // u64
+  seller_order_id?: number;   // u64
+  timestamp: number;          // u64 (nanos)
+  venue_id?: number;          // u32
+  is_auction_trade?: boolean;
 }
+
+// Rust ParticipantType and LatencyTier enums serialize as strings
+type ParticipantType = 'MarketMaker' | 'HFT' | 'StatArb' | 'Momentum' | 'MeanReversion' |
+  'NoiseTrader' | 'InformedTrader' | 'Institutional' | 'RetailTrader' | 'ToxicFlow' |
+  'Spoofer' | 'Arbitrageur' | 'SniperBot' | string | Record<string, unknown>;
+
+type LatencyTier = 'CoLocated' | 'ProximityHosted' | 'DirectConnect' | 'Retail' |
+  string | Record<string, unknown>;
+
+type MarketPhase = 'PreOpen' | 'OpeningAuction' | 'ContinuousTrading' | 'VolatilityAuction' |
+  'ClosingAuction' | 'PostClose' | 'Halted' | string | Record<string, unknown>;
 
 interface ParticipantSummary {
-  id: number;
+  id: number;                 // u32
   name: string;
-  participant_type: string;
-  pnl: number;
-  position: number;
-  trade_count: number;
-  order_count: number;
-  cancel_count: number;
+  participant_type: ParticipantType;
+  pnl: number;                // f64
+  position: number;           // i64
+  trade_count: number;        // u64
+  order_count: number;        // u64
+  cancel_count: number;       // u64
   is_active: boolean;
-  latency_tier: string;
+  latency_tier: LatencyTier;
 }
 
+// Helper to extract enum variant name from Rust serde serialization
+const getEnumVariant = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value !== null) {
+    const keys = Object.keys(value);
+    return keys.length > 0 ? keys[0] : 'Unknown';
+  }
+  return String(value);
+};
+
 interface SimulationSnapshot {
-  current_time: number;
-  market_phase: string;
+  current_time: number;           // u64 (nanos)
+  market_phase: MarketPhase;      // enum MarketPhase
   quotes: L1Quote[];
   recent_trades: Trade[];
   participant_summaries: ParticipantSummary[];
-  total_volume: number;
-  total_trades: number;
+  total_volume: number;           // i64
+  total_trades: number;           // u64
   circuit_breaker_active: boolean;
-  messages_per_second: number;
-  orders_per_second: number;
+  messages_per_second: number;    // u64
+  orders_per_second: number;      // u64
 }
 
 interface InstrumentMetrics {
@@ -116,19 +163,19 @@ interface InstrumentMetrics {
 }
 
 interface ParticipantMetrics {
-  participant_id: number;
-  participant_type: string;
+  participant_id: number;         // u32
+  participant_type: ParticipantType;
   name: string;
-  realized_pnl: number;
-  unrealized_pnl: number;
-  total_pnl: number;
-  max_drawdown: number;
-  total_trades: number;
-  total_orders: number;
-  total_cancels: number;
-  order_to_trade_ratio: number;
-  fill_rate: number;
-  net_fees: number;
+  realized_pnl: number;           // f64
+  unrealized_pnl: number;         // f64
+  total_pnl: number;              // f64
+  max_drawdown: number;           // f64
+  total_trades: number;           // u64
+  total_orders: number;           // u64
+  total_cancels: number;          // u64
+  order_to_trade_ratio: number;   // f64
+  fill_rate: number;              // f64
+  net_fees: number;               // f64
 }
 
 interface AnalyticsSummary {
@@ -264,6 +311,7 @@ export const MarketSimTab: React.FC = () => {
   // State
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<SimulationSnapshot | null>(null);
   const [orderbook, setOrderbook] = useState<L2Snapshot | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
@@ -279,25 +327,39 @@ export const MarketSimTab: React.FC = () => {
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isMountedRef = useRef(true);
 
   // ---- API Calls ----
   const startSimulation = useCallback(async () => {
     try {
       setError(null);
+      setIsLoading(true);
+      console.log('[MarketSim] Starting simulation...');
       const resp = await invoke<SimResponse<SimulationSnapshot>>('market_sim_start', {
         request: { name: 'Live Simulation', seed: Date.now() },
       });
+      console.log('[MarketSim] Start response:', resp);
       if (resp.success && resp.data) {
         setSnapshot(resp.data);
         setIsRunning(true);
         setIsPaused(false);
         setTradeHistory([]);
         setPriceHistory([]);
+        setIsLoading(false);
+        // Auto-start continuous running after successful start
+        setTimeout(() => {
+          if (intervalRef.current === null) {
+            runContinuousInternal();
+          }
+        }, 100);
       } else {
+        setIsLoading(false);
         setError(resp.error || 'Failed to start simulation');
       }
-    } catch (e: any) {
-      setError(e.toString());
+    } catch (e: unknown) {
+      console.error('[MarketSim] Start error:', e);
+      setIsLoading(false);
+      setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
@@ -306,37 +368,51 @@ export const MarketSimTab: React.FC = () => {
       const resp = await invoke<SimResponse<SimulationSnapshot>>('market_sim_step', { ticks: speed });
       if (resp.success && resp.data) {
         setSnapshot(resp.data);
+        setError(null); // Clear any previous errors on successful step
         // Accumulate trades
-        if (resp.data.recent_trades.length > 0) {
+        if (resp.data.recent_trades && resp.data.recent_trades.length > 0) {
           setTradeHistory(prev => [...resp.data!.recent_trades.slice(0, 20), ...prev].slice(0, 200));
         }
         // Track price
-        const q = resp.data.quotes[0];
+        const q = resp.data.quotes?.[0];
         if (q && q.last_price > 0) {
           setPriceHistory(prev => [...prev, { time: resp.data!.current_time, price: q.last_price }].slice(-500));
         }
+      } else if (resp.error) {
+        console.warn('[MarketSim] Step warning:', resp.error);
+        // Don't stop for non-critical errors
       }
       // Fetch orderbook
-      const obResp = await invoke<SimResponse<L2Snapshot>>('market_sim_orderbook', {
-        instrumentId: 1,
-        depth: 15,
-      });
-      if (obResp.success && obResp.data) {
-        setOrderbook(obResp.data);
+      try {
+        const obResp = await invoke<SimResponse<L2Snapshot>>('market_sim_orderbook', {
+          instrumentId: 1,
+          depth: 15,
+        });
+        if (obResp.success && obResp.data) {
+          setOrderbook(obResp.data);
+        }
+      } catch (obError) {
+        console.warn('[MarketSim] Orderbook fetch failed:', obError);
       }
-    } catch (e: any) {
-      setError(e.toString());
+    } catch (e: unknown) {
+      console.error('[MarketSim] Step error:', e);
+      setError(e instanceof Error ? e.message : String(e));
       stopSimulation();
     }
   }, [speed]);
 
-  const runContinuous = useCallback(() => {
+  // Internal function to start continuous running
+  const runContinuousInternal = useCallback(() => {
     if (intervalRef.current) return;
     setIsPaused(false);
     intervalRef.current = setInterval(() => {
       stepSimulation();
     }, 100); // 10 updates per second
   }, [stepSimulation]);
+
+  const runContinuous = useCallback(() => {
+    runContinuousInternal();
+  }, [runContinuousInternal]);
 
   const pauseSimulation = useCallback(() => {
     if (intervalRef.current) {
@@ -353,9 +429,13 @@ export const MarketSimTab: React.FC = () => {
     }
     try {
       await invoke<SimResponse<string>>('market_sim_stop', {});
-    } catch (_) {}
-    setIsRunning(false);
-    setIsPaused(false);
+    } catch (err) {
+      console.warn('[MarketSim] Stop error:', err);
+    }
+    if (isMountedRef.current) {
+      setIsRunning(false);
+      setIsPaused(false);
+    }
   }, []);
 
   const fetchAnalytics = useCallback(async () => {
@@ -377,14 +457,16 @@ export const MarketSimTab: React.FC = () => {
         instrumentIds: [1],
       });
       setNewsHeadline('');
-    } catch (e: any) {
-      setError(e.toString());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }, [newsHeadline, newsSentiment, newsMagnitude]);
 
   // Cleanup
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
@@ -454,7 +536,8 @@ export const MarketSimTab: React.FC = () => {
 
   // ---- Render helpers ----
   const quote = snapshot?.quotes[0];
-  const phase = snapshot ? PHASE_LABELS[snapshot.market_phase] || { label: snapshot.market_phase, color: F.GRAY } : null;
+  const phaseKey = snapshot ? getEnumVariant(snapshot.market_phase) : null;
+  const phase = phaseKey ? PHASE_LABELS[phaseKey] || { label: phaseKey, color: F.GRAY } : null;
 
   const renderTopNav = () => (
     <div style={{
@@ -500,12 +583,33 @@ export const MarketSimTab: React.FC = () => {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {!isRunning ? (
-          <button onClick={startSimulation} style={{
-            padding: '6px 14px', backgroundColor: F.GREEN, color: F.DARK_BG,
-            border: 'none', borderRadius: '2px', fontSize: '9px', fontWeight: 700,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-          }}>
-            <Play size={10} /> START
+          <button
+            onClick={startSimulation}
+            disabled={isLoading}
+            style={{
+              padding: '6px 14px',
+              backgroundColor: isLoading ? F.MUTED : F.GREEN,
+              color: F.DARK_BG,
+              border: 'none',
+              borderRadius: '2px',
+              fontSize: '9px',
+              fontWeight: 700,
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              opacity: isLoading ? 0.7 : 1,
+            }}
+          >
+            {isLoading ? (
+              <>
+                <RefreshCw size={10} style={{ animation: 'spin 1s linear infinite' }} /> STARTING...
+              </>
+            ) : (
+              <>
+                <Play size={10} /> START
+              </>
+            )}
           </button>
         ) : (
           <>
@@ -658,7 +762,8 @@ export const MarketSimTab: React.FC = () => {
       {snapshot?.participant_summaries
         .sort((a, b) => b.pnl - a.pnl)
         .map((p, idx) => {
-          const color = PARTICIPANT_COLORS[p.participant_type] || F.GRAY;
+          const participantType = getEnumVariant(p.participant_type);
+          const color = PARTICIPANT_COLORS[participantType] || F.GRAY;
           const pnlColor = p.pnl >= 0 ? F.GREEN : F.RED;
           return (
             <div key={p.id} style={{
@@ -675,7 +780,7 @@ export const MarketSimTab: React.FC = () => {
                   padding: '1px 5px', backgroundColor: `${color}20`, color,
                   fontSize: '7px', fontWeight: 700, borderRadius: '2px',
                 }}>
-                  {p.participant_type.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}
+                  {participantType.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontFamily: FONT }}>
@@ -903,7 +1008,9 @@ export const MarketSimTab: React.FC = () => {
         </div>
       ) : (
         tradeHistory.map((t, i) => {
-          const sideColor = t.aggressor_side === 'Buy' ? F.GREEN : F.RED;
+          const sideStr = getEnumVariant(t.aggressor_side);
+          const isBuy = sideStr === 'Buy';
+          const sideColor = isBuy ? F.GREEN : F.RED;
           return (
             <div key={`${t.id}-${i}`} style={{
               display: 'flex', padding: '3px 12px', fontSize: '9px', fontFamily: FONT,
@@ -914,7 +1021,7 @@ export const MarketSimTab: React.FC = () => {
               <span style={{ flex: 1, color: sideColor, fontWeight: 700 }}>{formatPrice(t.price)}</span>
               <span style={{ width: '80px', textAlign: 'right', color: F.WHITE }}>{formatQty(t.quantity)}</span>
               <span style={{ width: '50px', textAlign: 'right', color: sideColor, fontWeight: 700 }}>
-                {t.aggressor_side === 'Buy' ? 'BUY' : 'SELL'}
+                {isBuy ? 'BUY' : 'SELL'}
               </span>
               <span style={{ width: '60px', textAlign: 'right', color: F.MUTED }}>P{t.buyer_id}</span>
               <span style={{ width: '60px', textAlign: 'right', color: F.MUTED }}>P{t.seller_id}</span>
@@ -984,7 +1091,8 @@ export const MarketSimTab: React.FC = () => {
           {analytics.participants
             .sort((a, b) => b.total_pnl - a.total_pnl)
             .map((p, idx) => {
-              const color = PARTICIPANT_COLORS[p.participant_type] || F.GRAY;
+              const participantType = getEnumVariant(p.participant_type);
+              const color = PARTICIPANT_COLORS[participantType] || F.GRAY;
               const pnlColor = p.total_pnl >= 0 ? F.GREEN : F.RED;
               return (
                 <div key={p.participant_id} style={{
@@ -1044,7 +1152,9 @@ export const MarketSimTab: React.FC = () => {
               .sort((a, b) => b.pnl - a.pnl)
               .slice(0, 5)
               .map((p, idx) => {
-                const color = PARTICIPANT_COLORS[p.participant_type] || F.GRAY;
+                const participantType = getEnumVariant(p.participant_type);
+                const latencyTier = getEnumVariant(p.latency_tier);
+                const color = PARTICIPANT_COLORS[participantType] || F.GRAY;
                 const pnlColor = p.pnl >= 0 ? F.GREEN : F.RED;
                 return (
                   <div key={p.id} style={{
@@ -1067,7 +1177,7 @@ export const MarketSimTab: React.FC = () => {
                         padding: '1px 5px', backgroundColor: `${color}20`, color,
                         fontSize: '7px', fontWeight: 700, borderRadius: '2px',
                       }}>
-                        {p.latency_tier.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}
+                        {latencyTier.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontFamily: FONT }}>
@@ -1086,7 +1196,8 @@ export const MarketSimTab: React.FC = () => {
               .sort((a, b) => a.pnl - b.pnl)
               .slice(0, 3)
               .map(p => {
-                const color = PARTICIPANT_COLORS[p.participant_type] || F.GRAY;
+                const participantType = getEnumVariant(p.participant_type);
+                const color = PARTICIPANT_COLORS[participantType] || F.GRAY;
                 return (
                   <div key={`w-${p.id}`} style={{
                     padding: '8px 12px',

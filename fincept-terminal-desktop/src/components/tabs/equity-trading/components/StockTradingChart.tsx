@@ -12,6 +12,7 @@ import type { StockExchange, TimeFrame, OHLCV } from '@/brokers/stocks/types';
 import { useStockBrokerContext } from '@/contexts/StockBrokerContext';
 import { ProChartWithToolkit } from '../../trading/charts/ProChartWithToolkit';
 import { withTimeout } from '@/services/core/apiUtils';
+import { useTimezone } from '@/contexts/TimezoneContext';
 
 interface LiveQuote {
   lastPrice: number;
@@ -70,7 +71,7 @@ const timeframeToDays = (tf: TimeFrame): number => {
 
 // Map exchange to timezone
 const EXCHANGE_TIMEZONES: Record<string, string> = {
-  // Indian exchanges - IST (UTC+5:30)
+  // Indian exchanges - IST
   NSE: 'Asia/Kolkata',
   BSE: 'Asia/Kolkata',
   MCX: 'Asia/Kolkata',
@@ -85,8 +86,6 @@ const EXCHANGE_TIMEZONES: Record<string, string> = {
   LSE: 'Europe/London',
   XETRA: 'Europe/Berlin',
   EURONEXT: 'Europe/Paris',
-  // Default
-  DEFAULT: 'UTC',
 };
 
 export function StockTradingChart({
@@ -98,13 +97,15 @@ export function StockTradingChart({
   liveQuote,
   onIntervalChange
 }: StockTradingChartProps) {
-  // Auto-detect timezone based on exchange if not provided
-  const timezone = propTimezone || EXCHANGE_TIMEZONES[exchange] || EXCHANGE_TIMEZONES.DEFAULT;
+  // Auto-detect timezone based on exchange if not provided, fallback to user's timezone
+  const { timezone: userTimezone } = useTimezone();
+  const timezone = propTimezone || EXCHANGE_TIMEZONES[exchange] || userTimezone.zone || undefined;
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedInterval, setSelectedInterval] = useState<TimeFrame>(initialInterval);
   const mountedRef = useRef(true);
   const fetchIdRef = useRef(0);
+  const chartDataLengthRef = useRef(0);
   const [chartData, setChartData] = useState<Array<{
     time: number;
     open: number;
@@ -131,6 +132,7 @@ export function StockTradingChart({
   useEffect(() => {
     console.log(`[StockTradingChart] Symbol/exchange changed to ${exchange}:${symbol}, clearing old chart data`);
     setChartData([]);
+    chartDataLengthRef.current = 0;
     setIsLoading(true);
     setError(null);
   }, [symbol, exchange]);
@@ -338,6 +340,7 @@ export function StockTradingChart({
       });
 
       setChartData(uniqueData);
+      chartDataLengthRef.current = uniqueData.length;
       setIsLoading(false);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -356,7 +359,7 @@ export function StockTradingChart({
       });
 
       // If we have existing data, keep showing it with a warning
-      if (chartData.length > 0) {
+      if (chartDataLengthRef.current > 0) {
         console.warn('[StockTradingChart] Keeping existing chart data visible despite error');
         setError('Failed to update chart. Showing previous data.');
       } else {

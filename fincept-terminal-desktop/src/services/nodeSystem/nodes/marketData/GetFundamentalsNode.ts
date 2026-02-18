@@ -153,7 +153,7 @@ export class GetFundamentalsNode implements INodeType {
     
 
     try {
-      const fundamentals = await MarketDataBridge.getFundamentals(symbol, provider as any);
+      const fundamentals = await MarketDataBridge.getFundamentals(symbol);
 
       const result: Record<string, any> = {
         dataType,

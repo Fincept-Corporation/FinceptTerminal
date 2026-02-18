@@ -14,6 +14,7 @@ import { createDashboardTabTour } from '@/components/tabs/tours/dashboardTabTour
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { sqliteService, saveSetting, getSetting } from '@/services/core/sqliteService';
+import { useTimezone } from '@/contexts/TimezoneContext';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { withTimeout } from '@/services/core/apiUtils';
 import { showConfirm, showSuccess, showError } from '@/utils/notifications';
@@ -26,23 +27,40 @@ import {
   CommoditiesWidget,
   GlobalIndicesWidget,
   ForexWidget,
-  MaritimeWidget,
   DataSourceWidget,
   PolymarketWidget,
   EconomicIndicatorsWidget,
+  EconomicCalendarWidget,
   PortfolioSummaryWidget,
-  AlertsWidget,
-  CalendarWidget,
   QuickTradeWidget,
   GeopoliticsWidget,
   PerformanceWidget,
+  NotesWidget,
+  StockQuoteWidget,
+  TopMoversWidget,
+  ScreenerWidget,
+  RiskMetricsWidget,
+  MarketSentimentWidget,
+  AlgoStatusWidget,
+  AlphaArenaWidget,
+  BacktestSummaryWidget,
+  WatchlistAlertsWidget,
+  LiveSignalsWidget,
+  DBnomicsWidget,
+  AkShareWidget,
+  MaritimeWidget,
   WidgetType,
   WidgetConfig
 } from './widgets';
 import { AddWidgetModal } from './AddWidgetModal';
+import { WidgetSettingsModal } from './WidgetSettingsModal';
+import { TemplatePicker } from './TemplatePicker';
 import { MarketTickerBar } from './MarketTickerBar';
 import { MarketPulsePanel } from './MarketPulsePanel';
 import { HeatMapWidget } from './widgets/HeatMapWidget';
+import { watchlistService } from '../../../services/core/watchlistService';
+import { getAllDataSources } from '../../../services/data-sources/dataSourceRegistry';
+import { DASHBOARD_TEMPLATES, TEMPLATE_PICKER_SEEN_KEY, SELECTED_TEMPLATE_KEY, DashboardTemplate } from './dashboardTemplates';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -91,6 +109,8 @@ interface State {
   widgets: WidgetInstance[];
   nextId: number;
   showAddModal: boolean;
+  showSettingsModal: boolean;
+  settingsWidgetId: string | null;
   currentTime: Date;
   containerWidth: number;
   error: string | null;
@@ -104,9 +124,11 @@ type Action =
   | { type: 'SET_WIDGETS'; widgets: WidgetInstance[] }
   | { type: 'ADD_WIDGET'; widget: WidgetInstance }
   | { type: 'REMOVE_WIDGET'; id: string }
+  | { type: 'UPDATE_WIDGET_CONFIG'; id: string; config: any }
   | { type: 'UPDATE_LAYOUTS'; layouts: Layout[] }
   | { type: 'SET_NEXT_ID'; nextId: number }
   | { type: 'TOGGLE_MODAL'; show: boolean }
+  | { type: 'TOGGLE_SETTINGS_MODAL'; show: boolean; widgetId?: string }
   | { type: 'UPDATE_TIME'; time: Date }
   | { type: 'SET_WIDTH'; width: number }
   | { type: 'START_SAVING' }
@@ -118,7 +140,7 @@ type Action =
   | { type: 'TOGGLE_COMPACT_MODE' };
 
 const DEFAULT_LAYOUT: WidgetInstance[] = [
-  // Row 1 - Top: Global Indices + Portfolio + Performance
+  // Row 1 - Top: Global Indices + Heatmap + Performance
   {
     id: 'indices-1',
     type: 'indices',
@@ -162,7 +184,7 @@ const DEFAULT_LAYOUT: WidgetInstance[] = [
     config: {},
     layout: { i: 'crypto-1', x: 8, y: 5, w: 4, h: 4, minW: 2, minH: 3 }
   },
-  // Row 3 - News + Calendar + Geopolitics
+  // Row 3 - News + Economic + Geopolitics
   {
     id: 'news-1',
     type: 'news',
@@ -171,11 +193,11 @@ const DEFAULT_LAYOUT: WidgetInstance[] = [
     layout: { i: 'news-1', x: 0, y: 9, w: 4, h: 5, minW: 2, minH: 3 }
   },
   {
-    id: 'calendar-1',
-    type: 'calendar',
-    title: 'widgets.economicCalendar',
+    id: 'economic-1',
+    type: 'economic',
+    title: 'widgets.economicIndicators',
     config: {},
-    layout: { i: 'calendar-1', x: 4, y: 9, w: 4, h: 5, minW: 2, minH: 3 }
+    layout: { i: 'economic-1', x: 4, y: 9, w: 4, h: 5, minW: 2, minH: 3 }
   },
   {
     id: 'geopolitics-1',
@@ -191,6 +213,8 @@ const initialState: State = {
   widgets: [],
   nextId: 1,
   showAddModal: false,
+  showSettingsModal: false,
+  settingsWidgetId: null,
   currentTime: new Date(),
   containerWidth: 1200,
   error: null,
@@ -210,6 +234,13 @@ function reducer(state: State, action: Action): State {
       return { ...state, widgets: [...state.widgets, action.widget], nextId: state.nextId + 1 };
     case 'REMOVE_WIDGET':
       return { ...state, widgets: state.widgets.filter(w => w.id !== action.id) };
+    case 'UPDATE_WIDGET_CONFIG':
+      return {
+        ...state,
+        widgets: state.widgets.map(widget =>
+          widget.id === action.id ? { ...widget, config: action.config } : widget
+        ),
+      };
     case 'UPDATE_LAYOUTS':
       return {
         ...state,
@@ -222,6 +253,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, nextId: action.nextId };
     case 'TOGGLE_MODAL':
       return { ...state, showAddModal: action.show };
+    case 'TOGGLE_SETTINGS_MODAL':
+      return { ...state, showSettingsModal: action.show, settingsWidgetId: action.widgetId || null };
     case 'UPDATE_TIME':
       return { ...state, currentTime: action.time };
     case 'SET_WIDTH':
@@ -256,6 +289,7 @@ interface DashboardTabProps {
 const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   const { colors, fontSize } = useTerminalTheme();
   const { t } = useTranslation('dashboard');
+  const { timezone, formatTime } = useTimezone();
 
   const [state, dispatch] = useReducer(reducer, initialState);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -263,6 +297,11 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   const [isConnected, setIsConnected] = useState(true);
   const [sessionUptime, setSessionUptime] = useState(0);
   const sessionStartRef = useRef(Date.now());
+  const [watchlists, setWatchlists] = useState<any[]>([]);
+  const [dataSources, setDataSources] = useState<any[]>([]);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [isFirstLaunch, setIsFirstLaunch] = useState(false);
+  const [activeTemplateId, setActiveTemplateId] = useState<string | undefined>(undefined);
 
   // Workspace tab state
   const getWorkspaceState = useCallback(() => ({
@@ -294,8 +333,19 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
           } catch {
             dispatch({ type: 'INIT_COMPLETE', widgets: DEFAULT_LAYOUT, nextId: 1 });
           }
+          // Restore last selected template id for the picker highlight
+          const savedTemplate = await getSetting(SELECTED_TEMPLATE_KEY).catch(() => null);
+          if (savedTemplate && mountedRef.current) setActiveTemplateId(savedTemplate);
         } else {
+          // First launch: no saved layout — show template picker
           dispatch({ type: 'INIT_COMPLETE', widgets: DEFAULT_LAYOUT, nextId: 1 });
+          if (mountedRef.current) {
+            const pickerSeen = await getSetting(TEMPLATE_PICKER_SEEN_KEY).catch(() => null);
+            if (!pickerSeen) {
+              setIsFirstLaunch(true);
+              setShowTemplatePicker(true);
+            }
+          }
         }
       } catch (error) {
         if (!mountedRef.current) return;
@@ -378,6 +428,22 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
     }
   }, [t]);
 
+  // Apply a dashboard template
+  const handleTemplateSelect = useCallback(async (template: DashboardTemplate) => {
+    dispatch({ type: 'RESET_LAYOUT', widgets: template.widgets as WidgetInstance[] });
+    setActiveTemplateId(template.id);
+    setShowTemplatePicker(false);
+    setIsFirstLaunch(false);
+    try {
+      await saveSetting(TEMPLATE_PICKER_SEEN_KEY, 'true', 'dashboard');
+      await saveSetting(SELECTED_TEMPLATE_KEY, template.id, 'dashboard');
+      const layoutData = JSON.stringify({ widgets: template.widgets, nextId: 1 });
+      await withTimeout(saveSetting(STORAGE_KEY, layoutData, 'dashboard'), SAVE_TIMEOUT_MS, 'Template save timeout');
+    } catch (error) {
+      console.error('[DashboardTab] Template save error:', error);
+    }
+  }, []);
+
   // Add widget
   const handleAddWidget = useCallback((widgetType: WidgetType, config?: any) => {
     const newWidget: WidgetInstance = {
@@ -402,8 +468,37 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
     dispatch({ type: 'REMOVE_WIDGET', id });
   }, []);
 
+  const handleConfigureWidget = useCallback((id: string) => {
+    dispatch({ type: 'TOGGLE_SETTINGS_MODAL', show: true, widgetId: id });
+  }, []);
+
+  const handleSaveWidgetConfig = useCallback((widgetId: string, newConfig: any) => {
+    dispatch({ type: 'UPDATE_WIDGET_CONFIG', id: widgetId, config: newConfig });
+  }, []);
+
   const handleLayoutChange = useCallback((layouts: Layout[]) => {
     dispatch({ type: 'UPDATE_LAYOUTS', layouts });
+  }, []);
+
+  // Load watchlists and data sources for settings modal
+  useEffect(() => {
+    const loadResources = async () => {
+      try {
+        await watchlistService.initialize();
+        const wls = await watchlistService.getWatchlistsWithCounts();
+        setWatchlists(wls);
+      } catch (error) {
+        console.error('[DashboardTab] Failed to load watchlists:', error);
+      }
+
+      try {
+        const sources = await getAllDataSources();
+        setDataSources(sources.filter(s => s.enabled));
+      } catch (error) {
+        console.error('[DashboardTab] Failed to load data sources:', error);
+      }
+    };
+    loadResources();
   }, []);
 
   // Format uptime
@@ -416,17 +511,24 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
 
   // Render widget based on type
   const renderWidget = (widget: WidgetInstance) => {
+    // Configurable widgets get settings button
+    const isConfigurable = [
+      'news', 'market', 'watchlist', 'forum', 'datasource', 'calendar', 'notes',
+      'stockquote', 'screener', 'watchlistalerts', 'dbnomics', 'performance'
+    ].includes(widget.type);
+    const onConfigure = isConfigurable ? () => handleConfigureWidget(widget.id) : undefined;
+
     switch (widget.type) {
       case 'heatmap':
         return <HeatMapWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} />;
       case 'news':
-        return <NewsWidget id={widget.id} category={widget.config?.newsCategory} limit={widget.config?.newsLimit} onRemove={() => handleRemoveWidget(widget.id)} />;
+        return <NewsWidget id={widget.id} category={widget.config?.newsCategory} limit={widget.config?.newsLimit} onRemove={() => handleRemoveWidget(widget.id)} onConfigure={onConfigure} />;
       case 'market':
-        return <MarketDataWidget id={widget.id} category={widget.config?.marketCategory} tickers={widget.config?.marketTickers} onRemove={() => handleRemoveWidget(widget.id)} />;
+        return <MarketDataWidget id={widget.id} category={widget.config?.marketCategory} tickers={widget.config?.marketTickers} onRemove={() => handleRemoveWidget(widget.id)} onConfigure={onConfigure} />;
       case 'watchlist':
-        return <WatchlistWidget id={widget.id} watchlistId={widget.config?.watchlistId} watchlistName={widget.config?.watchlistName} onRemove={() => handleRemoveWidget(widget.id)} />;
+        return <WatchlistWidget id={widget.id} watchlistId={widget.config?.watchlistId} watchlistName={widget.config?.watchlistName} onRemove={() => handleRemoveWidget(widget.id)} onConfigure={onConfigure} />;
       case 'forum':
-        return <ForumWidget id={widget.id} categoryId={widget.config?.forumCategoryId} categoryName={widget.config?.forumCategoryName} limit={widget.config?.forumLimit} onRemove={() => handleRemoveWidget(widget.id)} onNavigateToTab={onNavigateToTab} />;
+        return <ForumWidget id={widget.id} categoryId={widget.config?.forumCategoryId} categoryName={widget.config?.forumCategoryName} limit={widget.config?.forumLimit} onRemove={() => handleRemoveWidget(widget.id)} onNavigateToTab={onNavigateToTab} onConfigure={onConfigure} />;
       case 'crypto':
         return <CryptoWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} />;
       case 'commodities':
@@ -435,32 +537,56 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         return <GlobalIndicesWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} />;
       case 'forex':
         return <ForexWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} />;
-      case 'maritime':
-        return <MaritimeWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('maritime')} />;
       case 'datasource':
-        return <DataSourceWidget id={widget.id} alias={widget.config?.dataSourceAlias || ''} displayName={widget.config?.dataSourceDisplayName} onRemove={() => handleRemoveWidget(widget.id)} />;
+        return <DataSourceWidget id={widget.id} alias={widget.config?.dataSourceAlias || ''} displayName={widget.config?.dataSourceDisplayName} onRemove={() => handleRemoveWidget(widget.id)} onConfigure={onConfigure} />;
       case 'polymarket':
         return <PolymarketWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('polymarket')} />;
       case 'economic':
         return <EconomicIndicatorsWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('economics')} />;
+      case 'calendar':
+        return <EconomicCalendarWidget id={widget.id} country={widget.config?.country} limit={widget.config?.limit} onRemove={() => handleRemoveWidget(widget.id)} onConfigure={isConfigurable ? () => handleConfigureWidget(widget.id) : undefined} />;
       case 'portfolio':
         return <PortfolioSummaryWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('portfolio')} />;
-      case 'alerts':
-        return <AlertsWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('equity-trading')} />;
-      case 'calendar':
-        return <CalendarWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} />;
       case 'quicktrade':
         return <QuickTradeWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('trading')} />;
       case 'geopolitics':
         return <GeopoliticsWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('geopolitics')} />;
       case 'performance':
-        return <PerformanceWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('portfolio')} />;
+        return <PerformanceWidget id={widget.id} portfolioId={widget.config?.portfolioId} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('portfolio')} onConfigure={() => handleConfigureWidget(widget.id)} />;
+      case 'notes':
+        return <NotesWidget id={widget.id} category={widget.config?.notesCategory} limit={widget.config?.notesLimit} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('notes')} />;
+      case 'stockquote':
+        return <StockQuoteWidget id={widget.id} symbol={widget.config?.stockSymbol} onRemove={() => handleRemoveWidget(widget.id)} onConfigure={() => handleConfigureWidget(widget.id)} />;
+      case 'topmovers':
+        return <TopMoversWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('markets')} />;
+      case 'screener':
+        return <ScreenerWidget id={widget.id} preset={widget.config?.screenerPreset} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('screener')} />;
+      case 'riskmetrics':
+        return <RiskMetricsWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('portfolio')} />;
+      case 'sentiment':
+        return <MarketSentimentWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('news')} />;
+      case 'algostatus':
+        return <AlgoStatusWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('algo-trading')} />;
+      case 'alphaarena':
+        return <AlphaArenaWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('alpha-arena')} />;
+      case 'backtestsummary':
+        return <BacktestSummaryWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('backtesting')} />;
+      case 'watchlistalerts':
+        return <WatchlistAlertsWidget id={widget.id} changeThreshold={widget.config?.alertThreshold} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('watchlist')} />;
+      case 'livesignals':
+        return <LiveSignalsWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('ai-quant-lab')} />;
+      case 'dbnomics':
+        return <DBnomicsWidget id={widget.id} seriesId={widget.config?.dbnomicsSeriesId} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('dbnomics')} onConfigure={() => handleConfigureWidget(widget.id)} />;
+      case 'akshare':
+        return <AkShareWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('akshare-data')} />;
+      case 'maritime':
+        return <MaritimeWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('maritime')} />;
       default:
         return <div style={{ padding: '12px', color: FC.MUTED, fontSize: '10px' }}>UNKNOWN WIDGET</div>;
     }
   };
 
-  const { status, widgets, showAddModal, currentTime, containerWidth, error, rightPanelCollapsed, compactMode } = state;
+  const { status, widgets, showAddModal, showSettingsModal, settingsWidgetId, currentTime, containerWidth, error, rightPanelCollapsed, compactMode } = state;
 
   // Loading state
   if (status === 'initializing') {
@@ -646,7 +772,10 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Clock size={10} color={FC.YELLOW} />
               <span style={{ color: FC.YELLOW, fontSize: '10px', fontWeight: 700, fontFamily: '"IBM Plex Mono", monospace' }}>
-                {currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC
+                {formatTime(currentTime, {
+                  year: 'numeric', month: '2-digit', day: '2-digit',
+                  hour: '2-digit', minute: '2-digit', second: '2-digit'
+                })} {timezone.shortLabel}
               </span>
             </div>
 
@@ -688,6 +817,14 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
 
             <div style={{ width: '1px', height: '20px', backgroundColor: FC.BORDER }} />
 
+            <button
+              className="ft-toolbar-btn"
+              onClick={() => { setIsFirstLaunch(false); setShowTemplatePicker(true); }}
+              title="Change Dashboard Template"
+            >
+              <Layers size={11} />
+              <span>TEMPLATE</span>
+            </button>
             <button
               id="dashboard-add-widget"
               className="ft-toolbar-btn ft-toolbar-btn-primary"
@@ -853,12 +990,44 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         </div>
       </div>
 
+      {/* Template Picker Modal */}
+      <TemplatePicker
+        isOpen={showTemplatePicker}
+        isFirstLaunch={isFirstLaunch}
+        currentTemplateId={activeTemplateId}
+        onSelect={handleTemplateSelect}
+        onClose={() => {
+          setShowTemplatePicker(false);
+          setIsFirstLaunch(false);
+          // Mark as seen even if skipped
+          saveSetting(TEMPLATE_PICKER_SEEN_KEY, 'true', 'dashboard').catch(() => {});
+        }}
+      />
+
       {/* Add Widget Modal */}
       <AddWidgetModal
         isOpen={showAddModal}
         onClose={() => dispatch({ type: 'TOGGLE_MODAL', show: false })}
         onAdd={handleAddWidget}
       />
+
+      {/* Widget Settings Modal */}
+      {showSettingsModal && settingsWidgetId && (() => {
+        const widget = widgets.find(w => w.id === settingsWidgetId);
+        if (!widget) return null;
+        return (
+          <WidgetSettingsModal
+            isOpen={showSettingsModal}
+            widgetId={widget.id}
+            widgetType={widget.type}
+            currentConfig={widget.config}
+            onClose={() => dispatch({ type: 'TOGGLE_SETTINGS_MODAL', show: false })}
+            onSave={handleSaveWidgetConfig}
+            availableWatchlists={watchlists}
+            availableDataSources={dataSources}
+          />
+        );
+      })()}
     </div>
   );
 };

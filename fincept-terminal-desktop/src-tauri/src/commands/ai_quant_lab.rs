@@ -367,23 +367,38 @@ pub async fn qlib_rl_evaluate_agent(
 // ONLINE LEARNING COMMANDS
 // ============================================================================
 
-/// Initialize online learning model
+/// Initialize online learning system
 #[tauri::command]
 pub async fn qlib_online_initialize(
     app: tauri::AppHandle,
-    config: String,
+    provider_uri: Option<String>,
+    region: Option<String>,
 ) -> Result<String, String> {
-    let args = vec!["initialize".to_string(), config];
+    let uri = provider_uri.unwrap_or_else(|| "~/.qlib/qlib_data/cn_data".to_string());
+    let reg = region.unwrap_or_else(|| "cn".to_string());
+    let args = vec!["initialize".to_string(), uri, reg];
+    python::execute_sync(&app, "ai_quant_lab/qlib_online_learning.py", args)
+}
+
+/// Create online learning model
+#[tauri::command]
+pub async fn qlib_online_create_model(
+    app: tauri::AppHandle,
+    params: String,
+) -> Result<String, String> {
+    let args = vec!["create_model".to_string(), params];
     python::execute_sync(&app, "ai_quant_lab/qlib_online_learning.py", args)
 }
 
 /// Incremental train
 #[tauri::command]
-pub async fn qlib_online_incremental_train(
+pub async fn qlib_online_train(
     app: tauri::AppHandle,
-    params: String,
+    model_id: String,
+    features: String,
+    target: String,
 ) -> Result<String, String> {
-    let args = vec!["incremental_train".to_string(), params];
+    let args = vec!["train".to_string(), model_id, features, target];
     python::execute_sync(&app, "ai_quant_lab/qlib_online_learning.py", args)
 }
 
@@ -398,14 +413,89 @@ pub async fn qlib_online_predict(
     python::execute_sync(&app, "ai_quant_lab/qlib_online_learning.py", args)
 }
 
-/// Detect concept drift
+/// Get model performance
 #[tauri::command]
-pub async fn qlib_online_detect_drift(
+pub async fn qlib_online_performance(
     app: tauri::AppHandle,
     model_id: String,
 ) -> Result<String, String> {
-    let args = vec!["detect_drift".to_string(), model_id];
+    let args = vec!["performance".to_string(), model_id];
     python::execute_sync(&app, "ai_quant_lab/qlib_online_learning.py", args)
+}
+
+/// Setup rolling update schedule
+#[tauri::command]
+pub async fn qlib_online_setup_rolling(
+    app: tauri::AppHandle,
+    params: String,
+) -> Result<String, String> {
+    let args = vec!["setup_rolling".to_string(), params];
+    python::execute_sync(&app, "ai_quant_lab/qlib_online_learning.py", args)
+}
+
+/// Handle concept drift
+#[tauri::command]
+pub async fn qlib_online_handle_drift(
+    app: tauri::AppHandle,
+    params: String,
+) -> Result<String, String> {
+    let args = vec!["handle_drift".to_string(), params];
+    python::execute_sync(&app, "ai_quant_lab/qlib_online_learning.py", args)
+}
+
+/// List all online models
+#[tauri::command]
+pub async fn qlib_online_list_models(app: tauri::AppHandle) -> Result<String, String> {
+    let args = vec!["list_models".to_string()];
+    python::execute_sync(&app, "ai_quant_lab/qlib_online_learning.py", args)
+}
+
+// ============================================================================
+// META LEARNING COMMANDS
+// ============================================================================
+
+/// List available models for meta learning
+#[tauri::command]
+pub async fn qlib_meta_list_models(app: tauri::AppHandle) -> Result<String, String> {
+    let args = vec!["list_models".to_string()];
+    python::execute_sync(&app, "ai_quant_lab/qlib_meta_learning.py", args)
+}
+
+/// Run model selection
+#[tauri::command]
+pub async fn qlib_meta_run_selection(
+    app: tauri::AppHandle,
+    params: String,
+) -> Result<String, String> {
+    let args = vec!["run_selection".to_string(), params];
+    python::execute_sync(&app, "ai_quant_lab/qlib_meta_learning.py", args)
+}
+
+/// Create ensemble model
+#[tauri::command]
+pub async fn qlib_meta_create_ensemble(
+    app: tauri::AppHandle,
+    params: String,
+) -> Result<String, String> {
+    let args = vec!["create_ensemble".to_string(), params];
+    python::execute_sync(&app, "ai_quant_lab/qlib_meta_learning.py", args)
+}
+
+/// Hyperparameter tuning
+#[tauri::command]
+pub async fn qlib_meta_tune_hyperparameters(
+    app: tauri::AppHandle,
+    params: String,
+) -> Result<String, String> {
+    let args = vec!["tune_hyperparameters".to_string(), params];
+    python::execute_sync(&app, "ai_quant_lab/qlib_meta_learning.py", args)
+}
+
+/// Get all results
+#[tauri::command]
+pub async fn qlib_meta_get_results(app: tauri::AppHandle) -> Result<String, String> {
+    let args = vec!["get_results".to_string()];
+    python::execute_sync(&app, "ai_quant_lab/qlib_meta_learning.py", args)
 }
 
 // ============================================================================
@@ -483,40 +573,6 @@ pub async fn qlib_hft_latency_stats(app: tauri::AppHandle) -> Result<String, Str
 }
 
 // ============================================================================
-// META LEARNING COMMANDS
-// ============================================================================
-
-/// Model selection
-#[tauri::command]
-pub async fn qlib_meta_model_selection(
-    app: tauri::AppHandle,
-    models: String,
-) -> Result<String, String> {
-    let args = vec!["select".to_string(), models];
-    python::execute_sync(&app, "ai_quant_lab/qlib_meta_learning.py", args)
-}
-
-/// Create ensemble
-#[tauri::command]
-pub async fn qlib_meta_create_ensemble(
-    app: tauri::AppHandle,
-    models: String,
-) -> Result<String, String> {
-    let args = vec!["ensemble".to_string(), models];
-    python::execute_sync(&app, "ai_quant_lab/qlib_meta_learning.py", args)
-}
-
-/// Auto-tune hyperparameters
-#[tauri::command]
-pub async fn qlib_meta_auto_tune(
-    app: tauri::AppHandle,
-    param_grid: String,
-) -> Result<String, String> {
-    let args = vec!["tune".to_string(), param_grid];
-    python::execute_sync(&app, "ai_quant_lab/qlib_meta_learning.py", args)
-}
-
-// ============================================================================
 // ROLLING RETRAINING COMMANDS
 // ============================================================================
 
@@ -554,7 +610,7 @@ pub async fn qlib_rolling_list_schedules(app: tauri::AppHandle) -> Result<String
 /// List available advanced models
 #[tauri::command]
 pub async fn qlib_advanced_list_models(app: tauri::AppHandle) -> Result<String, String> {
-    let args = vec!["list".to_string()];
+    let args = vec!["list_available".to_string()];
     python::execute_sync(&app, "ai_quant_lab/qlib_advanced_models.py", args)
 }
 
@@ -562,8 +618,46 @@ pub async fn qlib_advanced_list_models(app: tauri::AppHandle) -> Result<String, 
 #[tauri::command]
 pub async fn qlib_advanced_create_model(
     app: tauri::AppHandle,
-    model_type: String,
+    params: String,
 ) -> Result<String, String> {
-    let args = vec!["create".to_string(), model_type];
+    let args = vec!["create".to_string(), params];
+    python::execute_sync(&app, "ai_quant_lab/qlib_advanced_models.py", args)
+}
+
+/// Train advanced model
+#[tauri::command]
+pub async fn qlib_advanced_train_model(
+    app: tauri::AppHandle,
+    model_id: String,
+    params: String,
+) -> Result<String, String> {
+    let args = vec!["train".to_string(), model_id, params];
+    python::execute_sync(&app, "ai_quant_lab/qlib_advanced_models.py", args)
+}
+
+/// Make predictions with advanced model
+#[tauri::command]
+pub async fn qlib_advanced_predict(
+    app: tauri::AppHandle,
+    model_id: String,
+) -> Result<String, String> {
+    let args = vec!["predict".to_string(), model_id];
+    python::execute_sync(&app, "ai_quant_lab/qlib_advanced_models.py", args)
+}
+
+/// Get model info
+#[tauri::command]
+pub async fn qlib_advanced_get_info(
+    app: tauri::AppHandle,
+    model_id: String,
+) -> Result<String, String> {
+    let args = vec!["info".to_string(), model_id];
+    python::execute_sync(&app, "ai_quant_lab/qlib_advanced_models.py", args)
+}
+
+/// List all created models
+#[tauri::command]
+pub async fn qlib_advanced_list_created(app: tauri::AppHandle) -> Result<String, String> {
+    let args = vec!["list_models".to_string()];
     python::execute_sync(&app, "ai_quant_lab/qlib_advanced_models.py", args)
 }

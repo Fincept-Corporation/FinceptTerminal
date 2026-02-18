@@ -17,7 +17,11 @@ Modules:
 - ft_cli: CLI entry points and helpers (backtest_helper, create_plot, save)
 """
 
-from .fasttrade_provider import FastTradeProvider
+# Fix: Avoid relative imports for CLI compatibility
+try:
+    from .fasttrade_provider import FastTradeProvider
+except ImportError:
+    from fasttrade_provider import FastTradeProvider
 
 __all__ = [
     'FastTradeProvider',

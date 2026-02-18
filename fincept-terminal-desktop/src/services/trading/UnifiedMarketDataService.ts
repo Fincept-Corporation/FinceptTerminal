@@ -290,8 +290,15 @@ export class UnifiedMarketDataService extends EventEmitter<MarketDataEvents> {
       await websocketBridge.subscribe(provider, symbol, 'ticker');
       this.activeWsSubscriptions.set(normalizedKey, true);
       console.log(`[UnifiedMarketDataService] Subscribed to ${provider}:${symbol} (normalized: ${normalizedKey})`);
-    } catch (error) {
-      console.error(`[UnifiedMarketDataService] Failed to subscribe to ${provider}:${symbol}:`, error);
+    } catch (error: any) {
+      // Extract error message for better logging
+      const errorMsg = error?.message || String(error);
+      // Only log as warning if it's a connection issue (expected during startup)
+      if (errorMsg.includes('not connected') || errorMsg.includes('Not connected')) {
+        console.warn(`[UnifiedMarketDataService] Failed to subscribe to ${provider}:${symbol}: Subscription error: WebSocket not connected`);
+      } else {
+        console.error(`[UnifiedMarketDataService] Failed to subscribe to ${provider}:${symbol}:`, error);
+      }
       throw error;
     }
   }

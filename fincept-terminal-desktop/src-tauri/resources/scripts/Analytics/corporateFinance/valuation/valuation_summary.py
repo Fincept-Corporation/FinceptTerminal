@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from dataclasses import asdict
 from datetime import datetime
 
 scripts_path = Path(__file__).parent.parent.parent.parent
@@ -49,7 +50,7 @@ class ValuationSummary:
             results['valuation_methods']['dcf'] = target_metrics['dcf_valuation']
 
         valuation_ranges = self._build_valuation_ranges(results['valuation_methods'])
-        results['valuation_ranges'] = valuation_ranges
+        results['valuation_ranges'] = [asdict(vr) for vr in valuation_ranges]
 
         if valuation_ranges:
             results['weighted_valuation'] = self.chart_generator.calculate_weighted_valuation(valuation_ranges)
@@ -182,23 +183,29 @@ class ValuationSummary:
             'premium_dollars': premium_dollars
         }
 
-    def generate_football_field(self, comprehensive_result: Dict[str, Any],
-                               output_path: Optional[str] = None) -> Dict[str, Any]:
+    def generate_football_field(self, comprehensive_result: Dict[str, Any]) -> Dict[str, Any]:
         """Generate football field chart from comprehensive valuation"""
 
-        valuation_ranges = comprehensive_result.get('valuation_ranges', [])
+        raw_ranges = comprehensive_result.get('valuation_ranges', [])
 
-        if not valuation_ranges:
+        if not raw_ranges:
             return {'error': 'No valuation ranges available'}
+
+        # Reconstruct ValuationRange objects from dicts
+        valuation_ranges = []
+        for vr in raw_ranges:
+            if isinstance(vr, dict):
+                valuation_ranges.append(ValuationRange(**vr))
+            else:
+                valuation_ranges.append(vr)
 
         current_price = comprehensive_result.get('target_financials', {}).get('current_market_cap')
         offer_price = comprehensive_result.get('target_financials', {}).get('offer_price')
 
-        return self.chart_generator.generate_chart(
+        return self.chart_generator.generate_chart_data(
             valuation_ranges,
             current_price=current_price,
             offer_price=offer_price,
-            output_path=output_path
         )
 
     def generate_executive_summary(self, comprehensive_result: Dict[str, Any]) -> Dict[str, Any]:
@@ -318,7 +325,7 @@ def main():
                 raise ValueError("Valuation results JSON required")
 
             valuation_results = json.loads(sys.argv[2])
-            chart_data = summary.create_football_field_chart(valuation_results)
+            chart_data = summary.generate_football_field(valuation_results)
 
             result = {
                 "success": True,

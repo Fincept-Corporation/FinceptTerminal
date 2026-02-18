@@ -61,31 +61,39 @@ class PortfolioMetrics:
     avg_trade_duration: float = 0.0  # seconds
     time_in_market_pct: float = 0.0
 
+    @staticmethod
+    def _safe_float(v: float) -> float:
+        """Clamp inf/nan to JSON-safe values."""
+        if math.isinf(v) or math.isnan(v):
+            return 0.0
+        return v
+
     def to_dict(self) -> Dict[str, Any]:
+        sf = self._safe_float
         return {
-            "total_return": self.total_return,
-            "total_return_pct": self.total_return_pct,
-            "total_pnl": self.total_pnl,
+            "total_return": sf(self.total_return),
+            "total_return_pct": sf(self.total_return_pct),
+            "total_pnl": sf(self.total_pnl),
             "total_trades": self.total_trades,
             "winning_trades": self.winning_trades,
             "losing_trades": self.losing_trades,
-            "win_rate": self.win_rate,
-            "gross_profit": self.gross_profit,
-            "gross_loss": self.gross_loss,
-            "profit_factor": self.profit_factor,
-            "average_win": self.average_win,
-            "average_loss": self.average_loss,
-            "largest_win": self.largest_win,
-            "largest_loss": self.largest_loss,
-            "expectancy": self.expectancy,
-            "sharpe_ratio": self.sharpe_ratio,
-            "sortino_ratio": self.sortino_ratio,
-            "max_drawdown": self.max_drawdown,
-            "max_drawdown_pct": self.max_drawdown_pct,
-            "current_drawdown": self.current_drawdown,
-            "current_drawdown_pct": self.current_drawdown_pct,
-            "daily_volatility": self.daily_volatility,
-            "annualized_volatility": self.annualized_volatility,
+            "win_rate": sf(self.win_rate),
+            "gross_profit": sf(self.gross_profit),
+            "gross_loss": sf(self.gross_loss),
+            "profit_factor": sf(self.profit_factor),
+            "average_win": sf(self.average_win),
+            "average_loss": sf(self.average_loss),
+            "largest_win": sf(self.largest_win),
+            "largest_loss": sf(self.largest_loss),
+            "expectancy": sf(self.expectancy),
+            "sharpe_ratio": sf(self.sharpe_ratio),
+            "sortino_ratio": sf(self.sortino_ratio),
+            "max_drawdown": sf(self.max_drawdown),
+            "max_drawdown_pct": sf(self.max_drawdown_pct),
+            "current_drawdown": sf(self.current_drawdown),
+            "current_drawdown_pct": sf(self.current_drawdown_pct),
+            "daily_volatility": sf(self.daily_volatility),
+            "annualized_volatility": sf(self.annualized_volatility),
         }
 
     def to_prompt_context(self) -> str:

@@ -46,6 +46,7 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
   const {
     data: indicators,
     isLoading: loading,
+    isFetching,
     error,
     refresh
   } = useCache<Indicator[]>({
@@ -110,7 +111,7 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
       title="ECONOMIC INDICATORS"
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={loading && !indicators}
+      isLoading={(loading && !indicators) || isFetching}
       error={error?.message || null}
       headerColor="var(--ft-color-accent)"
     >

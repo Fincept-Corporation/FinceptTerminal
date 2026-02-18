@@ -385,8 +385,35 @@ def main():
             result = {"success": True, "data": analysis}
             print(json.dumps(result, default=str))
 
+        elif command == "valuation_multiples":
+            # Rust sends: "valuation_multiples" deals_json multiple_type
+            if len(sys.argv) < 3:
+                raise ValueError("Deals data required")
+
+            deals_data = json.loads(sys.argv[2])
+            multiple_type = sys.argv[3] if len(sys.argv) > 3 else 'ev_ebitda'
+            deals = _parse_deals(deals_data)
+            comparator = DealComparator()
+
+            analysis = comparator.valuation_multiple_comparison(deals, multiple_type=multiple_type)
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result, default=str))
+
+        elif command == "synergy_analysis":
+            # Rust sends: "synergy_analysis" deals_json
+            if len(sys.argv) < 3:
+                raise ValueError("Deals data required")
+
+            deals_data = json.loads(sys.argv[2])
+            deals = _parse_deals(deals_data)
+            comparator = DealComparator()
+
+            analysis = comparator.synergy_analysis(deals)
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result, default=str))
+
         else:
-            result = {"success": False, "error": f"Unknown command: {command}. Available: compare, rank, benchmark, payment_analysis, industry_analysis"}
+            result = {"success": False, "error": f"Unknown command: {command}. Available: compare, rank, benchmark, payment_analysis, industry_analysis, valuation_multiples, synergy_analysis"}
             print(json.dumps(result))
             sys.exit(1)
 

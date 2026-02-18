@@ -322,7 +322,7 @@ def main():
                     analysis = analyzer.premium_regression(comp_data)
 
             result = {"success": True, "data": analysis}
-            print(json.dumps(result))
+            print(json.dumps(result, default=lambda o: bool(o) if isinstance(o, np.bool_) else float(o) if isinstance(o, (np.floating, np.integer)) else str(o)))
 
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}

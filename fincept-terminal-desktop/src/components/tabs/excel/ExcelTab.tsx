@@ -3,13 +3,14 @@ import Handsontable from 'handsontable';
 import 'handsontable/dist/handsontable.full.min.css';
 import * as XLSX from 'xlsx';
 import { HyperFormula } from 'hyperformula';
-import { Upload, Download, Plus, Trash2, Save, FileSpreadsheet, History, Camera, RotateCcw, Clock, FolderOpen, X } from 'lucide-react';
+import { Upload, Download, Plus, Trash2, Save, FileSpreadsheet, History, Camera, RotateCcw, Clock, FolderOpen, X, ShoppingCart } from 'lucide-react';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readFile as tauriReadFile, writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
 import { excelService, ExcelFile, ExcelSnapshot } from '@/services/core/excelService';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 import { showConfirm, showSuccess, showError, showWarning, showPrompt } from '@/utils/notifications';
+import ExcelMarketplacePanel from './ExcelMarketplacePanel';
 
 interface SheetData {
   name: string;
@@ -29,6 +30,7 @@ const ExcelTab: React.FC = () => {
   const [filePath, setFilePath] = useState<string>('');
   const [showHistory, setShowHistory] = useState(false);
   const [showSnapshots, setShowSnapshots] = useState(false);
+  const [showMarketplace, setShowMarketplace] = useState(false);
   const [recentFiles, setRecentFiles] = useState<ExcelFile[]>([]);
   const [snapshots, setSnapshots] = useState<ExcelSnapshot[]>([]);
 
@@ -149,6 +151,42 @@ const ExcelTab: React.FC = () => {
     } catch (error) {
       console.error('Error importing Excel file:', error);
       showError('Failed to import Excel file');
+    }
+  };
+
+  // Handle opening file from marketplace
+  const handleOpenFromMarketplace = async (fileData: ArrayBuffer, fName: string) => {
+    try {
+      const workbook = XLSX.read(new Uint8Array(fileData), { type: 'array' });
+
+      const newSheets: SheetData[] = workbook.SheetNames.map(sheetName => {
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+
+        // Ensure minimum size
+        const minRows = 100;
+        const minCols = 26;
+        while (data.length < minRows) {
+          data.push(Array(minCols).fill(''));
+        }
+        data.forEach(row => {
+          while (row.length < minCols) {
+            row.push('');
+          }
+        });
+
+        return { name: sheetName, data };
+      });
+
+      setSheets(newSheets);
+      setActiveSheetIndex(0);
+      setFileName(fName);
+      setFilePath(''); // No file path for marketplace files until saved
+
+      showSuccess(`Opened marketplace file: ${fName}`);
+    } catch (error) {
+      showError('Failed to open file from marketplace');
+      console.error('Open from marketplace error:', error);
     }
   };
 
@@ -509,6 +547,30 @@ const ExcelTab: React.FC = () => {
         >
           <RotateCcw size={14} />
           {t('toolbar.revert')}
+        </button>
+
+        <div style={{ width: '1px', height: '20px', backgroundColor: '#525252' }}></div>
+
+        <button
+          onClick={() => setShowMarketplace(!showMarketplace)}
+          style={{
+            backgroundColor: showMarketplace ? '#ea580c' : '#404040',
+            color: '#fff',
+            border: 'none',
+            padding: '6px 12px',
+            fontSize: '10px',
+            cursor: 'pointer',
+            borderRadius: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+          onMouseEnter={(e) => { if (!showMarketplace) e.currentTarget.style.backgroundColor = '#525252' }}
+          onMouseLeave={(e) => { if (!showMarketplace) e.currentTarget.style.backgroundColor = '#404040' }}
+          title="Browse and download Excel files from marketplace (122 professional templates)"
+        >
+          <ShoppingCart size={14} />
+          Marketplace
         </button>
 
         <div style={{ flex: 1 }}></div>
@@ -887,6 +949,14 @@ const ExcelTab: React.FC = () => {
         backgroundColor="#1a1a1a"
         borderColor="#2d2d2d"
       />
+
+      {/* Excel Marketplace Panel */}
+      {showMarketplace && (
+        <ExcelMarketplacePanel
+          onClose={() => setShowMarketplace(false)}
+          onOpenFile={handleOpenFromMarketplace}
+        />
+      )}
     </div>
   );
 };

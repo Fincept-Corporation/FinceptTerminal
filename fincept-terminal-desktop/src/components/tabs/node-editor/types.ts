@@ -8,7 +8,6 @@ import { Node, Edge } from 'reactflow';
 import type { INodeProperties, NodeParameterValue, INodeTypeDescription } from '@/services/nodeSystem';
 import { Workflow as WorkflowType } from '@/services/core/workflowService';
 import { MCPNodeConfig } from './nodes/mcpNodeConfigs';
-import { AgentMetadata } from '@/services/chat/pythonAgentService';
 
 // Node configuration for builtin nodes
 export interface NodeConfig {
@@ -39,7 +38,6 @@ export interface NodePaletteProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   mcpNodeConfigs: MCPNodeConfig[];
-  agentConfigs: AgentMetadata[];
 }
 
 // Toolbar props
@@ -136,4 +134,4 @@ export interface CategoryConfig {
   color: string;
 }
 
-export type { WorkflowType, MCPNodeConfig, AgentMetadata, INodeProperties, NodeParameterValue, INodeTypeDescription };
+export type { WorkflowType, MCPNodeConfig, INodeProperties, NodeParameterValue, INodeTypeDescription };

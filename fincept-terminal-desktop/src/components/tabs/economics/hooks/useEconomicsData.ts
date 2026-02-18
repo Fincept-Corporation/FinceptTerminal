@@ -15,6 +15,7 @@ import {
   UNESCO_INDICATORS,
   FISCALDATA_INDICATORS,
   BEA_INDICATORS,
+  FINCEPT_INDICATORS,
   getIndicatorsForSource,
   getDefaultIndicator,
   DATA_SOURCES,
@@ -31,6 +32,15 @@ interface UseEconomicsDataReturn {
   selectedIndicator: string;
   setSelectedIndicator: (id: string) => void;
   data: IndicatorData | null;
+  finceptTableData: { columns: string[]; rows: Record<string, any>[] } | null;
+  // Fincept CEIC drill-down state
+  finceptCeicCountry: string;
+  setFinceptCeicCountry: (c: string) => void;
+  finceptCeicIndicator: string;
+  setFinceptCeicIndicator: (i: string) => void;
+  finceptCeicIndicatorList: { indicator: string; series_id: string; data_points: number }[];
+  finceptCeicIndicatorsLoading: boolean;
+  fetchFinceptCeicIndicators: (country: string) => Promise<void>;
   loading: boolean;
   error: string | null;
   fetchData: () => Promise<void>;
@@ -62,6 +72,12 @@ export function useEconomicsData(): UseEconomicsDataReturn {
   const [selectedCountry, setSelectedCountry] = useState('USA');
   const [selectedIndicator, setSelectedIndicator] = useState('NY.GDP.MKTP.CD');
   const [data, setData] = useState<IndicatorData | null>(null);
+  const [finceptTableData, setFinceptTableData] = useState<{ columns: string[]; rows: Record<string, any>[] } | null>(null);
+  // Fincept CEIC drill-down
+  const [finceptCeicCountry, setFinceptCeicCountry] = useState<string>('united-states');
+  const [finceptCeicIndicator, setFinceptCeicIndicator] = useState<string>('');
+  const [finceptCeicIndicatorList, setFinceptCeicIndicatorList] = useState<{ indicator: string; series_id: string; data_points: number }[]>([]);
+  const [finceptCeicIndicatorsLoading, setFinceptCeicIndicatorsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,6 +137,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
       // FRED, Federal Reserve, BLS, FiscalData, and BEA are US-only
       setSelectedCountry('USA');
     }
+    // Fincept uses country code where applicable; keep current selection
     setData(null);
     setError(null);
   }, []);
@@ -139,10 +156,31 @@ export function useEconomicsData(): UseEconomicsDataReturn {
     }
   }, []);
 
+  // Fetch CEIC indicator list for a given country slug
+  const fetchFinceptCeicIndicators = useCallback(async (countrySlug: string) => {
+    setFinceptCeicIndicatorsLoading(true);
+    setFinceptCeicIndicatorList([]);
+    setFinceptCeicIndicator('');
+    try {
+      const res = await fetch(
+        `https://finceptbackend.share.zrok.io/macro/ceic/series/indicators?country=${encodeURIComponent(countrySlug)}`,
+        { headers: { 'X-API-Key': 'fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo' } }
+      );
+      const parsed = await res.json();
+      const list = parsed?.data?.indicators || [];
+      setFinceptCeicIndicatorList(list);
+    } catch {
+      setFinceptCeicIndicatorList([]);
+    } finally {
+      setFinceptCeicIndicatorsLoading(false);
+    }
+  }, []);
+
   // Fetch data
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setFinceptTableData(null);
 
     try {
       const country = COUNTRIES.find(c => c.code === selectedCountry);
@@ -400,6 +438,61 @@ export function useEconomicsData(): UseEconomicsDataReturn {
           }) as string;
           break;
 
+        case 'fincept': {
+          const BASE_URL = 'https://finceptbackend.share.zrok.io';
+          const FINCEPT_API_KEY = 'fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo';
+          let url = '';
+          switch (selectedIndicator) {
+            case 'ceic_series_countries':
+              url = `${BASE_URL}/macro/ceic/series/countries`;
+              break;
+            case 'ceic_series_indicators':
+              url = `${BASE_URL}/macro/ceic/series/indicators?country=${encodeURIComponent(finceptCeicCountry)}`;
+              break;
+            case 'ceic_series': {
+              const indicatorParam = finceptCeicIndicator
+                ? `&indicator=${encodeURIComponent(finceptCeicIndicator)}`
+                : '';
+              url = `${BASE_URL}/macro/ceic/series?country=${encodeURIComponent(finceptCeicCountry)}${indicatorParam}&year_from=${startDate.substring(0, 4)}&year_to=${endDate.substring(0, 4)}&limit=500`;
+              break;
+            }
+            case 'economic_calendar':
+              url = `${BASE_URL}/macro/economic-calendar?start_date=${startDate}&end_date=${endDate}&limit=200`;
+              break;
+            case 'upcoming_events':
+              url = `${BASE_URL}/macro/upcoming-events?limit=200`;
+              break;
+            case 'wgb_central_bank_rates':
+              url = `${BASE_URL}/macro/wgb/central-bank-rates`;
+              break;
+            case 'wgb_credit_ratings':
+              url = `${BASE_URL}/macro/wgb/credit-ratings`;
+              break;
+            case 'wgb_sovereign_cds':
+              url = `${BASE_URL}/macro/wgb/sovereign-cds`;
+              break;
+            case 'wgb_bond_spreads':
+              url = `${BASE_URL}/macro/wgb/bond-spreads`;
+              break;
+            case 'wgb_inverted_yields':
+              url = `${BASE_URL}/macro/wgb/inverted-yields`;
+              break;
+            default:
+              url = `${BASE_URL}/macro/wgb/central-bank-rates`;
+          }
+          const finceptResponse = await fetch(url, {
+            headers: { 'X-API-Key': FINCEPT_API_KEY, 'Accept': 'application/json' },
+          });
+          if (!finceptResponse.ok) {
+            const errBody = await finceptResponse.text().catch(() => '');
+            let errMsg = `${finceptResponse.status} ${finceptResponse.statusText}`;
+            try { errMsg = JSON.parse(errBody).message || errMsg; } catch {}
+            throw new Error(errMsg);
+          }
+          result = await finceptResponse.text();
+          break;
+        }
+
         default:
           throw new Error('Unknown data source');
       }
@@ -592,6 +685,61 @@ export function useEconomicsData(): UseEconomicsDataReturn {
             indicatorName = parsed.metadata?.indicator_name || beaIndicator?.name || selectedIndicator;
             countryName = 'United States';
           }
+        } else if (dataSource === 'fincept') {
+          // Fincept — always table display, no chart
+          const finceptIndicator = FINCEPT_INDICATORS.find(i => i.id === selectedIndicator);
+          indicatorName = finceptIndicator?.name || selectedIndicator;
+          countryName = 'Global';
+
+          // Check for backend error in response body
+          if (parsed.success === false) {
+            throw new Error(parsed.message || 'Fincept API returned an error');
+          }
+
+          // Extract the array of rows from known response shapes:
+          // WGB:      parsed.data.central_bank_rates | credit_ratings | sovereign_cds | bond_spreads | inverted_yields
+          // Calendar: parsed.data.events
+          // CEIC:     parsed.data.countries | indicators | series
+          let rows: Record<string, any>[] = [];
+          const dataBlock = parsed.data;
+
+          if (dataBlock) {
+            // Try each known key in order
+            const knownKeys = [
+              'central_bank_rates', 'credit_ratings', 'sovereign_cds',
+              'bond_spreads', 'inverted_yields', 'events',
+              'countries', 'indicators', 'series',
+            ];
+            for (const key of knownKeys) {
+              if (Array.isArray(dataBlock[key]) && dataBlock[key].length > 0) {
+                rows = dataBlock[key];
+                break;
+              }
+            }
+            // Fallback: first array value in dataBlock
+            if (rows.length === 0) {
+              const firstArr = Object.values(dataBlock).find(v => Array.isArray(v) && (v as any[]).length > 0);
+              if (firstArr) rows = firstArr as Record<string, any>[];
+            }
+          }
+
+          if (rows.length > 0) {
+            const HIDDEN_COLS = new Set(['scraped_at', 'id', 'detail_url', 'url', 'created_at', 'event_id', 'source']);
+            const columns = Object.keys(rows[0]).filter(k => !HIDDEN_COLS.has(k));
+            setFinceptTableData({ columns, rows });
+            setData({
+              indicator: selectedIndicator,
+              country: selectedCountry,
+              data: [],
+              metadata: { indicator_name: indicatorName, country_name: countryName, source: 'Fincept' },
+            });
+          } else {
+            setError('No data returned for this endpoint');
+            setData(null);
+            setFinceptTableData(null);
+          }
+          setLoading(false);
+          return;
         } else if (parsed.data && Array.isArray(parsed.data)) {
           rawData = parsed.data.map((d: any) => ({
             date: d.date || d.period || d.year || '',
@@ -663,7 +811,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
     } finally {
       setLoading(false);
     }
-  }, [dataSource, selectedCountry, selectedIndicator, wtoApiKey, eiaApiKey, blsApiKey, beaApiKey, startDate, endDate]);
+  }, [dataSource, selectedCountry, selectedIndicator, wtoApiKey, eiaApiKey, blsApiKey, beaApiKey, startDate, endDate, finceptCeicCountry, finceptCeicIndicator]);
 
   // Calculate stats
   const stats: ChartStats | null = data && data.data.length > 0 ? (() => {
@@ -685,6 +833,14 @@ export function useEconomicsData(): UseEconomicsDataReturn {
     selectedIndicator,
     setSelectedIndicator,
     data,
+    finceptTableData,
+    finceptCeicCountry,
+    setFinceptCeicCountry,
+    finceptCeicIndicator,
+    setFinceptCeicIndicator,
+    finceptCeicIndicatorList,
+    finceptCeicIndicatorsLoading,
+    fetchFinceptCeicIndicators,
     loading,
     error,
     fetchData,

@@ -1,6 +1,7 @@
 // News MCP Tools - Comprehensive news fetching, filtering, management and analysis
 // Allows AI to interact with all news functionality via chat
 
+import { invoke } from '@tauri-apps/api/core';
 import type { InternalTool, InternalToolResult, NewsArticleInfo } from '../types';
 
 /**
@@ -584,21 +585,22 @@ export const newsTools: InternalTool[] = [
       },
       required: ['url'],
     },
-    handler: async (args, contexts): Promise<InternalToolResult> => {
-      if (!contexts.testRSSFeedUrl) {
-        return { success: false, error: 'News service not available' };
-      }
+    handler: async (args, _contexts): Promise<InternalToolResult> => {
       try {
-        const isValid = await contexts.testRSSFeedUrl(args.url);
+        const result = await invoke<{ valid: boolean; error?: string; status?: number; response_preview?: string }>('test_rss_feed_url', { url: args.url });
         return {
           success: true,
-          data: { valid: isValid, url: args.url },
-          message: isValid
-            ? `RSS feed URL is valid and accessible: ${args.url}`
-            : `RSS feed URL is invalid or not accessible: ${args.url}`,
+          data: { ...result, url: args.url },
+          message: result.valid
+            ? `RSS feed URL is valid: ${args.url}`
+            : `RSS feed URL invalid. Reason: ${result.error || 'unknown'}${result.status ? ` (HTTP ${result.status})` : ''}${result.response_preview ? `\nResponse preview: ${result.response_preview}` : ''}`,
         };
       } catch (error) {
-        return { success: false, error: `Failed to test URL: ${error}` };
+        return {
+          success: true,
+          data: { valid: false, url: args.url, invoke_error: String(error) },
+          message: `Invoke failed: ${error}`,
+        };
       }
     },
   },

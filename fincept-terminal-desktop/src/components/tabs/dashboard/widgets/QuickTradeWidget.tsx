@@ -55,6 +55,7 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
   const {
     data: quotes,
     isLoading,
+    isFetching,
     error,
     refresh
   } = useCache<QuoteData[]>({
@@ -128,7 +129,7 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
       title="QUICK TRADE"
       onRemove={onRemove}
       onRefresh={refresh}
-      isLoading={false}
+      isLoading={(isLoading && !quotes) || isFetching}
       error={error?.message}
       headerColor="var(--ft-color-accent)"
     >

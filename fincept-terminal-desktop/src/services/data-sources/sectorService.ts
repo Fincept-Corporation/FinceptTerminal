@@ -16,11 +16,95 @@ export const DEFAULT_SECTOR = 'Other';
 // Crypto sector constant (for pattern matching)
 export const CRYPTO_SECTOR = 'Cryptocurrency';
 
+// LocalStorage key for user-defined manual mappings
+const MANUAL_MAPPINGS_KEY = 'fincept_sector_manual_mappings';
+
+// Common ETF/fund sector fallbacks (yfinance returns no sector for most ETFs)
+const ETF_FALLBACKS: Record<string, SectorInfo> = {
+  // US Equity
+  'SPY': { sector: 'US Equity', industry: 'S&P 500 ETF' },
+  'QQQ': { sector: 'Technology', industry: 'Nasdaq 100 ETF' },
+  'IWM': { sector: 'US Equity', industry: 'Small Cap ETF' },
+  'VTI': { sector: 'US Equity', industry: 'Total Market ETF' },
+  'VOO': { sector: 'US Equity', industry: 'S&P 500 ETF' },
+  'DIA': { sector: 'US Equity', industry: 'Dow Jones ETF' },
+  // International Equity
+  'EFA': { sector: 'International Equity', industry: 'Developed Markets ETF' },
+  'EEM': { sector: 'International Equity', industry: 'Emerging Markets ETF' },
+  'VGK': { sector: 'International Equity', industry: 'Europe ETF' },
+  'EWJ': { sector: 'International Equity', industry: 'Japan ETF' },
+  'EWG': { sector: 'International Equity', industry: 'Germany ETF' },
+  'MCHI': { sector: 'International Equity', industry: 'China ETF' },
+  'KWEB': { sector: 'Technology', industry: 'China Internet ETF' },
+  'EWZ': { sector: 'International Equity', industry: 'Brazil ETF' },
+  'EWY': { sector: 'International Equity', industry: 'South Korea ETF' },
+  // Fixed Income
+  'AGG': { sector: 'Fixed Income', industry: 'US Aggregate Bond ETF' },
+  'BND': { sector: 'Fixed Income', industry: 'Total Bond ETF' },
+  'TLT': { sector: 'Fixed Income', industry: 'Long-Term Treasury ETF' },
+  'IEF': { sector: 'Fixed Income', industry: 'Intermediate Treasury ETF' },
+  'SHY': { sector: 'Fixed Income', industry: 'Short-Term Treasury ETF' },
+  'LQD': { sector: 'Fixed Income', industry: 'Investment Grade Corporate ETF' },
+  'HYG': { sector: 'Fixed Income', industry: 'High Yield Bond ETF' },
+  'IAGG': { sector: 'Fixed Income', industry: 'International Bond ETF' },
+  'CBON': { sector: 'Fixed Income', industry: 'China Bond ETF' },
+  'DBJP': { sector: 'Fixed Income', industry: 'Japan Bond ETF' },
+  // Commodities
+  'GLD': { sector: 'Commodities', industry: 'Gold ETF' },
+  'SLV': { sector: 'Commodities', industry: 'Silver ETF' },
+  'USO': { sector: 'Commodities', industry: 'Oil ETF' },
+  'DJP': { sector: 'Commodities', industry: 'Commodity Index ETF' },
+  'PDBC': { sector: 'Commodities', industry: 'Commodity ETF' },
+  // Sector ETFs
+  'XLK': { sector: 'Technology', industry: 'Technology Sector ETF' },
+  'XLF': { sector: 'Financial Services', industry: 'Financial Sector ETF' },
+  'XLV': { sector: 'Healthcare', industry: 'Healthcare Sector ETF' },
+  'XLE': { sector: 'Energy', industry: 'Energy Sector ETF' },
+  'XLI': { sector: 'Industrials', industry: 'Industrial Sector ETF' },
+  'XLY': { sector: 'Consumer Cyclical', industry: 'Consumer Discretionary ETF' },
+  'XLP': { sector: 'Consumer Defensive', industry: 'Consumer Staples ETF' },
+  'XLU': { sector: 'Utilities', industry: 'Utilities Sector ETF' },
+  'XLRE': { sector: 'Real Estate', industry: 'Real Estate Sector ETF' },
+  'XLB': { sector: 'Basic Materials', industry: 'Materials Sector ETF' },
+  'XLC': { sector: 'Communication Services', industry: 'Communication Sector ETF' },
+  // REITs
+  'VNQ': { sector: 'Real Estate', industry: 'REIT ETF' },
+};
+
 // Runtime cache for fetched sector data (fully dynamic)
 const sectorCache: Record<string, SectorInfo> = {};
 
 // Pending fetch promises to avoid duplicate requests
 const pendingFetches: Record<string, Promise<SectorInfo>> = {};
+
+// Load persisted manual mappings into cache on startup
+function loadManualMappings(): void {
+  try {
+    const raw = localStorage.getItem(MANUAL_MAPPINGS_KEY);
+    if (raw) {
+      const mappings: Record<string, SectorInfo> = JSON.parse(raw);
+      Object.entries(mappings).forEach(([sym, info]) => {
+        sectorCache[sym.toUpperCase()] = { ...info, _manual: true } as SectorInfo & { _manual?: boolean };
+      });
+    }
+  } catch {}
+}
+
+function saveManualMappings(): void {
+  try {
+    const manual: Record<string, SectorInfo> = {};
+    Object.entries(sectorCache).forEach(([sym, info]) => {
+      if ((info as any)._manual) manual[sym] = info;
+    });
+    localStorage.setItem(MANUAL_MAPPINGS_KEY, JSON.stringify(manual));
+  } catch {}
+}
+
+// Init: load ETF fallbacks then manual overrides
+Object.entries(ETF_FALLBACKS).forEach(([sym, info]) => {
+  sectorCache[sym] = info;
+});
+loadManualMappings(); // manual overrides ETF fallbacks
 
 class SectorService {
   /**
@@ -172,10 +256,44 @@ class SectorService {
   }
 
   /**
-   * Manually add sector mapping to cache
+   * Manually add sector mapping to cache and persist it
    */
   addSectorMapping(symbol: string, sectorInfo: SectorInfo): void {
-    sectorCache[symbol.toUpperCase()] = sectorInfo;
+    const key = symbol.toUpperCase();
+    sectorCache[key] = { ...sectorInfo, _manual: true } as any;
+    saveManualMappings();
+  }
+
+  /**
+   * Remove a manual mapping
+   */
+  removeManualMapping(symbol: string): void {
+    const key = symbol.toUpperCase();
+    // Restore ETF fallback if exists, otherwise delete
+    if (ETF_FALLBACKS[key]) {
+      sectorCache[key] = ETF_FALLBACKS[key];
+    } else {
+      delete sectorCache[key];
+    }
+    saveManualMappings();
+  }
+
+  /**
+   * Get all manual mappings (user-defined)
+   */
+  getManualMappings(): Record<string, SectorInfo> {
+    const manual: Record<string, SectorInfo> = {};
+    Object.entries(sectorCache).forEach(([sym, info]) => {
+      if ((info as any)._manual) manual[sym] = info;
+    });
+    return manual;
+  }
+
+  /**
+   * Get full cache snapshot (for display in editor)
+   */
+  getAllMappings(): Record<string, SectorInfo> {
+    return { ...sectorCache };
   }
 
   /**
@@ -192,6 +310,9 @@ class SectorService {
    */
   clearCache(): void {
     Object.keys(sectorCache).forEach(key => delete sectorCache[key]);
+    // Re-init ETF fallbacks and manual mappings
+    Object.entries(ETF_FALLBACKS).forEach(([sym, info]) => { sectorCache[sym] = info; });
+    loadManualMappings();
   }
 }
 

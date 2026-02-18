@@ -314,6 +314,7 @@ class LLMTradingAgent(BaseTradingAgent):
 
     Uses the Agno library for LLM interactions when available.
     Supports trading styles for behavioral customization.
+    Supports advanced config for Agno features (memory, reasoning, tools, etc.).
     """
 
     def __init__(
@@ -328,10 +329,34 @@ class LLMTradingAgent(BaseTradingAgent):
         trading_style: Optional[str] = None,  # Style ID (e.g., "aggressive", "conservative")
         style_config: Optional[Dict[str, Any]] = None,  # Full style configuration
         initial_capital: float = 10000.0,
+        advanced_config: Optional[Dict[str, Any]] = None,  # AgentAdvancedConfig dict
     ):
         super().__init__(name, provider, model_id, api_key, temperature, instructions, initial_capital=initial_capital)
         self.mode = mode
         self._llm = None
+
+        # Advanced config (Agno features)
+        self.advanced_config = advanced_config or {}
+        if self.advanced_config.get("temperature") is not None:
+            self.temperature = self.advanced_config["temperature"]
+
+        # Memory support
+        self._memory = None
+        if self.advanced_config.get("enable_memory", False):
+            try:
+                from alpha_arena.core.memory_adapter import AgentMemory
+                self._memory = AgentMemory(
+                    agent_name=name,
+                    competition_id="",  # Set later when competition_id is known
+                )
+                logger.info(f"Agent '{name}' memory enabled")
+            except ImportError:
+                logger.warning("Memory adapter not available")
+
+        # Override features pipeline based on advanced config
+        if not self.advanced_config.get("enable_features_pipeline", True):
+            self.enable_features = False
+            self._features_pipeline = None
 
         # Trading style support
         self.trading_style_id = trading_style
@@ -344,7 +369,7 @@ class LLMTradingAgent(BaseTradingAgent):
                 self._style = get_trading_style(trading_style)
                 if self._style:
                     # Apply style's temperature modifier
-                    self.temperature = temperature + self._style.temperature_modifier
+                    self.temperature = self.temperature + self._style.temperature_modifier
                     logger.info(f"Agent '{name}' using trading style: {self._style.name}")
             except ImportError:
                 logger.warning("Trading styles module not available")
@@ -455,14 +480,39 @@ class LLMTradingAgent(BaseTradingAgent):
                 logger.warning(f"Unknown provider '{self.provider}', treating as OpenAI-compatible")
                 model = OpenAIChat(id=self.model_id, api_key=self.api_key)
 
+            # Build agent kwargs from advanced config
+            agent_kwargs: Dict[str, Any] = {
+                "name": f"Trader-{self.name}",
+                "role": "Autonomous Trading Agent",
+                "model": model,
+                "instructions": self._get_mode_instructions(),
+                "markdown": False,
+            }
+
+            # Apply Agno reasoning if enabled
+            if self.advanced_config.get("enable_reasoning", False):
+                agent_kwargs["reasoning"] = True
+                agent_kwargs["reasoning_min_steps"] = self.advanced_config.get("reasoning_min_steps", 1)
+                agent_kwargs["reasoning_max_steps"] = self.advanced_config.get("reasoning_max_steps", 10)
+                logger.info(f"Agent '{self.name}' reasoning enabled (steps: {agent_kwargs['reasoning_min_steps']}-{agent_kwargs['reasoning_max_steps']})")
+
+            # Apply Agno tools if enabled
+            if self.advanced_config.get("enable_tools", False):
+                try:
+                    from agno_trading.tools.technical_indicators import (
+                        calculate_sma, calculate_ema, calculate_rsi,
+                        calculate_macd, calculate_bollinger_bands,
+                    )
+                    agent_kwargs["tools"] = [
+                        calculate_sma, calculate_ema, calculate_rsi,
+                        calculate_macd, calculate_bollinger_bands,
+                    ]
+                    logger.info(f"Agent '{self.name}' tools enabled ({len(agent_kwargs['tools'])} tools)")
+                except ImportError:
+                    logger.warning(f"Agent '{self.name}' tools requested but agno_trading tools not available")
+
             # Create agent
-            agent = Agent(
-                name=f"Trader-{self.name}",
-                role="Autonomous Trading Agent",
-                model=model,
-                instructions=self._get_mode_instructions(),
-                markdown=False,
-            )
+            agent = Agent(**agent_kwargs)
 
             logger.info(f"Created LLM agent '{self.name}' with {self.provider}:{self.model_id}")
             return agent
@@ -472,8 +522,16 @@ class LLMTradingAgent(BaseTradingAgent):
             return None
 
     def _get_mode_instructions(self) -> List[str]:
-        """Get instructions based on competition mode and trading style."""
+        """Get instructions based on competition mode, trading style, and advanced config."""
         base = self.instructions.copy()
+
+        # Add custom system prompt from advanced config (highest priority)
+        custom_prompt = self.advanced_config.get("custom_system_prompt", "")
+        if custom_prompt:
+            base.insert(0, custom_prompt)
+        custom_instr = self.advanced_config.get("custom_instructions", [])
+        if custom_instr:
+            base.extend(custom_instr)
 
         # Add style-specific system prompt and instructions first (higher priority)
         if self._style:
@@ -523,8 +581,58 @@ class LLMTradingAgent(BaseTradingAgent):
         """Make a trading decision using the LLM."""
         import json
 
-        # Build prompt
-        prompt = self._build_prompt(market_data, portfolio, cycle_number)
+        # Build prompt with features (async version for enrichment)
+        features_context = ""
+        metrics_context = ""
+
+        if self.enable_features and self._features_pipeline:
+            try:
+                features_context = await self.get_features_context(market_data)
+            except Exception as e:
+                logger.warning(f"Failed to compute features: {e}")
+
+        metrics_context = self.get_metrics_context()
+
+        # Inject memory context if enabled
+        memory_context = ""
+        if self._memory and self.advanced_config.get("enable_memory", False):
+            try:
+                memory_context = self._memory.get_relevant_context(
+                    market_data.symbol, max_trades=5, max_insights=3
+                )
+            except Exception as e:
+                logger.warning(f"Failed to get memory context: {e}")
+
+        # Inject sentiment context if enabled
+        sentiment_context = ""
+        if self.advanced_config.get("enable_sentiment", False):
+            try:
+                from alpha_arena.core.sentiment_agent import get_sentiment_context
+                sentiment_context = await get_sentiment_context(market_data.symbol)
+            except Exception as e:
+                logger.warning(f"Failed to get sentiment context: {e}")
+
+        # Inject research context if enabled
+        research_context = ""
+        if self.advanced_config.get("enable_research", False):
+            try:
+                from alpha_arena.core.research_agent import get_research_context
+                # Extract ticker from symbol (BTC/USD -> BTC)
+                ticker = market_data.symbol.split("/")[0]
+                research_context = await get_research_context(ticker)
+            except Exception as e:
+                logger.warning(f"Failed to get research context: {e}")
+
+        # Combine all enrichment contexts
+        enrichment = features_context
+        if memory_context:
+            enrichment += f"\n{memory_context}\n"
+        if sentiment_context:
+            enrichment += f"\n{sentiment_context}\n"
+        if research_context:
+            enrichment += f"\n{research_context}\n"
+
+        prompt = self._build_prompt_internal(market_data, portfolio, cycle_number, enrichment, metrics_context)
 
         if self._llm is None:
             init_error = getattr(self, '_init_error', 'unknown')
@@ -574,7 +682,7 @@ class LLMTradingAgent(BaseTradingAgent):
                 logger.warning(f"Invalid action '{action_str}', defaulting to 'hold'")
                 action_str = "hold"
 
-            return ModelDecision(
+            result_decision = ModelDecision(
                 competition_id="",  # Set by caller
                 model_name=self.name,
                 cycle_number=cycle_number,
@@ -586,6 +694,18 @@ class LLMTradingAgent(BaseTradingAgent):
                 price_at_decision=market_data.price,
                 portfolio_value_before=portfolio.portfolio_value,
             )
+
+            # Record to memory if enabled
+            if self._memory:
+                self._memory.record_trade(
+                    symbol=result_decision.symbol,
+                    action=action_str,
+                    quantity=result_decision.quantity,
+                    price=market_data.price,
+                    reasoning=result_decision.reasoning,
+                )
+
+            return result_decision
 
         except Exception as e:
             import traceback
@@ -657,24 +777,52 @@ class LLMTradingAgent(BaseTradingAgent):
         pnl = portfolio.portfolio_value - self.initial_capital
         pnl_pct = (pnl / self.initial_capital) * 100 if self.initial_capital > 0 else 0
 
+        # Build per-position breakdown
+        positions_value = 0.0
+        position_details = ""
+        max_sellable_qty = 0.0
+        if has_positions:
+            position_lines = []
+            for sym, pos in portfolio.positions.items():
+                current_val = pos.quantity * market_data.price
+                positions_value += current_val
+                entry_val = pos.quantity * pos.entry_price
+                unrealized = current_val - entry_val
+                unrealized_pct = (unrealized / entry_val) * 100 if entry_val > 0 else 0
+                position_lines.append(
+                    f"  {sym}: {pos.quantity:.6f} units @ avg entry ${pos.entry_price:,.2f} | "
+                    f"current ${market_data.price:,.2f} | unrealized P&L: ${unrealized:+,.2f} ({unrealized_pct:+.2f}%)"
+                )
+                if sym == market_data.symbol:
+                    max_sellable_qty = pos.quantity
+            position_details = "\nPOSITION DETAILS:\n" + "\n".join(position_lines)
+        else:
+            positions_value = 0.0
+
+        # Max affordable quantity for BUY
+        max_buy_qty = portfolio.cash / market_data.price if market_data.price > 0 else 0
+
         if not has_positions and num_trades == 0:
-            action_guidance = """
+            action_guidance = f"""
 IMPORTANT: This is the start of the competition. You have NO open positions.
 You MUST take a position (BUY or SELL) to participate. HOLD is NOT allowed at the start.
 Analyze the market data and decide whether to go LONG (buy) or SHORT (sell).
 Use approximately 10-20% of your capital for the initial position.
+Max affordable BUY quantity: {max_buy_qty:.6f} units (at current price)
+Recommended initial position: {max_buy_qty * 0.15:.6f} units (~15% of capital)
 """
         elif not has_positions:
-            action_guidance = """
+            action_guidance = f"""
 NOTE: You currently have NO open positions. Consider entering a new position.
 Being fully in cash means you're not participating in market movements.
+Max affordable BUY quantity: {max_buy_qty:.6f} units (at current price)
 """
         else:
-            action_guidance = """
+            action_guidance = f"""
 You have open positions. Decide whether to:
-- BUY: Add to position or enter new long
-- SELL: Close position or enter short
-- HOLD: Maintain current position
+- BUY: Add to position (max affordable: {max_buy_qty:.6f} units)
+- SELL: Close/reduce position (max sellable: {max_sellable_qty:.6f} units)
+- HOLD: Maintain current position (quantity MUST be 0)
 """
 
         # Build optional sections
@@ -694,21 +842,26 @@ Ask: ${market_data.ask:,.2f}
 24h High: ${market_data.high_24h:,.2f}
 24h Low: ${market_data.low_24h:,.2f}
 Volume: {market_data.volume_24h:,.2f}
+{position_details}
+EXACT PORTFOLIO STATE (use these numbers — do NOT calculate your own):
+  Initial Capital: ${self.initial_capital:,.2f}
+  Current Cash: ${portfolio.cash:,.2f}
+  Positions Value: ${positions_value:,.2f}
+  Total Portfolio Value: ${portfolio.portfolio_value:,.2f}
+  Realized P&L: ${portfolio.total_pnl:+,.2f}
+  Total P&L (realized + unrealized): ${pnl:+,.2f} ({pnl_pct:+.2f}%)
+  Open Positions: {len(portfolio.positions)}
+  Total Trades Made: {num_trades}
 
-YOUR PORTFOLIO:
-Cash: ${portfolio.cash:,.2f}
-Portfolio Value: ${portfolio.portfolio_value:,.2f}
-P&L: ${pnl:+,.2f} ({pnl_pct:+.2f}%)
-Open Positions: {len(portfolio.positions)}
-Total Trades Made: {num_trades}
+WARNING: You MUST reference the EXACT values above. Do NOT fabricate or estimate P&L numbers.
 {optional_sections}{action_guidance}
 RESPONSE FORMAT (JSON ONLY - NO MARKDOWN, NO CODE BLOCKS):
 {{
   "action": "buy" or "sell" or "hold",
   "symbol": "{market_data.symbol}",
-  "quantity": 0.01,
+  "quantity": <number — for HOLD this MUST be 0>,
   "confidence": 0.0 to 1.0,
-  "reasoning": "brief explanation"
+  "reasoning": "brief explanation referencing actual portfolio values"
 }}
 
 Respond ONLY with the JSON object, nothing else.

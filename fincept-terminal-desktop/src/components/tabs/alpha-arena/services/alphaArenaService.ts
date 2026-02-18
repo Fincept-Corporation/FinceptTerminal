@@ -45,8 +45,19 @@ export async function createCompetition(
 ): Promise<CreateCompetitionResponse> {
   try {
     const configJson = JSON.stringify(request);
+    // Extract API keys from models to pass separately to the Rust command
+    // This ensures keys are available even if the Rust config parser doesn't extract them
+    const apiKeys: Record<string, string> = {};
+    for (const model of request.models) {
+      if (model.api_key && !apiKeys[model.provider]) {
+        apiKeys[model.provider] = model.api_key;
+      }
+    }
     const result = await withTimeout(
-      invoke<CreateCompetitionResponse>('create_alpha_competition', { configJson }),
+      invoke<CreateCompetitionResponse>('create_alpha_competition', {
+        configJson,
+        apiKeys: Object.keys(apiKeys).length > 0 ? apiKeys : null,
+      }),
       30000, 'Create competition timeout'
     );
     return result;

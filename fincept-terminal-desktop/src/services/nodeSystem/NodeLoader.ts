@@ -29,7 +29,6 @@ import {
 import {
   GetQuoteNode,
   GetMarketDepthNode,
-  StreamQuotesNode,
   GetFundamentalsNode,
   GetTickerStatsNode,
 } from './nodes/marketData';
@@ -53,16 +52,12 @@ import {
   PriceAlertTriggerNode,
   NewsEventTriggerNode,
   MarketEventTriggerNode,
-  WebhookTriggerNode,
 } from './nodes/triggers';
 
 // Import agent nodes
 import { AgentMediatorNode } from './nodes/agents/AgentMediatorNode';
 import { AgentNode } from './nodes/agents/AgentNode';
 import { MultiAgentNode } from './nodes/agents/MultiAgentNode';
-import { GeopoliticsAgentNode } from './nodes/agents/GeopoliticsAgentNode';
-import { HedgeFundAgentNode } from './nodes/agents/HedgeFundAgentNode';
-import { InvestorAgentNode } from './nodes/agents/InvestorAgentNode';
 
 // Import agent node generator for dynamic Python agent nodes
 import { generateAllAgentNodes, getAgentNodeStatistics } from './utils/AgentNodeGenerator';
@@ -138,11 +133,7 @@ import {
   CompareDatasetsNode,
 } from './nodes/data';
 
-// Import database nodes
-import { SQLNode, RedisNode, MongoDBNode } from './nodes/database';
-
-// Import integration nodes
-import { GoogleSheetsNode, FTPNode } from './nodes/integrations';
+// database and integration nodes removed (stubs)
 
 // TODO: Import agent node generator when ready
 // import { generateAllAgentNodes, getAgentNodeStatistics } from './utils/AgentNodeGenerator';
@@ -203,12 +194,6 @@ class NodeLoaderClass {
 
     // Load data nodes
     await this.loadDataNodes();
-
-    // Load database nodes
-    await this.loadDatabaseNodes();
-
-    // Load integration nodes
-    await this.loadIntegrationNodes();
 
     this.loaded = true;
   }
@@ -305,7 +290,6 @@ class NodeLoaderClass {
       const nodes = [
         { instance: new GetQuoteNode(), name: 'GetQuoteNode' },
         { instance: new GetMarketDepthNode(), name: 'GetMarketDepthNode' },
-        { instance: new StreamQuotesNode(), name: 'StreamQuotesNode' },
         { instance: new GetFundamentalsNode(), name: 'GetFundamentalsNode' },
         { instance: new GetTickerStatsNode(), name: 'GetTickerStatsNode' },
       ];
@@ -455,7 +439,6 @@ class NodeLoaderClass {
         { instance: new PriceAlertTriggerNode(), name: 'PriceAlertTriggerNode' },
         { instance: new NewsEventTriggerNode(), name: 'NewsEventTriggerNode' },
         { instance: new MarketEventTriggerNode(), name: 'MarketEventTriggerNode' },
-        { instance: new WebhookTriggerNode(), name: 'WebhookTriggerNode' },
       ];
 
       for (const { instance, name } of nodes) {
@@ -481,9 +464,6 @@ class NodeLoaderClass {
         { instance: new AgentMediatorNode(), name: 'AgentMediatorNode' },
         { instance: new AgentNode(), name: 'AgentNode' },
         { instance: new MultiAgentNode(), name: 'MultiAgentNode' },
-        { instance: new GeopoliticsAgentNode(), name: 'GeopoliticsAgentNode' },
-        { instance: new HedgeFundAgentNode(), name: 'HedgeFundAgentNode' },
-        { instance: new InvestorAgentNode(), name: 'InvestorAgentNode' },
       ];
 
       for (const { instance, name } of staticNodes) {
@@ -611,45 +591,6 @@ class NodeLoaderClass {
       }
     } catch (error) {
       console.error('[NodeLoader] Error loading data nodes:', error);
-    }
-  }
-
-  /**
-   * Load database nodes
-   */
-  private async loadDatabaseNodes(): Promise<void> {
-    try {
-      const nodes = [
-        { instance: new SQLNode(), name: 'SQLNode' },
-        { instance: new RedisNode(), name: 'RedisNode' },
-        { instance: new MongoDBNode(), name: 'MongoDBNode' },
-      ];
-
-      for (const { instance, name } of nodes) {
-        NodeRegistry.registerNodeType(instance, name);
-        this.loadedNodes.set(instance.description.name, instance);
-      }
-    } catch (error) {
-      console.error('[NodeLoader] Error loading database nodes:', error);
-    }
-  }
-
-  /**
-   * Load integration nodes
-   */
-  private async loadIntegrationNodes(): Promise<void> {
-    try {
-      const nodes = [
-        { instance: new GoogleSheetsNode(), name: 'GoogleSheetsNode' },
-        { instance: new FTPNode(), name: 'FTPNode' },
-      ];
-
-      for (const { instance, name } of nodes) {
-        NodeRegistry.registerNodeType(instance, name);
-        this.loadedNodes.set(instance.description.name, instance);
-      }
-    } catch (error) {
-      console.error('[NodeLoader] Error loading integration nodes:', error);
     }
   }
 

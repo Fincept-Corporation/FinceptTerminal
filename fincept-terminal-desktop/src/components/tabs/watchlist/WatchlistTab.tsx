@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { RefreshCw, Download, WifiOff, Plus, BarChart3 } from 'lucide-react';
+import { useTimezone } from '@/contexts/TimezoneContext';
 import {
   watchlistService,
   Watchlist,
@@ -20,6 +21,7 @@ import { showConfirm, showSuccess, showError } from '@/utils/notifications';
 
 const WatchlistTab: React.FC = () => {
   const { t } = useTranslation('watchlist');
+  const { timezone, formatTime } = useTimezone();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [watchlists, setWatchlists] = useState<Array<Watchlist & { stock_count: number }>>([]);
   const [selectedWatchlist, setSelectedWatchlist] = useState<(Watchlist & { stock_count: number }) | null>(null);
@@ -315,7 +317,10 @@ const WatchlistTab: React.FC = () => {
           </span>
           <span style={{ color: FINCEPT.BORDER }}>|</span>
           <span style={{ color: FINCEPT.CYAN, fontSize: '10px' }}>
-            {currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC
+            {formatTime(currentTime, {
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit'
+            })} {timezone.shortLabel}
           </span>
           {isOffline && (
             <>

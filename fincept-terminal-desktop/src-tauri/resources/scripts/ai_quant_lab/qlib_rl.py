@@ -35,6 +35,7 @@ except ImportError as e:
 
 # Gym/Stable-Baselines3 for RL algorithms
 STABLE_BASELINES_AVAILABLE = False
+gym = None
 try:
     import gymnasium as gym
     from stable_baselines3 import PPO, DQN, A2C, SAC, TD3
@@ -46,7 +47,7 @@ except ImportError:
     pass
 
 
-class TradingEnvironment(gym.Env):
+class TradingEnvironment(gym.Env if gym else object):
     """
     Custom Gym environment for trading using Qlib data
     Supports continuous and discrete action spaces

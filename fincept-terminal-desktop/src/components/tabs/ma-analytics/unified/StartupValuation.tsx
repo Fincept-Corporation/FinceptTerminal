@@ -5,10 +5,18 @@
  */
 
 import React, { useState } from 'react';
-import { Rocket, PlayCircle, Loader2, TrendingUp, AlertTriangle, Target, Users, Lightbulb, Shield } from 'lucide-react';
+import { Rocket, PlayCircle, Loader2, TrendingUp, AlertTriangle, Target, Users, Lightbulb, Shield, ChevronDown, ChevronUp, BarChart3, PieChart as PieChartIcon, Radar as RadarIcon, DollarSign } from 'lucide-react';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
+import { MA_COLORS, CHART_STYLE, CHART_PALETTE } from '../constants';
+import { MAMetricCard, MAChartPanel, MASectionHeader, MAEmptyState, MAExportButton } from '../components';
 import { MAAnalyticsService } from '@/services/maAnalyticsService';
 import { showSuccess, showError } from '@/utils/notifications';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
+  PieChart, Pie, Legend,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  ResponsiveContainer,
+} from 'recharts';
 
 type ValuationMethod = 'berkus' | 'scorecard' | 'vc' | 'first_chicago' | 'risk_factor' | 'comprehensive';
 
@@ -57,10 +65,13 @@ const RISK_FACTORS = [
   { key: 'exit', label: 'Potential Lucrative Exit' },
 ];
 
+const ACCENT = MA_COLORS.startup;
+
 export const StartupValuation: React.FC = () => {
   const [method, setMethod] = useState<ValuationMethod>('berkus');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [inputsExpanded, setInputsExpanded] = useState(true);
 
   // Berkus inputs (0-100% of max $500K per factor)
   const [berkusScores, setBerkusScores] = useState<Record<string, number>>({
@@ -270,19 +281,32 @@ export const StartupValuation: React.FC = () => {
     }
   };
 
+  // ── Build export data from result ──
+  const buildExportData = (): Record<string, any>[] => {
+    if (!result) return [];
+    if (result.methods) {
+      return Object.entries(result.methods).map(([name, res]: [string, any]) => ({
+        method: name.replace(/_/g, ' '),
+        valuation: res.valuation || res.weighted_valuation || res.adjusted_valuation || 0,
+      }));
+    }
+    return [{ method, ...result }];
+  };
+
+  // ── Render method-specific inputs ──
   const renderInputs = () => {
     switch (method) {
       case 'berkus':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
             <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.TINY }}>
               BERKUS FACTORS (0-100%)
             </div>
             {BERKUS_FACTORS.map(factor => (
               <div key={factor.key}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                  <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>{factor.label}</span>
-                  <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.ORANGE }}>
+                  <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO }}>{factor.label}</span>
+                  <span style={{ fontSize: TYPOGRAPHY.TINY, color: ACCENT, fontFamily: TYPOGRAPHY.MONO, fontWeight: TYPOGRAPHY.BOLD }}>
                     {berkusScores[factor.key]}% (${((berkusScores[factor.key] / 100) * factor.max / 1000).toFixed(0)}K)
                   </span>
                 </div>
@@ -292,9 +316,9 @@ export const StartupValuation: React.FC = () => {
                   max="100"
                   value={berkusScores[factor.key]}
                   onChange={(e) => setBerkusScores({ ...berkusScores, [factor.key]: Number(e.target.value) })}
-                  style={{ width: '100%', accentColor: FINCEPT.ORANGE }}
+                  style={{ width: '100%', accentColor: ACCENT }}
                 />
-                <div style={{ fontSize: '9px', color: FINCEPT.MUTED }}>{factor.desc}</div>
+                <div style={{ fontSize: '9px', color: FINCEPT.MUTED, fontFamily: TYPOGRAPHY.MONO }}>{factor.desc}</div>
               </div>
             ))}
           </div>
@@ -302,10 +326,10 @@ export const StartupValuation: React.FC = () => {
 
       case 'scorecard':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-            <div style={{ display: 'flex', gap: SPACING.SMALL }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Stage</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.MEDIUM }}>
+              <div>
+                <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '3px' }}>Stage</label>
                 <select
                   value={scorecardInputs.stage}
                   onChange={(e) => setScorecardInputs({ ...scorecardInputs, stage: e.target.value })}
@@ -316,8 +340,8 @@ export const StartupValuation: React.FC = () => {
                   <option value="series_a">Series A</option>
                 </select>
               </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Region</label>
+              <div>
+                <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '3px' }}>Region</label>
                 <select
                   value={scorecardInputs.region}
                   onChange={(e) => setScorecardInputs({ ...scorecardInputs, region: e.target.value })}
@@ -334,8 +358,8 @@ export const StartupValuation: React.FC = () => {
               FACTOR SCORES (0.5 = Below Avg, 1.0 = Avg, 1.5 = Above)
             </div>
             {SCORECARD_FACTORS.map(factor => (
-              <div key={factor.key} style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
-                <span style={{ flex: 1, fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>
+              <div key={factor.key} style={{ display: 'flex', alignItems: 'center', gap: SPACING.MEDIUM }}>
+                <span style={{ flex: 1, fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO }}>
                   {factor.label} ({(factor.weight * 100).toFixed(0)}%)
                 </span>
                 <input
@@ -348,7 +372,7 @@ export const StartupValuation: React.FC = () => {
                     ...scorecardInputs,
                     assessments: { ...scorecardInputs.assessments, [factor.key]: Number(e.target.value) }
                   })}
-                  style={{ ...COMMON_STYLES.inputField, width: '60px', fontSize: TYPOGRAPHY.TINY }}
+                  style={{ ...COMMON_STYLES.inputField, width: '70px', fontSize: TYPOGRAPHY.TINY }}
                 />
               </div>
             ))}
@@ -357,9 +381,9 @@ export const StartupValuation: React.FC = () => {
 
       case 'vc':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.MEDIUM }}>
             <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Exit Year Revenue ($M)</label>
+              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '3px' }}>Exit Year Revenue ($M)</label>
               <input
                 type="number"
                 value={vcInputs.exitYearMetric}
@@ -368,7 +392,7 @@ export const StartupValuation: React.FC = () => {
               />
             </div>
             <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Exit Multiple (x Revenue)</label>
+              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '3px' }}>Exit Multiple (x Revenue)</label>
               <input
                 type="number"
                 step="0.5"
@@ -378,7 +402,7 @@ export const StartupValuation: React.FC = () => {
               />
             </div>
             <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Years to Exit</label>
+              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '3px' }}>Years to Exit</label>
               <input
                 type="number"
                 value={vcInputs.yearsToExit}
@@ -387,7 +411,7 @@ export const StartupValuation: React.FC = () => {
               />
             </div>
             <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Investment Amount ($M)</label>
+              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '3px' }}>Investment Amount ($M)</label>
               <input
                 type="number"
                 value={vcInputs.investmentAmount}
@@ -395,8 +419,8 @@ export const StartupValuation: React.FC = () => {
                 style={{ ...COMMON_STYLES.inputField, width: '100%' }}
               />
             </div>
-            <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Stage</label>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '3px' }}>Stage</label>
               <select
                 value={vcInputs.stage}
                 onChange={(e) => setVcInputs({ ...vcInputs, stage: e.target.value })}
@@ -413,77 +437,91 @@ export const StartupValuation: React.FC = () => {
 
       case 'first_chicago':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
             <div style={{ ...COMMON_STYLES.dataLabel }}>SCENARIO ANALYSIS</div>
-            {chicagoScenarios.map((scenario, idx) => (
-              <div key={idx} style={{
-                padding: SPACING.SMALL,
-                backgroundColor: FINCEPT.PANEL_BG,
-                borderRadius: '2px',
-                border: `1px solid ${FINCEPT.BORDER}`,
-              }}>
-                <div style={{ fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.WHITE, marginBottom: SPACING.TINY }}>
-                  {scenario.name}
-                </div>
-                <div style={{ display: 'flex', gap: SPACING.SMALL }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Probability %</label>
-                    <input
-                      type="number"
-                      value={scenario.probability}
-                      onChange={(e) => {
-                        const updated = [...chicagoScenarios];
-                        updated[idx].probability = Number(e.target.value);
-                        setChicagoScenarios(updated);
-                      }}
-                      style={{ ...COMMON_STYLES.inputField, width: '100%', fontSize: TYPOGRAPHY.TINY }}
-                    />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: SPACING.MEDIUM }}>
+              {chicagoScenarios.map((scenario, idx) => {
+                const scenarioColors = ['#00D66F', '#FFC400', '#FF3B3B'];
+                return (
+                  <div key={idx} style={{
+                    padding: SPACING.DEFAULT,
+                    backgroundColor: FINCEPT.PANEL_BG,
+                    borderRadius: '2px',
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    borderTop: `2px solid ${scenarioColors[idx]}`,
+                  }}>
+                    <div style={{
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      color: scenarioColors[idx],
+                      marginBottom: SPACING.MEDIUM,
+                      fontSize: TYPOGRAPHY.TINY,
+                      fontFamily: TYPOGRAPHY.MONO,
+                      letterSpacing: TYPOGRAPHY.WIDE,
+                      textTransform: 'uppercase' as const,
+                    }}>
+                      {scenario.name}
+                    </div>
+                    <div style={{ marginBottom: SPACING.SMALL }}>
+                      <label style={{ fontSize: '9px', color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '2px' }}>Probability %</label>
+                      <input
+                        type="number"
+                        value={scenario.probability}
+                        onChange={(e) => {
+                          const updated = [...chicagoScenarios];
+                          updated[idx].probability = Number(e.target.value);
+                          setChicagoScenarios(updated);
+                        }}
+                        style={{ ...COMMON_STYLES.inputField, width: '100%', fontSize: TYPOGRAPHY.TINY }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '9px', color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '2px' }}>Exit Value ($M)</label>
+                      <input
+                        type="number"
+                        value={scenario.exit_value}
+                        onChange={(e) => {
+                          const updated = [...chicagoScenarios];
+                          updated[idx].exit_value = Number(e.target.value);
+                          setChicagoScenarios(updated);
+                        }}
+                        style={{ ...COMMON_STYLES.inputField, width: '100%', fontSize: TYPOGRAPHY.TINY }}
+                      />
+                    </div>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Exit Value ($M)</label>
-                    <input
-                      type="number"
-                      value={scenario.exit_value}
-                      onChange={(e) => {
-                        const updated = [...chicagoScenarios];
-                        updated[idx].exit_value = Number(e.target.value);
-                        setChicagoScenarios(updated);
-                      }}
-                      style={{ ...COMMON_STYLES.inputField, width: '100%', fontSize: TYPOGRAPHY.TINY }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
+                );
+              })}
+            </div>
           </div>
         );
 
       case 'risk_factor':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-            <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Base Valuation ($M)</label>
-              <input
-                type="number"
-                value={riskInputs.baseValuation}
-                onChange={(e) => setRiskInputs({ ...riskInputs, baseValuation: Number(e.target.value) })}
-                style={{ ...COMMON_STYLES.inputField, width: '100%' }}
-              />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: SPACING.MEDIUM, alignItems: 'end' }}>
+              <div>
+                <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '3px' }}>Base Valuation ($M)</label>
+                <input
+                  type="number"
+                  value={riskInputs.baseValuation}
+                  onChange={(e) => setRiskInputs({ ...riskInputs, baseValuation: Number(e.target.value) })}
+                  style={{ ...COMMON_STYLES.inputField, width: '180px' }}
+                />
+              </div>
+              <div style={{ ...COMMON_STYLES.dataLabel }}>
+                RISK ADJUSTMENTS (-2 to +2)
+              </div>
             </div>
-            <div style={{ ...COMMON_STYLES.dataLabel, marginTop: SPACING.SMALL }}>
-              RISK ADJUSTMENTS (-2 to +2)
-            </div>
-            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: `${SPACING.SMALL} ${SPACING.LARGE}` }}>
               {RISK_FACTORS.map(factor => (
-                <div key={factor.key} style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL, marginBottom: '4px' }}>
-                  <span style={{ flex: 1, fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>{factor.label}</span>
+                <div key={factor.key} style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+                  <span style={{ flex: 1, fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO }}>{factor.label}</span>
                   <select
                     value={riskInputs.assessments[factor.key]}
                     onChange={(e) => setRiskInputs({
                       ...riskInputs,
                       assessments: { ...riskInputs.assessments, [factor.key]: Number(e.target.value) }
                     })}
-                    style={{ ...COMMON_STYLES.inputField, width: '80px', fontSize: TYPOGRAPHY.TINY }}
+                    style={{ ...COMMON_STYLES.inputField, width: '90px', fontSize: TYPOGRAPHY.TINY }}
                   >
                     <option value={-2}>-2 (High Risk)</option>
                     <option value={-1}>-1</option>
@@ -499,9 +537,9 @@ export const StartupValuation: React.FC = () => {
 
       case 'comprehensive':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
             <div>
-              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Startup Name</label>
+              <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO, display: 'block', marginBottom: '3px' }}>Startup Name</label>
               <input
                 type="text"
                 value={startupName}
@@ -510,15 +548,16 @@ export const StartupValuation: React.FC = () => {
               />
             </div>
             <div style={{
-              padding: SPACING.SMALL,
-              backgroundColor: `${FINCEPT.ORANGE}15`,
+              padding: SPACING.DEFAULT,
+              backgroundColor: `${ACCENT}10`,
               borderRadius: '2px',
-              border: `1px solid ${FINCEPT.ORANGE}40`,
+              border: `1px solid ${ACCENT}30`,
+              borderLeft: `3px solid ${ACCENT}`,
             }}>
-              <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.ORANGE, fontWeight: TYPOGRAPHY.BOLD }}>
+              <div style={{ fontSize: TYPOGRAPHY.TINY, color: ACCENT, fontWeight: TYPOGRAPHY.BOLD, fontFamily: TYPOGRAPHY.MONO, letterSpacing: TYPOGRAPHY.WIDE }}>
                 COMPREHENSIVE ANALYSIS
               </div>
-              <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginTop: '4px' }}>
+              <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginTop: '4px', fontFamily: TYPOGRAPHY.MONO, lineHeight: 1.5 }}>
                 Runs all 5 valuation methods using inputs from each tab. Configure each method first, then run comprehensive for a complete valuation range.
               </div>
             </div>
@@ -527,129 +566,290 @@ export const StartupValuation: React.FC = () => {
     }
   };
 
+  // ── Berkus Factor Breakdown chart data ──
+  const buildBerkusChartData = () =>
+    BERKUS_FACTORS.map(f => ({
+      factor: f.label,
+      value: (berkusScores[f.key] / 100) * f.max / 1000,
+      pct: berkusScores[f.key],
+    }));
+
+  // ── Risk Factor Radar chart data ──
+  const buildRiskRadarData = () =>
+    RISK_FACTORS.map(f => ({
+      factor: f.label.replace(' Risk', ''),
+      value: riskInputs.assessments[f.key] + 2,
+      fullMark: 4,
+    }));
+
+  // ── First Chicago scenario pie data ──
+  const buildChicagoPieData = () =>
+    chicagoScenarios.map(s => ({
+      name: s.name,
+      value: s.probability,
+      exitValue: s.exit_value,
+    }));
+
+  // ── Methods comparison data ──
+  const buildMethodsComparisonData = () => {
+    if (!result?.methods) return [];
+    return Object.entries(result.methods).map(([name, res]: [string, any]) => ({
+      name: name.replace(/_/g, ' '),
+      valuation: (res.valuation || res.weighted_valuation || res.adjusted_valuation || 0) / 1e6,
+    }));
+  };
+
+  const PIE_COLORS = ['#00D66F', '#FFC400', '#FF3B3B'];
+
+  // ── Render results section ──
   const renderResults = () => {
-    if (!result) {
-      return (
-        <div style={{ ...COMMON_STYLES.emptyState }}>
-          <Rocket size={32} style={{ opacity: 0.3, marginBottom: SPACING.SMALL }} />
-          <span style={{ color: FINCEPT.GRAY }}>Run a valuation to see results</span>
-        </div>
-      );
-    }
+    if (!result) return null;
 
     return (
-      <div style={{ padding: SPACING.DEFAULT }}>
-        <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>
-          VALUATION RESULTS
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.LARGE }}>
 
-        {/* Main valuation */}
-        {result.valuation && (
-          <div style={{
-            padding: SPACING.DEFAULT,
-            backgroundColor: FINCEPT.PANEL_BG,
-            borderRadius: '2px',
-            border: `1px solid ${FINCEPT.ORANGE}`,
-            marginBottom: SPACING.DEFAULT,
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>ESTIMATED VALUATION</div>
-            <div style={{ fontSize: '24px', color: FINCEPT.ORANGE, fontWeight: TYPOGRAPHY.BOLD }}>
-              {formatCurrency(result.valuation)}
-            </div>
+        {/* ── Main valuation metric cards ── */}
+        <MASectionHeader
+          title="Valuation Results"
+          icon={<DollarSign size={14} />}
+          accentColor={ACCENT}
+          action={<MAExportButton data={buildExportData()} filename="startup_valuation" accentColor={ACCENT} />}
+        />
+
+        {/* Berkus / Scorecard / Comprehensive single valuation */}
+        {result.valuation && !result.pre_money_valuation && !result.methods && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: SPACING.DEFAULT }}>
+            <MAMetricCard
+              label="Estimated Valuation"
+              value={formatCurrency(result.valuation)}
+              accentColor={ACCENT}
+            />
           </div>
         )}
 
-        {/* VC Method specific */}
+        {/* VC Method: pre-money / post-money */}
         {result.pre_money_valuation && (
-          <div style={{ display: 'flex', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-            <div style={{ flex: 1, padding: SPACING.SMALL, backgroundColor: FINCEPT.PANEL_BG, borderRadius: '4px' }}>
-              <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>PRE-MONEY</div>
-              <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.GREEN }}>
-                {formatCurrency(result.pre_money_valuation)}
-              </div>
-            </div>
-            <div style={{ flex: 1, padding: SPACING.SMALL, backgroundColor: FINCEPT.PANEL_BG, borderRadius: '4px' }}>
-              <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>POST-MONEY</div>
-              <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.CYAN }}>
-                {formatCurrency(result.post_money_valuation)}
-              </div>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT }}>
+            <MAMetricCard
+              label="Pre-Money Valuation"
+              value={formatCurrency(result.pre_money_valuation)}
+              accentColor={FINCEPT.GREEN}
+            />
+            <MAMetricCard
+              label="Post-Money Valuation"
+              value={formatCurrency(result.post_money_valuation)}
+              accentColor={FINCEPT.CYAN}
+            />
+            {result.ownership_percentage != null && (
+              <MAMetricCard
+                label="Investor Ownership"
+                value={`${(result.ownership_percentage * 100).toFixed(1)}%`}
+                accentColor={ACCENT}
+              />
+            )}
           </div>
         )}
 
-        {/* First Chicago specific */}
-        {result.weighted_valuation && (
-          <div style={{ marginBottom: SPACING.DEFAULT }}>
-            <div style={{
-              padding: SPACING.DEFAULT,
-              backgroundColor: FINCEPT.PANEL_BG,
-              borderRadius: '2px',
-              border: `1px solid ${FINCEPT.ORANGE}`,
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>PROBABILITY-WEIGHTED VALUE</div>
-              <div style={{ fontSize: '24px', color: FINCEPT.ORANGE, fontWeight: TYPOGRAPHY.BOLD }}>
-                {formatCurrency(result.weighted_valuation)}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Risk Factor specific */}
-        {result.adjusted_valuation && (
-          <div style={{ display: 'flex', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
-            <div style={{ flex: 1, padding: SPACING.SMALL, backgroundColor: FINCEPT.PANEL_BG, borderRadius: '4px' }}>
-              <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>BASE VALUE</div>
-              <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.GRAY }}>
-                {formatCurrency(result.base_valuation || riskInputs.baseValuation * 1e6)}
-              </div>
-            </div>
-            <div style={{ flex: 1, padding: SPACING.SMALL, backgroundColor: FINCEPT.PANEL_BG, borderRadius: '4px' }}>
-              <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>ADJUSTED VALUE</div>
-              <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.GREEN }}>
-                {formatCurrency(result.adjusted_valuation)}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Comprehensive results */}
-        {result.methods && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
-            {Object.entries(result.methods).map(([methodName, methodResult]: [string, any]) => (
-              <div key={methodName} style={{
-                padding: SPACING.SMALL,
-                backgroundColor: FINCEPT.PANEL_BG,
-                borderRadius: '2px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}>
-                <span style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.SMALL }}>
-                  {methodName.replace(/_/g, ' ').toUpperCase()}
-                </span>
-                <span style={{ color: FINCEPT.GREEN, fontWeight: TYPOGRAPHY.BOLD }}>
-                  {formatCurrency(methodResult.valuation || methodResult.weighted_valuation || methodResult.adjusted_valuation || 0)}
-                </span>
-              </div>
+        {/* First Chicago: weighted valuation */}
+        {result.weighted_valuation && !result.methods && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT }}>
+            <MAMetricCard
+              label="Probability-Weighted Value"
+              value={formatCurrency(result.weighted_valuation)}
+              accentColor={ACCENT}
+            />
+            {result.scenario_values && result.scenario_values.map((sv: any, i: number) => (
+              <MAMetricCard
+                key={i}
+                label={chicagoScenarios[i]?.name || `Scenario ${i + 1}`}
+                value={formatCurrency(sv || 0)}
+                accentColor={PIE_COLORS[i]}
+                compact
+              />
             ))}
           </div>
         )}
 
-        {/* Raw JSON for debugging */}
-        <details style={{ marginTop: SPACING.DEFAULT }}>
-          <summary style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED, cursor: 'pointer' }}>
+        {/* Risk Factor: base vs adjusted */}
+        {result.adjusted_valuation && !result.methods && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT }}>
+            <MAMetricCard
+              label="Base Valuation"
+              value={formatCurrency(result.base_valuation || riskInputs.baseValuation * 1e6)}
+              accentColor={FINCEPT.GRAY}
+            />
+            <MAMetricCard
+              label="Risk-Adjusted Value"
+              value={formatCurrency(result.adjusted_valuation)}
+              accentColor={FINCEPT.GREEN}
+            />
+            <MAMetricCard
+              label="Total Adjustment"
+              value={formatCurrency((result.adjusted_valuation || 0) - (result.base_valuation || riskInputs.baseValuation * 1e6))}
+              accentColor={
+                ((result.adjusted_valuation || 0) - (result.base_valuation || riskInputs.baseValuation * 1e6)) >= 0
+                  ? FINCEPT.GREEN
+                  : FINCEPT.RED
+              }
+              trend={
+                ((result.adjusted_valuation || 0) - (result.base_valuation || riskInputs.baseValuation * 1e6)) >= 0
+                  ? 'up'
+                  : 'down'
+              }
+            />
+          </div>
+        )}
+
+        {/* Comprehensive: method-level cards */}
+        {result.methods && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: SPACING.DEFAULT }}>
+            {Object.entries(result.methods).map(([methodName, methodResult]: [string, any], idx: number) => (
+              <MAMetricCard
+                key={methodName}
+                label={methodName.replace(/_/g, ' ')}
+                value={formatCurrency(methodResult.valuation || methodResult.weighted_valuation || methodResult.adjusted_valuation || 0)}
+                accentColor={CHART_PALETTE[idx % CHART_PALETTE.length]}
+                compact
+              />
+            ))}
+          </div>
+        )}
+
+        {/* ── Charts ── */}
+
+        {/* Chart 1: Methods Comparison Bar (comprehensive) */}
+        {result.methods && (
+          <MAChartPanel
+            title="Methods Comparison"
+            icon={<BarChart3 size={12} />}
+            accentColor={ACCENT}
+            height={260}
+          >
+            <BarChart data={buildMethodsComparisonData()}>
+              <CartesianGrid {...CHART_STYLE.grid} />
+              <XAxis dataKey="name" tick={CHART_STYLE.axis} interval={0} angle={-15} textAnchor="end" height={50} />
+              <YAxis tick={CHART_STYLE.axis} label={{ value: '$M', ...CHART_STYLE.label, angle: -90, position: 'insideLeft' }} />
+              <Tooltip
+                contentStyle={CHART_STYLE.tooltip}
+                formatter={(value: number) => [`$${value.toFixed(2)}M`, 'Valuation']}
+              />
+              <Bar dataKey="valuation" fill={ACCENT} radius={[2, 2, 0, 0]}>
+                {buildMethodsComparisonData().map((_, i) => (
+                  <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </MAChartPanel>
+        )}
+
+        {/* Chart 2: First Chicago Scenario Pie */}
+        {result.weighted_valuation && !result.methods && method === 'first_chicago' && (
+          <MAChartPanel
+            title="Scenario Probability Distribution"
+            icon={<PieChartIcon size={12} />}
+            accentColor={ACCENT}
+            height={280}
+          >
+            <PieChart>
+              <Pie
+                data={buildChicagoPieData()}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={80}
+                innerRadius={35}
+                label={({ name, value }: any) => `${name}: ${value}%`}
+                labelLine={{ stroke: FINCEPT.MUTED }}
+              >
+                {buildChicagoPieData().map((_, i) => (
+                  <Cell key={i} fill={PIE_COLORS[i]} />
+                ))}
+              </Pie>
+              <Legend
+                wrapperStyle={{ fontSize: '9px', fontFamily: 'var(--ft-font-family, monospace)' }}
+              />
+              <Tooltip
+                contentStyle={CHART_STYLE.tooltip}
+                formatter={(value: number, _name: string, props: any) => [
+                  `${value}% - Exit: $${props.payload.exitValue}M`,
+                  props.payload.name,
+                ]}
+              />
+            </PieChart>
+          </MAChartPanel>
+        )}
+
+        {/* Chart 3: Berkus Factor Breakdown */}
+        {method === 'berkus' && result.valuation && (
+          <MAChartPanel
+            title="Berkus Factor Breakdown"
+            icon={<BarChart3 size={12} />}
+            accentColor={ACCENT}
+            height={240}
+          >
+            <BarChart layout="vertical" data={buildBerkusChartData()}>
+              <YAxis type="category" dataKey="factor" width={130} tick={CHART_STYLE.axis} />
+              <XAxis type="number" tick={CHART_STYLE.axis} unit="K" />
+              <CartesianGrid {...CHART_STYLE.grid} />
+              <Bar dataKey="value" fill={ACCENT} radius={[0, 2, 2, 0]}>
+                {buildBerkusChartData().map((_, i) => (
+                  <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                ))}
+              </Bar>
+              <Tooltip
+                contentStyle={CHART_STYLE.tooltip}
+                formatter={(value: number, _name: string, props: any) => [
+                  `$${value.toFixed(0)}K (${props.payload.pct}%)`,
+                  'Value',
+                ]}
+              />
+            </BarChart>
+          </MAChartPanel>
+        )}
+
+        {/* Chart 4: Risk Factor Radar */}
+        {method === 'risk_factor' && result.adjusted_valuation && (
+          <MAChartPanel
+            title="Risk Factor Profile"
+            icon={<RadarIcon size={12} />}
+            accentColor={ACCENT}
+            height={320}
+          >
+            <RadarChart data={buildRiskRadarData()} cx="50%" cy="50%" outerRadius="70%">
+              <PolarGrid stroke={FINCEPT.BORDER} />
+              <PolarAngleAxis dataKey="factor" tick={{ fontSize: 7, fill: FINCEPT.MUTED, fontFamily: 'var(--ft-font-family, monospace)' }} />
+              <PolarRadiusAxis domain={[0, 4]} tick={{ ...CHART_STYLE.axis, fontSize: 7 }} tickCount={5} />
+              <Radar dataKey="value" stroke={ACCENT} fill={ACCENT} fillOpacity={0.25} strokeWidth={1.5} />
+              <Tooltip
+                contentStyle={CHART_STYLE.tooltip}
+                formatter={(value: number) => [`${(value - 2).toFixed(0)} (raw: ${value.toFixed(0)}/4)`, 'Risk Score']}
+              />
+            </RadarChart>
+          </MAChartPanel>
+        )}
+
+        {/* Raw JSON details */}
+        <details style={{ marginTop: SPACING.SMALL }}>
+          <summary style={{
+            fontSize: TYPOGRAPHY.TINY,
+            color: FINCEPT.MUTED,
+            cursor: 'pointer',
+            fontFamily: TYPOGRAPHY.MONO,
+            padding: SPACING.SMALL,
+          }}>
             Raw Output
           </summary>
           <pre style={{
             fontSize: '9px',
             color: FINCEPT.GRAY,
             backgroundColor: FINCEPT.PANEL_BG,
-            padding: SPACING.SMALL,
+            padding: SPACING.DEFAULT,
             borderRadius: '2px',
+            border: `1px solid ${FINCEPT.BORDER}`,
             overflow: 'auto',
             maxHeight: '200px',
+            fontFamily: TYPOGRAPHY.MONO,
           }}>
             {JSON.stringify(result, null, 2)}
           </pre>
@@ -659,91 +859,158 @@ export const StartupValuation: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      {/* LEFT - Method Selector & Inputs */}
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      overflow: 'hidden',
+      backgroundColor: FINCEPT.DARK_BG,
+      fontFamily: TYPOGRAPHY.MONO,
+    }}>
+
+      {/* ── Horizontal Method Tab Bar ── */}
       <div style={{
-        width: '380px',
-        borderRight: `1px solid ${FINCEPT.BORDER}`,
         display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
+        alignItems: 'stretch',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        flexShrink: 0,
       }}>
-        {/* Method Tabs */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '1px',
-          backgroundColor: FINCEPT.BORDER,
-          borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        }}>
-          {METHODS.map(m => (
+        {METHODS.map(m => {
+          const isActive = method === m.id;
+          return (
             <button
               key={m.id}
               onClick={() => { setMethod(m.id); setResult(null); }}
               style={{
-                padding: SPACING.SMALL,
-                backgroundColor: method === m.id ? FINCEPT.PANEL_BG : FINCEPT.DARK_BG,
+                flex: 1,
+                padding: '8px 6px 6px',
+                backgroundColor: 'transparent',
                 border: 'none',
-                borderBottom: method === m.id ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
-                color: method === m.id ? FINCEPT.ORANGE : FINCEPT.GRAY,
+                borderBottom: isActive ? `2px solid ${ACCENT}` : '2px solid transparent',
+                color: isActive ? ACCENT : FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '9px',
                 fontWeight: TYPOGRAPHY.BOLD,
                 fontFamily: TYPOGRAPHY.MONO,
+                letterSpacing: TYPOGRAPHY.WIDE,
+                textTransform: 'uppercase' as const,
+                transition: 'all 0.15s',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '2px',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) e.currentTarget.style.color = FINCEPT.WHITE;
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) e.currentTarget.style.color = FINCEPT.GRAY;
               }}
             >
-              {m.label}
+              <span>{m.label}</span>
+              <span style={{ fontSize: '7px', color: isActive ? `${ACCENT}99` : FINCEPT.MUTED, fontWeight: 400 }}>
+                {m.desc}
+              </span>
             </button>
-          ))}
-        </div>
+          );
+        })}
+      </div>
 
-        {/* Method Description */}
+      {/* ── Scrollable Content ── */}
+      <div style={{ flex: 1, overflow: 'auto', padding: SPACING.LARGE }}>
+
+        {/* ── Collapsible Inputs Section ── */}
         <div style={{
-          padding: SPACING.SMALL,
-          backgroundColor: FINCEPT.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          borderRadius: '2px',
+          marginBottom: SPACING.LARGE,
         }}>
-          <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED }}>
-            {METHODS.find(m => m.id === method)?.desc}
+          {/* Input section header with collapse toggle */}
+          <div
+            onClick={() => setInputsExpanded(!inputsExpanded)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.MEDIUM,
+              padding: '8px 12px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              cursor: 'pointer',
+              userSelect: 'none' as const,
+              borderBottom: inputsExpanded ? `1px solid ${FINCEPT.BORDER}` : 'none',
+            }}
+          >
+            <Rocket size={12} style={{ color: ACCENT }} />
+            <span style={{
+              fontSize: TYPOGRAPHY.SMALL,
+              fontWeight: TYPOGRAPHY.BOLD,
+              color: ACCENT,
+              letterSpacing: TYPOGRAPHY.WIDE,
+              textTransform: 'uppercase' as const,
+              fontFamily: TYPOGRAPHY.MONO,
+            }}>
+              {METHODS.find(m => m.id === method)?.label} Configuration
+            </span>
+            <div style={{ flex: 1 }} />
+            {inputsExpanded
+              ? <ChevronUp size={12} color={FINCEPT.GRAY} />
+              : <ChevronDown size={12} color={FINCEPT.GRAY} />
+            }
+          </div>
+
+          {/* Input fields */}
+          {inputsExpanded && (
+            <div style={{ padding: SPACING.DEFAULT }}>
+              {renderInputs()}
+            </div>
+          )}
+
+          {/* Run Button - always visible at bottom of config panel */}
+          <div style={{
+            padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
+            borderTop: `1px solid ${FINCEPT.BORDER}`,
+          }}>
+            <button
+              onClick={handleRun}
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '8px 16px',
+                backgroundColor: loading ? FINCEPT.PANEL_BG : ACCENT,
+                border: loading ? `1px solid ${FINCEPT.BORDER}` : 'none',
+                borderRadius: '2px',
+                color: loading ? FINCEPT.GRAY : '#000000',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: TYPOGRAPHY.SMALL,
+                fontWeight: TYPOGRAPHY.BOLD,
+                fontFamily: TYPOGRAPHY.MONO,
+                letterSpacing: TYPOGRAPHY.WIDE,
+                textTransform: 'uppercase' as const,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: SPACING.MEDIUM,
+                transition: 'all 0.15s',
+              }}
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
+              {loading ? 'CALCULATING...' : `RUN ${METHODS.find(m => m.id === method)?.label}`}
+            </button>
           </div>
         </div>
 
-        {/* Inputs */}
-        <div style={{ flex: 1, overflow: 'auto', padding: SPACING.DEFAULT }}>
-          {renderInputs()}
-        </div>
-
-        {/* Run Button */}
-        <div style={{ padding: SPACING.DEFAULT, borderTop: `1px solid ${FINCEPT.BORDER}` }}>
-          <button
-            onClick={handleRun}
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: SPACING.SMALL,
-              backgroundColor: loading ? FINCEPT.PANEL_BG : FINCEPT.ORANGE,
-              border: 'none',
-              borderRadius: '2px',
-              color: loading ? FINCEPT.GRAY : FINCEPT.DARK_BG,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: TYPOGRAPHY.SMALL,
-              fontWeight: TYPOGRAPHY.BOLD,
-              fontFamily: TYPOGRAPHY.MONO,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: SPACING.SMALL,
-            }}
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
-            {loading ? 'CALCULATING...' : `RUN ${METHODS.find(m => m.id === method)?.label}`}
-          </button>
-        </div>
-      </div>
-
-      {/* RIGHT - Results */}
-      <div style={{ flex: 1, overflow: 'auto', backgroundColor: FINCEPT.DARK_BG }}>
-        {renderResults()}
+        {/* ── Results Section ── */}
+        {!result ? (
+          <MAEmptyState
+            icon={<Rocket size={36} />}
+            title="Startup Valuation"
+            description="Select a method and configure inputs"
+            accentColor={ACCENT}
+          />
+        ) : (
+          renderResults()
+        )}
       </div>
     </div>
   );

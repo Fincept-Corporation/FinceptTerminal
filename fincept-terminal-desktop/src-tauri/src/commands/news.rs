@@ -718,31 +718,75 @@ pub fn toggle_user_rss_feed(id: String, enabled: bool) -> Result<(), String> {
 
 /// Test if an RSS feed URL is valid and accessible
 #[tauri::command]
-pub async fn test_rss_feed_url(url: String) -> Result<bool, String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
+pub async fn test_rss_feed_url(url: String) -> Result<serde_json::Value, String> {
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .danger_accept_invalid_certs(false)
         .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    {
+        Ok(c) => c,
+        Err(e) => return Ok(serde_json::json!({
+            "valid": false,
+            "error": format!("Failed to create HTTP client: {}", e)
+        })),
+    };
 
-    let response = client
+    let response = match client
         .get(&url)
         .header("Accept", "application/rss+xml, application/xml, text/xml, */*")
-        .header("User-Agent", "FinceptTerminal/3.0")
+        .header("User-Agent", "Mozilla/5.0 (compatible; FinceptTerminal/3.0)")
         .send()
         .await
-        .map_err(|e| format!("Failed to fetch URL: {}", e))?;
+    {
+        Ok(r) => r,
+        Err(e) => return Ok(serde_json::json!({
+            "valid": false,
+            "error": format!("Network error: {}", e)
+        })),
+    };
+
+    let status = response.status().as_u16();
 
     if !response.status().is_success() {
-        return Ok(false);
+        let preview = response.text().await.unwrap_or_default();
+        let snippet: String = preview.chars().take(300).collect();
+        return Ok(serde_json::json!({
+            "valid": false,
+            "status": status,
+            "error": format!("HTTP {} - server rejected the request", status),
+            "response_preview": snippet
+        }));
     }
 
-    let text = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
+    let text = match response.text().await {
+        Ok(t) => t,
+        Err(e) => return Ok(serde_json::json!({
+            "valid": false,
+            "status": status,
+            "error": format!("Failed to read response body: {}", e)
+        })),
+    };
 
     // Check if it looks like valid RSS/XML
-    let is_valid = text.trim().starts_with('<') &&
-        (text.contains("<rss") || text.contains("<feed") || text.contains("<channel"));
+    let trimmed = text.trim();
+    let starts_with_tag = trimmed.starts_with('<');
+    let has_rss = trimmed.contains("<rss");
+    let has_feed = trimmed.contains("<feed");
+    let has_channel = trimmed.contains("<channel");
+    let is_valid = starts_with_tag && (has_rss || has_feed || has_channel);
 
-    Ok(is_valid)
+    let snippet: String = trimmed.chars().take(300).collect();
+
+    Ok(serde_json::json!({
+        "valid": is_valid,
+        "status": status,
+        "starts_with_tag": starts_with_tag,
+        "has_rss_tag": has_rss,
+        "has_feed_tag": has_feed,
+        "has_channel_tag": has_channel,
+        "response_preview": snippet
+    }))
 }
 
 /// Toggle enabled status of a default RSS feed

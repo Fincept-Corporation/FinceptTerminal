@@ -310,6 +310,21 @@ class MeanVarianceOptimizer:
         else:
             max_return = min_return + 3 * min_var_result["volatility"]
 
+        # Guard against degenerate case where min == max return
+        if np.isclose(min_return, max_return):
+            return {
+                "success": True,
+                "frontier": [{
+                    "expected_return": min_var_result["expected_return"],
+                    "volatility": min_var_result["volatility"],
+                    "sharpe_ratio": min_var_result["sharpe_ratio"],
+                    "weights": min_var_result["weights"]
+                }],
+                "n_points": 1,
+                "min_variance_portfolio": min_var_result,
+                "note": "Degenerate frontier: all assets have identical expected returns"
+            }
+
         # Generate target returns
         target_returns = np.linspace(min_return, max_return, n_points)
 
@@ -405,6 +420,8 @@ class MeanCVaROptimizer:
     def _portfolio_var(self, weights: np.ndarray) -> float:
         """Calculate portfolio VaR."""
         port_returns = self.returns @ weights
+        if len(port_returns) == 0:
+            return 0.0
         sorted_idx = np.argsort(port_returns)
         sorted_returns = port_returns[sorted_idx]
         sorted_probs = self.probabilities[sorted_idx]
@@ -554,6 +571,22 @@ class MeanCVaROptimizer:
             max_return = np.max(self.mean_returns)
         else:
             max_return = min_return + 3 * min_cvar_result["cvar"]
+
+        # Guard against degenerate case where min == max return
+        if np.isclose(min_return, max_return):
+            return {
+                "success": True,
+                "frontier": [{
+                    "expected_return": min_cvar_result["expected_return"],
+                    "cvar": min_cvar_result["cvar"],
+                    "var": min_cvar_result["var"],
+                    "weights": min_cvar_result["weights"]
+                }],
+                "n_points": 1,
+                "min_cvar_portfolio": min_cvar_result,
+                "alpha": self.alpha,
+                "note": "Degenerate frontier: all assets have identical expected returns"
+            }
 
         # Generate target returns
         target_returns = np.linspace(min_return, max_return, n_points)

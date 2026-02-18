@@ -98,11 +98,16 @@ export interface MergerModelInputs {
     payment_cash_pct: number;
     payment_stock_pct: number;
     exchange_ratio?: number;
+    cost_synergies?: number;
+    revenue_synergies?: number;
+    integration_costs?: number;
+    tax_rate?: number;
   };
 }
 
 export interface LBOInputs {
   company_data: {
+    company_name?: string;
     revenue: number;
     ebitda: number;
     ebit: number;
@@ -113,8 +118,16 @@ export interface LBOInputs {
     purchase_price: number;
     entry_multiple: number;
     exit_multiple: number;
+    exit_multiples?: number[];
     debt_percent: number;
     equity_percent: number;
+    target_leverage?: number;
+    revenue_growth?: number;
+    ebitda_margin?: number;
+    capex_pct_revenue?: number;
+    nwc_pct_revenue?: number;
+    tax_rate?: number;
+    hurdle_irr?: number;
   };
   projection_years: number;
 }
@@ -302,12 +315,14 @@ export class ValuationService {
   static async calculatePrecedentTransactions(
     targetData: Record<string, any>,
     compDeals: MADeal[]
-  ): Promise<ValuationResult> {
+  ): Promise<any> {
     const result = await invoke('calculate_precedent_transactions', {
       targetData: JSON.stringify(targetData),
       compDeals: JSON.stringify(compDeals),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Precedent transactions failed');
+    return parsed;
   }
 
   /**
@@ -316,12 +331,14 @@ export class ValuationService {
   static async calculateTradingComps(
     targetTicker: string,
     compTickers: string[]
-  ): Promise<ValuationResult> {
+  ): Promise<any> {
     const result = await invoke('calculate_trading_comps', {
       targetTicker,
       compTickers: JSON.stringify(compTickers),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Trading comps failed');
+    return parsed;
   }
 
   /**
@@ -371,7 +388,9 @@ export class ValuationService {
       balanceSheet: JSON.stringify(balanceSheet),
       sharesOutstanding,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'DCF sensitivity failed');
+    return parsed;
   }
 
   /**
@@ -385,7 +404,9 @@ export class ValuationService {
       valuationMethods: JSON.stringify(valuationMethods),
       sharesOutstanding,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Football field generation failed');
+    return parsed;
   }
 }
 
@@ -403,7 +424,25 @@ export class MergerModelService {
       targetData: JSON.stringify(inputs.target_data),
       dealStructure: JSON.stringify(inputs.deal_structure),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Merger model failed');
+    const d = parsed.data;
+    // Flatten for UI: accretion_dilution fields + pro_forma fields at top level
+    const ad = d.accretion_dilution || {};
+    const pf = d.pro_forma_year1 || {};
+    return {
+      ...d,
+      // Accretion/Dilution fields at top level for UI
+      eps_accretion_pct: ad.accretion_dilution_pct ?? 0,
+      pro_forma_eps: ad.pro_forma_eps ?? pf.eps ?? 0,
+      standalone_eps: ad.standalone_eps ?? 0,
+      is_accretive: ad.is_accretive ?? false,
+      // Pro Forma fields at top level for UI
+      pro_forma_revenue: pf.revenue ?? 0,
+      pro_forma_shares: pf.shares_outstanding ?? 0,
+      pro_forma_net_income: pf.net_income ?? 0,
+      pro_forma_ebitda: pf.ebitda ?? 0,
+    };
   }
 
   /**
@@ -415,7 +454,9 @@ export class MergerModelService {
     const result = await invoke('calculate_accretion_dilution', {
       mergerModelData: JSON.stringify(mergerModelData),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Accretion/Dilution failed');
+    return parsed.data;
   }
 
   /**
@@ -431,7 +472,23 @@ export class MergerModelService {
       targetData: JSON.stringify(targetData),
       year,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Pro forma failed');
+    const d = parsed.data;
+    const pf = d.pro_forma || {};
+    // Flatten pro_forma fields with combined_ prefix for UI
+    return {
+      data: {
+        combined_revenue: pf.revenue ?? 0,
+        combined_ebitda: pf.ebitda ?? 0,
+        combined_net_income: pf.net_income ?? 0,
+        combined_eps: pf.eps ?? 0,
+        combined_shares: pf.shares_outstanding ?? 0,
+        pro_forma: pf,
+        standalone_vs_proforma: d.standalone_vs_proforma || {},
+        year: d.year,
+      },
+    };
   }
 
   /**
@@ -445,7 +502,9 @@ export class MergerModelService {
       dealStructure: JSON.stringify(dealStructure),
       financingStructure: JSON.stringify(financingStructure),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Sources & Uses failed');
+    return { data: parsed.data };
   }
 
   /**
@@ -461,7 +520,34 @@ export class MergerModelService {
       targetData: JSON.stringify(targetData),
       ownershipSplit,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Contribution analysis failed');
+    const d = parsed.data;
+    // Restructure for UI: { contributions: { revenue: {acquirer_pct, target_pct}, ... }, fairness_assessment }
+    const { ownership, ...metrics } = d;
+    const contributions: Record<string, any> = {};
+    for (const [key, val] of Object.entries(metrics)) {
+      contributions[key.replace('_contribution', '')] = val;
+    }
+    // Fairness assessment: check if ownership % roughly matches contribution %
+    const avgAcqContrib = Object.values(contributions).reduce(
+      (sum: number, v: any) => sum + (v.acquirer_pct || 0), 0
+    ) / Math.max(Object.keys(contributions).length, 1);
+    const ownershipDelta = Math.abs((ownership?.acquirer_pct || 0) - avgAcqContrib);
+    return {
+      data: {
+        contributions,
+        ownership,
+        fairness_assessment: {
+          is_fair: ownershipDelta < 15,
+          commentary: ownershipDelta < 5
+            ? 'Ownership closely reflects financial contributions. Deal structure appears fair.'
+            : ownershipDelta < 15
+            ? `Moderate gap (${ownershipDelta.toFixed(1)}pp) between ownership and contribution. Review recommended.`
+            : `Significant gap (${ownershipDelta.toFixed(1)}pp) between ownership and contribution. Deal may disadvantage one party.`,
+        },
+      },
+    };
   }
 }
 
@@ -479,7 +565,9 @@ export class LBOModelService {
       transactionAssumptions: JSON.stringify(inputs.transaction_assumptions),
       projectionYears: inputs.projection_years,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'LBO model failed');
+    return parsed;
   }
 
   /**
@@ -524,7 +612,9 @@ export class LBOModelService {
       cashFlows: JSON.stringify(cashFlows),
       sweepPercentage,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Debt schedule analysis failed');
+    return parsed;
   }
 
   /**
@@ -540,7 +630,9 @@ export class LBOModelService {
       revenueGrowthScenarios: JSON.stringify(revenueGrowthScenarios),
       exitMultipleScenarios: JSON.stringify(exitMultipleScenarios),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'LBO sensitivity analysis failed');
+    return parsed;
   }
 }
 
@@ -558,7 +650,9 @@ export class StartupValuationService {
     const result = await invoke('calculate_berkus_valuation', {
       factorScores: JSON.stringify(factorScores),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Berkus valuation failed');
+    return parsed.data;
   }
 
   /**
@@ -574,7 +668,9 @@ export class StartupValuationService {
       region,
       factorAssessments: JSON.stringify(factorAssessments),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Scorecard valuation failed');
+    return parsed.data;
   }
 
   /**
@@ -594,7 +690,9 @@ export class StartupValuationService {
       investmentAmount,
       stage,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'VC method valuation failed');
+    return parsed.data;
   }
 
   /**
@@ -612,7 +710,9 @@ export class StartupValuationService {
     const result = await invoke('calculate_first_chicago_valuation', {
       scenarios: JSON.stringify(scenarios),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'First Chicago valuation failed');
+    return parsed.data;
   }
 
   /**
@@ -626,7 +726,9 @@ export class StartupValuationService {
       baseValuation,
       riskAssessments: JSON.stringify(riskAssessments),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Risk factor valuation failed');
+    return parsed.data;
   }
 
   /**
@@ -647,7 +749,9 @@ export class StartupValuationService {
         ? JSON.stringify(inputs.risk_factor_assessments)
         : undefined,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Comprehensive startup valuation failed');
+    return parsed.data;
   }
 
   /**
@@ -665,7 +769,9 @@ export class StartupValuationService {
       prototypeStatus,
       marketSize,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Quick pre-revenue valuation failed');
+    return parsed.data;
   }
 }
 
@@ -689,7 +795,9 @@ export class DealStructureService {
       acquirerCash,
       debtCapacity,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Payment structure analysis failed');
+    return parsed.data;
   }
 
   /**
@@ -703,7 +811,9 @@ export class DealStructureService {
       earnoutParams: JSON.stringify(earnoutParams),
       financialProjections: JSON.stringify(financialProjections),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Earnout valuation failed');
+    return parsed.data;
   }
 
   /**
@@ -719,7 +829,9 @@ export class DealStructureService {
       targetPrice,
       offerPremium,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Exchange ratio calculation failed');
+    return parsed.data;
   }
 
   /**
@@ -733,7 +845,9 @@ export class DealStructureService {
       collarParams: JSON.stringify(collarParams),
       priceScenarios: JSON.stringify(priceScenarios),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Collar mechanism analysis failed');
+    return parsed.data;
   }
 
   /**
@@ -747,7 +861,9 @@ export class DealStructureService {
       cvrType,
       cvrParams: JSON.stringify(cvrParams),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'CVR valuation failed');
+    return parsed.data;
   }
 }
 
@@ -767,7 +883,9 @@ export class SynergiesService {
       synergyType,
       synergyParams: JSON.stringify(synergyParams),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Revenue synergy calculation failed');
+    return parsed.data;
   }
 
   /**
@@ -781,7 +899,9 @@ export class SynergiesService {
       synergyType,
       synergyParams: JSON.stringify(synergyParams),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Cost synergy calculation failed');
+    return parsed.data;
   }
 
   /**
@@ -797,7 +917,9 @@ export class SynergiesService {
       complexityLevel,
       integrationPlan: JSON.stringify(integrationPlan),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Integration cost estimation failed');
+    return parsed.data;
   }
 
   /**
@@ -815,7 +937,9 @@ export class SynergiesService {
       integrationCosts: JSON.stringify(integrationCosts),
       discountRate,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Synergy DCF valuation failed');
+    return parsed.data;
   }
 }
 
@@ -835,7 +959,9 @@ export class FairnessOpinionService {
       offerPrice: inputs.offer_price,
       qualitativeFactors: JSON.stringify(inputs.qualitative_factors),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Fairness opinion generation failed');
+    return parsed.data;
   }
 
   /**
@@ -851,7 +977,9 @@ export class FairnessOpinionService {
       offerPrice,
       announcementDate,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Premium fairness analysis failed');
+    return parsed.data;
   }
 
   /**
@@ -863,7 +991,9 @@ export class FairnessOpinionService {
     const result = await invoke('assess_process_quality', {
       processFactors: JSON.stringify(processFactors),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Process quality assessment failed');
+    return parsed.data;
   }
 }
 
@@ -883,7 +1013,9 @@ export class IndustryMetricsService {
       sector,
       companyData: JSON.stringify(companyData),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Tech metrics calculation failed');
+    return parsed.data;
   }
 
   /**
@@ -897,7 +1029,9 @@ export class IndustryMetricsService {
       sector,
       companyData: JSON.stringify(companyData),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Healthcare metrics calculation failed');
+    return parsed.data;
   }
 
   /**
@@ -911,7 +1045,9 @@ export class IndustryMetricsService {
       sector,
       institutionData: JSON.stringify(institutionData),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Financial services metrics calculation failed');
+    return parsed.data;
   }
 }
 
@@ -941,7 +1077,9 @@ export class AdvancedAnalyticsService {
       discountRate,
       simulations,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Monte Carlo valuation failed');
+    return parsed.data;
   }
 
   /**
@@ -957,7 +1095,9 @@ export class AdvancedAnalyticsService {
       subjectMetrics: JSON.stringify(subjectMetrics),
       regressionType,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Regression valuation failed');
+    return parsed.data;
   }
 }
 
@@ -973,7 +1113,9 @@ export class DealComparisonService {
     const result = await invoke('compare_deals', {
       deals: JSON.stringify(deals),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Deal comparison failed');
+    return parsed.data;
   }
 
   /**
@@ -987,7 +1129,9 @@ export class DealComparisonService {
       deals: JSON.stringify(deals),
       criteria,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Deal ranking failed');
+    return parsed.data;
   }
 
   /**
@@ -1001,7 +1145,9 @@ export class DealComparisonService {
       targetDeal: JSON.stringify(targetDeal),
       comparableDeals: JSON.stringify(comparableDeals),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Deal premium benchmark failed');
+    return parsed.data;
   }
 
   /**
@@ -1011,7 +1157,9 @@ export class DealComparisonService {
     const result = await invoke('analyze_payment_structures', {
       deals: JSON.stringify(deals),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Payment structure analysis failed');
+    return parsed.data;
   }
 
   /**
@@ -1021,7 +1169,9 @@ export class DealComparisonService {
     const result = await invoke('analyze_industry_deals', {
       deals: JSON.stringify(deals),
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'Industry deal analysis failed');
+    return parsed.data;
   }
 }
 

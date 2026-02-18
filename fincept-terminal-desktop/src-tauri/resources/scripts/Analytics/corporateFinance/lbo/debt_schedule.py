@@ -157,27 +157,94 @@ def main():
             from corporateFinance.lbo.capital_structure import DebtTranche
 
             tranches = []
-            for t in (debt_structure.get('tranches', []) if isinstance(debt_structure, dict) else debt_structure):
-                tranche = DebtTranche(
-                    name=t.get('name', ''),
-                    amount=t.get('amount', t.get('principal', 0)),
-                    interest_rate=t.get('interest_rate', 0),
-                    amortization_years=t.get('amortization_years', t.get('maturity_years', t.get('maturity', 7))),
-                    type=t.get('type', t.get('tranche_type', 'Term Loan')),
-                    mandatory_amortization=t.get('mandatory_amortization', t.get('mandatory_amort_pct', t.get('amortization_rate', 0))),
-                    sweep_percentage=t.get('sweep_percentage', t.get('sweep_priority', 0))
-                )
-                tranches.append(tranche)
 
-            debt_schedule = DebtSchedule(tranches)
-            fcf_list = cash_flows if isinstance(cash_flows, list) else cash_flows.get('fcf_projection', cash_flows.get('cash_flows', []))
-            schedule = debt_schedule.calculate_annual_schedule(
+            # Handle frontend format: {senior: {amount, rate, term}, subordinated: {...}, revolver: {...}}
+            if isinstance(debt_structure, dict) and 'senior' in debt_structure:
+                senior = debt_structure.get('senior', {})
+                if senior.get('amount', 0) > 0:
+                    tranches.append(DebtTranche(
+                        name='Senior', amount=senior['amount'],
+                        interest_rate=senior.get('rate', 0.055),
+                        amortization_years=senior.get('term', 7),
+                        type='Term Loan B',
+                        mandatory_amortization=0.01,
+                        sweep_percentage=sweep_percentage
+                    ))
+                sub = debt_structure.get('subordinated', {})
+                if sub.get('amount', 0) > 0:
+                    tranches.append(DebtTranche(
+                        name='Subordinated', amount=sub['amount'],
+                        interest_rate=sub.get('rate', 0.085),
+                        amortization_years=sub.get('term', 10),
+                        type='Subordinated',
+                        mandatory_amortization=0,
+                        sweep_percentage=0
+                    ))
+                rev = debt_structure.get('revolver', {})
+                if rev.get('amount', 0) > 0:
+                    tranches.append(DebtTranche(
+                        name='Revolver', amount=rev['amount'],
+                        interest_rate=rev.get('rate', 0.04),
+                        amortization_years=5,
+                        type='Revolver',
+                        mandatory_amortization=0,
+                        sweep_percentage=0
+                    ))
+            else:
+                # Handle standard format: {tranches: [{name, amount, ...}]} or array
+                for t in (debt_structure.get('tranches', []) if isinstance(debt_structure, dict) else debt_structure):
+                    tranche = DebtTranche(
+                        name=t.get('name', ''),
+                        amount=t.get('amount', t.get('principal', 0)),
+                        interest_rate=t.get('interest_rate', 0),
+                        amortization_years=t.get('amortization_years', t.get('maturity_years', t.get('maturity', 7))),
+                        type=t.get('type', t.get('tranche_type', 'Term Loan')),
+                        mandatory_amortization=t.get('mandatory_amortization', t.get('mandatory_amort_pct', t.get('amortization_rate', 0))),
+                        sweep_percentage=t.get('sweep_percentage', t.get('sweep_priority', 0))
+                    )
+                    tranches.append(tranche)
+
+            # Handle cash flows: frontend sends {ebitda: [], capex: [], interest_paid: [], taxes: []}
+            if isinstance(cash_flows, dict):
+                ebitda = cash_flows.get('ebitda', [])
+                capex = cash_flows.get('capex', [0] * len(ebitda))
+                taxes = cash_flows.get('taxes', [0] * len(ebitda))
+                interest = cash_flows.get('interest_paid', [0] * len(ebitda))
+                fcf_list = [e - c - t - i for e, c, t, i in zip(ebitda, capex, taxes, interest)]
+            elif isinstance(cash_flows, list):
+                fcf_list = cash_flows
+            else:
+                fcf_list = []
+
+            debt_sched = DebtSchedule(tranches)
+            schedule = debt_sched.calculate_annual_schedule(
                 fcf_list,
                 years=len(fcf_list) if fcf_list else 7
             )
-            summary = debt_schedule.summarize_debt_paydown(schedule)
+            raw_summary = debt_sched.summarize_debt_paydown(schedule)
 
-            result = {"success": True, "data": {"schedule": schedule, "summary": summary}}
+            # Transform schedule dict to array with frontend-expected field names
+            schedule_array = []
+            for year_key in sorted(schedule.keys(), key=lambda k: int(k)):
+                row = schedule[year_key]
+                schedule_array.append({
+                    'year': int(year_key),
+                    'opening': row.get('total_debt_beginning', 0),
+                    'interest': row.get('total_interest_expense', 0),
+                    'paydown': row.get('total_debt_paydown', 0),
+                    'closing': row.get('total_debt_ending', 0),
+                })
+
+            # Transform summary to frontend-expected field names
+            summary = {
+                'total_debt': raw_summary.get('initial_debt', 0),
+                'total_interest': raw_summary.get('total_interest_paid', 0),
+                'total_paydown': raw_summary.get('total_paydown', 0),
+                'exit_debt': raw_summary.get('final_debt', 0),
+                'paydown_percentage': raw_summary.get('paydown_percentage', 0),
+            }
+
+            result = {"success": True, "data": {"schedule": schedule_array, "summary": summary}}
             print(json.dumps(result))
 
         else:

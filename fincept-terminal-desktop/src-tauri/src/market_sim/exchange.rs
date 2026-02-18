@@ -465,6 +465,12 @@ impl Exchange {
             } => {
                 let order_id = self.matching_engine.allocate_order_id();
 
+                let current_display = if matches!(order_type, OrderType::Iceberg) {
+                    display_quantity.min(quantity)
+                } else {
+                    quantity
+                };
+
                 let order = Order {
                     id: order_id,
                     participant_id,
@@ -478,6 +484,7 @@ impl Exchange {
                     remaining_quantity: quantity,
                     stop_price: 0,
                     display_quantity,
+                    current_display,
                     hidden,
                     trailing_offset: 0,
                     status: OrderStatus::PendingNew,
@@ -565,6 +572,8 @@ impl Exchange {
         match &event {
             SimEvent::TradeExecuted(te) => {
                 let trade = &te.trade;
+                let instrument_id = trade.instrument_id;
+                let timestamp = trade.timestamp;
 
                 // Register with clearing
                 self.clearing_house.register_trade(trade);
@@ -590,7 +599,28 @@ impl Exchange {
                 // Notify agents of fills
                 for (pid, agent) in &mut self.agents {
                     if *pid == trade.buyer_id || *pid == trade.seller_id {
-                        agent.on_fill(trade);
+                        agent.on_fill(trade, *pid);
+                    }
+                }
+
+                // Update trailing stops and check stop order triggers
+                self.matching_engine.update_trailing_stops(instrument_id);
+                let stop_events = self.matching_engine.check_stop_orders(instrument_id, timestamp);
+                for stop_event in stop_events {
+                    self.handle_engine_event(stop_event);
+                }
+
+                // Update pegged orders when BBO may have changed
+                let peg_events = self.matching_engine.update_pegged_orders(instrument_id, timestamp);
+                for peg_event in peg_events {
+                    self.handle_engine_event(peg_event);
+                }
+            }
+            SimEvent::OrderAccepted(oa) => {
+                // Notify agent of accepted order so it can track order IDs
+                for (pid, agent) in &mut self.agents {
+                    if *pid == oa.participant_id {
+                        agent.on_order_accepted(oa.order_id, oa.side);
                     }
                 }
             }
