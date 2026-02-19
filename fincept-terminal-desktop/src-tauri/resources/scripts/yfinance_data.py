@@ -249,7 +249,7 @@ def get_batch_quotes(symbols):
         # that would corrupt the JSON output parsed by Rust
         _buf = io.StringIO()
         with contextlib.redirect_stdout(_buf):
-            data = yf.download(symbols, period="5d", group_by='ticker', progress=False, threads=False, auto_adjust=True)
+            data = yf.download(symbols, period="2d", group_by='ticker', progress=False, threads=True, auto_adjust=True)
 
         if data is None or data.empty:
             return []
