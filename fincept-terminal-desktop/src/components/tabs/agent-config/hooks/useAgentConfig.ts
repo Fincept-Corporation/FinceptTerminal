@@ -16,6 +16,7 @@ import {
   getLLMConfigs,
   getActiveLLMConfig,
   getAgentConfigs,
+  getSetting,
   LLM_PROVIDERS as DB_LLM_PROVIDERS,
   type AgentConfigData,
 } from '@/services/core/sqliteService';
@@ -440,6 +441,16 @@ export function useAgentConfig() {
         if (config.base_url) {
           apiKeys[`${config.provider.toUpperCase()}_BASE_URL`] = config.base_url;
           apiKeys[`${config.provider}_base_url`] = config.base_url;
+        }
+      }
+      // Always include the Fincept session API key (saved on login) so
+      // the finagent_core Python agent can use the fincept provider even
+      // if the user hasn't manually added it in LLM Settings.
+      if (!apiKeys['fincept']) {
+        const finceptKey = await getSetting('fincept_api_key');
+        if (finceptKey) {
+          apiKeys['fincept'] = finceptKey;
+          apiKeys['FINCEPT_API_KEY'] = finceptKey;
         }
       }
       return apiKeys;

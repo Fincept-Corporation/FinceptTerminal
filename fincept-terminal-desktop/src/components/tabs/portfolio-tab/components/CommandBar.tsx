@@ -34,6 +34,8 @@ interface CommandBarProps {
   onToggleFFN?: () => void;
   onAnalyzeWithAI?: () => void;
   aiAnalyzing?: boolean;
+  onRunAgent?: () => void;
+  agentRunning?: boolean;
   detailView?: DetailView | null;
   onSetDetailView?: (view: DetailView | null) => void;
 }
@@ -53,7 +55,7 @@ const DETAIL_VIEW_BUTTONS: { view: DetailView; label: string; icon: React.Elemen
 const CommandBar: React.FC<CommandBarProps> = ({
   portfolios, selectedPortfolio, onSelectPortfolio, portfolioSummary,
   onCreatePortfolio, onDeletePortfolio, onBuy, onSell, onRefresh, onExport, onExportJSON, onImport, refreshing, currency,
-  refreshIntervalMs, onSetRefreshInterval, showFFN, onToggleFFN, onAnalyzeWithAI, aiAnalyzing,
+  refreshIntervalMs, onSetRefreshInterval, showFFN, onToggleFFN, onAnalyzeWithAI, aiAnalyzing, onRunAgent, agentRunning,
   detailView, onSetDetailView,
 }) => {
   const { t } = useTranslation('portfolio');
@@ -337,6 +339,26 @@ const CommandBar: React.FC<CommandBarProps> = ({
             >
               <Bot size={10} className={aiAnalyzing ? 'animate-pulse' : ''} />
               {aiAnalyzing ? 'ANALYZING...' : 'AI'}
+            </button>
+          )}
+          {onRunAgent && (
+            <button
+              onClick={onRunAgent}
+              disabled={agentRunning}
+              title="Run a saved agent on this portfolio"
+              style={{
+                padding: '5px 10px',
+                backgroundColor: agentRunning ? '#00D4AA22' : 'transparent',
+                border: '1px solid #00D4AA',
+                color: '#00D4AA',
+                cursor: agentRunning ? 'wait' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: '4px',
+                fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px',
+                opacity: agentRunning ? 0.7 : 1,
+              }}
+            >
+              <Bot size={10} className={agentRunning ? 'animate-pulse' : ''} />
+              {agentRunning ? 'RUNNING...' : 'AGENT'}
             </button>
           )}
         </div>

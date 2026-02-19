@@ -182,7 +182,8 @@ fn handle_tool_call(
         return;
     }
 
-    // Wait for TypeScript to call register_mcp_tool_result (max 30 seconds).
+    // Wait for TypeScript to call register_mcp_tool_result (max 90 seconds).
+    // Economics tools (CEIC, central bank rates) can take 15-30s each.
     // We're on a std thread (not a tokio task), so we create a minimal runtime.
     let result = {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -190,7 +191,7 @@ fn handle_tool_call(
             .build()
             .expect("mini runtime for MCP bridge");
         rt.block_on(async {
-            tokio::time::timeout(std::time::Duration::from_secs(30), rx).await
+            tokio::time::timeout(std::time::Duration::from_secs(90), rx).await
         })
     };
 

@@ -396,14 +396,20 @@ async function getTerminalToolDefinitions(): Promise<AgentConfig['terminal_tools
  */
 async function execute<T = any>(payload: AgentPayload): Promise<AgentResponse<T>> {
   try {
-    // Inject terminal tool schemas for 'run' actions so Python can use TypeScript tools
+    // Inject terminal tool schemas for 'run' actions so Python can use TypeScript tools.
+    // Skip for Fincept provider — its endpoint has a ~50KB payload limit and terminal tools
+    // are not needed there (the Portfolio Analyst agent uses its own built-in MCP tools).
     if (payload.action === 'run' && payload.config) {
-      const terminalTools = await getTerminalToolDefinitions();
-      if (terminalTools && terminalTools.length > 0) {
-        payload = {
-          ...payload,
-          config: { ...payload.config, terminal_tools: terminalTools },
-        };
+      const provider = payload.config.model?.provider?.toLowerCase() ?? '';
+      const isFincept = provider === 'fincept' || provider === 'fincept-llm';
+      if (!isFincept) {
+        const terminalTools = await getTerminalToolDefinitions();
+        if (terminalTools && terminalTools.length > 0) {
+          payload = {
+            ...payload,
+            config: { ...payload.config, terminal_tools: terminalTools },
+          };
+        }
       }
     }
     const result = await invoke<string>('execute_core_agent', { payload });
@@ -1029,7 +1035,9 @@ export async function createPortfolioPlan(
 }
 
 /**
- * Run AI analysis on a portfolio summary - formats data and routes to agent
+ * Run AI analysis on a portfolio using live internal MCP tools.
+ * The agent fetches real-time holdings, risk metrics, diversification, and
+ * macro data itself via the terminal tool bridge — not pre-baked text.
  */
 export async function runPortfolioAnalysis(
   portfolioSummary: {
@@ -1054,17 +1062,58 @@ export async function runPortfolioAnalysis(
   apiKeys?: Record<string, string>,
   agentConfig?: AgentConfig,
 ): Promise<AgentResponse> {
-  const topHoldings = portfolioSummary.holdings
-    .sort((a, b) => b.weight - a.weight)
-    .slice(0, 10)
-    .map(h => `${h.symbol} (${h.weight.toFixed(1)}%, P&L: ${h.unrealized_pnl_percent.toFixed(1)}%)`)
-    .join(', ');
+  const portfolioId = portfolioSummary.portfolio.id;
+  const portfolioName = portfolioSummary.portfolio.name;
+  const currency = portfolioSummary.portfolio.currency;
+  const nav = `${currency} ${portfolioSummary.total_market_value.toFixed(2)}`;
 
+  // Each analysis type gets a focused query that tells the agent
+  // exactly which tools to call and what to do with the results.
   const queries: Record<string, string> = {
-    full: `Analyze my portfolio "${portfolioSummary.portfolio.name}": NAV ${portfolioSummary.portfolio.currency} ${portfolioSummary.total_market_value.toFixed(2)}, Total P&L ${portfolioSummary.total_unrealized_pnl_percent.toFixed(2)}%, Day change ${portfolioSummary.total_day_change_percent.toFixed(2)}%. Top holdings: ${topHoldings}. Provide comprehensive analysis: risk assessment, diversification, key risks, and actionable recommendations.`,
-    risk: `Risk analysis for portfolio "${portfolioSummary.portfolio.name}": NAV ${portfolioSummary.portfolio.currency} ${portfolioSummary.total_market_value.toFixed(2)}. Holdings: ${topHoldings}. Assess concentration risk, correlation, volatility exposure, and suggest risk mitigation strategies.`,
-    rebalance: `Rebalancing recommendations for portfolio "${portfolioSummary.portfolio.name}": Holdings: ${topHoldings}. Suggest optimal rebalancing to improve diversification, risk-adjusted returns, and alignment with best practices.`,
-    opportunities: `Investment opportunities for portfolio "${portfolioSummary.portfolio.name}": Current holdings: ${topHoldings}. Identify gaps, sectors to add, underweighted areas, and specific buy/sell recommendations.`,
+    full: `Run a comprehensive analysis of my portfolio "${portfolioName}" (ID: ${portfolioId}, NAV: ${nav}).
+Use these tools in order:
+1. get_my_stocks — get all holdings with current prices, weights, and P&L
+2. calculate_advanced_metrics with portfolio_id="${portfolioId}" — get Sharpe ratio, VaR, volatility, max drawdown
+3. analyze_diversification with portfolio_id="${portfolioId}" — assess concentration and sector spread
+4. economics_central_bank_rates — get global central bank rates
+5. economics_inverted_yields — check yield curve inversion signals
+6. economics_calendar — get upcoming macro events
+7. economics_ceic_series with country="united-states" indicator="GDP" — get GDP trend
+8. economics_ceic_series with country="united-states" indicator="CPI" — get inflation trend
+
+Then provide a structured report: portfolio snapshot, risk metrics, diversification, macro environment, and specific actionable recommendations.`,
+
+    risk: `Perform a risk analysis of portfolio "${portfolioName}" (ID: ${portfolioId}, NAV: ${nav}).
+Use these tools:
+1. get_my_stocks — get all holdings and current weights
+2. calculate_advanced_metrics with portfolio_id="${portfolioId}" — get Sharpe ratio, VaR 95%, volatility, max drawdown
+3. analyze_diversification with portfolio_id="${portfolioId}" — get concentration risk and sector breakdown
+4. economics_inverted_yields — check recession signals from yield curve
+5. economics_central_bank_rates — get rate environment
+
+Deliver: overall risk rating, key risk factors with specific numbers, stress scenarios, and risk mitigation actions.`,
+
+    rebalance: `Generate a rebalancing plan for portfolio "${portfolioName}" (ID: ${portfolioId}, NAV: ${nav}).
+Use these tools:
+1. get_my_stocks — get all holdings with exact weights
+2. analyze_diversification with portfolio_id="${portfolioId}" — identify concentration issues
+3. calculate_advanced_metrics with portfolio_id="${portfolioId}" — get current Sharpe and volatility
+4. economics_central_bank_rates — understand the rate environment
+5. economics_bond_spreads — assess fixed income conditions
+6. economics_inverted_yields — check recession signals
+
+Deliver: current vs target allocation table, specific trades to make (buy X / sell Y with amounts), and expected improvement in risk metrics.`,
+
+    opportunities: `Identify investment opportunities for portfolio "${portfolioName}" (ID: ${portfolioId}, NAV: ${nav}).
+Use these tools:
+1. get_my_stocks — see current holdings and any gaps
+2. analyze_diversification with portfolio_id="${portfolioId}" — identify underweighted sectors/geographies
+3. economics_ceic_series with country="china" indicator="GDP" — check China growth
+4. economics_ceic_series with country="india" indicator="GDP" — check India growth
+5. economics_central_bank_rates — find easing cycles (rate cuts = opportunity signal)
+6. economics_upcoming_events — upcoming catalysts
+
+Deliver: gaps in current allocation, specific assets/ETFs/sectors to add, and macro-driven opportunities with rationale.`,
   };
 
   return execute({

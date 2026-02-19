@@ -42,7 +42,7 @@ class TerminalToolkit:
         self,
         endpoint: str,
         tool_definitions: List[Dict[str, Any]],
-        timeout_seconds: int = 30,
+        timeout_seconds: int = 85,
         **kwargs,
     ):
         self.endpoint = endpoint.rstrip("/")

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Fincept LLM Model - Custom adapter for Fincept's built-in LLM endpoint.
 
 The /research/llm endpoint wraps GLM (via Anthropic API format at z.ai):
@@ -17,6 +17,8 @@ This adapter:
 import httpx
 import json
 import logging
+import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Optional, Dict, List, Iterator, AsyncIterator
 
@@ -25,6 +27,57 @@ from agno.models.message import Message
 from agno.models.response import ModelResponse
 
 logger = logging.getLogger(__name__)
+
+# ── Cross-process rate limiter: max 1 request/second to Fincept endpoint ──────
+# Uses a lock file so multiple Python subprocesses (AI panel + Agent panel)
+# share the same rate limit rather than each having their own in-memory counter.
+import os
+import tempfile
+
+_RATE_LOCK_FILE = os.path.join(tempfile.gettempdir(), "fincept_llm_rate.lock")
+_RATE_TS_FILE   = os.path.join(tempfile.gettempdir(), "fincept_llm_rate.ts")
+_fincept_proc_lock = threading.Lock()  # within-process serialisation
+
+def _rate_limit_fincept() -> None:
+    """
+    Block until at least 1.2 seconds have passed since the last call
+    across ALL Python processes on this machine.
+    Uses an exclusive file lock + a shared timestamp file.
+    """
+    with _fincept_proc_lock:
+        # Acquire the cross-process file lock
+        while True:
+            try:
+                fd = os.open(_RATE_LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.close(fd)
+                break  # we hold the lock
+            except FileExistsError:
+                time.sleep(0.05)
+
+        try:
+            # Read last call timestamp
+            last_ts = 0.0
+            try:
+                with open(_RATE_TS_FILE, "r") as f:
+                    last_ts = float(f.read().strip())
+            except Exception:
+                pass
+
+            # Wait until 2.0 s have elapsed since last call
+            now = time.time()
+            wait = 2.0 - (now - last_ts)
+            if wait > 0:
+                time.sleep(wait)
+
+            # Write current timestamp
+            with open(_RATE_TS_FILE, "w") as f:
+                f.write(str(time.time()))
+        finally:
+            # Always release the file lock
+            try:
+                os.remove(_RATE_LOCK_FILE)
+            except Exception:
+                pass
 
 FINCEPT_DEFAULT_URL = "https://finceptbackend.share.zrok.io/research/llm"
 
@@ -124,7 +177,8 @@ class FinceptChat(Model):
     max_tokens: Optional[int] = None
 
     # Max tool call rounds before forcing a final answer
-    max_tool_rounds: int = 8
+    # Keep low for Fincept endpoint — each round = 1 API call, gateway times out after ~60s
+    max_tool_rounds: int = 5
 
     # ── HTTP request ──────────────────────────────────────────────────────────
 
@@ -141,6 +195,8 @@ class FinceptChat(Model):
         Returns the full data dict:
           {"response": str, "tool_calls": [...], "model": str, ...}
         """
+        _rate_limit_fincept()
+
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["X-API-Key"] = self.api_key
@@ -160,35 +216,61 @@ class FinceptChat(Model):
         if tool_choice:
             payload["tool_choice"] = tool_choice
 
-        try:
-            with httpx.Client(timeout=120.0) as client:
-                resp = client.post(self.base_url, json=payload, headers=headers)
+        last_error: Optional[RuntimeError] = None
+        for attempt in range(3):
+            try:
+                with httpx.Client(timeout=120.0) as client:
+                    resp = client.post(self.base_url, json=payload, headers=headers)
 
-                if resp.status_code != 200:
-                    error_detail = ""
-                    try:
-                        err_data = resp.json()
-                        error_detail = err_data.get("detail", err_data.get("message", ""))
-                    except Exception:
-                        error_detail = resp.text[:200]
-                    raise RuntimeError(
-                        f"Fincept API error ({resp.status_code}): {error_detail}"
-                    )
+                    if resp.status_code == 429:
+                        # Rate limited — wait longer and retry (don't call _rate_limit_fincept
+                        # here since that would update the shared timestamp without a real call)
+                        wait = 5.0 * (attempt + 1)  # 5s, 10s, 15s
+                        logger.warning(f"FinceptChat: 429 rate limit on attempt {attempt + 1}, waiting {wait}s")
+                        time.sleep(wait)
+                        last_error = RuntimeError(
+                            f"Fincept API error (429): rate limit hit after {attempt + 1} attempts"
+                        )
+                        continue
 
-                outer = resp.json()
-                # Unwrap: {"success": true, "data": {...}}
-                if isinstance(outer, dict) and "data" in outer:
-                    return outer["data"]
-                return outer
+                    if resp.status_code in (502, 504):
+                        wait = 3.0 * (attempt + 1)  # 3s, 6s, 9s
+                        logger.warning(f"FinceptChat: {resp.status_code} on attempt {attempt + 1}, waiting {wait}s")
+                        time.sleep(wait)
+                        last_error = RuntimeError(
+                            f"Fincept API error ({resp.status_code}): gateway error"
+                        )
+                        continue
 
-        except httpx.TimeoutException:
-            raise RuntimeError("Fincept API request timed out (120s)")
-        except httpx.ConnectError as e:
-            raise RuntimeError(f"Cannot connect to Fincept API: {e}")
-        except RuntimeError:
-            raise
-        except Exception as e:
-            raise RuntimeError(f"Fincept API call failed: {e}")
+                    if resp.status_code != 200:
+                        error_detail = ""
+                        try:
+                            err_data = resp.json()
+                            error_detail = err_data.get("detail", err_data.get("message", ""))
+                        except Exception:
+                            error_detail = resp.text[:200]
+                        raise RuntimeError(
+                            f"Fincept API error ({resp.status_code}): {error_detail}"
+                        )
+
+                    outer = resp.json()
+                    # Unwrap: {"success": true, "data": {...}}
+                    if isinstance(outer, dict) and "data" in outer:
+                        return outer["data"]
+                    return outer
+
+            except httpx.TimeoutException:
+                last_error = RuntimeError("Fincept API request timed out (120s)")
+                logger.warning(f"FinceptChat: timeout on attempt {attempt + 1}")
+                continue
+            except httpx.ConnectError as e:
+                raise RuntimeError(f"Cannot connect to Fincept API: {e}")
+            except RuntimeError:
+                raise
+            except Exception as e:
+                raise RuntimeError(f"Fincept API call failed: {e}")
+
+        raise last_error or RuntimeError("Fincept API failed after 3 attempts")
 
     # ── Tool execution ────────────────────────────────────────────────────────
 
@@ -235,12 +317,11 @@ class FinceptChat(Model):
 
     # ── Native function-calling loop ──────────────────────────────────────────
 
-    # Fincept endpoint hard limit is 50k chars.
-    # We target 35k for the full prompt (prompt + tool context),
-    # leaving headroom for system instructions and response.
-    _PROMPT_CHAR_BUDGET = 35_000
+    # Fincept endpoint hard limit is ~50k chars, but gateway times out on large prompts.
+    # Keep the full prompt (query + tool context) under 20k chars to stay fast.
+    _PROMPT_CHAR_BUDGET = 20_000
     # Per-tool-result cap — prevents a single large result from dominating
-    _TOOL_RESULT_CAP = 4_000
+    _TOOL_RESULT_CAP = 2_000
 
     def _run_tool_loop(
         self,

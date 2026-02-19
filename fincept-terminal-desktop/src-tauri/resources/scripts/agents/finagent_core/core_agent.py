@@ -594,14 +594,11 @@ class CoreAgent:
         #    tool_call_limit caps how many tool iterations the agent
         #    can make per run, preventing infinite loops while still
         #    allowing multi-step autonomous tool use.
-        #    stream_intermediate_steps surfaces each tool call as it happens.
         # =================================================================
         if all_tools:
             # Cap tool call iterations — default 10, max 20
             max_iter = min(int(config.get("max_iterations", 10)), 20)
             agent_kwargs["tool_call_limit"] = max_iter
-            # Surface intermediate reasoning/tool steps in streaming
-            agent_kwargs["stream_intermediate_steps"] = True
 
         # =================================================================
         # 10. Output Settings

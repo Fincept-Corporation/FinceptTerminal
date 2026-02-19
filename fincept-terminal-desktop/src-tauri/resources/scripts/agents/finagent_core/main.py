@@ -112,10 +112,11 @@ def main(args=None):
 
     # Check for streaming mode
     streaming = "--stream" in args
-    args = [a for a in args if a != "--stream"]
+    use_stdin = "--stdin" in args
+    args = [a for a in args if a not in ("--stream", "--stdin")]
 
     try:
-        if len(args) == 0:
+        if use_stdin or len(args) == 0:
             # Read payload from stdin (used when payload is too large for argv)
             payload_str = sys.stdin.read().strip()
             if not payload_str:

@@ -5,6 +5,37 @@ import { fetch } from '@tauri-apps/plugin-http';
 import { invoke } from '@tauri-apps/api/core';
 import { llmLogger } from '../core/loggerService';
 
+// ── Fincept rate limiter + auth helper (TypeScript side) ─────────────────────
+// The Python subprocess has its own file-based rate limiter, but the Chat tab
+// calls the Fincept endpoint directly via fetch() — bypassing Python entirely.
+// This limiter enforces ≥2s between any two Fincept API calls from TypeScript.
+let _finceptLastCallTs = 0;
+async function _finceptRateLimit(): Promise<void> {
+  const now = Date.now();
+  const wait = 2000 - (now - _finceptLastCallTs);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  _finceptLastCallTs = Date.now();
+}
+
+/**
+ * Build Fincept request headers. Tries config.apiKey first, then falls back
+ * to the session key stored in settings. Never sends an empty X-API-Key header.
+ */
+async function _finceptHeaders(apiKey?: string): Promise<Record<string, string>> {
+  let key = apiKey;
+  if (!key) {
+    try {
+      const { getSetting } = await import('../core/sqliteService');
+      key = await getSetting('fincept_api_key') || '';
+    } catch {
+      key = '';
+    }
+  }
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (key) headers['X-API-Key'] = key;
+  return headers;
+}
+
 // Native SDK imports
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
@@ -532,12 +563,10 @@ class LLMApiService {
 
       llmLogger.debug('Fincept API request:', { url, bodyKeys: Object.keys(requestBody) });
 
+      await _finceptRateLimit();
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': config.apiKey || ''
-        },
+        headers: await _finceptHeaders(config.apiKey),
         body: JSON.stringify(requestBody)
       });
 
@@ -1033,12 +1062,10 @@ Mention the year-over-year growth percentages when discussing financial performa
       console.log('[Fincept Tools] Request body:', JSON.stringify(requestBody, null, 2));
       llmLogger.debug('Fincept API with tools request:', { url, tools: tools.length });
 
+      await _finceptRateLimit();
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': config.apiKey || ''
-        },
+        headers: await _finceptHeaders(config.apiKey),
         body: JSON.stringify(requestBody)
       });
 
@@ -1131,12 +1158,10 @@ Mention the year-over-year growth percentages when discussing financial performa
             max_tokens: config.maxTokens
           };
 
+          await _finceptRateLimit();
           const followUpResponse = await fetch(url, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-API-Key': config.apiKey || ''
-            },
+            headers: await _finceptHeaders(config.apiKey),
             body: JSON.stringify(followUpBody)
           });
 
