@@ -15,7 +15,9 @@ import agentService, {
 import {
   getLLMConfigs,
   getActiveLLMConfig,
+  getAgentConfigs,
   LLM_PROVIDERS as DB_LLM_PROVIDERS,
+  type AgentConfigData,
 } from '@/services/core/sqliteService';
 import { portfolioService, type Portfolio } from '@/services/portfolio/portfolioService';
 import type {
@@ -208,6 +210,9 @@ export function useAgentConfig() {
       loadSystemData().catch(err => {
         console.warn('System data loading failed (non-critical):', err);
       });
+
+      // Merge custom agents from SQLite (non-critical, always runs after main load)
+      loadCustomAgentsFromDb().catch(() => {});
     };
 
     loadInitialData();
@@ -312,6 +317,53 @@ export function useAgentConfig() {
     setDiscoveredAgents([]);
     setAgentsByCategory({ all: [] });
   };
+
+  /** Load custom agents from SQLite and merge into discoveredAgents */
+  const loadCustomAgentsFromDb = useCallback(async () => {
+    try {
+      const dbAgents = await getAgentConfigs();
+      const customCards: AgentCard[] = dbAgents
+        .filter(a => {
+          try { return (JSON.parse(a.config_json) as any).user_created === true; } catch { return false; }
+        })
+        .map(a => {
+          let cfg: AgentConfigData = {};
+          try { cfg = JSON.parse(a.config_json); } catch {}
+          return {
+            id: a.id,
+            name: a.name,
+            description: a.description || '',
+            category: a.category,
+            version: '1.0',
+            provider: cfg.model?.provider || 'custom',
+            capabilities: cfg.tools || [],
+            config: cfg,
+          } as AgentCard;
+        });
+
+      if (customCards.length === 0) return;
+
+      setDiscoveredAgents(prev => {
+        const existingIds = new Set(prev.map(a => a.id));
+        const newOnes = customCards.filter(c => !existingIds.has(c.id));
+        if (newOnes.length === 0) return prev;
+        return [...prev, ...newOnes];
+      });
+      setAgentsByCategory(prev => {
+        const updated = { ...prev };
+        for (const card of customCards) {
+          const cat = card.category || 'custom';
+          if (!updated[cat]) updated[cat] = [];
+          if (!updated[cat].find(a => a.id === card.id)) updated[cat].push(card);
+          if (!updated.all) updated.all = [];
+          if (!updated.all.find(a => a.id === card.id)) updated.all.push(card);
+        }
+        return updated;
+      });
+    } catch (e) {
+      // Non-fatal — SQLite custom agents are optional
+    }
+  }, []);
 
   const setAgentsFromList = (agents: AgentCard[]) => {
     setDiscoveredAgents(agents);
@@ -884,6 +936,7 @@ export function useAgentConfig() {
     workflowSymbol, setWorkflowSymbol, currentPlan, planExecuting,
     // Actions
     loadDiscoveredAgents,
+    loadCustomAgentsFromDb,
     updateEditedConfigFromAgent,
     runAgent, runTeam, runWorkflow, cancelStream,
     createPlan, executePlan,

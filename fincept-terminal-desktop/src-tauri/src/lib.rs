@@ -22,6 +22,7 @@ mod websocket;
 mod services;
 mod paper_trading;
 mod market_sim;
+pub mod mcp_bridge;
 
 // MCP Server Process with communication channels
 struct MCPProcess {
@@ -1401,9 +1402,9 @@ pub fn run() {
             commands::finscript_cmd::execute_finscript,
             // Python Agent Commands
             commands::agents::list_available_agents,
-            commands::agents::execute_python_agent,
             commands::agents::get_agent_metadata,
             commands::agents::execute_core_agent,
+            commands::agents::register_mcp_tool_result,
             commands::agents::read_agent_config,
             commands::agents::execute_renaissance_cli,
             // SuperAgent & Planner Commands
@@ -1614,37 +1615,6 @@ pub fn run() {
             commands::vollib::vollib_bsm_greeks,
             commands::vollib::vollib_bsm_iv,
             // AI Agent Commands
-            commands::ai_agents::execute_economic_agent,
-            commands::ai_agents::run_capitalism_agent,
-            commands::ai_agents::run_keynesian_agent,
-            commands::ai_agents::run_neoliberal_agent,
-            commands::ai_agents::run_socialism_agent,
-            commands::ai_agents::run_mercantilist_agent,
-            commands::ai_agents::run_mixed_economy_agent,
-            commands::ai_agents::execute_geopolitics_agent,
-            commands::ai_agents::run_eurasian_chessboard_agent,
-            commands::ai_agents::run_geostrategic_players_agent,
-            commands::ai_agents::run_eurasian_balkans_agent,
-            commands::ai_agents::run_geography_agent,
-            commands::ai_agents::run_world_order_agent,
-            commands::ai_agents::run_westphalian_europe_agent,
-            commands::ai_agents::run_balance_power_agent,
-            commands::ai_agents::execute_hedge_fund_agent,
-            commands::ai_agents::run_bridgewater_agent,
-            commands::ai_agents::run_citadel_agent,
-            commands::ai_agents::run_renaissance_agent,
-            commands::ai_agents::run_de_shaw_agent,
-            commands::ai_agents::run_two_sigma_agent,
-            commands::ai_agents::run_elliott_management_agent,
-            commands::ai_agents::run_fincept_hedge_fund_orchestrator,
-            commands::ai_agents::run_warren_buffett_agent,
-            commands::ai_agents::run_benjamin_graham_agent,
-            commands::ai_agents::run_charlie_munger_agent,
-            commands::ai_agents::run_seth_klarman_agent,
-            commands::ai_agents::run_howard_marks_agent,
-            commands::ai_agents::run_joel_greenblatt_agent,
-            commands::ai_agents::run_david_einhorn_agent,
-            commands::ai_agents::run_bill_miller_agent,
             // Report Generator Commands
             commands::report_generator::generate_report_html,
             commands::report_generator::generate_report_pdf,
@@ -2532,6 +2502,8 @@ pub fn run() {
             commands::akshare::get_stock_us_info,
             commands::akshare::check_akshare_db_status,
             commands::akshare::build_akshare_database,
+            commands::akshare::fetch_akshare_index_spot,
+            commands::polymarket::fetch_polymarket_markets,
             // LLM Models Commands (LiteLLM provider and model listing)
             commands::llm_models::get_llm_providers,
             commands::llm_models::get_llm_models_by_provider,

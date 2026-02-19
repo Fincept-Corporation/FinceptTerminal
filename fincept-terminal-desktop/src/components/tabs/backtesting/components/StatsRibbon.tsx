@@ -1,11 +1,10 @@
 /**
- * StatsRibbon - 52px metric cells for last backtest results
- * Matches portfolio StatsRibbon pattern: 3-line cells (label, value, sub)
+ * StatsRibbon - Horizontal metrics row matching VBMetricsCards style.
+ * Label on top, big value, sublabel below. Dark card bg, no borders.
  */
 
 import React, { useMemo } from 'react';
-import { FINCEPT } from '../../portfolio-tab/finceptStyles';
-import { getValueColor } from '../../portfolio-tab/finceptStyles';
+import { FINCEPT, TYPOGRAPHY, getValueColor } from '../../portfolio-tab/finceptStyles';
 import { PROVIDER_COLORS } from '../constants';
 import type { BacktestingState } from '../types';
 
@@ -26,11 +25,11 @@ export const StatsRibbon: React.FC<StatsRibbonProps> = ({ state }) => {
       { label: 'SYMBOL', value: symbols.toUpperCase() || '--', sub: activeCommand.toUpperCase().replace('_', ' '), color: FINCEPT.CYAN },
       { label: 'TOTAL RETURN', value: fmtPct(perf?.total_return), sub: 'CUMULATIVE', color: perf?.total_return != null ? getValueColor(perf.total_return) : FINCEPT.GRAY },
       { label: 'SHARPE', value: fmt(perf?.sharpe_ratio), sub: 'ANNUALIZED', color: FINCEPT.CYAN },
-      { label: 'MAX DRAWDOWN', value: fmtPct(perf?.max_drawdown), sub: 'PEAK-TROUGH', color: FINCEPT.RED },
+      { label: 'MAX DD', value: fmtPct(perf?.max_drawdown), sub: 'PEAK-TROUGH', color: FINCEPT.RED },
       { label: 'WIN RATE', value: perf?.win_rate != null ? `${fmt(perf.win_rate)}%` : '--', sub: 'TRADES', color: FINCEPT.GREEN },
-      { label: 'PROFIT FACTOR', value: fmt(perf?.profit_factor), sub: 'GROSS P/L', color: perf?.profit_factor > 1 ? FINCEPT.GREEN : FINCEPT.RED },
-      { label: 'TOTAL TRADES', value: perf?.total_trades != null ? String(perf.total_trades) : '--', sub: 'EXECUTED', color: FINCEPT.WHITE },
-      { label: 'ANNUAL RETURN', value: fmtPct(perf?.annual_return), sub: 'CAGR', color: perf?.annual_return != null ? getValueColor(perf.annual_return) : FINCEPT.GRAY },
+      { label: 'P. FACTOR', value: fmt(perf?.profit_factor), sub: 'GROSS P/L', color: perf?.profit_factor > 1 ? FINCEPT.GREEN : FINCEPT.RED },
+      { label: 'TRADES', value: perf?.total_trades != null ? String(perf.total_trades) : '--', sub: 'EXECUTED', color: FINCEPT.WHITE },
+      { label: 'ANN. RETURN', value: fmtPct(perf?.annual_return), sub: 'CAGR', color: perf?.annual_return != null ? getValueColor(perf.annual_return) : FINCEPT.GRAY },
       { label: 'VOLATILITY', value: perf?.annual_volatility != null ? `${fmt(perf.annual_volatility)}%` : '--', sub: 'ANN.', color: FINCEPT.ORANGE },
       { label: 'SORTINO', value: fmt(perf?.sortino_ratio), sub: 'DOWNSIDE', color: FINCEPT.CYAN },
       { label: 'CALMAR', value: fmt(perf?.calmar_ratio), sub: 'RATIO', color: FINCEPT.YELLOW },
@@ -40,39 +39,46 @@ export const StatsRibbon: React.FC<StatsRibbonProps> = ({ state }) => {
 
   return (
     <div style={{
-      height: '52px',
       flexShrink: 0,
-      backgroundColor: '#0A0A0A',
-      borderBottom: `1px solid ${FINCEPT.BORDER}`,
+      padding: '6px 8px',
       display: 'flex',
-      alignItems: 'stretch',
-      overflow: 'hidden',
+      gap: '4px',
+      borderBottom: `1px solid #2a2a2a`,
+      backgroundColor: '#000000',
+      overflowX: 'auto',
+      fontFamily: '"IBM Plex Mono", Consolas, monospace',
     }}>
-      {cells.map((m, i) => (
-        <div key={i} style={{
-          flex: 1,
-          minWidth: '80px',
-          padding: '6px 8px',
-          borderRight: '1px solid #141414',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-        }}>
+      {cells.map((cell, i) => (
+        <div
+          key={i}
+          style={{
+            flex: '1 1 0',
+            minWidth: '72px',
+            padding: '8px 10px',
+            backgroundColor: '#0f0f0f',
+            borderRadius: '2px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '2px',
+          }}
+        >
           <div style={{
-            fontSize: '8px', color: FINCEPT.GRAY, fontWeight: 700,
-            letterSpacing: '0.5px', lineHeight: 1, marginBottom: '3px',
+            fontSize: '8px', fontWeight: 700, color: '#787878',
+            letterSpacing: '0.5px', lineHeight: 1,
           }}>
-            {m.label}
+            {cell.label}
           </div>
           <div style={{
-            fontSize: '14px', fontWeight: 800, color: m.color, lineHeight: 1,
+            fontSize: '13px', fontWeight: 800,
+            color: isRunning && i > 0 && i < 11 ? FINCEPT.ORANGE : cell.color,
+            lineHeight: 1, letterSpacing: '-0.3px',
+            fontFamily: '"IBM Plex Mono", Consolas, monospace',
           }}>
-            {isRunning && i > 0 && i < 11 ? '...' : m.value}
+            {isRunning && i > 0 && i < 11 ? '...' : cell.value}
           </div>
-          <div style={{
-            fontSize: '8px', color: FINCEPT.GRAY, marginTop: '2px', lineHeight: 1,
-          }}>
-            {m.sub}
+          <div style={{ fontSize: '8px', color: '#4a4a4a', lineHeight: 1 }}>
+            {cell.sub}
           </div>
         </div>
       ))}

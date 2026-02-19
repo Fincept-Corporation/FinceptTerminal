@@ -105,9 +105,11 @@ export const MergerAnalysis: React.FC = () => {
     acquirerRevenue: 10000,
     acquirerEbitda: 2000,
     acquirerNetIncome: 1000,
+    acquirerShares: 500,
     targetRevenue: 3000,
     targetEbitda: 600,
     targetNetIncome: 300,
+    targetEnterpriseValue: 4800,
     projectionYear: 1,
   });
 
@@ -339,12 +341,14 @@ export const MergerAnalysis: React.FC = () => {
         revenue: proformaInputs.acquirerRevenue * 1000000,
         ebitda: proformaInputs.acquirerEbitda * 1000000,
         net_income: proformaInputs.acquirerNetIncome * 1000000,
+        shares_outstanding: proformaInputs.acquirerShares * 1000000,
       };
 
       const targetData = {
         revenue: proformaInputs.targetRevenue * 1000000,
         ebitda: proformaInputs.targetEbitda * 1000000,
         net_income: proformaInputs.targetNetIncome * 1000000,
+        enterprise_value: proformaInputs.targetEnterpriseValue * 1000000,
       };
 
       const res = await MAAnalyticsService.MergerModel.buildProForma(acquirerData, targetData, proformaInputs.projectionYear);
@@ -713,16 +717,18 @@ export const MergerAnalysis: React.FC = () => {
     if (analysisType === 'proforma' && proformaSubTab === 'proforma') return (
       <>
         <MASectionHeader title="Acquirer ($M)" accentColor={MA_COLORS.merger} icon={<TrendingUp size={12} />} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px', marginBottom: '14px' }}>
           {renderInputField('Revenue', proformaInputs.acquirerRevenue, (v) => setProformaInputs({ ...proformaInputs, acquirerRevenue: parseFloat(v) || 0 }))}
           {renderInputField('EBITDA', proformaInputs.acquirerEbitda, (v) => setProformaInputs({ ...proformaInputs, acquirerEbitda: parseFloat(v) || 0 }))}
           {renderInputField('Net Income', proformaInputs.acquirerNetIncome, (v) => setProformaInputs({ ...proformaInputs, acquirerNetIncome: parseFloat(v) || 0 }))}
+          {renderInputField('Shares (M)', proformaInputs.acquirerShares, (v) => setProformaInputs({ ...proformaInputs, acquirerShares: parseFloat(v) || 0 }))}
         </div>
         <MASectionHeader title="Target ($M)" accentColor={CHART_PALETTE[2]} icon={<Target size={12} />} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px', marginBottom: '14px' }}>
           {renderInputField('Revenue', proformaInputs.targetRevenue, (v) => setProformaInputs({ ...proformaInputs, targetRevenue: parseFloat(v) || 0 }))}
           {renderInputField('EBITDA', proformaInputs.targetEbitda, (v) => setProformaInputs({ ...proformaInputs, targetEbitda: parseFloat(v) || 0 }))}
           {renderInputField('Net Income', proformaInputs.targetNetIncome, (v) => setProformaInputs({ ...proformaInputs, targetNetIncome: parseFloat(v) || 0 }))}
+          {renderInputField('Enterprise Value', proformaInputs.targetEnterpriseValue, (v) => setProformaInputs({ ...proformaInputs, targetEnterpriseValue: parseFloat(v) || 0 }))}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
           {renderInputField('Projection Year', proformaInputs.projectionYear, (v) => setProformaInputs({ ...proformaInputs, projectionYear: parseInt(v) || 1 }))}
@@ -1243,7 +1249,7 @@ export const MergerAnalysis: React.FC = () => {
 
       return (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '16px' }}>
             <MAMetricCard
               label="Combined Revenue"
               value={formatCurrency(result.data.combined_revenue || 0)}
@@ -1258,6 +1264,16 @@ export const MergerAnalysis: React.FC = () => {
               label="Combined Net Income"
               value={formatCurrency(result.data.combined_net_income || 0)}
               accentColor={FINCEPT.GREEN}
+            />
+            <MAMetricCard
+              label="Pro Forma EPS"
+              value={`$${(result.data.combined_eps || 0).toFixed(2)}`}
+              accentColor={FINCEPT.YELLOW}
+            />
+            <MAMetricCard
+              label="Combined Shares"
+              value={`${((result.data.combined_shares || 0) / 1e6).toFixed(1)}M`}
+              accentColor={FINCEPT.CYAN}
             />
           </div>
 

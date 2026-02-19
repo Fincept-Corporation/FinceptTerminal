@@ -25,22 +25,25 @@ export const VBChartPanel: React.FC<VBChartPanelProps> = ({ state }) => {
   const trades = result?.data?.trades;
   const benchmark = result?.data?.benchmark;
 
+  // Normalize any date string to yyyy-mm-dd
+  const toDateStr = (raw: string): string => raw.split('T')[0].split(' ')[0].substring(0, 10);
+
   // Parse equity curve data
   const equityPoints = useMemo(() => {
     if (!equityData) return [];
     if (Array.isArray(equityData)) {
       return equityData.map((pt: any) => {
-        if (pt.time && pt.value !== undefined) return pt;
-        if (pt.date && pt.equity !== undefined) return { time: pt.date, value: pt.equity };
-        if (pt.date && pt.value !== undefined) return { time: pt.date, value: pt.value };
+        if (pt.time && pt.value !== undefined) return { time: toDateStr(pt.time), value: pt.value };
+        if (pt.date && pt.equity !== undefined) return { time: toDateStr(pt.date), value: pt.equity };
+        if (pt.date && pt.value !== undefined) return { time: toDateStr(pt.date), value: pt.value };
         if (pt.timestamp && pt.equity !== undefined)
-          return { time: new Date(pt.timestamp).toISOString().split('T')[0], value: pt.equity };
+          return { time: toDateStr(new Date(pt.timestamp).toISOString()), value: pt.equity };
         return null;
       }).filter(Boolean);
     }
     if (typeof equityData === 'object') {
       return Object.entries(equityData).map(([date, value]) => ({
-        time: date,
+        time: toDateStr(date),
         value: Number(value),
       })).sort((a, b) => a.time.localeCompare(b.time));
     }
@@ -52,15 +55,15 @@ export const VBChartPanel: React.FC<VBChartPanelProps> = ({ state }) => {
     if (!benchmark) return [];
     if (Array.isArray(benchmark)) {
       return benchmark.map((pt: any) => {
-        if (pt.time && pt.value !== undefined) return pt;
-        if (pt.date && pt.equity !== undefined) return { time: pt.date, value: pt.equity };
-        if (pt.date && pt.value !== undefined) return { time: pt.date, value: pt.value };
+        if (pt.time && pt.value !== undefined) return { time: toDateStr(pt.time), value: pt.value };
+        if (pt.date && pt.equity !== undefined) return { time: toDateStr(pt.date), value: pt.equity };
+        if (pt.date && pt.value !== undefined) return { time: toDateStr(pt.date), value: pt.value };
         return null;
       }).filter(Boolean);
     }
     if (typeof benchmark === 'object') {
       return Object.entries(benchmark).map(([date, value]) => ({
-        time: date,
+        time: toDateStr(date),
         value: Number(value),
       })).sort((a, b) => a.time.localeCompare(b.time));
     }
@@ -74,7 +77,7 @@ export const VBChartPanel: React.FC<VBChartPanelProps> = ({ state }) => {
     trades.forEach((trade: any) => {
       if (trade.entryDate || trade.entry_date) {
         m.push({
-          time: trade.entryDate || trade.entry_date,
+          time: toDateStr(trade.entryDate || trade.entry_date),
           position: 'belowBar' as const,
           color: '#00D66F',
           shape: 'arrowUp' as const,
@@ -83,7 +86,7 @@ export const VBChartPanel: React.FC<VBChartPanelProps> = ({ state }) => {
       }
       if (trade.exitDate || trade.exit_date) {
         m.push({
-          time: trade.exitDate || trade.exit_date,
+          time: toDateStr(trade.exitDate || trade.exit_date),
           position: 'aboveBar' as const,
           color: '#FF3B3B',
           shape: 'arrowDown' as const,

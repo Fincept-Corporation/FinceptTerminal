@@ -1,13 +1,12 @@
 /**
- * VBStrategyPanel - Left 300px panel with card-based category selector,
- * strategy cards with left color bars, parameter inputs, and advanced config.
- *
- * Redesign: card grid categories, 11px strategy names, 10px+ labels.
+ * VBStrategyPanel - NodePalette-identical structure.
+ * Header / Search / Expandable category headers / Strategy items with dot+name+description / Footer
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Layers, Search, ChevronDown } from 'lucide-react';
 import {
-  FINCEPT, TYPOGRAPHY, EFFECTS, COMMON_STYLES, BORDERS, SPACING,
+  FINCEPT, TYPOGRAPHY, EFFECTS, BORDERS,
   createFocusHandlers,
 } from '../../../portfolio-tab/finceptStyles';
 import { POSITION_SIZING } from '../../constants';
@@ -46,164 +45,274 @@ export const VBStrategyPanel: React.FC<VBStrategyPanelProps> = ({ state }) => {
   } = state;
 
   const categories = useMemo(() => Object.keys(providerStrategies), [providerStrategies]);
-  const strategies = useMemo(
-    () => providerStrategies[selectedCategory] || [],
-    [providerStrategies, selectedCategory]
+  const totalCount = useMemo(
+    () => categories.reduce((sum, cat) => sum + (providerStrategies[cat]?.length || 0), 0),
+    [categories, providerStrategies]
   );
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    () => new Set(categories)
+  );
+
+  const toggleCategory = (cat: string) => {
+    const next = new Set(expandedCategories);
+    if (next.has(cat)) next.delete(cat); else next.add(cat);
+    setExpandedCategories(next);
+  };
+
+  // Filter strategies by search
+  const filteredStrategies = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return providerStrategies;
+    const result: typeof providerStrategies = {};
+    categories.forEach(cat => {
+      const filtered = (providerStrategies[cat] || []).filter((s: any) =>
+        s.name.toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q)
+      );
+      if (filtered.length > 0) result[cat] = filtered;
+    });
+    return result;
+  }, [searchQuery, providerStrategies, categories]);
+
   const focus = createFocusHandlers();
 
   return (
     <div style={{
       width: '300px',
       flexShrink: 0,
-      borderRight: `1px solid ${FINCEPT.BORDER}`,
+      borderRight: `1px solid #2a2a2a`,
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden',
-      backgroundColor: FINCEPT.PANEL_BG,
+      height: '100%',
+      backgroundColor: '#000000',
+      fontFamily: '"IBM Plex Mono", Consolas, monospace',
     }}>
+
       {/* ── Header ── */}
       <div style={{
-        padding: '10px 14px',
-        backgroundColor: FINCEPT.HEADER_BG,
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        padding: '10px 12px',
+        backgroundColor: '#0f0f0f',
+        borderBottom: '1px solid #2a2a2a',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexShrink: 0,
       }}>
-        <span style={{
-          fontSize: '11px',
-          fontWeight: 700,
-          color: FINCEPT.ORANGE,
-          letterSpacing: '0.5px',
-        }}>
-          STRATEGIES
-        </span>
-        <span style={{
-          fontSize: '10px',
-          color: FINCEPT.GRAY,
-          fontFamily: TYPOGRAPHY.MONO,
-        }}>
-          {strategies.length} available
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+          <Layers size={13} style={{ color: '#FF8800' }} />
+          <span style={{
+            color: '#FF8800',
+            fontSize: '10px',
+            fontWeight: 700,
+            letterSpacing: '0.8px',
+          }}>
+            STRATEGIES
+          </span>
+        </div>
       </div>
 
-      {/* ── Category Card Grid ── */}
+      {/* ── Search ── */}
       <div style={{
         padding: '8px 10px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '4px',
+        borderBottom: '1px solid #2a2a2a',
+        backgroundColor: '#000000',
         flexShrink: 0,
       }}>
-        {categories.map(cat => {
-          const info = providerCategoryInfo[cat];
-          const isActive = selectedCategory === cat;
-          const count = (providerStrategies[cat] || []).length;
-          if (count === 0) return null;
-
-          const catColor = info?.color || FINCEPT.ORANGE;
-          const CatIcon = info?.icon;
-
-          return (
-            <button
-              key={cat}
-              onClick={() => {
-                setSelectedCategory(cat);
-                const first = providerStrategies[cat]?.[0];
-                if (first) setSelectedStrategy(first.id);
-              }}
-              style={{
-                padding: '6px 8px',
-                backgroundColor: isActive ? `${catColor}15` : 'transparent',
-                color: isActive ? catColor : FINCEPT.GRAY,
-                border: isActive ? `1px solid ${catColor}` : BORDERS.STANDARD,
-                borderLeft: isActive ? `3px solid ${catColor}` : `3px solid transparent`,
-                borderRadius: '3px',
-                fontSize: '10px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                letterSpacing: '0.3px',
-                textTransform: 'uppercase' as const,
-                transition: EFFECTS.TRANSITION_FAST,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '2px',
-                textAlign: 'center' as const,
-              }}
-            >
-              {CatIcon && <CatIcon size={14} style={{ opacity: isActive ? 1 : 0.5 }} />}
-              <span style={{ fontSize: '9px', lineHeight: 1.2 }}>
-                {info?.label || cat}
-              </span>
-              <span style={{
-                fontSize: '9px',
-                fontWeight: 600,
-                color: isActive ? catColor : FINCEPT.MUTED,
-                backgroundColor: isActive ? `${catColor}20` : 'transparent',
-                padding: '0 4px',
-                borderRadius: '2px',
-              }}>
-                {count}
-              </span>
-            </button>
-          );
-        })}
+        <div style={{ position: 'relative' }}>
+          <Search size={11} style={{
+            position: 'absolute',
+            left: '8px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: '#787878',
+            pointerEvents: 'none',
+          }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search strategies..."
+            style={{
+              width: '100%',
+              backgroundColor: '#0f0f0f',
+              border: '1px solid #2a2a2a',
+              borderRadius: '2px',
+              padding: '6px 8px 6px 26px',
+              color: '#ffffff',
+              fontSize: '10px',
+              fontFamily: '"IBM Plex Mono", Consolas, monospace',
+              outline: 'none',
+              boxSizing: 'border-box' as const,
+              transition: 'border-color 0.15s',
+            }}
+            onFocus={e => (e.currentTarget.style.borderColor = '#FF8800')}
+            onBlur={e => (e.currentTarget.style.borderColor = '#2a2a2a')}
+          />
+        </div>
+        <div style={{ color: '#787878', fontSize: '9px', marginTop: '5px', letterSpacing: '0.3px' }}>
+          {totalCount} STRATEGIES AVAILABLE
+        </div>
       </div>
 
-      {/* ── Strategy List ── */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '6px' }}>
-        {strategies.map((strat: any) => {
-          const isActive = selectedStrategy === strat.id;
-          const catInfo = providerCategoryInfo[selectedCategory];
-          const catColor = catInfo?.color || FINCEPT.ORANGE;
+      {/* ── Category + Strategy List ── */}
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        {Object.keys(filteredStrategies).length === 0 && (
+          <div style={{ padding: '32px 16px', textAlign: 'center' as const }}>
+            <Search size={20} style={{ color: '#2a2a2a', margin: '0 auto 10px' }} />
+            <div style={{ fontSize: '9px', fontWeight: 700, color: '#787878', letterSpacing: '0.5px' }}>
+              NO STRATEGIES FOUND
+            </div>
+            <div style={{ fontSize: '9px', color: '#4a4a4a', marginTop: '4px' }}>
+              Try a different search term
+            </div>
+          </div>
+        )}
+
+        {Object.keys(filteredStrategies).map(cat => {
+          const info = providerCategoryInfo[cat];
+          const strategies = filteredStrategies[cat] || [];
+          if (strategies.length === 0) return null;
+          const catColor = info?.color || '#FF8800';
+          const CatIcon = info?.icon;
+          const isExpanded = expandedCategories.has(cat);
 
           return (
-            <div
-              key={strat.id}
-              className="vb-strat"
-              onClick={() => setSelectedStrategy(strat.id)}
-              style={{
-                padding: '10px 12px',
-                cursor: 'pointer',
-                borderLeft: `3px solid ${isActive ? catColor : 'transparent'}`,
-                backgroundColor: isActive ? `${catColor}08` : 'transparent',
-                transition: EFFECTS.TRANSITION_FAST,
-                marginBottom: '2px',
-                borderRadius: '2px',
-                minHeight: '44px',
-              }}
-            >
-              <div style={{
-                fontSize: '11px',
-                fontWeight: isActive ? 700 : 600,
-                color: isActive ? FINCEPT.WHITE : FINCEPT.GRAY,
-                marginBottom: '3px',
-              }}>
-                {strat.name}
-              </div>
-              <div style={{
-                fontSize: '9px',
-                color: FINCEPT.MUTED,
-                lineHeight: 1.4,
-                marginBottom: strat.params?.length > 0 ? '4px' : '0',
-              }}>
-                {strat.description}
-              </div>
-              {/* Inline param preview */}
-              {strat.params?.length > 0 && (
+            <div key={cat}>
+              {/* Category Header */}
+              <button
+                onClick={() => toggleCategory(cat)}
+                style={{
+                  width: '100%',
+                  padding: '7px 10px',
+                  backgroundColor: '#0f0f0f',
+                  border: 'none',
+                  borderBottom: '1px solid #2a2a2a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.15s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#1a1a1a')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#0f0f0f')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                  {CatIcon && (
+                    <span style={{ color: catColor, display: 'flex', alignItems: 'center' }}>
+                      <CatIcon size={12} />
+                    </span>
+                  )}
+                  <span style={{
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    color: '#d4d4d4',
+                    letterSpacing: '0.5px',
+                  }}>
+                    {(info?.label || cat).toUpperCase()}
+                  </span>
+                  <span style={{
+                    fontSize: '8px',
+                    color: '#787878',
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid #2a2a2a',
+                    borderRadius: '2px',
+                    padding: '1px 4px',
+                    letterSpacing: '0.3px',
+                  }}>
+                    {strategies.length}
+                  </span>
+                </div>
+                <ChevronDown size={11} style={{
+                  color: '#787878',
+                  transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                  transition: 'transform 0.15s',
+                }} />
+              </button>
+
+              {/* Strategy Items */}
+              {isExpanded && (
                 <div style={{
-                  fontSize: '10px',
-                  color: FINCEPT.CYAN,
-                  fontFamily: TYPOGRAPHY.MONO,
-                  opacity: 0.8,
+                  padding: '4px 6px 6px',
+                  backgroundColor: '#000000',
+                  borderBottom: '1px solid #1a1a1a',
                 }}>
-                  {strat.params.map((p: any) =>
-                    `${p.label.toLowerCase()}=${state.strategyParams[p.name] ?? p.default}`
-                  ).join(', ')}
+                  {strategies.map((strat: any) => {
+                    const isActive = selectedStrategy === strat.id;
+                    return (
+                      <div
+                        key={strat.id}
+                        onClick={() => { setSelectedCategory(cat); setSelectedStrategy(strat.id); }}
+                        style={{
+                          backgroundColor: isActive ? `${catColor}15` : '#0f0f0f',
+                          border: `1px solid ${isActive ? catColor + '50' : '#2a2a2a'}`,
+                          borderLeft: `2px solid ${isActive ? catColor : '#2a2a2a'}`,
+                          borderRadius: '2px',
+                          padding: '6px 8px',
+                          marginBottom: '3px',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                        onMouseEnter={e => {
+                          if (!isActive) {
+                            e.currentTarget.style.backgroundColor = `${catColor}10`;
+                            e.currentTarget.style.borderColor = `${catColor}50`;
+                            e.currentTarget.style.borderLeftColor = catColor;
+                            e.currentTarget.style.borderLeftWidth = '2px';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (!isActive) {
+                            e.currentTarget.style.backgroundColor = '#0f0f0f';
+                            e.currentTarget.style.borderColor = '#2a2a2a';
+                            e.currentTarget.style.borderLeftWidth = '1px';
+                          }
+                        }}
+                      >
+                        {/* Color dot */}
+                        <div style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: isActive ? catColor : '#787878',
+                          flexShrink: 0,
+                          boxShadow: isActive ? `0 0 4px ${catColor}60` : 'none',
+                        }} />
+                        {/* Info */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            color: isActive ? '#ffffff' : '#d4d4d4',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            letterSpacing: '0.3px',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}>
+                            {strat.name}
+                          </div>
+                          {strat.description && (
+                            <div style={{
+                              color: '#787878',
+                              fontSize: '8px',
+                              letterSpacing: '0.2px',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              marginTop: '2px',
+                            }}>
+                              {strat.description.length > 36
+                                ? `${strat.description.substring(0, 36)}...`
+                                : strat.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -215,61 +324,39 @@ export const VBStrategyPanel: React.FC<VBStrategyPanelProps> = ({ state }) => {
       {currentStrategy && currentStrategy.params.length > 0 && (
         <div style={{
           padding: '10px 12px',
-          borderTop: `1px solid ${FINCEPT.BORDER}`,
+          borderTop: '1px solid #2a2a2a',
+          backgroundColor: '#0f0f0f',
           flexShrink: 0,
         }}>
           <div style={{
-            fontSize: '10px',
-            fontWeight: 700,
-            color: FINCEPT.ORANGE,
-            marginBottom: '8px',
-            letterSpacing: '0.5px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
+            fontSize: '9px', fontWeight: 700, color: '#FF8800',
+            marginBottom: '8px', letterSpacing: '0.5px',
           }}>
-            <div style={{
-              width: '16px', height: '1px',
-              backgroundColor: FINCEPT.ORANGE,
-            }} />
             PARAMETERS
-            <div style={{
-              flex: 1, height: '1px',
-              backgroundColor: FINCEPT.BORDER,
-            }} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
             {currentStrategy.params.map((param: any) => (
               <div key={param.name}>
                 <label style={{
-                  fontSize: '10px',
-                  color: FINCEPT.GRAY,
-                  fontWeight: 700,
-                  display: 'block',
-                  marginBottom: '3px',
+                  fontSize: '9px', color: '#787878', fontWeight: 700,
+                  display: 'block', marginBottom: '3px',
                 }}>
                   {param.label}
                 </label>
                 <input
                   type="number"
                   value={strategyParams[param.name] ?? param.default}
-                  onChange={e => setStrategyParams(prev => ({ ...prev, [param.name]: Number(e.target.value) }))}
-                  min={param.min}
-                  max={param.max}
-                  step={param.step || 1}
+                  onChange={e => setStrategyParams((prev: any) => ({ ...prev, [param.name]: Number(e.target.value) }))}
+                  min={param.min} max={param.max} step={param.step || 1}
                   style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.CYAN,
-                    border: BORDERS.STANDARD,
-                    borderRadius: '2px',
-                    fontSize: '11px',
-                    fontFamily: TYPOGRAPHY.MONO,
-                    outline: 'none',
-                    fontWeight: 600,
+                    width: '100%', padding: '5px 8px',
+                    backgroundColor: '#000000', color: FINCEPT.CYAN,
+                    border: '1px solid #2a2a2a', borderRadius: '2px',
+                    fontSize: '10px', fontFamily: '"IBM Plex Mono", Consolas, monospace',
+                    outline: 'none', fontWeight: 600,
                   }}
-                  {...focus}
+                  onFocus={e => (e.currentTarget.style.borderColor = '#FF8800')}
+                  onBlur={e => (e.currentTarget.style.borderColor = '#2a2a2a')}
                 />
               </div>
             ))}
@@ -279,34 +366,17 @@ export const VBStrategyPanel: React.FC<VBStrategyPanelProps> = ({ state }) => {
 
       {/* ── Custom Code ── */}
       {selectedStrategy === 'code' && (
-        <div style={{
-          padding: '10px 12px',
-          borderTop: `1px solid ${FINCEPT.BORDER}`,
-          flexShrink: 0,
-        }}>
-          <div style={{
-            fontSize: '10px',
-            fontWeight: 700,
-            color: FINCEPT.ORANGE,
-            marginBottom: '6px',
-          }}>
-            CUSTOM CODE
-          </div>
+        <div style={{ padding: '10px 12px', borderTop: '1px solid #2a2a2a', backgroundColor: '#0f0f0f', flexShrink: 0 }}>
+          <div style={{ fontSize: '9px', fontWeight: 700, color: '#FF8800', marginBottom: '6px' }}>CUSTOM CODE</div>
           <textarea
             value={customCode}
             onChange={e => setCustomCode(e.target.value)}
             style={{
-              width: '100%',
-              height: '100px',
-              padding: '8px',
-              backgroundColor: FINCEPT.DARK_BG,
-              color: FINCEPT.CYAN,
-              border: BORDERS.STANDARD,
-              borderRadius: '2px',
-              fontSize: '10px',
-              fontFamily: TYPOGRAPHY.MONO,
-              outline: 'none',
-              resize: 'vertical',
+              width: '100%', height: '100px', padding: '8px',
+              backgroundColor: '#000000', color: FINCEPT.CYAN,
+              border: '1px solid #2a2a2a', borderRadius: '2px',
+              fontSize: '10px', fontFamily: '"IBM Plex Mono", Consolas, monospace',
+              outline: 'none', resize: 'vertical' as const,
             }}
           />
         </div>
@@ -314,19 +384,8 @@ export const VBStrategyPanel: React.FC<VBStrategyPanelProps> = ({ state }) => {
 
       {/* ── Optimize Config ── */}
       {activeCommand === 'optimize' && (
-        <div style={{
-          padding: '10px 12px',
-          borderTop: `1px solid ${FINCEPT.BORDER}`,
-          flexShrink: 0,
-        }}>
-          <div style={{
-            fontSize: '10px',
-            fontWeight: 700,
-            color: FINCEPT.ORANGE,
-            marginBottom: '8px',
-          }}>
-            OPTIMIZE
-          </div>
+        <div style={{ padding: '10px 12px', borderTop: '1px solid #2a2a2a', backgroundColor: '#0f0f0f', flexShrink: 0 }}>
+          <div style={{ fontSize: '9px', fontWeight: 700, color: '#FF8800', marginBottom: '8px' }}>OPTIMIZE</div>
           <div style={{ display: 'grid', gap: '6px' }}>
             {renderSelect('Objective', optimizeObjective, v => setOptimizeObjective(v as any), [
               { value: 'sharpe', label: 'Sharpe Ratio' },
@@ -345,19 +404,8 @@ export const VBStrategyPanel: React.FC<VBStrategyPanelProps> = ({ state }) => {
 
       {/* ── Walk Forward Config ── */}
       {activeCommand === 'walk_forward' && (
-        <div style={{
-          padding: '10px 12px',
-          borderTop: `1px solid ${FINCEPT.BORDER}`,
-          flexShrink: 0,
-        }}>
-          <div style={{
-            fontSize: '10px',
-            fontWeight: 700,
-            color: FINCEPT.ORANGE,
-            marginBottom: '8px',
-          }}>
-            WALK FORWARD
-          </div>
+        <div style={{ padding: '10px 12px', borderTop: '1px solid #2a2a2a', backgroundColor: '#0f0f0f', flexShrink: 0 }}>
+          <div style={{ fontSize: '9px', fontWeight: 700, color: '#FF8800', marginBottom: '8px' }}>WALK FORWARD</div>
           <div style={{ display: 'grid', gap: '6px' }}>
             {renderInput('Splits', wfSplits, setWfSplits, 'number', undefined, 2, 20)}
             {renderInput('Train Ratio', wfTrainRatio, setWfTrainRatio, 'number', undefined, 0.5, 0.9, 0.05)}
@@ -368,31 +416,10 @@ export const VBStrategyPanel: React.FC<VBStrategyPanelProps> = ({ state }) => {
       {/* ── Advanced Config ── */}
       {showAdvanced && (
         <div style={{
-          padding: '10px 12px',
-          borderTop: `1px solid ${FINCEPT.ORANGE}30`,
-          flexShrink: 0,
-          maxHeight: '240px',
-          overflowY: 'auto',
+          padding: '10px 12px', borderTop: '1px solid #2a2a2a',
+          backgroundColor: '#0f0f0f', flexShrink: 0, maxHeight: '240px', overflowY: 'auto',
         }}>
-          <div style={{
-            fontSize: '10px',
-            fontWeight: 700,
-            color: FINCEPT.ORANGE,
-            marginBottom: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}>
-            <div style={{
-              width: '16px', height: '1px',
-              backgroundColor: FINCEPT.ORANGE,
-            }} />
-            ADVANCED
-            <div style={{
-              flex: 1, height: '1px',
-              backgroundColor: FINCEPT.BORDER,
-            }} />
-          </div>
+          <div style={{ fontSize: '9px', fontWeight: 700, color: '#FF8800', marginBottom: '8px' }}>ADVANCED</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
             {renderInput('Commission', commission, setCommission, 'number', undefined, 0, 0.1, 0.0001)}
             {renderInput('Slippage', slippage, setSlippage, 'number', undefined, 0, 0.1, 0.0001)}
@@ -406,44 +433,35 @@ export const VBStrategyPanel: React.FC<VBStrategyPanelProps> = ({ state }) => {
               POSITION_SIZING.map(p => ({ value: p.id, label: p.label }))
             )}
             {renderInput('Size Value', positionSizeValue, setPositionSizeValue, 'number', undefined, 0, 100, 0.01)}
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '10px',
-              color: FINCEPT.GRAY,
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}>
-              <input
-                type="checkbox"
-                checked={allowShort}
-                onChange={e => setAllowShort(e.target.checked)}
-                style={{ accentColor: FINCEPT.ORANGE }}
-              />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '9px', color: '#787878', cursor: 'pointer', fontWeight: 600 }}>
+              <input type="checkbox" checked={allowShort} onChange={e => setAllowShort(e.target.checked)} style={{ accentColor: '#FF8800' }} />
               ALLOW SHORT
             </label>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '10px',
-              color: FINCEPT.GRAY,
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}>
-              <input
-                type="checkbox"
-                checked={enableBenchmark}
-                onChange={e => setEnableBenchmark(e.target.checked)}
-                style={{ accentColor: FINCEPT.ORANGE }}
-              />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '9px', color: '#787878', cursor: 'pointer', fontWeight: 600 }}>
+              <input type="checkbox" checked={enableBenchmark} onChange={e => setEnableBenchmark(e.target.checked)} style={{ accentColor: '#FF8800' }} />
               BENCHMARK
             </label>
             {enableBenchmark && renderInput('Benchmark', benchmarkSymbol, setBenchmarkSymbol, 'text', 'SPY')}
           </div>
         </div>
       )}
+
+      {/* ── Footer ── */}
+      <div style={{
+        padding: '6px 10px',
+        borderTop: '1px solid #2a2a2a',
+        backgroundColor: '#0f0f0f',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '6px',
+        flexShrink: 0,
+      }}>
+        <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#FF8800' }} />
+        <span style={{ color: '#4a4a4a', fontSize: '8px', letterSpacing: '0.5px', fontWeight: 700 }}>
+          CLICK TO SELECT STRATEGY
+        </span>
+      </div>
     </div>
   );
 };

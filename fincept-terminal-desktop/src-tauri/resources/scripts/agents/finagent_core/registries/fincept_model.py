@@ -1,12 +1,23 @@
 """
 Fincept LLM Model - Custom adapter for Fincept's built-in LLM endpoint.
 
-Subclasses agno's Model @dataclass to work with Agent.run().
+The /research/llm endpoint wraps GLM (via Anthropic API format at z.ai):
+  - Accepts: prompt (str), tools (list), tool_choice (dict)
+  - Returns: {"data": {"response": str, "tool_calls": [...], "model": ...}}
+  - tool_calls format: [{"id", "type": "function", "function": {"name", "arguments": json_str}}]
+
+This adapter:
+  1. Converts Agno Function objects → Anthropic-style tool schemas
+  2. Sends them with the prompt to /research/llm
+  3. Parses tool_use blocks from the response
+  4. Executes the tools via Function.entrypoint
+  5. Loops with tool results until the model produces a final text response
 """
 
 import httpx
+import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional, Dict, List, Iterator, AsyncIterator
 
 from agno.models.base import Model
@@ -18,39 +29,136 @@ logger = logging.getLogger(__name__)
 FINCEPT_DEFAULT_URL = "https://finceptbackend.share.zrok.io/research/llm"
 
 
+# ── Anthropic tool schema builder ─────────────────────────────────────────────
+
+def _function_to_anthropic_tool(fn: Any) -> Dict[str, Any]:
+    """
+    Convert an Agno Function object to Anthropic tool schema format.
+
+    Anthropic format:
+    {
+        "name": "tool_name",
+        "description": "...",
+        "input_schema": {
+            "type": "object",
+            "properties": {"param": {"type": "string", "description": "..."}},
+            "required": ["param"]
+        }
+    }
+    """
+    name = fn.name if hasattr(fn, "name") else str(fn)
+    description = ""
+    if hasattr(fn, "description") and fn.description:
+        description = str(fn.description).strip()
+
+    # Try to get parameter schema from Agno Function
+    input_schema: Dict[str, Any] = {"type": "object", "properties": {}}
+
+    if hasattr(fn, "parameters") and fn.parameters:
+        params = fn.parameters
+        if isinstance(params, dict):
+            # Agno stores parameters as JSON schema already
+            input_schema = params
+        elif hasattr(params, "model_json_schema"):
+            input_schema = params.model_json_schema()
+    elif hasattr(fn, "entrypoint") and callable(fn.entrypoint):
+        # Derive from function signature
+        import inspect
+        try:
+            sig = inspect.signature(fn.entrypoint)
+            props: Dict[str, Any] = {}
+            required: List[str] = []
+            for pname, param in sig.parameters.items():
+                if pname in ("self", "agent", "team", "run_context"):
+                    continue
+                ptype = "string"
+                if param.annotation != inspect.Parameter.empty:
+                    ann = param.annotation
+                    if ann in (int,):
+                        ptype = "integer"
+                    elif ann in (float,):
+                        ptype = "number"
+                    elif ann in (bool,):
+                        ptype = "boolean"
+                props[pname] = {"type": ptype}
+                if param.default is inspect.Parameter.empty:
+                    required.append(pname)
+            input_schema = {"type": "object", "properties": props}
+            if required:
+                input_schema["required"] = required
+        except Exception:
+            pass
+
+    return {
+        "name": name,
+        "description": description or f"Tool: {name}",
+        "input_schema": input_schema,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 @dataclass
 class FinceptChat(Model):
     """
-    Agno-compatible model for Fincept's built-in LLM endpoint.
-    Uses @dataclass inheritance matching agno's Model base class.
+    Agno-compatible model for Fincept's /research/llm endpoint.
+
+    Supports native function calling — the endpoint wraps GLM via
+    Anthropic's API format, so tool schemas and tool_use responses
+    work identically to the Anthropic SDK.
+
+    Tool-calling loop:
+      1. Send prompt + Anthropic-format tool schemas
+      2. If response contains tool_calls → execute them via Function.entrypoint
+      3. Append tool results and call again
+      4. Repeat until plain text response (no tool_calls)
     """
 
     id: str = "fincept-llm"
     name: str = "FinceptChat"
     provider: str = "Fincept"
 
-    # Fincept-specific fields
     api_key: Optional[str] = None
     base_url: str = FINCEPT_DEFAULT_URL
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
 
-    def _make_request(self, messages: List[Message]) -> Dict[str, Any]:
-        """Send request to Fincept endpoint and return raw response dict."""
-        # Fincept endpoint expects a single 'prompt' field, not 'messages'
-        prompt = self._messages_to_prompt(messages)
+    # Max tool call rounds before forcing a final answer
+    max_tool_rounds: int = 8
 
+    # ── HTTP request ──────────────────────────────────────────────────────────
+
+    def _call_endpoint(
+        self,
+        prompt: str,
+        tools: Optional[List[Dict]] = None,
+        tool_choice: Optional[Dict] = None,
+        tool_results_context: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Call /research/llm and return the parsed response dict.
+
+        Returns the full data dict:
+          {"response": str, "tool_calls": [...], "model": str, ...}
+        """
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["X-API-Key"] = self.api_key
 
-        payload: Dict[str, Any] = {
-            "prompt": prompt,
-        }
+        # Build the full prompt — include tool results from prior rounds
+        full_prompt = prompt
+        if tool_results_context:
+            full_prompt = f"{prompt}\n\n{tool_results_context}"
+
+        payload: Dict[str, Any] = {"prompt": full_prompt}
         if self.temperature is not None:
             payload["temperature"] = self.temperature
         if self.max_tokens is not None:
             payload["max_tokens"] = self.max_tokens
+        if tools:
+            payload["tools"] = tools
+        if tool_choice:
+            payload["tool_choice"] = tool_choice
 
         try:
             with httpx.Client(timeout=120.0) as client:
@@ -63,9 +171,15 @@ class FinceptChat(Model):
                         error_detail = err_data.get("detail", err_data.get("message", ""))
                     except Exception:
                         error_detail = resp.text[:200]
-                    raise RuntimeError(f"Fincept API error ({resp.status_code}): {error_detail}")
+                    raise RuntimeError(
+                        f"Fincept API error ({resp.status_code}): {error_detail}"
+                    )
 
-                return resp.json()
+                outer = resp.json()
+                # Unwrap: {"success": true, "data": {...}}
+                if isinstance(outer, dict) and "data" in outer:
+                    return outer["data"]
+                return outer
 
         except httpx.TimeoutException:
             raise RuntimeError("Fincept API request timed out (120s)")
@@ -76,89 +190,265 @@ class FinceptChat(Model):
         except Exception as e:
             raise RuntimeError(f"Fincept API call failed: {e}")
 
+    # ── Tool execution ────────────────────────────────────────────────────────
+
+    def _execute_tool_call(
+        self,
+        tool_call: Dict[str, Any],
+        functions: Dict[str, Any],
+    ) -> str:
+        """
+        Execute a single tool call returned by the model.
+
+        tool_call format:
+          {"id": "...", "type": "function", "function": {"name": "...", "arguments": "json_str"}}
+        """
+        fn_info = tool_call.get("function", {})
+        tool_name = fn_info.get("name", "")
+        args_str = fn_info.get("arguments", "{}")
+
+        try:
+            args = json.loads(args_str) if isinstance(args_str, str) else args_str
+        except Exception:
+            args = {}
+
+        fn = functions.get(tool_name)
+        if fn is None:
+            return f"Error: Tool '{tool_name}' not found. Available: {list(functions.keys())}"
+
+        logger.info(f"FinceptChat: calling {tool_name}({args})")
+        try:
+            if hasattr(fn, "entrypoint") and callable(fn.entrypoint):
+                result = fn.entrypoint(**args)
+            elif callable(fn):
+                result = fn(**args)
+            else:
+                return f"Error: '{tool_name}' is not callable"
+
+            if result is None:
+                return "Tool returned no result."
+            if isinstance(result, (dict, list)):
+                return json.dumps(result, indent=2, default=str)
+            return str(result)
+        except Exception as e:
+            return f"Tool execution error for {tool_name}: {e}"
+
+    # ── Native function-calling loop ──────────────────────────────────────────
+
+    # Fincept endpoint hard limit is 50k chars.
+    # We target 35k for the full prompt (prompt + tool context),
+    # leaving headroom for system instructions and response.
+    _PROMPT_CHAR_BUDGET = 35_000
+    # Per-tool-result cap — prevents a single large result from dominating
+    _TOOL_RESULT_CAP = 4_000
+
+    def _run_tool_loop(
+        self,
+        prompt: str,
+        tool_schemas: List[Dict],
+        functions: Dict[str, Any],
+    ) -> str:
+        """
+        Run the native tool-calling loop:
+          1. Call endpoint with tools
+          2. If tool_calls in response → execute → build results context → repeat
+          3. When no tool_calls → return response text
+
+        Tool results are truncated to _TOOL_RESULT_CAP chars each, and the
+        cumulative context is trimmed to stay within _PROMPT_CHAR_BUDGET.
+        """
+        tool_results_context = ""
+
+        for round_num in range(self.max_tool_rounds):
+            logger.debug(f"FinceptChat: tool round {round_num + 1}/{self.max_tool_rounds}")
+
+            data = self._call_endpoint(
+                prompt=prompt,
+                tools=tool_schemas,
+                tool_results_context=tool_results_context if tool_results_context else None,
+            )
+
+            response_text = data.get("response", "")
+            tool_calls = data.get("tool_calls", [])
+
+            logger.debug(
+                f"FinceptChat: response={response_text[:100]!r}, "
+                f"tool_calls={len(tool_calls)}"
+            )
+
+            if not tool_calls:
+                # No more tool calls — we have the final answer
+                return response_text
+
+            # Execute all tool calls from this round
+            results_parts = []
+            for tc in tool_calls:
+                call_id = tc.get("id", "unknown")
+                fn_name = tc.get("function", {}).get("name", "unknown")
+                raw_result = self._execute_tool_call(tc, functions)
+
+                # Truncate large tool results to stay within prompt budget
+                if len(raw_result) > self._TOOL_RESULT_CAP:
+                    raw_result = (
+                        raw_result[:self._TOOL_RESULT_CAP]
+                        + f"\n... [truncated — {len(raw_result)} chars total]"
+                    )
+
+                results_parts.append(
+                    f"Tool result for {fn_name} (id={call_id}):\n{raw_result}"
+                )
+                logger.debug(f"Tool {fn_name} result: {raw_result[:200]}")
+
+            new_results = "\n\n".join(results_parts)
+
+            # Build updated context and trim if over budget
+            candidate = (
+                (tool_results_context + "\n\n" + new_results).strip()
+                if tool_results_context
+                else f"Tool results:\n{new_results}"
+            )
+            # Keep only the most recent content if over budget
+            budget = self._PROMPT_CHAR_BUDGET - len(prompt) - 500  # 500 for overhead
+            if len(candidate) > budget > 0:
+                candidate = candidate[-budget:]
+                candidate = "... [older results trimmed]\n" + candidate
+            tool_results_context = candidate
+
+        # Hit round limit — synthesize from accumulated context
+        logger.warning(
+            f"FinceptChat: hit tool round limit ({self.max_tool_rounds}), "
+            "requesting final synthesis"
+        )
+        synthesis_prompt = (
+            f"{prompt}\n\n{tool_results_context}\n\n"
+            "Based on the tool results above, provide a complete final answer."
+        )
+        data = self._call_endpoint(prompt=synthesis_prompt)
+        return data.get("response", "")
+
+    # ── Override Model.response() ─────────────────────────────────────────────
+
+    def response(
+        self,
+        messages: List[Message],
+        response_format=None,
+        tools=None,
+        tool_choice=None,
+        tool_call_limit=None,
+        run_response=None,
+        send_media_to_model: bool = True,
+        compression_manager=None,
+        **kwargs,
+    ) -> ModelResponse:
+        """
+        Override base response() to use Fincept's native function calling.
+
+        When Agno passes Function objects via `tools`, convert them to
+        Anthropic-format schemas and run the tool loop. Otherwise do a
+        simple completion.
+        """
+        from agno.tools.function import Function
+
+        # Build functions dict from Agno Function objects
+        _functions: Dict[str, Any] = {}
+        _tool_schemas: List[Dict] = []
+
+        if tools:
+            for t in tools:
+                if isinstance(t, Function) and t.entrypoint:
+                    _functions[t.name] = t
+                    _tool_schemas.append(_function_to_anthropic_tool(t))
+
+        # Build prompt from messages
+        prompt = self._messages_to_prompt(messages)
+
+        if _functions:
+            logger.info(
+                f"FinceptChat: native tool calling with "
+                f"{len(_functions)} tools: {list(_functions.keys())}"
+            )
+            answer = self._run_tool_loop(
+                prompt=prompt,
+                tool_schemas=_tool_schemas,
+                functions=_functions,
+            )
+            return ModelResponse(content=answer, role="assistant")
+
+        # No tools — simple completion
+        data = self._call_endpoint(prompt=prompt)
+        content = data.get("response", str(data))
+        return ModelResponse(content=content, role="assistant")
+
+    # ── Agno Model interface ──────────────────────────────────────────────────
+
     def invoke(self, *args, **kwargs) -> ModelResponse:
-        """Send request to Fincept endpoint and return ModelResponse."""
-        # Extract messages from args or kwargs
+        """Simple completion — called by base class when no tool override needed."""
         messages = args[0] if args else kwargs.get("messages", [])
-        raw = self._make_request(messages)
-        return self._parse_provider_response(raw)
+        prompt = self._messages_to_prompt(messages)
+        data = self._call_endpoint(prompt=prompt)
+        content = data.get("response", str(data))
+        return ModelResponse(content=content, role="assistant")
 
     async def ainvoke(self, *args, **kwargs) -> ModelResponse:
-        """Async invoke - runs sync version in executor."""
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: self.invoke(*args, **kwargs))
 
     def invoke_stream(self, *args, **kwargs) -> Iterator[ModelResponse]:
-        """Streaming not supported - yield single response."""
         yield self.invoke(*args, **kwargs)
 
     async def ainvoke_stream(self, *args, **kwargs) -> AsyncIterator[ModelResponse]:
-        """Async streaming - yields single result."""
         result = await self.ainvoke(*args, **kwargs)
         yield result
 
     def _parse_provider_response(self, response: Any, **kwargs) -> ModelResponse:
-        """Parse raw provider response into ModelResponse."""
         content = self._extract_content(response)
         return ModelResponse(content=content, role="assistant")
 
     def _parse_provider_response_delta(self, response: Any) -> ModelResponse:
-        """Parse streaming delta into ModelResponse."""
-        content = self._extract_content(response) if isinstance(response, dict) else (str(response) if response else "")
+        content = (
+            self._extract_content(response)
+            if isinstance(response, dict)
+            else (str(response) if response else "")
+        )
         return ModelResponse(content=content, role="assistant")
 
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
     def _messages_to_prompt(self, messages: List[Message]) -> str:
-        """Convert agno Messages list into a single prompt string for the Fincept API."""
+        """Convert Agno Message list to a single prompt string."""
         parts = []
         for msg in messages:
             content = msg.content or ""
             if isinstance(content, list):
-                text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+                text_parts = [
+                    p.get("text", "")
+                    for p in content
+                    if isinstance(p, dict) and p.get("type") == "text"
+                ]
                 content = "\n".join(text_parts) if text_parts else str(content)
             content = str(content).strip()
             if not content:
                 continue
-
-            role = msg.role or "user"
+            role = getattr(msg, "role", "user") or "user"
             if role == "system":
                 parts.append(f"[System]: {content}")
-            elif role == "user":
-                parts.append(content)
             elif role == "assistant":
                 parts.append(f"[Assistant]: {content}")
             else:
                 parts.append(content)
-
         return "\n\n".join(parts)
 
     def _extract_content(self, data: Any) -> str:
-        """Extract text content from various response formats."""
+        """Extract text from various response formats."""
         if isinstance(data, dict):
-            # Fincept API format: {"success": true, "data": {"response": "..."}}
+            # Fincept: {"success": true, "data": {"response": "..."}}
             if "data" in data and isinstance(data["data"], dict):
-                if "response" in data["data"]:
-                    return str(data["data"]["response"])
-
-            # OpenAI-style format
-            if "choices" in data:
-                choices = data["choices"]
-                if choices:
-                    msg = choices[0].get("message", {})
-                    return msg.get("content", "")
-
-            # Other common formats
-            if "response" in data:
-                return str(data["response"])
-            if "content" in data:
-                return str(data["content"])
-            if "text" in data:
-                return str(data["text"])
-            if "answer" in data:
-                return str(data["answer"])
-
+                return str(data["data"].get("response", ""))
+            for key in ("response", "content", "text", "answer"):
+                if key in data:
+                    return str(data[key])
             return str(data)
-
         return str(data) if data else ""
 
     def get_provider(self) -> str:

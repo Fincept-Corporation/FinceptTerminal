@@ -14,7 +14,7 @@ export type { AgentCard, ExecutionPlan, RoutingResult, DbLLMConfig };
 
 // ─── View Mode ────────────────────────────────────────────────────────────────
 
-export type ViewMode = 'agents' | 'teams' | 'workflows' | 'planner' | 'tools' | 'system' | 'chat';
+export type ViewMode = 'agents' | 'teams' | 'workflows' | 'planner' | 'tools' | 'system' | 'chat' | 'create';
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 

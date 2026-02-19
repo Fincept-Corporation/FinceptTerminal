@@ -87,9 +87,27 @@ pub async fn execute_core_agent(
 /// This bypasses the worker pool for reliability on Windows
 async fn execute_core_agent_with_timeout(
     app: tauri::AppHandle,
-    payload: serde_json::Value,
+    mut payload: serde_json::Value,
     timeout_secs: u64,
 ) -> Result<String, String> {
+    // Inject terminal MCP bridge endpoint so Python can call TypeScript tools
+    let bridge_port = crate::mcp_bridge::get_or_start_bridge(app.clone());
+    if let Some(config) = payload.get_mut("config").and_then(|c| c.as_object_mut()) {
+        config.insert(
+            "terminal_mcp_endpoint".to_string(),
+            serde_json::Value::String(format!("http://127.0.0.1:{}", bridge_port)),
+        );
+    } else if payload.is_object() {
+        // No config key yet — create it
+        let map = payload.as_object_mut().unwrap();
+        let mut config = serde_json::Map::new();
+        config.insert(
+            "terminal_mcp_endpoint".to_string(),
+            serde_json::Value::String(format!("http://127.0.0.1:{}", bridge_port)),
+        );
+        map.insert("config".to_string(), serde_json::Value::Object(config));
+    }
+
     let payload_str = serde_json::to_string(&payload)
         .map_err(|e| format!("Failed to serialize payload: {}", e))?;
 
@@ -117,18 +135,17 @@ async fn execute_core_agent_with_timeout(
     eprintln!("[AgentCmd] Payload preview: {}", payload_preview);
 
     let app_clone = app.clone();
-    let args: Vec<String> = vec![payload_str.clone()];
 
     eprintln!("[AgentCmd] Starting Python execution with timeout={}s...", timeout_secs);
     let start_time = std::time::Instant::now();
 
-    // Execute Python subprocess in a blocking task with timeout
+    // Pass payload via stdin to avoid Windows command-line length limit (os error 206)
     let result = timeout(
         Duration::from_secs(timeout_secs),
         tokio::task::spawn_blocking(move || {
-            eprintln!("[AgentCmd] Inside blocking task, calling python::execute_sync...");
-            let exec_result = python::execute_sync(&app_clone, "agents/finagent_core/main.py", args);
-            eprintln!("[AgentCmd] python::execute_sync returned");
+            eprintln!("[AgentCmd] Inside blocking task, calling python::execute_with_stdin...");
+            let exec_result = python::execute_with_stdin(&app_clone, "agents/finagent_core/main.py", vec![], &payload_str);
+            eprintln!("[AgentCmd] python::execute_with_stdin returned");
             exec_result
         })
     ).await;
@@ -205,6 +222,16 @@ pub async fn execute_core_agent_streaming(
     }
 
     result
+}
+
+/// Deliver a tool execution result from TypeScript back to the waiting Python agent.
+/// TypeScript calls this after executing a terminal MCP tool triggered by the Python agent.
+///
+/// id: The request ID from the mcp-tool-call event
+/// result: JSON string of { success, data, error }
+#[tauri::command]
+pub fn register_mcp_tool_result(id: String, result: String) -> bool {
+    crate::mcp_bridge::deliver_tool_result(&id, result)
 }
 
 /// Cancel an active streaming operation
@@ -346,79 +373,6 @@ pub async fn get_trade_decisions(
         }
     });
     execute_core_agent(app, payload).await
-}
-
-// Legacy commands for Node Editor compatibility
-fn get_agent_script_path(agent_type: &str) -> Option<&'static str> {
-    match agent_type {
-        "warren_buffett" => Some("agents/TraderInvestorsAgent/warren_buffett_agent_cli.py"),
-        "charlie_munger" => Some("agents/TraderInvestorsAgent/charlie_munger_agent_cli.py"),
-        "benjamin_graham" => Some("agents/TraderInvestorsAgent/benjamin_graham_agent_cli.py"),
-        "seth_klarman" => Some("agents/TraderInvestorsAgent/seth_klarman_agent_cli.py"),
-        "howard_marks" => Some("agents/TraderInvestorsAgent/howard_marks_agent_cli.py"),
-        "joel_greenblatt" => Some("agents/TraderInvestorsAgent/joel_greenblatt_agent_cli.py"),
-        "david_einhorn" => Some("agents/TraderInvestorsAgent/david_einhorn_agent_cli.py"),
-        "bill_miller" => Some("agents/TraderInvestorsAgent/bill_miller_agent_cli.py"),
-        "jean_marie_eveillard" => Some("agents/TraderInvestorsAgent/jean_marie_eveillard_agent_cli.py"),
-        "marty_whitman" => Some("agents/TraderInvestorsAgent/marty_whitman_agent_cli.py"),
-        "macro_cycle" | "central_bank" | "behavioral" | "institutional_flow" |
-        "innovation" | "geopolitical" | "currency" | "supply_chain" |
-        "sentiment" | "regulatory" | "bridgewater" | "citadel" |
-        "two_sigma" | "de_shaw" | "elliott" |
-        "pershing_square" | "arq_capital" => Some("agents/hedgeFundAgents/hedge_fund_agent_cli.py"),
-        "renaissance" | "renaissance_technologies" | "rentech" => Some("agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/rentech_cli.py"),
-        "capitalism" => Some("agents/EconomicAgents/capitalism_agent_cli.py"),
-        "keynesian" => Some("agents/EconomicAgents/keynesian_agent_cli.py"),
-        "neoliberal" => Some("agents/EconomicAgents/neoliberal_agent_cli.py"),
-        "socialism" => Some("agents/EconomicAgents/socialism_agent_cli.py"),
-        "mixed_economy" => Some("agents/EconomicAgents/mixed_economy_agent_cli.py"),
-        "mercantilist" => Some("agents/EconomicAgents/mercantilist_agent_cli.py"),
-        _ => None,
-    }
-}
-
-#[tauri::command]
-pub async fn execute_python_agent(
-    app: tauri::AppHandle,
-    agent_type: String,
-    parameters: serde_json::Value,
-    inputs: serde_json::Value,
-) -> Result<AgentExecutionResult, String> {
-    let start_time = std::time::Instant::now();
-    let script_path = get_agent_script_path(&agent_type)
-        .ok_or_else(|| format!("Unknown agent type: {}", agent_type))?;
-
-    let args = vec![
-        "--parameters".to_string(),
-        serde_json::to_string(&parameters).unwrap_or_default(),
-        "--inputs".to_string(),
-        serde_json::to_string(&inputs).unwrap_or_default(),
-    ];
-
-    let result_str = python::execute_sync(&app, script_path, args)
-        .map_err(|e| {
-            let execution_time = start_time.elapsed().as_millis() as u64;
-            format!("Python execution failed after {}ms: {}", execution_time, e)
-        })?;
-
-    let execution_time = start_time.elapsed().as_millis() as u64;
-
-    match serde_json::from_str::<serde_json::Value>(&result_str) {
-        Ok(data) => Ok(AgentExecutionResult {
-            success: true,
-            data: Some(data),
-            error: None,
-            execution_time_ms: execution_time,
-            agent_type,
-        }),
-        Err(e) => Ok(AgentExecutionResult {
-            success: true,
-            data: Some(serde_json::json!({ "raw_output": result_str })),
-            error: Some(format!("JSON parse warning: {}", e)),
-            execution_time_ms: execution_time,
-            agent_type,
-        }),
-    }
 }
 
 /// Struct for parsing agent definitions from JSON config files

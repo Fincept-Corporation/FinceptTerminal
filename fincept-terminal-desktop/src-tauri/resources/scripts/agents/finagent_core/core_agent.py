@@ -494,12 +494,39 @@ class CoreAgent:
         # 4. Tools - Load and validate
         # =================================================================
         tool_names = config.get("tools", [])
+        all_tools = []
+
         if tool_names:
             tools = ToolsRegistry.get_tools(tool_names, api_keys=self.api_keys)
-            if tools:
-                agent_kwargs["tools"] = tools
-            else:
+            all_tools.extend(tools)
+            if not tools:
                 logger.warning(f"No tools loaded from: {tool_names}")
+
+        # MCP servers — user-configured servers from the MCP tab
+        # Format: [{"id", "name", "command", "args", "env", "transport"}]
+        mcp_servers = config.get("mcp_servers", [])
+        if mcp_servers:
+            mcp_tools = self._connect_mcp_servers(mcp_servers)
+            all_tools.extend(mcp_tools)
+
+        # Terminal MCP bridge — TypeScript internal tools (navigation, market data, portfolio, etc.)
+        # endpoint is injected by agents.rs when the bridge is running
+        terminal_endpoint = config.get("terminal_mcp_endpoint")
+        terminal_tool_defs = config.get("terminal_tools", [])
+        if terminal_endpoint and terminal_tool_defs:
+            try:
+                from finagent_core.tools.terminal_toolkit import TerminalToolkit
+                terminal_toolkit = TerminalToolkit(
+                    endpoint=terminal_endpoint,
+                    tool_definitions=terminal_tool_defs,
+                )
+                all_tools.extend(terminal_toolkit.get_tools())
+                logger.info(f"TerminalToolkit: {len(terminal_toolkit.functions)} tools from TypeScript MCP")
+            except Exception as e:
+                logger.warning(f"TerminalToolkit setup failed: {e}")
+
+        if all_tools:
+            agent_kwargs["tools"] = all_tools
 
         # =================================================================
         # 5. Memory Integration
@@ -563,7 +590,21 @@ class CoreAgent:
             agent_kwargs["structured_outputs"] = config["structured_outputs"]
 
         # =================================================================
-        # 9. Output Settings
+        # 9. Agentic Loop — CRITICAL for true autonomous operation
+        #    tool_call_limit caps how many tool iterations the agent
+        #    can make per run, preventing infinite loops while still
+        #    allowing multi-step autonomous tool use.
+        #    stream_intermediate_steps surfaces each tool call as it happens.
+        # =================================================================
+        if all_tools:
+            # Cap tool call iterations — default 10, max 20
+            max_iter = min(int(config.get("max_iterations", 10)), 20)
+            agent_kwargs["tool_call_limit"] = max_iter
+            # Surface intermediate reasoning/tool steps in streaming
+            agent_kwargs["stream_intermediate_steps"] = True
+
+        # =================================================================
+        # 10. Output Settings
         # =================================================================
         if config.get("markdown", True):
             agent_kwargs["markdown"] = True
@@ -571,11 +612,8 @@ class CoreAgent:
         if config.get("debug"):
             agent_kwargs["debug_mode"] = True
 
-        if config.get("show_tool_calls"):
-            agent_kwargs["show_tool_calls"] = True
-
         # =================================================================
-        # 10. Session/Storage for persistence
+        # 11. Session/Storage for persistence
         # =================================================================
         if config.get("session_id") or config.get("storage"):
             storage = self._create_storage(config)
@@ -613,6 +651,104 @@ class CoreAgent:
         except Exception as e:
             logger.error(f"Failed to create memory backend: {e}")
             return None
+
+    def _connect_mcp_servers(self, mcp_servers: List[Dict[str, Any]]) -> List[Any]:
+        """
+        Connect to user-configured MCP servers from the MCP tab and return
+        initialized MCPTools instances ready for use by the agent.
+
+        Each entry in mcp_servers should have:
+          - command (str): executable + args as a single string, or
+          - cmd (str) + args (list): separate command and arguments
+          - env (dict, optional): environment variables
+          - transport ("stdio" | "sse" | "streamable-http", default "stdio")
+          - url (str): required for sse/streamable-http transport
+          - name (str, optional): server name for logging
+          - id (str, optional): server id for tool_name_prefix
+
+        Returns list of connected MCPTools instances (failures are skipped).
+        """
+        import asyncio
+        connected = []
+
+        for srv in mcp_servers:
+            srv_name = srv.get("name") or srv.get("id") or "mcp-server"
+            transport = srv.get("transport", "stdio")
+
+            try:
+                from agno.tools.mcp import MCPTools
+
+                env = srv.get("env") or {}
+                tool_prefix = (srv.get("id") or "").replace("-", "_") or None
+
+                if transport in ("sse", "streamable-http"):
+                    url = srv.get("url")
+                    if not url:
+                        logger.warning(f"MCP server '{srv_name}' missing url for {transport} transport — skipping")
+                        continue
+                    mcp_tool = MCPTools(
+                        url=url,
+                        transport=transport,
+                        env=env or None,
+                        tool_name_prefix=tool_prefix,
+                        timeout_seconds=30,
+                    )
+                else:
+                    # stdio — build full command string from command + args
+                    cmd_parts = []
+                    if srv.get("command"):
+                        cmd_parts.append(srv["command"])
+                    if srv.get("args"):
+                        args = srv["args"]
+                        if isinstance(args, list):
+                            cmd_parts.extend(args)
+                        elif isinstance(args, str):
+                            cmd_parts.extend(args.split())
+                    if not cmd_parts:
+                        logger.warning(f"MCP server '{srv_name}' has no command — skipping")
+                        continue
+                    full_command = " ".join(cmd_parts)
+                    mcp_tool = MCPTools(
+                        command=full_command,
+                        env=env or None,
+                        transport="stdio",
+                        tool_name_prefix=tool_prefix,
+                        timeout_seconds=30,
+                    )
+
+                # Connect synchronously using asyncio
+                async def _connect(tool):
+                    await tool.connect()
+
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # We're inside an event loop — use run_until_complete via thread
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                            future = ex.submit(asyncio.run, _connect(mcp_tool))
+                            future.result(timeout=35)
+                    else:
+                        loop.run_until_complete(_connect(mcp_tool))
+                except Exception as connect_err:
+                    logger.error(f"MCP server '{srv_name}' connect failed: {connect_err}")
+                    continue
+
+                if mcp_tool.initialized:
+                    fn_count = len(mcp_tool.functions) if mcp_tool.functions else 0
+                    logger.info(f"MCP server '{srv_name}' connected — {fn_count} tools available")
+                    connected.append(mcp_tool)
+                else:
+                    logger.warning(f"MCP server '{srv_name}' did not initialize properly")
+
+            except ImportError:
+                logger.warning("agno.tools.mcp not available — MCP servers cannot be used")
+                break
+            except Exception as e:
+                logger.error(f"MCP server '{srv_name}' setup error: {e}")
+                continue
+
+        return connected
 
     def _create_storage(self, config: Dict[str, Any]) -> Optional[Any]:
         """Create storage backend for session persistence."""

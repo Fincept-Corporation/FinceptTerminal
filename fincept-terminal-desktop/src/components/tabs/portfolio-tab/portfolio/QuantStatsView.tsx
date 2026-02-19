@@ -1118,17 +1118,29 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
                         backgroundColor: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                         borderBottom: `1px solid ${FINCEPT.BORDER}`,
                       }}>
-                        {Object.values(period).map((val, j) => (
-                          <div key={j} style={{
-                            color: FINCEPT.CYAN,
-                            fontSize: '9px',
-                            fontFamily: TYPOGRAPHY.MONO,
-                          }}>
-                            {typeof val === 'number' && !Number.isInteger(val)
-                              ? (val * 100).toFixed(2) + '%'
-                              : String(val ?? 'N/A')}
-                          </div>
-                        ))}
+                        {Object.entries(period).map(([key, val], j) => {
+                          const isDrawdownPct = key.includes('drawdown') || key.includes('return');
+                          let display: string;
+                          if (val === null || val === undefined) {
+                            display = 'N/A';
+                          } else if (typeof val === 'number' && !Number.isInteger(val)) {
+                            // drawdown/return columns come pre-multiplied as % from quantstats
+                            display = isDrawdownPct
+                              ? val.toFixed(2) + '%'
+                              : (val * 100).toFixed(2) + '%';
+                          } else {
+                            display = String(val);
+                          }
+                          return (
+                            <div key={j} style={{
+                              color: FINCEPT.CYAN,
+                              fontSize: '9px',
+                              fontFamily: TYPOGRAPHY.MONO,
+                            }}>
+                              {display}
+                            </div>
+                          );
+                        })}
                       </div>
                     ))}
                   </div>

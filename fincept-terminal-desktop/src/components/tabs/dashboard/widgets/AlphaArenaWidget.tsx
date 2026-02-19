@@ -26,10 +26,13 @@ export const AlphaArenaWidget: React.FC<AlphaArenaWidgetProps> = ({ id, onRemove
     staleWhileRevalidate: true,
     fetcher: async () => {
       try {
-        const raw = await invoke<string>('get_competition_state');
-        const state = JSON.parse(raw);
-        const leaderboard: LeaderboardEntry[] = state?.data?.leaderboard ?? [];
-        const isRunning: boolean = state?.data?.is_running ?? false;
+        // list_alpha_competitions returns competitions, pick the most recent active one
+        const competitions = await invoke<any>('list_alpha_competitions', { limit: 1 });
+        const compList: any[] = competitions?.competitions ?? competitions?.data ?? [];
+        if (compList.length === 0) return { leaderboard: [], isRunning: false, totalAgents: 0 };
+        const latest = compList[0];
+        const isRunning: boolean = latest?.status === 'running' || latest?.is_running === true;
+        const leaderboard: LeaderboardEntry[] = await alphaArenaService.getLeaderboard(latest.id);
         return {
           leaderboard: leaderboard.slice(0, 6),
           isRunning,

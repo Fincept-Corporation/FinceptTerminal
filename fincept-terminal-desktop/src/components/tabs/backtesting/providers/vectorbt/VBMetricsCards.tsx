@@ -1,12 +1,11 @@
 /**
- * VBMetricsCards - Horizontal row of large metric cards
- * Replaces both VBStatsRibbon and VBMetricsPanel top section.
- * 6 key metrics displayed as prominent cards with big numbers.
+ * VBMetricsCards - Horizontal row of metric cards
+ * AI Quant Lab style: label on top, big value below, compact dark cards.
  */
 
 import React from 'react';
 import {
-  FINCEPT, TYPOGRAPHY, BORDERS,
+  FINCEPT, TYPOGRAPHY,
   getValueColor, formatPercentage, formatCurrency,
 } from '../../../portfolio-tab/finceptStyles';
 import type { BacktestingState } from '../../types';
@@ -24,13 +23,6 @@ interface MetricCardDef {
 }
 
 const METRIC_CARDS: MetricCardDef[] = [
-  {
-    key: 'totalReturn',
-    label: 'RETURN',
-    sublabel: 'Total P&L',
-    format: v => formatPercentage(v * 100),
-    color: v => getValueColor(v),
-  },
   {
     key: 'sharpeRatio',
     label: 'SHARPE',
@@ -75,6 +67,7 @@ export const VBMetricsCards: React.FC<VBMetricsCardsProps> = ({ state }) => {
   const totalReturn = perf?.totalReturn;
   const hasReturn = typeof totalReturn === 'number' && isFinite(totalReturn);
   const endValue = hasReturn ? initialCapital * (1 + totalReturn) : null;
+  const returnColor = hasReturn ? getValueColor(totalReturn) : FINCEPT.MUTED;
 
   return (
     <div style={{
@@ -86,90 +79,105 @@ export const VBMetricsCards: React.FC<VBMetricsCardsProps> = ({ state }) => {
       backgroundColor: FINCEPT.PANEL_BG,
       overflowX: 'auto',
     }}>
-      {/* Summary card - wider, shows capital flow */}
+      {/* ── Return card (wider) ── */}
       <div style={{
-        minWidth: '120px',
+        minWidth: '130px',
         flex: '0 0 auto',
-        padding: '10px 14px',
-        backgroundColor: FINCEPT.HEADER_BG,
-        border: BORDERS.STANDARD,
+        padding: '10px 12px',
+        backgroundColor: FINCEPT.DARK_BG,
         borderRadius: '3px',
+        borderLeft: `3px solid ${returnColor}`,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
-        borderLeft: `3px solid ${hasReturn ? getValueColor(totalReturn) : FINCEPT.MUTED}`,
+        gap: '3px',
       }}>
         <div style={{
-          fontSize: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}>
+          <span style={{
+            fontSize: '9px',
+            fontWeight: 700,
+            color: FINCEPT.GRAY,
+            letterSpacing: '0.5px',
+            fontFamily: TYPOGRAPHY.MONO,
+          }}>RETURN</span>
+          {hasReturn && (
+            <span style={{
+              fontSize: '8px',
+              fontWeight: 700,
+              padding: '1px 5px',
+              backgroundColor: `${FINCEPT.GREEN}20`,
+              color: FINCEPT.GREEN,
+              borderRadius: '2px',
+              fontFamily: TYPOGRAPHY.MONO,
+            }}>DONE</span>
+          )}
+        </div>
+        <div style={{
+          fontSize: '18px',
           fontWeight: 800,
-          color: isRunning
-            ? FINCEPT.ORANGE
-            : hasReturn
-              ? getValueColor(totalReturn)
-              : FINCEPT.MUTED,
+          color: isRunning ? FINCEPT.ORANGE : returnColor,
           fontFamily: TYPOGRAPHY.MONO,
-          letterSpacing: '-1px',
+          letterSpacing: '-0.5px',
           lineHeight: 1.1,
           animation: isRunning ? 'pulse 1s infinite' : 'none',
         }}>
           {isRunning ? '...' : hasReturn ? formatPercentage(totalReturn * 100) : '--'}
         </div>
-        <div style={{
-          fontSize: '9px',
-          color: FINCEPT.GRAY,
-          marginTop: '4px',
-          fontFamily: TYPOGRAPHY.MONO,
-        }}>
-          {hasReturn && endValue !== null
-            ? `${formatCurrency(initialCapital)} \u2192 ${formatCurrency(endValue)}`
-            : 'TOTAL RETURN'
-          }
-        </div>
-        {hasReturn && (
+        {hasReturn && endValue !== null && (
           <div style={{
-            display: 'inline-block',
-            marginTop: '4px',
-            padding: '1px 6px',
-            backgroundColor: `${FINCEPT.GREEN}20`,
-            color: FINCEPT.GREEN,
             fontSize: '8px',
-            fontWeight: 700,
-            borderRadius: '2px',
-            width: 'fit-content',
+            color: FINCEPT.MUTED,
+            fontFamily: TYPOGRAPHY.MONO,
           }}>
-            DONE
+            {formatCurrency(initialCapital)} → {formatCurrency(endValue)}
           </div>
         )}
       </div>
 
-      {/* Individual metric cards */}
-      {METRIC_CARDS.slice(1).map(card => {
+      {/* ── Individual metric cards ── */}
+      {METRIC_CARDS.map(card => {
         const rawValue = perf?.[card.key];
         const hasValue = typeof rawValue === 'number' && isFinite(rawValue);
+        const valueColor = isRunning ? FINCEPT.ORANGE : hasValue ? card.color(rawValue) : FINCEPT.MUTED;
 
         return (
           <div
             key={card.key}
             style={{
-              minWidth: '90px',
+              minWidth: '80px',
               flex: '1 1 0',
               padding: '10px 12px',
-              backgroundColor: FINCEPT.HEADER_BG,
-              border: BORDERS.STANDARD,
+              backgroundColor: FINCEPT.DARK_BG,
               borderRadius: '3px',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
+              gap: '3px',
             }}
           >
+            {/* Label row */}
             <div style={{
-              fontSize: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}>
+              <span style={{
+                fontSize: '9px',
+                fontWeight: 700,
+                color: FINCEPT.GRAY,
+                letterSpacing: '0.5px',
+                fontFamily: TYPOGRAPHY.MONO,
+              }}>{card.label}</span>
+            </div>
+            {/* Value */}
+            <div style={{
+              fontSize: '16px',
               fontWeight: 800,
-              color: isRunning
-                ? FINCEPT.ORANGE
-                : hasValue
-                  ? card.color(rawValue)
-                  : FINCEPT.MUTED,
+              color: valueColor,
               fontFamily: TYPOGRAPHY.MONO,
               letterSpacing: '-0.5px',
               lineHeight: 1.1,
@@ -177,19 +185,11 @@ export const VBMetricsCards: React.FC<VBMetricsCardsProps> = ({ state }) => {
             }}>
               {isRunning ? '...' : hasValue ? card.format(rawValue) : '--'}
             </div>
-            <div style={{
-              fontSize: '9px',
-              fontWeight: 700,
-              color: FINCEPT.GRAY,
-              marginTop: '4px',
-              letterSpacing: '0.5px',
-            }}>
-              {card.label}
-            </div>
+            {/* Sublabel */}
             <div style={{
               fontSize: '8px',
               color: FINCEPT.MUTED,
-              marginTop: '1px',
+              fontFamily: TYPOGRAPHY.MONO,
             }}>
               {card.sublabel}
             </div>

@@ -116,9 +116,14 @@ def main(args=None):
 
     try:
         if len(args) == 0:
-            return json.dumps({"success": False, "error": "No payload provided"})
+            # Read payload from stdin (used when payload is too large for argv)
+            payload_str = sys.stdin.read().strip()
+            if not payload_str:
+                return json.dumps({"success": False, "error": "No payload provided"})
+        else:
+            payload_str = args[0]
 
-        payload = json.loads(args[0])
+        payload = json.loads(payload_str)
         action = payload.get("action")
         api_keys = payload.get("api_keys", {})
         params = payload.get("params", {})
@@ -625,6 +630,71 @@ def dispatch_action(
         agent = CoreAgent(api_keys=api_keys)
         models = agent.list_output_models()
         return {"success": True, "models": models}
+
+    # =========================================================================
+    # Resumable Multi-Step Agentic Tasks
+    # =========================================================================
+
+    if action == "start_task":
+        """
+        Start a multi-step autonomous task with full checkpoint persistence.
+        The agent plans its own steps, executes each one with tools,
+        and saves state after every step so it can be resumed if interrupted.
+
+        Params: { query, session_id? }
+        Config: standard agent config (model, tools, instructions, etc.)
+        Returns: { success, task_id, response, steps_completed, steps }
+        """
+        from finagent_core.task_state import ResumableTaskRunner
+        query = params.get("query")
+        if not query:
+            return {"success": False, "error": "Missing 'query' in params"}
+        runner = ResumableTaskRunner(api_keys=api_keys)
+        return runner.start_task(query, config)
+
+    if action == "resume_task":
+        """
+        Resume a failed or interrupted multi-step task from its last checkpoint.
+        Skips steps that already completed; continues from where it left off.
+
+        Params: { task_id }
+        Returns: { success, task_id, response, resumed_from_step, steps_completed }
+        """
+        from finagent_core.task_state import ResumableTaskRunner
+        task_id = params.get("task_id")
+        if not task_id:
+            return {"success": False, "error": "Missing 'task_id' in params"}
+        runner = ResumableTaskRunner(api_keys=api_keys)
+        return runner.resume_task(task_id)
+
+    if action == "get_task":
+        """Get the current state of a task."""
+        from finagent_core.task_state import get_state_manager
+        task_id = params.get("task_id")
+        if not task_id:
+            return {"success": False, "error": "Missing 'task_id' in params"}
+        task = get_state_manager().get_task(task_id)
+        if not task:
+            return {"success": False, "error": f"Task {task_id} not found"}
+        return {"success": True, "task": task}
+
+    if action == "list_tasks":
+        """List recent tasks, optionally filtered by status."""
+        from finagent_core.task_state import get_state_manager
+        tasks = get_state_manager().list_tasks(
+            status=params.get("status"),
+            limit=params.get("limit", 20)
+        )
+        return {"success": True, "tasks": tasks, "count": len(tasks)}
+
+    if action == "delete_task":
+        """Delete a task by ID."""
+        from finagent_core.task_state import get_state_manager
+        task_id = params.get("task_id")
+        if not task_id:
+            return {"success": False, "error": "Missing 'task_id' in params"}
+        get_state_manager().delete_task(task_id)
+        return {"success": True, "deleted": task_id}
 
     # =========================================================================
     # Unknown Action

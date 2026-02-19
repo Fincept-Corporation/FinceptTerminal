@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import {
   Briefcase, ChevronDown, Search, ArrowUpRight, ArrowDownRight,
   RefreshCw, Download, Upload, Timer, Plus, Trash2, Zap, Bot,
+  BarChart2, TrendingUp, Settings2, Activity, FileText, Layers,
+  Shield, Calendar, Globe,
 } from 'lucide-react';
 import { FINCEPT, COMMON_STYLES } from '../finceptStyles';
 import { valColor } from './helpers';
@@ -9,6 +11,7 @@ import { formatCurrency, formatPercent } from '../portfolio/utils';
 import { useTranslation } from 'react-i18next';
 import { REFRESH_OPTIONS } from '../hooks/usePortfolioOperations';
 import type { Portfolio, PortfolioSummary } from '../../../../services/portfolio/portfolioService';
+import type { DetailView } from '../types';
 
 interface CommandBarProps {
   portfolios: Portfolio[];
@@ -31,12 +34,27 @@ interface CommandBarProps {
   onToggleFFN?: () => void;
   onAnalyzeWithAI?: () => void;
   aiAnalyzing?: boolean;
+  detailView?: DetailView | null;
+  onSetDetailView?: (view: DetailView | null) => void;
 }
+
+const DETAIL_VIEW_BUTTONS: { view: DetailView; label: string; icon: React.ElementType; color: string }[] = [
+  { view: 'analytics-sectors', label: 'SECTORS', icon: BarChart2, color: FINCEPT.CYAN },
+  { view: 'perf-risk', label: 'PERF/RISK', icon: TrendingUp, color: '#22C55E' },
+  { view: 'optimization', label: 'OPTIMIZE', icon: Settings2, color: '#F59E0B' },
+  { view: 'quantstats', label: 'QUANTSTATS', icon: Activity, color: '#8B5CF6' },
+  { view: 'reports-pme', label: 'REPORTS', icon: FileText, color: '#06B6D4' },
+  { view: 'indices', label: 'INDICES', icon: Layers, color: '#EC4899' },
+  { view: 'risk-mgmt', label: 'RISK', icon: Shield, color: '#EF4444' },
+  { view: 'planning', label: 'PLANNING', icon: Calendar, color: '#10B981' },
+  { view: 'economics', label: 'ECONOMICS', icon: Globe, color: '#6366F1' },
+];
 
 const CommandBar: React.FC<CommandBarProps> = ({
   portfolios, selectedPortfolio, onSelectPortfolio, portfolioSummary,
   onCreatePortfolio, onDeletePortfolio, onBuy, onSell, onRefresh, onExport, onExportJSON, onImport, refreshing, currency,
   refreshIntervalMs, onSetRefreshInterval, showFFN, onToggleFFN, onAnalyzeWithAI, aiAnalyzing,
+  detailView, onSetDetailView,
 }) => {
   const { t } = useTranslation('portfolio');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -267,6 +285,39 @@ const CommandBar: React.FC<CommandBarProps> = ({
               FFN
             </button>
           )}
+          {/* Detail View Navigation Buttons */}
+          {onSetDetailView && DETAIL_VIEW_BUTTONS.map(({ view, label, icon: Icon, color }) => {
+            const isActive = detailView === view && !showFFN;
+            return (
+              <button
+                key={view}
+                onClick={() => {
+                  if (isActive) {
+                    onSetDetailView(null);
+                  } else {
+                    onSetDetailView(view);
+                    if (showFFN && onToggleFFN) onToggleFFN();
+                  }
+                }}
+                title={label}
+                style={{
+                  padding: '5px 8px',
+                  backgroundColor: isActive ? `${color}25` : 'transparent',
+                  border: `1px solid ${isActive ? color : color + '60'}`,
+                  color: color,
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '3px',
+                  fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = `${color}20`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isActive ? `${color}25` : 'transparent'; }}
+              >
+                <Icon size={9} />
+                {label}
+              </button>
+            );
+          })}
           {/* AI Analysis */}
           {onAnalyzeWithAI && (
             <button

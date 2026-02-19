@@ -259,6 +259,36 @@ export interface TerminalContexts {
   getAvailableRegions?: () => string[];
 
   // ============================================================================
+  // Economics / Fincept Macro API
+  // ============================================================================
+
+  // CEIC Economic Series
+  getFinceptCeicCountries?: () => Promise<Record<string, any>[]>;
+  getFinceptCeicIndicators?: (countrySlug: string) => Promise<Record<string, any>[]>;
+  getFinceptCeicSeries?: (params: {
+    country: string;
+    indicator?: string;
+    yearFrom?: number;
+    yearTo?: number;
+    limit?: number;
+  }) => Promise<Record<string, any>[]>;
+
+  // Economic Calendar
+  getFinceptEconomicCalendar?: (params: {
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }) => Promise<Record<string, any>[]>;
+  getFinceptUpcomingEvents?: (limit?: number) => Promise<Record<string, any>[]>;
+
+  // World Government Bonds
+  getFinceptCentralBankRates?: () => Promise<Record<string, any>[]>;
+  getFinceptCreditRatings?: () => Promise<Record<string, any>[]>;
+  getFinceptSovereignCds?: () => Promise<Record<string, any>[]>;
+  getFinceptBondSpreads?: () => Promise<Record<string, any>[]>;
+  getFinceptInvertedYields?: () => Promise<Record<string, any>[]>;
+
+  // ============================================================================
   // Data Mapping
   // ============================================================================
 

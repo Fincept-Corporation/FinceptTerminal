@@ -71,41 +71,46 @@ export const VBCommandBar: React.FC<VBCommandBarProps> = ({ state }) => {
         flexShrink: 0,
       }} />
 
-      {/* Command pills */}
+      {/* Command squares */}
       <div style={{
         display: 'flex',
-        gap: '4px',
+        gap: '3px',
         flexShrink: 0,
-        overflowX: 'auto',
       }}>
         {providerCommands.map(cmd => {
           const isActive = activeCommand === cmd.id;
           const Icon = cmd.icon;
+          const cmdColor = (cmd as any).color || FINCEPT.ORANGE;
           return (
             <button
               key={cmd.id}
-              className={isActive ? undefined : 'vb-pill'}
               onClick={() => setActiveCommand(cmd.id)}
+              title={cmd.label}
               style={{
-                padding: '6px 14px',
-                backgroundColor: isActive ? FINCEPT.ORANGE : 'transparent',
-                color: isActive ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                border: isActive ? 'none' : BORDERS.STANDARD,
+                width: '60px',
+                height: '40px',
+                backgroundColor: isActive ? `${cmdColor}20` : FINCEPT.DARK_BG,
+                color: isActive ? cmdColor : FINCEPT.MUTED,
+                border: `1px solid ${isActive ? cmdColor : FINCEPT.BORDER}`,
                 borderRadius: '3px',
-                fontSize: '10px',
+                fontSize: '8px',
                 fontWeight: 700,
                 cursor: 'pointer',
-                letterSpacing: '0.5px',
+                letterSpacing: '0.3px',
                 textTransform: 'uppercase' as const,
                 display: 'flex',
+                flexDirection: 'column' as const,
                 alignItems: 'center',
-                gap: '5px',
+                justifyContent: 'center',
+                gap: '3px',
                 transition: EFFECTS.TRANSITION_FAST,
-                whiteSpace: 'nowrap' as const,
+                fontFamily: TYPOGRAPHY.MONO,
               }}
+              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.borderColor = cmdColor; e.currentTarget.style.color = cmdColor; } }}
+              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.borderColor = FINCEPT.BORDER; e.currentTarget.style.color = FINCEPT.MUTED; } }}
             >
-              <Icon size={12} />
-              {cmd.label}
+              <Icon size={13} />
+              <span style={{ lineHeight: 1.2, fontSize: '7px', textAlign: 'center' as const }}>{cmd.label}</span>
             </button>
           );
         })}

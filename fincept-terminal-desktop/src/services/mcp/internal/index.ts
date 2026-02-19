@@ -20,8 +20,11 @@ import { newsTools } from './tools/news';
 import { finscriptDocsTools } from './tools/finscript-docs';
 import { dataMappingTools } from './tools/data-mapping';
 import { customIndexTools } from './tools/custom-index';
+import { economicsTools } from './tools/economics';
+import { portfolioPanelTools } from './tools/portfolio-panels';
 import { dataMappingMCPBridge } from './DataMappingMCPBridge';
 import { customIndexMCPBridge } from './CustomIndexMCPBridge';
+import { economicsMCPBridge } from './EconomicsMCPBridge';
 import { reportBuilderMCPBridge } from './ReportBuilderMCPBridge';
 import { brokerMCPBridge } from './BrokerMCPBridge';
 import { stockBrokerMCPBridge } from './StockBrokerMCPBridge';
@@ -64,6 +67,8 @@ export function initializeInternalMCP(): void {
     terminalMCPProvider.registerTools(finscriptDocsTools);
     terminalMCPProvider.registerTools(dataMappingTools);
     terminalMCPProvider.registerTools(customIndexTools);
+    terminalMCPProvider.registerTools(economicsTools);
+    terminalMCPProvider.registerTools(portfolioPanelTools);
 
     // Initialize global bridge contexts
     reportBuilderMCPBridge.initializeGlobalContexts();
@@ -82,6 +87,9 @@ export function initializeInternalMCP(): void {
 
     // Initialize Custom Index bridge contexts
     customIndexMCPBridge.connect();
+
+    // Initialize Economics bridge contexts (Fincept Macro API)
+    economicsMCPBridge.connect();
 
     // Mark as initialized
     isInitialized = true;
@@ -108,6 +116,7 @@ export { portfolioMCPBridge } from './PortfolioMCPBridge';
 export { newsMCPBridge } from './NewsMCPBridge';
 export { dataMappingMCPBridge } from './DataMappingMCPBridge';
 export { customIndexMCPBridge } from './CustomIndexMCPBridge';
+export { economicsMCPBridge } from './EconomicsMCPBridge';
 export { INTERNAL_SERVER_ID, INTERNAL_SERVER_NAME } from './types';
 export type { TerminalContexts, InternalTool, InternalToolResult } from './types';
 export type {

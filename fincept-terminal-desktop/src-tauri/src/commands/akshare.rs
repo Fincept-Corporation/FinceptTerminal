@@ -117,6 +117,19 @@ pub async fn akshare_get_endpoints(app: tauri::AppHandle, script: String) -> Res
     run_python_script(&app, &script, "get_all_endpoints")
 }
 
+// ==================== CHINESE INDEX SPOT (for dashboard widget) ====================
+
+/// Fetches Chinese major index realtime/spot data via AkShare.
+/// Uses index_realtime_sw (Shenwan realtime) as primary source.
+#[command]
+pub async fn fetch_akshare_index_spot(app: tauri::AppHandle) -> Result<String, String> {
+    let result = run_python_script_with_args(&app, "akshare_index.py", vec!["index_realtime_sw".to_string()]);
+    match result {
+        Ok(resp) => serde_json::to_string(&resp).map_err(|e| format!("Serialization error: {}", e)),
+        Err(e) => Err(e),
+    }
+}
+
 // ==================== STOCK MARKET DATA ====================
 
 #[command]

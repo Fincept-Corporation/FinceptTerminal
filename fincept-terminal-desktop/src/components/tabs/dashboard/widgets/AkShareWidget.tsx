@@ -23,12 +23,21 @@ interface AkShareData {
   lastUpdate: string;
 }
 
-const CN_INDICES = [
-  { symbol: 'sh000001', name: 'Shanghai Composite' },
-  { symbol: 'sz399001', name: 'Shenzhen Component' },
-  { symbol: 'sh000300', name: 'CSI 300' },
-  { symbol: 'sh000016', name: 'SSE 50' },
-  { symbol: 'sz399006', name: 'ChiNext' },
+// Major Chinese indices from stock_zh_index_spot_em (East Money A-share index spot)
+// Fields: 代码 (code), 名称 (name), 最新价 (price), 涨跌幅 (% chg), 涨跌额 (chg amt)
+const CN_INDEX_KEYWORDS = [
+  { keyword: '上证指数', name: 'Shanghai Comp.', symbol: '000001' },
+  { keyword: '深证成指', name: 'Shenzhen Comp.', symbol: '399001' },
+  { keyword: '沪深300', name: 'CSI 300', symbol: '000300' },
+  { keyword: '上证50', name: 'SSE 50', symbol: '000016' },
+  { keyword: '创业板指', name: 'ChiNext', symbol: '399006' },
+  { keyword: '中证500', name: 'CSI 500', symbol: '000905' },
+  { keyword: '中证1000', name: 'CSI 1000', symbol: '000852' },
+  { keyword: '科创50', name: 'STAR 50', symbol: '000688' },
+  { keyword: '深证100', name: 'SZSE 100', symbol: '399004' },
+  { keyword: '中小100', name: 'SME 100', symbol: '399005' },
+  { keyword: '上证180', name: 'SSE 180', symbol: '000010' },
+  { keyword: '创业板50', name: 'ChiNext 50', symbol: '399673' },
 ];
 
 export const AkShareWidget: React.FC<AkShareWidgetProps> = ({ id, onRemove, onNavigate }) => {
@@ -40,22 +49,33 @@ export const AkShareWidget: React.FC<AkShareWidgetProps> = ({ id, onRemove, onNa
     staleWhileRevalidate: true,
     fetcher: async () => {
       try {
-        const raw = await invoke<string>('fetch_akshare_index_spot');
-        const result = JSON.parse(raw);
+        // Use stock_zh_index_spot_em (ak.stock_zh_index_spot_em) which returns
+        // Chinese A-share indices with fields: 代码, 名称, 最新价, 涨跌幅, 涨跌额
+        const result = await invoke<any>('akshare_query', {
+          script: 'akshare_stocks_realtime.py',
+          endpoint: 'stock_zh_index_spot_em',
+          args: null,
+        });
         const rawData: any[] = result?.data ?? [];
+        const indices: ChineseIndex[] = [];
 
-        const indices: ChineseIndex[] = CN_INDICES.map(idx => {
-          const row = rawData.find((r: any) =>
-            (r.code ?? r.symbol ?? '').toLowerCase() === idx.symbol
-          );
-          return {
-            symbol: idx.symbol,
-            name: idx.name,
-            price: parseFloat(row?.latest ?? row?.close ?? row?.price ?? 0),
-            change: parseFloat(row?.change ?? 0),
-            change_pct: parseFloat(row?.pct_change ?? row?.change_pct ?? 0),
-          };
-        }).filter(i => i.price > 0);
+        for (const idx of CN_INDEX_KEYWORDS) {
+          const row = rawData.find((r: any) => {
+            // Match by code first (代码 field), then by name keyword
+            const code = String(r['代码'] ?? r['code'] ?? '');
+            if (code === idx.symbol) return true;
+            const name = String(r['名称'] ?? r['name'] ?? '');
+            return name.includes(idx.keyword);
+          });
+          if (row) {
+            const price = parseFloat(row['最新价'] ?? row['price'] ?? 0);
+            const change = parseFloat(row['涨跌额'] ?? row['change'] ?? 0);
+            const changePct = parseFloat(row['涨跌幅'] ?? row['change_pct'] ?? 0);
+            if (price > 0) {
+              indices.push({ symbol: idx.symbol, name: idx.name, price, change, change_pct: changePct });
+            }
+          }
+        }
 
         return { indices, lastUpdate: new Date().toLocaleTimeString() };
       } catch {

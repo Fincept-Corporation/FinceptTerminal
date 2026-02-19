@@ -30,13 +30,14 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ state }) => {
     showJsonEditor, setShowJsonEditor, jsonText, setJsonText,
     useAutoRouting, setUseAutoRouting, lastRoutingResult,
     selectedTools,
-    loadDiscoveredAgents, updateEditedConfigFromAgent,
+    loadDiscoveredAgents, loadCustomAgentsFromDb, updateEditedConfigFromAgent,
     addToTeam, runAgent,
     toggleToolSelection,
   } = state;
 
   const handleRefreshAgents = async () => {
     await loadDiscoveredAgents();
+    await loadCustomAgentsFromDb();
   };
 
   return (

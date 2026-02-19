@@ -97,7 +97,6 @@ pub mod financepy;
 pub mod vollib;
 
 // AI Agents
-pub mod ai_agents;
 
 // Report Generator
 pub mod report_generator;
@@ -195,3 +194,6 @@ pub mod pypme;
 
 // GS-Quant - Goldman Sachs Quant Analytics
 pub mod gs_quant;
+
+// Polymarket - Prediction markets data
+pub mod polymarket;

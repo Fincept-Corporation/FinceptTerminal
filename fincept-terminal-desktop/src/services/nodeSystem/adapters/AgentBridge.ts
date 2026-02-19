@@ -362,7 +362,7 @@ const AGENT_DEFINITIONS: AgentMetadata[] = [
 
   // ==================== ECONOMIC AGENTS ====================
   {
-    id: 'capitalism_analyst',
+    id: 'capitalism_agent',
     name: 'Capitalism Analyst',
     category: 'economic',
     description: 'Analyzes from free market capitalism perspective',
@@ -373,7 +373,7 @@ const AGENT_DEFINITIONS: AgentMetadata[] = [
     ],
   },
   {
-    id: 'keynesian_analyst',
+    id: 'keynesian_agent',
     name: 'Keynesian Analyst',
     category: 'economic',
     description: 'Analyzes from Keynesian economics perspective',
@@ -384,7 +384,7 @@ const AGENT_DEFINITIONS: AgentMetadata[] = [
     ],
   },
   {
-    id: 'neoliberal_analyst',
+    id: 'neoliberal_agent',
     name: 'Neoliberal Analyst',
     category: 'economic',
     description: 'Analyzes from neoliberal economics perspective',
@@ -395,7 +395,7 @@ const AGENT_DEFINITIONS: AgentMetadata[] = [
     ],
   },
   {
-    id: 'mixed_economy_analyst',
+    id: 'mixed_economy_agent',
     name: 'Mixed Economy Analyst',
     category: 'economic',
     description: 'Analyzes from mixed economy perspective',
@@ -486,7 +486,9 @@ class AgentBridgeClass {
         const result = await this.pythonAgentService.executeAgent(
           request.agentId,
           request.parameters,
-          request.inputs || {}
+          request.inputs || {},
+          request.llmProvider,
+          request.llmModel,
         );
 
         return {

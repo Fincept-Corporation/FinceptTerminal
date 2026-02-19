@@ -10,8 +10,9 @@ import React from 'react';
 import { FINCEPT, COMMON_STYLES } from '../portfolio-tab/finceptStyles';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useBacktestingState } from './hooks';
-import { TopNavBar, CommandPanel, ConfigPanel, ResultsPanel, StatusBar, StatsRibbon } from './components';
+import { TopNavBar } from './components';
 import { VectorBTDashboard } from './providers/vectorbt';
+import { FinceptDashboard } from './providers/fincept/FinceptDashboard';
 
 const BacktestingTab: React.FC = () => {
   const state = useBacktestingState();
@@ -38,29 +39,9 @@ const BacktestingTab: React.FC = () => {
       <TopNavBar state={state} />
 
       {state.selectedProvider === 'vectorbt' ? (
-        /* ═══ VECTORBT: Full Dashboard UI ═══ */
         <VectorBTDashboard state={state} />
       ) : (
-        /* ═══ GENERIC LAYOUT (other providers) ═══ */
-        <>
-          {/* ═══ STATS RIBBON (52px) ═══ */}
-          <StatsRibbon state={state} />
-
-          {/* ═══ MAIN CONTENT ═══ */}
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            {/* LEFT: Commands + Categories (220px) */}
-            <CommandPanel state={state} />
-
-            {/* CENTER: Configuration (flex:1) */}
-            <ConfigPanel state={state} />
-
-            {/* RIGHT: Results (320px) */}
-            <ResultsPanel state={state} />
-          </div>
-
-          {/* ═══ STATUS BAR (24px) ═══ */}
-          <StatusBar state={state} />
-        </>
+        <FinceptDashboard state={state} />
       )}
     </div>
   );

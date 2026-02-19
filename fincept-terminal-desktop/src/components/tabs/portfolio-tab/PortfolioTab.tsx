@@ -11,6 +11,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { Briefcase, RefreshCw, Bot, X } from 'lucide-react';
 import { FINCEPT, COMMON_STYLES } from './finceptStyles';
 import agentService from '@/services/agentService';
+import { sqliteService } from '@/services/core/sqliteService';
 import { usePortfolioOperations } from './hooks/usePortfolioOperations';
 import { usePortfolioMetrics } from './hooks/usePortfolioMetrics';
 import { useModalState } from './hooks/useModalState';
@@ -113,7 +114,42 @@ const PortfolioTab: React.FC = () => {
     setShowAiPanel(true);
     setAiResult(null);
     try {
-      const result = await agentService.runPortfolioAnalysis(portfolioSummary);
+      // Load active LLM config from DB (same pattern as Agent Config tab)
+      const llmConfigs = await sqliteService.getLLMConfigs();
+      const activeLLM = llmConfigs.find(c => c.is_active) ?? llmConfigs[0] ?? null;
+
+      if (!activeLLM) {
+        setAiResult('No LLM configured. Please add a model in Settings → LLM Configuration.');
+        return;
+      }
+
+      // Build apiKeys map (same as useAgentConfig.getApiKeys)
+      const apiKeys: Record<string, string> = {};
+      for (const cfg of llmConfigs) {
+        if (cfg.api_key) {
+          apiKeys[`${cfg.provider.toUpperCase()}_API_KEY`] = cfg.api_key;
+          apiKeys[cfg.provider] = cfg.api_key;
+          apiKeys[cfg.provider.toLowerCase()] = cfg.api_key;
+        }
+        if (cfg.base_url) {
+          apiKeys[`${cfg.provider.toUpperCase()}_BASE_URL`] = cfg.base_url;
+          apiKeys[`${cfg.provider}_base_url`] = cfg.base_url;
+        }
+      }
+
+      // Build AgentConfig using active LLM
+      const agentConfig = {
+        model: {
+          provider: activeLLM.provider,
+          model_id: activeLLM.model,
+          temperature: 0.7,
+          max_tokens: 4096,
+        },
+        instructions: 'You are a professional portfolio analyst with CFA-level expertise. Provide clear, actionable financial analysis.',
+        tools: [],
+      };
+
+      const result = await agentService.runPortfolioAnalysis(portfolioSummary, 'full', apiKeys, agentConfig);
       setAiResult(result.response || result.error || 'No analysis returned.');
     } catch (err: any) {
       setAiResult(`Analysis failed: ${err?.message || 'Unknown error'}`);
@@ -157,6 +193,8 @@ const PortfolioTab: React.FC = () => {
         onToggleFFN={() => { setShowFFN(v => !v); setDetailView(null); }}
         onAnalyzeWithAI={portfolioSummary ? handleAnalyzeWithAI : undefined}
         aiAnalyzing={aiAnalyzing}
+        detailView={detailView}
+        onSetDetailView={selectedPortfolio ? (view) => { setDetailView(view); if (view) setShowFFN(false); } : undefined}
       />
 
       {/* ═══ STATS RIBBON — hidden when a full-screen view is active ═══ */}

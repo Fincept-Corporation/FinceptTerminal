@@ -755,6 +755,15 @@ export interface AgentConfigData {
   };
   output_format?: string;
   debug?: boolean;
+  mcp_servers?: Array<{
+    id?: string;
+    name?: string;
+    command?: string;
+    args?: string[] | string;
+    env?: Record<string, string>;
+    transport?: string;
+    url?: string;
+  }>;
 }
 
 export const saveAgentConfig = async (config: Omit<AgentConfig, 'created_at' | 'updated_at'> | AgentConfig): Promise<{ success: boolean; message: string }> => {

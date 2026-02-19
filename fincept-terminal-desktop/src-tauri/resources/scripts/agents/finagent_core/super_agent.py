@@ -2,16 +2,37 @@
 SuperAgent - Triage routing for query distribution
 
 Routes queries to appropriate sub-agents based on intent classification.
-Similar to ValueCell's agent orchestration pattern.
+Supports two routing modes:
+  - LLM-based routing (default): The LLM itself decides which agent/intent fits best.
+    This is fully agentic — no hardcoded keyword tables.
+  - Keyword fallback: Used when no LLM config is available (offline / no API key).
 """
 
 import re
+import json
 from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
 
 logger = logging.getLogger(__name__)
+
+# System prompt given to the LLM router — lists all intents and asks for a JSON decision
+LLM_ROUTER_SYSTEM_PROMPT = """You are a financial query router. Your ONLY job is to classify a user query into ONE of these intents and return a JSON object.
+
+Available intents:
+- trading: order execution, buy/sell signals, position entry/exit, market orders
+- portfolio: portfolio allocation, rebalancing, diversification, holdings management
+- analysis: stock/equity research, valuation (DCF, P/E), fundamental or technical analysis, price targets
+- risk: VaR, volatility, drawdown, Sharpe ratio, hedging, stress testing, correlation
+- news: market news, earnings announcements, press releases, headlines
+- geopolitics: geopolitical risk, international relations, sanctions, trade wars, elections
+- economics: GDP, inflation, interest rates, central banks, employment, CPI/PPI
+- research: deep-dive research, industry studies, comprehensive investigation
+- general: anything that doesn't fit the above
+
+Respond ONLY with a valid JSON object in this exact format (no markdown, no explanation):
+{"intent": "<intent>", "confidence": <0.0-1.0>, "reasoning": "<one sentence>"}"""
 
 
 class QueryIntent(Enum):
@@ -179,12 +200,105 @@ class IntentClassifier:
         return results
 
 
+class LLMRouter:
+    """
+    True agentic router: asks an LLM to classify the query intent.
+
+    Falls back to IntentClassifier (keyword-based) if:
+    - No model config / API keys are available
+    - LLM call fails or times out
+    - LLM returns unparseable output
+    """
+
+    INTENT_VALUES = {i.value for i in QueryIntent}
+
+    def __init__(
+        self,
+        model_config: Optional[Dict[str, Any]] = None,
+        api_keys: Optional[Dict[str, str]] = None,
+    ):
+        self.model_config = model_config or {}
+        self.api_keys = api_keys or {}
+        self._fallback = IntentClassifier()
+
+    def classify(self, query: str) -> tuple:
+        """
+        Classify query intent using LLM if available, else keyword fallback.
+
+        Returns:
+            (QueryIntent, confidence: float, reasoning: str)
+        """
+        provider = self.model_config.get("provider", "")
+        model_id = self.model_config.get("model_id", "")
+
+        if provider and model_id:
+            try:
+                return self._llm_classify(query, provider, model_id)
+            except Exception as e:
+                logger.warning(f"LLM routing failed, using keyword fallback: {e}")
+
+        # Keyword fallback
+        results = self._fallback.classify(query)
+        if results:
+            intent, confidence, _, _ = results[0]
+            return intent, confidence, "keyword-based classification"
+        return QueryIntent.GENERAL, 0.1, "no match found"
+
+    def _llm_classify(self, query: str, provider: str, model_id: str) -> tuple:
+        """Ask the LLM to classify the query. Returns (QueryIntent, confidence, reasoning)."""
+        from finagent_core.registries import ModelsRegistry
+
+        model = ModelsRegistry.create_model(
+            provider=provider,
+            model_id=model_id,
+            api_keys=self.api_keys,
+            temperature=0.0,  # Deterministic — routing must be consistent
+        )
+
+        from agno.agent import Agent
+        router_agent = Agent(
+            model=model,
+            instructions=LLM_ROUTER_SYSTEM_PROMPT,
+            markdown=False,
+        )
+
+        response = router_agent.run(f"Classify this query: {query}")
+
+        # Extract text
+        if hasattr(response, "content"):
+            text = response.content
+        else:
+            text = str(response)
+
+        # Strip any accidental markdown code fences
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        text = text.strip()
+
+        parsed = json.loads(text)
+        intent_str = parsed.get("intent", "general").lower()
+        confidence = float(parsed.get("confidence", 0.8))
+        reasoning = parsed.get("reasoning", "")
+
+        # Validate intent value
+        if intent_str not in self.INTENT_VALUES:
+            intent_str = "general"
+
+        intent = QueryIntent(intent_str)
+        logger.info(f"LLM routed '{query[:60]}' → {intent_str} (conf={confidence:.2f}): {reasoning}")
+        return intent, confidence, reasoning
+
+
 class SuperAgent:
     """
     SuperAgent - Routes queries to appropriate sub-agents.
 
     Features:
-    - Intent classification
+    - LLM-driven intent classification (true agentic routing)
+    - Keyword fallback when LLM unavailable
     - Multi-agent routing
     - Fallback handling
     - Response aggregation
@@ -193,10 +307,12 @@ class SuperAgent:
     def __init__(
         self,
         api_keys: Optional[Dict[str, str]] = None,
-        routes: Optional[List[RouteConfig]] = None
+        routes: Optional[List[RouteConfig]] = None,
+        model_config: Optional[Dict[str, Any]] = None,
     ):
         self.api_keys = api_keys or {}
-        self.classifier = IntentClassifier()
+        self.classifier = IntentClassifier()  # keyword fallback
+        self.llm_router = LLMRouter(model_config=model_config, api_keys=self.api_keys)
         self.routes: Dict[QueryIntent, RouteConfig] = {}
         self.fallback_agent_id = "core_agent"
 
@@ -288,7 +404,8 @@ class SuperAgent:
 
     def route(self, query: str) -> RoutingResult:
         """
-        Route query to appropriate agent.
+        Route query to appropriate agent using LLM classification.
+        Falls back to keyword matching if LLM is unavailable.
 
         Args:
             query: User query
@@ -296,31 +413,16 @@ class SuperAgent:
         Returns:
             RoutingResult with agent info and confidence
         """
-        # Classify intent
-        classifications = self.classifier.classify(query)
-
-        if not classifications:
-            # Fallback to general
-            return RoutingResult(
-                intent=QueryIntent.GENERAL,
-                agent_id=self.fallback_agent_id,
-                confidence=0.0,
-                config={}
-            )
-
-        # Get top classification
-        top_intent, confidence, matched_kw, matched_pt = classifications[0]
-
-        # Get route config
-        route = self.routes.get(top_intent, self.routes.get(QueryIntent.GENERAL))
+        intent, confidence, reasoning = self.llm_router.classify(query)
+        route = self.routes.get(intent, self.routes.get(QueryIntent.GENERAL))
 
         return RoutingResult(
-            intent=top_intent,
+            intent=intent,
             agent_id=route.agent_id if route else self.fallback_agent_id,
             confidence=confidence,
             config=route.config_override if route else {},
-            matched_keywords=matched_kw,
-            matched_patterns=matched_pt
+            matched_keywords=[reasoning],  # repurpose field to carry LLM reasoning
+            matched_patterns=[],
         )
 
     def route_multi(self, query: str, max_agents: int = 3) -> List[RoutingResult]:
@@ -376,7 +478,11 @@ class SuperAgent:
         from finagent_core.core_agent import CoreAgent
         from finagent_core.agent_loader import get_loader
 
-        # Route query
+        # Pass user model config to LLM router so it can use the same provider
+        if user_config and user_config.get("model"):
+            self.llm_router.model_config = user_config["model"]
+
+        # Route query (LLM-based)
         routing = self.route(query)
         logger.info(f"Routed to {routing.agent_id} with confidence {routing.confidence:.2f}")
 
@@ -587,5 +693,6 @@ def execute_query(
     config: Dict[str, Any] = None
 ) -> Dict[str, Any]:
     """Route and execute a query"""
-    agent = SuperAgent(api_keys=api_keys)
+    model_config = config.get("model") if config else None
+    agent = SuperAgent(api_keys=api_keys, model_config=model_config)
     return agent.execute(query, session_id, user_config=config)

@@ -467,13 +467,20 @@ def compute_drawdowns(portfolio_returns: pd.Series) -> dict:
     try:
         dd_details = qs.stats.drawdown_details(dd_series)
         if dd_details is not None and len(dd_details) > 0:
+            # Flatten MultiIndex columns (e.g. ('AAPL', 'start') -> 'start')
+            if isinstance(dd_details.columns, pd.MultiIndex):
+                dd_details.columns = dd_details.columns.get_level_values(-1)
             periods = []
             for _, row in dd_details.head(10).iterrows():
                 period = {}
                 for col in dd_details.columns:
                     val = row[col]
-                    if isinstance(val, pd.Timestamp):
+                    if val is pd.NaT or (isinstance(val, float) and np.isnan(val)):
+                        period[col] = None
+                    elif isinstance(val, pd.Timestamp):
                         period[col] = val.strftime("%Y-%m-%d")
+                    elif isinstance(val, str):
+                        period[col] = val
                     elif isinstance(val, (int, np.integer)):
                         period[col] = int(val)
                     else:

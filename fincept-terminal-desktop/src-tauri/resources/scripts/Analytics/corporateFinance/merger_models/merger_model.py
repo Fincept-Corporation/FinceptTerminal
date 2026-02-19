@@ -285,14 +285,21 @@ def main():
             target = json.loads(sys.argv[3])
             year = int(sys.argv[4])
 
+            # Derive purchase price from available data; fall back to 2x target EBITDA or 1x revenue
+            target_ev = target.get('enterprise_value', target.get('market_cap', 0))
+            if not target_ev:
+                target_ebitda = target.get('ebitda', 0)
+                target_revenue = target.get('revenue', 0)
+                target_ev = target_ebitda * 8 if target_ebitda else target_revenue * 1.5
+
             deal_terms = {
-                'purchase_price': target.get('enterprise_value', target.get('market_cap', 0)),
-                'cash_consideration': target.get('enterprise_value', 0) * 0.5,
-                'stock_consideration': target.get('enterprise_value', 0) * 0.5,
+                'purchase_price': target_ev,
+                'cash_consideration': target_ev * 0.5,
+                'stock_consideration': target_ev * 0.5,
                 'acquirer_stock_price': acquirer.get('stock_price', 100),
-                'synergies': 0,
-                'integration_costs': 0,
-                'tax_rate': 0.21,
+                'synergies': acquirer.get('synergies', 0),
+                'integration_costs': acquirer.get('integration_costs', 0),
+                'tax_rate': acquirer.get('tax_rate', 0.21),
             }
 
             model = MergerModel(acquirer, target, deal_terms)

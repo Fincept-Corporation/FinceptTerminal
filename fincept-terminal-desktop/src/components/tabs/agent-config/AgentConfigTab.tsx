@@ -10,7 +10,7 @@ import React from 'react';
 import {
   Bot, RefreshCw, Route, AlertCircle, CheckCircle,
   Users, Wrench, MessageSquare, Cpu, ListTree,
-  GitBranch, Loader2,
+  GitBranch, Loader2, Plus,
 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { cacheService } from '@/services/cache/cacheService';
@@ -23,11 +23,13 @@ import { PlannerView } from './views/PlannerView';
 import { ToolsView } from './views/ToolsView';
 import { ChatView } from './views/ChatView';
 import { SystemView } from './views/SystemView';
+import { CreateAgentView } from './views/CreateAgentView';
 
 // ─── View Mode tab definitions (with icons) ──────────────────────────────────
 
 const VIEW_MODE_TABS = [
   { id: 'agents', name: 'AGENTS', icon: Bot },
+  { id: 'create', name: 'CREATE', icon: Plus },
   { id: 'teams', name: 'TEAMS', icon: Users },
   { id: 'workflows', name: 'WORKFLOWS', icon: GitBranch },
   { id: 'planner', name: 'PLANNER', icon: ListTree },
@@ -180,6 +182,7 @@ const AgentConfigTab: React.FC = () => {
       {/* ── Main Content ───────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {viewMode === 'agents' && <AgentsView state={state} />}
+        {viewMode === 'create' && <CreateAgentView />}
         {viewMode === 'teams' && <TeamsView state={state} />}
         {viewMode === 'workflows' && <WorkflowsView state={state} />}
         {viewMode === 'planner' && <PlannerView state={state} />}

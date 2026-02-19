@@ -13,6 +13,8 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { mcpToolService } from '@/services/mcp/mcpToolService';
+import { INTERNAL_SERVER_ID } from '@/services/mcp/internal';
 
 // =============================================================================
 // Types
@@ -82,6 +84,24 @@ export interface AgentConfig {
   // Structured output model name
   output_model?: string;
   debug?: boolean;
+  // User-configured MCP servers (from the MCP tab in Settings)
+  // Each entry matches the MCPServer schema from the mcp_servers SQLite table
+  mcp_servers?: Array<{
+    id?: string;
+    name?: string;
+    command?: string;
+    args?: string[] | string;
+    env?: Record<string, string>;
+    transport?: 'stdio' | 'sse' | 'streamable-http';
+    url?: string;
+  }>;
+  // Internal TypeScript MCP tool definitions — injected automatically by agentService
+  // Python TerminalToolkit uses these to register callable tools that proxy back via HTTP bridge
+  terminal_tools?: Array<{
+    name: string;
+    description: string;
+    inputSchema: Record<string, any>;
+  }>;
 }
 
 export interface TeamConfig {
@@ -344,11 +364,48 @@ const cache = new LRUCache(100);
 // Core Execution
 // =============================================================================
 
+// Tool names blocked from agent access (execution/write operations)
+const BLOCKED_TERMINAL_TOOLS = new Set([
+  'place_order', 'cancel_order', 'modify_order', 'place_market_order',
+  'place_limit_order', 'place_stop_order', 'execute_trade', 'submit_order',
+  'place_crypto_order', 'cancel_crypto_order',
+]);
+
 /**
- * Execute a CoreAgent action with the given payload
+ * Fetch internal TypeScript MCP tool definitions, filter to safe read-only tools,
+ * and return them ready for injection into an agent payload.
+ */
+async function getTerminalToolDefinitions(): Promise<AgentConfig['terminal_tools']> {
+  try {
+    const allTools = await mcpToolService.getAllTools();
+    return allTools
+      .filter(t => t.serverId === INTERNAL_SERVER_ID && !BLOCKED_TERMINAL_TOOLS.has(t.name))
+      .map(t => ({
+        name: t.name,
+        description: t.description || `Terminal tool: ${t.name}`,
+        inputSchema: t.inputSchema || { type: 'object', properties: {} },
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Execute a CoreAgent action with the given payload.
+ * Automatically injects internal TypeScript MCP tool definitions if the action is 'run'.
  */
 async function execute<T = any>(payload: AgentPayload): Promise<AgentResponse<T>> {
   try {
+    // Inject terminal tool schemas for 'run' actions so Python can use TypeScript tools
+    if (payload.action === 'run' && payload.config) {
+      const terminalTools = await getTerminalToolDefinitions();
+      if (terminalTools && terminalTools.length > 0) {
+        payload = {
+          ...payload,
+          config: { ...payload.config, terminal_tools: terminalTools },
+        };
+      }
+    }
     const result = await invoke<string>('execute_core_agent', { payload });
     return JSON.parse(result) as AgentResponse<T>;
   } catch (error: any) {
@@ -995,6 +1052,7 @@ export async function runPortfolioAnalysis(
   },
   analysisType: 'full' | 'risk' | 'rebalance' | 'opportunities' = 'full',
   apiKeys?: Record<string, string>,
+  agentConfig?: AgentConfig,
 ): Promise<AgentResponse> {
   const topHoldings = portfolioSummary.holdings
     .sort((a, b) => b.weight - a.weight)
@@ -1010,18 +1068,11 @@ export async function runPortfolioAnalysis(
   };
 
   return execute({
-    action: 'route_query',
+    action: 'run',
     api_keys: apiKeys,
+    config: agentConfig,
     params: {
       query: queries[analysisType],
-      portfolio_context: {
-        id: portfolioSummary.portfolio.id,
-        name: portfolioSummary.portfolio.name,
-        currency: portfolioSummary.portfolio.currency,
-        nav: portfolioSummary.total_market_value,
-        pnl_pct: portfolioSummary.total_unrealized_pnl_percent,
-        holdings_count: portfolioSummary.holdings.length,
-      },
     },
   });
 }
@@ -1650,32 +1701,34 @@ export interface RenTechResult {
 }
 
 /**
- * Run Renaissance Technologies signal analysis
+ * Run Renaissance Technologies signal analysis via finagent_core
  */
 export async function runRenaissanceTechnologies(
   signal: RenTechSignal,
   config?: RenTechConfig
 ): Promise<RenTechResult> {
   try {
-    const result = await invoke<string>('execute_python_agent', {
-      agentType: 'renaissance',
-      parameters: config || {},
-      inputs: { signal, config },
-    });
-
+    const query = JSON.stringify({ command: 'analyze_signal', signal, config: config || {} });
+    const payload = {
+      action: 'run',
+      api_keys: {},
+      config: {
+        model: { provider: 'openai', model_id: 'gpt-4-turbo' },
+        instructions: 'You are a quantitative analyst embodying Renaissance Technologies approach. Apply mathematical pattern recognition, statistical arbitrage, and systematic signal analysis.',
+      },
+      params: { query },
+    };
+    const result = await invoke<string>('execute_core_agent', { payload });
     const parsed = JSON.parse(result);
     return parsed.data || parsed;
   } catch (error: any) {
     console.error('[RenTech] Analysis failed:', error);
-    return {
-      success: false,
-      error: error.message || 'Renaissance Technologies analysis failed',
-    };
+    return { success: false, error: error.message || 'Renaissance Technologies analysis failed' };
   }
 }
 
 /**
- * Run IC Deliberation on a signal
+ * Run IC Deliberation on a signal via finagent_core
  */
 export async function runICDeliberation(deliberationData: {
   signal: any;
@@ -1684,40 +1737,38 @@ export async function runICDeliberation(deliberationData: {
   sizing_recommendation: any;
 }): Promise<RenTechResult> {
   try {
-    const jsonData = JSON.stringify(deliberationData);
-    const result = await invoke<string>('execute_python_agent', {
-      agentType: 'renaissance',
-      parameters: {},
-      inputs: { command: 'run_ic_deliberation', data: deliberationData },
-    });
-
+    const query = JSON.stringify({ command: 'run_ic_deliberation', data: deliberationData });
+    const payload = {
+      action: 'run',
+      api_keys: {},
+      config: {
+        model: { provider: 'openai', model_id: 'gpt-4-turbo' },
+        instructions: 'You are an Investment Committee member at a quantitative hedge fund. Deliberate on trade signals and provide IC-level decisions with clear reasoning.',
+      },
+      params: { query },
+    };
+    const result = await invoke<string>('execute_core_agent', { payload });
     const parsed = JSON.parse(result);
-    return { success: true, ic_decision: parsed.data };
+    return { success: true, ic_decision: parsed.data || parsed.response };
   } catch (error: any) {
     console.error('[RenTech] IC deliberation failed:', error);
-    return {
-      success: false,
-      error: error.message || 'IC deliberation failed',
-    };
+    return { success: false, error: error.message || 'IC deliberation failed' };
   }
 }
 
 /**
- * Get Renaissance Technologies agent presets
+ * Get Renaissance Technologies agent presets via finagent_core
  */
-export async function getRenTechPresets(): Promise<{
-  agents: any[];
-  teams: any[];
-}> {
+export async function getRenTechPresets(): Promise<{ agents: any[]; teams: any[] }> {
   try {
-    const result = await invoke<string>('execute_python_agent', {
-      agentType: 'renaissance',
-      parameters: {},
-      inputs: { command: 'list_agent_presets' },
-    });
-
+    const payload = {
+      action: 'list_agents',
+      api_keys: {},
+      params: { category: 'hedge-fund' },
+    };
+    const result = await invoke<string>('execute_core_agent', { payload });
     const parsed = JSON.parse(result);
-    return parsed.data || { agents: [], teams: [] };
+    return parsed.data || { agents: parsed.agents || [], teams: [] };
   } catch (error) {
     console.error('[RenTech] Failed to get presets:', error);
     return { agents: [], teams: [] };

@@ -12,6 +12,7 @@ import { initializeNodeSystem } from './services/nodeSystem';
 import { initializeStockBrokers } from './brokers/stocks';
 import { notificationService } from './services/notifications';
 import { fileStorageService } from './services/fileStorageService';
+import { initMCPBridge, destroyMCPBridge } from './services/mcp/mcpBridge';
 
 // Import screens
 import LoginScreen from './components/auth/LoginScreen';
@@ -118,6 +119,12 @@ const App: React.FC = () => {
     }
 
     checkSetup();
+  }, []);
+
+  // Initialize MCP bridge so Python agents can call TypeScript internal tools
+  useEffect(() => {
+    initMCPBridge().catch(err => console.error('[App] MCP bridge init failed:', err));
+    return () => { destroyMCPBridge(); };
   }, []);
 
   // Global monitor_alert listener — fires notifications even when MonitoringPanel is not mounted

@@ -18,6 +18,11 @@ class ToolsRegistry:
 
     # Tool categories and their available tools
     TOOL_CATALOG = {
+        # SEC EDGAR (internal Fincept MCP — no API key required)
+        "sec_edgar": {
+            "edgar": "finagent_core.tools.edgar_tools.EdgarTools",
+        },
+
         # Finance & Trading
         "finance": {
             "yfinance": "agno.tools.yfinance.YFinanceTools",

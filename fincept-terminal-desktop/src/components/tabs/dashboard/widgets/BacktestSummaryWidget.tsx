@@ -36,10 +36,9 @@ export const BacktestSummaryWidget: React.FC<BacktestSummaryWidgetProps> = ({ id
     staleWhileRevalidate: true,
     fetcher: async () => {
       try {
-        const raw = await invoke<string>('list_backtest_runs');
-        const result = JSON.parse(raw);
-        const runs: BacktestRun[] = (result?.data ?? []).slice(0, 5);
-        return { runs };
+        // db_get_backtest_runs returns Vec<BacktestRun> directly (not wrapped)
+        const runs = await invoke<BacktestRun[]>('db_get_backtest_runs', { limit: 5 });
+        return { runs: Array.isArray(runs) ? runs.slice(0, 5) : [] };
       } catch {
         return { runs: [] };
       }
