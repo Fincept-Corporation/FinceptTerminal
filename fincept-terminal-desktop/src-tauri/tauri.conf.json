@@ -69,7 +69,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0-rc.14/latest.json"
+        "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCRURCNzE2RUI4OTFDREUKUldUZUhJbnJGcmZ0MjFSQVhvYVR3eUFNYWZBK0t3cWtUTnUvc0hTM1BOVTgveENtMzBHZ3BRUFgK",
       "windows": {
