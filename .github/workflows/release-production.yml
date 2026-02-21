@@ -327,7 +327,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update README with download links
-        if: steps.check_release.outputs.exists == 'false'
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
           TAG_NAME="${{ github.ref_name }}"
@@ -338,7 +337,6 @@ jobs:
           fi
 
       - name: Commit README updates
-        if: steps.check_release.outputs.exists == 'false'
         run: |
           TAG_NAME="${{ github.ref_name }}"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
