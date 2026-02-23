@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-risk/quantlibRiskApi.ts
 // 25 endpoints — VaR, stress testing, EVT, XVA, sensitivities, tail risk, portfolio risk
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 let _apiKey: string | null = null;
 export function setRiskModApiKey(key: string | null) { _apiKey = key; }
 

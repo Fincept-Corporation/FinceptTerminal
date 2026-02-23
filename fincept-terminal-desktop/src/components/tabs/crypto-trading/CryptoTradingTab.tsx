@@ -4,10 +4,12 @@ import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import { websocketBridge } from '@/services/trading/websocketBridge';
 
 import { useBrokerContext } from '@/contexts/BrokerContext';
 import { useRustTicker, useRustOrderBook, useRustTrades } from '@/hooks/useRustWebSocket';
+import { useExchangeMarkets } from '@/hooks/useExchangeMarkets';
+import { useMemo } from 'react';
 import { getMarketDataService } from '@/services/trading/UnifiedMarketDataService';
 import { withTimeout } from '@/services/core/apiUtils';
 import { sanitizeInput } from '@/services/core/validators';
@@ -43,7 +45,6 @@ import type { OrderRequest } from '@/types/trading';
 
 // Constants
 const API_TIMEOUT_MS = 30000;
-const WATCHLIST_REFRESH_MS = 30000;
 const PAPER_TRADING_REFRESH_MS = 30000; // 30 second fallback sync (WebSocket handles real-time)
 
 // State machine types
@@ -73,6 +74,7 @@ type CryptoAction =
   | { type: 'SET_ORDERBOOK'; data: OrderBook; timestamp: number }
   | { type: 'SET_TRADES'; data: TradeData[] }
   | { type: 'SET_WATCHLIST_PRICES'; prices: Record<string, WatchlistPrice> }
+  | { type: 'UPDATE_WATCHLIST_PRICE'; symbol: string; price: number; change: number }
   | { type: 'SET_PAPER_DATA'; positions: Position[]; orders: Order[]; trades: any[]; balance: number; equity: number; stats: any }
   | { type: 'SET_SYMBOLS'; symbols: string[]; isLoading: boolean }
   | { type: 'RESET_DATA' }
@@ -108,7 +110,15 @@ function cryptoReducer(state: CryptoState, action: CryptoAction): CryptoState {
     case 'SET_TRADES':
       return { ...state, tradesData: action.data };
     case 'SET_WATCHLIST_PRICES':
-      return { ...state, watchlistPrices: action.prices };
+      return { ...state, watchlistPrices: { ...state.watchlistPrices, ...action.prices } };
+    case 'UPDATE_WATCHLIST_PRICE':
+      return {
+        ...state,
+        watchlistPrices: {
+          ...state.watchlistPrices,
+          [action.symbol]: { price: action.price, change: action.change },
+        },
+      };
     case 'SET_PAPER_DATA':
       return {
         ...state,
@@ -191,7 +201,6 @@ export function CryptoTradingTab() {
   // Refs for cleanup and race condition prevention
   const mountedRef = useRef(true);
   const fetchIdRef = useRef(0);
-  const watchlistFetchIdRef = useRef(0);
   const paperDataFetchIdRef = useRef(0);
 
   // Main state reducer
@@ -227,8 +236,31 @@ export function CryptoTradingTab() {
   const [makerFee, setMakerFee] = useState(0.0002);
   const [takerFee, setTakerFee] = useState(0.0005);
 
-  // Watchlist
-  const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_CRYPTO_WATCHLIST);
+  // Watchlist — derived dynamically from exchange markets via CCXT
+  const {
+    wsIdToUnified,
+    unifiedToWsId,
+    watchlistSymbols,
+    ready: marketsReady,
+  } = useExchangeMarkets(realAdapter);
+
+  // Fall back to hardcoded list until markets are loaded from exchange
+  const watchlist = marketsReady ? watchlistSymbols : DEFAULT_CRYPTO_WATCHLIST;
+
+  // Market precision/limits from CCXT for order validation
+  const marketLimits = useMemo(() => {
+    if (!realAdapter || !marketsReady) return null;
+    const markets = (realAdapter as any).getMarkets?.();
+    const market = markets?.[selectedSymbol];
+    if (!market) return null;
+    return {
+      amountPrecision: market.precision?.amount ?? 6,
+      pricePrecision: market.precision?.price ?? 2,
+      minAmount: market.limits?.amount?.min ?? 0,
+      maxAmount: market.limits?.amount?.max ?? null,
+      minCost: market.limits?.cost?.min ?? 0,
+    };
+  }, [realAdapter, selectedSymbol, marketsReady]);
 
   // WebSocket provider initialization state
   const [wsProvidersReady, setWsProvidersReady] = useState(false);
@@ -241,17 +273,42 @@ export function CryptoTradingTab() {
     };
   }, []);
 
-  // Initialize WebSocket providers (Kraken & HyperLiquid)
+  // WebSocket URL mapping for all supported crypto exchanges
+  const WS_CONFIGS: Record<string, { url: string }> = {
+    kraken: { url: 'wss://ws.kraken.com/v2' },
+    hyperliquid: { url: 'wss://api.hyperliquid.xyz/ws' },
+    binance: { url: 'wss://stream.binance.com:9443/ws' },
+    binanceus: { url: 'wss://stream.binance.us:9443/ws' },
+    coinbase: { url: 'wss://ws-feed.exchange.coinbase.com' },
+    coinbasepro: { url: 'wss://ws-feed.exchange.coinbase.com' },
+    bitfinex: { url: 'wss://api-pub.bitfinex.com/ws/2' },
+    okx: { url: 'wss://ws.okx.com:8443/ws/v5/public' },
+    bybit: { url: 'wss://stream.bybit.com/v5/public/spot' },
+    kucoin: { url: 'wss://ws-api-spot.kucoin.com' },
+    gateio: { url: 'wss://api.gateio.ws/ws/v4/' },
+    huobi: { url: 'wss://api.huobi.pro/ws' },
+    mexc: { url: 'wss://wbs.mexc.com/ws' },
+    bitget: { url: 'wss://ws.bitget.com/v2/ws/public' },
+  };
+
+  // Initialize WebSocket config for the active broker
   useEffect(() => {
-    const initializeProviders = async () => {
-      if (!mountedRef.current) return;
+    const initializeProvider = async () => {
+      if (!mountedRef.current || !activeBroker) return;
+
+      const wsConfig = WS_CONFIGS[activeBroker.toLowerCase()];
+      if (!wsConfig) {
+        console.warn(`[CryptoTrading] No WebSocket config for broker: ${activeBroker}`);
+        setWsProvidersReady(true); // Allow fallback behavior
+        return;
+      }
 
       try {
         await withTimeout(
           invoke('ws_set_config', {
             config: {
-              name: 'kraken',
-              url: 'wss://ws.kraken.com/v2',
+              name: activeBroker.toLowerCase(),
+              url: wsConfig.url,
               enabled: true,
               reconnect_delay_ms: 5000,
               max_reconnect_attempts: 10,
@@ -259,41 +316,24 @@ export function CryptoTradingTab() {
             }
           }),
           API_TIMEOUT_MS,
-          'Kraken WebSocket config timeout'
+          `${activeBroker} WebSocket config timeout`
         );
 
-        if (!mountedRef.current) return;
-
-        await withTimeout(
-          invoke('ws_set_config', {
-            config: {
-              name: 'hyperliquid',
-              url: 'wss://api.hyperliquid.xyz/ws',
-              enabled: true,
-              reconnect_delay_ms: 5000,
-              max_reconnect_attempts: 10,
-              heartbeat_interval_ms: 30000,
-            }
-          }),
-          API_TIMEOUT_MS,
-          'HyperLiquid WebSocket config timeout'
-        );
-        // Mark providers as ready after config is set
         if (mountedRef.current) {
           setWsProvidersReady(true);
         }
       } catch (err) {
-        // WebSocket config errors are non-fatal, log for debugging
+        console.warn(`[CryptoTrading] WebSocket config warning for ${activeBroker}:`, err);
         if (mountedRef.current) {
-          console.warn('[CryptoTrading] WebSocket provider init warning:', err);
-          // Still mark as ready to allow fallback behavior
-          setWsProvidersReady(true);
+          setWsProvidersReady(true); // Still allow fallback
         }
       }
     };
 
-    initializeProviders();
-  }, []);
+    // Reset ready state when broker changes, then reinitialize
+    setWsProvidersReady(false);
+    initializeProvider();
+  }, [activeBroker]);
 
   // Update time
   useEffect(() => {
@@ -303,75 +343,98 @@ export function CryptoTradingTab() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch watchlist prices via CoinGecko (fast, reliable, US-accessible)
-  const fetchWatchlistPrices = useCallback(async () => {
-    const currentFetchId = ++watchlistFetchIdRef.current;
-
-    try {
-      const symbolToCoinGeckoId: Record<string, string> = {
-        'BTC/USD': 'bitcoin', 'ETH/USD': 'ethereum', 'BNB/USD': 'binancecoin',
-        'SOL/USD': 'solana', 'XRP/USD': 'ripple', 'ADA/USD': 'cardano',
-        'DOGE/USD': 'dogecoin', 'AVAX/USD': 'avalanche-2', 'DOT/USD': 'polkadot',
-        'POL/USD': 'matic-network', 'LTC/USD': 'litecoin', 'SHIB/USD': 'shiba-inu',
-        'TRX/USD': 'tron', 'LINK/USD': 'chainlink', 'UNI/USD': 'uniswap',
-        'ATOM/USD': 'cosmos', 'XLM/USD': 'stellar', 'ETC/USD': 'ethereum-classic',
-        'BCH/USD': 'bitcoin-cash', 'NEAR/USD': 'near', 'APT/USD': 'aptos',
-        'ARB/USD': 'arbitrum', 'OP/USD': 'optimism', 'LDO/USD': 'lido-dao',
-        'FIL/USD': 'filecoin', 'ICP/USD': 'internet-computer', 'INJ/USD': 'injective-protocol',
-        'STX/USD': 'blockstack', 'MKR/USD': 'maker', 'AAVE/USD': 'aave',
-      };
-
-      const coinIds = watchlist
-        .map(s => symbolToCoinGeckoId[s])
-        .filter(Boolean)
-        .join(',');
-
-      try {
-        const response = await tauriFetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd&include_24hr_change=true`
-        );
-
-        if (!mountedRef.current || currentFetchId !== watchlistFetchIdRef.current) return;
-
-        if (!response.ok) {
-          throw new Error(`CoinGecko API returned ${response.status}`);
-        }
-
-        const data = await response.json();
-        const prices: Record<string, WatchlistPrice> = {};
-        let hasValidData = false;
-
-        watchlist.forEach(symbol => {
-          const coinId = symbolToCoinGeckoId[symbol];
-          const coinData = coinId && data[coinId];
-
-          if (coinData && coinData.usd > 0) {
-            prices[symbol] = {
-              price: coinData.usd,
-              change: coinData.usd_24h_change || 0,
-            };
-            hasValidData = true;
-          }
-        });
-
-        if (hasValidData && mountedRef.current && currentFetchId === watchlistFetchIdRef.current) {
-          dispatch({ type: 'SET_WATCHLIST_PRICES', prices });
-        }
-      } catch (fetchErr) {
-        if (!mountedRef.current || currentFetchId !== watchlistFetchIdRef.current) return;
-        console.warn('[CryptoTrading] CoinGecko API fetch failed:', fetchErr);
-      }
-    } catch (error) {
-      if (!mountedRef.current || currentFetchId !== watchlistFetchIdRef.current) return;
-      console.error('[CryptoTrading] Failed to fetch prices:', error);
-    }
-  }, [watchlist]);
-
+  // Subscribe to all watchlist symbols on the active exchange via WebSocket.
+  // Uses CCXT wsId for subscription (exchange wire format) and wsIdToUnified for
+  // reverse-mapping incoming ticks back to the unified symbol (e.g. XBT/USD → BTC/USD).
   useEffect(() => {
-    fetchWatchlistPrices();
-    const interval = setInterval(fetchWatchlistPrices, WATCHLIST_REFRESH_MS);
-    return () => clearInterval(interval);
-  }, [fetchWatchlistPrices]);
+    if (!activeBroker || !wsProvidersReady) return;
+
+    let mounted = true;
+    let unlistenTicker: (() => void) | null = null;
+
+    // Build a normalised-wsId → unified lookup for fast O(1) matching in the hot path.
+    // When markets aren't loaded yet (marketsReady=false), fall back to normalised
+    // unified-symbol matching (works for exchanges that use unified symbols on WS).
+    // Normalize helper: strips separators + maps exchange aliases (XBT→BTC, XDG→DOGE)
+    const normSym = (s: string) => s.replace(/XBT/g, 'BTC').replace(/XDG/g, 'DOGE').replace(/[/\-_]/g, '').toUpperCase();
+
+    const normWsIdToUnified = new Map<string, string>();
+    if (marketsReady && wsIdToUnified.size > 0) {
+      for (const [wsId, unified] of wsIdToUnified) {
+        normWsIdToUnified.set(normSym(wsId), unified);
+      }
+    } else {
+      // Fallback: normalised unified symbol maps to itself
+      for (const sym of watchlist) {
+        normWsIdToUnified.set(normSym(sym), sym);
+      }
+    }
+
+    // Normalize broker name to lowercase for consistent matching with Rust backend
+    const normalizedBroker = activeBroker.toLowerCase();
+
+    const setup = async () => {
+      // Register listener FIRST so no ticks are missed while subscribing
+      unlistenTicker = await websocketBridge.onTicker((tickerData) => {
+        if (!mounted || tickerData.provider !== normalizedBroker) return;
+        if (tickerData.price <= 0) return;
+
+        const normalizedIncoming = normSym(tickerData.symbol);
+        const unified = normWsIdToUnified.get(normalizedIncoming);
+        if (!unified) return;
+
+        dispatch({
+          type: 'UPDATE_WATCHLIST_PRICE',
+          symbol: unified,
+          price: tickerData.price,
+          change: tickerData.change_percent ?? 0,
+        });
+      });
+
+      // Subscribe using wsId (exchange wire format) when available, else unified symbol
+      await Promise.allSettled(
+        watchlist.map(unified => {
+          const wsId = unifiedToWsId.get(unified) ?? unified;
+          return websocketBridge.subscribe(normalizedBroker, wsId, 'ticker');
+        })
+      );
+
+      // Seed watchlist prices immediately with REST snapshot (before WS ticks arrive)
+      if (realAdapter && marketsReady && typeof (realAdapter as any).fetchTickers === 'function') {
+        try {
+          const tickers = await withTimeout(
+            (realAdapter as any).fetchTickers(watchlist),
+            API_TIMEOUT_MS,
+            'fetchTickers timeout'
+          );
+          if (!mounted) return;
+          // Batch all seed prices into a single dispatch to avoid N re-renders
+          const seedPrices: Record<string, { price: number; change: number }> = {};
+          for (const [sym, ticker] of Object.entries(tickers as Record<string, any>)) {
+            if (ticker?.last && ticker.last > 0) {
+              seedPrices[sym] = { price: ticker.last, change: ticker.percentage ?? 0 };
+            }
+          }
+          if (Object.keys(seedPrices).length > 0) {
+            dispatch({ type: 'SET_WATCHLIST_PRICES', prices: seedPrices });
+          }
+        } catch {
+          // fetchTickers seed is best-effort — WS will fill in shortly
+        }
+      }
+    };
+
+    setup();
+
+    return () => {
+      mounted = false;
+      if (unlistenTicker) unlistenTicker();
+      for (const unified of watchlist) {
+        const wsId = unifiedToWsId.get(unified) ?? unified;
+        websocketBridge.unsubscribe(normalizedBroker, wsId, 'ticker').catch((e) => console.warn('[CryptoTradingTab] watchlist unsubscribe error:', e));
+      }
+    };
+  }, [activeBroker, wsProvidersReady, watchlist, marketsReady, wsIdToUnified, unifiedToWsId]);
 
   // Clear data when symbol changes
   useEffect(() => {
@@ -390,22 +453,25 @@ export function CryptoTradingTab() {
   // Subscribe to Rust WebSocket feeds (only after providers are configured)
   const shouldConnectWs = !!activeBroker && wsProvidersReady;
 
+  // Convert unified symbol to exchange wire format (e.g. BTC/USD → XBT/USD on Kraken)
+  const selectedWsSymbol = (marketsReady ? unifiedToWsId.get(selectedSymbol) : undefined) ?? selectedSymbol;
+
   const { data: tickerData, error: tickerError } = useRustTicker(
     activeBroker || '',
-    selectedSymbol,
+    selectedWsSymbol,
     shouldConnectWs
   );
 
   const { data: orderbookData, error: orderbookError } = useRustOrderBook(
     activeBroker || '',
-    selectedSymbol,
+    selectedWsSymbol,
     25,
     shouldConnectWs
   );
 
   const { trades: tradesData, error: tradesError } = useRustTrades(
     activeBroker || '',
-    selectedSymbol,
+    selectedWsSymbol,
     50,
     shouldConnectWs
   );
@@ -428,6 +494,7 @@ export function CryptoTradingTab() {
         change: tickerData.change,
         changePercent: tickerData.change_percent,
         open: tickerData.open,
+        quoteVolume: tickerData.quote_volume,
       }
     });
 
@@ -593,6 +660,35 @@ export function CryptoTradingTab() {
     }
   }, [tradingMode, paperAdapter, activeBroker]);
 
+  // Live data loader — fetches balance, positions, open orders, and trade history from realAdapter
+  const loadLiveBalance = useCallback(async () => {
+    if (tradingMode !== 'live' || !realAdapter || !realAdapter.isConnected() || !mountedRef.current) return;
+    try {
+      const [balanceData, myTrades] = await Promise.allSettled([
+        withTimeout((realAdapter as any).fetchBalance(), API_TIMEOUT_MS, 'Fetch live balance timeout'),
+        withTimeout((realAdapter as any).fetchMyTrades(undefined, undefined, 50), API_TIMEOUT_MS, 'Fetch live trades timeout'),
+      ]);
+
+      if (!mountedRef.current) return;
+
+      const balance = balanceData.status === 'fulfilled' ? (balanceData.value as any) : null;
+      const usdBalance = balance ? (balance.free?.USD || balance.free?.USDT || 0) : state.balance;
+      const totalEquity = balance ? (balance.total?.USD || balance.total?.USDT || 0) : state.equity;
+      const trades = myTrades.status === 'fulfilled' ? (myTrades.value as any[]) : state.trades;
+
+      dispatch({ type: 'SET_PAPER_DATA', positions: state.positions, orders: state.orders, trades, balance: usdBalance, equity: totalEquity, stats: state.stats });
+    } catch {
+      // Silently fail — live data is best-effort
+    }
+  }, [tradingMode, realAdapter, state.positions, state.orders, state.trades, state.balance, state.equity, state.stats]);
+
+  useEffect(() => {
+    if (tradingMode !== 'live') return;
+    loadLiveBalance();
+    const interval = setInterval(loadLiveBalance, 30000);
+    return () => clearInterval(interval);
+  }, [tradingMode, loadLiveBalance]);
+
   // Normalize symbol for comparison (removes slashes, dashes, converts to uppercase)
   const normalizeSymbol = (symbol: string): string => {
     return symbol.replace(/[/\-_]/g, '').toUpperCase();
@@ -658,6 +754,29 @@ export function CryptoTradingTab() {
       }
     }
   }, [slippage, makerFee, takerFee, paperAdapter]);
+
+  // Load real trading fees from exchange when in live authenticated mode
+  useEffect(() => {
+    if (tradingMode !== 'live' || !realAdapter || !realAdapter.isAuthenticated?.() || !selectedSymbol) return;
+    let active = true;
+    const loadFees = async () => {
+      try {
+        const fee = await withTimeout(
+          (realAdapter as any).fetchTradingFee(selectedSymbol),
+          API_TIMEOUT_MS,
+          'fetchTradingFee timeout'
+        );
+        if (!active || !fee) return;
+        const feeData = fee as any;
+        if (feeData.maker != null) setMakerFee(feeData.maker);
+        if (feeData.taker != null) setTakerFee(feeData.taker);
+      } catch {
+        // Best-effort — keep defaults on failure
+      }
+    };
+    loadFees();
+    return () => { active = false; };
+  }, [tradingMode, realAdapter, selectedSymbol]);
 
   // Fetch markets with timeout
   useEffect(() => {
@@ -880,6 +999,9 @@ export function CryptoTradingTab() {
               isConnecting={isConnecting}
               paperAdapter={paperAdapter}
               realAdapter={realAdapter}
+              makerFee={makerFee}
+              takerFee={takerFee}
+              marketLimits={marketLimits}
               onTradingModeChange={setTradingMode}
               onOrderPlaced={loadPaperTradingData}
             />

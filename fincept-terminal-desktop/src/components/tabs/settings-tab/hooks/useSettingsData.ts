@@ -66,7 +66,7 @@ export function useSettingsData() {
         const finceptConfig = {
           provider: 'fincept',
           api_key: userApiKey,
-          base_url: 'https://finceptbackend.share.zrok.io/research/llm',
+          base_url: 'https://api.fincept.in/research/llm',
           model: 'fincept-llm',
           is_active: true,
           created_at: now,

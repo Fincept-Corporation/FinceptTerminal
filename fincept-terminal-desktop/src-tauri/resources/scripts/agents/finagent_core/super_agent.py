@@ -402,6 +402,19 @@ class SuperAgent:
         if route.keywords:
             self.classifier.keywords.setdefault(route.intent, []).extend(route.keywords)
 
+    def _resolve_model_config_from_keys(self, api_keys: Dict[str, Any]) -> Dict[str, Any]:
+        """Derive provider from available api_keys instead of hardcoding openai."""
+        keys = api_keys or {}
+        preferred = ["fincept", "ollama", "anthropic", "google", "groq",
+                     "deepseek", "openai", "openrouter"]
+        for provider in preferred:
+            if keys.get(provider) or keys.get(f"{provider.upper()}_API_KEY"):
+                return {"provider": provider}
+        for k, v in keys.items():
+            if k.endswith("_API_KEY") and v:
+                return {"provider": k[:-8].lower()}
+        return {"provider": "openai"}
+
     def route(self, query: str) -> RoutingResult:
         """
         Route query to appropriate agent using LLM classification.
@@ -486,11 +499,11 @@ class SuperAgent:
         routing = self.route(query)
         logger.info(f"Routed to {routing.agent_id} with confidence {routing.confidence:.2f}")
 
-        # Build config - use user's model config if provided, otherwise default
-        model_config = (
-            user_config.get("model", {}) if user_config
-            else {"provider": "openai", "model_id": "gpt-4o-mini"}
-        )
+        # Build config - use user's model config if provided, otherwise resolve from api_keys
+        if user_config and user_config.get("model"):
+            model_config = user_config["model"]
+        else:
+            model_config = self._resolve_model_config_from_keys(getattr(self, "api_keys", {}))
 
         config = {
             "model": model_config,
@@ -534,6 +547,26 @@ class SuperAgent:
         try:
             response = agent.run(query, config, session_id)
             content = agent.get_response_content(response) if hasattr(agent, 'get_response_content') else str(response)
+
+            # Detect when Agno swallowed an API error and returned it as response text
+            _ERROR_PREFIXES = (
+                "Fincept API error",
+                "Fincept API request timed out",
+                "Fincept API failed",
+                "Cannot connect to Fincept API",
+            )
+            if isinstance(content, str) and any(content.startswith(p) for p in _ERROR_PREFIXES):
+                return {
+                    "success": False,
+                    "error": content,
+                    "routing": {
+                        "intent": routing.intent.value,
+                        "agent_id": routing.agent_id,
+                        "confidence": routing.confidence,
+                        "matched_keywords": routing.matched_keywords
+                    },
+                    "model_attempted": f"{model_provider}/{model_id}"
+                }
 
             return {
                 "success": True,

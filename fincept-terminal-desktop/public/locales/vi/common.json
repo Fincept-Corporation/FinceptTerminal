@@ -1,25 +1,4 @@
 {
-  "appName": "Fincept Terminal",
   "loading": "Đang tải...",
-  "error": "Lỗi",
-  "success": "Thành công",
-  "save": "Lưu",
-  "cancel": "Hủy",
-  "delete": "Xóa",
-  "edit": "Chỉnh sửa",
-  "add": "Thêm",
-  "search": "Tìm kiếm",
-  "filter": "Lọc",
-  "back": "Quay lại",
-  "next": "Tiếp theo",
-  "previous": "Trước đó",
-  "submit": "Gửi",
-  "close": "Đóng",
-  "open": "Mở",
-  "yes": "Có",
-  "no": "Không",
-  "ok": "OK",
-  "confirm": "Xác nhận",
-  "language": "Ngôn ngữ",
-  "selectLanguage": "Chọn ngôn ngữ"
+  "settings": "[VI] Settings"
 }

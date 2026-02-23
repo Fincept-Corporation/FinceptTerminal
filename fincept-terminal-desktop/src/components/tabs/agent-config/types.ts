@@ -160,7 +160,7 @@ export const DEFAULT_EDITED_CONFIG: EditedConfig = {
   knowledge_type: 'url',
   knowledge_urls: '',
   knowledge_vector_db: 'lancedb',
-  knowledge_embedder: 'openai',
+  knowledge_embedder: 'fincept',
   guardrails_pii: true,
   guardrails_injection: true,
   guardrails_compliance: false,

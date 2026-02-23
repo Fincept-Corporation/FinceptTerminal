@@ -1,32 +1,63 @@
 {
   "title": "ПРОФЕСІЙНІ НОВИНИ ТЕРМІНАЛУ FINCEPT",
   "header": {
-    "liveFeed": "ЖИВИЙ ПОТІК",
-    "live": "НАЖИВО",
-    "refresh": "ОНОВИТИ",
-    "updating": "ОНОВЛЕННЯ...",
-    "alerts": "СПОВІЩЕННЯ",
-    "sources": "ДЖЕРЕЛА",
-    "status": "СТАТУС",
-    "demoMode": "ДЕМО РЕЖИМ",
-    "articles": "СТАТТІ",
-    "activeSources": "АКТИВНІ ДЖЕРЕЛА"
-  },
-  "autoRefresh": {
-    "title": "ІНТЕРВАЛ АВТООНОВЛЕННЯ",
-    "minute": "хвилина",
-    "minutes": "хвилин"
+    "refresh": "ОНОВИТИ"
   },
   "messages": {
-    "loadingFeeds": "Завантаження стрічок...",
-    "breaking": "ТЕРМІНОВЕ"
+    "loadingFeedsModal": "[UK] Loading feeds...",
+    "failedToLoad": "[UK] Failed to load RSS feeds",
+    "noCustomFeeds": "[UK] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[UK] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[UK] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[UK] PRIMARY NEWS FEED",
-    "secondary": "[UK] SECONDARY NEWS FEED",
-    "additional": "[UK] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[UK] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[UK] RSS FEED SETTINGS",
+    "subtitle": "[UK] MANAGE YOUR NEWS SOURCES",
+    "close": "[UK] CLOSE",
+    "myFeeds": "[UK] MY FEEDS",
+    "defaultFeeds": "[UK] DEFAULT FEEDS",
+    "noFeedsAvailable": "[UK] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[UK] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[UK] ADD NEW FEED",
+    "addNewRssFeed": "[UK] ADD NEW RSS FEED",
+    "editRssFeed": "[UK] EDIT RSS FEED",
+    "restoreDefaults": "[UK] RESTORE DEFAULTS",
+    "restoreAll": "[UK] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[UK] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[UK] DISPLAY NAME",
+    "sourceName": "[UK] SOURCE NAME (SHORT)",
+    "feedUrl": "[UK] RSS FEED URL",
+    "category": "[UK] CATEGORY",
+    "region": "[UK] REGION",
+    "required": "[UK] *",
+    "testUrl": "[UK] TEST URL",
+    "testing": "[UK] TESTING...",
+    "valid": "[UK] VALID",
+    "cancel": "[UK] CANCEL",
+    "saving": "[UK] SAVING...",
+    "addFeed": "[UK] ADD FEED",
+    "updateFeed": "[UK] UPDATE FEED",
+    "on": "[UK] ON",
+    "off": "[UK] OFF",
+    "default": "[UK] DEFAULT",
+    "total": "[UK] TOTAL",
+    "active": "[UK] ACTIVE",
+    "custom": "[UK] CUSTOM",
+    "placeholders": {
+      "displayName": "[UK] e.g., Bloomberg Markets",
+      "sourceName": "[UK] e.g., BLOOMBERG",
+      "feedUrl": "[UK] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[UK] Name is required",
+      "sourceRequired": "[UK] Source name is required",
+      "invalidUrl": "[UK] Please enter a valid URL",
+      "invalidRss": "[UK] URL does not appear to be a valid RSS feed",
+      "testFailed": "[UK] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[UK] Delete this RSS feed?",
+      "message": "[UK] This action cannot be undone."
+    }
   }
 }

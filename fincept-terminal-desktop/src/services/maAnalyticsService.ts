@@ -28,14 +28,23 @@ export interface MADeal {
   deal_value: number;
   offer_price_per_share?: number;
   premium_1day: number;
+  payment_method?: string;
   payment_cash_pct: number;
   payment_stock_pct: number;
   ev_revenue?: number;
   ev_ebitda?: number;
   synergies?: number;
   status: string;
+  deal_type?: string;
   industry: string;
   announced_date: string;
+  expected_close_date?: string;
+  breakup_fee?: number;
+  hostile_flag?: number;
+  tender_offer_flag?: number;
+  cross_border_flag?: number;
+  acquirer_country?: string;
+  target_country?: string;
 }
 
 export interface ValuationResult {
@@ -250,22 +259,43 @@ export class DealDatabaseService {
     const parsed = JSON.parse(result as string);
     if (parsed.success) {
       // Map DB column names to MADeal interface
-      return (parsed.data || []).map((d: any) => ({
-        deal_id: d.deal_id || '',
-        target_name: d.target_name || '',
-        acquirer_name: d.acquirer_name || '',
-        deal_value: d.deal_value || 0,
-        offer_price_per_share: d.offer_price_per_share,
-        premium_1day: d.premium_1day || 0,
-        payment_cash_pct: d.cash_percentage ?? d.payment_cash_pct ?? 0,
-        payment_stock_pct: d.stock_percentage ?? d.payment_stock_pct ?? 0,
-        ev_revenue: d.ev_revenue,
-        ev_ebitda: d.ev_ebitda,
-        synergies: d.synergies_disclosed ?? d.synergies,
-        status: d.deal_status || d.status || 'Unknown',
-        industry: d.industry || 'General',
-        announced_date: d.announcement_date || d.announced_date || '',
-      }));
+      return (parsed.data || []).map((d: any) => {
+        const paymentMethod: string = d.payment_method || '';
+        // Derive cash/stock percentages from stored columns first, then fall back to payment_method string
+        let cashPct: number = d.cash_percentage ?? d.payment_cash_pct ?? null;
+        let stockPct: number = d.stock_percentage ?? d.payment_stock_pct ?? null;
+        if (cashPct === null && stockPct === null) {
+          if (paymentMethod === 'Cash') { cashPct = 100; stockPct = 0; }
+          else if (paymentMethod === 'Stock') { cashPct = 0; stockPct = 100; }
+          else if (paymentMethod === 'Mixed') { cashPct = 50; stockPct = 50; }
+          else { cashPct = 0; stockPct = 0; }
+        }
+        return {
+          deal_id: d.deal_id || '',
+          target_name: d.target_name || '',
+          acquirer_name: d.acquirer_name || '',
+          deal_value: d.deal_value || 0,
+          offer_price_per_share: d.offer_price_per_share ?? undefined,
+          premium_1day: d.premium_1day || 0,
+          payment_method: paymentMethod,
+          payment_cash_pct: cashPct ?? 0,
+          payment_stock_pct: stockPct ?? 0,
+          ev_revenue: d.ev_revenue ?? undefined,
+          ev_ebitda: d.ev_ebitda ?? undefined,
+          synergies: d.synergies_disclosed ?? d.synergies ?? undefined,
+          status: d.deal_status || d.status || 'Unknown',
+          deal_type: d.deal_type || undefined,
+          industry: d.industry || 'General',
+          announced_date: d.announcement_date || d.announced_date || '',
+          expected_close_date: d.expected_close_date || undefined,
+          breakup_fee: d.breakup_fee ?? undefined,
+          hostile_flag: d.hostile_flag ?? undefined,
+          tender_offer_flag: d.tender_offer_flag ?? undefined,
+          cross_border_flag: d.cross_border_flag ?? undefined,
+          acquirer_country: d.acquirer_country || undefined,
+          target_country: d.target_country || undefined,
+        };
+      });
     } else {
       throw new Error(parsed.error || 'Failed to get deals');
     }
@@ -652,7 +682,9 @@ export class StartupValuationService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Berkus valuation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // Normalize: Python returns total_valuation, frontend expects valuation
+    return { ...d, valuation: d.total_valuation ?? d.valuation ?? 0 };
   }
 
   /**
@@ -670,7 +702,9 @@ export class StartupValuationService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Scorecard valuation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // Normalize: Python returns final_valuation, frontend expects valuation
+    return { ...d, valuation: d.final_valuation ?? d.valuation ?? 0 };
   }
 
   /**
@@ -692,7 +726,12 @@ export class StartupValuationService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'VC method valuation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // Normalize: Python returns investor_ownership_pct (0-100), frontend expects ownership_percentage (0-1)
+    return {
+      ...d,
+      ownership_percentage: (d.investor_ownership_pct ?? 0) / 100,
+    };
   }
 
   /**
@@ -712,7 +751,16 @@ export class StartupValuationService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'First Chicago valuation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // Normalize: Python returns expected_present_value, frontend checks weighted_valuation
+    // Also extract scenario_values array for display
+    return {
+      ...d,
+      weighted_valuation: d.expected_present_value ?? d.weighted_valuation ?? d.valuation ?? 0,
+      scenario_values: Array.isArray(d.scenarios)
+        ? d.scenarios.map((s: any) => s.present_value ?? s.exit_value ?? 0)
+        : [],
+    };
   }
 
   /**
@@ -728,7 +776,13 @@ export class StartupValuationService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Risk factor valuation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // Normalize: Python returns final_valuation and base_valuation, frontend expects adjusted_valuation
+    return {
+      ...d,
+      adjusted_valuation: d.final_valuation ?? d.adjusted_valuation ?? 0,
+      base_valuation: d.base_valuation ?? 0,
+    };
   }
 
   /**
@@ -751,7 +805,13 @@ export class StartupValuationService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Comprehensive startup valuation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // Normalize: Python returns valuations_by_method, frontend expects methods
+    // Each method entry has {valuation, method, applicability, details}
+    return {
+      ...d,
+      methods: d.valuations_by_method ?? d.methods ?? {},
+    };
   }
 
   /**
@@ -961,7 +1021,19 @@ export class FairnessOpinionService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Fairness opinion generation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    const wvr = d.weighted_valuation_range || {};
+    // Normalize: build valuation_summary that the frontend expects
+    return {
+      ...d,
+      valuation_summary: {
+        average: wvr.midpoint ?? 0,
+        median: wvr.midpoint ?? 0,
+        range_low: wvr.low ?? 0,
+        range_high: wvr.high ?? 0,
+        ...(d.valuation_summary || {}),
+      },
+    };
   }
 
   /**
@@ -979,7 +1051,21 @@ export class FairnessOpinionService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Premium fairness analysis failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // Python returns premiums_to_unaffected.{1_day,5_day,20_day,60_day}
+    // Frontend checks premium_1day, premium_1week, premium_1month, premium_52week_high
+    const pu = d.premiums_to_unaffected || {};
+    // Also handle calculate_premiums format: premiums.{1_day,1_week,1_month}.premium_pct
+    const cp = d.premiums || {};
+    const getPremium = (puKey: string, cpKey: string) =>
+      pu[puKey] ?? cp[cpKey]?.premium_pct ?? undefined;
+    return {
+      ...d,
+      premium_1day: getPremium('1_day', '1_day'),
+      premium_1week: getPremium('5_day', '1_week'),
+      premium_1month: getPremium('20_day', '1_month'),
+      premium_52week_high: getPremium('60_day', '52_week'),
+    };
   }
 
   /**
@@ -993,7 +1079,15 @@ export class FairnessOpinionService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Process quality assessment failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // For flat input mode, overall_score is already 1-5. For nested, we computed it.
+    // For nested without comprehensive (missing data), compute from available component scores.
+    const comprehensiveScore = d.comprehensive?.overall_process_score;
+    return {
+      ...d,
+      overall_score: d.overall_score ?? (comprehensiveScore != null ? comprehensiveScore / 20 : undefined),
+      factor_scores: d.factor_scores ?? {},
+    };
   }
 }
 
@@ -1015,7 +1109,14 @@ export class IndustryMetricsService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Tech metrics calculation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // Ensure standard output fields are always present
+    return {
+      ...d,
+      valuation_metrics: d.valuation_metrics ?? {},
+      benchmarks: d.benchmarks ?? {},
+      insights: Array.isArray(d.insights) ? d.insights : [],
+    };
   }
 
   /**
@@ -1031,7 +1132,13 @@ export class IndustryMetricsService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Healthcare metrics calculation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    return {
+      ...d,
+      valuation_metrics: d.valuation_metrics ?? {},
+      benchmarks: d.benchmarks ?? {},
+      insights: Array.isArray(d.insights) ? d.insights : [],
+    };
   }
 
   /**
@@ -1047,7 +1154,13 @@ export class IndustryMetricsService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Financial services metrics calculation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    return {
+      ...d,
+      valuation_metrics: d.valuation_metrics ?? {},
+      benchmarks: d.benchmarks ?? {},
+      insights: Array.isArray(d.insights) ? d.insights : [],
+    };
   }
 }
 
@@ -1079,7 +1192,18 @@ export class AdvancedAnalyticsService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Monte Carlo valuation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // Ensure flat top-level fields frontend expects: mean, median, std, p5, p25, p75, p95
+    return {
+      ...d,
+      mean: d.mean ?? d.valuation_statistics?.mean ?? 0,
+      median: d.median ?? d.valuation_statistics?.median ?? 0,
+      std: d.std ?? d.valuation_statistics?.std ?? 0,
+      p5: d.p5 ?? d.valuation_statistics?.percentile_5 ?? 0,
+      p25: d.p25 ?? d.valuation_statistics?.percentile_25 ?? 0,
+      p75: d.p75 ?? d.valuation_statistics?.percentile_75 ?? 0,
+      p95: d.p95 ?? d.valuation_statistics?.percentile_95 ?? 0,
+    };
   }
 
   /**
@@ -1097,7 +1221,22 @@ export class AdvancedAnalyticsService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Regression valuation failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    // Normalize output to flat fields the frontend expects
+    const rs = (d.regression_statistics || {}) as Record<string, number>;
+    return {
+      ...d,
+      implied_ev: d.implied_ev ?? d.predicted_value ?? 0,
+      r_squared: d.r_squared ?? rs.r_squared ?? 0,
+      adj_r_squared: d.adj_r_squared ?? rs.adjusted_r_squared ?? 0,
+      // coefficients: flatten to {feature: number} if Python returned nested objects
+      coefficients: d.coefficients && typeof Object.values(d.coefficients)[0] === 'object'
+        ? Object.fromEntries(
+            Object.entries(d.coefficients).map(([k, v]: [string, any]) => [k, v?.coefficient ?? v ?? 0])
+          )
+        : (d.coefficients ?? {}),
+      implied_multiples: d.implied_multiples ?? {},
+    };
   }
 }
 
@@ -1108,6 +1247,7 @@ export class AdvancedAnalyticsService {
 export class DealComparisonService {
   /**
    * Compare multiple deals side-by-side
+   * Expected: { comparison: {metric: [v1,v2,...]}, summary: {metric: value} }
    */
   static async compareDeals(deals: MADeal[]): Promise<any> {
     const result = await invoke('compare_deals', {
@@ -1115,11 +1255,18 @@ export class DealComparisonService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Deal comparison failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    return {
+      ...d,
+      comparison: d.comparison ?? {},
+      summary: d.summary ?? {},
+      num_deals: d.num_deals ?? deals.length,
+    };
   }
 
   /**
    * Rank deals by criteria
+   * Expected: { rankings: [{target_name, acquirer_name, premium_1day|deal_value|ev_revenue|ev_ebitda|synergies}] }
    */
   static async rankDeals(
     deals: MADeal[],
@@ -1131,11 +1278,17 @@ export class DealComparisonService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Deal ranking failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    return {
+      ...d,
+      rankings: Array.isArray(d.rankings) ? d.rankings : [],
+      ranking_criteria: d.ranking_criteria ?? criteria,
+    };
   }
 
   /**
    * Benchmark deal premium against comparables
+   * Expected: { premium_comparison: {target, median, percentile}, insight: string }
    */
   static async benchmarkDealPremium(
     targetDeal: MADeal,
@@ -1147,11 +1300,18 @@ export class DealComparisonService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Deal premium benchmark failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    return {
+      ...d,
+      premium_comparison: d.premium_comparison ?? null,
+      insight: d.insight ?? '',
+      above_median: Boolean(d.above_median),
+    };
   }
 
   /**
    * Analyze payment structures across deals
+   * Expected: { distribution: {all_cash: count, all_stock: count, mixed: count}, stats_by_type: {...} }
    */
   static async analyzePaymentStructures(deals: MADeal[]): Promise<any> {
     const result = await invoke('analyze_payment_structures', {
@@ -1159,11 +1319,18 @@ export class DealComparisonService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Payment structure analysis failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    return {
+      ...d,
+      distribution: d.distribution ?? {},
+      stats_by_type: d.stats_by_type ?? {},
+      total_deals: d.total_deals ?? deals.length,
+    };
   }
 
   /**
    * Analyze deals by industry
+   * Expected: { by_industry: {IndustryName: {count, avg_premium, avg_ev_revenue, avg_ev_ebitda, total_value}} }
    */
   static async analyzeIndustryDeals(deals: MADeal[]): Promise<any> {
     const result = await invoke('analyze_industry_deals', {
@@ -1171,7 +1338,13 @@ export class DealComparisonService {
     });
     const parsed = JSON.parse(result as string);
     if (!parsed.success) throw new Error(parsed.error || 'Industry deal analysis failed');
-    return parsed.data;
+    const d = parsed.data || {};
+    return {
+      ...d,
+      by_industry: d.by_industry ?? {},
+      industries: d.industries ?? [],
+      total_deals: d.total_deals ?? deals.length,
+    };
   }
 }
 

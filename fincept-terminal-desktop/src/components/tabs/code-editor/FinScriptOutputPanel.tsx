@@ -15,6 +15,11 @@ interface PlotPoint {
   volume?: number;
 }
 
+export interface IntegrationAction {
+  action_type: 'watchlist_add' | 'paper_trade' | 'alert_create' | 'screener_run' | string;
+  payload: Record<string, unknown>;
+}
+
 export interface FinScriptExecutionResult {
   success: boolean;
   output: string;
@@ -31,6 +36,19 @@ export interface FinScriptExecutionResult {
     color?: string;
   }>;
   errors: string[];
+  alerts?: Array<{
+    message: string;
+    alert_type: string;
+    timestamp: string;
+  }>;
+  drawings?: Array<{
+    drawing_type: string;
+    x1: number; y1: number;
+    x2: number; y2: number;
+    color: string; text: string;
+    style: string; width: number;
+  }>;
+  integration_actions?: IntegrationAction[];
   execution_time_ms: number;
 }
 

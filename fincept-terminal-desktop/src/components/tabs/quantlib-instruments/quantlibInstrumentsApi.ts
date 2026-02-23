@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-instruments/quantlibInstrumentsApi.ts
 // 26 endpoints — bonds, swaps, FRA, money market, OIS, equity, commodity, FX, CDS, futures
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 let _apiKey: string | null = null;
 export function setInstrumentsApiKey(key: string | null) { _apiKey = key; }
 

@@ -1,25 +1,7 @@
 {
-  "title": "DANH SÁCH THEO DÕI",
-  "header": {
-    "export": "XUẤT",
-    "updating": "ĐANG CẬP NHẬT",
-    "live": "TRỰC TIẾP"
-  },
   "sidebar": {
-    "groups": "NHÓM DANH SÁCH",
-    "new": "MỚI",
     "noWatchlists": "Chưa có danh sách nào.",
     "clickNew": "Nhấn MỚI để tạo.",
-    "stocks": "cổ phiếu",
-    "marketMovers": "NGƯỜI DẪN ĐẦU",
-    "gainer": "TĂNG",
-    "loser": "GIẢM",
-    "volumeLeaders": "KHỐI LƯỢNG CAO NHẤT"
-  },
-  "emptyState": {
-    "selectWatchlist": "Chọn danh sách hoặc tạo mới để bắt đầu"
-  },
-  "list": {
-    "symbols": "Mã"
+    "stocks": "cổ phiếu"
   }
 }

@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-portfolio/quantlibPortfolioApi.ts
 // API service for QuantLib Portfolio endpoints (15 endpoints)
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 
 let _apiKey: string | null = null;
 export function setPortfolioApiKey(key: string | null) { _apiKey = key; }

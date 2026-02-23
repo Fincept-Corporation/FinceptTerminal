@@ -5,7 +5,7 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
 // API Configuration - always use full URL for Tauri fetch
 const API_CONFIG = {
-  BASE_URL: 'https://finceptbackend.share.zrok.io',
+  BASE_URL: 'https://api.fincept.in',
 };
 
 const getApiEndpoint = (path: string) => `${API_CONFIG.BASE_URL}${path}`;
@@ -20,6 +20,8 @@ interface ApiResponse<T = any> {
   status_code: number;
 }
 
+const REQUEST_TIMEOUT_MS = 30000;
+
 // Generic API request handler
 async function makeApiRequest<T = any>(
   endpoint: string,
@@ -28,19 +30,28 @@ async function makeApiRequest<T = any>(
   body?: any
 ): Promise<ApiResponse<T>> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
     const options: RequestInit = {
       method,
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': apiKey,
       },
+      signal: controller.signal,
     };
 
     if (body && (method === 'POST' || method === 'PUT')) {
       options.body = JSON.stringify(body);
     }
 
-    const response = await safeFetch(getApiEndpoint(endpoint), options);
+    let response: Response;
+    try {
+      response = await safeFetch(getApiEndpoint(endpoint), options);
+    } finally {
+      clearTimeout(timeoutId);
+    }
     const data = await response.json();
 
     return {
@@ -123,26 +134,6 @@ export class UserApiService {
 
   static async getPaymentDetails(apiKey: string, paymentUuid: string): Promise<ApiResponse> {
     return makeApiRequest(`/payment/payments/${paymentUuid}`, 'GET', apiKey);
-  }
-
-  // ========================
-  // GUEST USER ENDPOINTS
-  // ========================
-
-  static async getGuestStatus(apiKey: string): Promise<ApiResponse> {
-    return makeApiRequest('/guest/status', 'GET', apiKey);
-  }
-
-  static async extendGuestSession(apiKey: string): Promise<ApiResponse> {
-    return makeApiRequest('/guest/extend', 'POST', apiKey);
-  }
-
-  static async getGuestUsage(apiKey: string): Promise<ApiResponse> {
-    return makeApiRequest('/guest/usage', 'GET', apiKey);
-  }
-
-  static async deleteGuestSession(apiKey: string): Promise<ApiResponse> {
-    return makeApiRequest('/guest/session', 'DELETE', apiKey);
   }
 
   // ========================

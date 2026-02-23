@@ -5,29 +5,7 @@
     "news": "Nachrichten",
     "portfolio": "Portfolio",
     "backtesting": "Backtesting",
-    "watchlist": "Watchlist",
-    "research": "Forschung",
-    "screener": "Screener",
     "chat": "AI Chat",
-    "agents": "Agenten",
-    "settings": "Einstellungen",
     "profile": "Profil"
-  },
-  "functionKeys": {
-    "f1": "DASH",
-    "f2": "MRKT",
-    "f3": "NEWS",
-    "f4": "PORT",
-    "f5": "BKTS",
-    "f6": "WTCH",
-    "f7": "FORS",
-    "f8": "SCRN",
-    "f9": "TRDG",
-    "f10": "AI",
-    "f11": "VOLL",
-    "f12": "PROF"
-  },
-  "labels": {
-    "moreTabs": "Weitere Tabs in Toolbar-Menüs"
   }
 }

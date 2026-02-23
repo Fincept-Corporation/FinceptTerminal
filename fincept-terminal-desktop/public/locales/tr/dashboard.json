@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "ÖZELLEŞTİRİLEBİLİR GÖSTERGE PANELİ",
-    "live": "CANLI",
-    "widgets": "WIDGET'LAR"
-  },
-  "buttons": {
-    "addWidget": "WIDGET EKLE",
-    "saveLayout": "DÜZENİ KAYDET",
-    "reset": "SIFIRLAMA",
-    "help": "YARDIM"
-  },
   "widgets": {
     "loading": "Yükleniyor...",
-    "error": "Hata",
     "globalIndices": "Küresel Endeksler - İlk 12",
     "forex": "Forex - Ana Çiftler",
     "crypto": "KRİPTO PARALAR",
@@ -20,8 +8,6 @@
     "news": "HABERLER",
     "forum": "FORUM",
     "watchlist": "İZLEME LİSTESİ",
-    "maritimeIntelligence": "Denizcilik İstihbaratı",
-    "unknown": "Bilinmeyen widget türü",
     "index": "DİZİN",
     "symbol": "SEMBOL",
     "price": "FİYAT",
@@ -38,41 +24,22 @@
     "pair": "ÇİFT",
     "rate": "ORAN",
     "commodity": "EMTİA",
-    "globe3D": "3D KÜRE",
-    "vessels": "GEMİLER",
-    "routes": "ROTALAR",
-    "vol24h": "CİLT 24 SAAT",
-    "topTradeCorridors": "EN ÜST TİCARET KORİDORLARI",
-    "ships": "gemiler",
-    "marketNews": "Piyasa Haberleri",
-    "secPressReleases": "SEC Basın Bültenleri",
-    "cryptoNews": "Kripto Haberleri",
-    "trendingForum": "Trend Olan Forum",
-    "techStocks": "Teknoloji Hisse Senetleri"
-  },
-  "tips": {
-    "drag": "Yeniden düzenlemek için widget'ları sürükleyin",
-    "resize": "Sağ alt köşeden yeniden boyutlandır",
-    "remove": "X düğmesiyle widget'ları kaldırın",
-    "responsive": "Duyarlı düzen - tam genişliği kullanır"
-  },
-  "loading": {
-    "title": "Kontrol Paneli Başlatılıyor",
-    "description": "Daha hızlı veri yükleme için veritabanı önbelleği ayarlanıyor...",
-    "note": "Bu, ilk başlatmada yalnızca bir dakika sürecektir"
-  },
-  "empty": {
-    "noWidgets": "Kontrol panelinde widget yok",
-    "addFirst": "İLK WIDGETINIZI EKLEYİN"
-  },
-  "status": {
-    "version": "Fincept Özelleştirilebilir Kontrol Paneli v2.0.0 | Sürükle ve bırak çalışma alanı",
-    "layout": "Düzen",
-    "custom": "Gelenek",
-    "empty": "Boş",
-    "active": "AKTİF",
-    "cache": "Önbellek: ETKİN",
-    "label": "Durum"
+    "noActiveMarkets": "[TR] No active markets found",
+    "indicator": "[TR] INDICATOR",
+    "value": "[TR] VALUE",
+    "chg": "[TR] CHG",
+    "overallRisk": "[TR] OVERALL RISK",
+    "openEconomicsTab": "[TR] Open Economics Tab",
+    "openGeopoliticsTab": "[TR] Open Geopolitics Tab",
+    "openPolymarketTab": "[TR] Open Polymarket Tab",
+    "noPortfolioFound": "[TR] No portfolio found",
+    "createPortfolioHint": "[TR] Create one in Portfolio tab",
+    "openPortfolioTab": "[TR] Open Portfolio Tab",
+    "action": "[TR] ACTION",
+    "markets": "[TR] MARKETS",
+    "performanceTracker": "[TR] PERFORMANCE TRACKER",
+    "totalPnL": "[TR] TOTAL P&L",
+    "viewDetailedAnalytics": "[TR] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "Kontrol paneli düzeni kaydedildi!",

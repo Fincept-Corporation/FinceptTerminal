@@ -1,32 +1,63 @@
 {
   "title": "FINCEPT 终端专业新闻",
   "header": {
-    "liveFeed": "实时动态",
-    "live": "实时",
-    "refresh": "刷新",
-    "updating": "更新中...",
-    "alerts": "提醒",
-    "sources": "来源",
-    "status": "状态",
-    "demoMode": "演示模式",
-    "articles": "文章",
-    "activeSources": "活跃来源"
-  },
-  "autoRefresh": {
-    "title": "自动刷新间隔",
-    "minute": "分钟",
-    "minutes": "分钟"
+    "refresh": "刷新"
   },
   "messages": {
-    "loadingFeeds": "加载新闻源...",
-    "breaking": "突发"
+    "loadingFeedsModal": "[ZH] Loading feeds...",
+    "failedToLoad": "[ZH] Failed to load RSS feeds",
+    "noCustomFeeds": "[ZH] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[ZH] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[ZH] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[ZH] PRIMARY NEWS FEED",
-    "secondary": "[ZH] SECONDARY NEWS FEED",
-    "additional": "[ZH] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[ZH] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[ZH] RSS FEED SETTINGS",
+    "subtitle": "[ZH] MANAGE YOUR NEWS SOURCES",
+    "close": "[ZH] CLOSE",
+    "myFeeds": "[ZH] MY FEEDS",
+    "defaultFeeds": "[ZH] DEFAULT FEEDS",
+    "noFeedsAvailable": "[ZH] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[ZH] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[ZH] ADD NEW FEED",
+    "addNewRssFeed": "[ZH] ADD NEW RSS FEED",
+    "editRssFeed": "[ZH] EDIT RSS FEED",
+    "restoreDefaults": "[ZH] RESTORE DEFAULTS",
+    "restoreAll": "[ZH] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[ZH] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[ZH] DISPLAY NAME",
+    "sourceName": "[ZH] SOURCE NAME (SHORT)",
+    "feedUrl": "[ZH] RSS FEED URL",
+    "category": "[ZH] CATEGORY",
+    "region": "[ZH] REGION",
+    "required": "[ZH] *",
+    "testUrl": "[ZH] TEST URL",
+    "testing": "[ZH] TESTING...",
+    "valid": "[ZH] VALID",
+    "cancel": "[ZH] CANCEL",
+    "saving": "[ZH] SAVING...",
+    "addFeed": "[ZH] ADD FEED",
+    "updateFeed": "[ZH] UPDATE FEED",
+    "on": "[ZH] ON",
+    "off": "[ZH] OFF",
+    "default": "[ZH] DEFAULT",
+    "total": "[ZH] TOTAL",
+    "active": "[ZH] ACTIVE",
+    "custom": "[ZH] CUSTOM",
+    "placeholders": {
+      "displayName": "[ZH] e.g., Bloomberg Markets",
+      "sourceName": "[ZH] e.g., BLOOMBERG",
+      "feedUrl": "[ZH] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[ZH] Name is required",
+      "sourceRequired": "[ZH] Source name is required",
+      "invalidUrl": "[ZH] Please enter a valid URL",
+      "invalidRss": "[ZH] URL does not appear to be a valid RSS feed",
+      "testFailed": "[ZH] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[ZH] Delete this RSS feed?",
+      "message": "[ZH] This action cannot be undone."
+    }
   }
 }

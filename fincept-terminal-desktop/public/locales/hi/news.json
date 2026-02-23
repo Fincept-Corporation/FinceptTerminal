@@ -1,32 +1,63 @@
 {
   "title": "FINCEPT टर्मिनल प्रोफेशनल न्यूज़",
   "header": {
-    "liveFeed": "लाइव फ़ीड",
-    "live": "लाइव",
-    "refresh": "रीफ्रेश",
-    "updating": "अपडेट हो रहा है...",
-    "alerts": "अलर्ट",
-    "sources": "स्रोत",
-    "status": "स्थिति",
-    "demoMode": "डेमो मोड",
-    "articles": "लेख",
-    "activeSources": "सक्रिय स्रोत"
-  },
-  "autoRefresh": {
-    "title": "ऑटो-रीफ्रेश अंतराल",
-    "minute": "मिनट",
-    "minutes": "मिनट"
+    "refresh": "रीफ्रेश"
   },
   "messages": {
-    "loadingFeeds": "फ़ीड लोड हो रहे हैं...",
-    "breaking": "ब्रेकिंग"
+    "loadingFeedsModal": "[HI] Loading feeds...",
+    "failedToLoad": "[HI] Failed to load RSS feeds",
+    "noCustomFeeds": "[HI] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[HI] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[HI] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[HI] PRIMARY NEWS FEED",
-    "secondary": "[HI] SECONDARY NEWS FEED",
-    "additional": "[HI] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[HI] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[HI] RSS FEED SETTINGS",
+    "subtitle": "[HI] MANAGE YOUR NEWS SOURCES",
+    "close": "[HI] CLOSE",
+    "myFeeds": "[HI] MY FEEDS",
+    "defaultFeeds": "[HI] DEFAULT FEEDS",
+    "noFeedsAvailable": "[HI] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[HI] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[HI] ADD NEW FEED",
+    "addNewRssFeed": "[HI] ADD NEW RSS FEED",
+    "editRssFeed": "[HI] EDIT RSS FEED",
+    "restoreDefaults": "[HI] RESTORE DEFAULTS",
+    "restoreAll": "[HI] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[HI] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[HI] DISPLAY NAME",
+    "sourceName": "[HI] SOURCE NAME (SHORT)",
+    "feedUrl": "[HI] RSS FEED URL",
+    "category": "[HI] CATEGORY",
+    "region": "[HI] REGION",
+    "required": "[HI] *",
+    "testUrl": "[HI] TEST URL",
+    "testing": "[HI] TESTING...",
+    "valid": "[HI] VALID",
+    "cancel": "[HI] CANCEL",
+    "saving": "[HI] SAVING...",
+    "addFeed": "[HI] ADD FEED",
+    "updateFeed": "[HI] UPDATE FEED",
+    "on": "[HI] ON",
+    "off": "[HI] OFF",
+    "default": "[HI] DEFAULT",
+    "total": "[HI] TOTAL",
+    "active": "[HI] ACTIVE",
+    "custom": "[HI] CUSTOM",
+    "placeholders": {
+      "displayName": "[HI] e.g., Bloomberg Markets",
+      "sourceName": "[HI] e.g., BLOOMBERG",
+      "feedUrl": "[HI] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[HI] Name is required",
+      "sourceRequired": "[HI] Source name is required",
+      "invalidUrl": "[HI] Please enter a valid URL",
+      "invalidRss": "[HI] URL does not appear to be a valid RSS feed",
+      "testFailed": "[HI] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[HI] Delete this RSS feed?",
+      "message": "[HI] This action cannot be undone."
+    }
   }
 }

@@ -20,6 +20,10 @@ from alpha_arena.types.models import (
     ModelDecision,
     TradeAction,
     TradeResult,
+    PolymarketDecision,
+    PolymarketAction,
+    PolymarketTradeResult,
+    PolymarketInfo,
 )
 
 logger = get_logger("paper_trading_bridge")
@@ -271,6 +275,45 @@ class PaperTradingBridge:
             CREATE INDEX IF NOT EXISTS idx_orders_portfolio ON pt_orders(portfolio_id);
             CREATE INDEX IF NOT EXISTS idx_positions_portfolio ON pt_positions(portfolio_id);
             CREATE INDEX IF NOT EXISTS idx_trades_portfolio ON pt_trades(portfolio_id);
+
+            -- Polymarket positions table
+            CREATE TABLE IF NOT EXISTS pt_polymarket_positions (
+                id TEXT PRIMARY KEY,
+                portfolio_id TEXT NOT NULL,
+                market_id TEXT NOT NULL,
+                market_question TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                shares REAL NOT NULL,
+                avg_price REAL NOT NULL,
+                current_price REAL NOT NULL,
+                unrealized_pnl REAL DEFAULT 0,
+                realized_pnl REAL DEFAULT 0,
+                opened_at TEXT NOT NULL,
+                resolved INTEGER DEFAULT 0,
+                resolution_outcome TEXT,
+                FOREIGN KEY (portfolio_id) REFERENCES pt_portfolios(id),
+                UNIQUE(portfolio_id, market_id, outcome)
+            );
+
+            -- Polymarket trades table
+            CREATE TABLE IF NOT EXISTS pt_polymarket_trades (
+                id TEXT PRIMARY KEY,
+                portfolio_id TEXT NOT NULL,
+                market_id TEXT NOT NULL,
+                market_question TEXT NOT NULL,
+                action TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                shares REAL NOT NULL,
+                price REAL NOT NULL,
+                cost REAL NOT NULL,
+                fee REAL NOT NULL,
+                pnl REAL DEFAULT 0,
+                timestamp TEXT NOT NULL,
+                FOREIGN KEY (portfolio_id) REFERENCES pt_portfolios(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_pm_positions_portfolio ON pt_polymarket_positions(portfolio_id);
+            CREATE INDEX IF NOT EXISTS idx_pm_trades_portfolio ON pt_polymarket_trades(portfolio_id);
         """)
 
     def _initialize_portfolio(self):
@@ -1006,6 +1049,506 @@ class PaperTradingBridge:
             proceeds=quantity * execution_price - trade.fee if action == TradeAction.SELL else None,
             pnl=trade.pnl,
         )
+
+
+    def _ensure_polymarket_tables(self):
+        """Ensure Polymarket-specific tables exist."""
+        conn = get_connection()
+        try:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='pt_polymarket_positions'"
+            )
+            if not cursor.fetchone():
+                conn.executescript("""
+                    CREATE TABLE IF NOT EXISTS pt_polymarket_positions (
+                        id TEXT PRIMARY KEY,
+                        portfolio_id TEXT NOT NULL,
+                        market_id TEXT NOT NULL,
+                        market_question TEXT NOT NULL,
+                        outcome TEXT NOT NULL,
+                        shares REAL NOT NULL,
+                        avg_price REAL NOT NULL,
+                        current_price REAL NOT NULL,
+                        unrealized_pnl REAL DEFAULT 0,
+                        realized_pnl REAL DEFAULT 0,
+                        opened_at TEXT NOT NULL,
+                        resolved INTEGER DEFAULT 0,
+                        resolution_outcome TEXT,
+                        FOREIGN KEY (portfolio_id) REFERENCES pt_portfolios(id),
+                        UNIQUE(portfolio_id, market_id, outcome)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS pt_polymarket_trades (
+                        id TEXT PRIMARY KEY,
+                        portfolio_id TEXT NOT NULL,
+                        market_id TEXT NOT NULL,
+                        market_question TEXT NOT NULL,
+                        action TEXT NOT NULL,
+                        outcome TEXT NOT NULL,
+                        shares REAL NOT NULL,
+                        price REAL NOT NULL,
+                        cost REAL NOT NULL,
+                        fee REAL NOT NULL,
+                        pnl REAL DEFAULT 0,
+                        timestamp TEXT NOT NULL,
+                        FOREIGN KEY (portfolio_id) REFERENCES pt_portfolios(id)
+                    );
+
+                    CREATE INDEX IF NOT EXISTS idx_pm_positions_portfolio ON pt_polymarket_positions(portfolio_id);
+                    CREATE INDEX IF NOT EXISTS idx_pm_trades_portfolio ON pt_polymarket_trades(portfolio_id);
+                """)
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_polymarket_positions(self) -> List[Dict[str, Any]]:
+        """Get all open Polymarket positions."""
+        if not self.portfolio_id:
+            return []
+
+        self._ensure_polymarket_tables()
+        conn = get_connection()
+        try:
+            cursor = conn.execute(
+                """SELECT id, portfolio_id, market_id, market_question, outcome,
+                          shares, avg_price, current_price, unrealized_pnl,
+                          realized_pnl, opened_at, resolved, resolution_outcome
+                   FROM pt_polymarket_positions
+                   WHERE portfolio_id = ? AND resolved = 0""",
+                (self.portfolio_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def get_polymarket_trades(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get recent Polymarket trades."""
+        if not self.portfolio_id:
+            return []
+
+        self._ensure_polymarket_tables()
+        conn = get_connection()
+        try:
+            cursor = conn.execute(
+                """SELECT id, portfolio_id, market_id, market_question, action,
+                          outcome, shares, price, cost, fee, pnl, timestamp
+                   FROM pt_polymarket_trades
+                   WHERE portfolio_id = ?
+                   ORDER BY timestamp DESC
+                   LIMIT ?""",
+                (self.portfolio_id, limit)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def execute_polymarket_decision(
+        self,
+        decision: PolymarketDecision,
+        market: PolymarketInfo,
+        max_exposure_pct: float = 0.25,
+    ) -> PolymarketTradeResult:
+        """
+        Execute a Polymarket trading decision.
+
+        Shares are priced between $0 and $1. Buying YES at $0.60 means
+        paying $0.60 per share; if the event resolves YES, each share pays $1.
+
+        Args:
+            decision: The Polymarket decision to execute
+            market: Current market data
+            max_exposure_pct: Max portfolio % per market (risk guardrail)
+
+        Returns:
+            PolymarketTradeResult with execution details
+        """
+        self._ensure_polymarket_tables()
+
+        action = decision.action
+        if isinstance(action, str):
+            try:
+                action = PolymarketAction(action.lower())
+            except ValueError:
+                return PolymarketTradeResult(
+                    status="rejected",
+                    market_id=decision.market_id,
+                    action=PolymarketAction.HOLD,
+                    outcome="",
+                    shares=0,
+                    price=0,
+                    cost=0,
+                    reason=f"Invalid action: {action}",
+                )
+
+        # HOLD
+        if action == PolymarketAction.HOLD:
+            return PolymarketTradeResult(
+                status="executed",
+                market_id=decision.market_id,
+                action=PolymarketAction.HOLD,
+                outcome="",
+                shares=0,
+                price=0,
+                cost=0,
+                reason="Hold - no trade",
+            )
+
+        portfolio = self.get_portfolio()
+        if not portfolio:
+            return PolymarketTradeResult(
+                status="rejected",
+                market_id=decision.market_id,
+                action=action,
+                outcome="",
+                shares=0,
+                price=0,
+                cost=0,
+                reason="Portfolio not initialized",
+            )
+
+        # Determine outcome and price
+        is_buy = action in (PolymarketAction.BUY_YES, PolymarketAction.BUY_NO)
+        if action in (PolymarketAction.BUY_YES, PolymarketAction.SELL_YES):
+            outcome = "YES"
+            price = market.outcome_prices[0] if market.outcome_prices else 0.5
+        else:
+            outcome = "NO"
+            price = market.outcome_prices[1] if len(market.outcome_prices) > 1 else 0.5
+
+        amount_usd = decision.amount_usd or 0
+        if amount_usd <= 0 and is_buy:
+            return PolymarketTradeResult(
+                status="rejected",
+                market_id=decision.market_id,
+                action=action,
+                outcome=outcome,
+                shares=0,
+                price=price,
+                cost=0,
+                reason="Amount must be > 0 for buy",
+            )
+
+        # Risk guardrail: max exposure per market
+        max_exposure = portfolio.balance * max_exposure_pct
+        if is_buy and amount_usd > max_exposure:
+            amount_usd = max_exposure
+            logger.warning(
+                f"Capped {decision.model_name} exposure on {decision.market_id} "
+                f"to ${max_exposure:.2f} ({max_exposure_pct:.0%} of portfolio)"
+            )
+
+        # Liquidity check
+        if market.liquidity > 0 and amount_usd > market.liquidity * 0.1:
+            amount_usd = min(amount_usd, market.liquidity * 0.1)
+            logger.warning(f"Capped trade to 10% of market liquidity: ${amount_usd:.2f}")
+
+        now = datetime.utcnow().isoformat() + "Z"
+        fee = amount_usd * self.fee_rate
+        conn = get_connection()
+
+        try:
+            if is_buy:
+                # Calculate shares: amount / price
+                shares = amount_usd / price if price > 0 else 0
+                total_cost = amount_usd + fee
+
+                if total_cost > portfolio.balance:
+                    return PolymarketTradeResult(
+                        status="rejected",
+                        market_id=decision.market_id,
+                        action=action,
+                        outcome=outcome,
+                        shares=0,
+                        price=price,
+                        cost=0,
+                        reason=f"Insufficient funds: need ${total_cost:.2f}, have ${portfolio.balance:.2f}",
+                    )
+
+                # Update or create position
+                cursor = conn.execute(
+                    """SELECT id, shares, avg_price FROM pt_polymarket_positions
+                       WHERE portfolio_id = ? AND market_id = ? AND outcome = ? AND resolved = 0""",
+                    (self.portfolio_id, decision.market_id, outcome)
+                )
+                existing = cursor.fetchone()
+
+                if existing:
+                    new_shares = existing["shares"] + shares
+                    new_avg = (existing["avg_price"] * existing["shares"] + price * shares) / new_shares
+                    conn.execute(
+                        """UPDATE pt_polymarket_positions
+                           SET shares = ?, avg_price = ?, current_price = ?
+                           WHERE id = ?""",
+                        (new_shares, new_avg, price, existing["id"])
+                    )
+                else:
+                    pos_id = str(uuid.uuid4())
+                    conn.execute(
+                        """INSERT INTO pt_polymarket_positions
+                           (id, portfolio_id, market_id, market_question, outcome, shares,
+                            avg_price, current_price, unrealized_pnl, realized_pnl, opened_at, resolved)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 0)""",
+                        (pos_id, self.portfolio_id, decision.market_id,
+                         decision.market_question, outcome, shares, price, price, now)
+                    )
+
+                # Deduct from balance
+                conn.execute(
+                    "UPDATE pt_portfolios SET balance = balance - ? WHERE id = ?",
+                    (total_cost, self.portfolio_id)
+                )
+
+                # Record trade
+                trade_id = str(uuid.uuid4())
+                conn.execute(
+                    """INSERT INTO pt_polymarket_trades
+                       (id, portfolio_id, market_id, market_question, action, outcome,
+                        shares, price, cost, fee, pnl, timestamp)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
+                    (trade_id, self.portfolio_id, decision.market_id,
+                     decision.market_question, action.value, outcome,
+                     shares, price, total_cost, fee, now)
+                )
+
+                conn.commit()
+                logger.info(
+                    f"{self.model_name}: {action.value.upper()} {shares:.2f} {outcome} shares "
+                    f"@ ${price:.4f} for ${total_cost:.2f} (market: {decision.market_question[:50]})"
+                )
+
+                return PolymarketTradeResult(
+                    status="executed",
+                    market_id=decision.market_id,
+                    action=action,
+                    outcome=outcome,
+                    shares=shares,
+                    price=price,
+                    cost=total_cost,
+                    pnl=0,
+                )
+
+            else:
+                # SELL - close/reduce position
+                cursor = conn.execute(
+                    """SELECT id, shares, avg_price FROM pt_polymarket_positions
+                       WHERE portfolio_id = ? AND market_id = ? AND outcome = ? AND resolved = 0""",
+                    (self.portfolio_id, decision.market_id, outcome)
+                )
+                existing = cursor.fetchone()
+
+                if not existing or existing["shares"] <= 0:
+                    return PolymarketTradeResult(
+                        status="rejected",
+                        market_id=decision.market_id,
+                        action=action,
+                        outcome=outcome,
+                        shares=0,
+                        price=price,
+                        cost=0,
+                        reason=f"No {outcome} position to sell",
+                    )
+
+                # Sell shares based on amount_usd or all
+                if amount_usd > 0:
+                    sell_shares = min(amount_usd / price, existing["shares"]) if price > 0 else existing["shares"]
+                else:
+                    sell_shares = existing["shares"]
+
+                proceeds = sell_shares * price
+                pnl = (price - existing["avg_price"]) * sell_shares
+                net_proceeds = proceeds - fee
+
+                # Update position
+                remaining = existing["shares"] - sell_shares
+                if remaining <= 0.0001:
+                    conn.execute("DELETE FROM pt_polymarket_positions WHERE id = ?", (existing["id"],))
+                else:
+                    conn.execute(
+                        """UPDATE pt_polymarket_positions
+                           SET shares = ?, current_price = ?, realized_pnl = realized_pnl + ?
+                           WHERE id = ?""",
+                        (remaining, price, pnl, existing["id"])
+                    )
+
+                # Add proceeds to balance
+                conn.execute(
+                    "UPDATE pt_portfolios SET balance = balance + ? WHERE id = ?",
+                    (net_proceeds, self.portfolio_id)
+                )
+
+                # Record trade
+                trade_id = str(uuid.uuid4())
+                conn.execute(
+                    """INSERT INTO pt_polymarket_trades
+                       (id, portfolio_id, market_id, market_question, action, outcome,
+                        shares, price, cost, fee, pnl, timestamp)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (trade_id, self.portfolio_id, decision.market_id,
+                     decision.market_question, action.value, outcome,
+                     sell_shares, price, net_proceeds, fee, pnl, now)
+                )
+
+                conn.commit()
+                logger.info(
+                    f"{self.model_name}: {action.value.upper()} {sell_shares:.2f} {outcome} shares "
+                    f"@ ${price:.4f} P&L: ${pnl:+.2f}"
+                )
+
+                return PolymarketTradeResult(
+                    status="executed",
+                    market_id=decision.market_id,
+                    action=action,
+                    outcome=outcome,
+                    shares=sell_shares,
+                    price=price,
+                    cost=net_proceeds,
+                    pnl=pnl,
+                )
+
+        except Exception as e:
+            logger.error(f"Polymarket execution error: {e}")
+            conn.rollback()
+            return PolymarketTradeResult(
+                status="rejected",
+                market_id=decision.market_id,
+                action=action,
+                outcome=outcome,
+                shares=0,
+                price=price,
+                cost=0,
+                reason=f"Execution error: {str(e)}",
+            )
+        finally:
+            conn.close()
+
+    def resolve_market(self, market_id: str, winning_outcome: str) -> float:
+        """
+        Resolve a Polymarket market. Winning shares pay $1 each, losing shares pay $0.
+
+        Args:
+            market_id: The market ID to resolve
+            winning_outcome: "YES" or "NO"
+
+        Returns:
+            Total P&L from resolution
+        """
+        self._ensure_polymarket_tables()
+        conn = get_connection()
+        total_pnl = 0.0
+
+        try:
+            cursor = conn.execute(
+                """SELECT id, outcome, shares, avg_price
+                   FROM pt_polymarket_positions
+                   WHERE portfolio_id = ? AND market_id = ? AND resolved = 0""",
+                (self.portfolio_id, market_id)
+            )
+            positions = cursor.fetchall()
+            now = datetime.utcnow().isoformat() + "Z"
+
+            for pos in positions:
+                is_winner = pos["outcome"] == winning_outcome
+                settlement_price = 1.0 if is_winner else 0.0
+                pnl = (settlement_price - pos["avg_price"]) * pos["shares"]
+                total_pnl += pnl
+
+                # Credit winning positions
+                if is_winner:
+                    proceeds = pos["shares"] * 1.0  # $1 per share
+                    conn.execute(
+                        "UPDATE pt_portfolios SET balance = balance + ? WHERE id = ?",
+                        (proceeds, self.portfolio_id)
+                    )
+
+                # Mark as resolved
+                conn.execute(
+                    """UPDATE pt_polymarket_positions
+                       SET resolved = 1, resolution_outcome = ?,
+                           current_price = ?, realized_pnl = realized_pnl + ?
+                       WHERE id = ?""",
+                    (winning_outcome, settlement_price, pnl, pos["id"])
+                )
+
+                # Record resolution trade
+                trade_id = str(uuid.uuid4())
+                conn.execute(
+                    """INSERT INTO pt_polymarket_trades
+                       (id, portfolio_id, market_id, market_question, action, outcome,
+                        shares, price, cost, fee, pnl, timestamp)
+                       VALUES (?, ?, ?, 'Resolution', 'resolution', ?, ?, ?, 0, 0, ?, ?)""",
+                    (trade_id, self.portfolio_id, market_id,
+                     pos["outcome"], pos["shares"], settlement_price, pnl, now)
+                )
+
+            conn.commit()
+            logger.info(f"Resolved market {market_id}: winner={winning_outcome}, P&L=${total_pnl:+.2f}")
+
+        except Exception as e:
+            logger.error(f"Market resolution error: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
+
+        return total_pnl
+
+    def update_polymarket_prices(self, price_updates: Dict[str, Dict[str, float]]):
+        """
+        Update Polymarket position prices.
+
+        Args:
+            price_updates: {market_id: {"YES": price, "NO": price}}
+        """
+        self._ensure_polymarket_tables()
+        if not self.portfolio_id:
+            return
+
+        conn = get_connection()
+        try:
+            for market_id, prices in price_updates.items():
+                for outcome, price in prices.items():
+                    conn.execute(
+                        """UPDATE pt_polymarket_positions
+                           SET current_price = ?,
+                               unrealized_pnl = (? - avg_price) * shares
+                           WHERE portfolio_id = ? AND market_id = ? AND outcome = ? AND resolved = 0""",
+                        (price, price, self.portfolio_id, market_id, outcome)
+                    )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_polymarket_portfolio_state(self) -> Dict[str, Any]:
+        """Get portfolio state including Polymarket positions."""
+        portfolio = self.get_portfolio()
+        pm_positions = self.get_polymarket_positions()
+        pm_trades = self.get_polymarket_trades()
+
+        if not portfolio:
+            return {
+                "model_name": self.model_name,
+                "portfolio_value": self.initial_capital,
+                "cash": self.initial_capital,
+                "total_pnl": 0.0,
+                "unrealized_pnl": 0.0,
+                "trades_count": 0,
+                "positions": [],
+            }
+
+        total_unrealized = sum(p.get("unrealized_pnl", 0) for p in pm_positions)
+        total_realized = sum(t.get("pnl", 0) for t in pm_trades)
+        positions_value = sum(p.get("shares", 0) * p.get("current_price", 0) for p in pm_positions)
+
+        return {
+            "model_name": self.model_name,
+            "portfolio_value": portfolio.balance + positions_value,
+            "cash": portfolio.balance,
+            "total_pnl": total_realized + total_unrealized,
+            "unrealized_pnl": total_unrealized,
+            "realized_pnl": total_realized,
+            "trades_count": len(pm_trades),
+            "positions": pm_positions,
+            "positions_value": positions_value,
+        }
 
 
 # Convenience function to create bridge for a model

@@ -63,9 +63,9 @@ def _rate_limit_fincept() -> None:
             except Exception:
                 pass
 
-            # Wait until 2.0 s have elapsed since last call
+            # Wait until 1.2 s have elapsed since last call
             now = time.time()
-            wait = 2.0 - (now - last_ts)
+            wait = 1.2 - (now - last_ts)
             if wait > 0:
                 time.sleep(wait)
 
@@ -79,7 +79,7 @@ def _rate_limit_fincept() -> None:
             except Exception:
                 pass
 
-FINCEPT_DEFAULT_URL = "https://finceptbackend.share.zrok.io/research/llm"
+FINCEPT_DEFAULT_URL = "https://api.fincept.in/research/llm"
 
 
 # ── Anthropic tool schema builder ─────────────────────────────────────────────
@@ -182,6 +182,65 @@ class FinceptChat(Model):
 
     # ── HTTP request ──────────────────────────────────────────────────────────
 
+    def _try_url(
+        self,
+        url: str,
+        payload: Dict[str, Any],
+        headers: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """
+        Attempt a single POST to `url`. Retries up to 3 times on 429/502/504/timeout.
+        Raises RuntimeError on persistent failure so the caller can try a fallback URL.
+        """
+        last_error: Optional[RuntimeError] = None
+        for attempt in range(3):
+            try:
+                with httpx.Client(timeout=250.0) as client:
+                    resp = client.post(url, json=payload, headers=headers)
+
+                    if resp.status_code == 429:
+                        wait = 3.0 * (attempt + 1)  # 3s, 6s, 9s
+                        logger.warning(f"FinceptChat: 429 from {url} attempt {attempt + 1}, waiting {wait}s")
+                        time.sleep(wait)
+                        last_error = RuntimeError(f"Fincept API error (429): rate limited")
+                        continue
+
+                    if resp.status_code in (502, 504):
+                        wait = 2.0 * (attempt + 1)  # 2s, 4s, 6s
+                        logger.warning(f"FinceptChat: {resp.status_code} from {url} attempt {attempt + 1}, waiting {wait}s")
+                        time.sleep(wait)
+                        last_error = RuntimeError(f"Fincept API error ({resp.status_code}): gateway error")
+                        continue
+
+                    if resp.status_code != 200:
+                        error_detail = ""
+                        try:
+                            err_data = resp.json()
+                            error_detail = err_data.get("detail", err_data.get("message", ""))
+                        except Exception:
+                            error_detail = resp.text[:200]
+                        raise RuntimeError(f"Fincept API error ({resp.status_code}): {error_detail}")
+
+                    outer = resp.json()
+                    if isinstance(outer, dict) and "data" in outer:
+                        return outer["data"]
+                    return outer
+
+            except httpx.TimeoutException:
+                last_error = RuntimeError(f"Fincept API request timed out (250s) for {url}")
+                logger.warning(f"FinceptChat: timeout from {url} attempt {attempt + 1}")
+                continue
+            except httpx.ConnectError as e:
+                last_error = RuntimeError(f"Cannot connect to {url}: {e}")
+                logger.warning(f"FinceptChat: connect error for {url}: {e}")
+                break  # Connection refused — no point retrying same URL
+            except RuntimeError:
+                raise
+            except Exception as e:
+                raise RuntimeError(f"Fincept API call failed: {e}")
+
+        raise last_error or RuntimeError(f"Fincept API failed after 3 attempts on {url}")
+
     def _call_endpoint(
         self,
         prompt: str,
@@ -191,6 +250,11 @@ class FinceptChat(Model):
     ) -> Dict[str, Any]:
         """
         Call /research/llm and return the parsed response dict.
+
+        Tries self.base_url first. If that URL is different from the canonical
+        FINCEPT_DEFAULT_URL and it fails with a gateway error, automatically
+        falls back to the canonical URL so a misconfigured/expired custom
+        endpoint never permanently blocks the agent.
 
         Returns the full data dict:
           {"response": str, "tool_calls": [...], "model": str, ...}
@@ -216,61 +280,21 @@ class FinceptChat(Model):
         if tool_choice:
             payload["tool_choice"] = tool_choice
 
-        last_error: Optional[RuntimeError] = None
-        for attempt in range(3):
-            try:
-                with httpx.Client(timeout=120.0) as client:
-                    resp = client.post(self.base_url, json=payload, headers=headers)
-
-                    if resp.status_code == 429:
-                        # Rate limited — wait longer and retry (don't call _rate_limit_fincept
-                        # here since that would update the shared timestamp without a real call)
-                        wait = 5.0 * (attempt + 1)  # 5s, 10s, 15s
-                        logger.warning(f"FinceptChat: 429 rate limit on attempt {attempt + 1}, waiting {wait}s")
-                        time.sleep(wait)
-                        last_error = RuntimeError(
-                            f"Fincept API error (429): rate limit hit after {attempt + 1} attempts"
-                        )
-                        continue
-
-                    if resp.status_code in (502, 504):
-                        wait = 3.0 * (attempt + 1)  # 3s, 6s, 9s
-                        logger.warning(f"FinceptChat: {resp.status_code} on attempt {attempt + 1}, waiting {wait}s")
-                        time.sleep(wait)
-                        last_error = RuntimeError(
-                            f"Fincept API error ({resp.status_code}): gateway error"
-                        )
-                        continue
-
-                    if resp.status_code != 200:
-                        error_detail = ""
-                        try:
-                            err_data = resp.json()
-                            error_detail = err_data.get("detail", err_data.get("message", ""))
-                        except Exception:
-                            error_detail = resp.text[:200]
-                        raise RuntimeError(
-                            f"Fincept API error ({resp.status_code}): {error_detail}"
-                        )
-
-                    outer = resp.json()
-                    # Unwrap: {"success": true, "data": {...}}
-                    if isinstance(outer, dict) and "data" in outer:
-                        return outer["data"]
-                    return outer
-
-            except httpx.TimeoutException:
-                last_error = RuntimeError("Fincept API request timed out (120s)")
-                logger.warning(f"FinceptChat: timeout on attempt {attempt + 1}")
-                continue
-            except httpx.ConnectError as e:
-                raise RuntimeError(f"Cannot connect to Fincept API: {e}")
-            except RuntimeError:
+        # Try the configured URL first
+        try:
+            return self._try_url(self.base_url, payload, headers)
+        except RuntimeError as primary_err:
+            # If we're already using the default URL, re-raise immediately
+            if self.base_url == FINCEPT_DEFAULT_URL:
                 raise
-            except Exception as e:
-                raise RuntimeError(f"Fincept API call failed: {e}")
 
-        raise last_error or RuntimeError("Fincept API failed after 3 attempts")
+            # Custom/tunnel URL failed — fall back to the real Fincept API
+            logger.warning(
+                f"FinceptChat: custom base_url '{self.base_url}' failed ({primary_err}). "
+                f"Falling back to {FINCEPT_DEFAULT_URL}"
+            )
+            _rate_limit_fincept()  # honour rate limit before fallback attempt
+            return self._try_url(FINCEPT_DEFAULT_URL, payload, headers)
 
     # ── Tool execution ────────────────────────────────────────────────────────
 

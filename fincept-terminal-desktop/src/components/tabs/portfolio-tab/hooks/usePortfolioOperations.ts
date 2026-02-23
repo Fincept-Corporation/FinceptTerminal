@@ -107,6 +107,11 @@ export const usePortfolioOperations = () => {
           setPortfolioSummary(cachedSummary.data);
         }
       } else {
+        // No cache — clear stale data and show spinner
+        if (loadingPortfolioIdRef.current === portfolioId) {
+          setPortfolioSummary(null);
+          setTransactions([]);
+        }
         // Fetch fresh summary
         const summary = await portfolioService.getPortfolioSummary(portfolioId);
 
@@ -329,11 +334,17 @@ export const usePortfolioOperations = () => {
 
   // Initialize service and load portfolios, restoring last selection
   useEffect(() => {
+    let cancelled = false;
+
     const initService = async () => {
       setLoading(true);
       try {
         await portfolioService.initialize();
+        if (cancelled) return;
+
         const result = await portfolioService.getPortfolios();
+        if (cancelled) return;
+
         setPortfolios(result);
 
         if (result.length > 0) {
@@ -358,10 +369,16 @@ export const usePortfolioOperations = () => {
       } catch (error) {
         console.error('[usePortfolioOperations] Initialization error:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     initService();
+
+    return () => {
+      cancelled = true;
+    };
   }, [setSelectedPortfolio]);
 
   // Auto-refresh portfolio data only when tab is visible
@@ -408,14 +425,10 @@ export const usePortfolioOperations = () => {
   // Load portfolio summary when selection changes
   useEffect(() => {
     if (selectedPortfolio) {
-      // Clear previous portfolio data immediately when switching
-      setPortfolioSummary(null);
-      setTransactions([]);
-
       // Update the ref to track which portfolio we're loading
       loadingPortfolioIdRef.current = selectedPortfolio.id;
 
-      // Load new portfolio data
+      // Load new portfolio data (cache hit = instant, no flicker)
       loadPortfolioSummary(selectedPortfolio.id);
     } else {
       // Clear data when no portfolio is selected

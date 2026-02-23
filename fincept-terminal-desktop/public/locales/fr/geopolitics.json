@@ -1,6 +1,66 @@
 {
-  "title": "GÉOPOLITIQUE",
   "messages": {
-    "loading": "Chargement des données..."
+    "retry": "[FR] RETRY"
+  },
+  "header": {
+    "prefix": "[FR] GEO>",
+    "title": "[FR] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[FR] EVENTS"
+  },
+  "status": {
+    "stale": "[FR] STALE",
+    "loading": "[FR] LOADING...",
+    "error": "[FR] ERROR:"
+  },
+  "filters": {
+    "country": "[FR] Country...",
+    "cities": "[FR] Cities...",
+    "category": "[FR] Category...",
+    "apply": "[FR] APPLY",
+    "clear": "[FR] CLEAR",
+    "clearAllCities": "[FR] Clear all cities",
+    "selectedLabel": "[FR] Selected:"
+  },
+  "panel": {
+    "title": "[FR] INFO PANEL",
+    "expand": "[FR] Expand panel",
+    "collapse": "[FR] Collapse panel",
+    "eventsLoaded": "[FR] EVENTS LOADED",
+    "onMapVisualization": "[FR] on map visualization",
+    "topCategories": "[FR] TOP CATEGORIES",
+    "topCountries": "[FR] TOP COUNTRIES",
+    "eventDetails": "[FR] EVENT DETAILS",
+    "close": "[FR] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[FR] Country:",
+    "city": "[FR] City:",
+    "keywords": "[FR] Keywords:",
+    "coords": "[FR] Coords:",
+    "date": "[FR] Date:",
+    "source": "[FR] Source:",
+    "viewArticle": "[FR] View Article"
+  },
+  "legend": {
+    "title": "[FR] EVENT CATEGORIES",
+    "armedConflict": "[FR] Armed Conflict",
+    "terrorism": "[FR] Terrorism",
+    "protests": "[FR] Protests",
+    "civilianViolence": "[FR] Civilian Violence",
+    "riots": "[FR] Riots",
+    "politicalViolence": "[FR] Political Violence",
+    "crisis": "[FR] Crisis",
+    "explosions": "[FR] Explosions",
+    "strategic": "[FR] Strategic",
+    "unclassified": "[FR] Unclassified"
+  },
+  "footer": {
+    "tabName": "[FR] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[FR] EVENTS",
+    "labelEngine": "[FR] ENGINE",
+    "engineValue": "[FR] DECK.GL v9.2",
+    "labelSource": "[FR] SOURCE",
+    "sourceValue": "[FR] NEWS-EVENTS API",
+    "labelSelected": "[FR] SELECTED"
   }
 }

@@ -32,12 +32,42 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 # Timeout for discovery operations (seconds)
-DISCOVERY_TIMEOUT = 4.0
+DISCOVERY_TIMEOUT = 30.0
 
 
 def stream_print(chunk_type: str, content: str):
     """Print a streaming chunk with immediate flush for real-time output"""
     print(f"{chunk_type.upper()}: {content}", flush=True)
+
+
+def _extract_workflow_response(result: Any) -> str:
+    """Extract a human-readable string from a workflow result.
+
+    Workflow.run() can return:
+    - An Agno RunResponse object (has .content attribute)
+    - A dict (from SimpleWorkflowExecutor)
+    - A plain string
+    """
+    import json as _json
+    if result is None:
+        return "Workflow completed with no output."
+    # Agno RunResponse object
+    if hasattr(result, "content"):
+        content = result.content
+        if content:
+            return str(content)
+    # SimpleWorkflowExecutor dict: {"success": True, "results": [...], "context": {...}}
+    if isinstance(result, dict):
+        # Collect all step results into a readable string
+        parts = []
+        for step_result in result.get("results", []):
+            if step_result is not None:
+                parts.append(str(step_result))
+        if parts:
+            return "\n\n".join(parts)
+        # Fallback: render the whole dict
+        return _json.dumps(result, indent=2, default=str)
+    return str(result)
 
 
 def _setup_agent_modules(agent, config: Dict[str, Any], params: Dict[str, Any]):
@@ -362,6 +392,13 @@ def dispatch_action(
             return {"success": False, "error": "Missing 'plan'"}
         return execute_plan(plan_dict, api_keys)
 
+    if action == "generate_dynamic_plan":
+        from finagent_core.execution_planner import generate_dynamic_plan
+        query = params.get("query")
+        if not query:
+            return {"success": False, "error": "Missing 'query'"}
+        return generate_dynamic_plan(query, api_keys)
+
     # =========================================================================
     # Paper Trading Bridge
     # =========================================================================
@@ -516,7 +553,8 @@ def dispatch_action(
         if not symbol:
             return {"success": False, "error": "Missing 'symbol' in params"}
         result = agent.run_stock_analysis(symbol, config)
-        return {"success": True, "symbol": symbol, "result": result if isinstance(result, dict) else str(result)}
+        response_text = _extract_workflow_response(result)
+        return {"success": True, "symbol": symbol, "response": response_text, "result": result if isinstance(result, dict) else None}
 
     if action == "portfolio_rebal":
         from finagent_core.core_agent import CoreAgent
@@ -524,7 +562,8 @@ def dispatch_action(
         _setup_agent_modules(agent, config, params)
         portfolio_data = params.get("portfolio_data", params)
         result = agent.run_portfolio_rebalancing(portfolio_data, config)
-        return {"success": True, "result": result if isinstance(result, dict) else str(result)}
+        response_text = _extract_workflow_response(result)
+        return {"success": True, "response": response_text, "result": result if isinstance(result, dict) else None}
 
     if action == "risk_assessment":
         from finagent_core.core_agent import CoreAgent
@@ -532,7 +571,8 @@ def dispatch_action(
         _setup_agent_modules(agent, config, params)
         portfolio_data = params.get("portfolio_data", params)
         result = agent.run_risk_assessment(portfolio_data, config)
-        return {"success": True, "result": result if isinstance(result, dict) else str(result)}
+        response_text = _extract_workflow_response(result)
+        return {"success": True, "response": response_text, "result": result if isinstance(result, dict) else None}
 
     # =========================================================================
     # Agent Memory (via CoreAgent module)
@@ -785,9 +825,14 @@ def dispatch_action_streaming(
                 core_agent.end_trace()
 
             stream_print("done", "completed")
+            # response may be a generator (streaming) or a RunResponse/str (fallback)
             resp_content = ""
-            if response:
-                resp_content = core_agent.get_response_content(response) if hasattr(response, 'content') else str(response)
+            if response is not None:
+                if hasattr(response, 'content'):
+                    resp_content = core_agent.get_response_content(response)
+                elif not hasattr(response, '__iter__') or isinstance(response, str):
+                    resp_content = str(response)
+                # generators are already consumed above — leave resp_content as ""
             return {"success": True, "response": resp_content}
 
         except Exception as e:

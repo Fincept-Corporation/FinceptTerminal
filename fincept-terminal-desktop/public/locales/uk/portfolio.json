@@ -1,63 +1,20 @@
 {
-    "title": "МЕНЕДЖЕР ПОРТФЕЛЯ FINCEPT",
-    "header": {
-        "live": "НАЖИВО",
-        "updating": "ОНОВЛЮЄТЬСЯ",
-        "newPortfolio": "НОВИЙ ПОРТФЕЛЬ",
-        "refresh": "ОНОВИТИ",
-        "exportCsv": "ЕКСПОРТ CSV"
-    },
-    "summary": {
-        "totalValue": "ЗАГАЛЬНА ВАРТІСТЬ",
-        "dayPnl": "P&L ЗА ДЕНЬ",
-        "totalPnl": "ЗАГАЛЬНИЙ P&L",
-        "positions": "ПОЗИЦІЇ"
-    },
-    "views": {
-        "positions": "ПОЗИЦІЇ",
-        "addAsset": "ДОДАТИ АКТИВ",
-        "sellAsset": "ПРОДАТИ АКТИВ",
-        "analytics": "АНАЛІТИКА",
-        "history": "ІСТОРІЯ",
-        "activeMgmt": "АКТИВНЕ УПРАВЛІННЯ",
-        "performance": "ЕФЕКТИВНІСТЬ",
-        "rebalance": "РЕБАЛАНСУВАННЯ",
-        "reports": "ЗВІТИ",
-        "alerts": "СПОВІЩЕННЯ",
-        "sectors": "СЕКТОРИ",
-        "help": "ДОПОМОГА"
-    },
-    "sidebar": {
-        "portfolios": "ПОРТФЕЛІ",
-        "loading": "Завантаження портфелів...",
-        "noPortfolios": "Ще немає портфелів.",
-        "clickCreate": "Натисніть НОВИЙ ПОРТФЕЛЬ для створення.",
-        "owner": "Власник",
-        "currency": "Валюта"
-    },
-    "content": {
-        "selectOrCreate": "Виберіть портфель або створіть новий для початку",
-        "loadingData": "Завантаження даних портфеля...",
-        "comingSoon": "вигляд скоро..."
-    },
-    "modals": {
-        "createNew": "СТВОРИТИ НОВИЙ ПОРТФЕЛЬ",
-        "portfolioName": "НАЗВА ПОРТФЕЛЯ",
-        "owner": "ВЛАСНИК",
-        "currency": "ВАЛЮТА",
-        "cancel": "СКАСУВАТИ",
-        "create": "СТВОРИТИ",
-        "addAssetTitle": "ДОДАТИ АКТИВ ДО ПОРТФЕЛЯ",
-        "sellAssetTitle": "ПРОДАТИ АКТИВ",
-        "symbol": "СИМВОЛ",
-        "quantity": "КІЛЬКІСТЬ",
-        "price": "ЦІНА",
-        "add": "ДОДАТИ",
-        "sell": "ПРОДАТИ"
-    },
-    "status": {
-        "version": "Fincept Portfolio Manager v2.1.0 | Відстеження в реальному часі з інтеграцією yfinance",
-        "lastUpdated": "Останнє Оновлення",
-        "connected": "ПІД'ЄДНАНО"
-    }
+  "modals": {
+    "createNew": "СТВОРИТИ НОВИЙ ПОРТФЕЛЬ",
+    "portfolioName": "НАЗВА ПОРТФЕЛЯ",
+    "owner": "ВЛАСНИК",
+    "currency": "ВАЛЮТА",
+    "cancel": "СКАСУВАТИ",
+    "create": "СТВОРИТИ",
+    "addAssetTitle": "ДОДАТИ АКТИВ ДО ПОРТФЕЛЯ",
+    "sellAssetTitle": "ПРОДАТИ АКТИВ",
+    "symbol": "СИМВОЛ",
+    "quantity": "КІЛЬКІСТЬ",
+    "price": "ЦІНА",
+    "add": "ДОДАТИ",
+    "sell": "ПРОДАТИ"
+  },
+  "extracted": {
+    "areYouSureYou": "[UK] Are you sure you want to delete this portfolio? This action cannot be undone."
+  }
 }

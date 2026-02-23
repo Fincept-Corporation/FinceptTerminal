@@ -1,63 +1,20 @@
 {
-    "title": "MANAJER PORTOFOLIO FINCEPT",
-    "header": {
-        "live": "LANGSUNG",
-        "updating": "MEMPERBARUI",
-        "newPortfolio": "PORTOFOLIO BARU",
-        "refresh": "SEGARKAN",
-        "exportCsv": "EKSPOR CSV"
-    },
-    "summary": {
-        "totalValue": "TOTAL NILAI",
-        "dayPnl": "P&L HARI INI",
-        "totalPnl": "TOTAL P&L",
-        "positions": "POSISI"
-    },
-    "views": {
-        "positions": "POSISI",
-        "addAsset": "TAMBAH ASET",
-        "sellAsset": "JUAL ASET",
-        "analytics": "ANALITIK",
-        "history": "RIWAYAT",
-        "activeMgmt": "MANAJEMEN AKTIF",
-        "performance": "KINERJA",
-        "rebalance": "REBALANCE",
-        "reports": "LAPORAN",
-        "alerts": "PERINGATAN",
-        "sectors": "SEKTOR",
-        "help": "BANTUAN"
-    },
-    "sidebar": {
-        "portfolios": "PORTOFOLIO",
-        "loading": "Memuat portofolio...",
-        "noPortfolios": "Belum ada portofolio.",
-        "clickCreate": "Klik PORTOFOLIO BARU untuk membuat.",
-        "owner": "Pemilik",
-        "currency": "Mata Uang"
-    },
-    "content": {
-        "selectOrCreate": "Pilih portofolio atau buat yang baru untuk memulai",
-        "loadingData": "Memuat data portofolio...",
-        "comingSoon": "tampilan segera hadir..."
-    },
-    "modals": {
-        "createNew": "BUAT PORTOFOLIO BARU",
-        "portfolioName": "NAMA PORTOFOLIO",
-        "owner": "PEMILIK",
-        "currency": "MATA UANG",
-        "cancel": "BATAL",
-        "create": "BUAT",
-        "addAssetTitle": "TAMBAH ASET KE PORTOFOLIO",
-        "sellAssetTitle": "JUAL ASET",
-        "symbol": "SIMBOL",
-        "quantity": "KUANTITAS",
-        "price": "HARGA",
-        "add": "TAMBAH",
-        "sell": "JUAL"
-    },
-    "status": {
-        "version": "Fincept Portfolio Manager v2.1.0 | Pelacakan real-time dengan integrasi yfinance",
-        "lastUpdated": "Terakhir Diperbarui",
-        "connected": "TERHUBUNG"
-    }
+  "modals": {
+    "createNew": "BUAT PORTOFOLIO BARU",
+    "portfolioName": "NAMA PORTOFOLIO",
+    "owner": "PEMILIK",
+    "currency": "MATA UANG",
+    "cancel": "BATAL",
+    "create": "BUAT",
+    "addAssetTitle": "TAMBAH ASET KE PORTOFOLIO",
+    "sellAssetTitle": "JUAL ASET",
+    "symbol": "SIMBOL",
+    "quantity": "KUANTITAS",
+    "price": "HARGA",
+    "add": "TAMBAH",
+    "sell": "JUAL"
+  },
+  "extracted": {
+    "areYouSureYou": "[ID] Are you sure you want to delete this portfolio? This action cannot be undone."
+  }
 }

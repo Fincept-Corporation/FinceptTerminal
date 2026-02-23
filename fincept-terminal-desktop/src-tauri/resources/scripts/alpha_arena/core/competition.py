@@ -15,12 +15,16 @@ from alpha_arena.types.models import (
     CompetitionConfig,
     CompetitionStatus,
     CompetitionModel,
+    CompetitionType,
     CycleResult,
     LeaderboardEntry,
     MarketData,
     ModelDecision,
     PortfolioState,
     PerformanceSnapshot,
+    PolymarketInfo,
+    PolymarketDecision,
+    PolymarketAction,
 )
 from alpha_arena.types.responses import (
     StreamResponse,
@@ -38,7 +42,12 @@ from alpha_arena.types.responses import (
 )
 from alpha_arena.core.base_agent import BaseTradingAgent, LLMTradingAgent
 from alpha_arena.core.paper_trading_bridge import PaperTradingBridge, create_paper_trading_bridge
-from alpha_arena.core.market_data import MarketDataProvider, get_market_data_provider
+from alpha_arena.core.market_data import (
+    MarketDataProvider,
+    get_market_data_provider,
+    PolymarketDataProvider,
+    get_polymarket_provider,
+)
 from alpha_arena.core.agent_manager import AgentManager, get_agent_manager
 from alpha_arena.core.guardrails import TradingGuardrails, create_trading_guardrails
 from alpha_arena.config.agent_cards import get_agent_card
@@ -72,6 +81,13 @@ class AlphaArenaCompetition:
         self._agents: Dict[str, BaseTradingAgent] = {}
         self._engines: Dict[str, PaperTradingBridge] = {}
         self._market_provider: Optional[MarketDataProvider] = None
+        self._polymarket_provider: Optional[PolymarketDataProvider] = None
+
+        # Competition type
+        self._is_polymarket = (
+            hasattr(config, 'competition_type') and
+            config.competition_type == CompetitionType.POLYMARKET
+        )
 
         # Guardrails
         mode_str = config.mode if isinstance(config.mode, str) else config.mode.value
@@ -104,16 +120,30 @@ class AlphaArenaCompetition:
             logger.info(f"API keys available for providers: {list(api_keys.keys())}")
 
             # Initialize market data provider with timeout
-            try:
-                self._market_provider = await asyncio.wait_for(
-                    get_market_data_provider(self.config.exchange_id),
-                    timeout=30.0
-                )
-                logger.info(f"Market data provider initialized for {self.config.exchange_id}")
-            except asyncio.TimeoutError:
-                logger.error(f"Market data provider initialization timed out for {self.config.exchange_id}")
-                self.status = CompetitionStatus.FAILED
-                return False
+            if self._is_polymarket:
+                # Polymarket mode - use Polymarket provider
+                try:
+                    self._polymarket_provider = await asyncio.wait_for(
+                        get_polymarket_provider(),
+                        timeout=30.0
+                    )
+                    logger.info("Polymarket data provider initialized")
+                except asyncio.TimeoutError:
+                    logger.error("Polymarket data provider initialization timed out")
+                    self.status = CompetitionStatus.FAILED
+                    return False
+            else:
+                # Crypto mode - use exchange provider
+                try:
+                    self._market_provider = await asyncio.wait_for(
+                        get_market_data_provider(self.config.exchange_id),
+                        timeout=30.0
+                    )
+                    logger.info(f"Market data provider initialized for {self.config.exchange_id}")
+                except asyncio.TimeoutError:
+                    logger.error(f"Market data provider initialization timed out for {self.config.exchange_id}")
+                    self.status = CompetitionStatus.FAILED
+                    return False
 
             # Auto-assign contrasting trading styles to models without explicit styles
             _STYLE_ROTATION = [
@@ -274,6 +304,14 @@ class AlphaArenaCompetition:
         )
 
         try:
+            # Branch based on competition type
+            if self._is_polymarket:
+                # Polymarket mode - run prediction market cycle
+                async for response in self._run_polymarket_cycle(cycle_number, cycle_start):
+                    yield response
+                return
+
+            # Crypto mode - original logic
             # Fetch market data
             symbol = self.config.symbols[0] if self.config.symbols else "BTC/USD"
 
@@ -556,6 +594,294 @@ class AlphaArenaCompetition:
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "leaderboard": [e.model_dump() for e in self.get_leaderboard()],
         }
+
+    # =========================================================================
+    # Polymarket Cycle Execution
+    # =========================================================================
+
+    async def _run_polymarket_cycle(
+        self,
+        cycle_number: int,
+        cycle_start: float
+    ) -> AsyncGenerator[StreamResponse, None]:
+        """
+        Run a single Polymarket prediction market cycle.
+
+        Similar to crypto cycle but uses Polymarket markets instead of crypto prices.
+        """
+        logger.info(f"Running Polymarket cycle {cycle_number}")
+
+        # Ensure Polymarket provider is initialized
+        if self._polymarket_provider is None:
+            yield error("Polymarket data provider not initialized")
+            return
+
+        # Get market IDs from config
+        market_ids = []
+        if self.config.polymarket_market_ids:
+            market_ids = self.config.polymarket_market_ids
+        elif self.config.polymarket_markets:
+            market_ids = [m.id for m in self.config.polymarket_markets]
+
+        if not market_ids:
+            yield error("No Polymarket markets configured for this competition")
+            return
+
+        try:
+            # Fetch current market data
+            markets = await self._polymarket_provider.get_markets(market_ids)
+
+            # Check for market resolutions
+            await self._check_market_resolutions(markets)
+
+            # Fetch live prices from CLOB API for more accurate data
+            all_token_ids = []
+            token_to_market = {}  # token_id -> (market_id, outcome_index)
+            for m_id, m_info in markets.items():
+                for idx, token_id in enumerate(m_info.token_ids):
+                    all_token_ids.append(token_id)
+                    token_to_market[token_id] = (m_id, idx)
+
+            if all_token_ids:
+                try:
+                    live_prices = await self._polymarket_provider.get_live_prices(all_token_ids)
+                    for token_id, live_price in live_prices.items():
+                        if token_id in token_to_market:
+                            m_id, idx = token_to_market[token_id]
+                            if idx < len(markets[m_id].outcome_prices):
+                                markets[m_id].outcome_prices[idx] = live_price
+                    logger.info(f"Updated {len(live_prices)} live prices from CLOB API")
+                except Exception as e:
+                    logger.warning(f"Live price fetch failed (using Gamma prices): {e}")
+
+            # Emit market data for each market
+            for market_id, market_info in markets.items():
+                yes_price = market_info.outcome_prices[0] if market_info.outcome_prices else 0.5
+                yield market_data_response(
+                    symbol=market_info.question[:30] if market_info.question else market_id[:8],
+                    price=yes_price,
+                    change_pct=0.0,
+                )
+
+            # Get decisions from each agent
+            decisions: Dict[str, List[PolymarketDecision]] = {}
+            errors_list: List[str] = []
+
+            for model_name, agent in self._agents.items():
+                engine = self._engines[model_name]
+
+                # Build portfolio state (using market IDs as pseudo-symbols)
+                prices = {m_id: markets[m_id].outcome_prices[0] for m_id in markets}
+                portfolio = engine.get_portfolio_state(prices)
+
+                yield decision_started(model_name, "POLYMARKET")
+
+                try:
+                    # Build Polymarket-specific prompt context
+                    market_context = self._build_polymarket_context(markets)
+
+                    # Include existing positions in context
+                    pm_positions = engine.get_polymarket_positions()
+                    if pm_positions:
+                        pos_lines = ["\nYOUR CURRENT POSITIONS:"]
+                        for p in pm_positions:
+                            edge = p.get("current_price", 0) - p.get("avg_price", 0)
+                            pos_lines.append(
+                                f"  {p.get('market_question', '')[:50]} | "
+                                f"{p.get('outcome', '')} {p.get('shares', 0):.1f} shares "
+                                f"@ ${p.get('avg_price', 0):.4f} (now ${p.get('current_price', 0):.4f}, "
+                                f"P&L: ${p.get('unrealized_pnl', 0):+.2f})"
+                            )
+                        market_context += "\n".join(pos_lines)
+
+                    # Get decision from agent with Polymarket context
+                    raw_decision = await agent.make_polymarket_decision(
+                        markets=list(markets.values()),
+                        portfolio=portfolio,
+                        cycle_number=cycle_number,
+                        context=market_context,
+                    )
+
+                    # Process and execute each decision
+                    if raw_decision:
+                        decisions[model_name] = raw_decision
+
+                        for pm_decision in raw_decision:
+                            pm_decision.competition_id = self.competition_id
+
+                            # Emit reasoning
+                            if pm_decision.reasoning:
+                                yield reasoning(model_name, pm_decision.reasoning)
+
+                            # Execute trade through paper trading bridge
+                            action_val = pm_decision.action.value if hasattr(pm_decision.action, 'value') else str(pm_decision.action)
+                            if action_val != "hold":
+                                market_info = markets.get(pm_decision.market_id)
+                                if market_info:
+                                    trade_result = engine.execute_polymarket_decision(
+                                        decision=pm_decision,
+                                        market=market_info,
+                                        max_exposure_pct=0.25,
+                                    )
+
+                                    # Emit trade execution
+                                    if trade_result.status == "executed":
+                                        yield trade_executed(
+                                            model_name=model_name,
+                                            action=action_val,
+                                            symbol=f"{trade_result.outcome}@{pm_decision.market_question[:30]}",
+                                            quantity=trade_result.shares,
+                                            price=trade_result.price,
+                                            pnl=trade_result.pnl,
+                                        )
+
+                            # Emit decision
+                            yield decision_completed(
+                                model_name=model_name,
+                                action=action_val,
+                                symbol=pm_decision.market_id[:16],
+                                quantity=pm_decision.amount_usd,
+                                confidence=pm_decision.confidence,
+                                reasoning=pm_decision.reasoning,
+                            )
+
+                except Exception as agent_error:
+                    logger.error(f"Agent {model_name} error in Polymarket cycle: {agent_error}")
+                    errors_list.append(f"{model_name}: {agent_error}")
+
+                # Update positions with live prices
+                price_updates = {}
+                for m_id, m_info in markets.items():
+                    yes_p = m_info.outcome_prices[0] if m_info.outcome_prices else 0.5
+                    no_p = m_info.outcome_prices[1] if len(m_info.outcome_prices) > 1 else (1 - yes_p)
+                    price_updates[m_id] = {"YES": yes_p, "NO": no_p}
+                engine.update_polymarket_prices(price_updates)
+
+                # Emit portfolio update with positions
+                pm_state = engine.get_polymarket_portfolio_state()
+                pm_pos_list = pm_state.get("positions", [])
+                yield portfolio_update(
+                    model_name=model_name,
+                    portfolio_value=pm_state.get("portfolio_value", 0),
+                    cash=pm_state.get("cash", 0),
+                    total_pnl=pm_state.get("total_pnl", 0),
+                    positions=[
+                        {
+                            "symbol": f"{p.get('outcome', '')}@{p.get('market_question', '')[:30]}",
+                            "side": "long",
+                            "quantity": p.get("shares", 0),
+                            "entry_price": p.get("avg_price", 0),
+                            "current_price": p.get("current_price", 0),
+                            "unrealized_pnl": p.get("unrealized_pnl", 0),
+                        }
+                        for p in pm_pos_list
+                    ],
+                    trades_count=pm_state.get("trades_count", 0),
+                    cycle_number=cycle_number,
+                )
+
+            # Create snapshots for Polymarket
+            for model_name, engine in self._engines.items():
+                pm_state = engine.get_polymarket_portfolio_state()
+                snapshot = PerformanceSnapshot(
+                    id=generate_snapshot_id(self.competition_id, model_name, cycle_number),
+                    competition_id=self.competition_id,
+                    cycle_number=cycle_number,
+                    model_name=model_name,
+                    portfolio_value=pm_state.get("portfolio_value", self.config.initial_capital),
+                    cash=pm_state.get("cash", self.config.initial_capital),
+                    pnl=pm_state.get("total_pnl", 0),
+                    return_pct=((pm_state.get("portfolio_value", self.config.initial_capital) / self.config.initial_capital) - 1) * 100,
+                    positions_count=len(pm_state.get("positions", [])),
+                    trades_count=pm_state.get("trades_count", 0),
+                )
+                self._snapshots.append(snapshot)
+
+            # Calculate and emit leaderboard using Polymarket portfolio states
+            pm_leaderboard = self._calculate_polymarket_leaderboard()
+            yield leaderboard_update(
+                leaderboard=[e.model_dump() for e in pm_leaderboard],
+                cycle_number=cycle_number,
+            )
+
+            # Emit cycle completed
+            cycle_time = time.time() - cycle_start
+            yield cycle_completed(
+                cycle_number=cycle_number,
+                cycle_time=cycle_time,
+                decisions_count=sum(len(d) for d in decisions.values()),
+                errors=errors_list,
+            )
+
+        except Exception as e:
+            logger.exception(f"Polymarket cycle error: {e}")
+            yield error(f"Cycle error: {str(e)}")
+
+    def _calculate_polymarket_leaderboard(self) -> List[LeaderboardEntry]:
+        """Calculate leaderboard using Polymarket portfolio states."""
+        entries = []
+        for model_name, engine in self._engines.items():
+            pm_state = engine.get_polymarket_portfolio_state()
+            pv = pm_state.get("portfolio_value", self.config.initial_capital)
+            return_pct = ((pv / self.config.initial_capital) - 1) * 100
+
+            entries.append(LeaderboardEntry(
+                rank=0,
+                model_name=model_name,
+                portfolio_value=pv,
+                total_pnl=pm_state.get("total_pnl", 0),
+                return_pct=return_pct,
+                trades_count=pm_state.get("trades_count", 0),
+                cash=pm_state.get("cash", 0),
+                positions_count=len(pm_state.get("positions", [])),
+            ))
+
+        entries.sort(key=lambda x: x.portfolio_value, reverse=True)
+        for i, entry in enumerate(entries):
+            entry.rank = i + 1
+        return entries
+
+    async def _check_market_resolutions(self, markets: Dict[str, PolymarketInfo]):
+        """Check if any markets have resolved and settle positions."""
+        for market_id, info in markets.items():
+            # A market is resolved when one outcome price is very close to 1.0
+            if not info.outcome_prices:
+                continue
+            yes_price = info.outcome_prices[0]
+            no_price = info.outcome_prices[1] if len(info.outcome_prices) > 1 else (1 - yes_price)
+
+            resolved = False
+            winning_outcome = ""
+            if yes_price >= 0.99:
+                resolved = True
+                winning_outcome = "YES"
+            elif no_price >= 0.99:
+                resolved = True
+                winning_outcome = "NO"
+
+            if resolved:
+                logger.info(f"Market {market_id} resolved: {winning_outcome}")
+                for model_name, engine in self._engines.items():
+                    pnl = engine.resolve_market(market_id, winning_outcome)
+                    if pnl != 0:
+                        logger.info(f"{model_name} resolution P&L for {market_id}: ${pnl:+.2f}")
+
+    def _build_polymarket_context(self, markets: Dict[str, PolymarketInfo]) -> str:
+        """Build context string for Polymarket agent decisions."""
+        lines = ["Current Prediction Markets:\n"]
+
+        for market_id, info in markets.items():
+            yes_price = info.outcome_prices[0] if info.outcome_prices else 0.5
+            no_price = info.outcome_prices[1] if len(info.outcome_prices) > 1 else (1 - yes_price)
+
+            lines.append(f"Market: {info.question}")
+            lines.append(f"  YES: {yes_price*100:.1f}% | NO: {no_price*100:.1f}%")
+            lines.append(f"  Volume: ${info.volume:,.0f} | Liquidity: ${info.liquidity:,.0f}")
+            if info.end_date:
+                lines.append(f"  Ends: {info.end_date}")
+            lines.append("")
+
+        return "\n".join(lines)
 
 
 # Competition registry

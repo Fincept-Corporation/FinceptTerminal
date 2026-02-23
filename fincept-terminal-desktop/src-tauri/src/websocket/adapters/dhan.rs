@@ -409,6 +409,7 @@ impl DhanAdapter {
                 close: Some(tick.close as f64),
                 change: None,
                 change_percent: None,
+                quote_volume: None,
                 timestamp: tick.ltt as u64,
             })
         }

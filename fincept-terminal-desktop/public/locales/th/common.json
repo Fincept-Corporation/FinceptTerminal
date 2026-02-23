@@ -1,25 +1,4 @@
 {
-  "appName": "Fincept Terminal",
   "loading": "กำลังโหลด...",
-  "error": "ข้อผิดพลาด",
-  "success": "สำเร็จ",
-  "save": "บันทึก",
-  "cancel": "ยกเลิก",
-  "delete": "ลบ",
-  "edit": "แก้ไข",
-  "add": "เพิ่ม",
-  "search": "ค้นหา",
-  "filter": "กรอง",
-  "back": "กลับ",
-  "next": "ถัดไป",
-  "previous": "ก่อนหน้า",
-  "submit": "ส่ง",
-  "close": "ปิด",
-  "open": "เปิด",
-  "yes": "ใช่",
-  "no": "ไม่",
-  "ok": "ตกลง",
-  "confirm": "ยืนยัน",
-  "language": "ภาษา",
-  "selectLanguage": "เลือกภาษา"
+  "settings": "[TH] Settings"
 }

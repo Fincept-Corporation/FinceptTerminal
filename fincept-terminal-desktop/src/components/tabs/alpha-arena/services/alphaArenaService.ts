@@ -21,6 +21,8 @@ import type {
   SnapshotsResponse,
   ListAgentsResponse,
   ModelDecision,
+  CompetitionType,
+  PolymarketMarketInfo,
 } from '../types';
 
 // =============================================================================
@@ -519,6 +521,8 @@ export interface StoredCompetition {
     mode: string;
     cycle_interval_seconds: number;
     exchange_id: string;
+    competition_type?: CompetitionType;
+    polymarket_markets?: PolymarketMarketInfo[];
   };
   status: string;
   cycle_count: number;

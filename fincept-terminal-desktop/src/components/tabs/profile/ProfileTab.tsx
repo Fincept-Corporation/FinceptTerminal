@@ -159,6 +159,7 @@ const ProfileTab: React.FC = () => {
   const [state, dispatch] = useReducer(profileReducer, initialState);
   const mountedRef = useRef(true);
   const fetchIdRef = useRef(0);
+  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -178,7 +179,7 @@ const ProfileTab: React.FC = () => {
     try {
       if (state.activeSection === 'usage') {
         const result = session.user_type === 'guest'
-          ? await withTimeout(UserApiService.getGuestUsage(session.api_key), API_TIMEOUT_MS, 'Usage fetch timeout')
+          ? { success: true, data: { requests_today: session.requests_today || 0, credit_balance: session.credit_balance || 0, expires_at: session.expires_at }, error: undefined, status_code: 200 }
           : await withTimeout(UserApiService.getUserUsage(session.api_key), API_TIMEOUT_MS, 'Usage fetch timeout');
 
         if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
@@ -221,6 +222,28 @@ const ProfileTab: React.FC = () => {
       }
     }
   }, [state.activeSection, state.status, session]);
+
+  // Refresh credits/usage from session on mount and every 30 seconds
+  const refreshCreditsAndUsage = useCallback(async () => {
+    if (!mountedRef.current || !session?.api_key) return;
+    await refreshUserData();
+    // If on usage section, also re-fetch usage data
+    if (state.activeSection === 'usage' && state.status !== 'loading') {
+      fetchSectionData();
+    }
+  }, [refreshUserData, session?.api_key, state.activeSection, state.status, fetchSectionData]);
+
+  // On mount: immediate refresh + start 30s interval
+  useEffect(() => {
+    refreshCreditsAndUsage();
+    refreshIntervalRef.current = setInterval(refreshCreditsAndUsage, 30000);
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchSectionData();
@@ -455,7 +478,7 @@ const OverviewSection: React.FC<{ session: any; onLogout: () => void; isLoggingO
           <DataRow label="PLAN" value={accountType.toUpperCase()} valueColor={F.ORANGE} />
           {session?.user_type === 'guest' && (
             <>
-              <DataRow label="DAILY LIMIT" value={session?.daily_limit?.toString() || '0'} />
+              <DataRow label="CREDITS" value={session?.credit_balance?.toString() || '0'} />
               <DataRow label="REQUESTS TODAY" value={session?.requests_today?.toString() || '0'} />
             </>
           )}
@@ -475,10 +498,10 @@ const OverviewSection: React.FC<{ session: any; onLogout: () => void; isLoggingO
 
 // ─── Usage Section ────────────────────────────────────────────────────────────
 const UsageSection: React.FC<{ usageData: UsageData | null; loading: boolean; session: any }> = ({ usageData, loading, session }) => {
-  const credits = session?.user_info?.credit_balance || 0;
-  const dailyLimit = session?.daily_limit || 0;
+  const credits = session?.user_type === 'guest'
+    ? (session?.credit_balance || 0)
+    : (session?.user_info?.credit_balance || 0);
   const requestsToday = session?.requests_today || 0;
-  const usagePercent = dailyLimit > 0 ? (requestsToday / dailyLimit) * 100 : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -492,22 +515,11 @@ const UsageSection: React.FC<{ usageData: UsageData | null; loading: boolean; se
       </Panel>
 
       {session?.user_type === 'guest' && (
-        <Panel title="DAILY USAGE LIMIT" icon={<Activity size={14} />}>
+        <Panel title="GUEST SESSION USAGE" icon={<Activity size={14} />}>
           <div style={{ padding: '12px 0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '10px' }}>
               <span style={{ color: F.GRAY, fontWeight: 700, fontSize: '9px', letterSpacing: '0.5px' }}>REQUESTS TODAY</span>
-              <span style={{ color: F.WHITE, fontWeight: 700, fontFamily: FONT }}>
-                {requestsToday} / {dailyLimit}
-              </span>
-            </div>
-            <div style={{ height: '6px', backgroundColor: F.HEADER_BG, borderRadius: '2px', position: 'relative' }}>
-              <div style={{
-                height: '100%',
-                width: `${Math.min(usagePercent, 100)}%`,
-                backgroundColor: usagePercent >= 90 ? F.RED : usagePercent >= 70 ? F.YELLOW : F.GREEN,
-                borderRadius: '2px',
-                transition: 'width 0.3s',
-              }} />
+              <span style={{ color: F.WHITE, fontWeight: 700, fontFamily: FONT }}>{requestsToday}</span>
             </div>
           </div>
         </Panel>

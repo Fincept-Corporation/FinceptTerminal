@@ -1,25 +1,4 @@
 {
-  "appName": "Fincept Terminal",
   "loading": "Завантаження...",
-  "error": "Помилка",
-  "success": "Успіх",
-  "save": "Зберегти",
-  "cancel": "Скасувати",
-  "delete": "Видалити",
-  "edit": "Редагувати",
-  "add": "Додати",
-  "search": "Пошук",
-  "filter": "Фільтр",
-  "back": "Назад",
-  "next": "Далі",
-  "previous": "Попередній",
-  "submit": "Надіслати",
-  "close": "Закрити",
-  "open": "Відкрити",
-  "yes": "Так",
-  "no": "Ні",
-  "ok": "OK",
-  "confirm": "Підтвердити",
-  "language": "Мова",
-  "selectLanguage": "Виберіть мову"
+  "settings": "[UK] Settings"
 }

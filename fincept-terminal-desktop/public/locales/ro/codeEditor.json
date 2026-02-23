@@ -1,29 +1,60 @@
 {
-  "title": "EDITOR COD",
   "header": {
-    "packages": "PACHETE"
+    "finscriptIde": "[RO] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "FIȘIER NOU",
-    "new": "NOU",
-    "open": "DESCHIDE",
-    "save": "SALVEAZĂ",
     "run": "RULEAZĂ",
     "running": "RULEAZĂ...",
-    "runAll": "RULEAZĂ TOT",
-    "history": "ISTORIC"
+    "toggleExplorer": "[RO] Toggle Explorer (Ctrl+B)",
+    "openFile": "[RO] Open File",
+    "saveShortcut": "[RO] Save (Ctrl+S)",
+    "findShortcut": "[RO] Find (Ctrl+F)",
+    "runShortcut": "[RO] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "EDITOR FINSCRIPT"
   },
-  "packages": {
-    "clickToLoad": "Click pentru a încărca...",
-    "load": "ÎNCARCĂ PACHETE"
+  "explorer": {
+    "title": "[RO] EXPLORER",
+    "openFiles": "[RO] OPEN FILES",
+    "examples": "[RO] EXAMPLES",
+    "runHistory": "[RO] RUN HISTORY",
+    "finscriptEngine": "[RO] FinScript Engine"
   },
-  "history": {
-    "title": "ISTORIC NOTEBOOK",
-    "loading": "Încarcă istoric...",
-    "empty": "Niciun istoric notebook"
+  "output": {
+    "title": "[RO] OUTPUT",
+    "success": "[RO] SUCCESS",
+    "error": "[RO] ERROR",
+    "executing": "[RO] EXECUTING FINSCRIPT...",
+    "noOutput": "[RO] No output yet",
+    "pressToRun": "[RO] Press Ctrl+Enter to run",
+    "completed": "[RO] COMPLETED",
+    "failed": "[RO] FAILED",
+    "signals": "[RO] signals",
+    "clear": "[RO] CLEAR",
+    "errors": "[RO] ERRORS",
+    "signalsSection": "[RO] SIGNALS",
+    "outputSection": "[RO] OUTPUT",
+    "charts": "[RO] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[RO] OHLC",
+    "histogram": "[RO] Histogram",
+    "line": "[RO] Line",
+    "points": "[RO] points"
+  },
+  "statusBar": {
+    "modified": "[RO] MODIFIED",
+    "showOutput": "[RO] SHOW OUTPUT",
+    "encoding": "[RO] UTF-8",
+    "spaces": "[RO] 4 Spaces",
+    "runShortcut": "[RO] Ctrl+Enter: Run",
+    "lines": "[RO] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[RO] Close file without saving?",
+    "unsavedChanges": "[RO] You have unsaved changes."
   }
 }

@@ -10,7 +10,8 @@
     "tabLayout": "เค้าโครงแท็บ",
     "appearance": "รูปร่าง",
     "language": "ภาษา",
-    "storage": "พื้นที่เก็บข้อมูลและแคช"
+    "storage": "พื้นที่เก็บข้อมูลและแคช",
+    "notifications": "[TH] Notifications"
   },
   "credentials": {
     "title": "การจัดการข้อมูลรับรอง API",
@@ -46,7 +47,31 @@
     "saveConfig": "บันทึกการกำหนดค่า",
     "reset": "รีเซ็ต",
     "saveSuccess": "บันทึกลักษณะเทอร์มินัลและการแมปคีย์เรียบร้อยแล้ว",
-    "resetSuccess": "รีเซ็ตเป็นรูปลักษณ์เริ่มต้นและการแมปคีย์"
+    "resetSuccess": "รีเซ็ตเป็นรูปลักษณ์เริ่มต้นและการแมปคีย์",
+    "customColors": "[TH] Custom Colors",
+    "customColorsTitle": "[TH] CUSTOM COLORS",
+    "colorPrimary": "[TH] Primary",
+    "colorSecondary": "[TH] Secondary",
+    "colorSuccess": "[TH] Success",
+    "colorAlert": "[TH] Alert",
+    "colorWarning": "[TH] Warning",
+    "colorInfo": "[TH] Info",
+    "colorAccent": "[TH] Accent",
+    "colorPurple": "[TH] Purple",
+    "colorText": "[TH] Text",
+    "colorTextMuted": "[TH] Text Muted",
+    "colorBackground": "[TH] Background",
+    "colorPanel": "[TH] Panel",
+    "layoutSpacing": "[TH] LAYOUT & SPACING",
+    "contentDensity": "[TH] CONTENT DENSITY",
+    "borderRadius": "[TH] BORDER RADIUS",
+    "borderStyle": "[TH] BORDER STYLE",
+    "lineHeight": "[TH] LINE HEIGHT",
+    "letterSpacing": "[TH] LETTER SPACING",
+    "effects": "[TH] EFFECTS",
+    "widgetOpacity": "[TH] WIDGET OPACITY",
+    "enableGlow": "[TH] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[TH] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "ฐานข้อมูลสัญลักษณ์หุ้น",
@@ -65,17 +90,8 @@
     "tip": "เคล็ดลับ: ลากแท็บเพื่อจัดเรียงใหม่ ใช้ปุ่มลูกศรเพื่อย้ายแท็บระหว่างส่วนหัวและส่วนเมนู การเปลี่ยนแปลงจะถูกบันทึกโดยอัตโนมัติ"
   },
   "llm": {
-    "title": "การกำหนดค่า LLM",
-    "description": "กำหนดค่าโมเดล AI และผู้ให้บริการ",
     "connected": "เชื่อมต่อแล้ว",
-    "disconnected": "ตัดการเชื่อมต่อแล้ว",
-    "provider": "ผู้ให้บริการ AI",
-    "globalSettings": "การตั้งค่า AI ทั่วโลก",
-    "temperature": "อุณหภูมิ",
-    "maxTokens": "โทเค็นสูงสุด",
-    "systemPrompt": "พร้อมท์ระบบ",
-    "modelLibrary": "ไลบรารีโมเดล",
-    "multiModelConfigs": "การกำหนดค่าหลายรุ่น"
+    "disconnected": "ตัดการเชื่อมต่อแล้ว"
   },
   "buttons": {
     "save": "บันทึก",
@@ -86,5 +102,18 @@
     "database": "ฐานข้อมูล: SQLite",
     "storage": "พื้นที่เก็บข้อมูล: ตามไฟล์",
     "secureStorage": "ข้อมูลทั้งหมดเก็บไว้อย่างปลอดภัยใน fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[TH] NOTIFICATION PROVIDERS",
+    "description": "[TH] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[TH] Event Filters",
+    "eventFilterDescription": "[TH] Choose which notification types to forward to external providers.",
+    "providers": "[TH] Providers",
+    "enabled": "[TH] Enabled",
+    "disabled": "[TH] Disabled",
+    "testButton": "[TH] TEST",
+    "testSuccess": "[TH] Test notification sent successfully!",
+    "testFailed": "[TH] Failed to send test notification. Check your configuration.",
+    "saved": "[TH] Configuration saved"
   }
 }

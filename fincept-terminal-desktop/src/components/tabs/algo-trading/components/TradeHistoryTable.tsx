@@ -1,12 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { AlgoTrade } from '../types';
 import { getAlgoTrades } from '../services/algoTradingService';
-
-const F = {
-  ORANGE: '#FF8800', WHITE: '#FFFFFF', RED: '#FF3B3B', GREEN: '#00D66F',
-  GRAY: '#787878', DARK_BG: '#000000', PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A', BORDER: '#2A2A2A', MUTED: '#4A4A4A', CYAN: '#00E5FF',
-};
+import { F } from '../constants/theme';
 
 const thStyle: React.CSSProperties = {
   padding: '6px 12px', fontSize: '8px', fontWeight: 700, color: F.GRAY,

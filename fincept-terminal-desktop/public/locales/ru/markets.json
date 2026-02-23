@@ -9,13 +9,9 @@
   "percentChange": "%ИЗМ",
   "high": "МАКС",
   "low": "МИН",
-  "loading": "Загрузка...",
   "noData": "Нет данных",
   "refresh": "ОБНОВИТЬ",
   "auto": "АВТО",
   "on": "ВКЛ",
-  "off": "ВЫКЛ",
-  "lastUpdate": "ПОСЛЕДНЕЕ ОБНОВЛЕНИЕ",
-  "updating": "ОБНОВЛЕНИЕ",
-  "live": "LIVE"
+  "off": "ВЫКЛ"
 }

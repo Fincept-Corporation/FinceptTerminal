@@ -3,9 +3,7 @@
   "header": {
     "load": "[VI] Load",
     "save": "[VI] Save",
-    "saving": "[VI] Saving...",
-    "exportPdf": "[VI] Export PDF",
-    "generating": "[VI] Generating..."
+    "saving": "[VI] Saving..."
   },
   "components": {
     "title": "[VI] ADD COMPONENTS"

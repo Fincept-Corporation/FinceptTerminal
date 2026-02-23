@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-analysis/quantlibAnalysisApi.ts
 // 122 endpoints — fundamentals(11), ratios(77), valuation(30), industry(4)
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 let _apiKey: string | null = null;
 export function setAnalysisApiKey(key: string | null) { _apiKey = key; }
 

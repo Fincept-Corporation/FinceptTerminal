@@ -10,7 +10,8 @@
     "tabLayout": "टैब लेआउट",
     "appearance": "उपस्थिति",
     "language": "भाषा",
-    "storage": "भंडारण एवं कैश"
+    "storage": "भंडारण एवं कैश",
+    "notifications": "[HI] Notifications"
   },
   "credentials": {
     "title": "एपीआई क्रेडेंशियल प्रबंधन",
@@ -46,7 +47,31 @@
     "saveConfig": "कॉन्फ़िगरेशन सहेजें",
     "reset": "रीसेट करें",
     "saveSuccess": "टर्मिनल उपस्थिति और कुंजी मैपिंग सफलतापूर्वक सहेजी गई",
-    "resetSuccess": "डिफ़ॉल्ट उपस्थिति और कुंजी मैपिंग पर रीसेट करें"
+    "resetSuccess": "डिफ़ॉल्ट उपस्थिति और कुंजी मैपिंग पर रीसेट करें",
+    "customColors": "[HI] Custom Colors",
+    "customColorsTitle": "[HI] CUSTOM COLORS",
+    "colorPrimary": "[HI] Primary",
+    "colorSecondary": "[HI] Secondary",
+    "colorSuccess": "[HI] Success",
+    "colorAlert": "[HI] Alert",
+    "colorWarning": "[HI] Warning",
+    "colorInfo": "[HI] Info",
+    "colorAccent": "[HI] Accent",
+    "colorPurple": "[HI] Purple",
+    "colorText": "[HI] Text",
+    "colorTextMuted": "[HI] Text Muted",
+    "colorBackground": "[HI] Background",
+    "colorPanel": "[HI] Panel",
+    "layoutSpacing": "[HI] LAYOUT & SPACING",
+    "contentDensity": "[HI] CONTENT DENSITY",
+    "borderRadius": "[HI] BORDER RADIUS",
+    "borderStyle": "[HI] BORDER STYLE",
+    "lineHeight": "[HI] LINE HEIGHT",
+    "letterSpacing": "[HI] LETTER SPACING",
+    "effects": "[HI] EFFECTS",
+    "widgetOpacity": "[HI] WIDGET OPACITY",
+    "enableGlow": "[HI] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[HI] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "स्टॉक प्रतीक डेटाबेस",
@@ -65,17 +90,8 @@
     "tip": "सुझाव: टैब को पुन: व्यवस्थित करने के लिए उन्हें खींचें। हेडर और मेनू अनुभागों के बीच टैब को स्थानांतरित करने के लिए तीर बटन का उपयोग करें। परिवर्तन स्वचालित रूप से सहेजे जाते हैं."
   },
   "llm": {
-    "title": "एलएलएम कॉन्फ़िगरेशन",
-    "description": "एआई मॉडल और प्रदाताओं को कॉन्फ़िगर करें",
     "connected": "जुड़े हुए",
-    "disconnected": "डिस्कनेक्ट किया गया",
-    "provider": "एआई प्रदाता",
-    "globalSettings": "वैश्विक एआई सेटिंग्स",
-    "temperature": "तापमान",
-    "maxTokens": "अधिकतम टोकन",
-    "systemPrompt": "सिस्टम प्रॉम्प्ट",
-    "modelLibrary": "मॉडल लाइब्रेरी",
-    "multiModelConfigs": "मल्टी-मॉडल कॉन्फ़िगरेशन"
+    "disconnected": "डिस्कनेक्ट किया गया"
   },
   "buttons": {
     "save": "बचाना",
@@ -86,5 +102,18 @@
     "database": "डेटाबेस: SQLite",
     "storage": "भंडारण: फ़ाइल-आधारित",
     "secureStorage": "सभी डेटा fincept_terminal.db में सुरक्षित रूप से संग्रहीत हैं"
+  },
+  "notifications": {
+    "title": "[HI] NOTIFICATION PROVIDERS",
+    "description": "[HI] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[HI] Event Filters",
+    "eventFilterDescription": "[HI] Choose which notification types to forward to external providers.",
+    "providers": "[HI] Providers",
+    "enabled": "[HI] Enabled",
+    "disabled": "[HI] Disabled",
+    "testButton": "[HI] TEST",
+    "testSuccess": "[HI] Test notification sent successfully!",
+    "testFailed": "[HI] Failed to send test notification. Check your configuration.",
+    "saved": "[HI] Configuration saved"
   }
 }

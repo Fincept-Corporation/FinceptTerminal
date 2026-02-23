@@ -1,4 +1,4 @@
-const API_BASE = 'https://finceptbackend.share.zrok.io';
+const API_BASE = 'https://api.fincept.in';
 
 export interface NewsEvent {
   url?: string;

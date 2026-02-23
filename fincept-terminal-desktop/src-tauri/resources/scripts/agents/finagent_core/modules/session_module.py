@@ -477,13 +477,20 @@ class SessionModule:
         try:
             from agno.session import SessionSummaryManager
 
-            # Create model if not provided
+            # Create model if not provided — resolve from api_keys rather than hardcoding openai
             if model is None and api_keys:
-                from agno.models.openai import OpenAIChat
-                model = OpenAIChat(
-                    id="gpt-3.5-turbo",
-                    api_key=api_keys.get("OPENAI_API_KEY")
-                )
+                try:
+                    from finagent_core.registries import ModelsRegistry
+                    preferred = ["fincept", "ollama", "anthropic", "google", "groq",
+                                 "deepseek", "openai", "openrouter"]
+                    provider = next(
+                        (p for p in preferred if api_keys.get(p) or api_keys.get(f"{p.upper()}_API_KEY")),
+                        None
+                    )
+                    if provider:
+                        model = ModelsRegistry.create_model(provider=provider, api_keys=api_keys)
+                except Exception:
+                    pass
 
             if model:
                 manager = SessionSummaryManager(model=model)

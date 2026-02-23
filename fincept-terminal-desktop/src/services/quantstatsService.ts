@@ -187,7 +187,8 @@ async function runQuantStats<T>(
   action: string,
   benchmark: string = 'SPY',
   period: string = '1y',
-  riskFreeRate: number = 0.02
+  riskFreeRate: number = 0.02,
+  numSims: number = 1000
 ): Promise<T> {
   let result: string;
   try {
@@ -197,6 +198,7 @@ async function runQuantStats<T>(
       benchmark,
       period,
       riskFreeRate,
+      numSims,
     });
   } catch (e) {
     // Rust command returned Err - extract useful message
@@ -238,11 +240,11 @@ export const quantstatsService = {
   getRolling: (tickers: Record<string, number>, benchmark?: string, period?: string, rf?: number) =>
     runQuantStats<RollingAnalysis>(tickers, 'rolling', benchmark, period, rf),
 
-  getFullReport: (tickers: Record<string, number>, benchmark?: string, period?: string, rf?: number) =>
-    runQuantStats<FullReport>(tickers, 'full_report', benchmark, period, rf),
+  getFullReport: (tickers: Record<string, number>, benchmark?: string, period?: string, rf?: number, numSims?: number) =>
+    runQuantStats<FullReport>(tickers, 'full_report', benchmark, period, rf, numSims),
 
-  getMonteCarlo: (tickers: Record<string, number>, benchmark?: string, period?: string) =>
-    runQuantStats<MonteCarloAnalysis>(tickers, 'montecarlo', benchmark, period),
+  getMonteCarlo: (tickers: Record<string, number>, benchmark?: string, period?: string, numSims?: number) =>
+    runQuantStats<MonteCarloAnalysis>(tickers, 'montecarlo', benchmark, period, undefined, numSims),
 
   getHtmlReport: (tickers: Record<string, number>, benchmark?: string, period?: string) =>
     runQuantStats<{ html_base64: string }>(tickers, 'html_report', benchmark, period),

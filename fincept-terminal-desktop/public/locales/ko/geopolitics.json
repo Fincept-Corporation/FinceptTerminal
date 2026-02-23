@@ -1,6 +1,66 @@
 {
-  "title": "지정학",
   "messages": {
-    "loading": "지정학 데이터 로딩..."
+    "retry": "[KO] RETRY"
+  },
+  "header": {
+    "prefix": "[KO] GEO>",
+    "title": "[KO] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[KO] EVENTS"
+  },
+  "status": {
+    "stale": "[KO] STALE",
+    "loading": "[KO] LOADING...",
+    "error": "[KO] ERROR:"
+  },
+  "filters": {
+    "country": "[KO] Country...",
+    "cities": "[KO] Cities...",
+    "category": "[KO] Category...",
+    "apply": "[KO] APPLY",
+    "clear": "[KO] CLEAR",
+    "clearAllCities": "[KO] Clear all cities",
+    "selectedLabel": "[KO] Selected:"
+  },
+  "panel": {
+    "title": "[KO] INFO PANEL",
+    "expand": "[KO] Expand panel",
+    "collapse": "[KO] Collapse panel",
+    "eventsLoaded": "[KO] EVENTS LOADED",
+    "onMapVisualization": "[KO] on map visualization",
+    "topCategories": "[KO] TOP CATEGORIES",
+    "topCountries": "[KO] TOP COUNTRIES",
+    "eventDetails": "[KO] EVENT DETAILS",
+    "close": "[KO] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[KO] Country:",
+    "city": "[KO] City:",
+    "keywords": "[KO] Keywords:",
+    "coords": "[KO] Coords:",
+    "date": "[KO] Date:",
+    "source": "[KO] Source:",
+    "viewArticle": "[KO] View Article"
+  },
+  "legend": {
+    "title": "[KO] EVENT CATEGORIES",
+    "armedConflict": "[KO] Armed Conflict",
+    "terrorism": "[KO] Terrorism",
+    "protests": "[KO] Protests",
+    "civilianViolence": "[KO] Civilian Violence",
+    "riots": "[KO] Riots",
+    "politicalViolence": "[KO] Political Violence",
+    "crisis": "[KO] Crisis",
+    "explosions": "[KO] Explosions",
+    "strategic": "[KO] Strategic",
+    "unclassified": "[KO] Unclassified"
+  },
+  "footer": {
+    "tabName": "[KO] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[KO] EVENTS",
+    "labelEngine": "[KO] ENGINE",
+    "engineValue": "[KO] DECK.GL v9.2",
+    "labelSource": "[KO] SOURCE",
+    "sourceValue": "[KO] NEWS-EVENTS API",
+    "labelSelected": "[KO] SELECTED"
   }
 }

@@ -1,6 +1,66 @@
 {
-  "title": "भू-राजनीति",
   "messages": {
-    "loading": "भू-राजनीतिक डेटा लोड हो रहा है..."
+    "retry": "[HI] RETRY"
+  },
+  "header": {
+    "prefix": "[HI] GEO>",
+    "title": "[HI] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[HI] EVENTS"
+  },
+  "status": {
+    "stale": "[HI] STALE",
+    "loading": "[HI] LOADING...",
+    "error": "[HI] ERROR:"
+  },
+  "filters": {
+    "country": "[HI] Country...",
+    "cities": "[HI] Cities...",
+    "category": "[HI] Category...",
+    "apply": "[HI] APPLY",
+    "clear": "[HI] CLEAR",
+    "clearAllCities": "[HI] Clear all cities",
+    "selectedLabel": "[HI] Selected:"
+  },
+  "panel": {
+    "title": "[HI] INFO PANEL",
+    "expand": "[HI] Expand panel",
+    "collapse": "[HI] Collapse panel",
+    "eventsLoaded": "[HI] EVENTS LOADED",
+    "onMapVisualization": "[HI] on map visualization",
+    "topCategories": "[HI] TOP CATEGORIES",
+    "topCountries": "[HI] TOP COUNTRIES",
+    "eventDetails": "[HI] EVENT DETAILS",
+    "close": "[HI] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[HI] Country:",
+    "city": "[HI] City:",
+    "keywords": "[HI] Keywords:",
+    "coords": "[HI] Coords:",
+    "date": "[HI] Date:",
+    "source": "[HI] Source:",
+    "viewArticle": "[HI] View Article"
+  },
+  "legend": {
+    "title": "[HI] EVENT CATEGORIES",
+    "armedConflict": "[HI] Armed Conflict",
+    "terrorism": "[HI] Terrorism",
+    "protests": "[HI] Protests",
+    "civilianViolence": "[HI] Civilian Violence",
+    "riots": "[HI] Riots",
+    "politicalViolence": "[HI] Political Violence",
+    "crisis": "[HI] Crisis",
+    "explosions": "[HI] Explosions",
+    "strategic": "[HI] Strategic",
+    "unclassified": "[HI] Unclassified"
+  },
+  "footer": {
+    "tabName": "[HI] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[HI] EVENTS",
+    "labelEngine": "[HI] ENGINE",
+    "engineValue": "[HI] DECK.GL v9.2",
+    "labelSource": "[HI] SOURCE",
+    "sourceValue": "[HI] NEWS-EVENTS API",
+    "labelSelected": "[HI] SELECTED"
   }
 }

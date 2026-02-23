@@ -151,7 +151,7 @@ def main():
             factor_scores = json.loads(sys.argv[2])
 
             berkus = BerkusMethod(max_value_per_factor=factor_scores.get('max_value_per_factor', 500_000))
-            # Map frontend keys to quick_assessment params
+            # Map frontend keys to quick_assessment params (0-100 scale → 0-1)
             key_map = {
                 'sound_idea': 'idea_score', 'idea_score': 'idea_score',
                 'prototype': 'prototype_score', 'prototype_score': 'prototype_score',
@@ -161,8 +161,16 @@ def main():
             }
             mapped = {}
             for k, v in factor_scores.items():
-                if k in key_map:
-                    mapped[key_map[k]] = v
+                if k in key_map and k != 'max_value_per_factor':
+                    # Normalize: if score > 1, treat as percentage (0-100) → (0-1)
+                    normalized = v / 100.0 if v > 1 else v
+                    mapped[key_map[k]] = normalized
+            # Provide defaults for any missing required args
+            defaults = {'idea_score': 0.5, 'prototype_score': 0.5, 'team_score': 0.5,
+                       'relationships_score': 0.5, 'rollout_score': 0.5}
+            for param, default in defaults.items():
+                if param not in mapped:
+                    mapped[param] = default
             valuation = berkus.quick_assessment(**mapped)
 
             result = {"success": True, "data": valuation}

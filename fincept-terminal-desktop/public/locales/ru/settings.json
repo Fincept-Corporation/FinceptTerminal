@@ -10,7 +10,8 @@
     "tabLayout": "Макет вкладок",
     "appearance": "Появление",
     "language": "Язык",
-    "storage": "Хранение и кэш"
+    "storage": "Хранение и кэш",
+    "notifications": "[RU] Notifications"
   },
   "credentials": {
     "title": "Управление учетными данными API",
@@ -46,7 +47,31 @@
     "saveConfig": "СОХРАНИТЬ КОНФИГУРАЦИЯ",
     "reset": "ПЕРЕЗАГРУЗИТЬ",
     "saveSuccess": "Внешний вид терминала и сопоставление клавиш успешно сохранены.",
-    "resetSuccess": "Сброс к внешнему виду и сопоставлению клавиш по умолчанию"
+    "resetSuccess": "Сброс к внешнему виду и сопоставлению клавиш по умолчанию",
+    "customColors": "[RU] Custom Colors",
+    "customColorsTitle": "[RU] CUSTOM COLORS",
+    "colorPrimary": "[RU] Primary",
+    "colorSecondary": "[RU] Secondary",
+    "colorSuccess": "[RU] Success",
+    "colorAlert": "[RU] Alert",
+    "colorWarning": "[RU] Warning",
+    "colorInfo": "[RU] Info",
+    "colorAccent": "[RU] Accent",
+    "colorPurple": "[RU] Purple",
+    "colorText": "[RU] Text",
+    "colorTextMuted": "[RU] Text Muted",
+    "colorBackground": "[RU] Background",
+    "colorPanel": "[RU] Panel",
+    "layoutSpacing": "[RU] LAYOUT & SPACING",
+    "contentDensity": "[RU] CONTENT DENSITY",
+    "borderRadius": "[RU] BORDER RADIUS",
+    "borderStyle": "[RU] BORDER STYLE",
+    "lineHeight": "[RU] LINE HEIGHT",
+    "letterSpacing": "[RU] LETTER SPACING",
+    "effects": "[RU] EFFECTS",
+    "widgetOpacity": "[RU] WIDGET OPACITY",
+    "enableGlow": "[RU] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[RU] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "База данных биржевых символов",
@@ -65,17 +90,8 @@
     "tip": "СОВЕТ: Перетаскивайте вкладки, чтобы изменить их порядок. Используйте кнопки со стрелками для перемещения вкладок между разделами заголовка и меню. Изменения сохраняются автоматически."
   },
   "llm": {
-    "title": "КОНФИГУРАЦИЯ LLM",
-    "description": "Настройка моделей и поставщиков ИИ",
     "connected": "ПОДКЛЮЧЕНО",
-    "disconnected": "ОТКЛЮЧЕНО",
-    "provider": "ИИ-ПРОВАЙДЕР",
-    "globalSettings": "ГЛОБАЛЬНЫЕ НАСТРОЙКИ ИИ",
-    "temperature": "ТЕМПЕРАТУРА",
-    "maxTokens": "МАКС. ТОКЕНОВ",
-    "systemPrompt": "СИСТЕМНАЯ ПОДСКАЗКА",
-    "modelLibrary": "МОДЕЛЬНАЯ БИБЛИОТЕКА",
-    "multiModelConfigs": "Мультимодельные конфигурации"
+    "disconnected": "ОТКЛЮЧЕНО"
   },
   "buttons": {
     "save": "СОХРАНЯТЬ",
@@ -86,5 +102,18 @@
     "database": "База данных: SQLite.",
     "storage": "Хранение: файловое",
     "secureStorage": "Все данные надежно хранятся в fincept_terminal.db."
+  },
+  "notifications": {
+    "title": "[RU] NOTIFICATION PROVIDERS",
+    "description": "[RU] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[RU] Event Filters",
+    "eventFilterDescription": "[RU] Choose which notification types to forward to external providers.",
+    "providers": "[RU] Providers",
+    "enabled": "[RU] Enabled",
+    "disabled": "[RU] Disabled",
+    "testButton": "[RU] TEST",
+    "testSuccess": "[RU] Test notification sent successfully!",
+    "testFailed": "[RU] Failed to send test notification. Check your configuration.",
+    "saved": "[RU] Configuration saved"
   }
 }

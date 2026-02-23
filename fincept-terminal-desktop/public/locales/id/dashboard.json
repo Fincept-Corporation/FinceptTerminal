@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "DAsbor yang dapat disesuaikan",
-    "live": "HIDUP",
-    "widgets": "WIDGET"
-  },
-  "buttons": {
-    "addWidget": "TAMBAHKAN WIDGET",
-    "saveLayout": "SIMPAN TATA LETAK",
-    "reset": "MENGATUR ULANG",
-    "help": "MEMBANTU"
-  },
   "widgets": {
     "loading": "Memuat...",
-    "error": "Kesalahan",
     "globalIndices": "Indeks Global - 12 Teratas",
     "forex": "Forex - Pasangan Utama",
     "crypto": "MATA UANG KRIPTO",
@@ -20,8 +8,6 @@
     "news": "BERITA",
     "forum": "FORUM",
     "watchlist": "DAFTAR PERHATIAN",
-    "maritimeIntelligence": "Intelijen Maritim",
-    "unknown": "Jenis widget tidak diketahui",
     "index": "INDEKS",
     "symbol": "SIMBOL",
     "price": "HARGA",
@@ -38,41 +24,22 @@
     "pair": "PASANGAN",
     "rate": "KECEPATAN",
     "commodity": "KOMODITI",
-    "globe3D": "DUNIA 3D",
-    "vessels": "KAPAL",
-    "routes": "RUTE",
-    "vol24h": "VOL 24JAM",
-    "topTradeCorridors": "KORIDOR PERDAGANGAN TERATAS",
-    "ships": "kapal",
-    "marketNews": "Berita Pasar",
-    "secPressReleases": "Siaran Pers SEC",
-    "cryptoNews": "Berita Kripto",
-    "trendingForum": "Forum Tren",
-    "techStocks": "Saham Teknologi"
-  },
-  "tips": {
-    "drag": "Seret widget untuk mengatur ulang",
-    "resize": "Ubah ukuran dari sudut kanan bawah",
-    "remove": "Hapus widget dengan tombol X",
-    "responsive": "Tata letak responsif - menggunakan lebar penuh"
-  },
-  "loading": {
-    "title": "Inisialisasi Dasbor",
-    "description": "Menyiapkan cache database untuk memuat data lebih cepat...",
-    "note": "Ini hanya akan memakan waktu beberapa saat pada peluncuran pertama"
-  },
-  "empty": {
-    "noWidgets": "Tidak ada widget di dasbor",
-    "addFirst": "TAMBAHKAN WIDGET PERTAMA ANDA"
-  },
-  "status": {
-    "version": "Dasbor Fincept yang Dapat Disesuaikan v2.0.0 | Seret & lepas ruang kerja",
-    "layout": "Tata Letak",
-    "custom": "Kebiasaan",
-    "empty": "Kosong",
-    "active": "AKTIF",
-    "cache": "Tembolok: DIAKTIFKAN",
-    "label": "Status"
+    "noActiveMarkets": "[ID] No active markets found",
+    "indicator": "[ID] INDICATOR",
+    "value": "[ID] VALUE",
+    "chg": "[ID] CHG",
+    "overallRisk": "[ID] OVERALL RISK",
+    "openEconomicsTab": "[ID] Open Economics Tab",
+    "openGeopoliticsTab": "[ID] Open Geopolitics Tab",
+    "openPolymarketTab": "[ID] Open Polymarket Tab",
+    "noPortfolioFound": "[ID] No portfolio found",
+    "createPortfolioHint": "[ID] Create one in Portfolio tab",
+    "openPortfolioTab": "[ID] Open Portfolio Tab",
+    "action": "[ID] ACTION",
+    "markets": "[ID] MARKETS",
+    "performanceTracker": "[ID] PERFORMANCE TRACKER",
+    "totalPnL": "[ID] TOTAL P&L",
+    "viewDetailedAnalytics": "[ID] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "Tata letak dasbor disimpan!",

@@ -37,7 +37,7 @@ class ChatModeApiService {
   private apiKey: string | null = null;
 
   constructor() {
-    this.baseUrl = import.meta.env.VITE_API_URL || 'https://finceptbackend.share.zrok.io';
+    this.baseUrl = import.meta.env.VITE_API_URL || 'https://api.fincept.in';
   }
 
   /**

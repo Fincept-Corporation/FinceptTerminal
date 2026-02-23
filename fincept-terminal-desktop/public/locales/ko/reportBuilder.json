@@ -3,9 +3,7 @@
   "header": {
     "load": "[KO] Load",
     "save": "[KO] Save",
-    "saving": "[KO] Saving...",
-    "exportPdf": "[KO] Export PDF",
-    "generating": "[KO] Generating..."
+    "saving": "[KO] Saving..."
   },
   "components": {
     "title": "[KO] ADD COMPONENTS"

@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "PAINEL PERSONALIZÁVEL",
-    "live": "AO VIVO",
-    "widgets": "WIDGETS"
-  },
-  "buttons": {
-    "addWidget": "ADICIONAR WIDGET",
-    "saveLayout": "SALVAR LAYOUT",
-    "reset": "REINICIAR",
-    "help": "AJUDA"
-  },
   "widgets": {
     "loading": "Carregando...",
-    "error": "Erro",
     "globalIndices": "Índices Globais - Top 12",
     "forex": "Forex - Pares Principais",
     "crypto": "CRIPTOMOEDAS",
@@ -20,8 +8,6 @@
     "news": "NOTÍCIAS",
     "forum": "FÓRUM",
     "watchlist": "LISTA DE ASSISTIR",
-    "maritimeIntelligence": "Inteligência Marítima",
-    "unknown": "Tipo de widget desconhecido",
     "index": "ÍNDICE",
     "symbol": "SÍMBOLO",
     "price": "PREÇO",
@@ -38,41 +24,22 @@
     "pair": "PAR",
     "rate": "AVALIAR",
     "commodity": "MERCADORIA",
-    "globe3D": "GLOBO 3D",
-    "vessels": "NAVIOS",
-    "routes": "ROTAS",
-    "vol24h": "VOL 24H",
-    "topTradeCorridors": "PRINCIPAIS CORREDORES COMERCIAIS",
-    "ships": "navios",
-    "marketNews": "Notícias do mercado",
-    "secPressReleases": "Comunicados de imprensa da SEC",
-    "cryptoNews": "Notícias criptográficas",
-    "trendingForum": "Fórum de tendências",
-    "techStocks": "Ações de tecnologia"
-  },
-  "tips": {
-    "drag": "Arraste os widgets para reorganizar",
-    "resize": "Redimensionar do canto inferior direito",
-    "remove": "Remova widgets com o botão X",
-    "responsive": "Layout responsivo – usa largura total"
-  },
-  "loading": {
-    "title": "Inicializando o painel",
-    "description": "Configurando o cache do banco de dados para carregamento mais rápido de dados...",
-    "note": "Isso levará apenas um momento no primeiro lançamento"
-  },
-  "empty": {
-    "noWidgets": "Nenhum widget no painel",
-    "addFirst": "ADICIONE SEU PRIMEIRO WIDGET"
-  },
-  "status": {
-    "version": "Painel personalizável Fincept v2.0.0 | Arrastar e soltar espaço de trabalho",
-    "layout": "Disposição",
-    "custom": "Personalizado",
-    "empty": "Vazio",
-    "active": "ATIVO",
-    "cache": "Cache: ATIVADO",
-    "label": "Status"
+    "noActiveMarkets": "[PT] No active markets found",
+    "indicator": "[PT] INDICATOR",
+    "value": "[PT] VALUE",
+    "chg": "[PT] CHG",
+    "overallRisk": "[PT] OVERALL RISK",
+    "openEconomicsTab": "[PT] Open Economics Tab",
+    "openGeopoliticsTab": "[PT] Open Geopolitics Tab",
+    "openPolymarketTab": "[PT] Open Polymarket Tab",
+    "noPortfolioFound": "[PT] No portfolio found",
+    "createPortfolioHint": "[PT] Create one in Portfolio tab",
+    "openPortfolioTab": "[PT] Open Portfolio Tab",
+    "action": "[PT] ACTION",
+    "markets": "[PT] MARKETS",
+    "performanceTracker": "[PT] PERFORMANCE TRACKER",
+    "totalPnL": "[PT] TOTAL P&L",
+    "viewDetailedAnalytics": "[PT] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "Layout do painel salvo!",

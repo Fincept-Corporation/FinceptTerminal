@@ -3,9 +3,7 @@
   "header": {
     "load": "[ZH] Load",
     "save": "[ZH] Save",
-    "saving": "[ZH] Saving...",
-    "exportPdf": "[ZH] Export PDF",
-    "generating": "[ZH] Generating..."
+    "saving": "[ZH] Saving..."
   },
   "components": {
     "title": "[ZH] ADD COMPONENTS"

@@ -10,7 +10,8 @@
     "tabLayout": "탭 레이아웃",
     "appearance": "모습",
     "language": "언어",
-    "storage": "스토리지 및 캐시"
+    "storage": "스토리지 및 캐시",
+    "notifications": "[KO] Notifications"
   },
   "credentials": {
     "title": "API 자격 증명 관리",
@@ -46,7 +47,31 @@
     "saveConfig": "구성 저장",
     "reset": "다시 놓기",
     "saveSuccess": "터미널 모양 및 키 매핑이 성공적으로 저장되었습니다.",
-    "resetSuccess": "기본 모양 및 키 매핑으로 재설정"
+    "resetSuccess": "기본 모양 및 키 매핑으로 재설정",
+    "customColors": "[KO] Custom Colors",
+    "customColorsTitle": "[KO] CUSTOM COLORS",
+    "colorPrimary": "[KO] Primary",
+    "colorSecondary": "[KO] Secondary",
+    "colorSuccess": "[KO] Success",
+    "colorAlert": "[KO] Alert",
+    "colorWarning": "[KO] Warning",
+    "colorInfo": "[KO] Info",
+    "colorAccent": "[KO] Accent",
+    "colorPurple": "[KO] Purple",
+    "colorText": "[KO] Text",
+    "colorTextMuted": "[KO] Text Muted",
+    "colorBackground": "[KO] Background",
+    "colorPanel": "[KO] Panel",
+    "layoutSpacing": "[KO] LAYOUT & SPACING",
+    "contentDensity": "[KO] CONTENT DENSITY",
+    "borderRadius": "[KO] BORDER RADIUS",
+    "borderStyle": "[KO] BORDER STYLE",
+    "lineHeight": "[KO] LINE HEIGHT",
+    "letterSpacing": "[KO] LETTER SPACING",
+    "effects": "[KO] EFFECTS",
+    "widgetOpacity": "[KO] WIDGET OPACITY",
+    "enableGlow": "[KO] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[KO] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "주식 기호 데이터베이스",
@@ -65,17 +90,8 @@
     "tip": "팁: 탭을 끌어서 순서를 바꾸세요. 화살표 버튼을 사용하여 헤더와 메뉴 섹션 간에 탭을 이동하세요. 변경 사항은 자동으로 저장됩니다."
   },
   "llm": {
-    "title": "LLM 구성",
-    "description": "AI 모델 및 공급자 구성",
     "connected": "연결됨",
-    "disconnected": "연결이 끊김",
-    "provider": "AI 제공자",
-    "globalSettings": "글로벌 AI 설정",
-    "temperature": "온도",
-    "maxTokens": "최대 토큰",
-    "systemPrompt": "시스템 프롬프트",
-    "modelLibrary": "모델 라이브러리",
-    "multiModelConfigs": "다중 모델 구성"
+    "disconnected": "연결이 끊김"
   },
   "buttons": {
     "save": "구하다",
@@ -86,5 +102,18 @@
     "database": "데이터베이스: SQLite",
     "storage": "저장: 파일 기반",
     "secureStorage": "모든 데이터는 fincept_terminal.db에 안전하게 저장됩니다."
+  },
+  "notifications": {
+    "title": "[KO] NOTIFICATION PROVIDERS",
+    "description": "[KO] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[KO] Event Filters",
+    "eventFilterDescription": "[KO] Choose which notification types to forward to external providers.",
+    "providers": "[KO] Providers",
+    "enabled": "[KO] Enabled",
+    "disabled": "[KO] Disabled",
+    "testButton": "[KO] TEST",
+    "testSuccess": "[KO] Test notification sent successfully!",
+    "testFailed": "[KO] Failed to send test notification. Check your configuration.",
+    "saved": "[KO] Configuration saved"
   }
 }

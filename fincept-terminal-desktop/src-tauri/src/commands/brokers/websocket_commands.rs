@@ -397,11 +397,6 @@ pub async fn angelone_ws_unsubscribe(symbol: String, mode: String) -> Result<Api
 // ANGEL ONE AUTO-CONNECT HELPER (called from algo_trading deploy)
 // ============================================================================
 
-/// Check if Angel One WebSocket is connected
-pub async fn is_angelone_ws_connected() -> bool {
-    ANGELONE_WS.read().await.is_some()
-}
-
 /// Connect Angel One WebSocket using stored credentials (no frontend needed).
 /// Called from deploy_algo_strategy when provider is "angelone".
 /// Returns Ok(true) if connected (or already connected), Err on failure.

@@ -10,9 +10,6 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use flate2::read::GzDecoder;
-use std::io::Read;
 
 use super::common::{ApiResponse, TokenExchangeResponse, OrderPlaceResponse};
 use crate::database::pool::get_db;
@@ -20,7 +17,6 @@ use crate::database::pool::get_db;
 // Upstox API Configuration
 const UPSTOX_API_BASE_V2: &str = "https://api.upstox.com/v2";
 const UPSTOX_API_BASE_V3: &str = "https://api.upstox.com/v3";
-const UPSTOX_MASTER_CONTRACT_URL: &str = "https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz";
 
 fn create_upstox_headers(access_token: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
@@ -740,109 +736,6 @@ fn init_upstox_symbols_table() -> Result<(), String> {
     ).map_err(|e| e.to_string())?;
 
     Ok(())
-}
-
-/// Download and store Upstox master contract (async version)
-async fn download_and_store_upstox_symbols() -> Result<(i64, HashMap<String, i64>), String> {
-    eprintln!("[upstox_symbols] Downloading master contract...");
-
-    // Download gzipped JSON
-    let client = reqwest::Client::new();
-    let response = client
-        .get(UPSTOX_MASTER_CONTRACT_URL)
-        .send()
-        .await
-        .map_err(|e| format!("Download failed: {}", e))?;
-
-    let bytes = response.bytes().await.map_err(|e| format!("Failed to read response: {}", e))?;
-
-    // Decompress
-    let mut decoder = GzDecoder::new(&bytes[..]);
-    let mut json_str = String::new();
-    decoder.read_to_string(&mut json_str).map_err(|e| format!("Decompression failed: {}", e))?;
-
-    // Parse JSON
-    let instruments: Vec<Value> = serde_json::from_str(&json_str)
-        .map_err(|e| format!("JSON parse failed: {}", e))?;
-
-    eprintln!("[upstox_symbols] Parsed {} instruments", instruments.len());
-
-    // Initialize table
-    init_upstox_symbols_table()?;
-
-    let db = get_db().map_err(|e| e.to_string())?;
-
-    // Clear existing data
-    db.execute("DELETE FROM upstox_symbols", []).map_err(|e| e.to_string())?;
-
-    let mut segment_counts: HashMap<String, i64> = HashMap::new();
-    let mut total = 0i64;
-
-    // Exchange mapping (Upstox segment → standard exchange)
-    let exchange_map: HashMap<&str, &str> = [
-        ("NSE_EQ", "NSE"),
-        ("BSE_EQ", "BSE"),
-        ("NSE_FO", "NFO"),
-        ("BSE_FO", "BFO"),
-        ("MCX_FO", "MCX"),
-        ("NCD_FO", "CDS"),
-        ("NSE_INDEX", "NSE_INDEX"),
-        ("BSE_INDEX", "BSE_INDEX"),
-    ].iter().cloned().collect();
-
-    for inst in instruments {
-        let segment = inst.get("segment").and_then(|s| s.as_str()).unwrap_or("");
-
-        // Skip NSE_COM
-        if segment == "NSE_COM" {
-            continue;
-        }
-
-        let exchange = exchange_map.get(segment).copied().unwrap_or(segment);
-
-        let instrument_key = inst.get("instrument_key").and_then(|v| v.as_str()).unwrap_or("");
-        let trading_symbol = inst.get("trading_symbol").and_then(|v| v.as_str()).unwrap_or("");
-        let name = inst.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        let instrument_type = inst.get("instrument_type").and_then(|v| v.as_str()).unwrap_or("");
-        let lot_size = inst.get("lot_size").and_then(|v| v.as_i64()).unwrap_or(1) as i32;
-        let tick_size = inst.get("tick_size").and_then(|v| v.as_f64()).unwrap_or(0.05);
-        let strike = inst.get("strike_price").and_then(|v| v.as_f64());
-
-        // Convert expiry from milliseconds to date string
-        let expiry: Option<String> = inst.get("expiry")
-            .and_then(|v| v.as_i64())
-            .and_then(|ms| {
-                let secs = ms / 1000;
-                chrono::DateTime::from_timestamp(secs, 0)
-                    .map(|dt| dt.format("%d-%b-%y").to_string().to_uppercase())
-            });
-
-        if db.execute(
-            "INSERT OR REPLACE INTO upstox_symbols
-             (instrument_key, trading_symbol, name, exchange, segment, instrument_type, lot_size, tick_size, expiry, strike)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            rusqlite::params![instrument_key, trading_symbol, name, exchange, segment, instrument_type, lot_size, tick_size, expiry, strike],
-        ).is_ok() {
-            total += 1;
-            *segment_counts.entry(segment.to_string()).or_insert(0) += 1;
-        }
-    }
-
-    // Update metadata
-    let now = chrono::Utc::now().timestamp();
-    db.execute(
-        "INSERT OR REPLACE INTO upstox_metadata (key, value) VALUES ('last_updated', ?1)",
-        rusqlite::params![now.to_string()],
-    ).map_err(|e| e.to_string())?;
-
-    db.execute(
-        "INSERT OR REPLACE INTO upstox_metadata (key, value) VALUES ('symbol_count', ?1)",
-        rusqlite::params![total.to_string()],
-    ).map_err(|e| e.to_string())?;
-
-    eprintln!("[upstox_symbols] Stored {} symbols", total);
-
-    Ok((total, segment_counts))
 }
 
 fn search_upstox_symbols(keyword: &str, exchange: Option<&str>, limit: i32) -> Result<Vec<UpstoxSymbol>, String> {

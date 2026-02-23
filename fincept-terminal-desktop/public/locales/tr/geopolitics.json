@@ -1,6 +1,66 @@
 {
-  "title": "JEOPOLİTİK",
   "messages": {
-    "loading": "Veri yükleniyor..."
+    "retry": "[TR] RETRY"
+  },
+  "header": {
+    "prefix": "[TR] GEO>",
+    "title": "[TR] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[TR] EVENTS"
+  },
+  "status": {
+    "stale": "[TR] STALE",
+    "loading": "[TR] LOADING...",
+    "error": "[TR] ERROR:"
+  },
+  "filters": {
+    "country": "[TR] Country...",
+    "cities": "[TR] Cities...",
+    "category": "[TR] Category...",
+    "apply": "[TR] APPLY",
+    "clear": "[TR] CLEAR",
+    "clearAllCities": "[TR] Clear all cities",
+    "selectedLabel": "[TR] Selected:"
+  },
+  "panel": {
+    "title": "[TR] INFO PANEL",
+    "expand": "[TR] Expand panel",
+    "collapse": "[TR] Collapse panel",
+    "eventsLoaded": "[TR] EVENTS LOADED",
+    "onMapVisualization": "[TR] on map visualization",
+    "topCategories": "[TR] TOP CATEGORIES",
+    "topCountries": "[TR] TOP COUNTRIES",
+    "eventDetails": "[TR] EVENT DETAILS",
+    "close": "[TR] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[TR] Country:",
+    "city": "[TR] City:",
+    "keywords": "[TR] Keywords:",
+    "coords": "[TR] Coords:",
+    "date": "[TR] Date:",
+    "source": "[TR] Source:",
+    "viewArticle": "[TR] View Article"
+  },
+  "legend": {
+    "title": "[TR] EVENT CATEGORIES",
+    "armedConflict": "[TR] Armed Conflict",
+    "terrorism": "[TR] Terrorism",
+    "protests": "[TR] Protests",
+    "civilianViolence": "[TR] Civilian Violence",
+    "riots": "[TR] Riots",
+    "politicalViolence": "[TR] Political Violence",
+    "crisis": "[TR] Crisis",
+    "explosions": "[TR] Explosions",
+    "strategic": "[TR] Strategic",
+    "unclassified": "[TR] Unclassified"
+  },
+  "footer": {
+    "tabName": "[TR] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[TR] EVENTS",
+    "labelEngine": "[TR] ENGINE",
+    "engineValue": "[TR] DECK.GL v9.2",
+    "labelSource": "[TR] SOURCE",
+    "sourceValue": "[TR] NEWS-EVENTS API",
+    "labelSelected": "[TR] SELECTED"
   }
 }

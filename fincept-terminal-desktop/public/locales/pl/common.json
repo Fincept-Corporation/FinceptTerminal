@@ -1,25 +1,4 @@
 {
-  "appName": "Fincept Terminal",
   "loading": "Ładowanie...",
-  "error": "Błąd",
-  "success": "Sukces",
-  "save": "Zapisz",
-  "cancel": "Anuluj",
-  "delete": "Usuń",
-  "edit": "Edytuj",
-  "add": "Dodaj",
-  "search": "Szukaj",
-  "filter": "Filtruj",
-  "back": "Wstecz",
-  "next": "Dalej",
-  "previous": "Poprzedni",
-  "submit": "Wyślij",
-  "close": "Zamknij",
-  "open": "Otwórz",
-  "yes": "Tak",
-  "no": "Nie",
-  "ok": "OK",
-  "confirm": "Potwierdź",
-  "language": "Język",
-  "selectLanguage": "Wybierz język"
+  "settings": "[PL] Settings"
 }

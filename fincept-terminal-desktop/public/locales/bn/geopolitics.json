@@ -1,6 +1,66 @@
 {
-  "title": "ভূ-রাজনীতি",
   "messages": {
-    "loading": "ডেটা লোড হচ্ছে..."
+    "retry": "[BN] RETRY"
+  },
+  "header": {
+    "prefix": "[BN] GEO>",
+    "title": "[BN] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[BN] EVENTS"
+  },
+  "status": {
+    "stale": "[BN] STALE",
+    "loading": "[BN] LOADING...",
+    "error": "[BN] ERROR:"
+  },
+  "filters": {
+    "country": "[BN] Country...",
+    "cities": "[BN] Cities...",
+    "category": "[BN] Category...",
+    "apply": "[BN] APPLY",
+    "clear": "[BN] CLEAR",
+    "clearAllCities": "[BN] Clear all cities",
+    "selectedLabel": "[BN] Selected:"
+  },
+  "panel": {
+    "title": "[BN] INFO PANEL",
+    "expand": "[BN] Expand panel",
+    "collapse": "[BN] Collapse panel",
+    "eventsLoaded": "[BN] EVENTS LOADED",
+    "onMapVisualization": "[BN] on map visualization",
+    "topCategories": "[BN] TOP CATEGORIES",
+    "topCountries": "[BN] TOP COUNTRIES",
+    "eventDetails": "[BN] EVENT DETAILS",
+    "close": "[BN] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[BN] Country:",
+    "city": "[BN] City:",
+    "keywords": "[BN] Keywords:",
+    "coords": "[BN] Coords:",
+    "date": "[BN] Date:",
+    "source": "[BN] Source:",
+    "viewArticle": "[BN] View Article"
+  },
+  "legend": {
+    "title": "[BN] EVENT CATEGORIES",
+    "armedConflict": "[BN] Armed Conflict",
+    "terrorism": "[BN] Terrorism",
+    "protests": "[BN] Protests",
+    "civilianViolence": "[BN] Civilian Violence",
+    "riots": "[BN] Riots",
+    "politicalViolence": "[BN] Political Violence",
+    "crisis": "[BN] Crisis",
+    "explosions": "[BN] Explosions",
+    "strategic": "[BN] Strategic",
+    "unclassified": "[BN] Unclassified"
+  },
+  "footer": {
+    "tabName": "[BN] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[BN] EVENTS",
+    "labelEngine": "[BN] ENGINE",
+    "engineValue": "[BN] DECK.GL v9.2",
+    "labelSource": "[BN] SOURCE",
+    "sourceValue": "[BN] NEWS-EVENTS API",
+    "labelSelected": "[BN] SELECTED"
   }
 }

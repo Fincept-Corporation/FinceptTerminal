@@ -1,29 +1,60 @@
 {
-  "title": "কোড এডিটর",
   "header": {
-    "packages": "প্যাকেজ"
+    "finscriptIde": "[BN] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "নতুন ফাইল",
-    "new": "নতুন",
-    "open": "খুলুন",
-    "save": "সংরক্ষণ",
     "run": "কোড চালান",
     "running": "চলছে...",
-    "runAll": "সব চালান",
-    "history": "ইতিহাস"
+    "toggleExplorer": "[BN] Toggle Explorer (Ctrl+B)",
+    "openFile": "[BN] Open File",
+    "saveShortcut": "[BN] Save (Ctrl+S)",
+    "findShortcut": "[BN] Find (Ctrl+F)",
+    "runShortcut": "[BN] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "জুপিটার নোটবুক",
     "finscript": "ফিনস্ক্রিপ্ট এডিটর"
   },
-  "packages": {
-    "clickToLoad": "প্যাকেজ লোড করতে ক্লিক করুন...",
-    "load": "প্যাকেজ লোড করুন"
+  "explorer": {
+    "title": "[BN] EXPLORER",
+    "openFiles": "[BN] OPEN FILES",
+    "examples": "[BN] EXAMPLES",
+    "runHistory": "[BN] RUN HISTORY",
+    "finscriptEngine": "[BN] FinScript Engine"
   },
-  "history": {
-    "title": "নোটবুক ইতিহাস",
-    "loading": "ইতিহাস লোড হচ্ছে...",
-    "empty": "এখনো কোনো নোটবুক ইতিহাস নেই"
+  "output": {
+    "title": "[BN] OUTPUT",
+    "success": "[BN] SUCCESS",
+    "error": "[BN] ERROR",
+    "executing": "[BN] EXECUTING FINSCRIPT...",
+    "noOutput": "[BN] No output yet",
+    "pressToRun": "[BN] Press Ctrl+Enter to run",
+    "completed": "[BN] COMPLETED",
+    "failed": "[BN] FAILED",
+    "signals": "[BN] signals",
+    "clear": "[BN] CLEAR",
+    "errors": "[BN] ERRORS",
+    "signalsSection": "[BN] SIGNALS",
+    "outputSection": "[BN] OUTPUT",
+    "charts": "[BN] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[BN] OHLC",
+    "histogram": "[BN] Histogram",
+    "line": "[BN] Line",
+    "points": "[BN] points"
+  },
+  "statusBar": {
+    "modified": "[BN] MODIFIED",
+    "showOutput": "[BN] SHOW OUTPUT",
+    "encoding": "[BN] UTF-8",
+    "spaces": "[BN] 4 Spaces",
+    "runShortcut": "[BN] Ctrl+Enter: Run",
+    "lines": "[BN] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[BN] Close file without saving?",
+    "unsavedChanges": "[BN] You have unsaved changes."
   }
 }

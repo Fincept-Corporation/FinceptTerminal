@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "DOSTOSOWALNY PANEL ROZDZIELNY",
-    "live": "NA ŻYWO",
-    "widgets": "WIDŻETY"
-  },
-  "buttons": {
-    "addWidget": "DODAJ WIDŻET",
-    "saveLayout": "ZAPISZ UKŁAD",
-    "reset": "NASTAWIĆ",
-    "help": "POMOC"
-  },
   "widgets": {
     "loading": "Załadunek...",
-    "error": "Błąd",
     "globalIndices": "Globalne indeksy - Top 12",
     "forex": "Forex – główne pary",
     "crypto": "KRYPTOWALUTY",
@@ -20,8 +8,6 @@
     "news": "AKTUALNOŚCI",
     "forum": "FORUM",
     "watchlist": "LISTA OBSERWOWANYCH",
-    "maritimeIntelligence": "Wywiad Morski",
-    "unknown": "Nieznany typ widżetu",
     "index": "INDEKS",
     "symbol": "SYMBOL",
     "price": "CENA",
@@ -38,41 +24,22 @@
     "pair": "PARA",
     "rate": "WSKAŹNIK",
     "commodity": "TOWAR",
-    "globe3D": "GLOB 3D",
-    "vessels": "STATKI",
-    "routes": "TRASY",
-    "vol24h": "TOM 24H",
-    "topTradeCorridors": "NAJLEPSZE KORYTARZE HANDLOWE",
-    "ships": "statki",
-    "marketNews": "Wiadomości rynkowe",
-    "secPressReleases": "Komunikaty prasowe SEC",
-    "cryptoNews": "Wiadomości kryptograficzne",
-    "trendingForum": "Forum trendów",
-    "techStocks": "Akcje technologiczne"
-  },
-  "tips": {
-    "drag": "Przeciągnij widżety, aby zmienić ich kolejność",
-    "resize": "Zmień rozmiar od prawego dolnego rogu",
-    "remove": "Usuń widżety za pomocą przycisku X",
-    "responsive": "Układ responsywny - wykorzystuje całą szerokość"
-  },
-  "loading": {
-    "title": "Inicjowanie pulpitu nawigacyjnego",
-    "description": "Konfigurowanie pamięci podręcznej bazy danych w celu szybszego ładowania danych...",
-    "note": "Przy pierwszym uruchomieniu zajmie to tylko chwilę"
-  },
-  "empty": {
-    "noWidgets": "Brak widżetów na desce rozdzielczej",
-    "addFirst": "DODAJ SWOJ PIERWSZY WIDŻET"
-  },
-  "status": {
-    "version": "Konfigurowalny pulpit nawigacyjny Fincept v2.0.0 | Przeciągnij i upuść obszar roboczy",
-    "layout": "Układ",
-    "custom": "Zwyczaj",
-    "empty": "Pusty",
-    "active": "AKTYWNY",
-    "cache": "Pamięć podręczna: WŁĄCZONA",
-    "label": "Status"
+    "noActiveMarkets": "[PL] No active markets found",
+    "indicator": "[PL] INDICATOR",
+    "value": "[PL] VALUE",
+    "chg": "[PL] CHG",
+    "overallRisk": "[PL] OVERALL RISK",
+    "openEconomicsTab": "[PL] Open Economics Tab",
+    "openGeopoliticsTab": "[PL] Open Geopolitics Tab",
+    "openPolymarketTab": "[PL] Open Polymarket Tab",
+    "noPortfolioFound": "[PL] No portfolio found",
+    "createPortfolioHint": "[PL] Create one in Portfolio tab",
+    "openPortfolioTab": "[PL] Open Portfolio Tab",
+    "action": "[PL] ACTION",
+    "markets": "[PL] MARKETS",
+    "performanceTracker": "[PL] PERFORMANCE TRACKER",
+    "totalPnL": "[PL] TOTAL P&L",
+    "viewDetailedAnalytics": "[PL] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "Układ pulpitu nawigacyjnego został zapisany!",

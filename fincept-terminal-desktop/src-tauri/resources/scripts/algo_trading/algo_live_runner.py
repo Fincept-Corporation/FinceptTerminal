@@ -52,16 +52,41 @@ TIMEFRAME_SECONDS = {
 }
 
 
-def load_strategy(db_path: str, strategy_id: str) -> dict:
+MAX_ORDER_VALUE_WARNING = 1_000_000  # Warn if order value exceeds this
+
+
+def _db_execute_with_retry(conn, sql, params=(), retries=3, commit=True):
+    """Execute a DB statement with retry logic for 'database is locked' errors."""
+    for attempt in range(retries):
+        try:
+            conn.execute(sql, params)
+            if commit:
+                conn.commit()
+            return
+        except sqlite3.OperationalError as e:
+            if 'locked' in str(e).lower() and attempt < retries - 1:
+                log.warning(f"  DB locked, retry {attempt + 1}/{retries}...")
+                time.sleep(0.1 * (attempt + 1))
+            else:
+                raise
+
+
+def open_db_connection(db_path: str):
+    """Open a shared DB connection with WAL mode for concurrent access."""
+    conn = sqlite3.connect(db_path, timeout=10)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
+
+def load_strategy(conn, strategy_id: str) -> dict:
     """Load strategy conditions from algo_strategies table."""
-    conn = sqlite3.connect(db_path)
     row = conn.execute(
         "SELECT entry_conditions, exit_conditions, entry_logic, exit_logic, "
         "stop_loss, take_profit, trailing_stop, trailing_stop_type "
         "FROM algo_strategies WHERE id = ?",
         (strategy_id,)
     ).fetchone()
-    conn.close()
 
     if not row:
         return None
@@ -78,27 +103,21 @@ def load_strategy(db_path: str, strategy_id: str) -> dict:
     }
 
 
-def update_deployment_status(db_path: str, deploy_id: str, status: str, error: str = None):
+def update_deployment_status(conn, deploy_id: str, status: str, error: str = None):
     """Update deployment status in DB."""
-    conn = sqlite3.connect(db_path)
     if error:
-        conn.execute(
+        _db_execute_with_retry(conn,
             "UPDATE algo_deployments SET status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (status, error, deploy_id)
-        )
+            (status, error, deploy_id))
     else:
-        conn.execute(
+        _db_execute_with_retry(conn,
             "UPDATE algo_deployments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (status, deploy_id)
-        )
-    conn.commit()
-    conn.close()
+            (status, deploy_id))
 
 
-def update_metrics(db_path: str, deploy_id: str, metrics: dict):
+def update_metrics(conn, deploy_id: str, metrics: dict):
     """Update algo_metrics table."""
-    conn = sqlite3.connect(db_path)
-    conn.execute(
+    _db_execute_with_retry(conn,
         """INSERT INTO algo_metrics (deployment_id, total_pnl, unrealized_pnl, total_trades,
            win_rate, max_drawdown, current_position_qty, current_position_side,
            current_position_entry, updated_at)
@@ -116,39 +135,28 @@ def update_metrics(db_path: str, deploy_id: str, metrics: dict):
         (deploy_id, metrics.get('total_pnl', 0), metrics.get('unrealized_pnl', 0),
          metrics.get('total_trades', 0), metrics.get('win_rate', 0),
          metrics.get('max_drawdown', 0), metrics.get('current_position_qty', 0),
-         metrics.get('current_position_side', ''), metrics.get('current_position_entry', 0))
-    )
-    conn.commit()
-    conn.close()
+         metrics.get('current_position_side', ''), metrics.get('current_position_entry', 0)))
 
 
-def record_trade(db_path: str, deploy_id: str, symbol: str, side: str,
+def record_trade(conn, deploy_id: str, symbol: str, side: str,
                  quantity: float, price: float, pnl: float, reason: str):
     """Record a trade in algo_trades table."""
     trade_id = f"trade-{uuid.uuid4()}"
-    conn = sqlite3.connect(db_path)
-    conn.execute(
+    _db_execute_with_retry(conn,
         "INSERT INTO algo_trades (id, deployment_id, symbol, side, quantity, price, pnl, signal_reason) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (trade_id, deploy_id, symbol, side, quantity, price, pnl, reason)
-    )
-    conn.commit()
-    conn.close()
+        (trade_id, deploy_id, symbol, side, quantity, price, pnl, reason))
     return trade_id
 
 
-def create_order_signal(db_path: str, deploy_id: str, symbol: str, side: str,
+def create_order_signal(conn, deploy_id: str, symbol: str, side: str,
                         quantity: float, order_type: str = 'MARKET', price: float = None):
     """Write an order signal for Rust to execute (live mode)."""
     signal_id = f"signal-{uuid.uuid4()}"
-    conn = sqlite3.connect(db_path)
-    conn.execute(
+    _db_execute_with_retry(conn,
         "INSERT INTO algo_order_signals (id, deployment_id, symbol, side, quantity, order_type, price, status) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')",
-        (signal_id, deploy_id, symbol, side, quantity, order_type, price)
-    )
-    conn.commit()
-    conn.close()
+        (signal_id, deploy_id, symbol, side, quantity, order_type, price))
     return signal_id
 
 
@@ -157,20 +165,18 @@ def _normalize_symbol(s: str) -> str:
     return s.replace('/', '').replace('-', '').replace('_', '').replace(':', '').upper()
 
 
-def get_current_price(db_path: str, symbol: str) -> float:
+def get_current_price(conn, symbol: str) -> float:
     """Get latest price from strategy_price_cache.
 
     Tries exact match first, then normalized match to handle symbol format
     differences (e.g., BTC/USD vs BTCUSD, NSE:RELIANCE vs RELIANCE).
     """
-    conn = sqlite3.connect(db_path)
     # Try exact match first
     row = conn.execute(
         "SELECT price FROM strategy_price_cache WHERE symbol = ? ORDER BY updated_at DESC LIMIT 1",
         (symbol,)
     ).fetchone()
     if row:
-        conn.close()
         log.debug(f"  get_current_price({symbol}) = {row[0]} (exact match)")
         return row[0]
 
@@ -179,7 +185,6 @@ def get_current_price(db_path: str, symbol: str) -> float:
     rows = conn.execute(
         "SELECT symbol, price FROM strategy_price_cache ORDER BY updated_at DESC"
     ).fetchall()
-    conn.close()
 
     log.debug(f"  get_current_price({symbol}) exact miss. Normalized={norm}. Cache has {len(rows)} entries: {[(s, p) for s, p in rows[:10]]}")
 
@@ -250,18 +255,23 @@ def main():
     log.info(f"  pid        = {os.getpid()}")
     log.info("=" * 70)
 
+    # Open shared DB connection (WAL mode for concurrent Rust access)
+    conn = open_db_connection(args.db)
+    log.info("Shared DB connection opened (WAL mode)")
+
     # Load strategy
-    strategy = load_strategy(args.db, args.strategy_id)
+    strategy = load_strategy(conn, args.strategy_id)
     if not strategy:
         log.error(f"Strategy {args.strategy_id} NOT FOUND in DB!")
-        update_deployment_status(args.db, args.deploy_id, 'error', 'Strategy not found')
+        update_deployment_status(conn, args.deploy_id, 'error', 'Strategy not found')
+        conn.close()
         sys.exit(1)
 
     log.info(f"Strategy loaded OK. Entry conditions: {json.dumps(strategy['entry_conditions'], indent=2)}")
     log.info(f"Exit conditions: {json.dumps(strategy['exit_conditions'], indent=2)}")
     log.info(f"Risk: SL={strategy.get('stop_loss')}, TP={strategy.get('take_profit')}, TS={strategy.get('trailing_stop')}")
 
-    update_deployment_status(args.db, args.deploy_id, 'running')
+    update_deployment_status(conn, args.deploy_id, 'running')
 
     # Inject logic operators into condition lists
     entry_conds = strategy['entry_conditions']
@@ -293,14 +303,10 @@ def main():
                     log.warning(f"[loop#{loop_count}] Candle data insufficient: {len(df)} rows (need >=2) for {args.symbol}@{args.timeframe}")
                     # Dump what symbols exist in candle_cache
                     try:
-                        conn_debug = sqlite3.connect(args.db)
-                        syms = conn_debug.execute("SELECT DISTINCT symbol, timeframe, COUNT(*) FROM candle_cache GROUP BY symbol, timeframe").fetchall()
-                        conn_debug.close()
+                        syms = conn.execute("SELECT DISTINCT symbol, timeframe, COUNT(*) FROM candle_cache GROUP BY symbol, timeframe").fetchall()
                         log.warning(f"  candle_cache contents: {syms}")
                         # Also check strategy_price_cache for recent price updates
-                        conn_debug = sqlite3.connect(args.db)
-                        prices = conn_debug.execute("SELECT symbol, price, updated_at FROM strategy_price_cache ORDER BY updated_at DESC LIMIT 10").fetchall()
-                        conn_debug.close()
+                        prices = conn.execute("SELECT symbol, price, updated_at FROM strategy_price_cache ORDER BY updated_at DESC LIMIT 10").fetchall()
                         log.warning(f"  strategy_price_cache recent entries: {prices}")
                     except Exception as dbg_e:
                         log.warning(f"  could not read cache tables: {dbg_e}")
@@ -322,7 +328,7 @@ def main():
                 log.info(f"[loop#{loop_count}] NEW candle detected! open_time={newest_time}, total candles={len(df)}")
             log.debug(f"  Last 3 candles: {df[['open_time','open','high','low','close','volume']].tail(3).to_string()}")
 
-            current_price = get_current_price(args.db, args.symbol)
+            current_price = get_current_price(conn, args.symbol)
             price_source = "price_cache"
             if current_price <= 0:
                 current_price = float(df['close'].iloc[-1])
@@ -348,10 +354,10 @@ def main():
                         else (position['entry'] - current_price) * qty
 
                     if args.mode == 'paper':
-                        record_trade(args.db, args.deploy_id, args.symbol, 'SELL' if position['side'] == 'BUY' else 'BUY',
+                        record_trade(conn, args.deploy_id, args.symbol, 'SELL' if position['side'] == 'BUY' else 'BUY',
                                      abs(position['qty']), current_price, pnl, risk_exit)
                     else:
-                        create_order_signal(args.db, args.deploy_id, args.symbol,
+                        create_order_signal(conn, args.deploy_id, args.symbol,
                                             'SELL' if position['side'] == 'BUY' else 'BUY',
                                             abs(position['qty']))
 
@@ -382,12 +388,17 @@ def main():
                         'max_pnl_pct': 0,
                     }
 
+                    # Position size warning (#18)
+                    order_value = args.quantity * current_price
+                    if order_value > MAX_ORDER_VALUE_WARNING:
+                        log.warning(f"  HIGH ORDER VALUE: {args.quantity} x {current_price} = {order_value:.2f} (exceeds {MAX_ORDER_VALUE_WARNING})")
+
                     if args.mode == 'paper':
-                        record_trade(args.db, args.deploy_id, args.symbol, 'BUY',
+                        record_trade(conn, args.deploy_id, args.symbol, 'BUY',
                                      args.quantity, current_price, 0,
                                      f'entry_signal: {json.dumps([d.get("indicator", "") for d in entry_result.get("details", [])])}')
                     else:
-                        create_order_signal(args.db, args.deploy_id, args.symbol, 'BUY', args.quantity)
+                        create_order_signal(conn, args.deploy_id, args.symbol, 'BUY', args.quantity)
 
             else:
                 # In position: check exit conditions
@@ -406,12 +417,12 @@ def main():
                         else (position['entry'] - current_price) * qty
 
                     if args.mode == 'paper':
-                        record_trade(args.db, args.deploy_id, args.symbol,
+                        record_trade(conn, args.deploy_id, args.symbol,
                                      'SELL' if position['side'] == 'BUY' else 'BUY',
                                      abs(position['qty']), current_price, pnl,
                                      f'exit_signal: {json.dumps([d.get("indicator", "") for d in exit_result.get("details", [])])}')
                     else:
-                        create_order_signal(args.db, args.deploy_id, args.symbol,
+                        create_order_signal(conn, args.deploy_id, args.symbol,
                                             'SELL' if position['side'] == 'BUY' else 'BUY',
                                             abs(position['qty']))
 
@@ -439,7 +450,7 @@ def main():
 
             win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
 
-            update_metrics(args.db, args.deploy_id, {
+            update_metrics(conn, args.deploy_id, {
                 'total_pnl': total_pnl,
                 'unrealized_pnl': unrealized,
                 'total_trades': total_trades,
@@ -459,8 +470,9 @@ def main():
             log.error(f"[loop#{loop_count}] EXCEPTION: {e}", exc_info=True)
             time.sleep(check_interval)
 
-    # Shutdown: update status
-    update_deployment_status(args.db, args.deploy_id, 'stopped')
+    # Shutdown: update status and close DB connection
+    update_deployment_status(conn, args.deploy_id, 'stopped')
+    conn.close()
     log.info(f"Deployment {args.deploy_id} STOPPED. Total trades={total_trades}, PnL={total_pnl:.2f}")
 
 

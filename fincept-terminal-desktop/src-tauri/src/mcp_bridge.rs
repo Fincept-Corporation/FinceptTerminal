@@ -37,8 +37,20 @@ pub fn get_or_start_bridge(app: AppHandle) -> u16 {
 /// Safe to call multiple times — only starts once.
 fn start_bridge(app: AppHandle) -> u16 {
     // Bind to random available port on loopback only
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind MCP bridge");
-    let port = listener.local_addr().expect("No local addr").port();
+    let listener = match TcpListener::bind("127.0.0.1:0") {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("[MCPBridge] Failed to bind: {}. MCP bridge disabled.", e);
+            return 0;
+        }
+    };
+    let port = match listener.local_addr() {
+        Ok(addr) => addr.port(),
+        Err(e) => {
+            eprintln!("[MCPBridge] Failed to get local addr: {}. MCP bridge disabled.", e);
+            return 0;
+        }
+    };
 
     // Store port globally
     BRIDGE_PORT.store(port, Ordering::Relaxed);
@@ -75,7 +87,14 @@ fn handle_connection(
     app: AppHandle,
 ) {
     // Read HTTP request line + headers
-    let mut reader = BufReader::new(stream.try_clone().expect("clone stream"));
+    let cloned = match stream.try_clone() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[MCPBridge] Failed to clone stream: {}", e);
+            return;
+        }
+    };
+    let mut reader = BufReader::new(cloned);
     let mut request_line = String::new();
     if reader.read_line(&mut request_line).is_err() {
         return;
@@ -110,7 +129,12 @@ fn handle_connection(
     let method = parts[0];
     let path = parts[1];
 
-    // Read body
+    // Read body (limit to 10 MB to prevent OOM from malicious Content-Length)
+    const MAX_BODY_SIZE: usize = 10 * 1024 * 1024;
+    if content_length > MAX_BODY_SIZE {
+        write_response(stream, 413, "Payload Too Large", b"{\"error\":\"body exceeds 10MB limit\"}");
+        return;
+    }
     let mut body = vec![0u8; content_length];
     if content_length > 0 {
         use std::io::Read;
@@ -186,10 +210,18 @@ fn handle_tool_call(
     // Economics tools (CEIC, central bank rates) can take 15-30s each.
     // We're on a std thread (not a tokio task), so we create a minimal runtime.
     let result = {
-        let rt = tokio::runtime::Builder::new_current_thread()
+        let rt = match tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .expect("mini runtime for MCP bridge");
+        {
+            Ok(rt) => rt,
+            Err(e) => {
+                eprintln!("[MCPBridge] Failed to create runtime: {}", e);
+                pending.remove(&id);
+                write_response(stream, 500, "Internal Server Error", b"{\"error\":\"runtime creation failed\"}");
+                return;
+            }
+        };
         rt.block_on(async {
             tokio::time::timeout(std::time::Duration::from_secs(90), rx).await
         })

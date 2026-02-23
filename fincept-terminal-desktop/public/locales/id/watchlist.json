@@ -1,25 +1,7 @@
 {
-  "title": "DAFTAR PANTAU",
-  "header": {
-    "export": "EKSPOR",
-    "updating": "MEMPERBARUI",
-    "live": "LANGSUNG"
-  },
   "sidebar": {
-    "groups": "GRUP DAFTAR PANTAU",
-    "new": "BARU",
     "noWatchlists": "Belum ada daftar pantau.",
     "clickNew": "Klik BARU untuk membuat.",
-    "stocks": "saham",
-    "marketMovers": "PENGGERAK PASAR",
-    "gainer": "NAIK",
-    "loser": "TURUN",
-    "volumeLeaders": "VOLUME TERTINGGI"
-  },
-  "emptyState": {
-    "selectWatchlist": "Pilih daftar pantau atau buat yang baru untuk memulai"
-  },
-  "list": {
-    "symbols": "Simbol"
+    "stocks": "saham"
   }
 }

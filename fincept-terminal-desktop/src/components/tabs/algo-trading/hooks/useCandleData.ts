@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
 import { getCandleCache } from '../services/algoTradingService';
+import type { CandleData } from '../types';
 
 export function useCandleData() {
-  const [candles, setCandles] = useState<unknown[]>([]);
+  const [candles, setCandles] = useState<CandleData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

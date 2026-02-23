@@ -9,13 +9,9 @@
   "percentChange": "%DEĞ",
   "high": "YÜKSEK",
   "low": "DÜŞÜK",
-  "loading": "Yükleniyor...",
   "noData": "Veri yok",
   "refresh": "YENİLE",
   "auto": "OTOMATİK",
   "on": "AÇIK",
-  "off": "KAPALI",
-  "lastUpdate": "SON GÜNCELLEME",
-  "updating": "GÜNCELLENİYOR",
-  "live": "CANLI"
+  "off": "KAPALI"
 }

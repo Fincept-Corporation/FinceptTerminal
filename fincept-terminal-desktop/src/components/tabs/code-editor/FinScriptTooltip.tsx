@@ -268,6 +268,80 @@ export const FINSCRIPT_FUNCTIONS: Record<string, {
     description: 'Print values to output console',
     example: 'print "Price:", round(last(close(AAPL)), 2)'
   },
+
+  // Risk & Portfolio Analytics
+  'sharpe': {
+    signature: 'sharpe(series, rf_rate?)',
+    description: 'Annualized Sharpe ratio — measures risk-adjusted return',
+    params: ['series: Price or returns series', 'rf_rate: Risk-free rate (default 0.0)'],
+    returns: 'Number',
+    example: 'sr = sharpe(close(AAPL))\nprint "Sharpe:", round(sr, 3)'
+  },
+  'sortino': {
+    signature: 'sortino(series, rf_rate?)',
+    description: 'Sortino ratio — like Sharpe but penalizes only downside volatility',
+    params: ['series: Price or returns series', 'rf_rate: Risk-free rate (default 0.0)'],
+    returns: 'Number',
+    example: 'so = sortino(close(AAPL))\nprint "Sortino:", round(so, 3)'
+  },
+  'max_drawdown': {
+    signature: 'max_drawdown(series)',
+    description: 'Maximum drawdown — largest peak-to-trough decline (0 to 1)',
+    params: ['series: Price or equity series'],
+    returns: 'Number',
+    example: 'dd = max_drawdown(close(AAPL))\nprint "Max DD:", round(dd * 100, 2), "%"'
+  },
+  'correlation': {
+    signature: 'correlation(series_a, series_b)',
+    description: 'Pearson correlation coefficient between two return series (-1 to 1)',
+    params: ['series_a: First price series', 'series_b: Second price series'],
+    returns: 'Number',
+    example: 'corr = correlation(close(AAPL), close(MSFT))\nprint "Correlation:", round(corr, 3)'
+  },
+  'beta': {
+    signature: 'beta(asset, benchmark)',
+    description: 'Beta coefficient — sensitivity of asset returns to benchmark',
+    params: ['asset: Asset price series', 'benchmark: Benchmark price series (e.g., SPY)'],
+    returns: 'Number',
+    example: 'b = beta(close(AAPL), close(SPY))\nprint "Beta:", round(b, 3)'
+  },
+  'returns': {
+    signature: 'returns(series)',
+    description: 'Daily returns series — percentage change between consecutive values',
+    params: ['series: Price series'],
+    returns: 'Series',
+    example: 'rets = returns(close(AAPL))\nprint "Last return:", round(last(rets) * 100, 2), "%"'
+  },
+
+  // Terminal Integration Functions
+  'watchlist_add': {
+    signature: 'watchlist_add(symbol, name?)',
+    description: 'Add a symbol to the terminal watchlist',
+    params: ['symbol: Ticker symbol to add', 'name: Watchlist name (default "default")'],
+    returns: 'Bool',
+    example: 'if rsi_now < 30 {\n  watchlist_add(AAPL, "Oversold")\n}'
+  },
+  'paper_trade': {
+    signature: 'paper_trade(symbol, side, quantity, price?)',
+    description: 'Submit a paper trade order to the terminal',
+    params: ['symbol: Ticker symbol', 'side: "buy" or "sell"', 'quantity: Number of shares', 'price: Limit price (optional, uses market if omitted)'],
+    returns: 'Bool',
+    example: 'if crossover(ema(AAPL, 12), ema(AAPL, 26)) {\n  paper_trade(AAPL, "buy", 100)\n}'
+  },
+  'alert_create': {
+    signature: 'alert_create(message, type?)',
+    description: 'Create a persistent alert in the terminal notification system',
+    params: ['message: Alert message text', 'type: "info", "warning", or "critical" (default "info")'],
+    returns: 'Bool',
+    example: 'if rsi_now > 80 {\n  alert_create("AAPL extremely overbought!", "warning")\n}'
+  },
+  'screener_scan': {
+    signature: 'screener_scan(symbols)',
+    description: 'Queue a batch screener scan across multiple symbols',
+    params: ['symbols: Array of ticker symbols to scan'],
+    returns: 'Bool',
+    example: 'tickers = ["AAPL", "MSFT", "GOOGL", "TSLA"]\nscreener_scan(tickers)'
+  },
 };
 
 interface FinScriptTooltipProps {

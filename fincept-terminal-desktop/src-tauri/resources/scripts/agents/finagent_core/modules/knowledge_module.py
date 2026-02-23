@@ -51,7 +51,7 @@ class KnowledgeModule:
     def __init__(
         self,
         name: str = "Knowledge Base",
-        embedder_provider: str = "openai",
+        embedder_provider: Optional[str] = None,
         embedder_model: Optional[str] = None,
         vectordb_type: str = "lancedb",
         vectordb_config: Optional[Dict[str, Any]] = None,
@@ -77,6 +77,14 @@ class KnowledgeModule:
             **kwargs: Additional configuration
         """
         self.name = name
+        # Resolve embedder provider from api_keys if not explicitly set
+        if not embedder_provider:
+            _keys = api_keys or {}
+            _preferred = ["fincept", "ollama", "anthropic", "google", "groq", "deepseek", "openai"]
+            embedder_provider = next(
+                (p for p in _preferred if _keys.get(p) or _keys.get(f"{p.upper()}_API_KEY")),
+                "openai"
+            )
         self.embedder_provider = embedder_provider
         self.embedder_model = embedder_model
         self.vectordb_type = vectordb_type
@@ -328,7 +336,7 @@ class KnowledgeModule:
         """
         module = cls(
             name=config.get("name", "Knowledge Base"),
-            embedder_provider=config.get("embedder", {}).get("provider", "openai"),
+            embedder_provider=config.get("embedder", {}).get("provider"),
             embedder_model=config.get("embedder", {}).get("model"),
             vectordb_type=config.get("vectordb", {}).get("type", "lancedb"),
             vectordb_config=config.get("vectordb", {}),

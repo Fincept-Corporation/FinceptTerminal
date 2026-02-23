@@ -10,7 +10,8 @@
     "tabLayout": "Макет вкладки",
     "appearance": "Зовнішній вигляд",
     "language": "Мова",
-    "storage": "Пам'ять і кеш"
+    "storage": "Пам'ять і кеш",
+    "notifications": "[UK] Notifications"
   },
   "credentials": {
     "title": "КЕРУВАННЯ ОБЛІКОВИМИ ДАННИМИ API",
@@ -46,7 +47,31 @@
     "saveConfig": "ЗБЕРЕГТИ КОНФІГУРАЦІЮ",
     "reset": "СКИДАННЯ",
     "saveSuccess": "Вигляд терміналу та зіставлення клавіш успішно збережено",
-    "resetSuccess": "Відновити зовнішній вигляд і зіставлення клавіш за замовчуванням"
+    "resetSuccess": "Відновити зовнішній вигляд і зіставлення клавіш за замовчуванням",
+    "customColors": "[UK] Custom Colors",
+    "customColorsTitle": "[UK] CUSTOM COLORS",
+    "colorPrimary": "[UK] Primary",
+    "colorSecondary": "[UK] Secondary",
+    "colorSuccess": "[UK] Success",
+    "colorAlert": "[UK] Alert",
+    "colorWarning": "[UK] Warning",
+    "colorInfo": "[UK] Info",
+    "colorAccent": "[UK] Accent",
+    "colorPurple": "[UK] Purple",
+    "colorText": "[UK] Text",
+    "colorTextMuted": "[UK] Text Muted",
+    "colorBackground": "[UK] Background",
+    "colorPanel": "[UK] Panel",
+    "layoutSpacing": "[UK] LAYOUT & SPACING",
+    "contentDensity": "[UK] CONTENT DENSITY",
+    "borderRadius": "[UK] BORDER RADIUS",
+    "borderStyle": "[UK] BORDER STYLE",
+    "lineHeight": "[UK] LINE HEIGHT",
+    "letterSpacing": "[UK] LETTER SPACING",
+    "effects": "[UK] EFFECTS",
+    "widgetOpacity": "[UK] WIDGET OPACITY",
+    "enableGlow": "[UK] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[UK] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "База даних символів акцій",
@@ -65,17 +90,8 @@
     "tip": "ПОРАДА. Перетягуйте вкладки, щоб змінити їх порядок. Використовуйте кнопки зі стрілками для переміщення вкладок між заголовками та розділами меню. Зміни зберігаються автоматично."
   },
   "llm": {
-    "title": "КОНФІГУРАЦІЯ LLM",
-    "description": "Налаштуйте моделі та постачальників AI",
     "connected": "ПІДКЛЮЧЕНО",
-    "disconnected": "ВІДКЛЮЧЕНО",
-    "provider": "ПОСТАЧАЛЬНИК ШІ",
-    "globalSettings": "ГЛОБАЛЬНІ НАЛАШТУВАННЯ ШІ",
-    "temperature": "ТЕМПЕРАТУРА",
-    "maxTokens": "МАКС. ЖЕТОНІВ",
-    "systemPrompt": "СИСТЕМНА ПІДКАЗКА",
-    "modelLibrary": "БІБЛІОТЕКА МОДЕЛЕЙ",
-    "multiModelConfigs": "Багатомодельні конфігурації"
+    "disconnected": "ВІДКЛЮЧЕНО"
   },
   "buttons": {
     "save": "ЗБЕРЕГТИ",
@@ -86,5 +102,18 @@
     "database": "База даних: SQLite",
     "storage": "Зберігання: файлове",
     "secureStorage": "Усі дані безпечно зберігаються у fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[UK] NOTIFICATION PROVIDERS",
+    "description": "[UK] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[UK] Event Filters",
+    "eventFilterDescription": "[UK] Choose which notification types to forward to external providers.",
+    "providers": "[UK] Providers",
+    "enabled": "[UK] Enabled",
+    "disabled": "[UK] Disabled",
+    "testButton": "[UK] TEST",
+    "testSuccess": "[UK] Test notification sent successfully!",
+    "testFailed": "[UK] Failed to send test notification. Check your configuration.",
+    "saved": "[UK] Configuration saved"
   }
 }

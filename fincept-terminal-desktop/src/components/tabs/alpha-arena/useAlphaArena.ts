@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { showConfirm } from '@/utils/notifications';
-import { sqliteService, type LLMGlobalSettings } from '@/services/core/sqliteService';
+import { sqliteService, buildApiKeysMap, type LLMGlobalSettings } from '@/services/core/sqliteService';
 import { withTimeout } from '@/services/core/apiUtils';
 import { validateString } from '@/services/core/validators';
 import { useCache, cacheKey } from '@/hooks/useCache';
@@ -22,8 +22,11 @@ import type {
   PerformanceSnapshot,
   CompetitionMode,
   AgentAdvancedConfig,
+  CompetitionType,
+  PolymarketMarketInfo,
 } from './types';
 import { DEFAULT_ADVANCED_CONFIG } from './types';
+import polymarketService from '@/services/polymarket/polymarketService';
 
 // Extended model type for Alpha Arena with API key and advanced config
 export interface AlphaArenaModel {
@@ -98,6 +101,19 @@ export function useAlphaArena() {
   const [initialCapital, setInitialCapital] = useState(10000);
   const [cycleInterval, setCycleInterval] = useState(150);
   const [exchangeId, setExchangeId] = useState('kraken');
+
+  // Competition type state (crypto vs polymarket)
+  const [competitionType, setCompetitionType] = useState<CompetitionType>('crypto');
+
+  // Polymarket-specific state
+  const [availablePolymarkets, setAvailablePolymarkets] = useState<PolymarketMarketInfo[]>([]);
+  const [selectedPolymarkets, setSelectedPolymarkets] = useState<PolymarketMarketInfo[]>([]);
+  const [polymarketCategory, setPolymarketCategory] = useState<string>('');
+  const [polymarketPrices, setPolymarketPrices] = useState<Record<string, number>>({});
+  const [loadingPolymarkets, setLoadingPolymarkets] = useState(false);
+  const [polymarketSortBy, setPolymarketSortBy] = useState<'volume' | 'liquidity' | 'end_date' | 'spread'>('volume');
+  const [polymarketMinVolume, setPolymarketMinVolume] = useState(0);
+  const [polymarketMinLiquidity, setPolymarketMinLiquidity] = useState(0);
 
   // Component mounted ref for async safety
   const mountedRef = useRef(true);
@@ -249,6 +265,105 @@ export function useAlphaArena() {
   }, [loadLLMConfigs]);
 
   // ===========================================================================
+  // Polymarket Markets Loading
+  // ===========================================================================
+
+  const loadPolymarkets = useCallback(async () => {
+    if (competitionType !== 'polymarket') return;
+    setLoadingPolymarkets(true);
+    try {
+      const result = await withTimeout(
+        polymarketService.getMarkets({
+          active: true,
+          limit: 50,
+          tag_id: polymarketCategory || undefined,
+        }),
+        15000
+      );
+      if (!mountedRef.current) return;
+
+      // Transform to PolymarketMarketInfo
+      let markets: PolymarketMarketInfo[] = (result || []).map((m: any) => {
+        let outcomes: string[] = [];
+        let outcomePrices: number[] = [];
+        let tokenIds: string[] = [];
+        try {
+          if (typeof m.outcomes === 'string') outcomes = JSON.parse(m.outcomes);
+          else if (Array.isArray(m.outcomes)) outcomes = m.outcomes;
+        } catch { /* ignore */ }
+        try {
+          if (typeof m.outcomePrices === 'string') outcomePrices = JSON.parse(m.outcomePrices).map(Number);
+          else if (Array.isArray(m.outcomePrices)) outcomePrices = m.outcomePrices.map(Number);
+        } catch { /* ignore */ }
+        try {
+          if (typeof m.clobTokenIds === 'string') tokenIds = JSON.parse(m.clobTokenIds);
+          else if (Array.isArray(m.clobTokenIds)) tokenIds = m.clobTokenIds;
+        } catch { /* ignore */ }
+
+        return {
+          id: m.id,
+          question: m.question,
+          description: m.description,
+          outcomes,
+          outcome_prices: outcomePrices,
+          token_ids: tokenIds,
+          volume: m.volumeNum ?? m.volume ?? 0,
+          liquidity: m.liquidityNum ?? m.liquidity ?? 0,
+          end_date: m.endDate,
+          image: m.image,
+          category: m.tags?.[0]?.label,
+        };
+      });
+
+      // Apply volume/liquidity filters
+      if (polymarketMinVolume > 0) {
+        markets = markets.filter(m => m.volume >= polymarketMinVolume);
+      }
+      if (polymarketMinLiquidity > 0) {
+        markets = markets.filter(m => m.liquidity >= polymarketMinLiquidity);
+      }
+
+      // Sort
+      markets.sort((a, b) => {
+        switch (polymarketSortBy) {
+          case 'volume': return b.volume - a.volume;
+          case 'liquidity': return b.liquidity - a.liquidity;
+          case 'end_date': {
+            if (!a.end_date) return 1;
+            if (!b.end_date) return -1;
+            return new Date(a.end_date).getTime() - new Date(b.end_date).getTime();
+          }
+          case 'spread': {
+            const spreadA = Math.abs(0.5 - (a.outcome_prices[0] || 0.5));
+            const spreadB = Math.abs(0.5 - (b.outcome_prices[0] || 0.5));
+            return spreadB - spreadA; // Highest spread first (most decisive markets)
+          }
+          default: return 0;
+        }
+      });
+
+      setAvailablePolymarkets(markets);
+    } catch (err) {
+      console.error('[AlphaArena] Failed to load Polymarket markets:', err);
+      if (mountedRef.current) setAvailablePolymarkets([]);
+    } finally {
+      if (mountedRef.current) setLoadingPolymarkets(false);
+    }
+  }, [competitionType, polymarketCategory, polymarketSortBy, polymarketMinVolume, polymarketMinLiquidity]);
+
+  useEffect(() => {
+    loadPolymarkets();
+  }, [loadPolymarkets]);
+
+  const togglePolymarketSelection = useCallback((market: PolymarketMarketInfo) => {
+    setSelectedPolymarkets(prev => {
+      const exists = prev.some(m => m.id === market.id);
+      if (exists) return prev.filter(m => m.id !== market.id);
+      return [...prev, market];
+    });
+  }, []);
+
+  // ===========================================================================
   // Past Competitions (useCache)
   // ===========================================================================
 
@@ -304,6 +419,14 @@ export function useAlphaArena() {
       }
       if (comp.config.exchange_id) {
         setExchangeId(comp.config.exchange_id);
+      }
+
+      // Restore competition type and polymarket markets if applicable
+      if (comp.config.competition_type) {
+        setCompetitionType(comp.config.competition_type);
+      }
+      if (comp.config.polymarket_markets && comp.config.polymarket_markets.length > 0) {
+        setSelectedPolymarkets(comp.config.polymarket_markets);
       }
 
       showSuccess(`Loaded competition: ${comp.config.competition_name}`);
@@ -451,6 +574,11 @@ export function useAlphaArena() {
       setError('Cycle interval must be at least 10 seconds');
       return;
     }
+    // Polymarket validation
+    if (competitionType === 'polymarket' && selectedPolymarkets.length < 1) {
+      setError('Select at least 1 prediction market for Polymarket competition');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -469,16 +597,24 @@ export function useAlphaArena() {
           trading_style: m.advancedConfig.trading_style || undefined,
           advanced_config: m.advancedConfig,
         })),
-        symbols: [symbol],
+        symbols: competitionType === 'crypto' ? [symbol] : undefined,
         initial_capital: initialCapital,
         mode,
         cycle_interval_seconds: cycleInterval,
-        exchange_id: exchangeId,
+        exchange_id: competitionType === 'crypto' ? exchangeId : undefined,
         llm_settings: {
           temperature: llmGlobalSettings.temperature,
           max_tokens: llmGlobalSettings.max_tokens,
           system_prompt: llmGlobalSettings.system_prompt,
         },
+        // Polymarket-specific params
+        competition_type: competitionType,
+        polymarket_market_ids: competitionType === 'polymarket'
+          ? selectedPolymarkets.map(m => m.id)
+          : undefined,
+        polymarket_category: competitionType === 'polymarket'
+          ? polymarketCategory || undefined
+          : undefined,
       });
 
       if (!mountedRef.current) return;
@@ -511,18 +647,7 @@ export function useAlphaArena() {
 
     try {
       const currentCompetitionId = competitionId;
-      const currentModels = [...selectedModels];
-      // Collect API keys — use model-specific key, keyed by "provider:model_id" to support
-      // multiple models from the same provider with different keys
-      const apiKeys: Record<string, string> = {};
-      for (const model of currentModels) {
-        if (model.api_key) {
-          // Provider-level key (first one wins per provider for backend compatibility)
-          if (!apiKeys[model.provider]) {
-            apiKeys[model.provider] = model.api_key;
-          }
-        }
-      }
+      const apiKeys = await buildApiKeysMap();
       const result = await alphaArenaService.runCycle(currentCompetitionId, Object.keys(apiKeys).length > 0 ? apiKeys : undefined);
 
       // If cancelled or unmounted while awaiting, discard results
@@ -643,14 +768,18 @@ export function useAlphaArena() {
     };
   }, []);
 
-  // Real-time price streaming via Rust WebSocket — uses competition's configured exchange
-  const tickerHook = useRustTicker(exchangeId, symbol, !!competitionId);
+  // Real-time price streaming via Rust WebSocket — uses competition's configured exchange (crypto only)
+  const tickerHook = useRustTicker(
+    exchangeId,
+    symbol,
+    !!competitionId && competitionType === 'crypto'
+  );
 
   useEffect(() => {
-    if (tickerHook.data && mountedRef.current) {
+    if (tickerHook.data && mountedRef.current && competitionType === 'crypto') {
       setLatestPrice(tickerHook.data.price);
     }
-  }, [tickerHook.data]);
+  }, [tickerHook.data, competitionType]);
 
   const toggleModelSelection = (model: AlphaArenaModel) => {
     setSelectedModels(prev => {
@@ -719,6 +848,27 @@ export function useAlphaArena() {
     setCycleInterval,
     exchangeId,
     setExchangeId,
+
+    // Competition type (crypto vs polymarket)
+    competitionType,
+    setCompetitionType,
+
+    // Polymarket state
+    availablePolymarkets,
+    selectedPolymarkets,
+    setSelectedPolymarkets,
+    polymarketCategory,
+    setPolymarketCategory,
+    polymarketPrices,
+    loadingPolymarkets,
+    loadPolymarkets,
+    togglePolymarketSelection,
+    polymarketSortBy,
+    setPolymarketSortBy,
+    polymarketMinVolume,
+    setPolymarketMinVolume,
+    polymarketMinLiquidity,
+    setPolymarketMinLiquidity,
 
     // Past competitions
     pastCompetitions,

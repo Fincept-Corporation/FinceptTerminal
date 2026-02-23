@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-volatility/quantlibVolatilityApi.ts
 // API service for QuantLib Volatility endpoints
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 
 let _apiKey: string | null = null;
 export function setVolatilityApiKey(key: string | null) { _apiKey = key; }

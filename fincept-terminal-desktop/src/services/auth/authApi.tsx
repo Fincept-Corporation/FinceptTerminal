@@ -5,7 +5,7 @@ import { fetch } from '@tauri-apps/plugin-http';
 
 // API Configuration
 const API_CONFIG = {
-  BASE_URL: import.meta.env.DEV ? '/api' : 'https://finceptbackend.share.zrok.io',
+  BASE_URL: import.meta.env.DEV ? '/api' : 'https://api.fincept.in',
   API_VERSION: 'v1',
   CONNECTION_TIMEOUT: 10000,
   REQUEST_TIMEOUT: 30000
@@ -55,16 +55,9 @@ interface ResetPasswordRequest {
 
 interface DeviceRegisterRequest {
   device_id: string;
-  device_name: string;
+  device_name?: string;
   platform: string;
-  hardware_info: {
-    platform: string;
-    user_agent: string;
-    language: string;
-    screen_resolution?: string;
-    cpu_cores?: number;
-    memory_gb?: number;
-  };
+  hardware_info: Record<string, any>;
 }
 
 // Response Types
@@ -112,19 +105,15 @@ interface AuthStatusResponse {
     platform: string;
     requests_today: number;
     expires_at: string;
-    daily_limit?: number;
   };
 }
 
 interface DeviceRegisterResponse {
-  api_key?: string;
-  temp_api_key?: string;
-  guest_id?: number;
-  device_id?: string;
-  expires_at?: string;
-  daily_limit?: number;
-  requests_today?: number;
-  credit_balance?: number;
+  api_key: string;
+  expires_at: string;
+  credit_balance: number;
+  user_type: 'guest';
+  message: string;
 }
 
 // Generic API request function
@@ -142,17 +131,26 @@ const makeApiRequest = async <T = any>(
 
     const url = getApiEndpoint(endpoint);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.REQUEST_TIMEOUT);
+
     const config: RequestInit = {
       method,
       headers: defaultHeaders,
       mode: 'cors',
+      signal: controller.signal,
     };
 
     if (data && (method === 'POST' || method === 'PUT')) {
       config.body = JSON.stringify(data);
     }
 
-    const response = await fetch(url, config);
+    let response: Response;
+    try {
+      response = await fetch(url, config);
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const responseText = await response.text();
 
@@ -248,10 +246,6 @@ export class AuthApiService {
 
   // Login user
   static async login(request: LoginRequest): Promise<ApiResponse<LoginResponse>> {
-    console.log('=== LOGIN REQUEST DEBUG ===');
-    console.log('Endpoint: /user/login');
-    console.log('Request body:', JSON.stringify(request, null, 2));
-    console.log('========================');
     return makeApiRequest<LoginResponse>('POST', '/user/login', request);
   }
 
@@ -295,16 +289,9 @@ export class AuthApiService {
     return makeApiRequest<AuthStatusResponse>('GET', '/auth/status', undefined, headers);
   }
 
-  // Register device for guest access
-  static async registerDevice(request: DeviceRegisterRequest): Promise<ApiResponse<DeviceRegisterResponse>> {
-    return makeApiRequest<DeviceRegisterResponse>('POST', '/guest/register', request);
-  }
-
-  // Get guest status
-  static async getGuestStatus(apiKey: string): Promise<ApiResponse<any>> {
-    return makeApiRequest('GET', '/guest/status', undefined, {
-      'X-API-Key': apiKey
-    });
+  // Create or renew guest session (idempotent — same device_id returns existing session)
+  static async createGuestSession(request: DeviceRegisterRequest): Promise<ApiResponse<DeviceRegisterResponse>> {
+    return makeApiRequest<DeviceRegisterResponse>('POST', '/guest/session', request);
   }
 
   // Update user profile

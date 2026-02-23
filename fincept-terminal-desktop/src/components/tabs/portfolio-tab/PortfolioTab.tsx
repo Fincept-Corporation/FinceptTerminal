@@ -10,7 +10,8 @@ import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { Briefcase, RefreshCw, Bot, X, ChevronDown } from 'lucide-react';
 import { FINCEPT, COMMON_STYLES } from './finceptStyles';
-import agentService from '@/services/agentService';
+import agentService, { buildAgentConfig } from '@/services/agentService';
+import { withTimeout } from '@/services/core/apiUtils';
 import { sqliteService, getSetting, getAgentConfigs } from '@/services/core/sqliteService';
 import type { AgentConfig } from '@/services/core/sqliteService';
 import MarkdownRenderer from '@/components/common/MarkdownRenderer';
@@ -69,6 +70,18 @@ const PortfolioTab: React.FC = () => {
   const agentResultCache = useRef<Record<string, string>>({});
   const lastPortfolioId = useRef<string | null>(null);
 
+  // Clear caches when the selected portfolio changes
+  useEffect(() => {
+    const currentId = selectedPortfolio?.id ?? null;
+    if (lastPortfolioId.current !== currentId) {
+      aiResultCache.current = {};
+      agentResultCache.current = {};
+      lastPortfolioId.current = currentId;
+      setAiResult(null);
+      setAgentResult(null);
+    }
+  }, [selectedPortfolio?.id]);
+
   // ── Agent Runner state ──
   const [agentRunning, setAgentRunning] = useState(false);
   const [agentResult, setAgentResult] = useState<string | null>(null);
@@ -100,9 +113,9 @@ const PortfolioTab: React.FC = () => {
     setAgentResult(null);
 
     try {
-      const agentCfg = JSON.parse(agentCfgRow.config_json || '{}');
+      const savedCfg = JSON.parse(agentCfgRow.config_json || '{}');
 
-      // Build api keys
+      // Build api keys from LLM configs
       const llmConfigs = await sqliteService.getLLMConfigs();
       const apiKeys: Record<string, string> = {};
       for (const cfg of llmConfigs) {
@@ -121,34 +134,56 @@ const PortfolioTab: React.FC = () => {
         if (finceptKey) { apiKeys['fincept'] = finceptKey; apiKeys['FINCEPT_API_KEY'] = finceptKey; }
       }
 
-      // Build portfolio context to prepend to the agent query
+      // Resolve provider/model — prefer saved config, fall back to active LLM
+      const activeLLM = llmConfigs.find(c => c.is_active) ?? llmConfigs[0] ?? null;
+      const provider = savedCfg.model?.provider ?? activeLLM?.provider ?? 'fincept';
+      const model_id = savedCfg.model?.model_id ?? activeLLM?.model ?? 'fincept-llm';
+
+      if (!activeLLM && !apiKeys['fincept']) {
+        setAgentResult('No LLM configured. Please add a model in Settings → LLM Configuration.');
+        return;
+      }
+
+      // Build proper agent config using the shared builder
+      const agentConfig = buildAgentConfig(
+        provider,
+        model_id,
+        savedCfg.instructions || 'You are a professional portfolio analyst. Analyze the provided portfolio data and give actionable insights.',
+        {
+          tools: savedCfg.tools ?? [],
+          temperature: savedCfg.model?.temperature ?? 0.3,
+          maxTokens: savedCfg.model?.max_tokens ?? 4096,
+          memory: savedCfg.memory,
+          reasoning: savedCfg.reasoning,
+          guardrails: savedCfg.guardrails,
+        }
+      );
+
+      // Build structured portfolio context query
       const portfolioHoldings = portfolioSummary.holdings || [];
       const holdingsSummary = portfolioHoldings.map((h: any) =>
-        h.symbol + ': ' + h.quantity + ' units @ $' + (h.current_price || 0).toFixed(2) +
-        ' | Weight: ' + (h.weight || 0).toFixed(1) + '%'
+        `${h.symbol}: ${h.quantity} units @ $${(h.current_price || 0).toFixed(2)} | PnL: ${(h.unrealized_pnl_percent || 0).toFixed(2)}% | Weight: ${(h.weight || 0).toFixed(1)}%`
       ).join('\n');
       const portfolioContext = [
-        '=== PORTFOLIO CONTEXT ===',
-        'Portfolio: ' + (portfolioSummary.portfolio?.name || 'Unknown'),
-        'NAV: ' + currency + ' ' + portfolioSummary.total_market_value.toFixed(2),
-        'Holdings (' + portfolioHoldings.length + '):',
+        `Portfolio: ${portfolioSummary.portfolio?.name || 'Unknown'} | NAV: ${currency} ${portfolioSummary.total_market_value.toFixed(2)}`,
+        `Total P&L: ${portfolioSummary.total_unrealized_pnl_percent?.toFixed(2) ?? 'N/A'}% | Day Change: ${portfolioSummary.total_day_change_percent?.toFixed(2) ?? 'N/A'}%`,
+        `Holdings (${portfolioHoldings.length}):`,
         holdingsSummary,
-        '========================',
         '',
-        'Please analyze the portfolio above and provide actionable insights.',
+        'Please analyze this portfolio and provide actionable insights with specific recommendations.',
       ].join('\n');
 
-      const result = await agentService.runAgent(
-        portfolioContext,
-        { ...agentCfg, markdown: true },
-        apiKeys
+      const result = await withTimeout(
+        agentService.runAgent(portfolioContext, agentConfig, apiKeys),
+        180000,
+        'Agent timed out. Check your LLM API key and network connection.'
       );
 
       const agentText = result.response || result.error || 'No response returned.';
       agentResultCache.current[selectedAgentId] = agentText;
       setAgentResult(agentText);
     } catch (err: any) {
-      setAgentResult('Agent run failed: ' + (err?.message || 'Unknown error'));
+      setAgentResult(`Agent run failed: ${err?.message || 'Unknown error'}`);
     } finally {
       setAgentRunning(false);
     }
@@ -354,7 +389,7 @@ const PortfolioTab: React.FC = () => {
           </div>
         ) : detailView ? (
           /* ═══ FULL-SCREEN DETAIL VIEW ═══ */
-          <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
             <DetailViewWrapper
               view={detailView}
               onBack={() => setDetailView(null)}

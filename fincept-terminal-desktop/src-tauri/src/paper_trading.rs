@@ -236,14 +236,34 @@ pub fn reset_portfolio(id: &str) -> Result<Portfolio> {
 pub fn place_order(portfolio_id: &str, symbol: &str, side: &str, order_type: &str, quantity: f64, price: Option<f64>, stop_price: Option<f64>, reduce_only: bool) -> Result<Order> {
     let portfolio = get_portfolio(portfolio_id)?;
 
-    // Validate
-    if quantity <= 0.0 { bail!("Invalid quantity"); }
+    // Validate order_type
+    let valid_order_types = ["market", "limit", "stop", "stop_limit"];
+    if !valid_order_types.contains(&order_type) {
+        bail!("Invalid order type: {}. Must be one of: market, limit, stop, stop_limit", order_type);
+    }
+
+    // Validate side
+    if side != "buy" && side != "sell" {
+        bail!("Invalid side: {}. Must be 'buy' or 'sell'", side);
+    }
+
+    // Validate quantity
+    if !quantity.is_finite() || quantity <= 0.0 { bail!("Invalid quantity"); }
+
+    // Validate price fields
+    if let Some(p) = price { if !p.is_finite() || p <= 0.0 { bail!("Invalid price"); } }
+    if let Some(sp) = stop_price { if !sp.is_finite() || sp <= 0.0 { bail!("Invalid stop price"); } }
+
     if order_type == "limit" && price.is_none() { bail!("Limit order requires price"); }
     if (order_type == "stop" || order_type == "stop_limit") && stop_price.is_none() { bail!("Stop order requires stop_price"); }
 
     // Check margin for new positions
     if !reduce_only {
-        let required_margin = quantity * price.unwrap_or(stop_price.unwrap_or(0.0)) / portfolio.leverage;
+        let reference_price = price.or(stop_price).unwrap_or(0.0);
+        if reference_price <= 0.0 {
+            bail!("Market orders require a reference price for margin calculation");
+        }
+        let required_margin = quantity * reference_price / portfolio.leverage;
         if required_margin > portfolio.balance { bail!("Insufficient margin"); }
     }
 
@@ -273,13 +293,20 @@ pub fn get_orders(portfolio_id: &str, status: Option<&str>) -> Result<Vec<Order>
     let pool = get_pool()?;
     let conn = pool.get()?;
 
-    let sql = match status {
-        Some(s) => format!("SELECT id, portfolio_id, symbol, side, order_type, quantity, price, stop_price, filled_qty, avg_price, status, reduce_only, created_at, filled_at FROM pt_orders WHERE portfolio_id = ?1 AND status = '{}'", s),
-        None => "SELECT id, portfolio_id, symbol, side, order_type, quantity, price, stop_price, filled_qty, avg_price, status, reduce_only, created_at, filled_at FROM pt_orders WHERE portfolio_id = ?1".to_string(),
+    let (sql, query_params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match status {
+        Some(s) => (
+            "SELECT id, portfolio_id, symbol, side, order_type, quantity, price, stop_price, filled_qty, avg_price, status, reduce_only, created_at, filled_at FROM pt_orders WHERE portfolio_id = ?1 AND status = ?2".to_string(),
+            vec![Box::new(portfolio_id.to_string()) as Box<dyn rusqlite::types::ToSql>, Box::new(s.to_string())],
+        ),
+        None => (
+            "SELECT id, portfolio_id, symbol, side, order_type, quantity, price, stop_price, filled_qty, avg_price, status, reduce_only, created_at, filled_at FROM pt_orders WHERE portfolio_id = ?1".to_string(),
+            vec![Box::new(portfolio_id.to_string()) as Box<dyn rusqlite::types::ToSql>],
+        ),
     };
 
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map(params![portfolio_id], |row| Ok(Order {
+    let params_refs: Vec<&dyn rusqlite::types::ToSql> = query_params.iter().map(|p| p.as_ref()).collect();
+    let rows = stmt.query_map(params_refs.as_slice(), |row| Ok(Order {
         id: row.get(0)?, portfolio_id: row.get(1)?, symbol: row.get(2)?, side: row.get(3)?, order_type: row.get(4)?,
         quantity: row.get(5)?, price: row.get(6)?, stop_price: row.get(7)?, filled_qty: row.get(8)?, avg_price: row.get(9)?,
         status: row.get(10)?, reduce_only: row.get(11)?, created_at: row.get(12)?, filled_at: row.get(13)?
@@ -292,11 +319,21 @@ pub fn get_orders(portfolio_id: &str, status: Option<&str>) -> Result<Vec<Order>
 // ============================================================================
 
 pub fn fill_order(order_id: &str, fill_price: f64, fill_qty: Option<f64>) -> Result<Trade> {
+    if !fill_price.is_finite() || fill_price <= 0.0 {
+        bail!("Invalid fill price");
+    }
+    if let Some(fq) = fill_qty {
+        if !fq.is_finite() || fq <= 0.0 {
+            bail!("Invalid fill quantity");
+        }
+    }
+
     let pool = get_pool()?;
-    let conn = pool.get()?;
+    let mut conn = pool.get()?;
+    let tx = conn.transaction()?;
 
     // Get order
-    let order: Order = conn.query_row(
+    let order: Order = tx.query_row(
         "SELECT id, portfolio_id, symbol, side, order_type, quantity, price, stop_price, filled_qty, avg_price, status, reduce_only, created_at, filled_at FROM pt_orders WHERE id = ?1",
         params![order_id],
         |row| Ok(Order { id: row.get(0)?, portfolio_id: row.get(1)?, symbol: row.get(2)?, side: row.get(3)?, order_type: row.get(4)?, quantity: row.get(5)?, price: row.get(6)?, stop_price: row.get(7)?, filled_qty: row.get(8)?, avg_price: row.get(9)?, status: row.get(10)?, reduce_only: row.get(11)?, created_at: row.get(12)?, filled_at: row.get(13)? })
@@ -315,7 +352,7 @@ pub fn fill_order(order_id: &str, fill_price: f64, fill_qty: Option<f64>) -> Res
     let mut pnl = 0.0;
 
     // Check if closing opposite position
-    let existing: Option<Position> = conn.query_row(
+    let existing: Option<Position> = tx.query_row(
         "SELECT id, portfolio_id, symbol, side, quantity, entry_price, current_price, unrealized_pnl, realized_pnl, leverage, liquidation_price, opened_at FROM pt_positions WHERE portfolio_id = ?1 AND symbol = ?2 AND side = ?3",
         params![order.portfolio_id, order.symbol, opposite_side],
         |row| Ok(Position { id: row.get(0)?, portfolio_id: row.get(1)?, symbol: row.get(2)?, side: row.get(3)?, quantity: row.get(4)?, entry_price: row.get(5)?, current_price: row.get(6)?, unrealized_pnl: row.get(7)?, realized_pnl: row.get(8)?, leverage: row.get(9)?, liquidation_price: row.get(10)?, opened_at: row.get(11)? })
@@ -327,23 +364,23 @@ pub fn fill_order(order_id: &str, fill_price: f64, fill_qty: Option<f64>) -> Res
         pnl = if pos.side == "long" { (fill_price - pos.entry_price) * close_qty } else { (pos.entry_price - fill_price) * close_qty };
 
         if close_qty >= pos.quantity {
-            conn.execute("DELETE FROM pt_positions WHERE id = ?1", params![pos.id])?;
+            tx.execute("DELETE FROM pt_positions WHERE id = ?1", params![pos.id])?;
         } else {
-            conn.execute("UPDATE pt_positions SET quantity = quantity - ?1, realized_pnl = realized_pnl + ?2 WHERE id = ?3", params![close_qty, pnl, pos.id])?;
+            tx.execute("UPDATE pt_positions SET quantity = quantity - ?1, realized_pnl = realized_pnl + ?2 WHERE id = ?3", params![close_qty, pnl, pos.id])?;
         }
 
         // Open remaining as new position if qty > close_qty (flip position)
         if qty > close_qty {
             let new_qty = qty - close_qty;
             let pos_id = Uuid::new_v4().to_string();
-            conn.execute(
+            tx.execute(
                 "INSERT INTO pt_positions (id, portfolio_id, symbol, side, quantity, entry_price, current_price, leverage, opened_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![pos_id, order.portfolio_id, order.symbol, position_side, new_qty, fill_price, fill_price, portfolio.leverage, now]
             )?;
         }
     } else {
         // Check for same-side position to add to
-        let same_pos: Option<Position> = conn.query_row(
+        let same_pos: Option<Position> = tx.query_row(
             "SELECT id, portfolio_id, symbol, side, quantity, entry_price, current_price, unrealized_pnl, realized_pnl, leverage, liquidation_price, opened_at FROM pt_positions WHERE portfolio_id = ?1 AND symbol = ?2 AND side = ?3",
             params![order.portfolio_id, order.symbol, position_side],
             |row| Ok(Position { id: row.get(0)?, portfolio_id: row.get(1)?, symbol: row.get(2)?, side: row.get(3)?, quantity: row.get(4)?, entry_price: row.get(5)?, current_price: row.get(6)?, unrealized_pnl: row.get(7)?, realized_pnl: row.get(8)?, leverage: row.get(9)?, liquidation_price: row.get(10)?, opened_at: row.get(11)? })
@@ -353,11 +390,11 @@ pub fn fill_order(order_id: &str, fill_price: f64, fill_qty: Option<f64>) -> Res
             // Average into existing position
             let new_qty = pos.quantity + qty;
             let new_entry = (pos.entry_price * pos.quantity + fill_price * qty) / new_qty;
-            conn.execute("UPDATE pt_positions SET quantity = ?1, entry_price = ?2, current_price = ?3 WHERE id = ?4", params![new_qty, new_entry, fill_price, pos.id])?;
+            tx.execute("UPDATE pt_positions SET quantity = ?1, entry_price = ?2, current_price = ?3 WHERE id = ?4", params![new_qty, new_entry, fill_price, pos.id])?;
         } else {
             // Brand new position
             let pos_id = Uuid::new_v4().to_string();
-            conn.execute(
+            tx.execute(
                 "INSERT INTO pt_positions (id, portfolio_id, symbol, side, quantity, entry_price, current_price, leverage, opened_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![pos_id, order.portfolio_id, order.symbol, position_side, qty, fill_price, fill_price, portfolio.leverage, now]
             )?;
@@ -369,22 +406,24 @@ pub fn fill_order(order_id: &str, fill_price: f64, fill_qty: Option<f64>) -> Res
     // Opening positions does NOT affect wallet balance (margin is reserved from available balance)
     // Closing positions adds/subtracts realized P&L minus fees
     let balance_change = pnl - fee;
-    conn.execute("UPDATE pt_portfolios SET balance = balance + ?1 WHERE id = ?2", params![balance_change, order.portfolio_id])?;
+    tx.execute("UPDATE pt_portfolios SET balance = balance + ?1 WHERE id = ?2", params![balance_change, order.portfolio_id])?;
 
     // Update order
     let new_filled = order.filled_qty + qty;
     let new_status = if new_filled >= order.quantity { "filled" } else { "partial" };
     let new_avg = Some((order.avg_price.unwrap_or(0.0) * order.filled_qty + fill_price * qty) / new_filled);
-    conn.execute("UPDATE pt_orders SET filled_qty = ?1, avg_price = ?2, status = ?3, filled_at = ?4 WHERE id = ?5", params![new_filled, new_avg, new_status, now, order_id])?;
+    tx.execute("UPDATE pt_orders SET filled_qty = ?1, avg_price = ?2, status = ?3, filled_at = ?4 WHERE id = ?5", params![new_filled, new_avg, new_status, now, order_id])?;
 
     // Create trade
     let trade_id = Uuid::new_v4().to_string();
-    conn.execute(
+    tx.execute(
         "INSERT INTO pt_trades (id, portfolio_id, order_id, symbol, side, price, quantity, fee, pnl, timestamp) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![trade_id, order.portfolio_id, order_id, order.symbol, order.side, fill_price, qty, fee, pnl, now]
     )?;
 
-    Ok(Trade { id: trade_id, portfolio_id: order.portfolio_id, order_id: order_id.to_string(), symbol: order.symbol, side: order.side, price: fill_price, quantity: qty, fee, pnl, timestamp: now })
+    let trade = Trade { id: trade_id, portfolio_id: order.portfolio_id, order_id: order_id.to_string(), symbol: order.symbol, side: order.side, price: fill_price, quantity: qty, fee, pnl, timestamp: now };
+    tx.commit()?;
+    Ok(trade)
 }
 
 // ============================================================================

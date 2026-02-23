@@ -63,6 +63,10 @@ export interface NodeEditorToolbarProps {
   onShowDeployDialog: () => void;
   onQuickSaveDraft: () => Promise<void>;
   onShowTemplates: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 }
 
 // Deploy dialog props

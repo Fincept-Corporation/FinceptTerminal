@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-stochastic/quantlibStochasticApi.ts
 // API service for QuantLib Stochastic endpoints (36 endpoints)
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 
 let _apiKey: string | null = null;
 export function setStochasticApiKey(key: string | null) { _apiKey = key; }

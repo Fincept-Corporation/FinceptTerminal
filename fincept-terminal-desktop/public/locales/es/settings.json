@@ -10,7 +10,8 @@
     "tabLayout": "Diseño de pestañas",
     "appearance": "Apariencia",
     "language": "Idioma",
-    "storage": "Almacenamiento y caché"
+    "storage": "Almacenamiento y caché",
+    "notifications": "[ES] Notifications"
   },
   "credentials": {
     "title": "GESTIÓN DE CREDENCIALES API",
@@ -46,7 +47,31 @@
     "saveConfig": "GUARDAR CONFIGURACIÓN",
     "reset": "REINICIAR",
     "saveSuccess": "La apariencia del terminal y las asignaciones de teclas se guardaron correctamente",
-    "resetSuccess": "Restablecer la apariencia predeterminada y las asignaciones de teclas"
+    "resetSuccess": "Restablecer la apariencia predeterminada y las asignaciones de teclas",
+    "customColors": "[ES] Custom Colors",
+    "customColorsTitle": "[ES] CUSTOM COLORS",
+    "colorPrimary": "[ES] Primary",
+    "colorSecondary": "[ES] Secondary",
+    "colorSuccess": "[ES] Success",
+    "colorAlert": "[ES] Alert",
+    "colorWarning": "[ES] Warning",
+    "colorInfo": "[ES] Info",
+    "colorAccent": "[ES] Accent",
+    "colorPurple": "[ES] Purple",
+    "colorText": "[ES] Text",
+    "colorTextMuted": "[ES] Text Muted",
+    "colorBackground": "[ES] Background",
+    "colorPanel": "[ES] Panel",
+    "layoutSpacing": "[ES] LAYOUT & SPACING",
+    "contentDensity": "[ES] CONTENT DENSITY",
+    "borderRadius": "[ES] BORDER RADIUS",
+    "borderStyle": "[ES] BORDER STYLE",
+    "lineHeight": "[ES] LINE HEIGHT",
+    "letterSpacing": "[ES] LETTER SPACING",
+    "effects": "[ES] EFFECTS",
+    "widgetOpacity": "[ES] WIDGET OPACITY",
+    "enableGlow": "[ES] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[ES] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "Base de datos de símbolos bursátiles",
@@ -65,17 +90,8 @@
     "tip": "SUGERENCIA: arrastre las pestañas para reordenarlas. Utilice los botones de flecha para mover pestañas entre las secciones del encabezado y del menú. Los cambios se guardan automáticamente."
   },
   "llm": {
-    "title": "CONFIGURACIÓN DEL LLM",
-    "description": "Configurar modelos y proveedores de IA",
     "connected": "CONECTADO",
-    "disconnected": "DESCONECTADO",
-    "provider": "PROVEEDOR DE IA",
-    "globalSettings": "AJUSTES GLOBALES DE IA",
-    "temperature": "TEMPERATURA",
-    "maxTokens": "FICHAS MÁXIMAS",
-    "systemPrompt": "AVISO DEL SISTEMA",
-    "modelLibrary": "BIBLIOTECA DE MODELOS",
-    "multiModelConfigs": "Configuraciones multimodelo"
+    "disconnected": "DESCONECTADO"
   },
   "buttons": {
     "save": "AHORRAR",
@@ -86,5 +102,18 @@
     "database": "Base de datos: SQLite",
     "storage": "Almacenamiento: basado en archivos",
     "secureStorage": "Todos los datos almacenados de forma segura en fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[ES] NOTIFICATION PROVIDERS",
+    "description": "[ES] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[ES] Event Filters",
+    "eventFilterDescription": "[ES] Choose which notification types to forward to external providers.",
+    "providers": "[ES] Providers",
+    "enabled": "[ES] Enabled",
+    "disabled": "[ES] Disabled",
+    "testButton": "[ES] TEST",
+    "testSuccess": "[ES] Test notification sent successfully!",
+    "testFailed": "[ES] Failed to send test notification. Check your configuration.",
+    "saved": "[ES] Configuration saved"
   }
 }

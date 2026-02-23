@@ -10,7 +10,8 @@
     "tabLayout": "选项卡布局",
     "appearance": "外貌",
     "language": "语言",
-    "storage": "存储和缓存"
+    "storage": "存储和缓存",
+    "notifications": "[ZH] Notifications"
   },
   "credentials": {
     "title": "API 凭证管理",
@@ -46,7 +47,31 @@
     "saveConfig": "保存配置",
     "reset": "重置",
     "saveSuccess": "终端外观和按键映射已成功保存",
-    "resetSuccess": "重置为默认外观和键映射"
+    "resetSuccess": "重置为默认外观和键映射",
+    "customColors": "[ZH] Custom Colors",
+    "customColorsTitle": "[ZH] CUSTOM COLORS",
+    "colorPrimary": "[ZH] Primary",
+    "colorSecondary": "[ZH] Secondary",
+    "colorSuccess": "[ZH] Success",
+    "colorAlert": "[ZH] Alert",
+    "colorWarning": "[ZH] Warning",
+    "colorInfo": "[ZH] Info",
+    "colorAccent": "[ZH] Accent",
+    "colorPurple": "[ZH] Purple",
+    "colorText": "[ZH] Text",
+    "colorTextMuted": "[ZH] Text Muted",
+    "colorBackground": "[ZH] Background",
+    "colorPanel": "[ZH] Panel",
+    "layoutSpacing": "[ZH] LAYOUT & SPACING",
+    "contentDensity": "[ZH] CONTENT DENSITY",
+    "borderRadius": "[ZH] BORDER RADIUS",
+    "borderStyle": "[ZH] BORDER STYLE",
+    "lineHeight": "[ZH] LINE HEIGHT",
+    "letterSpacing": "[ZH] LETTER SPACING",
+    "effects": "[ZH] EFFECTS",
+    "widgetOpacity": "[ZH] WIDGET OPACITY",
+    "enableGlow": "[ZH] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[ZH] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "股票代码数据库",
@@ -65,17 +90,8 @@
     "tip": "提示：拖动选项卡可对其重新排序。使用箭头按钮在标题和菜单部分之间移动选项卡。更改会自动保存。"
   },
   "llm": {
-    "title": "法学硕士配置",
-    "description": "配置 AI 模型和提供者",
     "connected": "连接",
-    "disconnected": "已断开连接",
-    "provider": "人工智能提供商",
-    "globalSettings": "全局人工智能设置",
-    "temperature": "温度",
-    "maxTokens": "最大代币数",
-    "systemPrompt": "系统提示符",
-    "modelLibrary": "模型库",
-    "multiModelConfigs": "多模型配置"
+    "disconnected": "已断开连接"
   },
   "buttons": {
     "save": "节省",
@@ -86,5 +102,18 @@
     "database": "数据库：SQLite",
     "storage": "存储：基于文件",
     "secureStorage": "所有数据都安全地存储在fincept_terminal.db中"
+  },
+  "notifications": {
+    "title": "[ZH] NOTIFICATION PROVIDERS",
+    "description": "[ZH] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[ZH] Event Filters",
+    "eventFilterDescription": "[ZH] Choose which notification types to forward to external providers.",
+    "providers": "[ZH] Providers",
+    "enabled": "[ZH] Enabled",
+    "disabled": "[ZH] Disabled",
+    "testButton": "[ZH] TEST",
+    "testSuccess": "[ZH] Test notification sent successfully!",
+    "testFailed": "[ZH] Failed to send test notification. Check your configuration.",
+    "saved": "[ZH] Configuration saved"
   }
 }

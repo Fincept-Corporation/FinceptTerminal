@@ -5,29 +5,7 @@
     "news": "Notizie",
     "portfolio": "Portafoglio",
     "backtesting": "Backtesting",
-    "watchlist": "Lista Preferiti",
-    "research": "Ricerca",
-    "screener": "Screener",
     "chat": "AI Chat",
-    "agents": "Agenti",
-    "settings": "Impostazioni",
     "profile": "Profilo"
-  },
-  "functionKeys": {
-    "f1": "DASH",
-    "f2": "MERC",
-    "f3": "NOTI",
-    "f4": "PORT",
-    "f5": "BKTS",
-    "f6": "PREF",
-    "f7": "RICE",
-    "f8": "SCRN",
-    "f9": "TRDG",
-    "f10": "AI",
-    "f11": "FULL",
-    "f12": "PROF"
-  },
-  "labels": {
-    "moreTabs": "Più schede nei menu della barra degli strumenti"
   }
 }

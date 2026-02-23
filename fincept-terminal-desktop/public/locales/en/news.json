@@ -1,39 +1,14 @@
 {
   "title": "FINCEPT TERMINAL PROFESSIONAL NEWS",
   "header": {
-    "liveFeed": "LIVE FEED",
-    "live": "LIVE",
-    "refresh": "REFRESH",
-    "updating": "UPDATING...",
-    "alerts": "ALERTS",
-    "sources": "SOURCES",
-    "status": "STATUS",
-    "demoMode": "DEMO MODE",
-    "articles": "ARTICLES",
-    "activeSources": "ACTIVE SOURCES"
-  },
-  "autoRefresh": {
-    "title": "AUTO-REFRESH INTERVAL",
-    "minute": "minute",
-    "minutes": "minutes"
+    "refresh": "REFRESH"
   },
   "messages": {
-    "loadingFeeds": "Loading news feeds...",
-    "breaking": "BREAKING",
     "loadingFeedsModal": "Loading feeds...",
     "failedToLoad": "Failed to load RSS feeds",
     "noCustomFeeds": "No custom feeds yet. Add your first RSS feed above.",
     "allFeedsDeleted": "All feeds have been deleted. Add a new feed or restore defaults.",
-    "allDefaultFeedsDeleted": "You have deleted all {{count}} default feeds. Click below to restore them.",
     "defaultFeedsInfo": "Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
-  },
-  "feeds": {
-    "primary": "PRIMARY NEWS FEED",
-    "secondary": "SECONDARY NEWS FEED",
-    "additional": "ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "REAL-TIME NEWS ANALYTICS"
   },
   "rssSettings": {
     "title": "RSS FEED SETTINGS",
@@ -78,9 +53,7 @@
       "sourceRequired": "Source name is required",
       "invalidUrl": "Please enter a valid URL",
       "invalidRss": "URL does not appear to be a valid RSS feed",
-      "testFailed": "Failed to test URL",
-      "addFailed": "Failed to add feed",
-      "updateFailed": "Failed to update feed"
+      "testFailed": "Failed to test URL"
     },
     "confirmDelete": {
       "title": "Delete this RSS feed?",

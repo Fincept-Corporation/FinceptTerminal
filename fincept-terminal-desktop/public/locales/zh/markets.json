@@ -9,13 +9,9 @@
   "percentChange": "涨跌%",
   "high": "最高",
   "low": "最低",
-  "loading": "加载中...",
   "noData": "无数据",
   "refresh": "刷新",
   "auto": "自动",
   "on": "开",
-  "off": "关",
-  "lastUpdate": "最后更新",
-  "updating": "更新中",
-  "live": "实时"
+  "off": "关"
 }

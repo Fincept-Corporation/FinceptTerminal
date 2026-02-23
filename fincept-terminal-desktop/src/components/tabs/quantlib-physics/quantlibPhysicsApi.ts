@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-physics/quantlibPhysicsApi.ts
 // API service for QuantLib Physics endpoints (24 endpoints)
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 
 let _apiKey: string | null = null;
 export function setPhysicsApiKey(key: string | null) { _apiKey = key; }

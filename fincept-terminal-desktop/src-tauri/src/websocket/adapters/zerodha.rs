@@ -400,6 +400,7 @@ impl ZerodhaAdapter {
             close: None,
             change: None,
             change_percent: None,
+            quote_volume: None,
             timestamp: Self::now(),
         };
 

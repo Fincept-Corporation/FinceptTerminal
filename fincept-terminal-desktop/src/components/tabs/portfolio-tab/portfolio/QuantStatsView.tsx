@@ -86,6 +86,7 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
   const [error, setError] = useState<string | null>(null);
   const [benchmark, setBenchmark] = useState('SPY');
   const [period, setPeriod] = useState('1y');
+  const [numSims, setNumSims] = useState(1000);
   const [activeSection, setActiveSection] = useState<'metrics' | 'returns' | 'drawdown' | 'rolling' | 'montecarlo'>('metrics');
 
   // ── FFN + Fortitudo state ──
@@ -119,8 +120,8 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
     const validHoldings = portfolioSummary.holdings.filter(h => h.symbol && h.quantity > 0);
     const symbols = validHoldings.map(h => h.symbol).sort().join(',');
     const weights = validHoldings.map(h => Math.round(h.weight * 10)).join(',');
-    return `quantstats:${symbols}:${weights}:${benchmark}:${period}`;
-  }, [portfolioSummary.holdings, benchmark, period]);
+    return `quantstats:${symbols}:${weights}:${benchmark}:${period}:${numSims}`;
+  }, [portfolioSummary.holdings, benchmark, period, numSims]);
 
   const fortitudoCacheKey = useMemo(() => {
     const validHoldings = portfolioSummary.holdings.filter(h => h.symbol && h.quantity > 0);
@@ -152,11 +153,11 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
       return;
     }
 
-    console.log('[QuantStats] Running analysis with tickers:', tickers, 'benchmark:', benchmark, 'period:', period);
+    console.log('[QuantStats] Running analysis with tickers:', tickers, 'benchmark:', benchmark, 'period:', period, 'sims:', numSims);
     setLoading(true);
     setError(null);
     try {
-      const data = await quantstatsService.getFullReport(tickers, benchmark, period);
+      const data = await quantstatsService.getFullReport(tickers, benchmark, period, undefined, numSims);
       setReport(data);
       cacheService.set(cacheKey, data, 'api-response', '1h');
     } catch (e) {
@@ -165,7 +166,7 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
     } finally {
       setLoading(false);
     }
-  }, [buildTickersWeights, benchmark, period, cacheKey]);
+  }, [buildTickersWeights, benchmark, period, numSims, cacheKey]);
 
   const generateHtmlReport = useCallback(async () => {
     const tickers = buildTickersWeights();
@@ -290,10 +291,10 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
 
   return (
     <div style={{
-      height: '100%',
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: FINCEPT.DARK_BG,
+      minHeight: '100%',
     }}>
       {/* Terminal-style Header */}
       <div style={{
@@ -383,6 +384,30 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
               {p.label}
             </button>
           ))}
+        </div>
+
+        {/* Sims selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ color: FINCEPT.WHITE, fontSize: '10px', letterSpacing: '0.5px', fontFamily: 'monospace', opacity: 0.7 }}>SIMS:</span>
+          <div style={{ display: 'flex', gap: '2px' }}>
+            {([500, 1000, 2000, 5000] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setNumSims(s)}
+                style={{
+                  padding: '6px 8px',
+                  backgroundColor: numSims === s ? FINCEPT.CYAN : FINCEPT.DARK_BG,
+                  border: `1px solid ${numSims === s ? FINCEPT.CYAN : FINCEPT.BORDER}`,
+                  color: numSims === s ? '#000000' : FINCEPT.WHITE,
+                  fontSize: '10px', fontWeight: 700, fontFamily: 'monospace',
+                  cursor: 'pointer', letterSpacing: '0.5px',
+                  opacity: numSims === s ? 1 : 0.7,
+                }}
+              >
+                {s >= 1000 ? `${s / 1000}K` : s}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Run Analysis button */}
@@ -485,8 +510,6 @@ const QuantStatsView: React.FC<QuantStatsViewProps> = ({ portfolioSummary }) => 
 
       {/* Main Content Area */}
       <div style={{
-        flex: 1,
-        overflow: 'auto',
         padding: '16px',
       }}>
 

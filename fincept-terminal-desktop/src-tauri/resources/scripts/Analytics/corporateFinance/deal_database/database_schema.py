@@ -262,6 +262,20 @@ class MADatabase:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_filings_type ON sec_filings(filing_type)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_filings_date ON sec_filings(filing_date)")
 
+        # Add new XBRL financial columns if they don't exist (safe migration)
+        xbrl_columns = [
+            ("target_revenue", "REAL"),
+            ("target_ebitda", "REAL"),
+            ("target_total_debt", "REAL"),
+            ("target_cash", "REAL"),
+            ("offer_price_per_share", "REAL"),
+        ]
+        for col_name, col_type in xbrl_columns:
+            try:
+                cursor.execute(f"ALTER TABLE ma_deals ADD COLUMN {col_name} {col_type}")
+            except Exception:
+                pass  # Column already exists
+
         conn.commit()
 
     def insert_deal(self, deal_data: Dict[str, Any]) -> str:

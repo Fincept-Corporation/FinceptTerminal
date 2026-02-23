@@ -1,25 +1,7 @@
 {
-  "title": "वॉचलिस्ट",
-  "header": {
-    "export": "निर्यात",
-    "updating": "अपडेट हो रहा है",
-    "live": "लाइव"
-  },
   "sidebar": {
-    "groups": "वॉचलिस्ट समूह",
-    "new": "नया",
     "noWatchlists": "अभी तक कोई वॉचलिस्ट नहीं।",
     "clickNew": "बनाने के लिए नया क्लिक करें।",
-    "stocks": "स्टॉक",
-    "marketMovers": "मार्केट मूवर्स",
-    "gainer": "गेनर",
-    "loser": "लूज़र",
-    "volumeLeaders": "वॉल्यूम लीडर्स"
-  },
-  "emptyState": {
-    "selectWatchlist": "शुरू करने के लिए वॉचलिस्ट चुनें या नई बनाएं"
-  },
-  "list": {
-    "symbols": "सिम्बल"
+    "stocks": "स्टॉक"
   }
 }

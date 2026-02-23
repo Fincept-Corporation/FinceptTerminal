@@ -1,29 +1,60 @@
 {
-  "title": "РЕДАКТОР КОДУ",
   "header": {
-    "packages": "ПАКЕТИ"
+    "finscriptIde": "[UK] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "НОВИЙ ФАЙЛ",
-    "new": "НОВИЙ",
-    "open": "ВІДКРИТИ",
-    "save": "ЗБЕРЕГТИ",
     "run": "ВИКОНАТИ",
     "running": "ВИКОНУЄТЬСЯ...",
-    "runAll": "ВИКОНАТИ ВСЕ",
-    "history": "ІСТОРІЯ"
+    "toggleExplorer": "[UK] Toggle Explorer (Ctrl+B)",
+    "openFile": "[UK] Open File",
+    "saveShortcut": "[UK] Save (Ctrl+S)",
+    "findShortcut": "[UK] Find (Ctrl+F)",
+    "runShortcut": "[UK] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "РЕДАКТОР FINSCRIPT"
   },
-  "packages": {
-    "clickToLoad": "Натисніть для завантаження...",
-    "load": "ЗАВАНТАЖИТИ ПАКЕТИ"
+  "explorer": {
+    "title": "[UK] EXPLORER",
+    "openFiles": "[UK] OPEN FILES",
+    "examples": "[UK] EXAMPLES",
+    "runHistory": "[UK] RUN HISTORY",
+    "finscriptEngine": "[UK] FinScript Engine"
   },
-  "history": {
-    "title": "ІСТОРІЯ НОУТБУКІВ",
-    "loading": "Завантаження історії...",
-    "empty": "Історія ноутбуків порожня"
+  "output": {
+    "title": "[UK] OUTPUT",
+    "success": "[UK] SUCCESS",
+    "error": "[UK] ERROR",
+    "executing": "[UK] EXECUTING FINSCRIPT...",
+    "noOutput": "[UK] No output yet",
+    "pressToRun": "[UK] Press Ctrl+Enter to run",
+    "completed": "[UK] COMPLETED",
+    "failed": "[UK] FAILED",
+    "signals": "[UK] signals",
+    "clear": "[UK] CLEAR",
+    "errors": "[UK] ERRORS",
+    "signalsSection": "[UK] SIGNALS",
+    "outputSection": "[UK] OUTPUT",
+    "charts": "[UK] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[UK] OHLC",
+    "histogram": "[UK] Histogram",
+    "line": "[UK] Line",
+    "points": "[UK] points"
+  },
+  "statusBar": {
+    "modified": "[UK] MODIFIED",
+    "showOutput": "[UK] SHOW OUTPUT",
+    "encoding": "[UK] UTF-8",
+    "spaces": "[UK] 4 Spaces",
+    "runShortcut": "[UK] Ctrl+Enter: Run",
+    "lines": "[UK] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[UK] Close file without saving?",
+    "unsavedChanges": "[UK] You have unsaved changes."
   }
 }

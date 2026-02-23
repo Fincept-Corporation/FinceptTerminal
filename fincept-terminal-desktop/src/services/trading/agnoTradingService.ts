@@ -295,35 +295,7 @@ class AgnoTradingService {
    * Returns a map of API keys in the format: { OPENAI_API_KEY: "sk-...", ... }
    */
   private async getApiKeysMap(): Promise<Record<string, string>> {
-    try {
-      const configs = await sqliteService.getLLMConfigs();
-
-      // Build API keys map
-      const apiKeys: Record<string, string> = {};
-      configs.forEach(config => {
-        if (config.api_key) {
-          const provider = config.provider.toLowerCase();
-
-          // Map provider name to standard env var format
-          // Handle aliases: gemini -> google
-          let standardProvider = provider;
-          if (provider === 'gemini') {
-            standardProvider = 'google';
-            // Also add GEMINI_API_KEY for backward compatibility
-            apiKeys['GEMINI_API_KEY'] = config.api_key;
-          }
-
-          // Format: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, etc.
-          const keyName = `${standardProvider.toUpperCase()}_API_KEY`;
-          apiKeys[keyName] = config.api_key;
-        }
-      });
-
-      return apiKeys;
-    } catch (error) {
-      console.warn('Failed to load API keys:', error);
-      return {};
-    }
+    return sqliteService.buildApiKeysMap();
   }
 
   /**

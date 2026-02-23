@@ -1247,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "fincept-terminal-desktop"
-version = "3.3.1"
+version = "3.3.3"
 dependencies = [
  "aes-gcm",
  "ahash",
@@ -1258,6 +1258,7 @@ dependencies = [
  "csv",
  "dashmap",
  "dirs 5.0.1",
+ "finscript",
  "flate2",
  "futures",
  "futures-util",
@@ -1306,6 +1307,15 @@ name = "find-msvc-tools"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a3076410a55c90011c298b04d0cfa770b00fa04e1e3c97d3f6c9de105a03844"
+
+[[package]]
+name = "finscript"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "flate2"

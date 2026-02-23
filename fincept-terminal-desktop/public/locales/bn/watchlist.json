@@ -1,25 +1,7 @@
 {
-  "title": "ওয়াচলিস্ট",
-  "header": {
-    "export": "রপ্তানি",
-    "updating": "আপডেট হচ্ছে",
-    "live": "লাইভ"
-  },
   "sidebar": {
-    "groups": "ওয়াচলিস্ট গ্রুপ",
-    "new": "নতুন",
     "noWatchlists": "এখনো কোনো তালিকা নেই।",
     "clickNew": "তৈরি করতে নতুন ক্লিক করুন।",
-    "stocks": "স্টক",
-    "marketMovers": "মার্কেট মুভার্স",
-    "gainer": "গেইনার",
-    "loser": "লুজার",
-    "volumeLeaders": "ভলিউম লিডার"
-  },
-  "emptyState": {
-    "selectWatchlist": "শুরু করতে একটি তালিকা নির্বাচন করুন বা নতুন তৈরি করুন"
-  },
-  "list": {
-    "symbols": "সিম্বল"
+    "stocks": "স্টক"
   }
 }

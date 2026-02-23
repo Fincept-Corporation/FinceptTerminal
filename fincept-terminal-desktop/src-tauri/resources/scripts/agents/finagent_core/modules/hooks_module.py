@@ -399,7 +399,7 @@ class CostTrackingHook(Hook):
 
         input_tokens = usage.get("input_tokens", 0)
         output_tokens = usage.get("output_tokens", 0)
-        model = context.get("model", "gpt-3.5-turbo")
+        model = context.get("model") or context.get("provider", "unknown")
 
         # Calculate cost
         cost = self._calculate_cost(model, input_tokens, output_tokens)

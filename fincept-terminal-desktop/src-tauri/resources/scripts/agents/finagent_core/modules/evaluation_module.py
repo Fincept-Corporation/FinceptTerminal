@@ -298,7 +298,7 @@ class AgentJudgeEvaluator:
 
     def __init__(
         self,
-        judge_model: str = "gpt-4-turbo",
+        judge_model: Optional[str] = None,
         criteria: List[str] = None
     ):
         """
@@ -408,7 +408,7 @@ class EvaluationModule:
         self.judge_eval: Optional[AgentJudgeEvaluator] = None
         self._results: List[EvaluationResult] = []
 
-    def enable_agent_judge(self, model: str = "gpt-4-turbo") -> "EvaluationModule":
+    def enable_agent_judge(self, model: Optional[str] = None) -> "EvaluationModule":
         """Enable agent-as-judge evaluation."""
         self.judge_eval = AgentJudgeEvaluator(judge_model=model)
         return self
@@ -502,7 +502,7 @@ class EvaluationModule:
 
         if config.get("agent_judge"):
             module.enable_agent_judge(
-                model=config["agent_judge"].get("model", "gpt-4-turbo")
+                model=config["agent_judge"].get("model")
             )
 
         return module

@@ -7,13 +7,7 @@ import { listen } from '@tauri-apps/api/event';
 import type { AlgoDeployment } from '../types';
 import { stopAlgoDeployment, deleteAlgoDeployment } from '../services/algoTradingService';
 import TradeHistoryTable from './TradeHistoryTable';
-
-const F = {
-  ORANGE: '#FF8800', WHITE: '#FFFFFF', RED: '#FF3B3B', GREEN: '#00D66F',
-  GRAY: '#787878', DARK_BG: '#000000', PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A', BORDER: '#2A2A2A', MUTED: '#4A4A4A',
-  CYAN: '#00E5FF', YELLOW: '#FFD700', BLUE: '#0088FF', PURPLE: '#9D4EDD',
-};
+import { F } from '../constants/theme';
 
 const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
   running: { color: F.GREEN, bg: `${F.GREEN}15`, label: 'RUNNING' },

@@ -14,21 +14,25 @@ export const finscriptLanguageDoc: DocSection = {
 **Key Features:**
 • Pine Script-inspired syntax — familiar to traders
 • 30+ built-in technical indicators (EMA, SMA, RSI, MACD, Bollinger, ATR, etc.)
-• Deterministic OHLCV data generation for instant backtesting
+• Live market data from Yahoo Finance or demo mode with synthetic data
+• Risk analytics: Sharpe, Sortino, max drawdown, correlation, beta
+• Terminal integration: watchlist, paper trading, alerts, screener
 • Candlestick and line chart visualization
 • Buy/Sell signal generation with strategy mode
 • User-defined functions, structs, maps, and matrices
 • For/while loops, if/else, switch, ternary operator
 • Alerts and alert conditions
+• Batch execution for multi-symbol screening
 • Print debugging with formatted output
-• Zero external dependencies — pure Rust execution
+• Zero external dependencies — compiled Rust library
 
 **Architecture:**
 • Lexer tokenizes source code into tokens
 • Recursive descent parser produces an AST
 • Tree-walking interpreter evaluates the program
-• Results returned as JSON (signals, plots, output, alerts)
-• Standalone CLI binary — no Python or network required
+• Results returned as JSON (signals, plots, output, alerts, integration actions)
+• Linked as a Rust library into the Tauri app for native performance
+• Live mode fetches real OHLCV data via Yahoo Finance
 
 **File Extension:** \`.fincept\``,
       codeExample: `// Your first FinScript program
@@ -695,8 +699,8 @@ print "AAPL-MSFT corr:", matrix_get(corr, 0, 1)`
 **Ticker Symbols:**
 • Any ALL-UPPERCASE identifier is treated as a ticker symbol
 • Examples: \`AAPL\`, \`MSFT\`, \`GOOGL\`, \`TSLA\`, \`SPY\`
-• Data is automatically generated (deterministic random walk)
-• 180 days of daily OHLCV data per symbol
+• Demo mode: synthetic data (deterministic random walk, 180 days)
+• Live mode: real historical data from Yahoo Finance (configurable date range)
 
 **request.security():**
 • \`request.security(SYMBOL)\` — Fetch close data for another symbol
@@ -807,6 +811,206 @@ label_new(200, 170.0, "Resistance", "red")
 box_new(50, 148.0, 200, 152.0, "blue", "rgba(0,0,255,0.1)", 1)`
     },
     {
+      id: 'fs-live-data',
+      title: 'Live Market Data',
+      content: `FinScript supports both demo mode (synthetic data) and live mode (real market data from Yahoo Finance). Toggle between modes using the LIVE/DEMO button in the toolbar.
+
+**Demo Mode (Default):**
+• Uses deterministic synthetic OHLCV data
+• Instant execution — no network required
+• 180 days of generated daily data per symbol
+• Great for learning and prototyping strategies
+
+**Live Mode:**
+• Fetches real historical OHLCV data from Yahoo Finance
+• Configure date range with start and end date pickers
+• Symbols are auto-detected from your code
+• Slightly slower due to data fetching
+• Requires internet connection
+
+**How to Use:**
+1. Click the "DEMO" button in the toolbar to switch to "LIVE"
+2. Set your desired date range (defaults to last 1 year)
+3. Run your script — real data will be fetched for all referenced symbols
+4. The green dot indicator shows when live mode is active
+
+**Batch / Screener Mode:**
+• Use \`screener_scan(symbols)\` to run your script across multiple symbols
+• Each symbol is executed independently with its own data
+• Results are collected and displayed together
+
+**Notes:**
+• Symbol names must be valid Yahoo Finance tickers (e.g., AAPL, MSFT, BTC-USD)
+• Date format: YYYY-MM-DD
+• If a symbol fails to fetch, an error is returned for that symbol only`,
+      codeExample: `// This script works in both DEMO and LIVE mode
+// In LIVE mode, real Yahoo Finance data is used
+// Toggle the LIVE/DEMO button in the toolbar
+
+close_prices = close(AAPL)
+sma_20 = sma(AAPL, 20)
+ema_12 = ema(AAPL, 12)
+rsi_14 = rsi(AAPL, 14)
+
+print "Data points:", len(close_prices)
+print "Latest close:", round(last(close_prices), 2)
+print "SMA(20):", round(last(sma_20), 2)
+print "RSI(14):", round(last(rsi_14), 1)
+
+// Multi-symbol analysis (each symbol's data is fetched)
+aapl_rsi = last(rsi(AAPL, 14))
+msft_rsi = last(rsi(MSFT, 14))
+spy_rsi = last(rsi(SPY, 14))
+
+print "AAPL RSI:", round(aapl_rsi, 1)
+print "MSFT RSI:", round(msft_rsi, 1)
+print "SPY RSI:", round(spy_rsi, 1)
+
+plot_candlestick AAPL, "AAPL (Live Data)"
+plot_line sma_20, "SMA 20", "blue"
+plot_line ema_12, "EMA 12", "orange"`
+    },
+    {
+      id: 'fs-risk-analytics',
+      title: 'Risk & Portfolio Analytics',
+      content: `FinScript includes built-in risk analytics functions for portfolio analysis. These operate on price or return series and produce key performance metrics.
+
+**Risk Metrics:**
+• \`sharpe(series, rf_rate?)\` — Annualized Sharpe ratio (risk-adjusted return)
+• \`sortino(series, rf_rate?)\` — Sortino ratio (penalizes only downside volatility)
+• \`max_drawdown(series)\` — Maximum peak-to-trough decline (0 to 1)
+
+**Correlation & Beta:**
+• \`correlation(series_a, series_b)\` — Pearson correlation of daily returns (-1 to 1)
+• \`beta(asset, benchmark)\` — Beta coefficient (sensitivity to benchmark)
+
+**Returns:**
+• \`returns(series)\` — Computes daily returns series (percentage changes)
+
+**Parameters:**
+• \`rf_rate\` — Annual risk-free rate (default 0.0). Use 0.05 for 5%.
+• All functions accept price Series (close prices). Returns are computed internally.
+
+**Interpretation:**
+• Sharpe > 1.0 = good, > 2.0 = very good, > 3.0 = excellent
+• Sortino is preferred when returns are asymmetric
+• Max drawdown of 0.20 means the asset dropped 20% from peak
+• Beta > 1 = more volatile than benchmark, < 1 = less volatile
+• Correlation near 1 = assets move together, near -1 = inversely`,
+      codeExample: `// Risk analytics for a single stock
+prices = close(AAPL)
+sr = sharpe(prices)
+so = sortino(prices)
+dd = max_drawdown(prices)
+
+print "=== AAPL Risk Profile ==="
+print "Sharpe Ratio:", round(sr, 3)
+print "Sortino Ratio:", round(so, 3)
+print "Max Drawdown:", round(dd * 100, 2), "%"
+
+// Compare two assets
+corr = correlation(close(AAPL), close(MSFT))
+b = beta(close(AAPL), close(SPY))
+
+print "\\n=== Relative Metrics ==="
+print "AAPL-MSFT Correlation:", round(corr, 3)
+print "AAPL Beta (vs SPY):", round(b, 3)
+
+// Analyze daily returns
+rets = returns(close(AAPL))
+print "\\n=== Returns ==="
+print "Return observations:", len(rets)
+print "Last daily return:", round(last(rets) * 100, 4), "%"
+print "Avg daily return:", round(avg(rets) * 100, 4), "%"
+
+// Risk-adjusted comparison
+print "\\n=== Comparison ==="
+print "AAPL Sharpe:", round(sharpe(close(AAPL)), 3)
+print "MSFT Sharpe:", round(sharpe(close(MSFT)), 3)
+print "GOOGL Sharpe:", round(sharpe(close(GOOGL)), 3)
+
+plot_candlestick AAPL, "AAPL Risk Analysis"`
+    },
+    {
+      id: 'fs-terminal-integration',
+      title: 'Terminal Integration',
+      content: `FinScript can interact with the Fincept Terminal through integration functions. These queue actions that are processed by the terminal after script execution.
+
+**Watchlist:**
+• \`watchlist_add(symbol, name?)\` — Add a symbol to a terminal watchlist
+• \`name\` is optional (defaults to "default")
+• Returns \`true\` on success
+
+**Paper Trading:**
+• \`paper_trade(symbol, side, quantity, price?)\` — Submit a paper trade order
+• \`side\`: "buy" or "sell"
+• \`price\` is optional (market order if omitted)
+• Returns \`true\` on success
+
+**Alerts:**
+• \`alert_create(message, type?)\` — Create a persistent terminal alert
+• Types: "info" (default), "warning", "critical"
+• Different from \`alert()\` — these persist in the notification panel
+
+**Screener:**
+• \`screener_scan(symbols)\` — Run the current script across multiple symbols
+• Accepts an array of ticker symbol strings
+• Results collected per-symbol
+
+**How It Works:**
+1. Integration functions queue actions during script execution
+2. After the script finishes, the terminal processes all queued actions
+3. Actions are dispatched to the appropriate terminal subsystem
+4. The output panel shows a summary of actions taken
+
+**Use Cases:**
+• Auto-add oversold stocks to a watchlist for monitoring
+• Execute paper trades when strategy conditions are met
+• Create alerts for important market conditions
+• Screen a universe of stocks with custom criteria`,
+      codeExample: `// Terminal integration workflow
+// This script analyzes AAPL and takes actions
+
+rsi_now = last(rsi(AAPL, 14))
+ema_f = last(ema(AAPL, 12))
+ema_s = last(ema(AAPL, 26))
+price = last(close(AAPL))
+
+print "=== Signal Analysis ==="
+print "Price:", round(price, 2)
+print "RSI:", round(rsi_now, 1)
+print "Trend:", ema_f > ema_s ? "UP" : "DOWN"
+
+// Add to watchlist if interesting
+if rsi_now < 35 {
+    watchlist_add(AAPL, "Oversold")
+    print "Added AAPL to Oversold watchlist"
+}
+
+// Paper trade on strong signal
+if ema_f > ema_s and rsi_now < 65 {
+    paper_trade(AAPL, "buy", 50)
+    print "Paper buy 50 shares of AAPL"
+}
+
+// Create alert for extreme conditions
+if rsi_now > 80 {
+    alert_create("AAPL RSI extremely overbought!", "warning")
+}
+if rsi_now < 20 {
+    alert_create("AAPL RSI extremely oversold!", "critical")
+}
+
+// Screen multiple symbols
+tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
+screener_scan(tickers)
+
+plot_candlestick AAPL, "Terminal Integration Demo"
+plot rsi(AAPL, 14), "RSI"
+hline 70, "OB", "red"
+hline 30, "OS", "green"`
+    },
+    {
       id: 'fs-imports',
       title: 'Modules & Imports',
       content: `FinScript supports a module system for organizing reusable code.
@@ -845,7 +1049,7 @@ fn calculate_sharpe(returns, risk_free) {
     return (avg_ret - risk_free) / std_ret
 }
 
-fn max_drawdown(equity_curve) {
+fn calc_max_drawdown(equity_curve) {
     peak = first(equity_curve)
     max_dd = 0
     for val in equity_curve {
@@ -861,7 +1065,7 @@ fn max_drawdown(equity_curve) {
 }
 
 export calculate_sharpe
-export max_drawdown
+export calc_max_drawdown
 
 // Use the functions
 returns = [0.02, -0.01, 0.03, 0.01, -0.02, 0.04]
@@ -869,8 +1073,11 @@ sharpe = calculate_sharpe(returns, 0.005)
 print "Sharpe:", round(sharpe, 3)
 
 equity = [100000, 102000, 101500, 104000, 103000, 106000]
-dd = max_drawdown(equity)
-print "Max Drawdown:", round(dd * 100, 2), "%"`
+dd = calc_max_drawdown(equity)
+print "Max Drawdown:", round(dd * 100, 2), "%"
+
+// Note: FinScript also has a built-in max_drawdown(series)
+// that works directly on price Series data`
     },
     {
       id: 'fs-complete-example',

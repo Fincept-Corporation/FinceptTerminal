@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "TABLEAU DE BORD PERSONNALISABLE",
-    "live": "EN DIRECT",
-    "widgets": "WIDGETS"
-  },
-  "buttons": {
-    "addWidget": "AJOUTER UN WIDGET",
-    "saveLayout": "ENREGISTRER LA MISE EN PAGE",
-    "reset": "RÉINITIALISER",
-    "help": "AIDE"
-  },
   "widgets": {
     "loading": "Chargement...",
-    "error": "Erreur",
     "globalIndices": "Indices mondiaux - Top 12",
     "forex": "Forex - Paires majeures",
     "crypto": "CRYPTOMONNAIES",
@@ -20,8 +8,6 @@
     "news": "NOUVELLES",
     "forum": "FORUM",
     "watchlist": "LISTE DE SURVEILLANCE",
-    "maritimeIntelligence": "Renseignement maritime",
-    "unknown": "Type de widget inconnu",
     "index": "INDICE",
     "symbol": "SYMBOLE",
     "price": "PRIX",
@@ -38,41 +24,22 @@
     "pair": "PAIRE",
     "rate": "TAUX",
     "commodity": "MARCHANDISE",
-    "globe3D": "GLOBE 3D",
-    "vessels": "NAVIRES",
-    "routes": "ITINÉRAIRES",
-    "vol24h": "VOL 24H",
-    "topTradeCorridors": "PRINCIPAUX CORRIDORS COMMERCIAUX",
-    "ships": "navires",
-    "marketNews": "Actualités du marché",
-    "secPressReleases": "Communiqués de presse de la SEC",
-    "cryptoNews": "Actualités cryptographiques",
-    "trendingForum": "Forum des tendances",
-    "techStocks": "Actions technologiques"
-  },
-  "tips": {
-    "drag": "Faites glisser les widgets pour les réorganiser",
-    "resize": "Redimensionner à partir du coin inférieur droit",
-    "remove": "Supprimer les widgets avec le bouton X",
-    "responsive": "Mise en page réactive - utilise toute la largeur"
-  },
-  "loading": {
-    "title": "Initialisation du tableau de bord",
-    "description": "Configuration du cache de base de données pour un chargement plus rapide des données...",
-    "note": "Cela ne prendra qu'un instant au premier lancement"
-  },
-  "empty": {
-    "noWidgets": "Aucun widget sur le tableau de bord",
-    "addFirst": "AJOUTEZ VOTRE PREMIER WIDGET"
-  },
-  "status": {
-    "version": "Tableau de bord personnalisable Fincept v2.0.0 | Glisser-déposer l'espace de travail",
-    "layout": "Mise en page",
-    "custom": "Coutume",
-    "empty": "Vide",
-    "active": "ACTIF",
-    "cache": "Cache : ACTIVÉ",
-    "label": "Statut"
+    "noActiveMarkets": "[FR] No active markets found",
+    "indicator": "[FR] INDICATOR",
+    "value": "[FR] VALUE",
+    "chg": "[FR] CHG",
+    "overallRisk": "[FR] OVERALL RISK",
+    "openEconomicsTab": "[FR] Open Economics Tab",
+    "openGeopoliticsTab": "[FR] Open Geopolitics Tab",
+    "openPolymarketTab": "[FR] Open Polymarket Tab",
+    "noPortfolioFound": "[FR] No portfolio found",
+    "createPortfolioHint": "[FR] Create one in Portfolio tab",
+    "openPortfolioTab": "[FR] Open Portfolio Tab",
+    "action": "[FR] ACTION",
+    "markets": "[FR] MARKETS",
+    "performanceTracker": "[FR] PERFORMANCE TRACKER",
+    "totalPnL": "[FR] TOTAL P&L",
+    "viewDetailedAnalytics": "[FR] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "Disposition du tableau de bord enregistrée !",

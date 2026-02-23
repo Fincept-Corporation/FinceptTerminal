@@ -11,6 +11,14 @@ interface Position {
   currentPrice: number;
 }
 
+interface MarketLimits {
+  amountPrecision: number;   // decimal places for quantity
+  pricePrecision: number;    // decimal places for price
+  minAmount: number;         // minimum order quantity
+  maxAmount: number | null;
+  minCost: number;           // minimum notional value
+}
+
 interface CryptoOrderEntryProps {
   selectedSymbol: string;
   currentPrice: number;
@@ -22,6 +30,9 @@ interface CryptoOrderEntryProps {
   isConnecting: boolean;
   paperAdapter: any;
   realAdapter: any;
+  makerFee?: number;
+  takerFee?: number;
+  marketLimits?: MarketLimits | null;
   onTradingModeChange: (mode: 'paper' | 'live') => void;
   onRetryConnection?: () => void;
   onOrderPlaced?: () => void;
@@ -41,10 +52,18 @@ export function CryptoOrderEntry({
   isConnecting,
   paperAdapter,
   realAdapter,
+  makerFee = 0.001,
+  takerFee = 0.001,
+  marketLimits = null,
   onTradingModeChange,
   onRetryConnection,
   onOrderPlaced,
 }: CryptoOrderEntryProps) {
+  // Precision helpers — use CCXT market data when available, sensible defaults otherwise
+  const amountDecimals = marketLimits?.amountPrecision ?? 6;
+  const priceDecimals = marketLimits?.pricePrecision ?? 2;
+  const minAmount = marketLimits?.minAmount ?? 0;
+  const minCost = marketLimits?.minCost ?? 0;
   // Order state
   const [side, setSide] = useState<OrderSide>('buy');
   const [orderType, setOrderType] = useState<OrderType>('limit');
@@ -119,17 +138,27 @@ export function CryptoOrderEntry({
     return num.toFixed(6);
   };
 
-  // Validation
+  // Effective fee: limit orders use makerFee, market/stop-limit use takerFee
+  const effectiveFee = orderType === 'limit' ? makerFee : takerFee;
+
+  // Validation — includes exchange-enforced limits from CCXT market data
   const validation = useMemo(() => {
     const errors: string[] = [];
     if (quantityNum <= 0) errors.push('Enter quantity');
     if ((orderType === 'limit' || orderType === 'stop-limit') && priceNum <= 0) errors.push('Enter price');
     if (orderType === 'stop-limit' && (!stopPrice || parseFloat(stopPrice) <= 0)) errors.push('Enter stop price');
-    // Include estimated fee (0.1%) in balance check
-    const totalWithFees = total + (total * 0.001);
+    // Exchange minimum order size
+    if (quantityNum > 0 && minAmount > 0 && quantityNum < minAmount) {
+      errors.push(`Min order: ${minAmount} ${selectedSymbol.split('/')[0]}`);
+    }
+    // Exchange minimum notional value
+    if (total > 0 && minCost > 0 && total < minCost) {
+      errors.push(`Min order value: $${minCost}`);
+    }
+    const totalWithFees = total + (total * effectiveFee);
     if (side === 'buy' && totalWithFees > balance && total > 0) errors.push(`Insufficient balance ($${balance.toFixed(2)} available, $${totalWithFees.toFixed(2)} needed)`);
     return { valid: errors.length === 0, errors };
-  }, [quantityNum, priceNum, orderType, stopPrice, side, total, balance]);
+  }, [quantityNum, priceNum, orderType, stopPrice, side, total, balance, effectiveFee, minAmount, minCost, selectedSymbol]);
 
   // Handle percentage buttons
   const handlePercentage = useCallback((percent: number) => {
@@ -140,18 +169,16 @@ export function CryptoOrderEntry({
       if (effectivePrice <= 0 || balance <= 0) return;
       const maxQty = balance / effectivePrice;
       const qty = maxQty * percent;
-      setQuantity(qty > 0 ? qty.toFixed(6) : '');
+      setQuantity(qty > 0 ? qty.toFixed(amountDecimals) : '');
     } else {
       // Sell/Short: percentage of current position holdings OR percentage of balance for new shorts
       if (positionQuantity > 0 && positionSide === 'long') {
-        // If we have a long position, sell percentage of that position
         const qty = positionQuantity * percent;
-        setQuantity(qty > 0 ? qty.toFixed(6) : '');
+        setQuantity(qty > 0 ? qty.toFixed(amountDecimals) : '');
       } else if (effectivePrice > 0 && balance > 0) {
-        // No position or short position - calculate short size based on available margin
         const maxQty = balance / effectivePrice;
         const qty = maxQty * percent;
-        setQuantity(qty > 0 ? qty.toFixed(6) : '');
+        setQuantity(qty > 0 ? qty.toFixed(amountDecimals) : '');
       }
     }
   }, [balance, currentPrice, priceNum, side, positionQuantity, positionSide]);
@@ -174,12 +201,16 @@ export function CryptoOrderEntry({
       if (orderType === 'stop-limit' && parsedStopPrice) params.stopPrice = parsedStopPrice;
 
       if (typeof adapter.createOrder === 'function') {
+        // Apply exchange precision before submitting — prevents exchange rejections
+        const preciseAmount = parseFloat(quantityNum.toFixed(amountDecimals));
+        const precisePrice = priceNum > 0 ? parseFloat(priceNum.toFixed(priceDecimals)) : undefined;
+
         await adapter.createOrder(
           selectedSymbol,
           orderType,
           side,
-          quantityNum,
-          orderType !== 'market' ? priceNum : undefined,
+          preciseAmount,
+          orderType !== 'market' ? precisePrice : undefined,
           Object.keys(params).length > 0 ? params : undefined
         );
       }
@@ -539,6 +570,16 @@ export function CryptoOrderEntry({
           border: `1px solid ${FINCEPT.BORDER}`,
           marginBottom: '12px',
         }}>
+          {/* Market limits info row */}
+          {marketLimits && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span style={{ color: FINCEPT.GRAY, fontSize: '9px' }}>Min order</span>
+              <span style={{ color: FINCEPT.GRAY, fontSize: '9px' }}>
+                {minAmount > 0 ? `${minAmount} ${selectedSymbol.split('/')[0]}` : '—'}
+                {minCost > 0 ? ` / $${minCost}` : ''}
+              </span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>Order Value</span>
             <span style={{ color: FINCEPT.WHITE, fontSize: '12px', fontWeight: 600 }}>
@@ -546,16 +587,16 @@ export function CryptoOrderEntry({
             </span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>Est. Fee (0.1%)</span>
+            <span style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>Est. Fee ({(effectiveFee * 100).toFixed(2)}%)</span>
             <span style={{ color: FINCEPT.GRAY, fontSize: '11px' }}>
-              ${formatNum(total * 0.001)}
+              ${formatNum(total * effectiveFee)}
             </span>
           </div>
           <div style={{ height: '1px', background: FINCEPT.BORDER, margin: '8px 0' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>Total</span>
             <span style={{ color: FINCEPT.YELLOW, fontSize: '14px', fontWeight: 700, fontFamily: '"IBM Plex Mono", monospace' }}>
-              ${formatNum(total + (total * 0.001))}
+              ${formatNum(total + (total * effectiveFee))}
             </span>
           </div>
         </div>

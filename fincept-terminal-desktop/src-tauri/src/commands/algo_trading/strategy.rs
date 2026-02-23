@@ -3,6 +3,38 @@
 use crate::database::pool::get_db;
 use serde_json::json;
 
+/// Validate that a conditions JSON string has the correct structure.
+/// Each non-string element must have at minimum `indicator`, `operator`, `field` keys.
+fn validate_conditions_json(conditions: &str, label: &str) -> Result<(), String> {
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(conditions)
+        .map_err(|e| format!("Invalid {} JSON: {}", label, e))?;
+
+    for (i, item) in parsed.iter().enumerate() {
+        if item.is_string() {
+            // Logic operators like "AND" / "OR" are fine
+            let s = item.as_str().unwrap_or("");
+            if s != "AND" && s != "OR" {
+                return Err(format!("{} item {} is an invalid string '{}' (expected 'AND' or 'OR')", label, i, s));
+            }
+            continue;
+        }
+        if item.is_object() {
+            if item.get("indicator").is_none() {
+                return Err(format!("{} item {} is missing required 'indicator' field", label, i));
+            }
+            if item.get("operator").is_none() {
+                return Err(format!("{} item {} is missing required 'operator' field", label, i));
+            }
+            if item.get("field").is_none() {
+                return Err(format!("{} item {} is missing required 'field' field", label, i));
+            }
+        } else {
+            return Err(format!("{} item {} has unexpected type (expected object or string)", label, i));
+        }
+    }
+    Ok(())
+}
+
 /// Save or update an algo strategy (condition-based)
 #[tauri::command]
 pub async fn save_algo_strategy(
@@ -20,6 +52,14 @@ pub async fn save_algo_strategy(
     timeframe: Option<String>,
     symbols: Option<String>,
 ) -> Result<String, String> {
+    // Validate condition JSON structure before saving
+    if let Err(e) = validate_conditions_json(&entry_conditions, "entry_conditions") {
+        return Ok(json!({ "success": false, "error": e }).to_string());
+    }
+    if let Err(e) = validate_conditions_json(&exit_conditions, "exit_conditions") {
+        return Ok(json!({ "success": false, "error": e }).to_string());
+    }
+
     let conn = get_db().map_err(|e| e.to_string())?;
 
     conn.execute(
@@ -102,7 +142,15 @@ pub async fn list_algo_strategies() -> Result<String, String> {
         })
         .map_err(|e| format!("Failed to query strategies: {}", e))?;
 
-    let strategies: Vec<serde_json::Value> = rows.filter_map(|r| r.ok()).collect();
+    let strategies: Vec<serde_json::Value> = rows
+        .filter_map(|r| match r {
+            Ok(v) => Some(v),
+            Err(e) => {
+                eprintln!("[AlgoStrategy] Failed to parse strategy row: {}", e);
+                None
+            }
+        })
+        .collect();
 
     Ok(json!({
         "success": true,

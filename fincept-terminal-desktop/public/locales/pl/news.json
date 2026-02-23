@@ -1,32 +1,63 @@
 {
   "title": "PROFESJONALNE WIADOMOŚCI TERMINALA FINCEPT",
   "header": {
-    "liveFeed": "NA ŻYWO",
-    "live": "LIVE",
-    "refresh": "ODŚWIEŻ",
-    "updating": "AKTUALIZACJA...",
-    "alerts": "ALERTY",
-    "sources": "ŹRÓDŁA",
-    "status": "STATUS",
-    "demoMode": "TRYB DEMO",
-    "articles": "ARTYKUŁY",
-    "activeSources": "AKTYWNE ŹRÓDŁA"
-  },
-  "autoRefresh": {
-    "title": "INTERWAŁ AUTOMATYCZNEGO ODŚWIEŻANIA",
-    "minute": "minuta",
-    "minutes": "minut"
+    "refresh": "ODŚWIEŻ"
   },
   "messages": {
-    "loadingFeeds": "Ładowanie kanałów...",
-    "breaking": "PILNE"
+    "loadingFeedsModal": "[PL] Loading feeds...",
+    "failedToLoad": "[PL] Failed to load RSS feeds",
+    "noCustomFeeds": "[PL] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[PL] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[PL] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[PL] PRIMARY NEWS FEED",
-    "secondary": "[PL] SECONDARY NEWS FEED",
-    "additional": "[PL] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[PL] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[PL] RSS FEED SETTINGS",
+    "subtitle": "[PL] MANAGE YOUR NEWS SOURCES",
+    "close": "[PL] CLOSE",
+    "myFeeds": "[PL] MY FEEDS",
+    "defaultFeeds": "[PL] DEFAULT FEEDS",
+    "noFeedsAvailable": "[PL] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[PL] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[PL] ADD NEW FEED",
+    "addNewRssFeed": "[PL] ADD NEW RSS FEED",
+    "editRssFeed": "[PL] EDIT RSS FEED",
+    "restoreDefaults": "[PL] RESTORE DEFAULTS",
+    "restoreAll": "[PL] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[PL] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[PL] DISPLAY NAME",
+    "sourceName": "[PL] SOURCE NAME (SHORT)",
+    "feedUrl": "[PL] RSS FEED URL",
+    "category": "[PL] CATEGORY",
+    "region": "[PL] REGION",
+    "required": "[PL] *",
+    "testUrl": "[PL] TEST URL",
+    "testing": "[PL] TESTING...",
+    "valid": "[PL] VALID",
+    "cancel": "[PL] CANCEL",
+    "saving": "[PL] SAVING...",
+    "addFeed": "[PL] ADD FEED",
+    "updateFeed": "[PL] UPDATE FEED",
+    "on": "[PL] ON",
+    "off": "[PL] OFF",
+    "default": "[PL] DEFAULT",
+    "total": "[PL] TOTAL",
+    "active": "[PL] ACTIVE",
+    "custom": "[PL] CUSTOM",
+    "placeholders": {
+      "displayName": "[PL] e.g., Bloomberg Markets",
+      "sourceName": "[PL] e.g., BLOOMBERG",
+      "feedUrl": "[PL] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[PL] Name is required",
+      "sourceRequired": "[PL] Source name is required",
+      "invalidUrl": "[PL] Please enter a valid URL",
+      "invalidRss": "[PL] URL does not appear to be a valid RSS feed",
+      "testFailed": "[PL] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[PL] Delete this RSS feed?",
+      "message": "[PL] This action cannot be undone."
+    }
   }
 }

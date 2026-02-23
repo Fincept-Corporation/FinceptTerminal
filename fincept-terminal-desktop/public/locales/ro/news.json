@@ -1,32 +1,63 @@
 {
   "title": "ȘTIRI PROFESIONALE TERMINAL FINCEPT",
   "header": {
-    "liveFeed": "FEED LIVE",
-    "live": "LIVE",
-    "refresh": "REÎMPROSPĂTEAZĂ",
-    "updating": "SE ACTUALIZEAZĂ...",
-    "alerts": "ALERTE",
-    "sources": "SURSE",
-    "status": "STATUS",
-    "demoMode": "MOD DEMO",
-    "articles": "ARTICOLE",
-    "activeSources": "SURSE ACTIVE"
-  },
-  "autoRefresh": {
-    "title": "INTERVAL DE REÎMPROSPĂTARE AUTOMATĂ",
-    "minute": "minut",
-    "minutes": "minute"
+    "refresh": "REÎMPROSPĂTEAZĂ"
   },
   "messages": {
-    "loadingFeeds": "Se încarcă fluxurile...",
-    "breaking": "BREAKING"
+    "loadingFeedsModal": "[RO] Loading feeds...",
+    "failedToLoad": "[RO] Failed to load RSS feeds",
+    "noCustomFeeds": "[RO] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[RO] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[RO] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[RO] PRIMARY NEWS FEED",
-    "secondary": "[RO] SECONDARY NEWS FEED",
-    "additional": "[RO] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[RO] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[RO] RSS FEED SETTINGS",
+    "subtitle": "[RO] MANAGE YOUR NEWS SOURCES",
+    "close": "[RO] CLOSE",
+    "myFeeds": "[RO] MY FEEDS",
+    "defaultFeeds": "[RO] DEFAULT FEEDS",
+    "noFeedsAvailable": "[RO] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[RO] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[RO] ADD NEW FEED",
+    "addNewRssFeed": "[RO] ADD NEW RSS FEED",
+    "editRssFeed": "[RO] EDIT RSS FEED",
+    "restoreDefaults": "[RO] RESTORE DEFAULTS",
+    "restoreAll": "[RO] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[RO] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[RO] DISPLAY NAME",
+    "sourceName": "[RO] SOURCE NAME (SHORT)",
+    "feedUrl": "[RO] RSS FEED URL",
+    "category": "[RO] CATEGORY",
+    "region": "[RO] REGION",
+    "required": "[RO] *",
+    "testUrl": "[RO] TEST URL",
+    "testing": "[RO] TESTING...",
+    "valid": "[RO] VALID",
+    "cancel": "[RO] CANCEL",
+    "saving": "[RO] SAVING...",
+    "addFeed": "[RO] ADD FEED",
+    "updateFeed": "[RO] UPDATE FEED",
+    "on": "[RO] ON",
+    "off": "[RO] OFF",
+    "default": "[RO] DEFAULT",
+    "total": "[RO] TOTAL",
+    "active": "[RO] ACTIVE",
+    "custom": "[RO] CUSTOM",
+    "placeholders": {
+      "displayName": "[RO] e.g., Bloomberg Markets",
+      "sourceName": "[RO] e.g., BLOOMBERG",
+      "feedUrl": "[RO] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[RO] Name is required",
+      "sourceRequired": "[RO] Source name is required",
+      "invalidUrl": "[RO] Please enter a valid URL",
+      "invalidRss": "[RO] URL does not appear to be a valid RSS feed",
+      "testFailed": "[RO] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[RO] Delete this RSS feed?",
+      "message": "[RO] This action cannot be undone."
+    }
   }
 }

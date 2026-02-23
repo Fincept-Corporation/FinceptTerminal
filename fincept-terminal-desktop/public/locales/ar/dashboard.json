@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "لوحة تحكم قابلة للتخصيص",
-    "live": "يعيش",
-    "widgets": "الحاجيات"
-  },
-  "buttons": {
-    "addWidget": "إضافة القطعة",
-    "saveLayout": "حفظ التخطيط",
-    "reset": "إعادة ضبط",
-    "help": "يساعد"
-  },
   "widgets": {
     "loading": "تحميل...",
-    "error": "خطأ",
     "globalIndices": "المؤشرات العالمية - أعلى 12",
     "forex": "الفوركس - الأزواج الرئيسية",
     "crypto": "العملات المشفرة",
@@ -20,8 +8,6 @@
     "news": "أخبار",
     "forum": "المنتدى",
     "watchlist": "قائمة المراقبة",
-    "maritimeIntelligence": "الاستخبارات البحرية",
-    "unknown": "نوع القطعة غير معروف",
     "index": "فِهرِس",
     "symbol": "رمز",
     "price": "سعر",
@@ -38,41 +24,22 @@
     "pair": "زوج",
     "rate": "معدل",
     "commodity": "سلعة",
-    "globe3D": "الكرة الأرضية ثلاثية الأبعاد",
-    "vessels": "السفن",
-    "routes": "الطرق",
-    "vol24h": "المجلد 24 ساعة",
-    "topTradeCorridors": "أعلى الممرات التجارية",
-    "ships": "السفن",
-    "marketNews": "أخبار السوق",
-    "secPressReleases": "البيانات الصحفية للجنة الأوراق المالية والبورصات",
-    "cryptoNews": "أخبار التشفير",
-    "trendingForum": "المنتدى الرائج",
-    "techStocks": "أسهم التكنولوجيا"
-  },
-  "tips": {
-    "drag": "اسحب الأدوات لإعادة ترتيبها",
-    "resize": "تغيير الحجم من الزاوية اليمنى السفلى",
-    "remove": "إزالة الحاجيات مع زر X",
-    "responsive": "تخطيط سريع الاستجابة - يستخدم العرض الكامل"
-  },
-  "loading": {
-    "title": "تهيئة لوحة المعلومات",
-    "description": "جارٍ إعداد ذاكرة التخزين المؤقت لقاعدة البيانات لتحميل البيانات بشكل أسرع...",
-    "note": "لن يستغرق هذا سوى لحظة واحدة عند الإطلاق الأول"
-  },
-  "empty": {
-    "noWidgets": "لا الحاجيات على لوحة القيادة",
-    "addFirst": "أضف القطعة الأولى الخاصة بك"
-  },
-  "status": {
-    "version": "لوحة معلومات Fincept القابلة للتخصيص v2.0.0 | سحب وإسقاط مساحة العمل",
-    "layout": "تَخطِيط",
-    "custom": "مخصص",
-    "empty": "فارغ",
-    "active": "نشيط",
-    "cache": "ذاكرة التخزين المؤقت: ممكّنة",
-    "label": "حالة"
+    "noActiveMarkets": "[AR] No active markets found",
+    "indicator": "[AR] INDICATOR",
+    "value": "[AR] VALUE",
+    "chg": "[AR] CHG",
+    "overallRisk": "[AR] OVERALL RISK",
+    "openEconomicsTab": "[AR] Open Economics Tab",
+    "openGeopoliticsTab": "[AR] Open Geopolitics Tab",
+    "openPolymarketTab": "[AR] Open Polymarket Tab",
+    "noPortfolioFound": "[AR] No portfolio found",
+    "createPortfolioHint": "[AR] Create one in Portfolio tab",
+    "openPortfolioTab": "[AR] Open Portfolio Tab",
+    "action": "[AR] ACTION",
+    "markets": "[AR] MARKETS",
+    "performanceTracker": "[AR] PERFORMANCE TRACKER",
+    "totalPnL": "[AR] TOTAL P&L",
+    "viewDetailedAnalytics": "[AR] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "تم حفظ تخطيط لوحة المعلومات!",

@@ -3,7 +3,7 @@
  * AI-powered news article analysis via Fincept Backend API
  */
 
-const API_BASE_URL = 'https://finceptbackend.share.zrok.io';
+const API_BASE_URL = 'https://api.fincept.in';
 const API_KEY = 'fk_user_uhwLowYhfwEg6H3WCtXK4hqG0DhZfNhK2UmtNpHuLuB';
 
 export interface NewsAnalysisRequest {

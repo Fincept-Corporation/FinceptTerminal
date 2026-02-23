@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://finceptbackend.share.zrok.io"
+BASE_URL = "https://api.fincept.in"
 POLL_INTERVAL = 4       # seconds between polls
 POLL_MAX_WAIT = 180     # max seconds to wait for a single LLM call
 

@@ -5,7 +5,7 @@
  * Includes all Alpha Arena features: auto-trading, TP/SL, confidence, safety limits.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bot, Brain, Shield, Target, Zap, Settings, AlertTriangle,
   Clock, TrendingUp, Activity, BarChart3, Sliders, Play, Pause,
@@ -40,9 +40,37 @@ export function AgentConfigurationUI({ onAgentCreated }: AgentConfigUIProps) {
   const [description, setDescription] = useState('');
 
   // LLM Config
-  const [provider, setProvider] = useState('openai');
-  const [model, setModel] = useState('gpt-4o-mini');
+  const [provider, setProvider] = useState('');
+  const [model, setModel] = useState('');
   const [temperature, setTemperature] = useState(0.7);
+  const [availableProviders, setAvailableProviders] = useState<Array<{ value: string; label: string }>>([]);
+
+  useEffect(() => {
+    const loadLLMConfig = async () => {
+      try {
+        const { sqliteService } = await import('../../../../services/core/sqliteService');
+        const [activeConfig, allConfigs] = await Promise.all([
+          sqliteService.getActiveLLMConfig(),
+          sqliteService.getLLMConfigs()
+        ]);
+        const configured = allConfigs.filter(c => c.api_key && c.api_key.trim().length > 0 || c.provider === 'ollama' || c.provider === 'fincept');
+        setAvailableProviders(configured.map(c => ({ value: c.provider, label: c.provider.charAt(0).toUpperCase() + c.provider.slice(1) })));
+        if (activeConfig) {
+          setProvider(activeConfig.provider);
+          setModel(activeConfig.model);
+          setTemperature((activeConfig as any).temperature ?? 0.7);
+        } else if (configured.length > 0) {
+          setProvider(configured[0].provider);
+          setModel(configured[0].model);
+        }
+      } catch (err) {
+        console.error('Failed to load LLM config:', err);
+      }
+    };
+    loadLLMConfig();
+    window.addEventListener('llm-config-changed', loadLLMConfig);
+    return () => window.removeEventListener('llm-config-changed', loadLLMConfig);
+  }, []);
 
   // Trading Config
   const [symbols, setSymbols] = useState(['BTC/USD']);
@@ -223,19 +251,20 @@ export function AgentConfigurationUI({ onAgentCreated }: AgentConfigUIProps) {
             <SelectField
               label="Provider"
               value={provider}
-              onChange={setProvider}
-              options={[
-                { value: 'openai', label: 'OpenAI' },
-                { value: 'anthropic', label: 'Anthropic' },
-                { value: 'google', label: 'Google' },
-                { value: 'groq', label: 'Groq (Fast & Free)' },
-                { value: 'deepseek', label: 'DeepSeek' },
-                { value: 'xai', label: 'xAI (Grok)' },
-                { value: 'ollama', label: 'Ollama (Local)' }
-              ]}
+              onChange={(val: string) => {
+                setProvider(val);
+                // Update model when provider changes
+                import('../../../../services/core/sqliteService').then(({ sqliteService }) => {
+                  sqliteService.getLLMConfigs().then(configs => {
+                    const match = configs.find(c => c.provider === val);
+                    if (match) setModel(match.model);
+                  });
+                });
+              }}
+              options={availableProviders.length > 0 ? availableProviders : [{ value: provider || 'none', label: provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Configure in Settings' }]}
             />
 
-            <InputField label="Model" value={model} onChange={setModel} placeholder="gpt-4o-mini" />
+            <InputField label="Model" value={model} onChange={setModel} placeholder="Configure LLM in Settings" />
           </div>
 
           <SliderField

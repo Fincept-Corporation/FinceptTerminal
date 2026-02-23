@@ -32,6 +32,8 @@ import { notesMCPBridge } from './NotesMCPBridge';
 import { nodeEditorMCPBridge } from './NodeEditorMCPBridge';
 import { portfolioMCPBridge } from './PortfolioMCPBridge';
 import { newsMCPBridge } from './NewsMCPBridge';
+import { allQuantLibTools, QUANTLIB_TOOL_COUNTS } from './tools/quantlib';
+import { quantLibMCPBridge } from './QuantLibMCPBridge';
 
 // Flag to ensure initialization only runs once
 let isInitialized = false;
@@ -70,6 +72,9 @@ export function initializeInternalMCP(): void {
     terminalMCPProvider.registerTools(economicsTools);
     terminalMCPProvider.registerTools(portfolioPanelTools);
 
+    // Register QuantLib tools (Phase 1: 120 tools)
+    terminalMCPProvider.registerTools(allQuantLibTools);
+
     // Initialize global bridge contexts
     reportBuilderMCPBridge.initializeGlobalContexts();
 
@@ -90,6 +95,9 @@ export function initializeInternalMCP(): void {
 
     // Initialize Economics bridge contexts (Fincept Macro API)
     economicsMCPBridge.connect();
+
+    // Initialize QuantLib bridge contexts
+    quantLibMCPBridge.connect();
 
     // Mark as initialized
     isInitialized = true;
@@ -117,6 +125,8 @@ export { newsMCPBridge } from './NewsMCPBridge';
 export { dataMappingMCPBridge } from './DataMappingMCPBridge';
 export { customIndexMCPBridge } from './CustomIndexMCPBridge';
 export { economicsMCPBridge } from './EconomicsMCPBridge';
+export { quantLibMCPBridge } from './QuantLibMCPBridge';
+export { allQuantLibTools, QUANTLIB_TOOL_COUNTS } from './tools/quantlib';
 export { INTERNAL_SERVER_ID, INTERNAL_SERVER_NAME } from './types';
 export type { TerminalContexts, InternalTool, InternalToolResult } from './types';
 export type {

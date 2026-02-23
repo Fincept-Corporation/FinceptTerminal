@@ -1,25 +1,7 @@
 {
-  "title": "LISTA DI CONTROLLO",
-  "header": {
-    "export": "ESPORTA",
-    "updating": "AGGIORNAMENTO",
-    "live": "LIVE"
-  },
   "sidebar": {
-    "groups": "GRUPPI DI LISTE",
-    "new": "NUOVA",
     "noWatchlists": "Nessuna lista ancora.",
     "clickNew": "Clicca NUOVA per crearne una.",
-    "stocks": "azioni",
-    "marketMovers": "LEADER DI MERCATO",
-    "gainer": "IN RIALZO",
-    "loser": "IN RIBASSO",
-    "volumeLeaders": "LEADER DI VOLUME"
-  },
-  "emptyState": {
-    "selectWatchlist": "Seleziona una lista o creane una nuova per iniziare"
-  },
-  "list": {
-    "symbols": "Simboli"
+    "stocks": "azioni"
   }
 }

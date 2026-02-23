@@ -1,899 +1,558 @@
 """
-Workflow Module - Complex task orchestration
+Workflow Module - Complex task orchestration using Agno's native subclass pattern.
 
-Provides:
-- Sequential and parallel step execution
-- Conditional branching
-- Loop support
-- Step dependencies
-- Agent workflow integration
+Each financial workflow is a proper Agno Workflow subclass with:
+- WorkflowAgent for LLM execution
+- Step / Parallel / Loop / Condition / Router primitives
+- StepInput / StepOutput typed I/O
+- Session state + streaming support
 """
 
-from typing import Dict, Any, Optional, List, Callable, Union
+from __future__ import annotations
+
+from datetime import date
+from typing import Any, Dict, Iterator, List, Optional, Callable, Union
 import logging
 
 logger = logging.getLogger(__name__)
 
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
-class WorkflowModule:
+def _today() -> str:
+    return date.today().strftime("%B %d, %Y")
+
+
+def _resolve_provider(api_keys: Dict[str, str]) -> str:
+    """Pick first configured provider from api_keys."""
+    preferred = ["fincept", "ollama", "anthropic", "google", "groq",
+                 "deepseek", "openai", "openrouter"]
+    for p in preferred:
+        if api_keys.get(p) or api_keys.get(f"{p.upper()}_API_KEY"):
+            return p
+    for k, v in api_keys.items():
+        if k.endswith("_API_KEY") and v:
+            return k[:-8].lower()
+    return "openai"
+
+
+def _make_model(api_keys: Dict[str, str], model_config: Optional[Dict] = None):
+    """Create an agno Model from api_keys + optional model_config dict."""
+    from finagent_core.registries import ModelsRegistry
+    cfg = model_config or {}
+    provider = cfg.get("provider") or _resolve_provider(api_keys)
+    return ModelsRegistry.create_model(
+        provider=provider,
+        model_id=cfg.get("model_id"),
+        api_keys=api_keys,
+        temperature=cfg.get("temperature"),
+        max_tokens=cfg.get("max_tokens"),
+    )
+
+
+def _load_workflow_tools(api_keys: Dict[str, str],
+                          terminal_endpoint: Optional[str] = None,
+                          terminal_tool_defs: Optional[List] = None) -> List[Any]:
     """
-    Workflow orchestration for complex multi-step tasks.
-
-    Supports:
-    - Sequential steps
-    - Parallel execution
-    - Conditional branching
-    - Loops
-    - Agent integration
+    Load tools for workflow agents:
+    - yfinance (real-time market data, prices, financials)
+    - duckduckgo (news and web search)
+    - TerminalToolkit (internal MCP: get_quote, portfolio, etc.)
+    Falls back gracefully if any tool fails to load.
     """
+    tools = []
 
-    def __init__(
-        self,
-        name: str = "Workflow",
-        description: Optional[str] = None,
-        **kwargs
-    ):
-        """
-        Initialize workflow module.
+    # Core financial data tools via ToolsRegistry
+    try:
+        from finagent_core.registries import ToolsRegistry
+        financial_tools = ToolsRegistry.get_tools(
+            ["yfinance", "duckduckgo"],
+            api_keys=api_keys
+        )
+        tools.extend(financial_tools)
+        logger.debug(f"WorkflowTools: loaded {len(financial_tools)} financial tools")
+    except Exception as e:
+        logger.warning(f"WorkflowTools: ToolsRegistry load failed: {e}")
 
-        Args:
-            name: Workflow name
-            description: Workflow description
-            **kwargs: Additional configuration
-        """
-        self.name = name
-        self.description = description
-        self.config = kwargs
-
-        self._steps: List[Dict[str, Any]] = []
-        self._workflow = None
-
-    def add_step(
-        self,
-        name: str,
-        agent: Optional[Any] = None,
-        function: Optional[Callable] = None,
-        prompt: Optional[str] = None,
-        **kwargs
-    ) -> "WorkflowModule":
-        """
-        Add a step to the workflow.
-
-        Args:
-            name: Step name
-            agent: Agno Agent for this step
-            function: Python function to execute
-            prompt: Prompt template for agent
-            **kwargs: Additional step configuration
-
-        Returns:
-            self for chaining
-        """
-        step = {
-            "type": "step",
-            "name": name,
-            "agent": agent,
-            "function": function,
-            "prompt": prompt,
-            **kwargs
-        }
-        self._steps.append(step)
-        return self
-
-    def add_parallel(
-        self,
-        name: str,
-        steps: List[Dict[str, Any]],
-        **kwargs
-    ) -> "WorkflowModule":
-        """
-        Add parallel execution steps.
-
-        Args:
-            name: Parallel group name
-            steps: List of steps to run in parallel
-            **kwargs: Additional configuration
-
-        Returns:
-            self for chaining
-        """
-        parallel_step = {
-            "type": "parallel",
-            "name": name,
-            "steps": steps,
-            **kwargs
-        }
-        self._steps.append(parallel_step)
-        return self
-
-    def add_condition(
-        self,
-        name: str,
-        condition: Callable[[Any], bool],
-        if_true: Dict[str, Any],
-        if_false: Optional[Dict[str, Any]] = None,
-        **kwargs
-    ) -> "WorkflowModule":
-        """
-        Add conditional branching.
-
-        Args:
-            name: Condition name
-            condition: Function that returns True/False
-            if_true: Step to execute if condition is True
-            if_false: Step to execute if condition is False
-            **kwargs: Additional configuration
-
-        Returns:
-            self for chaining
-        """
-        condition_step = {
-            "type": "condition",
-            "name": name,
-            "condition": condition,
-            "if_true": if_true,
-            "if_false": if_false,
-            **kwargs
-        }
-        self._steps.append(condition_step)
-        return self
-
-    def add_loop(
-        self,
-        name: str,
-        steps: List[Dict[str, Any]],
-        condition: Optional[Callable[[Any], bool]] = None,
-        max_iterations: int = 10,
-        **kwargs
-    ) -> "WorkflowModule":
-        """
-        Add loop execution.
-
-        Args:
-            name: Loop name
-            steps: Steps to repeat
-            condition: Continue condition (loop while True)
-            max_iterations: Maximum iterations
-            **kwargs: Additional configuration
-
-        Returns:
-            self for chaining
-        """
-        loop_step = {
-            "type": "loop",
-            "name": name,
-            "steps": steps,
-            "condition": condition,
-            "max_iterations": max_iterations,
-            **kwargs
-        }
-        self._steps.append(loop_step)
-        return self
-
-    def add_router(
-        self,
-        name: str,
-        routes: Dict[str, Dict[str, Any]],
-        router_function: Callable[[Any], str],
-        **kwargs
-    ) -> "WorkflowModule":
-        """
-        Add router step for dynamic routing.
-
-        Args:
-            name: Router name
-            routes: Dict of route_key -> step configuration
-            router_function: Function that returns route key
-            **kwargs: Additional configuration
-
-        Returns:
-            self for chaining
-        """
-        router_step = {
-            "type": "router",
-            "name": name,
-            "routes": routes,
-            "router_function": router_function,
-            **kwargs
-        }
-        self._steps.append(router_step)
-        return self
-
-    def build(self) -> Any:
-        """
-        Build the Agno Workflow.
-
-        Returns:
-            Agno Workflow instance
-        """
-        if self._workflow:
-            return self._workflow
-
-        if not self._steps:
-            raise ValueError("Cannot build workflow without steps")
-
+    # Terminal MCP bridge tools (get_quote, portfolio, navigation, etc.)
+    if terminal_endpoint and terminal_tool_defs:
         try:
-            from agno.workflow import Workflow, Step, Parallel, Condition, Loop, Router
-
-            # Convert steps to Agno format
-            agno_steps = self._convert_steps_to_agno(self._steps)
-
-            self._workflow = Workflow(
-                name=self.name,
-                description=self.description,
-                steps=agno_steps
+            from finagent_core.tools.terminal_toolkit import TerminalToolkit
+            toolkit = TerminalToolkit(
+                endpoint=terminal_endpoint,
+                tool_definitions=terminal_tool_defs,
             )
-
-            logger.debug(f"Built workflow '{self.name}' with {len(self._steps)} steps")
-            return self._workflow
-
-        except ImportError as e:
-            logger.warning(f"Agno Workflow not available: {e}")
-            # Return a simple executor fallback
-            return self._create_fallback_executor()
+            tools.extend(toolkit.get_tools())
+            logger.debug(f"WorkflowTools: loaded {len(toolkit.functions)} terminal MCP tools")
         except Exception as e:
-            raise RuntimeError(f"Failed to build workflow: {e}")
+            logger.warning(f"WorkflowTools: TerminalToolkit load failed: {e}")
 
-    def _convert_steps_to_agno(self, steps: List[Dict[str, Any]]) -> List[Any]:
-        """Convert internal step format to Agno steps"""
-        from agno.workflow import Step, Parallel, Condition, Loop, Router
+    return tools
 
-        agno_steps = []
 
-        for step_config in steps:
-            step_type = step_config.get("type", "step")
+def _make_workflow_agent(api_keys: Dict[str, str],
+                         instructions: str,
+                         model_config: Optional[Dict] = None,
+                         tools: Optional[List] = None) -> Any:
+    """
+    Create an agent for workflow step execution.
+    Uses Agent (supports tools) when tools are provided,
+    falls back to WorkflowAgent when no tools are needed.
+    """
+    model = _make_model(api_keys, model_config)
+    if tools:
+        from agno.agent import Agent
+        return Agent(model=model, instructions=instructions, tools=tools, markdown=False)
+    else:
+        from agno.workflow import WorkflowAgent
+        return WorkflowAgent(model=model, instructions=instructions)
 
-            if step_type == "step":
-                agno_step = self._create_step(step_config)
-            elif step_type == "parallel":
-                agno_step = self._create_parallel(step_config)
-            elif step_type == "condition":
-                agno_step = self._create_condition(step_config)
-            elif step_type == "loop":
-                agno_step = self._create_loop(step_config)
-            elif step_type == "router":
-                agno_step = self._create_router(step_config)
-            else:
-                logger.warning(f"Unknown step type: {step_type}")
-                continue
 
-            if agno_step:
-                agno_steps.append(agno_step)
+def _step_output(content: Any) -> Any:
+    from agno.workflow.types import StepOutput
+    return StepOutput(content=content)
 
-        return agno_steps
 
-    def _create_step(self, config: Dict[str, Any]) -> Any:
-        """Create an Agno Step"""
-        from agno.workflow import Step
+def _extract_content(step_input: Any) -> Any:
+    """Extract the input payload from a StepInput."""
+    return getattr(step_input, "input", None) or getattr(step_input, "previous_step_content", None) or {}
 
-        step_kwargs = {"name": config["name"]}
 
-        if config.get("agent"):
-            step_kwargs["agent"] = config["agent"]
-        if config.get("function"):
-            step_kwargs["function"] = config["function"]
-        if config.get("prompt"):
-            step_kwargs["prompt"] = config["prompt"]
+# ─── Stock Analysis Workflow ──────────────────────────────────────────────────
 
-        return Step(**step_kwargs)
+class StockAnalysisWorkflow:
+    """
+    Multi-step stock analysis pipeline.
 
-    def _create_parallel(self, config: Dict[str, Any]) -> Any:
-        """Create an Agno Parallel step"""
-        from agno.workflow import Parallel
+    Steps:
+    1. Fetch market data
+    2. Technical + Fundamental analysis (Parallel)
+    3. Generate recommendation
+    4. Create report
+    """
 
-        inner_steps = self._convert_steps_to_agno(config.get("steps", []))
-        return Parallel(name=config["name"], steps=inner_steps)
+    def __init__(self, api_keys: Dict[str, str], model_config: Optional[Dict] = None,
+                 tools: Optional[List] = None):
+        self.api_keys = api_keys
+        self._tools = tools
+        self.model_config = model_config or {}
 
-    def _create_condition(self, config: Dict[str, Any]) -> Any:
-        """Create an Agno Condition step"""
-        from agno.workflow import Condition
+    def run(self, symbol: str) -> Dict[str, Any]:
+        from agno.workflow import Workflow, Step, Parallel
+        from agno.workflow.types import StepOutput
 
-        return Condition(
-            name=config["name"],
-            condition=config["condition"],
-            if_true=self._create_step(config["if_true"]) if config.get("if_true") else None,
-            if_false=self._create_step(config["if_false"]) if config.get("if_false") else None,
+        today = _today()
+        agent = _make_workflow_agent(
+            self.api_keys,
+            f"You are a professional financial analyst. Today is {today}. Always use today's date in reports.",
+            self.model_config,
+            tools=self._tools,
         )
 
-    def _create_loop(self, config: Dict[str, Any]) -> Any:
-        """Create an Agno Loop step"""
-        from agno.workflow import Loop
+        def fetch_step(step_input):
+            inp = _extract_content(step_input)
+            sym = inp.get("symbol", symbol) if isinstance(inp, dict) else symbol
+            response = agent.run(
+                f"Today is {today}. Fetch and summarize current market data for {sym} "
+                f"including price, volume, recent news, and key metrics."
+            )
+            return _step_output(getattr(response, "content", str(response)))
 
-        inner_steps = self._convert_steps_to_agno(config.get("steps", []))
-        return Loop(
-            name=config["name"],
-            steps=inner_steps,
-            condition=config.get("condition"),
-            max_iterations=config.get("max_iterations", 10),
+        def tech_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Perform technical analysis for {symbol}. "
+                f"Market data context: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
+
+        def fund_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Perform fundamental analysis for {symbol} "
+                f"including valuation, financials, and competitive position. Context: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
+
+        def rec_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Based on the analysis, provide a clear "
+                f"buy/sell/hold recommendation for {symbol}. Analysis: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
+
+        def report_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Generate a comprehensive investment report for {symbol}. "
+                f"Report Date MUST be {today}. "
+                f"Include executive summary, business overview, financials, risks, and recommendation. "
+                f"Analysis: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
+
+        workflow = Workflow(
+            name=f"Stock Analysis: {symbol}",
+            steps=[
+                Step(name="fetch_market_data", executor=fetch_step),
+                Parallel(
+                    Step(name="technical_analysis", executor=tech_step),
+                    Step(name="fundamental_analysis", executor=fund_step),
+                ),
+                Step(name="generate_recommendation", executor=rec_step),
+                Step(name="create_report", executor=report_step),
+            ]
         )
 
-    def _create_router(self, config: Dict[str, Any]) -> Any:
-        """Create an Agno Router step"""
-        from agno.workflow import Router
+        result = workflow.run(input={"symbol": symbol})
+        return {"success": True, "response": getattr(result, "content", str(result))}
 
-        routes = {}
-        for key, step_config in config.get("routes", {}).items():
-            routes[key] = self._create_step(step_config)
 
-        return Router(
-            name=config["name"],
-            routes=routes,
-            router=config["router_function"],
+# ─── Portfolio Rebalancing Workflow ───────────────────────────────────────────
+
+class PortfolioRebalancingWorkflow:
+    """Portfolio rebalancing using Condition for drift check."""
+
+    def __init__(self, api_keys: Dict[str, str], model_config: Optional[Dict] = None,
+                 tools: Optional[List] = None):
+        self.api_keys = api_keys
+        self.model_config = model_config or {}
+        self._tools = tools
+
+    def run(self, portfolio_data: Dict[str, Any]) -> Dict[str, Any]:
+        from agno.workflow import Workflow, Step, Condition
+
+        today = _today()
+        agent = _make_workflow_agent(
+            self.api_keys,
+            f"You are a portfolio manager. Today is {today}.",
+            self.model_config,
+            tools=self._tools,
         )
 
-    def _create_fallback_executor(self) -> "SimpleWorkflowExecutor":
-        """Create a simple fallback executor if Agno Workflow is not available"""
-        return SimpleWorkflowExecutor(self._steps)
+        def analyze_step(step_input):
+            response = agent.run(
+                f"Today is {today}. Analyze this portfolio and calculate allocation drift: "
+                f"{portfolio_data}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
 
-    def run(self, input_data: Optional[Dict[str, Any]] = None, **kwargs) -> Any:
-        """
-        Run the workflow.
+        def rebalance_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Calculate optimal rebalancing trades. Analysis: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
 
-        Args:
-            input_data: Initial input data
-            **kwargs: Additional arguments
+        def no_action_step(step_input):
+            return _step_output("Portfolio is within tolerance. No rebalancing needed.")
 
-        Returns:
-            Workflow result
-        """
-        workflow = self.build()
+        def orders_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Generate specific trade orders for rebalancing. Plan: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
 
-        run_kwargs = {}
-        if input_data:
-            run_kwargs["input"] = input_data
-        run_kwargs.update(kwargs)
+        def needs_rebal(step_input):
+            prev = str(getattr(step_input, "previous_step_content", ""))
+            keywords = ["drift", "rebalance", "exceed", "above", "below", "overweight", "underweight"]
+            return any(k in prev.lower() for k in keywords)
 
-        return workflow.run(**run_kwargs)
-
-    async def arun(self, input_data: Optional[Dict[str, Any]] = None, **kwargs) -> Any:
-        """
-        Run the workflow asynchronously.
-
-        Args:
-            input_data: Initial input data
-            **kwargs: Additional arguments
-
-        Returns:
-            Workflow result
-        """
-        workflow = self.build()
-
-        run_kwargs = {}
-        if input_data:
-            run_kwargs["input"] = input_data
-        run_kwargs.update(kwargs)
-
-        return await workflow.arun(**run_kwargs)
-
-    def get_steps(self) -> List[Dict[str, Any]]:
-        """Get list of workflow steps"""
-        return self._steps.copy()
-
-    @classmethod
-    def from_config(cls, config: Dict[str, Any]) -> "WorkflowModule":
-        """
-        Create WorkflowModule from configuration.
-
-        Args:
-            config: Workflow configuration
-
-        Returns:
-            WorkflowModule instance
-        """
-        module = cls(
-            name=config.get("name", "Workflow"),
-            description=config.get("description"),
+        workflow = Workflow(
+            name="Portfolio Rebalancing",
+            steps=[
+                Step(name="analyze_portfolio", executor=analyze_step),
+                Condition(
+                    needs_rebal,
+                    steps=[Step(name="rebalance_plan", executor=rebalance_step)],
+                    name="check_drift",
+                ),
+                Step(name="generate_orders", executor=orders_step),
+            ]
         )
 
-        for step_config in config.get("steps", []):
-            step_type = step_config.get("type", "step")
+        result = workflow.run(input=portfolio_data)
+        return {"success": True, "response": getattr(result, "content", str(result))}
 
-            if step_type == "step":
-                module.add_step(**step_config)
-            elif step_type == "parallel":
-                module.add_parallel(**step_config)
-            elif step_type == "condition":
-                module.add_condition(**step_config)
-            elif step_type == "loop":
-                module.add_loop(**step_config)
-            elif step_type == "router":
-                module.add_router(**step_config)
 
-        return module
+# ─── Risk Assessment Workflow ─────────────────────────────────────────────────
 
+class RiskAssessmentWorkflow:
+    """Risk assessment using Router to route to the right risk analysis."""
+
+    def __init__(self, api_keys: Dict[str, str], model_config: Optional[Dict] = None,
+                 tools: Optional[List] = None):
+        self.api_keys = api_keys
+        self.model_config = model_config or {}
+        self._tools = tools
+
+    def run(self, portfolio_data: Dict[str, Any]) -> Dict[str, Any]:
+        from agno.workflow import Workflow, Step, Router
+
+        today = _today()
+        agent = _make_workflow_agent(
+            self.api_keys,
+            f"You are a risk analyst. Today is {today}.",
+            self.model_config,
+            tools=self._tools,
+        )
+
+        def identify_step(step_input):
+            response = agent.run(
+                f"Today is {today}. Identify the primary risk type (market/credit/liquidity/operational) "
+                f"for this portfolio: {portfolio_data}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
+
+        def market_risk_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Perform market risk analysis (VaR, beta, volatility). Context: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
+
+        def credit_risk_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Perform credit risk analysis. Context: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
+
+        def liquidity_risk_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Analyze liquidity risk (bid-ask, volume). Context: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
+
+        def general_risk_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Perform general risk assessment. Context: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
+
+        def report_step(step_input):
+            prev = getattr(step_input, "previous_step_content", "")
+            response = agent.run(
+                f"Today is {today}. Generate a comprehensive risk report. Report Date MUST be {today}. "
+                f"Analysis: {prev}"
+            )
+            return _step_output(getattr(response, "content", str(response)))
+
+        market_s  = Step(name="market_risk",    executor=market_risk_step)
+        credit_s  = Step(name="credit_risk",    executor=credit_risk_step)
+        liquid_s  = Step(name="liquidity_risk", executor=liquidity_risk_step)
+        general_s = Step(name="general_risk",   executor=general_risk_step)
+        choices   = [market_s, credit_s, liquid_s, general_s]
+
+        def selector(step_input):
+            prev = str(getattr(step_input, "previous_step_content", "")).lower()
+            if "credit"    in prev: return [credit_s]
+            if "liquidity" in prev: return [liquid_s]
+            if "general"   in prev: return [general_s]
+            return [market_s]
+
+        workflow = Workflow(
+            name="Risk Assessment",
+            steps=[
+                Step(name="identify_risk_type", executor=identify_step),
+                Router(selector, choices=choices, name="risk_router"),
+                Step(name="generate_risk_report", executor=report_step),
+            ]
+        )
+
+        result = workflow.run(input=portfolio_data)
+        return {"success": True, "response": getattr(result, "content", str(result))}
+
+
+# ─── Backwards-compatible factory (used by core_agent.py) ────────────────────
+
+class FinancialWorkflowTemplates:
+    """Factory that returns workflow instances — keeps core_agent.py unchanged."""
+
+    @staticmethod
+    def stock_analysis_pipeline(api_keys: Dict[str, str] = None,
+                                 model_config: Optional[Dict] = None,
+                                 tools: Optional[List] = None,
+                                 terminal_endpoint: Optional[str] = None,
+                                 terminal_tool_defs: Optional[List] = None,
+                                 **_) -> "StockAnalysisWorkflow":
+        _keys = api_keys or {}
+        _tools = tools or _load_workflow_tools(_keys, terminal_endpoint, terminal_tool_defs)
+        return StockAnalysisWorkflow(_keys, model_config, tools=_tools)
+
+    @staticmethod
+    def portfolio_rebalancing(api_keys: Dict[str, str] = None,
+                               model_config: Optional[Dict] = None,
+                               tools: Optional[List] = None,
+                               terminal_endpoint: Optional[str] = None,
+                               terminal_tool_defs: Optional[List] = None,
+                               **_) -> "PortfolioRebalancingWorkflow":
+        _keys = api_keys or {}
+        _tools = tools or _load_workflow_tools(_keys, terminal_endpoint, terminal_tool_defs)
+        return PortfolioRebalancingWorkflow(_keys, model_config, tools=_tools)
+
+    @staticmethod
+    def risk_assessment(api_keys: Dict[str, str] = None,
+                        model_config: Optional[Dict] = None,
+                        tools: Optional[List] = None,
+                        terminal_endpoint: Optional[str] = None,
+                        terminal_tool_defs: Optional[List] = None,
+                        **_) -> "RiskAssessmentWorkflow":
+        _keys = api_keys or {}
+        _tools = tools or _load_workflow_tools(_keys, terminal_endpoint, terminal_tool_defs)
+        return RiskAssessmentWorkflow(_keys, model_config, tools=_tools)
+
+
+# ─── Kept for any direct usage ────────────────────────────────────────────────
 
 class SimpleWorkflowExecutor:
-    """
-    Simple fallback workflow executor when Agno Workflow is not available.
-    Executes steps sequentially.
-    """
-
-    def __init__(self, steps: List[Dict[str, Any]]):
-        self.steps = steps
-
-    def run(self, input: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
-        """Execute workflow steps sequentially"""
+    """Fallback sequential executor (backwards compat)."""
+    def __init__(self, steps): self.steps = steps
+    def run(self, input=None, **kwargs):
         context = input or {}
         results = []
-
         for step in self.steps:
-            step_type = step.get("type", "step")
-
-            if step_type == "step":
-                result = self._execute_step(step, context)
-                results.append(result)
-                context["last_result"] = result
-            elif step_type == "parallel":
-                # Execute sequentially as fallback
-                for inner_step in step.get("steps", []):
-                    result = self._execute_step(inner_step, context)
-                    results.append(result)
-            # Add other step types as needed
-
-        return {
-            "success": True,
-            "results": results,
-            "context": context
-        }
-
-    def _execute_step(self, step: Dict[str, Any], context: Dict[str, Any]) -> Any:
-        """Execute a single step"""
-        if step.get("function"):
-            return step["function"](context)
-        elif step.get("agent"):
-            prompt = step.get("prompt", "")
-            return step["agent"].run(prompt.format(**context))
-        return None
-
-    async def arun(self, input: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
-        """Async execution (falls back to sync)"""
-        return self.run(input=input, **kwargs)
+            fn = step.get("function")
+            agent = step.get("agent")
+            if fn:
+                r = fn(context)
+            elif agent:
+                r = agent.run(step.get("prompt", "").format(**context))
+            else:
+                r = None
+            results.append(r)
+            context["last_result"] = r
+        return {"success": True, "results": results}
+    async def arun(self, input=None, **kwargs): return self.run(input=input)
 
 
 class WorkflowBuilder:
-    """
-    Fluent builder for creating workflows.
-
-    Example:
-        workflow = (WorkflowBuilder("Data Pipeline")
-            .add_step("fetch", function=fetch_data)
-            .add_step("process", agent=processor_agent)
-            .add_step("save", function=save_results)
-            .build())
-    """
-
+    """Fluent builder (backwards compat) — delegates to WorkflowModule."""
     def __init__(self, name: str):
-        """Initialize workflow builder"""
         self._module = WorkflowModule(name=name)
+    def with_description(self, d):
+        self._module.description = d; return self
+    def add_step(self, name, agent=None, function=None, prompt=None, **kw):
+        self._module.add_step(name, agent=agent, function=function, prompt=prompt, **kw); return self
+    def add_parallel(self, name, steps):
+        self._module.add_parallel(name, steps); return self
+    def add_condition(self, name, condition, if_true, if_false=None):
+        self._module.add_condition(name, condition, if_true, if_false); return self
+    def add_loop(self, name, steps, condition=None, max_iterations=10):
+        self._module.add_loop(name, steps, condition, max_iterations); return self
+    def build(self): return self._module.build()
+    def get_module(self): return self._module
 
-    def with_description(self, description: str) -> "WorkflowBuilder":
-        """Set workflow description"""
-        self._module.description = description
+
+class WorkflowModule:
+    """Thin shim kept for backwards compatibility. Delegates to workflow classes."""
+
+    def __init__(self, name: str = "Workflow", description: Optional[str] = None, **_):
+        self.name = name
+        self.description = description
+        self._steps: List[Dict[str, Any]] = []
+
+    def add_step(self, name, agent=None, function=None, prompt=None, **kwargs):
+        self._steps.append({"type": "step", "name": name, "agent": agent,
+                             "function": function, "prompt": prompt, **kwargs})
         return self
 
-    def add_step(
-        self,
-        name: str,
-        agent: Optional[Any] = None,
-        function: Optional[Callable] = None,
-        prompt: Optional[str] = None,
-        **kwargs
-    ) -> "WorkflowBuilder":
-        """Add a step"""
-        self._module.add_step(name, agent=agent, function=function, prompt=prompt, **kwargs)
+    def add_parallel(self, name, steps, **kwargs):
+        self._steps.append({"type": "parallel", "name": name, "steps": steps, **kwargs})
         return self
 
-    def add_parallel(self, name: str, steps: List[Dict[str, Any]]) -> "WorkflowBuilder":
-        """Add parallel steps"""
-        self._module.add_parallel(name, steps)
+    def add_condition(self, name, condition, if_true, if_false=None, **kwargs):
+        self._steps.append({"type": "condition", "name": name, "condition": condition,
+                             "if_true": if_true, "if_false": if_false, **kwargs})
         return self
 
-    def add_condition(
-        self,
-        name: str,
-        condition: Callable,
-        if_true: Dict,
-        if_false: Optional[Dict] = None
-    ) -> "WorkflowBuilder":
-        """Add conditional branching"""
-        self._module.add_condition(name, condition, if_true, if_false)
-        return self
-
-    def add_loop(
-        self,
-        name: str,
-        steps: List[Dict],
-        condition: Optional[Callable] = None,
-        max_iterations: int = 10
-    ) -> "WorkflowBuilder":
-        """Add a loop"""
-        self._module.add_loop(name, steps, condition, max_iterations)
+    def add_loop(self, name, steps, condition=None, max_iterations=10, **kwargs):
+        self._steps.append({"type": "loop", "name": name, "steps": steps,
+                             "condition": condition, "max_iterations": max_iterations, **kwargs})
         return self
 
     def build(self) -> Any:
-        """Build and return the workflow"""
-        return self._module.build()
+        from agno.workflow import Workflow, Step, Parallel, Loop, Condition, Router
+        if not self._steps:
+            raise ValueError("Cannot build workflow without steps")
+        agno_steps = self._convert(self._steps)
+        return Workflow(name=self.name, description=self.description, steps=agno_steps)
 
-    def get_module(self) -> WorkflowModule:
-        """Get the underlying WorkflowModule"""
-        return self._module
+    def run(self, input_data=None, **kwargs):
+        result = self.build().run(input=input_data, **kwargs)
+        return getattr(result, "content", str(result))
 
+    def _convert(self, steps):
+        from agno.workflow import Step, Parallel, Loop, Condition, Router
+        from agno.workflow.types import StepOutput
+        out = []
+        for cfg in steps:
+            t = cfg.get("type", "step")
+            if t == "step":
+                out.append(self._make_step(cfg))
+            elif t == "parallel":
+                inner = self._convert(cfg.get("steps", []))
+                out.append(Parallel(*inner, name=cfg["name"]))
+            elif t == "condition":
+                fn = cfg["condition"]
+                branches = []
+                if cfg.get("if_true"):  branches.append(self._make_step(cfg["if_true"]))
+                if cfg.get("if_false"): branches.append(self._make_step(cfg["if_false"]))
+                def _ev(si, _fn=fn):
+                    ctx = _extract_content(si)
+                    return bool(_fn(ctx if isinstance(ctx, dict) else {}))
+                out.append(Condition(_ev, steps=branches, name=cfg["name"]))
+            elif t == "loop":
+                inner = self._convert(cfg.get("steps", []))
+                kw: Dict = {"name": cfg["name"], "steps": inner,
+                            "max_iterations": cfg.get("max_iterations", 10)}
+                raw = cfg.get("condition")
+                if raw:
+                    def _ec(outputs, _r=raw):
+                        ctx = {"last_result": getattr(outputs[-1], "content", None)} if outputs else {}
+                        return not bool(_r(ctx))
+                    kw["end_condition"] = _ec
+                out.append(Loop(**kw))
+            elif t == "router":
+                routes = cfg.get("routes", {})
+                rfn   = cfg["router_function"]
+                keys  = list(routes.keys())
+                choices = self._convert(list(routes.values()))
+                def _sel(si, _keys=keys, _choices=choices, _rfn=rfn):
+                    ctx = _extract_content(si)
+                    key = _rfn(ctx if isinstance(ctx, dict) else {})
+                    idx = _keys.index(key) if key in _keys else 0
+                    return [_choices[idx]]
+                out.append(Router(_sel, choices=choices, name=cfg["name"]))
+        return out
 
-class FinancialWorkflowTemplates:
-    """
-    Pre-built workflow templates for common financial tasks.
-
-    Templates:
-    - Stock analysis pipeline
-    - Portfolio rebalancing
-    - Risk assessment
-    - Market screening
-    - Report generation
-    """
-
-    @staticmethod
-    def stock_analysis_pipeline(
-        fetch_agent: Any = None,
-        analysis_agent: Any = None,
-        report_agent: Any = None
-    ) -> WorkflowModule:
-        """
-        Create stock analysis workflow.
-
-        Steps:
-        1. Fetch market data
-        2. Perform technical analysis
-        3. Perform fundamental analysis (parallel)
-        4. Generate recommendation
-        5. Create report
-
-        Args:
-            fetch_agent: Agent for fetching data
-            analysis_agent: Agent for analysis
-            report_agent: Agent for report generation
-
-        Returns:
-            Configured WorkflowModule
-        """
-        workflow = WorkflowModule(
-            name="Stock Analysis Pipeline",
-            description="Comprehensive stock analysis workflow"
-        )
-
-        # Step 1: Fetch data
-        workflow.add_step(
-            name="fetch_market_data",
-            agent=fetch_agent,
-            prompt="Fetch current market data for {symbol} including price, volume, and recent news"
-        )
-
-        # Step 2: Parallel analysis
-        workflow.add_parallel(
-            name="analysis",
-            steps=[
-                {
-                    "type": "step",
-                    "name": "technical_analysis",
-                    "agent": analysis_agent,
-                    "prompt": "Perform technical analysis on {symbol} using the market data: {last_result}"
-                },
-                {
-                    "type": "step",
-                    "name": "fundamental_analysis",
-                    "agent": analysis_agent,
-                    "prompt": "Perform fundamental analysis on {symbol} including valuation metrics"
-                }
-            ]
-        )
-
-        # Step 3: Generate recommendation
-        workflow.add_step(
-            name="generate_recommendation",
-            agent=analysis_agent,
-            prompt="Based on the technical and fundamental analysis, provide a buy/sell/hold recommendation for {symbol}"
-        )
-
-        # Step 4: Create report
-        workflow.add_step(
-            name="create_report",
-            agent=report_agent,
-            prompt="Generate a comprehensive investment report for {symbol} summarizing all analysis and recommendations"
-        )
-
-        return workflow
-
-    @staticmethod
-    def portfolio_rebalancing(
-        analysis_agent: Any = None,
-        optimization_agent: Any = None,
-        execution_agent: Any = None,
-        risk_threshold: float = 0.05
-    ) -> WorkflowModule:
-        """
-        Create portfolio rebalancing workflow.
-
-        Steps:
-        1. Analyze current portfolio
-        2. Check if rebalancing needed (condition)
-        3. Calculate optimal allocation
-        4. Generate trade orders
-        5. Review and confirm
-
-        Args:
-            analysis_agent: Agent for portfolio analysis
-            optimization_agent: Agent for optimization
-            execution_agent: Agent for trade execution
-            risk_threshold: Drift threshold for rebalancing
-
-        Returns:
-            Configured WorkflowModule
-        """
-        workflow = WorkflowModule(
-            name="Portfolio Rebalancing",
-            description="Automated portfolio rebalancing workflow"
-        )
-
-        # Step 1: Analyze current portfolio
-        workflow.add_step(
-            name="analyze_portfolio",
-            agent=analysis_agent,
-            prompt="Analyze current portfolio holdings and calculate drift from target allocation"
-        )
-
-        # Step 2: Check if rebalancing needed
-        def needs_rebalancing(context: Dict) -> bool:
-            drift = context.get("max_drift", 0)
-            return drift > risk_threshold
-
-        workflow.add_condition(
-            name="check_rebalancing_needed",
-            condition=needs_rebalancing,
-            if_true={
-                "type": "step",
-                "name": "calculate_optimal_allocation",
-                "agent": optimization_agent,
-                "prompt": "Calculate optimal trade orders to rebalance portfolio to target allocation"
-            },
-            if_false={
-                "type": "step",
-                "name": "no_action_needed",
-                "function": lambda ctx: {"message": "Portfolio within tolerance, no rebalancing needed"}
-            }
-        )
-
-        # Step 3: Generate trade orders
-        workflow.add_step(
-            name="generate_orders",
-            agent=execution_agent,
-            prompt="Generate specific trade orders based on the optimal allocation: {last_result}"
-        )
-
-        return workflow
-
-    @staticmethod
-    def market_screening(
-        screening_agent: Any = None,
-        analysis_agent: Any = None,
-        max_iterations: int = 5
-    ) -> WorkflowModule:
-        """
-        Create market screening workflow with iterative refinement.
-
-        Steps:
-        1. Initial broad screen
-        2. Apply filters (loop)
-        3. Deep analysis on top candidates
-        4. Rank and prioritize
-
-        Args:
-            screening_agent: Agent for screening
-            analysis_agent: Agent for deep analysis
-            max_iterations: Maximum screening iterations
-
-        Returns:
-            Configured WorkflowModule
-        """
-        workflow = WorkflowModule(
-            name="Market Screening",
-            description="Iterative market screening and analysis"
-        )
-
-        # Step 1: Initial screen
-        workflow.add_step(
-            name="initial_screen",
-            agent=screening_agent,
-            prompt="Screen the market for stocks matching criteria: {criteria}"
-        )
-
-        # Step 2: Iterative filtering (loop)
-        def has_more_filters(context: Dict) -> bool:
-            filters = context.get("remaining_filters", [])
-            return len(filters) > 0
-
-        workflow.add_loop(
-            name="apply_filters",
-            steps=[
-                {
-                    "type": "step",
-                    "name": "apply_filter",
-                    "agent": screening_agent,
-                    "prompt": "Apply filter {current_filter} to the stock list: {candidates}"
-                }
-            ],
-            condition=has_more_filters,
-            max_iterations=max_iterations
-        )
-
-        # Step 3: Deep analysis on top candidates
-        workflow.add_step(
-            name="deep_analysis",
-            agent=analysis_agent,
-            prompt="Perform detailed analysis on top candidates: {last_result}"
-        )
-
-        # Step 4: Rank and prioritize
-        workflow.add_step(
-            name="rank_candidates",
-            agent=analysis_agent,
-            prompt="Rank and prioritize the analyzed candidates based on investment potential"
-        )
-
-        return workflow
-
-    @staticmethod
-    def risk_assessment(
-        risk_agent: Any = None,
-        market_agent: Any = None
-    ) -> WorkflowModule:
-        """
-        Create risk assessment workflow with routing.
-
-        Steps:
-        1. Identify risk type
-        2. Route to appropriate analysis
-        3. Calculate risk metrics
-        4. Generate risk report
-
-        Args:
-            risk_agent: Agent for risk analysis
-            market_agent: Agent for market analysis
-
-        Returns:
-            Configured WorkflowModule
-        """
-        workflow = WorkflowModule(
-            name="Risk Assessment",
-            description="Comprehensive risk assessment with dynamic routing"
-        )
-
-        # Step 1: Identify risk type
-        workflow.add_step(
-            name="identify_risk_type",
-            agent=risk_agent,
-            prompt="Identify the primary risk type for the portfolio: market, credit, liquidity, or operational"
-        )
-
-        # Step 2: Route to appropriate analysis
-        def route_risk_analysis(context: Dict) -> str:
-            risk_type = context.get("risk_type", "market").lower()
-            if "market" in risk_type:
-                return "market_risk"
-            elif "credit" in risk_type:
-                return "credit_risk"
-            elif "liquidity" in risk_type:
-                return "liquidity_risk"
-            return "general_risk"
-
-        workflow.add_router(
-            name="risk_router",
-            routes={
-                "market_risk": {
-                    "type": "step",
-                    "name": "market_risk_analysis",
-                    "agent": market_agent,
-                    "prompt": "Perform market risk analysis including VaR, beta, and volatility"
-                },
-                "credit_risk": {
-                    "type": "step",
-                    "name": "credit_risk_analysis",
-                    "agent": risk_agent,
-                    "prompt": "Perform credit risk analysis on holdings"
-                },
-                "liquidity_risk": {
-                    "type": "step",
-                    "name": "liquidity_risk_analysis",
-                    "agent": risk_agent,
-                    "prompt": "Analyze liquidity risk including bid-ask spreads and volume"
-                },
-                "general_risk": {
-                    "type": "step",
-                    "name": "general_risk_analysis",
-                    "agent": risk_agent,
-                    "prompt": "Perform general risk assessment"
-                }
-            },
-            router_function=route_risk_analysis
-        )
-
-        # Step 3: Generate risk report
-        workflow.add_step(
-            name="generate_risk_report",
-            agent=risk_agent,
-            prompt="Generate comprehensive risk report based on the analysis: {last_result}"
-        )
-
-        return workflow
-
-    @staticmethod
-    def research_report_generation(
-        research_agent: Any = None,
-        writing_agent: Any = None
-    ) -> WorkflowModule:
-        """
-        Create research report generation workflow.
-
-        Steps:
-        1. Gather research data (parallel)
-        2. Analyze and synthesize
-        3. Write report sections
-        4. Review and finalize
-
-        Args:
-            research_agent: Agent for research
-            writing_agent: Agent for writing
-
-        Returns:
-            Configured WorkflowModule
-        """
-        workflow = WorkflowModule(
-            name="Research Report Generation",
-            description="Generate comprehensive research reports"
-        )
-
-        # Step 1: Gather research data in parallel
-        workflow.add_parallel(
-            name="gather_research",
-            steps=[
-                {
-                    "type": "step",
-                    "name": "company_research",
-                    "agent": research_agent,
-                    "prompt": "Research company fundamentals, management, and competitive position for {symbol}"
-                },
-                {
-                    "type": "step",
-                    "name": "industry_research",
-                    "agent": research_agent,
-                    "prompt": "Research industry trends and competitive landscape for {symbol}'s sector"
-                },
-                {
-                    "type": "step",
-                    "name": "financial_research",
-                    "agent": research_agent,
-                    "prompt": "Analyze financial statements and metrics for {symbol}"
-                }
-            ]
-        )
-
-        # Step 2: Synthesize findings
-        workflow.add_step(
-            name="synthesize_findings",
-            agent=research_agent,
-            prompt="Synthesize all research findings into key insights and investment thesis"
-        )
-
-        # Step 3: Write report
-        workflow.add_step(
-            name="write_report",
-            agent=writing_agent,
-            prompt="Write a professional investment research report based on the synthesized findings"
-        )
-
-        # Step 4: Review and finalize
-        workflow.add_step(
-            name="review_report",
-            agent=writing_agent,
-            prompt="Review the report for accuracy, completeness, and clarity. Make necessary improvements."
-        )
-
-        return workflow
+    def _make_step(self, cfg):
+        from agno.workflow import Step
+        from agno.workflow.types import StepOutput
+        name = cfg["name"]
+        fn   = cfg.get("function")
+        agent = cfg.get("agent")
+        prompt = cfg.get("prompt")
+        if fn:
+            def _ex(si, _fn=fn):
+                ctx = _extract_content(si)
+                r = _fn(ctx if isinstance(ctx, dict) else {})
+                return r if isinstance(r, StepOutput) else StepOutput(content=r)
+            return Step(name=name, executor=_ex)
+        elif agent and prompt:
+            _a, _p = agent, prompt
+            def _ex(si, _a=_a, _p=_p):
+                ctx = _extract_content(si)
+                ctx = ctx if isinstance(ctx, dict) else {}
+                try:    fmt = _p.format(**ctx)
+                except: fmt = _p
+                resp = _a.run(fmt)
+                return StepOutput(content=getattr(resp, "content", str(resp)))
+            return Step(name=name, executor=_ex)
+        elif agent:
+            return Step(name=name, agent=agent)
+        else:
+            return Step(name=name, executor=lambda si: StepOutput(content=None))

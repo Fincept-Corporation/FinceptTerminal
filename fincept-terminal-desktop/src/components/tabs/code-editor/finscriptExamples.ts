@@ -1105,4 +1105,302 @@ label_new(250, stop_loss, "SL", "red")
 label_new(250, take_profit, "TP", "green")
 `,
   },
+  {
+    id: 'ex_live_data',
+    name: '13_live_data.fincept',
+    category: 'Live Data',
+    description: 'Real market data analysis with Yahoo Finance',
+    content: `// ═══════════════════════════════════════════════════════════════
+// Live Data Analysis
+// Toggle LIVE mode in toolbar to use real Yahoo Finance data
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Instructions ───────────────────────────────────────────
+// 1. Click "DEMO" button in toolbar to switch to "LIVE"
+// 2. Set date range (e.g., 2024-01-01 to 2025-01-01)
+// 3. Run script — real data will be fetched automatically
+
+// ─── Fetch Real OHLCV Data ─────────────────────────────────
+close_prices = close(AAPL)
+open_prices = open(AAPL)
+high_prices = high(AAPL)
+low_prices = low(AAPL)
+vol = volume(AAPL)
+
+print "=== AAPL Market Data ==="
+print "Data points:", len(close_prices)
+print "Latest close:", round(last(close_prices), 2)
+print "Latest open:", round(last(open_prices), 2)
+print "Latest high:", round(last(high_prices), 2)
+print "Latest low:", round(last(low_prices), 2)
+print "Latest volume:", last(vol)
+
+// ─── Technical Analysis on Real Data ────────────────────────
+sma_50 = sma(AAPL, 50)
+ema_20 = ema(AAPL, 20)
+rsi_14 = rsi(AAPL, 14)
+atr_14 = atr(AAPL, 14)
+bb_up = bollinger(AAPL, 20, 2)
+bb_low = bollinger_lower(AAPL, 20, 2)
+
+price = last(close_prices)
+rsi_now = last(rsi_14)
+
+print "\\n=== Technical Indicators ==="
+print "SMA(50):", round(last(sma_50), 2)
+print "EMA(20):", round(last(ema_20), 2)
+print "RSI(14):", round(rsi_now, 1)
+print "ATR(14):", round(last(atr_14), 2)
+print "BB Width:", round(last(bb_up) - last(bb_low), 2)
+
+// ─── Trend Assessment ──────────────────────────────────────
+above_sma = price > last(sma_50)
+ema_trend = last(ema(AAPL, 12)) > last(ema(AAPL, 26))
+
+print "\\n=== Trend Status ==="
+print "Price vs SMA(50):", above_sma ? "ABOVE" : "BELOW"
+print "EMA Trend:", ema_trend ? "BULLISH" : "BEARISH"
+print "RSI Zone:", rsi_now > 70 ? "OVERBOUGHT" : (rsi_now < 30 ? "OVERSOLD" : "NEUTRAL")
+
+// ─── Signal Generation ─────────────────────────────────────
+if ema_trend and rsi_now < 65 and above_sma {
+    buy "Bullish: EMA uptrend + RSI neutral + Above SMA50"
+}
+if not ema_trend and rsi_now > 35 and not above_sma {
+    sell "Bearish: EMA downtrend + Below SMA50"
+}
+
+// ─── Multi-Symbol Comparison ────────────────────────────────
+print "\\n=== Tech Sector RSI ==="
+print "AAPL:", round(last(rsi(AAPL, 14)), 1)
+print "MSFT:", round(last(rsi(MSFT, 14)), 1)
+print "GOOGL:", round(last(rsi(GOOGL, 14)), 1)
+
+// ─── Visualization ─────────────────────────────────────────
+plot_candlestick AAPL, "AAPL (Live Data)"
+plot_line sma_50, "SMA 50", "blue"
+plot_line ema_20, "EMA 20", "orange"
+plot_line bb_up, "BB Upper", "gray"
+plot_line bb_low, "BB Lower", "gray"
+plot rsi_14, "RSI (14)"
+hline 70, "Overbought", "red"
+hline 30, "Oversold", "green"
+`,
+  },
+  {
+    id: 'ex_risk_dashboard',
+    name: '14_risk_dashboard.fincept',
+    category: 'Risk Analytics',
+    description: 'Portfolio risk metrics: Sharpe, Sortino, drawdown, correlation',
+    content: `// ═══════════════════════════════════════════════════════════════
+// Risk Analytics Dashboard
+// Built-in functions: sharpe, sortino, max_drawdown, correlation, beta
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Single Stock Risk Profile ─────────────────────────────
+print "=== AAPL Risk Profile ==="
+aapl = close(AAPL)
+
+sr = sharpe(aapl)
+so = sortino(aapl)
+dd = max_drawdown(aapl)
+
+print "Sharpe Ratio:", round(sr, 3)
+print "Sortino Ratio:", round(so, 3)
+print "Max Drawdown:", round(dd * 100, 2), "%"
+
+// Sharpe interpretation
+if sr > 2.0 {
+    print "Risk-Adjusted Return: EXCELLENT"
+} else if sr > 1.0 {
+    print "Risk-Adjusted Return: GOOD"
+} else if sr > 0.0 {
+    print "Risk-Adjusted Return: POSITIVE"
+} else {
+    print "Risk-Adjusted Return: NEGATIVE"
+}
+
+// ─── Multi-Asset Comparison ────────────────────────────────
+print "\\n=== Multi-Asset Risk Comparison ==="
+print "Ticker | Sharpe | Sortino | Max DD"
+print "─────────────────────────────────────"
+
+fn risk_report(ticker, name) {
+    prices = close(ticker)
+    s = sharpe(prices)
+    so_val = sortino(prices)
+    d = max_drawdown(prices)
+    print name, " |", round(s, 2), "|", round(so_val, 2), "|", round(d * 100, 1), "%"
+}
+
+risk_report(AAPL, "AAPL ")
+risk_report(MSFT, "MSFT ")
+risk_report(GOOGL, "GOOGL")
+
+// ─── Correlation Matrix ────────────────────────────────────
+print "\\n=== Correlation Matrix ==="
+corr_am = correlation(close(AAPL), close(MSFT))
+corr_ag = correlation(close(AAPL), close(GOOGL))
+corr_mg = correlation(close(MSFT), close(GOOGL))
+
+print "AAPL-MSFT:", round(corr_am, 3)
+print "AAPL-GOOGL:", round(corr_ag, 3)
+print "MSFT-GOOGL:", round(corr_mg, 3)
+
+// ─── Beta Analysis ─────────────────────────────────────────
+print "\\n=== Beta (vs SPY) ==="
+aapl_beta = beta(close(AAPL), close(SPY))
+msft_beta = beta(close(MSFT), close(SPY))
+googl_beta = beta(close(GOOGL), close(SPY))
+
+print "AAPL Beta:", round(aapl_beta, 3)
+print "MSFT Beta:", round(msft_beta, 3)
+print "GOOGL Beta:", round(googl_beta, 3)
+
+// Beta interpretation
+if aapl_beta > 1.0 {
+    print "AAPL is MORE volatile than the market"
+} else {
+    print "AAPL is LESS volatile than the market"
+}
+
+// ─── Daily Returns Analysis ────────────────────────────────
+print "\\n=== Returns Distribution ==="
+rets = returns(close(AAPL))
+print "Observations:", len(rets)
+print "Avg Daily Return:", round(avg(rets) * 100, 4), "%"
+print "Last Return:", round(last(rets) * 100, 4), "%"
+
+// ─── Custom Sharpe with Risk-Free Rate ─────────────────────
+print "\\n=== Sharpe with Risk-Free Rate ==="
+sr_0 = sharpe(close(AAPL), 0.0)
+sr_5 = sharpe(close(AAPL), 0.05)
+print "Sharpe (rf=0%):", round(sr_0, 3)
+print "Sharpe (rf=5%):", round(sr_5, 3)
+
+// ─── Visualization ─────────────────────────────────────────
+plot_candlestick AAPL, "AAPL Risk Dashboard"
+plot_line sma(AAPL, 50), "SMA 50", "blue"
+plot rsi(AAPL, 14), "RSI"
+hline 70, "OB", "red"
+hline 30, "OS", "green"
+`,
+  },
+  {
+    id: 'ex_terminal_integration',
+    name: '15_terminal_integration.fincept',
+    category: 'Terminal Integration',
+    description: 'Watchlist, paper trading, alerts, and screener',
+    content: `// ═══════════════════════════════════════════════════════════════
+// Terminal Integration
+// Connect FinScript outputs to terminal features:
+// watchlist_add, paper_trade, alert_create, screener_scan
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Setup ─────────────────────────────────────────────────
+rsi_val = rsi(AAPL, 14)
+ema_12 = ema(AAPL, 12)
+ema_26 = ema(AAPL, 26)
+atr_val = atr(AAPL, 14)
+
+rsi_now = last(rsi_val)
+ema_f = last(ema_12)
+ema_s = last(ema_26)
+price = last(close(AAPL))
+atr_now = last(atr_val)
+
+print "=== AAPL Analysis ==="
+print "Price:", round(price, 2)
+print "RSI:", round(rsi_now, 1)
+print "EMA Trend:", ema_f > ema_s ? "BULLISH" : "BEARISH"
+print "ATR:", round(atr_now, 2)
+
+// ─── Watchlist Management ──────────────────────────────────
+// Add stocks to watchlists based on conditions
+if rsi_now < 35 {
+    watchlist_add(AAPL, "Oversold Picks")
+    print ">> Added AAPL to 'Oversold Picks' watchlist"
+}
+
+if rsi_now > 65 {
+    watchlist_add(AAPL, "Overbought Watch")
+    print ">> Added AAPL to 'Overbought Watch' watchlist"
+}
+
+if ema_f > ema_s {
+    watchlist_add(AAPL, "Uptrend Stocks")
+    print ">> Added AAPL to 'Uptrend Stocks' watchlist"
+}
+
+// ─── Paper Trading ─────────────────────────────────────────
+// Execute paper trades on strong signals
+// Position sizing based on ATR
+stop_distance = atr_now * 1.5
+position_size = round(2000 / stop_distance, 0)  // Risk $2000 per trade
+
+print "\\n=== Trade Setup ==="
+print "Stop Distance:", round(stop_distance, 2)
+print "Position Size:", position_size, "shares"
+
+// Long entry conditions
+long_signal = ema_f > ema_s and rsi_now > 30 and rsi_now < 60
+// Short entry conditions
+short_signal = ema_f < ema_s and rsi_now < 70 and rsi_now > 40
+
+if long_signal {
+    paper_trade(AAPL, "buy", position_size)
+    print ">> Paper BUY", position_size, "shares of AAPL at", round(price, 2)
+    buy "EMA bullish + RSI neutral"
+}
+
+if short_signal {
+    paper_trade(AAPL, "sell", position_size)
+    print ">> Paper SELL", position_size, "shares of AAPL at", round(price, 2)
+    sell "EMA bearish + RSI neutral"
+}
+
+// ─── Alert System ──────────────────────────────────────────
+// Create persistent alerts for important conditions
+print "\\n=== Alert Checks ==="
+
+if rsi_now > 80 {
+    alert_create("AAPL RSI at " + str(round(rsi_now, 1)) + " - Extremely Overbought!", "critical")
+    print ">> CRITICAL alert created: Extreme overbought"
+}
+
+if rsi_now < 20 {
+    alert_create("AAPL RSI at " + str(round(rsi_now, 1)) + " - Extremely Oversold!", "critical")
+    print ">> CRITICAL alert created: Extreme oversold"
+}
+
+if crossover(ema_12, ema_26) {
+    alert_create("AAPL Golden Cross: EMA 12 crossed above EMA 26", "warning")
+    print ">> WARNING alert: Golden Cross detected"
+}
+
+if crossunder(ema_12, ema_26) {
+    alert_create("AAPL Death Cross: EMA 12 crossed below EMA 26", "warning")
+    print ">> WARNING alert: Death Cross detected"
+}
+
+// Informational alerts
+alert_create("AAPL daily scan complete. RSI: " + str(round(rsi_now, 1)), "info")
+
+// ─── Screener ──────────────────────────────────────────────
+// Scan multiple symbols with this script's logic
+print "\\n=== Screener ==="
+universe = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "JPM"]
+screener_scan(universe)
+print "Queued screener scan for", len(universe), "symbols"
+
+// ─── Visualization ─────────────────────────────────────────
+plot_candlestick AAPL, "Terminal Integration Demo"
+plot_line ema_12, "EMA 12", "cyan"
+plot_line ema_26, "EMA 26", "orange"
+plot rsi_val, "RSI (14)"
+hline 70, "Overbought", "red"
+hline 30, "Oversold", "green"
+hline 50, "Midline", "gray"
+`,
+  },
 ];

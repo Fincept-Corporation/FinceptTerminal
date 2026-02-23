@@ -65,7 +65,8 @@ export function CryptoTickerBar({
     if (changeRef.current && tickerData) {
       const arrow = priceChange >= 0 ? '▲' : '▼';
       const sign = priceChange >= 0 ? '+' : '';
-      changeRef.current.innerHTML = `<span style="color: ${priceChange >= 0 ? FINCEPT.GREEN : FINCEPT.RED}">${arrow} ${sign}${priceChange.toFixed(2)} (${sign}${priceChangePercent.toFixed(2)}%)</span>`;
+      changeRef.current.textContent = `${arrow} ${sign}${priceChange.toFixed(2)} (${sign}${priceChangePercent.toFixed(2)}%)`;
+      changeRef.current.style.color = priceChange >= 0 ? FINCEPT.GREEN : FINCEPT.RED;
     }
 
     // Update bid/ask
@@ -178,7 +179,9 @@ export function CryptoTickerBar({
                       fontSize: '11px',
                       backgroundColor: symbol === selectedSymbol ? `${FINCEPT.ORANGE}20` : 'transparent',
                       color: symbol === selectedSymbol ? FINCEPT.ORANGE : FINCEPT.WHITE,
-                      borderLeft: symbol === selectedSymbol ? `3px solid ${FINCEPT.ORANGE}` : 'none'
+                      borderLeftWidth: '3px',
+                      borderLeftStyle: 'solid',
+                      borderLeftColor: symbol === selectedSymbol ? FINCEPT.ORANGE : 'transparent'
                     }}
                     onMouseEnter={(e) => {
                       if (symbol !== selectedSymbol) {
@@ -252,7 +255,7 @@ export function CryptoTickerBar({
             </div>
             <div>
               <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>EQUITY</div>
-              <div style={{ color: FINCEPT.YELLOW, fontWeight: 600 }}>${equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div style={{ color: FINCEPT.YELLOW, fontWeight: 600 }}>{equity > 0 ? `$${equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--'}</div>
             </div>
           </div>
         </>

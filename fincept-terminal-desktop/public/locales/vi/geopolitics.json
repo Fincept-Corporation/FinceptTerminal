@@ -1,6 +1,66 @@
 {
-  "title": "ĐỊA CHÍNH TRỊ",
   "messages": {
-    "loading": "Đang tải dữ liệu..."
+    "retry": "[VI] RETRY"
+  },
+  "header": {
+    "prefix": "[VI] GEO>",
+    "title": "[VI] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[VI] EVENTS"
+  },
+  "status": {
+    "stale": "[VI] STALE",
+    "loading": "[VI] LOADING...",
+    "error": "[VI] ERROR:"
+  },
+  "filters": {
+    "country": "[VI] Country...",
+    "cities": "[VI] Cities...",
+    "category": "[VI] Category...",
+    "apply": "[VI] APPLY",
+    "clear": "[VI] CLEAR",
+    "clearAllCities": "[VI] Clear all cities",
+    "selectedLabel": "[VI] Selected:"
+  },
+  "panel": {
+    "title": "[VI] INFO PANEL",
+    "expand": "[VI] Expand panel",
+    "collapse": "[VI] Collapse panel",
+    "eventsLoaded": "[VI] EVENTS LOADED",
+    "onMapVisualization": "[VI] on map visualization",
+    "topCategories": "[VI] TOP CATEGORIES",
+    "topCountries": "[VI] TOP COUNTRIES",
+    "eventDetails": "[VI] EVENT DETAILS",
+    "close": "[VI] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[VI] Country:",
+    "city": "[VI] City:",
+    "keywords": "[VI] Keywords:",
+    "coords": "[VI] Coords:",
+    "date": "[VI] Date:",
+    "source": "[VI] Source:",
+    "viewArticle": "[VI] View Article"
+  },
+  "legend": {
+    "title": "[VI] EVENT CATEGORIES",
+    "armedConflict": "[VI] Armed Conflict",
+    "terrorism": "[VI] Terrorism",
+    "protests": "[VI] Protests",
+    "civilianViolence": "[VI] Civilian Violence",
+    "riots": "[VI] Riots",
+    "politicalViolence": "[VI] Political Violence",
+    "crisis": "[VI] Crisis",
+    "explosions": "[VI] Explosions",
+    "strategic": "[VI] Strategic",
+    "unclassified": "[VI] Unclassified"
+  },
+  "footer": {
+    "tabName": "[VI] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[VI] EVENTS",
+    "labelEngine": "[VI] ENGINE",
+    "engineValue": "[VI] DECK.GL v9.2",
+    "labelSource": "[VI] SOURCE",
+    "sourceValue": "[VI] NEWS-EVENTS API",
+    "labelSelected": "[VI] SELECTED"
   }
 }

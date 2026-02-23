@@ -39,20 +39,6 @@ export function CryptoSettingsPanel({
     }
   };
 
-  const handleMakerFeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseFloat(e.target.value);
-    if (!isNaN(value) && value >= 0 && value <= 1) {
-      onMakerFeeChange(value);
-    }
-  };
-
-  const handleTakerFeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseFloat(e.target.value);
-    if (!isNaN(value) && value >= 0 && value <= 1) {
-      onTakerFeeChange(value);
-    }
-  };
-
   const handleResetPortfolio = () => {
     if (onResetPortfolio && window.confirm('Are you sure you want to reset your paper trading portfolio? This will clear all positions, orders, and trade history.')) {
       onResetPortfolio();

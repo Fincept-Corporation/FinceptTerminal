@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "맞춤형 대시보드",
-    "live": "살다",
-    "widgets": "위젯"
-  },
-  "buttons": {
-    "addWidget": "위젯 추가",
-    "saveLayout": "레이아웃 저장",
-    "reset": "다시 놓기",
-    "help": "돕다"
-  },
   "widgets": {
     "loading": "로드 중...",
-    "error": "오류",
     "globalIndices": "글로벌 지수 - 상위 12위",
     "forex": "외환 - 주요 쌍",
     "crypto": "암호화폐",
@@ -20,8 +8,6 @@
     "news": "소식",
     "forum": "법정",
     "watchlist": "관심 목록",
-    "maritimeIntelligence": "해양 인텔리전스",
-    "unknown": "알 수 없는 위젯 유형",
     "index": "색인",
     "symbol": "상징",
     "price": "가격",
@@ -38,41 +24,22 @@
     "pair": "쌍",
     "rate": "비율",
     "commodity": "상품",
-    "globe3D": "3D 글로브",
-    "vessels": "선박",
-    "routes": "노선",
-    "vol24h": "24시간 볼륨",
-    "topTradeCorridors": "상위 무역 통로",
-    "ships": "배송",
-    "marketNews": "시장 뉴스",
-    "secPressReleases": "SEC 보도자료",
-    "cryptoNews": "암호화폐 뉴스",
-    "trendingForum": "인기 포럼",
-    "techStocks": "기술주"
-  },
-  "tips": {
-    "drag": "재정렬하려면 위젯을 드래그하세요.",
-    "resize": "오른쪽 하단에서 크기 조정",
-    "remove": "X 버튼으로 위젯 제거",
-    "responsive": "반응형 레이아웃 - 전체 너비 사용"
-  },
-  "loading": {
-    "title": "대시보드 초기화 중",
-    "description": "더 빠른 데이터 로드를 위해 데이터베이스 캐시를 설정하는 중...",
-    "note": "처음 시작할 때 시간이 조금 걸립니다."
-  },
-  "empty": {
-    "noWidgets": "대시보드에 위젯이 없습니다",
-    "addFirst": "첫 번째 위젯을 추가하세요"
-  },
-  "status": {
-    "version": "Fincept 맞춤형 대시보드 v2.0.0 | 드래그 앤 드롭 작업 공간",
-    "layout": "공들여 나열한 것",
-    "custom": "관습",
-    "empty": "비어 있는",
-    "active": "활동적인",
-    "cache": "캐시: 활성화됨",
-    "label": "상태"
+    "noActiveMarkets": "[KO] No active markets found",
+    "indicator": "[KO] INDICATOR",
+    "value": "[KO] VALUE",
+    "chg": "[KO] CHG",
+    "overallRisk": "[KO] OVERALL RISK",
+    "openEconomicsTab": "[KO] Open Economics Tab",
+    "openGeopoliticsTab": "[KO] Open Geopolitics Tab",
+    "openPolymarketTab": "[KO] Open Polymarket Tab",
+    "noPortfolioFound": "[KO] No portfolio found",
+    "createPortfolioHint": "[KO] Create one in Portfolio tab",
+    "openPortfolioTab": "[KO] Open Portfolio Tab",
+    "action": "[KO] ACTION",
+    "markets": "[KO] MARKETS",
+    "performanceTracker": "[KO] PERFORMANCE TRACKER",
+    "totalPnL": "[KO] TOTAL P&L",
+    "viewDetailedAnalytics": "[KO] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "대시보드 레이아웃이 저장되었습니다!",

@@ -9,13 +9,9 @@
   "percentChange": "변동%",
   "high": "고가",
   "low": "저가",
-  "loading": "로딩 중...",
   "noData": "데이터 없음",
   "refresh": "새로고침",
   "auto": "자동",
   "on": "켜기",
-  "off": "끄기",
-  "lastUpdate": "마지막 업데이트",
-  "updating": "업데이트 중",
-  "live": "실시간"
+  "off": "끄기"
 }

@@ -11,6 +11,19 @@ import { NodeRegistry, INodeTypeDescription } from '@/services/nodeSystem';
 import { BUILTIN_NODE_CONFIGS, CATEGORY_CONFIG } from '../constants';
 import type { NodePaletteProps, PaletteNodeItem } from '../types';
 
+// Non-functional nodes to hide from the palette.
+// These nodes have stub implementations (credentials not wired, binary pipeline missing,
+// trigger infrastructure absent, or call non-existent helpers).
+// The code is kept for future implementation — we just hide them from the UI.
+const HIDDEN_NODES = new Set([
+  // Notifications — credential retrieval not implemented
+  'Discord', 'Email', 'Slack', 'SMS', 'Telegram', 'Webhook',
+  // Files — no binary pipeline in the executor
+  'BinaryFile', 'Compress', 'ConvertToFile', 'FileOperations', 'SpreadsheetFile',
+  // Control flow — calls non-existent ExecuteWorkflow helper
+  'ExecuteWorkflow',
+]);
+
 const NodePalette: React.FC<NodePaletteProps> = ({
   onNodeAdd,
   isCollapsed,
@@ -23,6 +36,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
   );
 
   // Get all registered nodes from NodeRegistry
+  // Re-evaluated when mcpNodeConfigs changes (which happens after NodeLoader.loadAll() completes)
   const registryNodes = useMemo(() => {
     try {
       return NodeRegistry.getAllNodes();
@@ -30,7 +44,8 @@ const NodePalette: React.FC<NodePaletteProps> = ({
       console.warn('[NodePalette] NodeRegistry not initialized yet');
       return [];
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mcpNodeConfigs]);
 
   // Combine builtin nodes with registry nodes
   const allNodes = useMemo(() => {
@@ -50,6 +65,9 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     });
 
     registryNodes.forEach((node: INodeTypeDescription) => {
+      // Skip non-functional nodes
+      if (HIDDEN_NODES.has(node.name)) return;
+
       const category = node.group?.[0] || 'Core';
       const categoryConfig = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['Core'];
       nodes.push({

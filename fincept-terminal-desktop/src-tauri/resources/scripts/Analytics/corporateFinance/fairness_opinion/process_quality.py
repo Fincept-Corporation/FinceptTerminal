@@ -365,7 +365,38 @@ def main():
 
             process_factors = json.loads(sys.argv[2])
 
-            # Extract process_type from input, default to 'targeted_auction'
+            # Detect flat format: {board_independence:4, special_committee:5, ...} sent from frontend
+            # vs nested format: {market_check:{}, board_process:{}, timing:{}}
+            FLAT_KEYS = {'board_independence', 'special_committee', 'independent_advisor',
+                         'market_check', 'negotiation_process', 'due_diligence', 'disclosure', 'timing'}
+
+            is_flat = any(k in FLAT_KEYS and not isinstance(process_factors.get(k), dict)
+                          for k in process_factors)
+
+            if is_flat:
+                # Convert flat 1-5 scores to a synthetic comprehensive result directly
+                def score_to_quality(s):
+                    s = float(s)
+                    if s >= 4.5: return 'excellent'
+                    if s >= 3.5: return 'good'
+                    if s >= 2.5: return 'adequate'
+                    return 'deficient'
+
+                factor_scores = {k: float(v) for k, v in process_factors.items() if k != 'process_type'}
+                overall_score = sum(factor_scores.values()) / len(factor_scores) if factor_scores else 0
+                quality = score_to_quality(overall_score)
+
+                result_data = {
+                    'factor_scores': factor_scores,
+                    'overall_score': overall_score,
+                    'quality_rating': quality,
+                    'supports_fairness_conclusion': overall_score >= 3.0,
+                }
+                result = {"success": True, "data": result_data}
+                print(json.dumps(result))
+                return
+
+            # Nested format handling
             process_type_str = process_factors.get('process_type', 'targeted_auction').upper().replace('-', '_').replace(' ', '_')
             process_type = ProcessType[process_type_str] if process_type_str in ProcessType.__members__ else ProcessType.TARGETED_AUCTION
 
@@ -375,7 +406,7 @@ def main():
 
             # Market check analysis
             mc = process_factors.get('market_check', {})
-            if mc:
+            if mc and isinstance(mc, dict):
                 result_data['market_check'] = assessment.evaluate_market_check(
                     parties_contacted=mc.get('parties_contacted', 0),
                     ndas_executed=mc.get('ndas_executed', 0),
@@ -386,7 +417,7 @@ def main():
 
             # Board process analysis
             bp = process_factors.get('board_process', {})
-            if bp:
+            if bp and isinstance(bp, dict):
                 result_data['board_process'] = assessment.evaluate_board_process(
                     board_meetings=bp.get('board_meetings', 0),
                     special_committee=bp.get('special_committee', False),
@@ -398,7 +429,7 @@ def main():
 
             # Timing analysis
             tp = process_factors.get('timing', {})
-            if tp:
+            if tp and isinstance(tp, dict):
                 result_data['timing_analysis'] = assessment.timing_pressure_analysis(
                     process_duration_days=tp.get('process_duration_days', 90),
                     termination_fee_pct=tp.get('termination_fee_pct', 3.0),
@@ -409,12 +440,20 @@ def main():
 
             # Comprehensive evaluation if we have enough data
             if 'market_check' in result_data and 'board_process' in result_data and 'timing_analysis' in result_data:
-                result_data['comprehensive'] = assessment.comprehensive_process_evaluation(
+                comp = assessment.comprehensive_process_evaluation(
                     market_check=result_data['market_check'],
                     competitive_tension={'competitive_tension': process_factors.get('competitive_tension', 'moderate')},
                     board_process=result_data['board_process'],
                     timing_analysis=result_data['timing_analysis']
                 )
+                result_data['comprehensive'] = comp
+                # Add top-level fields for frontend convenience
+                result_data['overall_score'] = comp.get('overall_process_score', 0) / 20  # convert 0-100 to 0-5
+                result_data['quality_rating'] = comp.get('process_quality_rating', 'N/A')
+                result_data['factor_scores'] = {
+                    k: round(v / 20, 1) for k, v in comp.get('component_scores', {}).items()
+                }
+                result_data['supports_fairness_conclusion'] = comp.get('supports_fairness_conclusion', False)
 
             result = {"success": True, "data": result_data}
             print(json.dumps(result))

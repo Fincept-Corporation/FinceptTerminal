@@ -1,25 +1,7 @@
 {
-  "title": "СПИСОК НАБЛЮДЕНИЯ",
-  "header": {
-    "export": "ЭКСПОРТ",
-    "updating": "ОБНОВЛЕНИЕ",
-    "live": "ЖИВОЙ"
-  },
   "sidebar": {
-    "groups": "ГРУППЫ СПИСКОВ",
-    "new": "НОВЫЙ",
     "noWatchlists": "Пока нет списков.",
     "clickNew": "Нажмите НОВЫЙ для создания.",
-    "stocks": "акции",
-    "marketMovers": "ЛИДЕРЫ РЫНКА",
-    "gainer": "РАСТУТ",
-    "loser": "ПАДАЮТ",
-    "volumeLeaders": "ЛИДЕРЫ ОБЪЕМА"
-  },
-  "emptyState": {
-    "selectWatchlist": "Выберите список или создайте новый для начала"
-  },
-  "list": {
-    "symbols": "Символы"
+    "stocks": "акции"
   }
 }

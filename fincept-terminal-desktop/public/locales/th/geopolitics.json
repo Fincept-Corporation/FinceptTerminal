@@ -1,6 +1,66 @@
 {
-  "title": "ภูมิรัฐศาสตร์",
   "messages": {
-    "loading": "กำลังโหลดข้อมูล..."
+    "retry": "[TH] RETRY"
+  },
+  "header": {
+    "prefix": "[TH] GEO>",
+    "title": "[TH] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[TH] EVENTS"
+  },
+  "status": {
+    "stale": "[TH] STALE",
+    "loading": "[TH] LOADING...",
+    "error": "[TH] ERROR:"
+  },
+  "filters": {
+    "country": "[TH] Country...",
+    "cities": "[TH] Cities...",
+    "category": "[TH] Category...",
+    "apply": "[TH] APPLY",
+    "clear": "[TH] CLEAR",
+    "clearAllCities": "[TH] Clear all cities",
+    "selectedLabel": "[TH] Selected:"
+  },
+  "panel": {
+    "title": "[TH] INFO PANEL",
+    "expand": "[TH] Expand panel",
+    "collapse": "[TH] Collapse panel",
+    "eventsLoaded": "[TH] EVENTS LOADED",
+    "onMapVisualization": "[TH] on map visualization",
+    "topCategories": "[TH] TOP CATEGORIES",
+    "topCountries": "[TH] TOP COUNTRIES",
+    "eventDetails": "[TH] EVENT DETAILS",
+    "close": "[TH] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[TH] Country:",
+    "city": "[TH] City:",
+    "keywords": "[TH] Keywords:",
+    "coords": "[TH] Coords:",
+    "date": "[TH] Date:",
+    "source": "[TH] Source:",
+    "viewArticle": "[TH] View Article"
+  },
+  "legend": {
+    "title": "[TH] EVENT CATEGORIES",
+    "armedConflict": "[TH] Armed Conflict",
+    "terrorism": "[TH] Terrorism",
+    "protests": "[TH] Protests",
+    "civilianViolence": "[TH] Civilian Violence",
+    "riots": "[TH] Riots",
+    "politicalViolence": "[TH] Political Violence",
+    "crisis": "[TH] Crisis",
+    "explosions": "[TH] Explosions",
+    "strategic": "[TH] Strategic",
+    "unclassified": "[TH] Unclassified"
+  },
+  "footer": {
+    "tabName": "[TH] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[TH] EVENTS",
+    "labelEngine": "[TH] ENGINE",
+    "engineValue": "[TH] DECK.GL v9.2",
+    "labelSource": "[TH] SOURCE",
+    "sourceValue": "[TH] NEWS-EVENTS API",
+    "labelSelected": "[TH] SELECTED"
   }
 }

@@ -11,7 +11,7 @@ sys.path.insert(0, str(analytics_path))
 
 # Use absolute imports instead of relative imports
 from corporateFinance.deal_database.database_schema import MADatabase
-from corporateFinance.deal_database.deal_scanner import MADealScanner, EDGAR_AVAILABLE
+from corporateFinance.deal_database.deal_scanner import MADealScanner
 
 try:
     from corporateFinance.deal_database.deal_parser import MADealParser
@@ -20,99 +20,6 @@ except ImportError:
     MADealParser = None
     PARSER_AVAILABLE = False
 
-# Demo deal data that maps to MADeal schema for when edgartools is unavailable
-_DEMO_DEALS = [
-    {
-        'deal_id': 'ACMECORP_WIDGETINC_20260205',
-        'acquirer_name': 'ACME Corporation',
-        'target_name': 'Widget Industries Inc.',
-        'deal_value': 4_200_000_000,
-        'deal_type': 'Merger',
-        'deal_status': 'Pending',
-        'payment_method': 'Mixed',
-        'cash_percentage': 60.0,
-        'stock_percentage': 40.0,
-        'industry': 'Technology',
-        'premium_1day': 32.5,
-        'premium_4week': 41.2,
-        'announcement_date': None,  # filled dynamically
-        'data_source': 'SEC EDGAR (demo)',
-        'filing_url': 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234567',
-        'synergies_disclosed': 350_000_000,
-    },
-    {
-        'deal_id': 'TECHCO_CLOUDSYS_20260129',
-        'acquirer_name': 'TechCo Inc.',
-        'target_name': 'CloudSys Technologies',
-        'deal_value': 1_800_000_000,
-        'deal_type': 'Acquisition',
-        'deal_status': 'Announced',
-        'payment_method': 'Cash',
-        'cash_percentage': 100.0,
-        'stock_percentage': 0.0,
-        'industry': 'Technology',
-        'premium_1day': 28.0,
-        'premium_4week': 35.7,
-        'announcement_date': None,
-        'data_source': 'SEC EDGAR (demo)',
-        'filing_url': 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234568',
-        'synergies_disclosed': 120_000_000,
-    },
-    {
-        'deal_id': 'BIOPHRM_GENETHX_20260123',
-        'acquirer_name': 'BioPharma Solutions',
-        'target_name': 'GeneTherapeutics Corp.',
-        'deal_value': 6_500_000_000,
-        'deal_type': 'Merger',
-        'deal_status': 'Pending',
-        'payment_method': 'Mixed',
-        'cash_percentage': 75.0,
-        'stock_percentage': 25.0,
-        'industry': 'Healthcare',
-        'premium_1day': 45.3,
-        'premium_4week': 52.1,
-        'announcement_date': None,
-        'data_source': 'SEC EDGAR (demo)',
-        'filing_url': 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234569',
-        'synergies_disclosed': 800_000_000,
-    },
-    {
-        'deal_id': 'FINTECH_PAYNET_20260119',
-        'acquirer_name': 'FinTech Innovations LLC',
-        'target_name': 'PayNet Solutions',
-        'deal_value': 950_000_000,
-        'deal_type': 'Acquisition',
-        'deal_status': 'Announced',
-        'payment_method': 'Stock',
-        'cash_percentage': 0.0,
-        'stock_percentage': 100.0,
-        'industry': 'Financial Services',
-        'premium_1day': 22.0,
-        'premium_4week': 30.5,
-        'announcement_date': None,
-        'data_source': 'SEC EDGAR (demo)',
-        'filing_url': 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234570',
-        'synergies_disclosed': 75_000_000,
-    },
-    {
-        'deal_id': 'GLOBEN_SOLARMAX_20260113',
-        'acquirer_name': 'Global Energy Partners',
-        'target_name': 'SolarMax Renewables',
-        'deal_value': 3_100_000_000,
-        'deal_type': 'Merger',
-        'deal_status': 'Pending',
-        'payment_method': 'Mixed',
-        'cash_percentage': 50.0,
-        'stock_percentage': 50.0,
-        'industry': 'Energy',
-        'premium_1day': 38.7,
-        'premium_4week': 44.0,
-        'announcement_date': None,
-        'data_source': 'SEC EDGAR (demo)',
-        'filing_url': 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234571',
-        'synergies_disclosed': 250_000_000,
-    },
-]
 
 class MADealTracker:
     def __init__(self, db_path: Optional[Path] = None):
@@ -168,22 +75,8 @@ class MADealTracker:
                     results['parsing_failed'] += 1
                     print(f"[DealTracker] Parse error: {e}", file=sys.stderr)
 
-        # If parser unavailable or all parsing failed, create synthetic deals from demo data
-        if results['deals_parsed'] == 0 and not EDGAR_AVAILABLE:
-            print("[DealTracker] Parser unavailable, creating deals from demo data...", file=sys.stderr)
-            today = datetime.now()
-            for i, demo_deal in enumerate(_DEMO_DEALS):
-                deal = dict(demo_deal)
-                # Set announcement_date from corresponding filing date
-                if i < len(filings):
-                    deal['announcement_date'] = filings[i]['filing_date']
-                else:
-                    deal['announcement_date'] = (today - timedelta(days=5 * (i + 1))).strftime('%Y-%m-%d')
-                try:
-                    self.db.insert_deal(deal)
-                    results['deals_created'] += 1
-                except Exception as e:
-                    print(f"[DealTracker] Failed to create demo deal: {e}", file=sys.stderr)
+        if results['deals_parsed'] == 0:
+            print("[DealTracker] No deals parsed from filings.", file=sys.stderr)
 
         return results
 
@@ -382,15 +275,33 @@ def main():
             days_back = int(sys.argv[2]) if len(sys.argv) > 2 else 7
             result = tracker.update_deal_database(days_back=days_back)
 
-            # Also return current deals so frontend can use them
-            all_deals = tracker.db.get_all_deals()
+            # Return only summary + slim filing list (no full deals query — frontend calls get_all separately)
+            filings = result.get('filings', [])
+            slim_filings = [
+                {
+                    'accession_number': f.get('accession_number', ''),
+                    'filing_type': f.get('filing_type', ''),
+                    'filing_date': f.get('filing_date', ''),
+                    'company_name': f.get('company_name', ''),
+                    'cik': f.get('cik', ''),
+                    'filing_url': f.get('filing_url', ''),
+                    'confidence_score': f.get('confidence_score', 0),
+                    'deal_indicators': f.get('deal_indicators', ''),
+                }
+                for f in filings
+            ]
 
             output = {
                 "success": True,
                 "data": {
-                    **result,
-                    'deals': all_deals,
-                    'deals_count': len(all_deals),
+                    'filings_found': result.get('filings_found', 0),
+                    'deals_parsed': result.get('deals_parsed', 0),
+                    'deals_created': result.get('deals_created', 0),
+                    'parsing_failed': result.get('parsing_failed', 0),
+                    'timestamp': result.get('timestamp', ''),
+                    'filings': slim_filings,
+                    'deals': [],
+                    'deals_count': 0,
                 }
             }
             print(json.dumps(output, default=str))

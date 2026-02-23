@@ -206,10 +206,16 @@ export class CacheService {
     try {
       const entry = await invoke<CacheEntry | null>('cache_get', { key });
       if (!entry) return null;
-      return {
-        data: JSON.parse(entry.data) as T,
-        isStale: entry.is_expired,
-      };
+      try {
+        return {
+          data: JSON.parse(entry.data) as T,
+          isStale: entry.is_expired,
+        };
+      } catch (parseError) {
+        console.warn(`[CacheService] Corrupted cache entry for key "${key}", deleting:`, parseError);
+        await this.delete(key).catch(() => {});
+        return null;
+      }
     } catch (error) {
       console.error('[CacheService] get error:', error);
       return null;
@@ -225,10 +231,16 @@ export class CacheService {
     try {
       const entry = await invoke<CacheEntry | null>('cache_get_with_stale', { key });
       if (!entry) return null;
-      return {
-        data: JSON.parse(entry.data) as T,
-        isStale: entry.is_expired,
-      };
+      try {
+        return {
+          data: JSON.parse(entry.data) as T,
+          isStale: entry.is_expired,
+        };
+      } catch (parseError) {
+        console.warn(`[CacheService] Corrupted stale cache entry for key "${key}", deleting:`, parseError);
+        await this.delete(key).catch(() => {});
+        return null;
+      }
     } catch (error) {
       console.error('[CacheService] getWithStale error:', error);
       return null;
@@ -294,7 +306,7 @@ export class CacheService {
         try {
           result.set(entry.cache_key, JSON.parse(entry.data) as T);
         } catch {
-          // Skip invalid entries
+          console.warn(`[CacheService] Skipping corrupted entry: ${entry.cache_key}`);
         }
       }
       return result;
@@ -496,7 +508,13 @@ export class CacheService {
     try {
       const session = await invoke<TabSession | null>('tab_session_get', { tabId });
       if (!session) return null;
-      return JSON.parse(session.state) as T;
+      try {
+        return JSON.parse(session.state) as T;
+      } catch (parseError) {
+        console.warn(`[CacheService] Corrupted tab session for "${tabId}", deleting:`, parseError);
+        await this.deleteTabSession(tabId).catch(() => {});
+        return null;
+      }
     } catch (error) {
       console.error('[CacheService] getTabSession error:', error);
       return null;

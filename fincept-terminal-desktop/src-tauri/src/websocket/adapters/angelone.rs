@@ -377,6 +377,7 @@ impl AngelOneAdapter {
             close: if tick.close > 0.0 { Some(tick.close) } else { None },
             change: if change != 0.0 { Some(change) } else { None },
             change_percent: if change_pct != 0.0 { Some(change_pct) } else { None },
+            quote_volume: None,
             timestamp: now_ms,
         }));
 

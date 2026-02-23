@@ -101,7 +101,7 @@ pub async fn run_algo_backtest(
 
     debug_log.push("[backtest] Launching Python backtest_engine.py...".to_string());
 
-    let output = Command::new("python")
+    let child = match Command::new("python")
         .arg(&backtest_path)
         .arg("--symbol")
         .arg(&symbol)
@@ -123,15 +123,45 @@ pub async fn run_algo_backtest(
         .arg(&data_provider)
         .arg("--db")
         .arg(&db_path)
-        .output();
-
-    let output = match output {
-        Ok(out) => out,
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn() {
+        Ok(c) => c,
         Err(e) => {
             debug_log.push(format!("[backtest] ERROR: Failed to spawn Python process: {}", e));
             return Ok(json!({
                 "success": false,
                 "error": format!("Failed to run backtest: {}", e),
+                "debug": debug_log
+            }).to_string());
+        }
+    };
+
+    // Wait for output with a 120-second timeout to prevent hanging
+    let timeout_duration = std::time::Duration::from_secs(120);
+    let output = match tokio::time::timeout(timeout_duration, tokio::task::spawn_blocking(move || child.wait_with_output())).await {
+        Ok(Ok(Ok(out))) => out,
+        Ok(Ok(Err(e))) => {
+            debug_log.push(format!("[backtest] ERROR: Failed to read process output: {}", e));
+            return Ok(json!({
+                "success": false,
+                "error": format!("Failed to run backtest: {}", e),
+                "debug": debug_log
+            }).to_string());
+        }
+        Ok(Err(e)) => {
+            debug_log.push(format!("[backtest] ERROR: Spawn blocking error: {}", e));
+            return Ok(json!({
+                "success": false,
+                "error": format!("Failed to run backtest: {}", e),
+                "debug": debug_log
+            }).to_string());
+        }
+        Err(_) => {
+            debug_log.push("[backtest] ERROR: Backtest timed out after 120 seconds".to_string());
+            return Ok(json!({
+                "success": false,
+                "error": "Backtest timed out after 120 seconds. Try a shorter period or simpler conditions.",
                 "debug": debug_log
             }).to_string());
         }

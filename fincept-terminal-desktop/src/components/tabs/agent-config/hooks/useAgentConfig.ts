@@ -116,6 +116,9 @@ export function useAgentConfig() {
   }, [updateTabSession]);
   const [showMembersResponses, setShowMembersResponses] = useState(false);
   const [teamLeaderIndex, setTeamLeaderIndex] = useState<number>(-1);
+  // Team-level LLM override — set by the Agent Configuration panel in TeamsView
+  const [teamProvider, setTeamProvider] = useState<string>('');
+  const [teamModelId, setTeamModelId] = useState<string>('');
 
   // ─── Chat ─────────────────────────────────────────────────────────────────
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -132,10 +135,8 @@ export function useAgentConfig() {
   const [selectedPortfolioCtx, setSelectedPortfolioCtx] = useState<Portfolio | null>(null);
   const [showPortfolioDropdown, setShowPortfolioDropdown] = useState(false);
 
-  // ─── Streaming ────────────────────────────────────────────────────────────
-  const [streamingContent, setStreamingContent] = useState<string>('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [activeStreamHandle, setActiveStreamHandle] = useState<any>(null);
+  // ─── Team Execution Log ───────────────────────────────────────────────────
+  const [teamLog, setTeamLog] = useState<{ label: string; text: string }[]>([]);
 
   // ─── Workflow / Planner ───────────────────────────────────────────────────
   const [workflowSymbol, setWorkflowSymbolInternal] = useState(tabSession.workflowSymbol);
@@ -145,6 +146,7 @@ export function useAgentConfig() {
   }, [updateTabSession]);
   const [currentPlan, setCurrentPlan] = useState<ExecutionPlan | null>(null);
   const [planExecuting, setPlanExecuting] = useState(false);
+  const [planGeneratedBy, setPlanGeneratedBy] = useState<'llm' | 'fallback' | 'template' | null>(null);
 
   // ─── Cleanup Refs ─────────────────────────────────────────────────────────
   const mountedRef = useRef(true);
@@ -303,7 +305,7 @@ export function useAgentConfig() {
 
     try {
       const timeoutPromise = new Promise<AgentCard[]>((_, reject) =>
-        setTimeout(() => reject(new Error('Agent discovery timeout')), 5000)
+        setTimeout(() => reject(new Error('Agent discovery timeout')), 20000)
       );
       const agents = await Promise.race([agentService.discoverAgents(), timeoutPromise]);
       if (Array.isArray(agents) && agents.length > 0) {
@@ -389,9 +391,10 @@ export function useAgentConfig() {
     const storageCfg = typeof config.storage === 'object' ? config.storage : {};
     const memoryCfg = typeof config.memory === 'object' ? config.memory : {};
     const agenticMemCfg = typeof config.agentic_memory === 'object' ? config.agentic_memory : {};
+    const fallback = getActiveFallback();
     setEditedConfig({
-      provider: model.provider || 'openai',
-      model_id: model.model_id || 'gpt-4-turbo',
+      provider: model.provider || fallback.provider,
+      model_id: model.model_id || fallback.model_id,
       temperature: model.temperature ?? 0.7,
       max_tokens: model.max_tokens ?? 4096,
       tools: config.tools || [],
@@ -409,7 +412,7 @@ export function useAgentConfig() {
       knowledge_type: knowledgeCfg?.type || 'url',
       knowledge_urls: (knowledgeCfg?.urls || []).join('\n'),
       knowledge_vector_db: knowledgeCfg?.vector_db || 'lancedb',
-      knowledge_embedder: knowledgeCfg?.embedder || 'openai',
+      knowledge_embedder: knowledgeCfg?.embedder || fallback.provider,
       guardrails_pii: guardrailsCfg?.pii_detection ?? true,
       guardrails_injection: guardrailsCfg?.injection_check ?? true,
       guardrails_compliance: guardrailsCfg?.financial_compliance ?? false,
@@ -423,6 +426,16 @@ export function useAgentConfig() {
       memory_create_session_summary: memoryCfg?.create_session_summary ?? true,
     });
     setJsonText(JSON.stringify(agent, null, 2));
+  };
+
+  // ─── Active LLM fallback (derived from already-loaded configuredLLMs state) ─
+  // All panels in this hook use this — no repeated DB calls needed.
+  const getActiveFallback = (): { provider: string; model_id: string } => {
+    const active = configuredLLMs.find(c => c.is_active) ?? configuredLLMs[0] ?? null;
+    return {
+      provider: active?.provider ?? 'fincept',
+      model_id: active?.model ?? 'fincept-llm',
+    };
   };
 
   // ─── API Keys ─────────────────────────────────────────────────────────────
@@ -541,7 +554,7 @@ export function useAgentConfig() {
       if (useAutoRouting) {
         const routingResult = await withTimeout(
           agentService.routeQuery(testQuery, apiKeys),
-          15000,
+          310000,
           'Query routing timed out'
         );
         setLastRoutingResult(routingResult);
@@ -557,7 +570,7 @@ export function useAgentConfig() {
         );
         const result = await withTimeout(
           agentService.executeRoutedQuery(testQuery, apiKeys, undefined, userConfig),
-          60000,
+          310000,
           'Agent execution timed out'
         );
         setTestResult(result);
@@ -578,12 +591,12 @@ export function useAgentConfig() {
         if (selectedOutputModel) {
           result = await withTimeout(
             agentService.runAgentStructured(testQuery, config, selectedOutputModel, apiKeys),
-            60000, 'Agent execution timed out'
+            310000, 'Agent execution timed out'
           );
         } else {
           result = await withTimeout(
             agentService.runAgent(testQuery, config, apiKeys),
-            60000, 'Agent execution timed out'
+            310000, 'Agent execution timed out'
           );
         }
         setTestResult(result);
@@ -618,15 +631,16 @@ export function useAgentConfig() {
 
     const currentFetchId = ++fetchIdRef.current;
     setExecuting(true);
-    setIsStreaming(true);
-    setStreamingContent('');
     setError(null);
-
-    setChatMessages(prev => [...prev, { role: 'user', content: testQuery, timestamp: new Date() }]);
+    setTeamLog([]);
 
     try {
       const apiKeys = await getApiKeys();
       if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+
+      const fallback = getActiveFallback();
+      const resolvedProvider = teamProvider || fallback.provider;
+      const resolvedModelId = teamModelId || fallback.model_id;
 
       const teamConfig = agentService.buildTeamConfig(
         'Custom Team',
@@ -634,8 +648,8 @@ export function useAgentConfig() {
         teamMembers.map(agent => ({
           name: agent.name,
           role: agent.description,
-          provider: agent.config?.model?.provider || 'openai',
-          modelId: agent.config?.model?.model_id || 'gpt-4-turbo',
+          provider: agent.config?.model?.provider || resolvedProvider,
+          modelId: agent.config?.model?.model_id || resolvedModelId,
           tools: agent.config?.tools || [],
           instructions: agent.config?.instructions || '',
         })),
@@ -645,57 +659,45 @@ export function useAgentConfig() {
         }
       );
 
-      let accumulatedContent = '';
-      const streamHandle = await agentService.runTeamStreaming(testQuery, teamConfig, apiKeys, (chunk) => {
-        if (chunk.chunk_type === 'token') {
-          accumulatedContent += chunk.content + ' ';
-          setStreamingContent(accumulatedContent);
-        } else if (chunk.chunk_type === 'thinking') {
-          setStreamingContent(prev => prev + `\n_${chunk.content}_\n`);
-        } else if (chunk.chunk_type === 'tool_call') {
-          setStreamingContent(prev => prev + `\n**Tool:** ${chunk.content}\n`);
-        } else if (chunk.chunk_type === 'done') {
-          setIsStreaming(false);
-        } else if (chunk.chunk_type === 'error') {
-          setError(chunk.content);
-          setIsStreaming(false);
-        }
+      // Log each member being called
+      const logs: { label: string; text: string }[] = [];
+      teamMembers.forEach((m, i) => {
+        logs.push({ label: `AGENT ${i + 1} — ${m.name}`, text: `Role: ${m.description || 'General'}` });
       });
+      logs.push({ label: 'STATUS', text: `Running ${teamMode} team with ${teamMembers.length} agents...` });
+      setTeamLog(logs);
 
-      setActiveStreamHandle(streamHandle);
+      const result = await withTimeout(
+        agentService.runTeam(testQuery, teamConfig, apiKeys),
+        600000,
+        'Team execution timed out'
+      );
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
 
-      setTimeout(() => {
-        if (accumulatedContent.trim()) {
-          setChatMessages(prev => [...prev, {
-            role: 'assistant',
-            content: accumulatedContent.trim(),
-            timestamp: new Date(),
-            agentName: `Team (${teamMembers.length} agents)`,
-          }]);
-          setTestResult({ success: true, response: accumulatedContent.trim() });
-          setSuccess('Team executed successfully');
-          setTimeout(() => setSuccess(null), 3000);
-        }
-        setExecuting(false);
-        setIsStreaming(false);
-        setStreamingContent('');
-      }, 500);
+      const finalContent = extractAgentResponseText(result.response || result.error || JSON.stringify(result, null, 2));
+
+      setTeamLog(prev => [...prev, { label: 'DONE', text: 'Team execution completed' }]);
+      setTestResult({ success: true, response: finalContent });
+      setChatMessages(prev => [...prev,
+        { role: 'user', content: testQuery, timestamp: new Date() },
+        {
+          role: 'assistant',
+          content: finalContent,
+          timestamp: new Date(),
+          agentName: `Team (${teamMembers.length} agents)`,
+        },
+      ]);
+      setSuccess('Team executed successfully');
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+      setTeamLog(prev => [...prev, { label: 'ERROR', text: err.toString() }]);
       setError(err.toString());
-      setExecuting(false);
-      setIsStreaming(false);
+    } finally {
+      if (mountedRef.current && currentFetchId === fetchIdRef.current) setExecuting(false);
     }
   };
 
-  const cancelStream = async () => {
-    if (activeStreamHandle) {
-      await activeStreamHandle.cancel();
-      setActiveStreamHandle(null);
-      setIsStreaming(false);
-      setExecuting(false);
-      setStreamingContent('');
-    }
-  };
 
   const runWorkflow = async (workflowType: string, extraParams?: Record<string, any>) => {
     if (workflowType === 'stock_analysis') {
@@ -782,18 +784,25 @@ export function useAgentConfig() {
 
   // ─── Planner ──────────────────────────────────────────────────────────────
 
-  const createPlan = async () => {
+  const createPlan = async (planQuery?: string) => {
     if (!workflowSymbol.trim()) return;
     setExecuting(true);
     setError(null);
+    setPlanGeneratedBy(null);
     try {
-      const plan = await agentService.createStockAnalysisPlan(workflowSymbol);
-      if (plan) {
-        setCurrentPlan(plan);
-        setSuccess('Execution plan created');
+      const apiKeys = await getApiKeys();
+      const query = planQuery
+        ? `${planQuery} for ${workflowSymbol}`
+        : `Perform a comprehensive financial analysis of ${workflowSymbol} including price data, fundamentals, news sentiment, technical analysis, and an overall investment recommendation.`;
+
+      const result = await agentService.generateDynamicPlan(query, apiKeys);
+      if (result?.plan) {
+        setCurrentPlan(result.plan);
+        setPlanGeneratedBy(result.generated_by === 'fallback' ? 'fallback' : 'llm');
+        setSuccess(result.generated_by === 'llm' ? 'AI-generated plan ready' : 'Plan created (template fallback)');
         setTimeout(() => setSuccess(null), 3000);
       } else {
-        setError('Failed to create plan');
+        setError('Failed to generate plan');
       }
     } catch (err: any) {
       setError(err.toString());
@@ -802,13 +811,14 @@ export function useAgentConfig() {
     }
   };
 
-  const executePlan = async () => {
-    if (!currentPlan) return;
+  const executePlan = async (planOverride?: ExecutionPlan) => {
+    const planToExecute = planOverride ?? currentPlan;
+    if (!planToExecute) return;
     setPlanExecuting(true);
     setError(null);
     try {
       const apiKeys = await getApiKeys();
-      const result = await agentService.executePlan(currentPlan, apiKeys);
+      const result = await agentService.executePlan(planToExecute, apiKeys);
       if (result) {
         setCurrentPlan(result);
         if (result.is_complete) {
@@ -931,6 +941,8 @@ export function useAgentConfig() {
     teamMembers, teamMode, setTeamMode,
     showMembersResponses, setShowMembersResponses,
     teamLeaderIndex, setTeamLeaderIndex,
+    teamProvider, setTeamProvider,
+    teamModelId, setTeamModelId,
     // Chat
     chatMessages, chatInput, setChatInput, chatEndRef,
     // Tools — selectedTools is derived from editedConfig.tools (single source of truth)
@@ -941,15 +953,15 @@ export function useAgentConfig() {
     // Portfolio
     portfolios, selectedPortfolioCtx, setSelectedPortfolioCtx,
     showPortfolioDropdown, setShowPortfolioDropdown,
-    // Streaming
-    streamingContent, isStreaming, activeStreamHandle,
+    // Team log
+    teamLog,
     // Workflow / Planner
-    workflowSymbol, setWorkflowSymbol, currentPlan, planExecuting,
+    workflowSymbol, setWorkflowSymbol, currentPlan, planExecuting, planGeneratedBy,
     // Actions
     loadDiscoveredAgents,
     loadCustomAgentsFromDb,
     updateEditedConfigFromAgent,
-    runAgent, runTeam, runWorkflow, cancelStream,
+    runAgent, runTeam, runWorkflow,
     createPlan, executePlan,
     addToTeam, removeFromTeam,
     toggleToolCategory, copyTool, toggleToolSelection,

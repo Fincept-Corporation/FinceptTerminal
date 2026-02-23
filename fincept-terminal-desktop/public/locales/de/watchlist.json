@@ -1,25 +1,7 @@
 {
-  "title": "BEOBACHTUNGSLISTE",
-  "header": {
-    "export": "EXPORTIEREN",
-    "updating": "AKTUALISIERUNG",
-    "live": "LIVE"
-  },
   "sidebar": {
-    "groups": "LISTENGRUPPEN",
-    "new": "NEU",
     "noWatchlists": "Noch keine Listen vorhanden.",
     "clickNew": "Klicken Sie NEU zum Erstellen.",
-    "stocks": "Aktien",
-    "marketMovers": "MARKTFÜHRER",
-    "gainer": "GEWINNER",
-    "loser": "VERLIERER",
-    "volumeLeaders": "VOLUMEN-LEADER"
-  },
-  "emptyState": {
-    "selectWatchlist": "Wählen Sie eine Liste oder erstellen Sie eine neue zum Starten"
-  },
-  "list": {
-    "symbols": "Symbole"
+    "stocks": "Aktien"
   }
 }

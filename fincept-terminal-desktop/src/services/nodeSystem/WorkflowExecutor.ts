@@ -114,10 +114,13 @@ export class WorkflowExecutor {
       startNode: startNodeName,
     } as IWorkflowExecuteStartEvent);
 
-    // Detect cycles
+    // Detect cycles — abort if found
     const cycleCheck = handleCycles(this.graph);
     if (cycleCheck.hasCycles) {
-      console.warn('[WorkflowExecutor] Detected cycles in workflow:', cycleCheck.cycleNodes);
+      const cycleNodeNames = cycleCheck.cycleNodes?.join(', ') || 'unknown';
+      throw new Error(
+        `Workflow contains cycles involving nodes: ${cycleNodeNames}. Remove circular connections to proceed.`
+      );
     }
 
     // Merge existing run data with new execution
@@ -175,6 +178,8 @@ export class WorkflowExecutor {
 
     // Execute nodes in order
     const executedNodes = new Set<string>();
+    const maxRequeue = nodesToExecute.length * 2;
+    let requeueCount = 0;
 
     while (executionState.nodeExecutionStack.length > 0) {
       const executeData = executionState.nodeExecutionStack.shift()!;
@@ -206,6 +211,7 @@ export class WorkflowExecutor {
           ];
 
           executedNodes.add(executeData.node.name);
+          requeueCount = 0;
 
           // Add downstream nodes
           await this.addDownstreamNodesOptimized(
@@ -224,10 +230,19 @@ export class WorkflowExecutor {
         );
 
         if (!allParentsExecuted) {
+          requeueCount++;
+          if (requeueCount > maxRequeue) {
+            throw new Error(
+              `Execution deadlock: nodes have unsatisfiable dependencies. ` +
+              `Remaining nodes: ${executionState.nodeExecutionStack.map(e => e.node.name).join(', ')}`
+            );
+          }
           // Re-add to end of stack and continue
           executionState.nodeExecutionStack.push(executeData);
           continue;
         }
+
+        requeueCount = 0;
 
         // Execute node
         console.log(`[WorkflowExecutor] Executing node: ${executeData.node.name}`);

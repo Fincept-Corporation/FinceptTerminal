@@ -2,7 +2,6 @@ import React from 'react';
 import { Plus } from 'lucide-react';
 import type { AddModelFormProps } from '../types';
 import { createStyles } from '../styles';
-import { PROVIDER_OPTIONS } from '../constants';
 
 export function AddModelForm({
   colors,
@@ -10,6 +9,7 @@ export function AddModelForm({
   newModelConfig,
   setNewModelConfig,
   newModelConfigModels,
+  availableProviders,
   useManualEntry,
   setUseManualEntry,
   onSubmit,
@@ -54,7 +54,7 @@ export function AddModelForm({
               fontSize: '12px'
             }}
           >
-            {PROVIDER_OPTIONS.map(option => (
+            {availableProviders.map(option => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

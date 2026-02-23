@@ -10,7 +10,8 @@
     "tabLayout": "Disposition des onglets",
     "appearance": "Apparence",
     "language": "Langue",
-    "storage": "Stockage et cache"
+    "storage": "Stockage et cache",
+    "notifications": "[FR] Notifications"
   },
   "credentials": {
     "title": "GESTION DES CRÉDENTIELS API",
@@ -46,7 +47,31 @@
     "saveConfig": "ENREGISTRER LA CONFIGURATION",
     "reset": "RÉINITIALISER",
     "saveSuccess": "L'apparence du terminal et les mappages de touches ont été enregistrés avec succès",
-    "resetSuccess": "Réinitialiser l'apparence et les mappages de touches par défaut"
+    "resetSuccess": "Réinitialiser l'apparence et les mappages de touches par défaut",
+    "customColors": "[FR] Custom Colors",
+    "customColorsTitle": "[FR] CUSTOM COLORS",
+    "colorPrimary": "[FR] Primary",
+    "colorSecondary": "[FR] Secondary",
+    "colorSuccess": "[FR] Success",
+    "colorAlert": "[FR] Alert",
+    "colorWarning": "[FR] Warning",
+    "colorInfo": "[FR] Info",
+    "colorAccent": "[FR] Accent",
+    "colorPurple": "[FR] Purple",
+    "colorText": "[FR] Text",
+    "colorTextMuted": "[FR] Text Muted",
+    "colorBackground": "[FR] Background",
+    "colorPanel": "[FR] Panel",
+    "layoutSpacing": "[FR] LAYOUT & SPACING",
+    "contentDensity": "[FR] CONTENT DENSITY",
+    "borderRadius": "[FR] BORDER RADIUS",
+    "borderStyle": "[FR] BORDER STYLE",
+    "lineHeight": "[FR] LINE HEIGHT",
+    "letterSpacing": "[FR] LETTER SPACING",
+    "effects": "[FR] EFFECTS",
+    "widgetOpacity": "[FR] WIDGET OPACITY",
+    "enableGlow": "[FR] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[FR] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "Base de données des symboles boursiers",
@@ -65,17 +90,8 @@
     "tip": "CONSEIL : faites glisser les onglets pour les réorganiser. Utilisez les boutons fléchés pour déplacer les onglets entre les sections d’en-tête et de menu. Les modifications sont enregistrées automatiquement."
   },
   "llm": {
-    "title": "CONFIGURATION LLM",
-    "description": "Configurer les modèles et les fournisseurs d'IA",
     "connected": "CONNECTÉ",
-    "disconnected": "DÉCONNECTÉ",
-    "provider": "FOURNISSEUR D'IA",
-    "globalSettings": "PARAMÈTRES GLOBAUX DE L'IA",
-    "temperature": "TEMPÉRATURE",
-    "maxTokens": "MAXI DE JETONS",
-    "systemPrompt": "INVITE SYSTÈME",
-    "modelLibrary": "BIBLIOTHÈQUE DE MODÈLES",
-    "multiModelConfigs": "Configurations multimodèles"
+    "disconnected": "DÉCONNECTÉ"
   },
   "buttons": {
     "save": "SAUVEGARDER",
@@ -86,5 +102,18 @@
     "database": "Base de données : SQLite",
     "storage": "Stockage : basé sur des fichiers",
     "secureStorage": "Toutes les données stockées en toute sécurité dans fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[FR] NOTIFICATION PROVIDERS",
+    "description": "[FR] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[FR] Event Filters",
+    "eventFilterDescription": "[FR] Choose which notification types to forward to external providers.",
+    "providers": "[FR] Providers",
+    "enabled": "[FR] Enabled",
+    "disabled": "[FR] Disabled",
+    "testButton": "[FR] TEST",
+    "testSuccess": "[FR] Test notification sent successfully!",
+    "testFailed": "[FR] Failed to send test notification. Check your configuration.",
+    "saved": "[FR] Configuration saved"
   }
 }

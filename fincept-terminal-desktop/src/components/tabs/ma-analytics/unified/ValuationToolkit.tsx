@@ -33,6 +33,13 @@ export const ValuationToolkit: React.FC = () => {
     beta: 1.2,
     terminalGrowth: 0.025,
     shares: 100,
+    marketCapM: 5000,
+    debtM: 1000,
+    costOfDebt: 0.05,
+    cash: 500,
+    depreciation: 100,
+    capex: 150,
+    changeInNwc: 20,
   });
 
   // LBO Returns Inputs (simple)
@@ -120,23 +127,23 @@ export const ValuationToolkit: React.FC = () => {
           risk_free_rate: dcfInputs.riskFreeRate,
           market_risk_premium: 0.06,
           beta: dcfInputs.beta,
-          cost_of_debt: 0.05,
+          cost_of_debt: dcfInputs.costOfDebt,
           tax_rate: dcfInputs.taxRate,
-          market_value_equity: 5000000000,
-          market_value_debt: 1000000000,
+          market_value_equity: dcfInputs.marketCapM * 1000000,
+          market_value_debt: dcfInputs.debtM * 1000000,
         },
         fcf_inputs: {
           ebit: dcfInputs.ebit * 1000000,
           tax_rate: dcfInputs.taxRate,
-          depreciation: 100000000,
-          capex: 150000000,
-          change_in_nwc: 20000000,
+          depreciation: dcfInputs.depreciation * 1000000,
+          capex: dcfInputs.capex * 1000000,
+          change_in_nwc: dcfInputs.changeInNwc * 1000000,
         },
         growth_rates: [0.15, 0.12, 0.10, 0.08, 0.06],
         terminal_growth: dcfInputs.terminalGrowth,
         balance_sheet: {
-          cash: 500000000,
-          debt: 1000000000,
+          cash: dcfInputs.cash * 1000000,
+          debt: dcfInputs.debtM * 1000000,
           minority_interest: 0,
           preferred_stock: 0,
         },
@@ -599,6 +606,13 @@ export const ValuationToolkit: React.FC = () => {
               {method === 'dcf' && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                   {renderInputField('EBIT ($M)', dcfInputs.ebit, (v) => setDcfInputs({ ...dcfInputs, ebit: parseFloat(v) || 0 }))}
+                  {renderInputField('DEPRECIATION ($M)', dcfInputs.depreciation, (v) => setDcfInputs({ ...dcfInputs, depreciation: parseFloat(v) || 0 }))}
+                  {renderInputField('CAPEX ($M)', dcfInputs.capex, (v) => setDcfInputs({ ...dcfInputs, capex: parseFloat(v) || 0 }))}
+                  {renderInputField('CHANGE IN NWC ($M)', dcfInputs.changeInNwc, (v) => setDcfInputs({ ...dcfInputs, changeInNwc: parseFloat(v) || 0 }))}
+                  {renderInputField('MARKET CAP ($M)', dcfInputs.marketCapM, (v) => setDcfInputs({ ...dcfInputs, marketCapM: parseFloat(v) || 0 }))}
+                  {renderInputField('TOTAL DEBT ($M)', dcfInputs.debtM, (v) => setDcfInputs({ ...dcfInputs, debtM: parseFloat(v) || 0 }))}
+                  {renderInputField('CASH ($M)', dcfInputs.cash, (v) => setDcfInputs({ ...dcfInputs, cash: parseFloat(v) || 0 }))}
+                  {renderInputField('COST OF DEBT', dcfInputs.costOfDebt, (v) => setDcfInputs({ ...dcfInputs, costOfDebt: parseFloat(v) || 0 }))}
                   {renderInputField('TAX RATE', dcfInputs.taxRate, (v) => setDcfInputs({ ...dcfInputs, taxRate: parseFloat(v) || 0 }))}
                   {renderInputField('RISK-FREE RATE', dcfInputs.riskFreeRate, (v) => setDcfInputs({ ...dcfInputs, riskFreeRate: parseFloat(v) || 0 }))}
                   {renderInputField('BETA', dcfInputs.beta, (v) => setDcfInputs({ ...dcfInputs, beta: parseFloat(v) || 0 }))}

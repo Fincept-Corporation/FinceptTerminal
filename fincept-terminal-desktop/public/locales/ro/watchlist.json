@@ -1,25 +1,7 @@
 {
-  "title": "LISTĂ URMĂRIRE",
-  "header": {
-    "export": "EXPORTĂ",
-    "updating": "ACTUALIZARE",
-    "live": "ÎN DIRECT"
-  },
   "sidebar": {
-    "groups": "GRUPURI DE LISTE",
-    "new": "NOUĂ",
     "noWatchlists": "Nicio listă încă.",
     "clickNew": "Click NOUĂ pentru a crea.",
-    "stocks": "acțiuni",
-    "marketMovers": "LIDERI PIAȚĂ",
-    "gainer": "ÎN CREȘTERE",
-    "loser": "ÎN SCĂDERE",
-    "volumeLeaders": "LIDERI VOLUM"
-  },
-  "emptyState": {
-    "selectWatchlist": "Selectați o listă sau creați una nouă pentru a începe"
-  },
-  "list": {
-    "symbols": "Simboluri"
+    "stocks": "acțiuni"
   }
 }

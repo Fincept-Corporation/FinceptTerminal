@@ -37,6 +37,8 @@ pub struct TickerData {
     pub close: Option<f64>,
     pub change: Option<f64>,
     pub change_percent: Option<f64>,
+    #[serde(default)]
+    pub quote_volume: Option<f64>,
     pub timestamp: u64,
 }
 

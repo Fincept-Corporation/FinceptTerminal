@@ -5,29 +5,7 @@
     "news": "Haberler",
     "portfolio": "Portföy",
     "backtesting": "Backtesting",
-    "watchlist": "İzleme Listesi",
-    "research": "Araştırma",
-    "screener": "Tarayıcı",
     "chat": "AI Chat",
-    "agents": "Ajanlar",
-    "settings": "Ayarlar",
     "profile": "Profil"
-  },
-  "functionKeys": {
-    "f1": "PANL",
-    "f2": "PYSA",
-    "f3": "HABR",
-    "f4": "PORT",
-    "f5": "BKTS",
-    "f6": "İZLE",
-    "f7": "ARST",
-    "f8": "TARA",
-    "f9": "TRDG",
-    "f10": "AI",
-    "f11": "FULL",
-    "f12": "PROF"
-  },
-  "labels": {
-    "moreTabs": "Araç çubuğu menülerinde daha fazla sekme"
   }
 }

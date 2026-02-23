@@ -1,29 +1,60 @@
 {
-  "title": "코드 에디터",
   "header": {
-    "packages": "패키지"
+    "finscriptIde": "[KO] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "새 파일",
-    "new": "새로 만들기",
-    "open": "열기",
-    "save": "저장",
     "run": "코드 실행",
     "running": "실행 중...",
-    "runAll": "모두 실행",
-    "history": "기록"
+    "toggleExplorer": "[KO] Toggle Explorer (Ctrl+B)",
+    "openFile": "[KO] Open File",
+    "saveShortcut": "[KO] Save (Ctrl+S)",
+    "findShortcut": "[KO] Find (Ctrl+F)",
+    "runShortcut": "[KO] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER 노트북",
     "finscript": "FINSCRIPT 에디터"
   },
-  "packages": {
-    "clickToLoad": "클릭하여 로드...",
-    "load": "패키지 로드"
+  "explorer": {
+    "title": "[KO] EXPLORER",
+    "openFiles": "[KO] OPEN FILES",
+    "examples": "[KO] EXAMPLES",
+    "runHistory": "[KO] RUN HISTORY",
+    "finscriptEngine": "[KO] FinScript Engine"
   },
-  "history": {
-    "title": "노트북 기록",
-    "loading": "기록 로딩 중...",
-    "empty": "노트북 기록 없음"
+  "output": {
+    "title": "[KO] OUTPUT",
+    "success": "[KO] SUCCESS",
+    "error": "[KO] ERROR",
+    "executing": "[KO] EXECUTING FINSCRIPT...",
+    "noOutput": "[KO] No output yet",
+    "pressToRun": "[KO] Press Ctrl+Enter to run",
+    "completed": "[KO] COMPLETED",
+    "failed": "[KO] FAILED",
+    "signals": "[KO] signals",
+    "clear": "[KO] CLEAR",
+    "errors": "[KO] ERRORS",
+    "signalsSection": "[KO] SIGNALS",
+    "outputSection": "[KO] OUTPUT",
+    "charts": "[KO] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[KO] OHLC",
+    "histogram": "[KO] Histogram",
+    "line": "[KO] Line",
+    "points": "[KO] points"
+  },
+  "statusBar": {
+    "modified": "[KO] MODIFIED",
+    "showOutput": "[KO] SHOW OUTPUT",
+    "encoding": "[KO] UTF-8",
+    "spaces": "[KO] 4 Spaces",
+    "runShortcut": "[KO] Ctrl+Enter: Run",
+    "lines": "[KO] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[KO] Close file without saving?",
+    "unsavedChanges": "[KO] You have unsaved changes."
   }
 }

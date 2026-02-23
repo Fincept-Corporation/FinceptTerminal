@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "カスタマイズ可能なダッシュボード",
-    "live": "ライブ",
-    "widgets": "ウィジェット"
-  },
-  "buttons": {
-    "addWidget": "ウィジェットを追加",
-    "saveLayout": "レイアウトの保存",
-    "reset": "リセット",
-    "help": "ヘルプ"
-  },
   "widgets": {
     "loading": "読み込み中...",
-    "error": "エラー",
     "globalIndices": "グローバル指数 - トップ 12",
     "forex": "外国為替 - 主要ペア",
     "crypto": "暗号通貨",
@@ -20,8 +8,6 @@
     "news": "ニュース",
     "forum": "フォーラム",
     "watchlist": "ウォッチリスト",
-    "maritimeIntelligence": "海洋インテリジェンス",
-    "unknown": "不明なウィジェットの種類",
     "index": "索引",
     "symbol": "シンボル",
     "price": "価格",
@@ -38,41 +24,22 @@
     "pair": "ペア",
     "rate": "レート",
     "commodity": "商品",
-    "globe3D": "3Dグローブ",
-    "vessels": "容器",
-    "routes": "ルート",
-    "vol24h": "24H巻",
-    "topTradeCorridors": "トップ貿易回廊",
-    "ships": "船",
-    "marketNews": "マーケットニュース",
-    "secPressReleases": "SEC プレスリリース",
-    "cryptoNews": "暗号ニュース",
-    "trendingForum": "トレンドフォーラム",
-    "techStocks": "ハイテク株"
-  },
-  "tips": {
-    "drag": "ウィジェットをドラッグして並べ替えます",
-    "resize": "右下隅からサイズを変更します",
-    "remove": "Xボタンでウィジェットを削除",
-    "responsive": "レスポンシブ レイアウト - 全幅を使用します"
-  },
-  "loading": {
-    "title": "ダッシュボードを初期化しています",
-    "description": "データの読み込みを高速化するためにデータベース キャッシュを設定しています...",
-    "note": "初回起動時はほんの少しだけかかります"
-  },
-  "empty": {
-    "noWidgets": "ダッシュボードにウィジェットがありません",
-    "addFirst": "最初のウィジェットを追加する"
-  },
-  "status": {
-    "version": "Fincept カスタマイズ可能なダッシュボード v2.0.0 |ワークスペースをドラッグ＆ドロップ",
-    "layout": "レイアウト",
-    "custom": "カスタム",
-    "empty": "空の",
-    "active": "アクティブ",
-    "cache": "キャッシュ: 有効",
-    "label": "状態"
+    "noActiveMarkets": "[JA] No active markets found",
+    "indicator": "[JA] INDICATOR",
+    "value": "[JA] VALUE",
+    "chg": "[JA] CHG",
+    "overallRisk": "[JA] OVERALL RISK",
+    "openEconomicsTab": "[JA] Open Economics Tab",
+    "openGeopoliticsTab": "[JA] Open Geopolitics Tab",
+    "openPolymarketTab": "[JA] Open Polymarket Tab",
+    "noPortfolioFound": "[JA] No portfolio found",
+    "createPortfolioHint": "[JA] Create one in Portfolio tab",
+    "openPortfolioTab": "[JA] Open Portfolio Tab",
+    "action": "[JA] ACTION",
+    "markets": "[JA] MARKETS",
+    "performanceTracker": "[JA] PERFORMANCE TRACKER",
+    "totalPnL": "[JA] TOTAL P&L",
+    "viewDetailedAnalytics": "[JA] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "ダッシュボードのレイアウトが保存されました。",

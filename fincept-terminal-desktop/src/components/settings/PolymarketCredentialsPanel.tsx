@@ -22,7 +22,7 @@ import {
   Link as LinkIcon
 } from 'lucide-react';
 import polymarketServiceEnhanced from '@/services/polymarket/polymarketServiceEnhanced';
-import { getSetting, saveSetting } from '@/services/core/sqliteService';
+import { saveCredential, getCredentialByService, deleteCredential } from '@/services/core/sqliteService';
 import { showConfirm } from '@/utils/notifications';
 
 // Fincept Professional Color Palette
@@ -82,14 +82,23 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
   const loadSavedCredentials = async () => {
     try {
-      const saved = await getSetting('polymarket_credentials');
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      const cred = await getCredentialByService('polymarket');
+      if (cred && cred.api_key) {
+        const additional = cred.additional_data ? JSON.parse(cred.additional_data) : {};
+        const parsed: PolymarketCredentials = {
+          apiKey: cred.api_key,
+          apiSecret: cred.api_secret ?? '',
+          apiPassphrase: cred.password ?? '',
+          walletAddress: cred.username ?? undefined,
+          createdAt: additional.createdAt,
+          method: additional.method ?? 'manual',
+        };
         setCredentials(parsed);
         polymarketServiceEnhanced.setCredentials({
           apiKey: parsed.apiKey,
           apiSecret: parsed.apiSecret,
-          apiPassphrase: parsed.apiPassphrase
+          apiPassphrase: parsed.apiPassphrase,
+          walletAddress: parsed.walletAddress,
         });
         if (parsed.walletAddress) {
           setWalletAddress(parsed.walletAddress);
@@ -103,12 +112,20 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
   const saveCredentials = async (creds: PolymarketCredentials) => {
     try {
-      await saveSetting('polymarket_credentials', JSON.stringify(creds), 'polymarket');
+      await saveCredential({
+        service_name: 'polymarket',
+        username: creds.walletAddress,
+        api_key: creds.apiKey,
+        api_secret: creds.apiSecret,
+        password: creds.apiPassphrase,
+        additional_data: JSON.stringify({ method: creds.method, createdAt: creds.createdAt ?? Date.now() }),
+      });
       setCredentials(creds);
       polymarketServiceEnhanced.setCredentials({
         apiKey: creds.apiKey,
         apiSecret: creds.apiSecret,
-        apiPassphrase: creds.apiPassphrase
+        apiPassphrase: creds.apiPassphrase,
+        walletAddress: creds.walletAddress,
       });
     } catch (error) {
       console.error('[PolymarketCredentials] Failed to save credentials:', error);
@@ -175,6 +192,7 @@ export const PolymarketCredentialsPanel: React.FC = () => {
       const provider = new BrowserProvider(window.ethereum as any);
       const signer = await provider.getSigner();
 
+      // L1 authentication: EIP-712 typed data signing as required by Polymarket CLOB API
       const domain = {
         name: 'ClobAuthDomain',
         version: '1',
@@ -192,13 +210,21 @@ export const PolymarketCredentialsPanel: React.FC = () => {
       setTestResult({ success: true, message: 'Please sign the message in MetaMask...' });
 
       const signature = await signer.signTypedData(domain, types, value);
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const nonce = '0';
 
       setTestResult({ success: true, message: 'Generating API credentials...' });
 
+      // Polymarket /auth/api-key requires L1 headers, NOT a JSON body
       const response = await fetch('https://clob.polymarket.com/auth/api-key', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, signature, nonce: 0 })
+        headers: {
+          'Content-Type': 'application/json',
+          'POLY_ADDRESS': address,
+          'POLY_SIGNATURE': signature,
+          'POLY_TIMESTAMP': timestamp,
+          'POLY_NONCE': nonce,
+        },
       });
 
       if (!response.ok) {
@@ -209,7 +235,7 @@ export const PolymarketCredentialsPanel: React.FC = () => {
       const apiCredentials = await response.json();
 
       const newCredentials: PolymarketCredentials = {
-        apiKey: apiCredentials.apiKey,
+        apiKey: apiCredentials.apiKey ?? apiCredentials.key,
         apiSecret: apiCredentials.secret,
         apiPassphrase: apiCredentials.passphrase,
         walletAddress: address,
@@ -217,7 +243,7 @@ export const PolymarketCredentialsPanel: React.FC = () => {
         method: 'wallet'
       };
 
-      saveCredentials(newCredentials);
+      await saveCredentials(newCredentials);
       setTestResult({ success: true, message: 'API credentials generated and saved!' });
 
     } catch (error: any) {
@@ -236,14 +262,17 @@ export const PolymarketCredentialsPanel: React.FC = () => {
     setTestResult(null);
 
     try {
-      const markets = await polymarketServiceEnhanced.getCLOBMarkets();
-      if (markets && (markets.length > 0 || Array.isArray(markets))) {
-        setTestResult({ success: true, message: 'Connection successful! Credentials valid.' });
-      } else {
-        setTestResult({ success: false, message: 'Invalid response from API' });
-      }
+      // Test against an authenticated endpoint — getOpenOrders requires valid L2 auth headers
+      const orders = await polymarketServiceEnhanced.getOpenOrders();
+      setTestResult({ success: true, message: `Connection successful! Credentials valid. (${orders.length} open orders)` });
     } catch (error: any) {
-      setTestResult({ success: false, message: `Test failed: ${error.message}` });
+      // Distinguish auth failure from network error
+      const msg = error.message ?? '';
+      if (msg.includes('401') || msg.includes('403') || msg.includes('Unauthorized')) {
+        setTestResult({ success: false, message: 'Authentication failed — check your API key, secret, and passphrase.' });
+      } else {
+        setTestResult({ success: false, message: `Test failed: ${msg}` });
+      }
     } finally {
       setIsTesting(false);
     }
@@ -259,7 +288,14 @@ export const PolymarketCredentialsPanel: React.FC = () => {
     );
     if (!confirmed) return;
 
-    await saveSetting('polymarket_credentials', '', 'polymarket');
+    try {
+      const cred = await getCredentialByService('polymarket');
+      if (cred?.id) {
+        await deleteCredential(cred.id);
+      }
+    } catch (error) {
+      console.error('[PolymarketCredentials] Failed to delete credentials:', error);
+    }
     setCredentials(null);
     setWalletConnected(false);
     setWalletAddress('');

@@ -4,7 +4,7 @@
 // import { loggerService } from './loggerService';
 import { getSetting } from '../core/sqliteService';
 
-const API_BASE = 'https://finceptbackend.share.zrok.io';
+const API_BASE = 'https://api.fincept.in';
 
 export interface TradePartner {
   partner_id: string;

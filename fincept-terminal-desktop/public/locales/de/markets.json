@@ -9,13 +9,9 @@
   "percentChange": "%ÄND",
   "high": "HOCH",
   "low": "TIEF",
-  "loading": "Laden...",
   "noData": "Keine Daten verfügbar",
   "refresh": "AKTUALISIEREN",
   "auto": "AUTO",
   "on": "AN",
-  "off": "AUS",
-  "lastUpdate": "LETZTE AKTUALISIERUNG",
-  "updating": "AKTUALISIERUNG",
-  "live": "LIVE"
+  "off": "AUS"
 }

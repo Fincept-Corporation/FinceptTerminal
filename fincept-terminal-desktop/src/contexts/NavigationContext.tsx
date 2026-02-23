@@ -1,7 +1,7 @@
 // File: src/contexts/NavigationContext.tsx
 // Reusable navigation context for sharing navigation functions across components
 
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, useRef, useEffect, useCallback, ReactNode } from 'react';
 import { Screen } from '../App';
 
 interface NavigationContextType {
@@ -36,25 +36,36 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({
   onSetActiveTab,
   activeTab
 }) => {
-  const navigateToScreen = (screen: Screen) => {
+  const profileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (profileTimerRef.current) {
+        clearTimeout(profileTimerRef.current);
+      }
+    };
+  }, []);
+
+  const navigateToScreen = useCallback((screen: Screen) => {
     onNavigate(screen);
-  };
+  }, [onNavigate]);
 
-  const navigateToPricing = () => {
+  const navigateToPricing = useCallback(() => {
     onNavigate('pricing');
-  };
+  }, [onNavigate]);
 
-  const navigateToDashboard = () => {
+  const navigateToDashboard = useCallback(() => {
     onNavigate('dashboard');
-  };
+  }, [onNavigate]);
 
-  const navigateToProfile = () => {
+  const navigateToProfile = useCallback(() => {
     onNavigate('dashboard');
     if (onSetActiveTab) {
       // Set active tab to profile after a short delay to ensure dashboard is mounted
-      setTimeout(() => onSetActiveTab('profile'), 100);
+      if (profileTimerRef.current) clearTimeout(profileTimerRef.current);
+      profileTimerRef.current = setTimeout(() => onSetActiveTab('profile'), 100);
     }
-  };
+  }, [onNavigate, onSetActiveTab]);
 
   const value: NavigationContextType = {
     navigateToScreen,

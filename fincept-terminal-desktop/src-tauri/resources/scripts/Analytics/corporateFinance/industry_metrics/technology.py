@@ -345,6 +345,90 @@ class TechnologyMetrics:
             }
         }
 
+def _build_standard_output(analysis: dict, sector: str) -> dict:
+    """Build valuation_metrics, benchmarks, and insights from sector-specific analysis output."""
+    benchmarks_db = {
+        'saas': {
+            'arr': {'p25': 50, 'median': 150, 'p75': 500},
+            'arr_growth': {'p25': 25, 'median': 40, 'p75': 65},
+            'gross_margin': {'p25': 65, 'median': 75, 'p75': 82},
+            'net_retention': {'p25': 100, 'median': 110, 'p75': 125},
+            'ltv_cac': {'p25': 2.0, 'median': 3.5, 'p75': 5.5},
+        },
+        'marketplace': {
+            'gmv': {'p25': 200, 'median': 800, 'p75': 3000},
+            'take_rate': {'p25': 10, 'median': 17, 'p75': 25},
+            'repeat_rate': {'p25': 40, 'median': 58, 'p75': 72},
+        },
+        'semiconductor': {
+            'revenue': {'p25': 100, 'median': 500, 'p75': 2000},
+            'gross_margin': {'p25': 45, 'median': 55, 'p75': 65},
+            'r_and_d_intensity': {'p25': 12, 'median': 18, 'p75': 25},
+        },
+    }
+
+    vm = {}
+    insights = []
+
+    if sector == 'saas':
+        km = analysis.get('key_metrics', {})
+        vm = {
+            'rule_of_40': round(km.get('rule_of_40', 0), 1),
+            'ltv_cac_ratio': round(km.get('ltv_cac_ratio', 0), 2),
+            'cac_payback_months': round(km.get('cac_payback_months', 0), 1),
+            'efficiency_score': analysis.get('efficiency_score', 0),
+            'gross_margin_pct': round(analysis.get('gross_margin', 0), 1),
+            'net_retention_rate': round(analysis.get('net_retention_rate', 0), 1),
+        }
+        vi = analysis.get('valuation_implications', {})
+        mr = vi.get('suggested_multiple_range', {})
+        vm['arr_multiple_mid'] = round(mr.get('mid', 0), 1)
+        if km.get('rule_of_40', 0) >= 40:
+            insights.append(f"Rule of 40 score of {vm['rule_of_40']} indicates strong operational efficiency — premium multiple justified.")
+        if km.get('ltv_cac_ratio', 0) >= 3:
+            insights.append("LTV/CAC ratio >= 3x demonstrates healthy unit economics for SaaS growth.")
+        if analysis.get('net_retention_rate', 0) >= 110:
+            insights.append("Net revenue retention above 110% shows strong net expansion — customers spending more over time.")
+        insights.append(f"Suggested ARR multiple range: {mr.get('low', 0):.1f}x – {mr.get('high', 0):.1f}x based on efficiency profile.")
+
+    elif sector == 'marketplace':
+        vm = {
+            'gmv': round(analysis.get('gmv', 0), 1),
+            'take_rate_pct': round(analysis.get('implied_take_rate', analysis.get('take_rate', 0) * 100), 1),
+            'network_strength': round(analysis.get('network_strength', 0), 1),
+            'marketplace_quality_score': analysis.get('marketplace_quality_score', 0),
+        }
+        mr = analysis.get('gmv_multiple_range', {})
+        vm['gmv_multiple_mid'] = round(mr.get('mid', 0), 2)
+        insights.append(f"GMV multiple range: {mr.get('low', 0):.2f}x – {mr.get('high', 0):.2f}x of GMV.")
+        if analysis.get('take_rate', 0) >= 15:
+            insights.append("Take rate >= 15% indicates strong monetization power in the marketplace.")
+        insights.append(f"Network strength score of {vm['network_strength']:.0f}% reflects combined supply/demand retention.")
+
+    elif sector == 'semiconductor':
+        vm = {
+            'revenue': round(analysis.get('revenue', 0), 1),
+            'gross_margin_pct': round(analysis.get('gross_margin', 0), 1),
+            'technology_leadership_score': analysis.get('technology_leadership_score', 0),
+            'semiconductor_quality_score': analysis.get('semiconductor_quality_score', 0),
+            'design_win_coverage_years': round(analysis.get('design_win_coverage_years', 0), 2),
+        }
+        mr = analysis.get('typical_revenue_multiple', {})
+        vm['revenue_multiple_mid'] = round(mr.get('mid', 0), 1)
+        insights.append(f"Revenue multiple range: {mr.get('low', 0):.1f}x – {mr.get('high', 0):.1f}x.")
+        if analysis.get('technology_leadership_score', 0) >= 70:
+            insights.append("Technology leadership score indicates competitive process node advantage.")
+        if analysis.get('design_win_coverage_years', 0) >= 1.5:
+            insights.append("Strong design win backlog provides revenue visibility for 1.5+ years.")
+
+    return {
+        **analysis,
+        'valuation_metrics': vm,
+        'benchmarks': benchmarks_db.get(sector, {}),
+        'insights': insights,
+    }
+
+
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -378,12 +462,14 @@ def main():
                 model = TechBusinessModel.SAAS  # default
 
             analyzer = TechnologyMetrics(model)
+            sector_key = sector.lower()
 
             # Route to appropriate calculation based on model
             if model == TechBusinessModel.SAAS:
-                # Map common alternative key names for SaaS
+                # Map frontend keys to Python parameter names
                 saas_aliases = {
                     'revenue': 'arr', 'annual_recurring_revenue': 'arr',
+                    'arr_growth': 'revenue_growth_rate',
                     'growth_rate': 'revenue_growth_rate', 'growth': 'revenue_growth_rate',
                     'net_retention': 'net_retention_rate', 'nrr': 'net_retention_rate',
                     'customer_acquisition_cost': 'cac',
@@ -392,15 +478,114 @@ def main():
                 for old_key, new_key in saas_aliases.items():
                     if old_key in company_data and new_key not in company_data:
                         company_data[new_key] = company_data.pop(old_key)
-                analysis = analyzer.calculate_saas_metrics(**company_data)
-            elif model == TechBusinessModel.CONSUMER_SOFTWARE:
-                analysis = analyzer.calculate_user_metrics(**company_data)
-            elif model == TechBusinessModel.MARKETPLACE:
-                analysis = analyzer.calculate_marketplace_metrics(**company_data)
-            elif model == TechBusinessModel.SEMICONDUCTOR:
-                analysis = analyzer.calculate_semiconductor_metrics(**company_data)
 
-            result = {"success": True, "data": analysis}
+                # ltv_cac ratio: split into ltv=ratio and cac=1 so ltv/cac = ratio
+                if 'ltv_cac' in company_data and 'cac' not in company_data:
+                    company_data['cac'] = 1.0
+                    company_data['ltv'] = float(company_data.pop('ltv_cac'))
+                elif 'ltv_cac' in company_data:
+                    company_data.pop('ltv_cac')
+
+                # gross_margin: normalize to 0-1 fraction if given as percentage
+                if 'gross_margin' in company_data and company_data['gross_margin'] > 1:
+                    company_data['gross_margin'] = company_data['gross_margin'] / 100.0
+
+                # net_retention_rate: keep as-is (Python compares >= 110 treating it as percentage)
+                # rule_of_40 and cac_payback are outputs, not inputs — drop them
+                for drop_key in ('rule_of_40', 'cac_payback'):
+                    company_data.pop(drop_key, None)
+
+                # Set defaults for required params not provided by frontend
+                company_data.setdefault('revenue_growth_rate', 30.0)
+                company_data.setdefault('net_retention_rate', 100.0)
+                company_data.setdefault('cac', 1.0)
+                company_data.setdefault('ltv', 3.0)
+
+                import inspect
+                valid_params = set(inspect.signature(analyzer.calculate_saas_metrics).parameters.keys())
+                filtered = {k: v for k, v in company_data.items() if k in valid_params}
+                analysis = analyzer.calculate_saas_metrics(**filtered)
+                sector_key = 'saas'
+
+            elif model == TechBusinessModel.CONSUMER_SOFTWARE:
+                import inspect
+                valid_params = set(inspect.signature(analyzer.calculate_user_metrics).parameters.keys())
+                filtered = {k: v for k, v in company_data.items() if k in valid_params}
+                analysis = analyzer.calculate_user_metrics(**filtered)
+                sector_key = 'consumer'
+
+            elif model == TechBusinessModel.MARKETPLACE:
+                # Map frontend keys to Python parameter names
+                marketplace_aliases = {
+                    'gmv_growth': None,          # computed metric, not an input — drop
+                    'active_buyers': None,        # not a param — drop
+                    'active_sellers': None,       # not a param — drop
+                    'repeat_rate': 'demand_side_retention',
+                }
+                for old_key, new_key in marketplace_aliases.items():
+                    if old_key in company_data:
+                        if new_key:
+                            if new_key not in company_data:
+                                company_data[new_key] = company_data.pop(old_key)
+                            else:
+                                company_data.pop(old_key)
+                        else:
+                            company_data.pop(old_key)
+
+                # take_rate: normalize to fraction if given as percentage
+                if 'take_rate' in company_data and company_data['take_rate'] > 1:
+                    company_data['take_rate'] = company_data['take_rate'] / 100.0
+
+                # Provide defaults for params not in frontend form
+                company_data.setdefault('revenue', company_data.get('gmv', 0) * company_data.get('take_rate', 0.15))
+                company_data.setdefault('liquidity_score', 70.0)
+                company_data.setdefault('supply_side_retention', company_data.get('demand_side_retention', 70.0))
+                company_data.setdefault('demand_side_retention', 70.0)
+
+                import inspect
+                valid_params = set(inspect.signature(analyzer.calculate_marketplace_metrics).parameters.keys())
+                filtered = {k: v for k, v in company_data.items() if k in valid_params}
+                analysis = analyzer.calculate_marketplace_metrics(**filtered)
+                sector_key = 'marketplace'
+
+            elif model == TechBusinessModel.SEMICONDUCTOR:
+                # Map frontend keys to Python parameter names
+                semi_aliases = {
+                    'r_and_d_intensity': 'r_and_d_pct',
+                    'design_wins': 'design_win_backlog',
+                    'revenue_growth': None,   # computed metric, not an input — drop
+                    'book_to_bill': None,     # not a param — drop
+                }
+                for old_key, new_key in semi_aliases.items():
+                    if old_key in company_data:
+                        if new_key:
+                            if new_key not in company_data:
+                                company_data[new_key] = company_data.pop(old_key)
+                            else:
+                                company_data.pop(old_key)
+                        else:
+                            company_data.pop(old_key)
+
+                # r_and_d_pct: normalize to fraction if given as percentage
+                if 'r_and_d_pct' in company_data and company_data['r_and_d_pct'] > 1:
+                    company_data['r_and_d_pct'] = company_data['r_and_d_pct'] / 100.0
+
+                # gross_margin: normalize to fraction
+                if 'gross_margin' in company_data and company_data['gross_margin'] > 1:
+                    company_data['gross_margin'] = company_data['gross_margin'] / 100.0
+
+                # Provide defaults for params not in frontend form
+                company_data.setdefault('process_node', 14)   # nm — 14nm default (mature)
+                company_data.setdefault('fabless', True)
+
+                import inspect
+                valid_params = set(inspect.signature(analyzer.calculate_semiconductor_metrics).parameters.keys())
+                filtered = {k: v for k, v in company_data.items() if k in valid_params}
+                analysis = analyzer.calculate_semiconductor_metrics(**filtered)
+                sector_key = 'semiconductor'
+
+            analysis_with_standard = _build_standard_output(analysis, sector_key)
+            result = {"success": True, "data": analysis_with_standard}
             print(json.dumps(result))
 
         else:

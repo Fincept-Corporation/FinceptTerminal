@@ -10,7 +10,8 @@
     "tabLayout": "Tata Letak Tab",
     "appearance": "Penampilan",
     "language": "Bahasa",
-    "storage": "Penyimpanan & Cache"
+    "storage": "Penyimpanan & Cache",
+    "notifications": "[ID] Notifications"
   },
   "credentials": {
     "title": "MANAJEMEN KREDENSIAL API",
@@ -46,7 +47,31 @@
     "saveConfig": "SIMPAN KONFIGURASI",
     "reset": "MENGATUR ULANG",
     "saveSuccess": "Tampilan terminal dan pemetaan kunci berhasil disimpan",
-    "resetSuccess": "Reset ke tampilan default dan pemetaan kunci"
+    "resetSuccess": "Reset ke tampilan default dan pemetaan kunci",
+    "customColors": "[ID] Custom Colors",
+    "customColorsTitle": "[ID] CUSTOM COLORS",
+    "colorPrimary": "[ID] Primary",
+    "colorSecondary": "[ID] Secondary",
+    "colorSuccess": "[ID] Success",
+    "colorAlert": "[ID] Alert",
+    "colorWarning": "[ID] Warning",
+    "colorInfo": "[ID] Info",
+    "colorAccent": "[ID] Accent",
+    "colorPurple": "[ID] Purple",
+    "colorText": "[ID] Text",
+    "colorTextMuted": "[ID] Text Muted",
+    "colorBackground": "[ID] Background",
+    "colorPanel": "[ID] Panel",
+    "layoutSpacing": "[ID] LAYOUT & SPACING",
+    "contentDensity": "[ID] CONTENT DENSITY",
+    "borderRadius": "[ID] BORDER RADIUS",
+    "borderStyle": "[ID] BORDER STYLE",
+    "lineHeight": "[ID] LINE HEIGHT",
+    "letterSpacing": "[ID] LETTER SPACING",
+    "effects": "[ID] EFFECTS",
+    "widgetOpacity": "[ID] WIDGET OPACITY",
+    "enableGlow": "[ID] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[ID] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "Basis Data Simbol Saham",
@@ -65,17 +90,8 @@
     "tip": "TIPS: Seret tab untuk menyusun ulang tab. Gunakan tombol panah untuk memindahkan tab antara header dan bagian menu. Perubahan disimpan secara otomatis."
   },
   "llm": {
-    "title": "KONFIGURASI LLM",
-    "description": "Konfigurasikan model dan penyedia AI",
     "connected": "TERHUBUNG",
-    "disconnected": "TERHUBUNG",
-    "provider": "PENYEDIA AI",
-    "globalSettings": "PENGATURAN AI GLOBAL",
-    "temperature": "SUHU",
-    "maxTokens": "TOKEN MAKS",
-    "systemPrompt": "PERINTAH SISTEM",
-    "modelLibrary": "PERPUSTAKAAN MODEL",
-    "multiModelConfigs": "Konfigurasi multi-model"
+    "disconnected": "TERHUBUNG"
   },
   "buttons": {
     "save": "MENYIMPAN",
@@ -86,5 +102,18 @@
     "database": "Basis Data: SQLite",
     "storage": "Penyimpanan: Berbasis file",
     "secureStorage": "Semua data disimpan dengan aman di fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[ID] NOTIFICATION PROVIDERS",
+    "description": "[ID] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[ID] Event Filters",
+    "eventFilterDescription": "[ID] Choose which notification types to forward to external providers.",
+    "providers": "[ID] Providers",
+    "enabled": "[ID] Enabled",
+    "disabled": "[ID] Disabled",
+    "testButton": "[ID] TEST",
+    "testSuccess": "[ID] Test notification sent successfully!",
+    "testFailed": "[ID] Failed to send test notification. Check your configuration.",
+    "saved": "[ID] Configuration saved"
   }
 }

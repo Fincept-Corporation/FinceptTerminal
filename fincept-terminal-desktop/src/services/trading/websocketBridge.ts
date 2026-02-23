@@ -4,6 +4,20 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
+const INVOKE_TIMEOUT_MS = 15000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number = INVOKE_TIMEOUT_MS, label?: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`[WebSocketBridge] ${label || 'invoke'} timed out after ${ms}ms`));
+    }, ms);
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
+
 // ============================================================================
 // TYPES (matching Rust types)
 // ============================================================================
@@ -34,6 +48,7 @@ export interface TickerData {
   close?: number;
   change?: number;
   change_percent?: number;
+  quote_volume?: number;
   timestamp: number;
 }
 
@@ -106,7 +121,7 @@ export class WebSocketBridge {
   // ========================================================================
 
   async setConfig(config: ProviderConfig): Promise<void> {
-    await invoke('ws_set_config', { config });
+    await withTimeout(invoke('ws_set_config', { config }), INVOKE_TIMEOUT_MS, 'setConfig');
   }
 
   // ========================================================================
@@ -114,15 +129,15 @@ export class WebSocketBridge {
   // ========================================================================
 
   async connect(provider: string): Promise<void> {
-    await invoke('ws_connect', { provider });
+    await withTimeout(invoke('ws_connect', { provider }), INVOKE_TIMEOUT_MS, 'connect');
   }
 
   async disconnect(provider: string): Promise<void> {
-    await invoke('ws_disconnect', { provider });
+    await withTimeout(invoke('ws_disconnect', { provider }), INVOKE_TIMEOUT_MS, 'disconnect');
   }
 
   async reconnect(provider: string): Promise<void> {
-    await invoke('ws_reconnect', { provider });
+    await withTimeout(invoke('ws_reconnect', { provider }), INVOKE_TIMEOUT_MS, 'reconnect');
   }
 
   // ========================================================================
@@ -135,16 +150,17 @@ export class WebSocketBridge {
     channel: string,
     params?: Record<string, any>
   ): Promise<void> {
-    await invoke('ws_subscribe', {
+    console.log(`[WebSocketBridge] subscribe: provider='${provider}' symbol='${symbol}' channel='${channel}'`);
+    await withTimeout(invoke('ws_subscribe', {
       provider,
       symbol,
       channel,
       params: params ? params : null,
-    });
+    }), INVOKE_TIMEOUT_MS, 'subscribe');
   }
 
   async unsubscribe(provider: string, symbol: string, channel: string): Promise<void> {
-    await invoke('ws_unsubscribe', { provider, symbol, channel });
+    await withTimeout(invoke('ws_unsubscribe', { provider, symbol, channel }), INVOKE_TIMEOUT_MS, 'unsubscribe');
   }
 
   // ========================================================================
@@ -203,11 +219,11 @@ export class WebSocketBridge {
   // ========================================================================
 
   async getMetrics(provider: string): Promise<ConnectionMetrics | null> {
-    return await invoke('ws_get_metrics', { provider });
+    return await withTimeout(invoke('ws_get_metrics', { provider }), INVOKE_TIMEOUT_MS, 'getMetrics');
   }
 
   async getAllMetrics(): Promise<ConnectionMetrics[]> {
-    return await invoke('ws_get_all_metrics');
+    return await withTimeout(invoke('ws_get_all_metrics'), INVOKE_TIMEOUT_MS, 'getAllMetrics');
   }
 
   // ========================================================================

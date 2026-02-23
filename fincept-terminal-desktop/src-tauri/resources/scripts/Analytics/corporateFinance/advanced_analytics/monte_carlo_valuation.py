@@ -305,14 +305,50 @@ def main():
                 discount_rate = float(sys.argv[7])
                 simulations = int(sys.argv[8])
 
+            # Normalize: frontend sends percentages (15, 5), Python needs fractions (0.15, 0.05)
+            if revenue_growth_mean > 1:
+                revenue_growth_mean = revenue_growth_mean / 100.0
+            if revenue_growth_std > 1:
+                revenue_growth_std = revenue_growth_std / 100.0
+            if margin_mean > 1:
+                margin_mean = margin_mean / 100.0
+            if margin_std > 1:
+                margin_std = margin_std / 100.0
+            if discount_rate > 1:
+                discount_rate = discount_rate / 100.0
+
             mc = MonteCarloValuation(num_simulations=simulations)
 
-            analysis = mc.simulate_synergies(
-                base_revenue_synergy=base_valuation * revenue_growth_mean,
-                base_cost_synergy=base_valuation * margin_mean,
-                revenue_std_dev_pct=revenue_growth_std,
-                cost_std_dev_pct=margin_std
+            # Use DCF-based Monte Carlo: simulate enterprise value distribution
+            # Build base FCF from base_valuation * margin_mean, grow at revenue_growth_mean
+            base_fcf = [base_valuation * margin_mean * ((1 + revenue_growth_mean) ** i) for i in range(5)]
+            analysis_dcf = mc.simulate_dcf_valuation(
+                base_fcf=base_fcf,
+                fcf_growth_mean=revenue_growth_mean,
+                fcf_growth_std=revenue_growth_std,
+                terminal_growth_mean=min(revenue_growth_mean * 0.3, 0.03),
+                terminal_growth_std=revenue_growth_std * 0.5,
+                wacc_mean=discount_rate,
+                wacc_std=discount_rate * 0.1,
             )
+
+            vs = analysis_dcf.get('valuation_statistics', {})
+
+            # Normalize to flat structure that frontend expects
+            analysis = {
+                'mean': vs.get('mean', 0),
+                'median': vs.get('median', 0),
+                'std': vs.get('std', 0),
+                'p5': vs.get('percentile_5', 0),
+                'p25': vs.get('percentile_25', 0),
+                'p75': vs.get('percentile_75', 0),
+                'p95': vs.get('percentile_95', 0),
+                'probability_positive': 100.0,  # DCF values are positive
+                'num_simulations': simulations,
+                'input_assumptions': analysis_dcf.get('input_assumptions', {}),
+                'base_valuation': base_valuation,
+                'discount_rate_pct': discount_rate * 100,
+            }
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result))

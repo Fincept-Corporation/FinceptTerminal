@@ -10,7 +10,8 @@
     "tabLayout": "ট্যাব লেআউট",
     "appearance": "চেহারা",
     "language": "ভাষা",
-    "storage": "স্টোরেজ এবং ক্যাশে"
+    "storage": "স্টোরেজ এবং ক্যাশে",
+    "notifications": "[BN] Notifications"
   },
   "credentials": {
     "title": "এপিআই ক্রেডেনশিয়াল ম্যানেজমেন্ট",
@@ -46,7 +47,31 @@
     "saveConfig": "কনফিগারেশন সংরক্ষণ করুন",
     "reset": "রিসেট",
     "saveSuccess": "টার্মিনাল উপস্থিতি এবং কী ম্যাপিং সফলভাবে সংরক্ষণ করা হয়েছে৷",
-    "resetSuccess": "ডিফল্ট চেহারা এবং কী ম্যাপিং রিসেট করুন"
+    "resetSuccess": "ডিফল্ট চেহারা এবং কী ম্যাপিং রিসেট করুন",
+    "customColors": "[BN] Custom Colors",
+    "customColorsTitle": "[BN] CUSTOM COLORS",
+    "colorPrimary": "[BN] Primary",
+    "colorSecondary": "[BN] Secondary",
+    "colorSuccess": "[BN] Success",
+    "colorAlert": "[BN] Alert",
+    "colorWarning": "[BN] Warning",
+    "colorInfo": "[BN] Info",
+    "colorAccent": "[BN] Accent",
+    "colorPurple": "[BN] Purple",
+    "colorText": "[BN] Text",
+    "colorTextMuted": "[BN] Text Muted",
+    "colorBackground": "[BN] Background",
+    "colorPanel": "[BN] Panel",
+    "layoutSpacing": "[BN] LAYOUT & SPACING",
+    "contentDensity": "[BN] CONTENT DENSITY",
+    "borderRadius": "[BN] BORDER RADIUS",
+    "borderStyle": "[BN] BORDER STYLE",
+    "lineHeight": "[BN] LINE HEIGHT",
+    "letterSpacing": "[BN] LETTER SPACING",
+    "effects": "[BN] EFFECTS",
+    "widgetOpacity": "[BN] WIDGET OPACITY",
+    "enableGlow": "[BN] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[BN] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "স্টক সিম্বল ডাটাবেস",
@@ -65,17 +90,8 @@
     "tip": "টিপ: ট্যাবগুলিকে পুনরায় সাজাতে টেনে আনুন৷ হেডার এবং মেনু বিভাগের মধ্যে ট্যাব সরাতে তীর বোতাম ব্যবহার করুন। পরিবর্তন স্বয়ংক্রিয়ভাবে সংরক্ষিত হয়."
   },
   "llm": {
-    "title": "এলএলএম কনফিগারেশন",
-    "description": "AI মডেল এবং প্রদানকারী কনফিগার করুন",
     "connected": "সংযুক্ত",
-    "disconnected": "সংযোগ বিচ্ছিন্ন",
-    "provider": "এআই প্রদানকারী",
-    "globalSettings": "গ্লোবাল এআই সেটিংস",
-    "temperature": "তাপমাত্রা",
-    "maxTokens": "সর্বোচ্চ টোকেন",
-    "systemPrompt": "সিস্টেম প্রম্পট",
-    "modelLibrary": "মডেল লাইব্রেরি",
-    "multiModelConfigs": "মাল্টি-মডেল কনফিগারেশন"
+    "disconnected": "সংযোগ বিচ্ছিন্ন"
   },
   "buttons": {
     "save": "সংরক্ষণ করুন",
@@ -86,5 +102,18 @@
     "database": "ডাটাবেস: SQLite",
     "storage": "স্টোরেজ: ফাইল-ভিত্তিক",
     "secureStorage": "সমস্ত ডেটা fincept_terminal.db এ সুরক্ষিতভাবে সংরক্ষিত"
+  },
+  "notifications": {
+    "title": "[BN] NOTIFICATION PROVIDERS",
+    "description": "[BN] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[BN] Event Filters",
+    "eventFilterDescription": "[BN] Choose which notification types to forward to external providers.",
+    "providers": "[BN] Providers",
+    "enabled": "[BN] Enabled",
+    "disabled": "[BN] Disabled",
+    "testButton": "[BN] TEST",
+    "testSuccess": "[BN] Test notification sent successfully!",
+    "testFailed": "[BN] Failed to send test notification. Check your configuration.",
+    "saved": "[BN] Configuration saved"
   }
 }

@@ -37,6 +37,7 @@ struct MCPState {
 }
 
 // Global state for WebSocket manager
+#[allow(private_interfaces)]
 pub struct WebSocketState {
     pub manager: Arc<tokio::sync::RwLock<websocket::WebSocketManager>>,
     pub router: Arc<tokio::sync::RwLock<websocket::MessageRouter>>,
@@ -44,7 +45,7 @@ pub struct WebSocketState {
 }
 
 #[allow(dead_code)]
-struct WebSocketServices {
+pub(crate) struct WebSocketServices {
     paper_trading: websocket::services::PaperTradingService,
     arbitrage: websocket::services::ArbitrageService,
     portfolio: websocket::services::PortfolioService,
@@ -196,7 +197,8 @@ fn spawn_mcp_server(
                 response_rx,
             };
 
-            let mut processes = state.processes.lock().unwrap();
+            let mut processes = state.processes.lock()
+                .map_err(|e| format!("Failed to lock MCP state: {}", e))?;
             processes.insert(server_id.clone(), mcp_process);
 
             Ok(SpawnResult {
@@ -227,12 +229,14 @@ fn send_mcp_request(
     let timeout = timeout_secs.unwrap_or(30);
     println!("[Tauri] Sending request to server {} (timeout: {}s): {}", server_id, timeout, request);
 
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock()
+        .map_err(|e| format!("Failed to lock MCP state: {}", e))?;
 
     if let Some(mcp_process) = processes.get_mut(&server_id) {
         // Write request to stdin
         {
-            let mut stdin = mcp_process.stdin.lock().unwrap();
+            let mut stdin = mcp_process.stdin.lock()
+                .map_err(|e| format!("Failed to lock stdin: {}", e))?;
             writeln!(stdin, "{}", request)
                 .map_err(|e| format!("Failed to write to stdin: {}", e))?;
             stdin.flush()
@@ -263,10 +267,12 @@ fn send_mcp_notification(
     server_id: String,
     notification: String,
 ) -> Result<(), String> {
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock()
+        .map_err(|e| format!("Failed to lock MCP state: {}", e))?;
 
     if let Some(mcp_process) = processes.get_mut(&server_id) {
-        let mut stdin = mcp_process.stdin.lock().unwrap();
+        let mut stdin = mcp_process.stdin.lock()
+            .map_err(|e| format!("Failed to lock stdin: {}", e))?;
         writeln!(stdin, "{}", notification)
             .map_err(|e| format!("Failed to write notification: {}", e))?;
         stdin.flush()
@@ -283,7 +289,8 @@ fn ping_mcp_server(
     state: tauri::State<MCPState>,
     server_id: String,
 ) -> Result<bool, String> {
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock()
+        .map_err(|e| format!("Failed to lock MCP state: {}", e))?;
 
     if let Some(mcp_process) = processes.get_mut(&server_id) {
         // Check if process is still running
@@ -303,11 +310,14 @@ fn kill_mcp_server(
     state: tauri::State<MCPState>,
     server_id: String,
 ) -> Result<(), String> {
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock()
+        .map_err(|e| format!("Failed to lock MCP state: {}", e))?;
 
     if let Some(mut mcp_process) = processes.remove(&server_id) {
         match mcp_process.child.kill() {
             Ok(_) => {
+                // Reap the child process to avoid zombies
+                let _ = mcp_process.child.wait();
                 Ok(())
             }
             Err(e) => Err(format!("Failed to kill server: {}", e)),
@@ -738,6 +748,7 @@ pub fn run() {
                                 close: payload.get("close").and_then(|v| v.as_f64()),
                                 change: payload.get("change").and_then(|v| v.as_f64()),
                                 change_percent: payload.get("change_percent").and_then(|v| v.as_f64()),
+                                quote_volume: payload.get("quote_volume").and_then(|v| v.as_f64()),
                                 timestamp: payload.get("timestamp").and_then(|v| v.as_u64()).unwrap_or(0),
                             };
 
@@ -1400,6 +1411,8 @@ pub fn run() {
             commands::jupyter::install_python_package,
             commands::jupyter::list_python_packages,
             commands::finscript_cmd::execute_finscript,
+            commands::finscript_cmd::execute_finscript_live,
+            commands::finscript_cmd::execute_finscript_batch,
             // Python Agent Commands
             commands::agents::list_available_agents,
             commands::agents::get_agent_metadata,
@@ -1412,6 +1425,7 @@ pub fn run() {
             commands::agents::execute_routed_query,
             commands::agents::discover_agents,
             commands::agents::create_stock_analysis_plan,
+            commands::agents::generate_dynamic_plan,
             commands::agents::execute_plan,
             commands::agents::save_trade_decision,
             commands::agents::get_trade_decisions,
@@ -2614,7 +2628,13 @@ pub fn run() {
             // Python Strategy Backtest & Deployment
             commands::algo_trading::run_python_backtest,
             commands::algo_trading::extract_strategy_parameters,
-            commands::algo_trading::deploy_python_strategy
+            commands::algo_trading::deploy_python_strategy,
+            // VisionQuant Pattern Intelligence
+            commands::vision_quant::vision_quant_search_patterns,
+            commands::vision_quant::vision_quant_score,
+            commands::vision_quant::vision_quant_backtest,
+            commands::vision_quant::vision_quant_setup_index,
+            commands::vision_quant::vision_quant_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

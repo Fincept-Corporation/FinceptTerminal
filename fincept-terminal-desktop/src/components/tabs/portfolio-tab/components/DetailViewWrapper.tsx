@@ -90,7 +90,7 @@ const DetailViewWrapper: React.FC<DetailViewWrapperProps> = ({
       </div>
 
       {/* Content — full height remaining */}
-      <div style={{ flex: 1, overflow: 'hidden' }}>
+      <div style={{ flex: 1, overflow: 'visible' }}>
         {view === 'analytics-sectors' && (
           <AnalyticsSectorsPanel portfolioSummary={portfolioSummary} currency={currency} />
         )}

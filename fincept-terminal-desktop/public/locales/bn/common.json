@@ -1,25 +1,4 @@
 {
-  "appName": "Fincept Terminal",
   "loading": "লোড হচ্ছে...",
-  "error": "ত্রুটি",
-  "success": "সফল",
-  "save": "সংরক্ষণ করুন",
-  "cancel": "বাতিল",
-  "delete": "মুছে ফেলুন",
-  "edit": "সম্পাদনা",
-  "add": "যোগ করুন",
-  "search": "অনুসন্ধান",
-  "filter": "ফিল্টার",
-  "back": "পিছনে",
-  "next": "পরবর্তী",
-  "previous": "পূর্ববর্তী",
-  "submit": "জমা দিন",
-  "close": "বন্ধ করুন",
-  "open": "খুলুন",
-  "yes": "হ্যাঁ",
-  "no": "না",
-  "ok": "ঠিক আছে",
-  "confirm": "নিশ্চিত করুন",
-  "language": "ভাষা",
-  "selectLanguage": "ভাষা নির্বাচন করুন"
+  "settings": "[BN] Settings"
 }

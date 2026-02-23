@@ -176,27 +176,6 @@ export function validateNumber(
   return { valid: true };
 }
 
-/**
- * Validate a price value
- */
-export function validatePrice(value: unknown): ValidationResult {
-  return validateNumber(value, { positive: true, allowZero: false });
-}
-
-/**
- * Validate a quantity value
- */
-export function validateQuantity(value: unknown): ValidationResult {
-  return validateNumber(value, { positive: true, integer: true, allowZero: false });
-}
-
-/**
- * Validate a percentage value (0-100)
- */
-export function validatePercentage(value: unknown): ValidationResult {
-  return validateNumber(value, { min: 0, max: 100 });
-}
-
 // ============================================================================
 // String Validation & Sanitization
 // ============================================================================
@@ -250,15 +229,6 @@ export function sanitizeInput(input: string): string {
     .trim()
     .replace(/[<>]/g, '') // Remove potential HTML/script tags
     .replace(/[\x00-\x1F\x7F]/g, ''); // Remove control characters
-}
-
-/**
- * Sanitize for SQL-like operations (basic protection)
- */
-export function sanitizeForQuery(input: string): string {
-  return sanitizeInput(input)
-    .replace(/['";\\]/g, '') // Remove quotes and backslashes
-    .replace(/--/g, ''); // Remove SQL comments
 }
 
 // ============================================================================
@@ -333,33 +303,3 @@ export function validateDateRange(
   return { valid: true };
 }
 
-// ============================================================================
-// Composite Validation Helper
-// ============================================================================
-
-type ValidatorFn = (value: unknown) => ValidationResult;
-
-/**
- * Compose multiple validators
- */
-export function composeValidators(...validators: ValidatorFn[]): ValidatorFn {
-  return (value: unknown) => {
-    for (const validator of validators) {
-      const result = validator(value);
-      if (!result.valid) return result;
-    }
-    return { valid: true };
-  };
-}
-
-/**
- * Create a required field validator
- */
-export function required(fieldName: string): ValidatorFn {
-  return (value: unknown) => {
-    if (value === null || value === undefined || value === '') {
-      return { valid: false, error: `${fieldName} is required` };
-    }
-    return { valid: true };
-  };
-}

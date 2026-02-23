@@ -1,63 +1,20 @@
 {
-    "title": "GESTORE PORTAFOGLIO FINCEPT",
-    "header": {
-        "live": "LIVE",
-        "updating": "AGGIORNAMENTO",
-        "newPortfolio": "NUOVO PORTAFOGLIO",
-        "refresh": "AGGIORNA",
-        "exportCsv": "ESPORTA CSV"
-    },
-    "summary": {
-        "totalValue": "VALORE TOTALE",
-        "dayPnl": "P/L GIORNO",
-        "totalPnl": "P/L TOTALE",
-        "positions": "POSIZIONI"
-    },
-    "views": {
-        "positions": "POSIZIONI",
-        "addAsset": "AGGIUNGI ASSET",
-        "sellAsset": "VENDI ASSET",
-        "analytics": "ANALITICA",
-        "history": "STORICO",
-        "activeMgmt": "GESTIONE ATTIVA",
-        "performance": "PERFORMANCE",
-        "rebalance": "RIBILANCIAMENTO",
-        "reports": "REPORT",
-        "alerts": "AVVISI",
-        "sectors": "SETTORI",
-        "help": "AIUTO"
-    },
-    "sidebar": {
-        "portfolios": "PORTAFOGLI",
-        "loading": "Caricamento portafogli...",
-        "noPortfolios": "Nessun portafoglio ancora.",
-        "clickCreate": "Clicca NUOVO PORTAFOGLIO per crearne uno.",
-        "owner": "Proprietario",
-        "currency": "Valuta"
-    },
-    "content": {
-        "selectOrCreate": "Seleziona un portafoglio o creane uno nuovo per iniziare",
-        "loadingData": "Caricamento dati portafoglio...",
-        "comingSoon": "vista in arrivo..."
-    },
-    "modals": {
-        "createNew": "CREA NUOVO PORTAFOGLIO",
-        "portfolioName": "NOME PORTAFOGLIO",
-        "owner": "PROPRIETARIO",
-        "currency": "VALUTA",
-        "cancel": "ANNULLA",
-        "create": "CREA",
-        "addAssetTitle": "AGGIUNGI ASSET AL PORTAFOGLIO",
-        "sellAssetTitle": "VENDI ASSET",
-        "symbol": "SIMBOLO",
-        "quantity": "QUANTITÀ",
-        "price": "PREZZO",
-        "add": "AGGIUNGI",
-        "sell": "VENDI"
-    },
-    "status": {
-        "version": "Fincept Portfolio Manager v2.1.0 | Tracciamento in tempo reale con integrazione yfinance",
-        "lastUpdated": "Ultimo Aggiornamento",
-        "connected": "CONNESSO"
-    }
+  "modals": {
+    "createNew": "CREA NUOVO PORTAFOGLIO",
+    "portfolioName": "NOME PORTAFOGLIO",
+    "owner": "PROPRIETARIO",
+    "currency": "VALUTA",
+    "cancel": "ANNULLA",
+    "create": "CREA",
+    "addAssetTitle": "AGGIUNGI ASSET AL PORTAFOGLIO",
+    "sellAssetTitle": "VENDI ASSET",
+    "symbol": "SIMBOLO",
+    "quantity": "QUANTITÀ",
+    "price": "PREZZO",
+    "add": "AGGIUNGI",
+    "sell": "VENDI"
+  },
+  "extracted": {
+    "areYouSureYou": "[IT] Are you sure you want to delete this portfolio? This action cannot be undone."
+  }
 }

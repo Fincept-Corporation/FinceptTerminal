@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "可定制的仪表板",
-    "live": "居住",
-    "widgets": "小部件"
-  },
-  "buttons": {
-    "addWidget": "添加小部件",
-    "saveLayout": "保存布局",
-    "reset": "重置",
-    "help": "帮助"
-  },
   "widgets": {
     "loading": "加载中...",
-    "error": "错误",
     "globalIndices": "全球指数 - 前 12 名",
     "forex": "外汇 - 主要货币对",
     "crypto": "加密货币",
@@ -20,8 +8,6 @@
     "news": "消息",
     "forum": "论坛",
     "watchlist": "观看列表",
-    "maritimeIntelligence": "海事情报",
-    "unknown": "未知的小部件类型",
     "index": "指数",
     "symbol": "象征",
     "price": "价格",
@@ -38,41 +24,22 @@
     "pair": "一对",
     "rate": "速度",
     "commodity": "商品",
-    "globe3D": "3D地球仪",
-    "vessels": "船舶",
-    "routes": "航线",
-    "vol24h": "24小时音量",
-    "topTradeCorridors": "顶级贸易走廊",
-    "ships": "船舶",
-    "marketNews": "市场新闻",
-    "secPressReleases": "美国证券交易委员会新闻稿",
-    "cryptoNews": "加密新闻",
-    "trendingForum": "热门论坛",
-    "techStocks": "科技股"
-  },
-  "tips": {
-    "drag": "拖动小部件以重新排列",
-    "resize": "从右下角开始调整大小",
-    "remove": "使用 X 按钮删除小部件",
-    "responsive": "响应式布局 - 使用全宽"
-  },
-  "loading": {
-    "title": "初始化仪表板",
-    "description": "设置数据库缓存以加快数据加载速度...",
-    "note": "首次启动时这只需要一点时间"
-  },
-  "empty": {
-    "noWidgets": "仪表板上没有小部件",
-    "addFirst": "添加您的第一个小部件"
-  },
-  "status": {
-    "version": "Fincept可定制仪表板v2.0.0 |拖放工作区",
-    "layout": "布局",
-    "custom": "风俗",
-    "empty": "空的",
-    "active": "积极的",
-    "cache": "缓存：已启用",
-    "label": "地位"
+    "noActiveMarkets": "[ZH] No active markets found",
+    "indicator": "[ZH] INDICATOR",
+    "value": "[ZH] VALUE",
+    "chg": "[ZH] CHG",
+    "overallRisk": "[ZH] OVERALL RISK",
+    "openEconomicsTab": "[ZH] Open Economics Tab",
+    "openGeopoliticsTab": "[ZH] Open Geopolitics Tab",
+    "openPolymarketTab": "[ZH] Open Polymarket Tab",
+    "noPortfolioFound": "[ZH] No portfolio found",
+    "createPortfolioHint": "[ZH] Create one in Portfolio tab",
+    "openPortfolioTab": "[ZH] Open Portfolio Tab",
+    "action": "[ZH] ACTION",
+    "markets": "[ZH] MARKETS",
+    "performanceTracker": "[ZH] PERFORMANCE TRACKER",
+    "totalPnL": "[ZH] TOTAL P&L",
+    "viewDetailedAnalytics": "[ZH] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "仪表板布局已保存！",

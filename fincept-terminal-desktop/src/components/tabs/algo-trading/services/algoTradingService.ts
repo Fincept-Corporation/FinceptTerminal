@@ -4,6 +4,7 @@ import type {
   AlgoDeployment,
   AlgoTrade,
   ScanResult,
+  CandleData,
   PythonStrategy,
   CustomPythonStrategy,
   PythonBacktestRequest,
@@ -137,33 +138,34 @@ export async function runAlgoScan(
   lookbackDays?: number
 ): Promise<ApiResult<ScanResponse>> {
   const raw = await invoke<string>('run_algo_scan', { conditions, symbols, timeframe, provider, lookbackDays });
-  const result = parseResult<ScanResponse>(raw);
-  // The Rust backend puts debug/prefetch_warning at root level (same as success/error),
-  // and the Python scanner puts matches/scanned/errors in the same JSON object.
-  // Normalize: merge top-level fields into data when success=true.
-  if (result.success && !result.data) {
-    // Scanner output is flat JSON — parse again to extract fields
-    try {
-      const parsed = JSON.parse(raw);
-      result.data = {
-        matches: parsed.matches || [],
-        scanned: parsed.scanned || 0,
-        errors: parsed.errors,
-        debug: parsed.debug,
-        prefetch_warning: parsed.prefetch_warning,
-      };
-      result.debug = parsed.debug;
-      result.prefetch_warning = parsed.prefetch_warning;
-    } catch { /* already handled */ }
+
+  // Parse once and normalize the flat scanner JSON into ApiResult<ScanResponse>
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { success: false, error: 'Failed to parse scan response' };
   }
-  // Also carry debug from root level
-  if (!result.debug) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed.debug) result.debug = parsed.debug;
-      if (parsed.prefetch_warning) result.prefetch_warning = parsed.prefetch_warning;
-    } catch { /* ignore */ }
+
+  const result: ApiResult<ScanResponse> = {
+    success: (parsed.success as boolean) ?? false,
+    error: parsed.error as string | undefined,
+    debug: parsed.debug as string[] | undefined,
+    prefetch_warning: parsed.prefetch_warning as string | undefined,
+  };
+
+  // The scanner output is flat JSON with matches/scanned at root level.
+  // Normalize into the data property.
+  if (result.success) {
+    result.data = {
+      matches: (parsed.matches || parsed.data && (parsed.data as Record<string, unknown>).matches || []) as ScanResult[],
+      scanned: (parsed.scanned || parsed.data && (parsed.data as Record<string, unknown>).scanned || 0) as number,
+      errors: (parsed.errors || parsed.data && (parsed.data as Record<string, unknown>).errors) as Array<{ symbol: string; error: string }> | undefined,
+      debug: result.debug,
+      prefetch_warning: result.prefetch_warning,
+    };
   }
+
   return result;
 }
 
@@ -172,7 +174,7 @@ export async function getCandleCache(
   symbol: string,
   timeframe?: string,
   limit?: number
-): Promise<ApiResult<unknown[]>> {
+): Promise<ApiResult<CandleData[]>> {
   const raw = await invoke<string>('get_candle_cache', { symbol, timeframe, limit });
   return parseResult(raw);
 }

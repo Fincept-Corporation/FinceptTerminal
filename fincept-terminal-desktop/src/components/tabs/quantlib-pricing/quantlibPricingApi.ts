@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-pricing/quantlibPricingApi.ts
 // 29 endpoints — Black-Scholes, Black76, Bachelier, Kirk, Binomial, Monte Carlo, PDE
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 let _apiKey: string | null = null;
 export function setPricingApiKey(key: string | null) { _apiKey = key; }
 

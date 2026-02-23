@@ -10,7 +10,8 @@
     "tabLayout": "Aspect fila",
     "appearance": "Aspect",
     "language": "Limbă",
-    "storage": "Stocare și cache"
+    "storage": "Stocare și cache",
+    "notifications": "[RO] Notifications"
   },
   "credentials": {
     "title": "GESTIUNEA CREDENTIALS API",
@@ -46,7 +47,31 @@
     "saveConfig": "SALVAȚI CONFIGURAȚIA",
     "reset": "RESET",
     "saveSuccess": "Aspectul terminalului și mapările cheilor au fost salvate cu succes",
-    "resetSuccess": "Resetați la aspectul implicit și mapările tastelor"
+    "resetSuccess": "Resetați la aspectul implicit și mapările tastelor",
+    "customColors": "[RO] Custom Colors",
+    "customColorsTitle": "[RO] CUSTOM COLORS",
+    "colorPrimary": "[RO] Primary",
+    "colorSecondary": "[RO] Secondary",
+    "colorSuccess": "[RO] Success",
+    "colorAlert": "[RO] Alert",
+    "colorWarning": "[RO] Warning",
+    "colorInfo": "[RO] Info",
+    "colorAccent": "[RO] Accent",
+    "colorPurple": "[RO] Purple",
+    "colorText": "[RO] Text",
+    "colorTextMuted": "[RO] Text Muted",
+    "colorBackground": "[RO] Background",
+    "colorPanel": "[RO] Panel",
+    "layoutSpacing": "[RO] LAYOUT & SPACING",
+    "contentDensity": "[RO] CONTENT DENSITY",
+    "borderRadius": "[RO] BORDER RADIUS",
+    "borderStyle": "[RO] BORDER STYLE",
+    "lineHeight": "[RO] LINE HEIGHT",
+    "letterSpacing": "[RO] LETTER SPACING",
+    "effects": "[RO] EFFECTS",
+    "widgetOpacity": "[RO] WIDGET OPACITY",
+    "enableGlow": "[RO] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[RO] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "Baza de date cu simboluri bursiere",
@@ -65,17 +90,8 @@
     "tip": "SFAT: Trageți filele pentru a le reordona. Folosiți butoanele săgeată pentru a muta filele între antet și secțiunile de meniu. Modificările sunt salvate automat."
   },
   "llm": {
-    "title": "CONFIGURARE LLM",
-    "description": "Configurați modelele și furnizorii AI",
     "connected": "CONECTAT",
-    "disconnected": "DECONECTAT",
-    "provider": "FURNIZOR AI",
-    "globalSettings": "SETĂRI GLOBALE AI",
-    "temperature": "TEMPERATURĂ",
-    "maxTokens": "MAX JETONE",
-    "systemPrompt": "PROMPT DE SISTEM",
-    "modelLibrary": "BIBLIOTECA DE MODELE",
-    "multiModelConfigs": "Configurații cu mai multe modele"
+    "disconnected": "DECONECTAT"
   },
   "buttons": {
     "save": "SALVA",
@@ -86,5 +102,18 @@
     "database": "Baza de date: SQLite",
     "storage": "Stocare: pe bază de fișiere",
     "secureStorage": "Toate datele stocate în siguranță în fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[RO] NOTIFICATION PROVIDERS",
+    "description": "[RO] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[RO] Event Filters",
+    "eventFilterDescription": "[RO] Choose which notification types to forward to external providers.",
+    "providers": "[RO] Providers",
+    "enabled": "[RO] Enabled",
+    "disabled": "[RO] Disabled",
+    "testButton": "[RO] TEST",
+    "testSuccess": "[RO] Test notification sent successfully!",
+    "testFailed": "[RO] Failed to send test notification. Check your configuration.",
+    "saved": "[RO] Configuration saved"
   }
 }

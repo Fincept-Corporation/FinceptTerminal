@@ -197,3 +197,6 @@ pub mod gs_quant;
 
 // Polymarket - Prediction markets data
 pub mod polymarket;
+
+// VisionQuant - AI K-line Pattern Intelligence
+pub mod vision_quant;

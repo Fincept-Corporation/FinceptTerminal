@@ -239,7 +239,7 @@ fn build_unified_symbol(
     expiry: &Option<String>,
     strike: f64,
     instrument_type: &str,
-    exchange: &str,
+    _exchange: &str,
 ) -> String {
     let normalized_name = normalize_index_symbol(name);
 

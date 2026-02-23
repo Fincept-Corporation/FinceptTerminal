@@ -9,13 +9,9 @@
   "percentChange": "%CAM",
   "high": "ALTO",
   "low": "BAJO",
-  "loading": "Cargando...",
   "noData": "Sin datos disponibles",
   "refresh": "ACTUALIZAR",
   "auto": "AUTO",
   "on": "ON",
-  "off": "OFF",
-  "lastUpdate": "ÚLTIMA ACTUALIZACIÓN",
-  "updating": "ACTUALIZANDO",
-  "live": "EN VIVO"
+  "off": "OFF"
 }

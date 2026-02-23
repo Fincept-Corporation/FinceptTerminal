@@ -1,32 +1,63 @@
 {
   "title": "FINCEPT টার্মিনাল পেশাদার সংবাদ",
   "header": {
-    "liveFeed": "লাইভ ফিড",
-    "live": "লাইভ",
-    "refresh": "রিফ্রেশ",
-    "updating": "আপডেট হচ্ছে...",
-    "alerts": "সতর্কতা",
-    "sources": "উৎস",
-    "status": "স্থিতি",
-    "demoMode": "ডেমো মোড",
-    "articles": "নিবন্ধ",
-    "activeSources": "সক্রিয় উৎস"
-  },
-  "autoRefresh": {
-    "title": "স্বয়ংক্রিয় রিফ্রেশ বিরতি",
-    "minute": "মিনিট",
-    "minutes": "মিনিট"
+    "refresh": "রিফ্রেশ"
   },
   "messages": {
-    "loadingFeeds": "ফিড লোড হচ্ছে...",
-    "breaking": "ব্রেকিং"
+    "loadingFeedsModal": "[BN] Loading feeds...",
+    "failedToLoad": "[BN] Failed to load RSS feeds",
+    "noCustomFeeds": "[BN] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[BN] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[BN] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[BN] PRIMARY NEWS FEED",
-    "secondary": "[BN] SECONDARY NEWS FEED",
-    "additional": "[BN] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[BN] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[BN] RSS FEED SETTINGS",
+    "subtitle": "[BN] MANAGE YOUR NEWS SOURCES",
+    "close": "[BN] CLOSE",
+    "myFeeds": "[BN] MY FEEDS",
+    "defaultFeeds": "[BN] DEFAULT FEEDS",
+    "noFeedsAvailable": "[BN] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[BN] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[BN] ADD NEW FEED",
+    "addNewRssFeed": "[BN] ADD NEW RSS FEED",
+    "editRssFeed": "[BN] EDIT RSS FEED",
+    "restoreDefaults": "[BN] RESTORE DEFAULTS",
+    "restoreAll": "[BN] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[BN] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[BN] DISPLAY NAME",
+    "sourceName": "[BN] SOURCE NAME (SHORT)",
+    "feedUrl": "[BN] RSS FEED URL",
+    "category": "[BN] CATEGORY",
+    "region": "[BN] REGION",
+    "required": "[BN] *",
+    "testUrl": "[BN] TEST URL",
+    "testing": "[BN] TESTING...",
+    "valid": "[BN] VALID",
+    "cancel": "[BN] CANCEL",
+    "saving": "[BN] SAVING...",
+    "addFeed": "[BN] ADD FEED",
+    "updateFeed": "[BN] UPDATE FEED",
+    "on": "[BN] ON",
+    "off": "[BN] OFF",
+    "default": "[BN] DEFAULT",
+    "total": "[BN] TOTAL",
+    "active": "[BN] ACTIVE",
+    "custom": "[BN] CUSTOM",
+    "placeholders": {
+      "displayName": "[BN] e.g., Bloomberg Markets",
+      "sourceName": "[BN] e.g., BLOOMBERG",
+      "feedUrl": "[BN] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[BN] Name is required",
+      "sourceRequired": "[BN] Source name is required",
+      "invalidUrl": "[BN] Please enter a valid URL",
+      "invalidRss": "[BN] URL does not appear to be a valid RSS feed",
+      "testFailed": "[BN] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[BN] Delete this RSS feed?",
+      "message": "[BN] This action cannot be undone."
+    }
   }
 }

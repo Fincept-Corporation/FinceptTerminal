@@ -373,14 +373,46 @@ def main():
             )
 
             # Convert valuation methods data to ValuationRange objects
+            # Handles both {low, high} format and {valuation, range: {min, max}} format
             valuation_ranges = []
             for method_data in methods_list:
-                method_name = method_data.get('method', 'DCF').upper().replace(' ', '_')
+                method_name = method_data.get('method', 'DCF').upper().replace(' ', '_').replace(' ', '_')
+                # Map common method names to enum keys
+                method_name_map = {
+                    'TRADING_COMPS': 'TRADING_COMPS',
+                    'TRADING COMPS': 'TRADING_COMPS',
+                    'PRECEDENT_TRANSACTIONS': 'PRECEDENT_TRANSACTIONS',
+                    'PRECEDENT TRANSACTIONS': 'PRECEDENT_TRANSACTIONS',
+                    'LBO_ANALYSIS': 'LBO_ANALYSIS',
+                    'LBO ANALYSIS': 'LBO_ANALYSIS',
+                    'PREMIUMS_PAID': 'PREMIUMS_PAID',
+                    'PREMIUMS PAID': 'PREMIUMS_PAID',
+                    'REPLACEMENT_COST': 'REPLACEMENT_COST',
+                    'DCF': 'DCF',
+                }
+                enum_key = method_name_map.get(method_name, method_name)
+                try:
+                    vm = ValuationMethod[enum_key]
+                except KeyError:
+                    vm = ValuationMethod.DCF
+
+                # Support {low, high} or {valuation, range: {min, max}} formats
+                if 'low' in method_data and 'high' in method_data:
+                    low = float(method_data['low'])
+                    high = float(method_data['high'])
+                elif 'range' in method_data and isinstance(method_data['range'], dict):
+                    low = float(method_data['range'].get('min', method_data.get('valuation', 0) * 0.9))
+                    high = float(method_data['range'].get('max', method_data.get('valuation', 0) * 1.1))
+                else:
+                    val = float(method_data.get('valuation', 0))
+                    low, high = val * 0.9, val * 1.1
+
+                midpoint = float(method_data.get('midpoint', method_data.get('mid', method_data.get('valuation', (low + high) / 2))))
                 val_range = ValuationRange(
-                    method=ValuationMethod[method_name],
-                    low=method_data['low'],
-                    high=method_data['high'],
-                    midpoint=method_data.get('midpoint', method_data.get('mid', (method_data['low'] + method_data['high']) / 2)),
+                    method=vm,
+                    low=low,
+                    high=high,
+                    midpoint=midpoint,
                     weight=method_data.get('weight', 1.0)
                 )
                 valuation_ranges.append(val_range)
@@ -392,6 +424,12 @@ def main():
                     v.weight = v.weight / total_weight
 
             analysis = framework.weighted_valuation_summary(valuation_ranges)
+
+            # Also compute fairness determination for the frontend
+            fairness = framework.fairness_determination(analysis, qualitative_factors)
+            analysis['is_fair'] = fairness['fairness_conclusion']['is_fair']
+            analysis['fairness_conclusion'] = fairness['fairness_conclusion']['conclusion']
+            analysis['quantitative_analysis'] = fairness['quantitative_analysis']
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result))

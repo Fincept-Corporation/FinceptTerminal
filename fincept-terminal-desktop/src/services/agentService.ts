@@ -12,7 +12,6 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { mcpToolService } from '@/services/mcp/mcpToolService';
 import { INTERNAL_SERVER_ID } from '@/services/mcp/internal';
 
@@ -164,22 +163,6 @@ export interface ModelsInfo {
 }
 
 // Streaming types
-export interface StreamChunk {
-  stream_id: string;
-  chunk_type: 'token' | 'thinking' | 'tool_call' | 'tool_result' | 'done' | 'error' | 'agent_token' | 'agent_done';
-  content: string;
-  metadata?: Record<string, any>;
-  sequence: number;
-}
-
-export interface StreamHandle {
-  streamId: string;
-  eventName: string;
-  unlisten: UnlistenFn | null;
-  cancel: () => Promise<void>;
-}
-
-export type StreamCallback = (chunk: StreamChunk) => void;
 
 // Parallel execution types
 export interface ParallelTask {
@@ -438,105 +421,6 @@ async function executeWithPriority<T = any>(
       error: error?.message || String(error),
     };
   }
-}
-
-// =============================================================================
-// Streaming Operations
-// =============================================================================
-
-/**
- * Run agent with real-time streaming
- * Returns a handle to control the stream
- */
-export async function runAgentStreaming(
-  query: string,
-  config: AgentConfig,
-  apiKeys: Record<string, string>,
-  onChunk: StreamCallback,
-  sessionId?: string
-): Promise<StreamHandle> {
-  const payload = {
-    action: 'run',
-    api_keys: apiKeys,
-    config,
-    params: { query, session_id: sessionId },
-  };
-
-  // Start streaming
-  const result = await invoke<string>('execute_agent_streaming', { payload });
-  const parsed = JSON.parse(result);
-
-  if (!parsed.success) {
-    throw new Error(parsed.error || 'Failed to start stream');
-  }
-
-  const streamId = parsed.stream_id;
-  const eventName = parsed.event_name;
-
-  // Subscribe to stream events
-  const unlisten = await listen<StreamChunk>(eventName, (event) => {
-    onChunk(event.payload);
-  });
-
-  return {
-    streamId,
-    eventName,
-    unlisten,
-    cancel: async () => {
-      unlisten();
-      await invoke('cancel_agent_stream', { streamId });
-    },
-  };
-}
-
-/**
- * Run team with streaming updates per agent
- */
-export async function runTeamStreaming(
-  query: string,
-  teamConfig: TeamConfig,
-  apiKeys: Record<string, string>,
-  onChunk: StreamCallback,
-  sessionId?: string
-): Promise<StreamHandle> {
-  const payload = {
-    action: 'run_team',
-    api_keys: apiKeys,
-    params: { query, team_config: teamConfig, session_id: sessionId },
-  };
-
-  const result = await invoke<string>('execute_agent_streaming', { payload });
-  const parsed = JSON.parse(result);
-
-  if (!parsed.success) {
-    throw new Error(parsed.error || 'Failed to start team stream');
-  }
-
-  const streamId = parsed.stream_id;
-  const eventName = parsed.event_name;
-
-  const unlisten = await listen<StreamChunk>(eventName, (event) => {
-    onChunk(event.payload);
-  });
-
-  return {
-    streamId,
-    eventName,
-    unlisten,
-    cancel: async () => {
-      unlisten();
-      await invoke('cancel_agent_stream', { streamId });
-    },
-  };
-}
-
-/**
- * Get all active streams
- */
-export async function getActiveStreams(): Promise<string[]> {
-  const result = await invoke<string>('get_active_agent_streams');
-  const parsed = JSON.parse(result);
-  return parsed.active_streams || [];
 }
 
 // =============================================================================
@@ -818,37 +702,6 @@ export async function searchKnowledge(
 }
 
 // =============================================================================
-// Guardrails & Evaluation
-// =============================================================================
-
-/**
- * Check input against guardrails
- */
-export async function checkGuardrails(
-  text: string,
-  context?: Record<string, any>
-): Promise<AgentResponse<{ passed: boolean; violations: string[] }>> {
-  return execute({
-    action: 'check_guardrails',
-    params: { text, context, check_type: 'input' },
-  });
-}
-
-/**
- * Evaluate agent response
- */
-export async function evaluateResponse(
-  query: string,
-  response: string,
-  context?: Record<string, any>
-): Promise<AgentResponse<{ passed: boolean; score: number; details: any }>> {
-  return execute({
-    action: 'evaluate',
-    params: { query, response, context, type: 'response' },
-  });
-}
-
-// =============================================================================
 // System Information (Cached)
 // =============================================================================
 
@@ -916,35 +769,6 @@ export async function getModels(forceRefresh = false): Promise<ModelsInfo | null
   }
 
   return null;
-}
-
-/**
- * Get available output models (cached)
- */
-export async function getOutputModels(forceRefresh = false): Promise<string[]> {
-  const cacheKey = 'output_models';
-
-  if (!forceRefresh) {
-    const cached = cache.get<string[]>(cacheKey);
-    if (cached) return cached;
-  }
-
-  const response = await execute<{ models: string[] }>({ action: 'list_output_models' });
-
-  if (response.success && response.data?.models) {
-    cache.set(cacheKey, response.data.models, 10 * 60 * 1000);
-    return response.data.models;
-  }
-
-  // Default output models if API fails
-  return [
-    'trade_signal',
-    'stock_analysis',
-    'portfolio_analysis',
-    'risk_assessment',
-    'market_analysis',
-    'research_report',
-  ];
 }
 
 // =============================================================================
@@ -1275,18 +1099,6 @@ export function getCacheStats(): { cacheSize: number; responseCacheSize: number;
 }
 
 /**
- * Pre-warm the agent system (call on app startup)
- */
-export async function prewarmAgent(): Promise<void> {
-  // Fetch and cache static data in parallel
-  await Promise.all([
-    getSystemInfo(),
-    getTools(),
-    getModels(),
-  ]);
-}
-
-/**
  * Build agent config from UI state — wires ALL CoreAgent features
  */
 export function buildAgentConfig(
@@ -1558,6 +1370,26 @@ export async function createStockAnalysisPlan(symbol: string): Promise<Execution
 }
 
 /**
+ * Generate a dynamic execution plan using LLM from a natural-language query.
+ * Returns { plan, generated_by } where generated_by is "llm" or "fallback".
+ */
+export async function generateDynamicPlan(
+  query: string,
+  apiKeys?: Record<string, string>
+): Promise<{ plan: ExecutionPlan; generated_by: string } | null> {
+  try {
+    const result = await invoke<string>('generate_dynamic_plan', { query, apiKeys: apiKeys ?? {} });
+    const parsed = JSON.parse(result);
+    if (parsed.success && parsed.plan) {
+      return { plan: parsed.plan as ExecutionPlan, generated_by: parsed.generated_by ?? 'llm' };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Execute an execution plan
  */
 export async function executePlan(
@@ -1631,10 +1463,6 @@ export const agentService = {
   runAgentStructured,
   runTeam,
 
-  // Streaming
-  runAgentStreaming,
-  runTeamStreaming,
-  getActiveStreams,
 
   // Parallel Execution
   runAgentsParallel,
@@ -1657,15 +1485,10 @@ export const agentService = {
   recallMemories,
   searchKnowledge,
 
-  // Guardrails
-  checkGuardrails,
-  evaluateResponse,
-
   // System (cached)
   getSystemInfo,
   getTools,
   getModels,
-  getOutputModels,
 
   // SuperAgent & Routing (v2.1)
   routeQuery,
@@ -1674,6 +1497,7 @@ export const agentService = {
 
   // Execution Planner (v2.1)
   createStockAnalysisPlan,
+  generateDynamicPlan,
   executePlan,
 
   // Trade Decisions (v2.1)
@@ -1711,117 +1535,9 @@ export const agentService = {
   clearCache,
   clearResponseCache,
   getCacheStats,
-  prewarmAgent,
   buildAgentConfig,
   buildTeamConfig,
   runPortfolioAnalysis,
 };
-
-// =============================================================================
-// Renaissance Technologies Integration
-// =============================================================================
-
-export interface RenTechSignal {
-  ticker: string;
-  signal_type: string;
-  direction: 'long' | 'short';
-  strength: number;
-  confidence: number;
-  p_value: number;
-  information_coefficient: number;
-}
-
-export interface RenTechConfig {
-  max_position_size_pct?: number;
-  max_leverage?: number;
-  max_drawdown_pct?: number;
-  max_daily_var_pct?: number;
-  min_signal_confidence?: number;
-}
-
-export interface RenTechResult {
-  success: boolean;
-  signal_id?: string;
-  statistical_quality?: string;
-  risk_assessment?: string;
-  ic_decision?: any;
-  execution_plan?: any;
-  error?: string;
-}
-
-/**
- * Run Renaissance Technologies signal analysis via finagent_core
- */
-export async function runRenaissanceTechnologies(
-  signal: RenTechSignal,
-  config?: RenTechConfig
-): Promise<RenTechResult> {
-  try {
-    const query = JSON.stringify({ command: 'analyze_signal', signal, config: config || {} });
-    const payload = {
-      action: 'run',
-      api_keys: {},
-      config: {
-        model: { provider: 'openai', model_id: 'gpt-4-turbo' },
-        instructions: 'You are a quantitative analyst embodying Renaissance Technologies approach. Apply mathematical pattern recognition, statistical arbitrage, and systematic signal analysis.',
-      },
-      params: { query },
-    };
-    const result = await invoke<string>('execute_core_agent', { payload });
-    const parsed = JSON.parse(result);
-    return parsed.data || parsed;
-  } catch (error: any) {
-    console.error('[RenTech] Analysis failed:', error);
-    return { success: false, error: error.message || 'Renaissance Technologies analysis failed' };
-  }
-}
-
-/**
- * Run IC Deliberation on a signal via finagent_core
- */
-export async function runICDeliberation(deliberationData: {
-  signal: any;
-  signal_evaluation: any;
-  risk_assessment: any;
-  sizing_recommendation: any;
-}): Promise<RenTechResult> {
-  try {
-    const query = JSON.stringify({ command: 'run_ic_deliberation', data: deliberationData });
-    const payload = {
-      action: 'run',
-      api_keys: {},
-      config: {
-        model: { provider: 'openai', model_id: 'gpt-4-turbo' },
-        instructions: 'You are an Investment Committee member at a quantitative hedge fund. Deliberate on trade signals and provide IC-level decisions with clear reasoning.',
-      },
-      params: { query },
-    };
-    const result = await invoke<string>('execute_core_agent', { payload });
-    const parsed = JSON.parse(result);
-    return { success: true, ic_decision: parsed.data || parsed.response };
-  } catch (error: any) {
-    console.error('[RenTech] IC deliberation failed:', error);
-    return { success: false, error: error.message || 'IC deliberation failed' };
-  }
-}
-
-/**
- * Get Renaissance Technologies agent presets via finagent_core
- */
-export async function getRenTechPresets(): Promise<{ agents: any[]; teams: any[] }> {
-  try {
-    const payload = {
-      action: 'list_agents',
-      api_keys: {},
-      params: { category: 'hedge-fund' },
-    };
-    const result = await invoke<string>('execute_core_agent', { payload });
-    const parsed = JSON.parse(result);
-    return parsed.data || { agents: parsed.agents || [], teams: [] };
-  } catch (error) {
-    console.error('[RenTech] Failed to get presets:', error);
-    return { agents: [], teams: [] };
-  }
-}
 
 export default agentService;

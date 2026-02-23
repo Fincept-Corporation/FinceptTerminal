@@ -185,45 +185,55 @@ class CoreAgent:
     # Financial Workflows
     # ============================================================
 
+    def _resolve_model_config(self) -> Dict[str, Any]:
+        """Derive provider from api_keys passed at runtime instead of hardcoding openai."""
+        keys = self.api_keys or {}
+        preferred = ["fincept", "ollama", "anthropic", "google", "groq",
+                     "deepseek", "openai", "openrouter"]
+        for provider in preferred:
+            if keys.get(provider) or keys.get(f"{provider.upper()}_API_KEY"):
+                return {"provider": provider}
+        for k, v in keys.items():
+            if k.endswith("_API_KEY") and v:
+                return {"provider": k[:-8].lower()}
+        return {"provider": "openai"}
+
     def run_stock_analysis(self, symbol: str, config: Dict[str, Any] = None) -> Dict[str, Any]:
         """Run stock analysis workflow."""
         from finagent_core.modules import FinancialWorkflowTemplates
-
-        config = config or {
-            "model": {"provider": "openai", "model_id": "gpt-4-turbo"},
-            "instructions": "You are a financial analyst"
-        }
-        agent = self._create_agent(config)
+        cfg = config or {}
+        model_config = cfg.get("model") or self._resolve_model_config()
         workflow = FinancialWorkflowTemplates.stock_analysis_pipeline(
-            fetch_agent=agent, analysis_agent=agent, report_agent=agent
+            api_keys=self.api_keys,
+            model_config=model_config,
+            terminal_endpoint=cfg.get("terminal_mcp_endpoint"),
+            terminal_tool_defs=cfg.get("terminal_tools", []),
         )
-        return workflow.run({"symbol": symbol})
+        return workflow.run(symbol)
 
     def run_portfolio_rebalancing(self, portfolio_data: Dict[str, Any], config: Dict[str, Any] = None) -> Dict[str, Any]:
         """Run portfolio rebalancing workflow."""
         from finagent_core.modules import FinancialWorkflowTemplates
-
-        config = config or {
-            "model": {"provider": "openai", "model_id": "gpt-4-turbo"},
-            "instructions": "You are a portfolio manager"
-        }
-        agent = self._create_agent(config)
+        cfg = config or {}
+        model_config = cfg.get("model") or self._resolve_model_config()
         workflow = FinancialWorkflowTemplates.portfolio_rebalancing(
-            analysis_agent=agent, optimization_agent=agent, execution_agent=agent
+            api_keys=self.api_keys,
+            model_config=model_config,
+            terminal_endpoint=cfg.get("terminal_mcp_endpoint"),
+            terminal_tool_defs=cfg.get("terminal_tools", []),
         )
         return workflow.run(portfolio_data)
 
     def run_risk_assessment(self, portfolio_data: Dict[str, Any], config: Dict[str, Any] = None) -> Dict[str, Any]:
         """Run risk assessment workflow."""
         from finagent_core.modules import FinancialWorkflowTemplates
-
-        config = config or {
-            "model": {"provider": "openai", "model_id": "gpt-4-turbo"},
-            "instructions": "You are a risk analyst"
-        }
-        agent = self._create_agent(config)
+        cfg = config or {}
+        model_config = cfg.get("model") or self._resolve_model_config()
         workflow = FinancialWorkflowTemplates.risk_assessment(
-            risk_agent=agent, market_agent=agent
+            api_keys=self.api_keys,
+            model_config=model_config,
+            terminal_endpoint=cfg.get("terminal_mcp_endpoint"),
+            terminal_tool_defs=cfg.get("terminal_tools", []),
         )
         return workflow.run(portfolio_data)
 
@@ -404,12 +414,48 @@ class CoreAgent:
     # ============================================================
 
     def get_response_content(self, response) -> str:
-        """Extract text content from response."""
-        # Try .content attribute (standard agno response)
-        if hasattr(response, 'content'):
-            return response.content
+        """Extract text content from response.
 
-        # If response is a dict (from custom models), try to extract the text
+        For TeamRunOutput, combines member responses with the coordinator summary
+        so the user sees the full team output, not just the brief delegation message.
+        """
+        # TeamRunOutput: prefer member_responses + coordinator summary
+        if hasattr(response, 'member_responses') and response.member_responses:
+            parts = []
+            for i, member_resp in enumerate(response.member_responses):
+                member_content = None
+                # RunOutput has .content
+                if hasattr(member_resp, 'content') and member_resp.content:
+                    member_content = str(member_resp.content)
+                # Nested TeamRunOutput — recurse
+                elif hasattr(member_resp, 'member_responses'):
+                    member_content = self.get_response_content(member_resp)
+                if member_content and member_content.strip():
+                    # Use agent name if available
+                    name = None
+                    if hasattr(member_resp, 'agent_name') and member_resp.agent_name:
+                        name = member_resp.agent_name
+                    elif hasattr(member_resp, 'team_name') and member_resp.team_name:
+                        name = member_resp.team_name
+                    header = f"### {name}\n" if name else f"### Agent {i + 1}\n"
+                    parts.append(header + member_content.strip())
+            if parts:
+                # Append coordinator summary if it adds substance beyond delegation
+                coordinator_content = getattr(response, 'content', None)
+                if coordinator_content and str(coordinator_content).strip():
+                    coord_str = str(coordinator_content).strip()
+                    # Only append if it's not just a delegation notice
+                    delegation_phrases = ['delegated', 'delegate', 'assigned', 'routed']
+                    is_delegation = any(p in coord_str.lower() for p in delegation_phrases) and len(coord_str) < 300
+                    if not is_delegation:
+                        parts.append(f"### Summary\n{coord_str}")
+                return "\n\n---\n\n".join(parts)
+
+        # Standard RunResponse / single-agent: .content attribute
+        if hasattr(response, 'content') and response.content is not None:
+            return str(response.content)
+
+        # Dict response (from custom models)
         if isinstance(response, dict):
             for key in ['response', 'content', 'text', 'answer', 'message']:
                 if key in response:
@@ -434,8 +480,9 @@ class CoreAgent:
     def _create_model(self, model_config: Dict[str, Any]) -> Any:
         """Create a model instance from config (used for team coordinator)."""
         from finagent_core.registries import ModelsRegistry
+        provider = model_config.get("provider") or self._resolve_model_config()["provider"]
         return ModelsRegistry.create_model(
-            provider=model_config.get("provider", "openai"),
+            provider=provider,
             model_id=model_config.get("model_id"),
             api_keys=self.api_keys,
             temperature=model_config.get("temperature"),
@@ -462,8 +509,9 @@ class CoreAgent:
         # 1. Create Model
         # =================================================================
         model_config = config.get("model", {})
+        provider = model_config.get("provider") or self._resolve_model_config()["provider"]
         model = ModelsRegistry.create_model(
-            provider=model_config.get("provider", "openai"),
+            provider=provider,
             model_id=model_config.get("model_id"),
             api_keys=self.api_keys,
             temperature=model_config.get("temperature"),

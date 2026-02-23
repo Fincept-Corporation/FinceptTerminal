@@ -1,25 +1,4 @@
 {
-  "appName": "Fincept Terminal",
   "loading": "جار التحميل...",
-  "error": "خطأ",
-  "success": "نجاح",
-  "save": "حفظ",
-  "cancel": "إلغاء",
-  "delete": "حذف",
-  "edit": "تعديل",
-  "add": "إضافة",
-  "search": "بحث",
-  "filter": "تصفية",
-  "back": "رجوع",
-  "next": "التالي",
-  "previous": "السابق",
-  "submit": "إرسال",
-  "close": "إغلاق",
-  "open": "فتح",
-  "yes": "نعم",
-  "no": "لا",
-  "ok": "حسناً",
-  "confirm": "تأكيد",
-  "language": "اللغة",
-  "selectLanguage": "اختر اللغة"
+  "settings": "[AR] Settings"
 }

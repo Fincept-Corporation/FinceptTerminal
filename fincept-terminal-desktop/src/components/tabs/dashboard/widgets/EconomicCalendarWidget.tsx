@@ -81,7 +81,7 @@ export const EconomicCalendarWidget: React.FC<EconomicCalendarWidgetProps> = ({
 
       // Call backend API via Tauri with API key
       const response = await fetch(
-        `https://finceptbackend.share.zrok.io/macro/economic-calendar?country=${country}&limit=${limit}`,
+        `https://api.fincept.in/macro/economic-calendar?country=${country}&limit=${limit}`,
         {
           method: 'GET',
           headers: {

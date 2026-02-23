@@ -3,7 +3,7 @@
 
 import { terminalMCPProvider } from './TerminalMCPProvider';
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 const FINCEPT_API_KEY = 'fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo';
 
 const CONTEXT_KEYS = [

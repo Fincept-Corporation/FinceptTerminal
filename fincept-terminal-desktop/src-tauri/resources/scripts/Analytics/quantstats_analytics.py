@@ -336,8 +336,8 @@ def compute_stats(portfolio_returns: pd.Series, benchmark_returns: pd.Series, rf
         dd_details = qs.stats.drawdown_details(qs.stats.to_drawdown_series(portfolio_returns))
         if dd_details is not None and len(dd_details) > 0:
             metrics["max_drawdown_duration"] = int(dd_details["days"].max()) if "days" in dd_details.columns else None
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write(f"[QuantStats] max_drawdown_duration error: {e}\n")
 
     # Benchmark comparison metrics
     if benchmark_returns is not None and len(benchmark_returns) > 0:
@@ -489,7 +489,8 @@ def compute_drawdowns(portfolio_returns: pd.Series) -> dict:
             result["drawdown_periods"] = periods
         else:
             result["drawdown_periods"] = []
-    except Exception:
+    except Exception as e:
+        sys.stderr.write(f"[QuantStats] drawdown_periods error: {e}\n")
         result["drawdown_periods"] = []
 
     return result
@@ -518,8 +519,8 @@ def compute_rolling(portfolio_returns: pd.Series, benchmark_returns: pd.Series, 
                         "value": safe_float(val)
                     })
                 result[f"rolling_sharpe_{label}"] = sharpe_data
-        except Exception:
-            pass
+        except Exception as e:
+            sys.stderr.write(f"[QuantStats] rolling_sharpe_{label} error: {e}\n")
 
         # Rolling Volatility
         try:
@@ -532,8 +533,8 @@ def compute_rolling(portfolio_returns: pd.Series, benchmark_returns: pd.Series, 
                         "value": safe_float(val)
                     })
                 result[f"rolling_volatility_{label}"] = vol_data
-        except Exception:
-            pass
+        except Exception as e:
+            sys.stderr.write(f"[QuantStats] rolling_volatility_{label} error: {e}\n")
 
         # Rolling Sortino
         try:
@@ -546,8 +547,8 @@ def compute_rolling(portfolio_returns: pd.Series, benchmark_returns: pd.Series, 
                         "value": safe_float(val)
                     })
                 result[f"rolling_sortino_{label}"] = sortino_data
-        except Exception:
-            pass
+        except Exception as e:
+            sys.stderr.write(f"[QuantStats] rolling_sortino_{label} error: {e}\n")
 
     # Cumulative returns series
     cum_returns = (1 + portfolio_returns).cumprod() - 1
@@ -577,131 +578,114 @@ def compute_rolling(portfolio_returns: pd.Series, benchmark_returns: pd.Series, 
 
 
 def compute_montecarlo(portfolio_returns: pd.Series, sims: int = 1000) -> dict:
-    """Run Monte Carlo simulations on portfolio returns.
+    """Run Monte Carlo simulations via bootstrap resampling of historical returns.
 
-    quantstats montecarlo_* functions return a dict with keys:
-    min, max, mean, median, std, percentile_5, percentile_95
-    We normalize these into our standard distribution format.
+    qs.stats.montecarlo* functions do not exist in quantstats 0.0.64.
+    We implement a bootstrap simulation: each path draws T daily returns
+    (with replacement) from the historical return distribution, then
+    compounds them to produce a cumulative return path.
     """
     result = {}
 
-    def _normalize_mc_dict(mc_dict):
-        """Convert quantstats MC dict to our standard distribution format."""
-        if mc_dict is None or not isinstance(mc_dict, dict):
-            return None
+    returns_arr = portfolio_returns.dropna().values.astype(float)
+    n = len(returns_arr)
+    if n < 20:
+        null = {"wealth_distribution": None, "cagr_distribution": None,
+                "sharpe_distribution": None, "max_drawdown_distribution": None,
+                "simulation_paths": None}
+        result.update(null)
+        return result
+
+    rng = np.random.default_rng()
+    # Each simulated path has the same length as the observed history
+    T = n
+
+    def _full_distribution(values: np.ndarray) -> dict:
         return {
-            "mean": safe_float(mc_dict.get("mean")),
-            "std": safe_float(mc_dict.get("std")),
-            "min": safe_float(mc_dict.get("min")),
-            "max": safe_float(mc_dict.get("max")),
-            "p5": safe_float(mc_dict.get("percentile_5")),
-            "p10": None,  # not provided by quantstats
-            "p25": None,
-            "p50": safe_float(mc_dict.get("median")),
-            "p75": None,
-            "p90": None,
-            "p95": safe_float(mc_dict.get("percentile_95")),
-            "count": sims,
+            "mean": safe_float(np.mean(values)),
+            "std":  safe_float(np.std(values)),
+            "min":  safe_float(np.min(values)),
+            "max":  safe_float(np.max(values)),
+            "p5":   safe_float(np.percentile(values, 5)),
+            "p10":  safe_float(np.percentile(values, 10)),
+            "p25":  safe_float(np.percentile(values, 25)),
+            "p50":  safe_float(np.percentile(values, 50)),
+            "p75":  safe_float(np.percentile(values, 75)),
+            "p90":  safe_float(np.percentile(values, 90)),
+            "p95":  safe_float(np.percentile(values, 95)),
+            "count": int(sims),
         }
 
-    try:
-        mc_sharpe = qs.stats.montecarlo_sharpe(portfolio_returns, sims=sims)
-        result["sharpe_distribution"] = _normalize_mc_dict(mc_sharpe)
-    except Exception as e:
-        sys.stderr.write(f"[QuantStats] MC Sharpe error: {e}\n")
-        result["sharpe_distribution"] = None
+    # Generate all paths at once: shape (T, sims)
+    sampled = rng.choice(returns_arr, size=(T, sims), replace=True)
 
-    try:
-        mc_dd = qs.stats.montecarlo_drawdown(portfolio_returns, sims=sims)
-        result["max_drawdown_distribution"] = _normalize_mc_dict(mc_dd)
-    except Exception as e:
-        sys.stderr.write(f"[QuantStats] MC Drawdown error: {e}\n")
-        result["max_drawdown_distribution"] = None
+    # Cumulative return paths: (T, sims)  — values are cumulative returns (e.g. 0.15 = +15%)
+    cum_paths = np.cumprod(1 + sampled, axis=0) - 1
 
-    try:
-        mc_cagr = qs.stats.montecarlo_cagr(portfolio_returns, sims=sims)
-        result["cagr_distribution"] = _normalize_mc_dict(mc_cagr)
-    except Exception as e:
-        sys.stderr.write(f"[QuantStats] MC CAGR error: {e}\n")
-        result["cagr_distribution"] = None
+    # Terminal wealth (final cumulative return per path)
+    final_values = cum_paths[-1, :]
+    result["wealth_distribution"] = _full_distribution(final_values)
 
-    # General Monte Carlo simulation - returns a MonteCarloResult with .data DataFrame
-    try:
-        mc_general = qs.stats.montecarlo(portfolio_returns, sims=sims)
-        # Extract DataFrame from MonteCarloResult if needed
-        mc_df = None
-        if mc_general is not None:
-            if isinstance(mc_general, pd.DataFrame):
-                mc_df = mc_general
-            elif hasattr(mc_general, 'data') and isinstance(mc_general.data, pd.DataFrame):
-                mc_df = mc_general.data
+    # CAGR distribution
+    years = T / 252.0
+    cagr_values = np.where(
+        final_values > -1,
+        (1 + final_values) ** (1.0 / max(years, 1e-6)) - 1,
+        -1.0
+    )
+    result["cagr_distribution"] = _full_distribution(cagr_values)
 
-        if mc_df is not None and not mc_df.empty:
-            # Get final cumulative return for each simulation path
-            final_values = mc_df.iloc[-1].values.astype(float)
-            result["wealth_distribution"] = {
-                "mean": safe_float(np.mean(final_values)),
-                "std": safe_float(np.std(final_values)),
-                "min": safe_float(np.min(final_values)),
-                "max": safe_float(np.max(final_values)),
-                "p5": safe_float(np.percentile(final_values, 5)),
-                "p10": safe_float(np.percentile(final_values, 10)),
-                "p25": safe_float(np.percentile(final_values, 25)),
-                "p50": safe_float(np.percentile(final_values, 50)),
-                "p75": safe_float(np.percentile(final_values, 75)),
-                "p90": safe_float(np.percentile(final_values, 90)),
-                "p95": safe_float(np.percentile(final_values, 95)),
-                "count": int(len(final_values)),
-            }
+    # Sharpe distribution (annualised, per path)
+    path_means = sampled.mean(axis=0)
+    path_stds  = sampled.std(axis=0)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        sharpe_values = np.where(path_stds > 0, (path_means / path_stds) * np.sqrt(252), 0.0)
+    result["sharpe_distribution"] = _full_distribution(sharpe_values)
 
-            # Export simulation paths for chart visualization
-            # Sample up to 100 paths and downsample time steps to keep JSON small
-            num_cols = mc_df.shape[1]
-            max_paths = min(100, num_cols)
-            # Pick evenly spaced paths (sorted by final value for a nice fan shape)
-            sorted_cols = sorted(range(num_cols), key=lambda i: mc_df.iloc[-1, i])
-            step = max(1, num_cols // max_paths)
-            selected = sorted_cols[::step][:max_paths]
+    # Max drawdown distribution (per path)
+    wealth = 1 + cum_paths                          # absolute wealth index
+    running_max = np.maximum.accumulate(wealth, axis=0)
+    drawdowns = (wealth - running_max) / running_max
+    max_dd_values = drawdowns.min(axis=0)
+    result["max_drawdown_distribution"] = _full_distribution(max_dd_values)
 
-            # Downsample time to ~100 points
-            num_rows = mc_df.shape[0]
-            max_points = min(100, num_rows)
-            row_step = max(1, num_rows // max_points)
-            row_indices = list(range(0, num_rows, row_step))
-            if row_indices[-1] != num_rows - 1:
-                row_indices.append(num_rows - 1)
+    # --- Simulation paths for chart (sample 100 evenly-spaced paths) ---
+    # Downsample to ~100 time points
+    max_points = min(100, T)
+    row_step = max(1, T // max_points)
+    row_indices = list(range(0, T, row_step))
+    if row_indices[-1] != T - 1:
+        row_indices.append(T - 1)
 
-            paths = []
-            for col_idx in selected:
-                path_vals = [safe_float(mc_df.iloc[r, col_idx]) for r in row_indices]
-                paths.append(path_vals)
+    # Pick 100 paths sorted by final value (fan shape)
+    sorted_cols = np.argsort(final_values)
+    step = max(1, sims // 100)
+    selected = sorted_cols[::step][:100]
 
-            # Also compute percentile bands at each time step
-            p5_band = [safe_float(np.percentile(mc_df.iloc[r].values, 5)) for r in row_indices]
-            p50_band = [safe_float(np.percentile(mc_df.iloc[r].values, 50)) for r in row_indices]
-            p95_band = [safe_float(np.percentile(mc_df.iloc[r].values, 95)) for r in row_indices]
+    paths = []
+    for col_idx in selected:
+        path_vals = [safe_float(cum_paths[r, col_idx]) for r in row_indices]
+        paths.append(path_vals)
 
-            # Include the original (actual) returns if available
-            original_path = None
-            if hasattr(mc_general, 'original') and mc_general.original is not None:
-                orig = mc_general.original
-                original_path = [safe_float(orig.iloc[r]) for r in row_indices]
+    # Percentile bands at each sampled time step
+    cum_at_rows = cum_paths[row_indices, :]
+    p5_band  = [safe_float(np.percentile(cum_at_rows[i], 5))  for i in range(len(row_indices))]
+    p50_band = [safe_float(np.percentile(cum_at_rows[i], 50)) for i in range(len(row_indices))]
+    p95_band = [safe_float(np.percentile(cum_at_rows[i], 95)) for i in range(len(row_indices))]
 
-            result["simulation_paths"] = {
-                "paths": paths,
-                "time_steps": len(row_indices),
-                "num_paths": len(paths),
-                "p5_band": p5_band,
-                "p50_band": p50_band,
-                "p95_band": p95_band,
-                "original_path": original_path,
-            }
-        else:
-            result["wealth_distribution"] = None
-            result["simulation_paths"] = None
-    except Exception as e:
-        sys.stderr.write(f"[QuantStats] MC General error: {e}\n")
-        result["wealth_distribution"] = None
+    # Actual historical cumulative return path (same time-step sampling)
+    actual_cum = (np.cumprod(1 + returns_arr) - 1)
+    original_path = [safe_float(actual_cum[r]) for r in row_indices]
+
+    result["simulation_paths"] = {
+        "paths": paths,
+        "time_steps": len(row_indices),
+        "num_paths": len(paths),
+        "p5_band": p5_band,
+        "p50_band": p50_band,
+        "p95_band": p95_band,
+        "original_path": original_path,
+    }
 
     return result
 
@@ -740,6 +724,7 @@ def main():
     benchmark = sys.argv[3] if len(sys.argv) > 3 else "SPY"
     period = sys.argv[4] if len(sys.argv) > 4 else "1y"
     risk_free_rate = float(sys.argv[5]) if len(sys.argv) > 5 else 0.02
+    num_sims = int(sys.argv[6]) if len(sys.argv) > 6 else 1000
 
     try:
         tickers_weights = json.loads(tickers_json)
@@ -779,7 +764,7 @@ def main():
             result["data"] = compute_rolling(portfolio_returns, benchmark_returns, risk_free_rate)
 
         elif action == "montecarlo":
-            result["data"] = compute_montecarlo(portfolio_returns)
+            result["data"] = compute_montecarlo(portfolio_returns, sims=num_sims)
 
         elif action == "full_report":
             result["data"] = {
@@ -787,7 +772,7 @@ def main():
                 "returns": compute_returns_analysis(portfolio_returns),
                 "drawdown": compute_drawdowns(portfolio_returns),
                 "rolling": compute_rolling(portfolio_returns, benchmark_returns, risk_free_rate),
-                "montecarlo": compute_montecarlo(portfolio_returns),
+                "montecarlo": compute_montecarlo(portfolio_returns, sims=num_sims),
             }
 
         elif action == "html_report":

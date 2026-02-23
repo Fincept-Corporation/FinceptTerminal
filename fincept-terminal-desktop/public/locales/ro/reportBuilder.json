@@ -3,9 +3,7 @@
   "header": {
     "load": "[RO] Load",
     "save": "[RO] Save",
-    "saving": "[RO] Saving...",
-    "exportPdf": "[RO] Export PDF",
-    "generating": "[RO] Generating..."
+    "saving": "[RO] Saving..."
   },
   "components": {
     "title": "[RO] ADD COMPONENTS"

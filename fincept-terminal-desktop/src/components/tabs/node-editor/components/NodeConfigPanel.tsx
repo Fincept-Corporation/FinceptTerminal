@@ -20,6 +20,7 @@ import {
   Play,
   BarChart3,
   Zap,
+  Clock,
 } from 'lucide-react';
 import { NodeParameterInput } from '../nodes/NodeParameterInput';
 import type { INodeProperties, NodeParameterValue } from '@/services/nodeSystem';
@@ -36,6 +37,7 @@ interface NodeConfigPanelProps {
   selectedNode: Node;
   onLabelChange: (nodeId: string, newLabel: string) => void;
   onParameterChange: (paramName: string, value: NodeParameterValue) => void;
+  onTimeoutChange: (nodeId: string, timeoutMs: number | undefined) => void;
   onClose: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
@@ -125,6 +127,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   selectedNode,
   onLabelChange,
   onParameterChange,
+  onTimeoutChange,
   onClose,
   onDelete,
   onDuplicate,
@@ -150,7 +153,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const [amProvider, setAmProvider] = useState(selectedNode.data.selectedProvider || '');
   const [amPrompt, setAmPrompt] = useState(selectedNode.data.customPrompt || '');
 
-  // Sync local state when node changes
+  // Sync local state when node changes or when node data is updated externally
+  // (e.g., after execution, loading from storage, or another component updating the node)
   useEffect(() => {
     setLocalConnection(selectedNode.data.selectedConnectionId || '');
     setLocalQuery(selectedNode.data.query || '');
@@ -160,7 +164,17 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     setTiCategories(selectedNode.data.categories || ['momentum', 'volume', 'volatility', 'trend', 'others']);
     setAmProvider(selectedNode.data.selectedProvider || '');
     setAmPrompt(selectedNode.data.customPrompt || '');
-  }, [selectedNode.id]);
+  }, [
+    selectedNode.id,
+    selectedNode.data.selectedConnectionId,
+    selectedNode.data.query,
+    selectedNode.data.dataSource,
+    selectedNode.data.symbol,
+    selectedNode.data.period,
+    selectedNode.data.categories,
+    selectedNode.data.selectedProvider,
+    selectedNode.data.customPrompt,
+  ]);
 
   // Check if this is a custom node type that needs special handling
   const isDataSourceNode = selectedNode.type === 'data-source';
@@ -965,6 +979,69 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                 </span>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Execution Timeout */}
+        <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.MD,
+              marginBottom: SPACING.MD,
+            }}
+          >
+            <Clock size={12} color={FINCEPT.GRAY} />
+            <span
+              style={{
+                color: FINCEPT.ORANGE,
+                fontSize: FONT_SIZE.SM,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}
+            >
+              EXECUTION TIMEOUT
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MD }}>
+            <input
+              type="number"
+              min={1}
+              max={600}
+              placeholder="30"
+              value={selectedNode.data.timeoutMs != null ? selectedNode.data.timeoutMs / 1000 : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || val === '0') {
+                  onTimeoutChange(selectedNode.id, undefined);
+                } else {
+                  const seconds = parseInt(val, 10);
+                  if (!isNaN(seconds) && seconds > 0) {
+                    onTimeoutChange(selectedNode.id, seconds * 1000);
+                  }
+                }
+              }}
+              style={{
+                ...textInputStyle,
+                width: '80px',
+                flex: 'none',
+              }}
+            />
+            <span style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.SM }}>
+              seconds
+            </span>
+          </div>
+          <div
+            style={{
+              marginTop: SPACING.XS,
+              fontSize: FONT_SIZE.XS,
+              color: FINCEPT.GRAY,
+              opacity: 0.6,
+            }}
+          >
+            Default: 30s. Leave blank to use default.
           </div>
         </div>
 

@@ -1,29 +1,60 @@
 {
-  "title": "محرر الكود",
   "header": {
-    "packages": "الحزم"
+    "finscriptIde": "[AR] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "ملف جديد",
-    "new": "جديد",
-    "open": "فتح",
-    "save": "حفظ",
     "run": "تشغيل الكود",
     "running": "جاري التشغيل...",
-    "runAll": "تشغيل الكل",
-    "history": "السجل"
+    "toggleExplorer": "[AR] Toggle Explorer (Ctrl+B)",
+    "openFile": "[AR] Open File",
+    "saveShortcut": "[AR] Save (Ctrl+S)",
+    "findShortcut": "[AR] Find (Ctrl+F)",
+    "runShortcut": "[AR] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "دفتر جوبيتر",
     "finscript": "محرر فينسكريبت"
   },
-  "packages": {
-    "clickToLoad": "انقر للتحميل...",
-    "load": "تحميل الحزم"
+  "explorer": {
+    "title": "[AR] EXPLORER",
+    "openFiles": "[AR] OPEN FILES",
+    "examples": "[AR] EXAMPLES",
+    "runHistory": "[AR] RUN HISTORY",
+    "finscriptEngine": "[AR] FinScript Engine"
   },
-  "history": {
-    "title": "سجل الدفاتر",
-    "loading": "جاري تحميل السجل...",
-    "empty": "لا يوجد سجل دفاتر"
+  "output": {
+    "title": "[AR] OUTPUT",
+    "success": "[AR] SUCCESS",
+    "error": "[AR] ERROR",
+    "executing": "[AR] EXECUTING FINSCRIPT...",
+    "noOutput": "[AR] No output yet",
+    "pressToRun": "[AR] Press Ctrl+Enter to run",
+    "completed": "[AR] COMPLETED",
+    "failed": "[AR] FAILED",
+    "signals": "[AR] signals",
+    "clear": "[AR] CLEAR",
+    "errors": "[AR] ERRORS",
+    "signalsSection": "[AR] SIGNALS",
+    "outputSection": "[AR] OUTPUT",
+    "charts": "[AR] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[AR] OHLC",
+    "histogram": "[AR] Histogram",
+    "line": "[AR] Line",
+    "points": "[AR] points"
+  },
+  "statusBar": {
+    "modified": "[AR] MODIFIED",
+    "showOutput": "[AR] SHOW OUTPUT",
+    "encoding": "[AR] UTF-8",
+    "spaces": "[AR] 4 Spaces",
+    "runShortcut": "[AR] Ctrl+Enter: Run",
+    "lines": "[AR] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[AR] Close file without saving?",
+    "unsavedChanges": "[AR] You have unsaved changes."
   }
 }

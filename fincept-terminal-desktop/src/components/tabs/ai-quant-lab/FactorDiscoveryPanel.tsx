@@ -25,6 +25,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { rdAgentService, type DiscoveredFactor } from '@/services/aiQuantLab/rdAgentService';
+import { buildApiKeysMap } from '@/services/core/sqliteService';
 import { showError, showWarning, showSuccess } from '@/utils/notifications';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 
@@ -70,9 +71,15 @@ export function FactorDiscoveryPanel() {
     setTaskStatus(null);
 
     try {
+      const apiKeys = await buildApiKeysMap();
+      // Allow manual override from the input field for backward compat
+      if (apiKey.trim()) {
+        apiKeys['OPENAI_API_KEY'] = apiKey.trim();
+        apiKeys['openai'] = apiKey.trim();
+      }
       const response = await rdAgentService.startFactorMining({
         task_description: taskDescription,
-        api_keys: { openai: apiKey },
+        api_keys: apiKeys,
         target_market: targetMarket,
         budget: budget
       });

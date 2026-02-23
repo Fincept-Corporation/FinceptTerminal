@@ -1,7 +1,5 @@
-#![allow(dead_code)]
 // Common types and utilities for Indian broker integrations
 
-use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
@@ -31,16 +29,3 @@ pub struct OrderPlaceResponse {
     pub error: Option<String>,
 }
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/// Create common HTTP headers for API requests
-pub fn create_common_headers() -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        "Content-Type",
-        HeaderValue::from_static("application/json"),
-    );
-    headers
-}

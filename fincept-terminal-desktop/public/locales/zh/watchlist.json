@@ -1,25 +1,7 @@
 {
-  "title": "自选列表",
-  "header": {
-    "export": "导出",
-    "updating": "更新中",
-    "live": "实时"
-  },
   "sidebar": {
-    "groups": "自选分组",
-    "new": "新建",
     "noWatchlists": "暂无自选列表",
     "clickNew": "点击新建创建列表",
-    "stocks": "股票",
-    "marketMovers": "市场异动",
-    "gainer": "涨幅榜",
-    "loser": "跌幅榜",
-    "volumeLeaders": "成交量榜"
-  },
-  "emptyState": {
-    "selectWatchlist": "选择一个自选列表或创建新列表开始"
-  },
-  "list": {
-    "symbols": "代码"
+    "stocks": "股票"
   }
 }

@@ -171,17 +171,48 @@ def main():
             region = sys.argv[3]
             factor_assessments = json.loads(sys.argv[4])
 
-            scorecard = ScorecardMethod(region=region)
-            # Map alternative frontend key names to scorecard factor names
+            scorecard = ScorecardMethod(region=region.capitalize() if region.lower() in ('us','europe','asia') else 'US')
+            # Map all frontend key variants to internal scorecard factor names
             key_map = {
-                'market_opportunity': 'size_of_opportunity', 'market_size': 'size_of_opportunity',
-                'marketing_channels': 'marketing_sales_channels', 'sales_channels': 'marketing_sales_channels',
+                # management team
+                'team': 'management_team', 'management_team': 'management_team',
+                'quality_team': 'management_team', 'team_strength': 'management_team',
+                # market size
+                'market_size': 'size_of_opportunity', 'market_opportunity': 'size_of_opportunity',
+                'size_of_opportunity': 'size_of_opportunity',
+                # product
+                'product': 'product_technology', 'product_technology': 'product_technology',
+                'product_strength': 'product_technology',
+                # competitive
+                'competitive': 'competitive_environment', 'competitive_environment': 'competitive_environment',
+                'competition': 'competitive_environment',
+                # marketing
+                'marketing': 'marketing_sales_channels', 'marketing_channels': 'marketing_sales_channels',
+                'sales_channels': 'marketing_sales_channels', 'marketing_sales_channels': 'marketing_sales_channels',
+                # need for investment
+                'need_for_funding': 'need_for_additional_investment',
                 'need_for_investment': 'need_for_additional_investment',
-                'other': 'other_factors',
+                'need_for_additional_investment': 'need_for_additional_investment',
+                # other
+                'other': 'other_factors', 'other_factors': 'other_factors',
             }
             mapped = {}
             for k, v in factor_assessments.items():
-                mapped[key_map.get(k, k)] = v
+                internal_key = key_map.get(k)
+                if internal_key:
+                    # Frontend sends multipliers (0.5-1.5); convert to comparison scores (-0.5 to +0.5)
+                    # If value > 1.1 or < 0.9 it's clearly a multiplier, otherwise treat as comparison score
+                    val = float(v)
+                    if val > 1.1 or val < 0.4:
+                        # It's a multiplier (e.g. 1.2 = 20% above avg) → comparison score = (val - 1.0) * 0.5 / 0.5 → clamped
+                        mapped[internal_key] = max(-0.5, min(0.5, (val - 1.0)))
+                    else:
+                        # Already a comparison score (-0.5 to +0.5)
+                        mapped[internal_key] = val
+            # Fill any missing required factors with 0 (average)
+            for factor in scorecard.factor_weights:
+                if factor not in mapped:
+                    mapped[factor] = 0.0
             valuation = scorecard.calculate_valuation(stage=stage, factor_assessments=mapped)
 
             result = {"success": True, "data": valuation}

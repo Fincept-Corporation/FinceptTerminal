@@ -9,13 +9,9 @@
   "percentChange": "%SCH",
   "high": "MAX",
   "low": "MIN",
-  "loading": "Se încarcă...",
   "noData": "Nu există date",
   "refresh": "REÎMPROSPĂTEAZĂ",
   "auto": "AUTO",
   "on": "PORNIT",
-  "off": "OPRIT",
-  "lastUpdate": "ULTIMA ACTUALIZARE",
-  "updating": "SE ACTUALIZEAZĂ",
-  "live": "LIVE"
+  "off": "OPRIT"
 }

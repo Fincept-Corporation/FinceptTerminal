@@ -800,51 +800,342 @@ const AlphaArenaTab: React.FC = () => {
         />
       </div>
 
-      {/* Symbol & Mode */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>TRADING SYMBOL</label>
-          <select
-            value={arena.symbol}
-            onChange={e => arena.setSymbol(e.target.value)}
+      {/* Competition Type Toggle */}
+      <div style={{ marginBottom: '10px' }}>
+        <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>COMPETITION TYPE</label>
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <button
+            type="button"
+            onClick={() => arena.setCompetitionType('crypto')}
             style={{
-              width: '100%',
-              padding: '8px 10px',
-              backgroundColor: FINCEPT.HEADER_BG,
-              color: FINCEPT.WHITE,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              fontSize: '12px',
+              flex: 1,
+              padding: '10px 12px',
+              backgroundColor: arena.competitionType === 'crypto' ? FINCEPT.ORANGE : FINCEPT.CARD_BG,
+              color: arena.competitionType === 'crypto' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+              border: `1px solid ${arena.competitionType === 'crypto' ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+              fontWeight: 700,
+              fontSize: '11px',
               fontFamily: TERMINAL_FONT,
-              outline: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              letterSpacing: '0.5px',
             }}
           >
-            {TRADING_SYMBOLS.map(s => (
-              <option key={s.value} value={s.value} style={{ backgroundColor: FINCEPT.HEADER_BG }}>{s.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>COMPETITION MODE</label>
-          <select
-            value={arena.mode}
-            onChange={e => arena.setMode(e.target.value as CompetitionMode)}
+            <TrendingUp size={12} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+            CRYPTO TRADING
+          </button>
+          <button
+            type="button"
+            onClick={() => arena.setCompetitionType('polymarket')}
             style={{
-              width: '100%',
-              padding: '8px 10px',
-              backgroundColor: FINCEPT.HEADER_BG,
-              color: FINCEPT.WHITE,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              fontSize: '12px',
+              flex: 1,
+              padding: '10px 12px',
+              backgroundColor: arena.competitionType === 'polymarket' ? FINCEPT.PURPLE : FINCEPT.CARD_BG,
+              color: arena.competitionType === 'polymarket' ? FINCEPT.WHITE : FINCEPT.GRAY,
+              border: `1px solid ${arena.competitionType === 'polymarket' ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
+              fontWeight: 700,
+              fontSize: '11px',
               fontFamily: TERMINAL_FONT,
-              outline: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              letterSpacing: '0.5px',
             }}
           >
-            {COMPETITION_MODES.map(m => (
-              <option key={m.value} value={m.value} style={{ backgroundColor: FINCEPT.HEADER_BG }}>{m.label}</option>
-            ))}
-          </select>
+            <BarChart3 size={12} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+            PREDICTION MARKETS
+          </button>
         </div>
       </div>
+
+      {/* Symbol & Mode (Crypto only) */}
+      {arena.competitionType === 'crypto' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>TRADING SYMBOL</label>
+            <select
+              value={arena.symbol}
+              onChange={e => arena.setSymbol(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                backgroundColor: FINCEPT.HEADER_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                fontSize: '12px',
+                fontFamily: TERMINAL_FONT,
+                outline: 'none',
+              }}
+            >
+              {TRADING_SYMBOLS.map(s => (
+                <option key={s.value} value={s.value} style={{ backgroundColor: FINCEPT.HEADER_BG }}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>COMPETITION MODE</label>
+            <select
+              value={arena.mode}
+              onChange={e => arena.setMode(e.target.value as CompetitionMode)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                backgroundColor: FINCEPT.HEADER_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                fontSize: '12px',
+                fontFamily: TERMINAL_FONT,
+                outline: 'none',
+              }}
+            >
+              {COMPETITION_MODES.map(m => (
+                <option key={m.value} value={m.value} style={{ backgroundColor: FINCEPT.HEADER_BG }}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Polymarket Market Selection (Polymarket only) */}
+      {arena.competitionType === 'polymarket' && (
+        <div style={{ marginBottom: '10px' }}>
+          <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600, letterSpacing: '0.5px' }}>
+            SELECT PREDICTION MARKETS (min 1 required)
+          </label>
+
+          {/* Filters Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '2px', fontWeight: 600 }}>CATEGORY</label>
+              <select
+                value={arena.polymarketCategory}
+                onChange={e => arena.setPolymarketCategory(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FINCEPT.HEADER_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  fontSize: '10px',
+                  fontFamily: TERMINAL_FONT,
+                  outline: 'none',
+                }}
+              >
+                <option value="" style={{ backgroundColor: FINCEPT.HEADER_BG }}>All Categories</option>
+                <option value="politics" style={{ backgroundColor: FINCEPT.HEADER_BG }}>Politics</option>
+                <option value="sports" style={{ backgroundColor: FINCEPT.HEADER_BG }}>Sports</option>
+                <option value="crypto" style={{ backgroundColor: FINCEPT.HEADER_BG }}>Crypto</option>
+                <option value="science" style={{ backgroundColor: FINCEPT.HEADER_BG }}>Science</option>
+                <option value="entertainment" style={{ backgroundColor: FINCEPT.HEADER_BG }}>Entertainment</option>
+                <option value="pop-culture" style={{ backgroundColor: FINCEPT.HEADER_BG }}>Pop Culture</option>
+                <option value="business" style={{ backgroundColor: FINCEPT.HEADER_BG }}>Business</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '2px', fontWeight: 600 }}>SORT BY</label>
+              <select
+                value={arena.polymarketSortBy}
+                onChange={e => arena.setPolymarketSortBy(e.target.value as 'volume' | 'liquidity' | 'end_date' | 'spread')}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FINCEPT.HEADER_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  fontSize: '10px',
+                  fontFamily: TERMINAL_FONT,
+                  outline: 'none',
+                }}
+              >
+                <option value="volume" style={{ backgroundColor: FINCEPT.HEADER_BG }}>Volume (High→Low)</option>
+                <option value="liquidity" style={{ backgroundColor: FINCEPT.HEADER_BG }}>Liquidity (High→Low)</option>
+                <option value="end_date" style={{ backgroundColor: FINCEPT.HEADER_BG }}>End Date (Soonest)</option>
+                <option value="spread" style={{ backgroundColor: FINCEPT.HEADER_BG }}>Spread (Highest)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Min thresholds */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '8px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '2px', fontWeight: 600 }}>MIN VOLUME ($)</label>
+              <input
+                type="number"
+                value={arena.polymarketMinVolume}
+                onChange={e => arena.setPolymarketMinVolume(Number(e.target.value) || 0)}
+                placeholder="0"
+                style={{
+                  width: '100%',
+                  padding: '5px 6px',
+                  backgroundColor: FINCEPT.HEADER_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  fontSize: '10px',
+                  fontFamily: TERMINAL_FONT,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '2px', fontWeight: 600 }}>MIN LIQUIDITY ($)</label>
+              <input
+                type="number"
+                value={arena.polymarketMinLiquidity}
+                onChange={e => arena.setPolymarketMinLiquidity(Number(e.target.value) || 0)}
+                placeholder="0"
+                style={{
+                  width: '100%',
+                  padding: '5px 6px',
+                  backgroundColor: FINCEPT.HEADER_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  fontSize: '10px',
+                  fontFamily: TERMINAL_FONT,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button
+                onClick={() => arena.loadPolymarkets()}
+                style={{
+                  width: '100%',
+                  padding: '5px 6px',
+                  backgroundColor: FINCEPT.PURPLE,
+                  color: FINCEPT.WHITE,
+                  border: 'none',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                }}
+              >
+                <RefreshCw size={9} />
+                REFRESH
+              </button>
+            </div>
+          </div>
+
+          {/* Market list */}
+          <div style={{
+            maxHeight: '200px',
+            overflowY: 'auto',
+            border: `1px solid ${FINCEPT.BORDER}`,
+            backgroundColor: FINCEPT.CARD_BG,
+          }}>
+            {arena.loadingPolymarkets ? (
+              <div style={{ padding: '20px', textAlign: 'center' }}>
+                <Loader2 size={20} style={{ color: FINCEPT.PURPLE, animation: 'alpha-spin 1s linear infinite' }} />
+                <p style={{ fontSize: '10px', color: FINCEPT.GRAY, marginTop: '8px' }}>Loading markets...</p>
+              </div>
+            ) : arena.availablePolymarkets.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center' }}>
+                <p style={{ fontSize: '10px', color: FINCEPT.GRAY }}>No active markets found</p>
+              </div>
+            ) : (
+              arena.availablePolymarkets.map(market => {
+                const isSelected = arena.selectedPolymarkets.some(m => m.id === market.id);
+                const yesPrice = market.outcome_prices[0] ?? 0;
+                const noPrice = market.outcome_prices[1] ?? (1 - yesPrice);
+                const spread = Math.abs(yesPrice - noPrice);
+                const edgeFromFair = Math.abs(0.5 - yesPrice);
+                return (
+                  <div
+                    key={market.id}
+                    onClick={() => arena.togglePolymarketSelection(market)}
+                    style={{
+                      padding: '10px 12px',
+                      borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                      cursor: 'pointer',
+                      backgroundColor: isSelected ? `${FINCEPT.PURPLE}15` : 'transparent',
+                      transition: 'background-color 0.1s',
+                    }}
+                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.backgroundColor = FINCEPT.HOVER; }}
+                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: isSelected ? FINCEPT.PURPLE : FINCEPT.BORDER,
+                        flexShrink: 0,
+                        marginTop: '2px',
+                      }}>
+                        {isSelected && <Check size={10} style={{ color: FINCEPT.WHITE }} />}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: FINCEPT.WHITE,
+                          marginBottom: '4px',
+                          lineHeight: 1.3,
+                        }}>
+                          {market.question}
+                        </div>
+                        {/* Price bar visualization */}
+                        <div style={{ display: 'flex', height: '4px', marginBottom: '5px', overflow: 'hidden' }}>
+                          <div style={{ width: `${yesPrice * 100}%`, backgroundColor: FINCEPT.GREEN, transition: 'width 0.3s' }} />
+                          <div style={{ width: `${noPrice * 100}%`, backgroundColor: FINCEPT.RED, transition: 'width 0.3s' }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '9px', flexWrap: 'wrap' }}>
+                          <span style={{ color: FINCEPT.GREEN, fontWeight: 600 }}>
+                            YES {(yesPrice * 100).toFixed(1)}¢
+                          </span>
+                          <span style={{ color: FINCEPT.RED, fontWeight: 600 }}>
+                            NO {(noPrice * 100).toFixed(1)}¢
+                          </span>
+                          <span style={{ color: FINCEPT.GRAY }}>
+                            VOL ${market.volume >= 1000000 ? (market.volume / 1000000).toFixed(1) + 'M' : (market.volume / 1000).toFixed(1) + 'K'}
+                          </span>
+                          <span style={{ color: FINCEPT.GRAY }}>
+                            LIQ ${market.liquidity >= 1000 ? (market.liquidity / 1000).toFixed(1) + 'K' : market.liquidity.toFixed(0)}
+                          </span>
+                          {edgeFromFair > 0.15 && (
+                            <span style={{
+                              color: FINCEPT.YELLOW,
+                              fontWeight: 700,
+                              padding: '0 3px',
+                              backgroundColor: `${FINCEPT.YELLOW}15`,
+                            }}>
+                              DECISIVE
+                            </span>
+                          )}
+                          {market.end_date && (
+                            <span style={{ color: FINCEPT.CYAN, fontSize: '8px' }}>
+                              Ends: {new Date(market.end_date).toLocaleDateString()}
+                            </span>
+                          )}
+                          {market.category && (
+                            <span style={{
+                              color: FINCEPT.PURPLE,
+                              fontSize: '8px',
+                              padding: '0 4px',
+                              backgroundColor: `${FINCEPT.PURPLE}15`,
+                            }}>
+                              {market.category}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <p style={{ fontSize: '9px', marginTop: '6px', color: FINCEPT.GRAY }}>
+            Selected: {arena.selectedPolymarkets.length} market(s)
+          </p>
+        </div>
+      )}
 
       {/* Capital & Interval */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>

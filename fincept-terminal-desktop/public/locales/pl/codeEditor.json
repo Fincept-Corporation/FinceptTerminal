@@ -1,29 +1,60 @@
 {
-  "title": "EDYTOR KODU",
   "header": {
-    "packages": "PAKIETY"
+    "finscriptIde": "[PL] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "NOWY PLIK",
-    "new": "NOWY",
-    "open": "OTWÓRZ",
-    "save": "ZAPISZ",
     "run": "URUCHOM",
     "running": "URUCHAMIANIE...",
-    "runAll": "URUCHOM WSZYSTKO",
-    "history": "HISTORIA"
+    "toggleExplorer": "[PL] Toggle Explorer (Ctrl+B)",
+    "openFile": "[PL] Open File",
+    "saveShortcut": "[PL] Save (Ctrl+S)",
+    "findShortcut": "[PL] Find (Ctrl+F)",
+    "runShortcut": "[PL] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "EDYTOR FINSCRIPT"
   },
-  "packages": {
-    "clickToLoad": "Kliknij aby załadować...",
-    "load": "ZAŁADUJ PAKIETY"
+  "explorer": {
+    "title": "[PL] EXPLORER",
+    "openFiles": "[PL] OPEN FILES",
+    "examples": "[PL] EXAMPLES",
+    "runHistory": "[PL] RUN HISTORY",
+    "finscriptEngine": "[PL] FinScript Engine"
   },
-  "history": {
-    "title": "HISTORIA NOTEBOOKÓW",
-    "loading": "Ładowanie historii...",
-    "empty": "Brak historii notebooków"
+  "output": {
+    "title": "[PL] OUTPUT",
+    "success": "[PL] SUCCESS",
+    "error": "[PL] ERROR",
+    "executing": "[PL] EXECUTING FINSCRIPT...",
+    "noOutput": "[PL] No output yet",
+    "pressToRun": "[PL] Press Ctrl+Enter to run",
+    "completed": "[PL] COMPLETED",
+    "failed": "[PL] FAILED",
+    "signals": "[PL] signals",
+    "clear": "[PL] CLEAR",
+    "errors": "[PL] ERRORS",
+    "signalsSection": "[PL] SIGNALS",
+    "outputSection": "[PL] OUTPUT",
+    "charts": "[PL] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[PL] OHLC",
+    "histogram": "[PL] Histogram",
+    "line": "[PL] Line",
+    "points": "[PL] points"
+  },
+  "statusBar": {
+    "modified": "[PL] MODIFIED",
+    "showOutput": "[PL] SHOW OUTPUT",
+    "encoding": "[PL] UTF-8",
+    "spaces": "[PL] 4 Spaces",
+    "runShortcut": "[PL] Ctrl+Enter: Run",
+    "lines": "[PL] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[PL] Close file without saving?",
+    "unsavedChanges": "[PL] You have unsaved changes."
   }
 }

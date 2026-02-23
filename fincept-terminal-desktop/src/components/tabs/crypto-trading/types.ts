@@ -46,7 +46,7 @@ export interface TickerData {
   change?: number;
   changePercent?: number;
   open?: number;
-  quoteVolume?: number;
+  quoteVolume?: number; // USD-denominated 24h volume (e.g. Binance "q" field)
 }
 
 export interface TradeData {

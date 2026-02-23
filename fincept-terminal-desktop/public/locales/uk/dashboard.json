@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "НАЛАШТУВАННЯ ПРИЛАДНОЇ ПАНЕЛІ",
-    "live": "НАЖИВО",
-    "widgets": "ВІДЖЕТИ"
-  },
-  "buttons": {
-    "addWidget": "ДОДАТИ ВІДЖЕТ",
-    "saveLayout": "ЗБЕРЕГТИ МАКЕТ",
-    "reset": "СКИДАННЯ",
-    "help": "ДОПОМОГА"
-  },
   "widgets": {
     "loading": "Завантаження...",
-    "error": "Помилка",
     "globalIndices": "Глобальні індекси - Топ 12",
     "forex": "Форекс - основні пари",
     "crypto": "КРИПТОВАЛЮТИ",
@@ -20,8 +8,6 @@
     "news": "НОВИНИ",
     "forum": "ФОРУМ",
     "watchlist": "СПИСОК ПЕРЕГЛЯДУ",
-    "maritimeIntelligence": "Морська розвідка",
-    "unknown": "Невідомий тип віджета",
     "index": "ІНДЕКС",
     "symbol": "СИМВОЛ",
     "price": "ЦІНА",
@@ -38,41 +24,22 @@
     "pair": "ПАРА",
     "rate": "СТАВКА",
     "commodity": "ТОВАРНИЙ",
-    "globe3D": "3D ГЛОБУС",
-    "vessels": "ПОСУДИ",
-    "routes": "МАРШРУТИ",
-    "vol24h": "VOL 24H",
-    "topTradeCorridors": "ТОП ТОРГІВЕЛЬНИХ КОРИДОРОВ",
-    "ships": "кораблі",
-    "marketNews": "Новини ринку",
-    "secPressReleases": "Прес-релізи SEC",
-    "cryptoNews": "Крипто новини",
-    "trendingForum": "Популярний форум",
-    "techStocks": "Технологічні акції"
-  },
-  "tips": {
-    "drag": "Перетягніть віджети, щоб змінити порядок",
-    "resize": "Змінити розмір від нижнього правого кута",
-    "remove": "Видаліть віджети за допомогою кнопки X",
-    "responsive": "Адаптивний макет – використовується повна ширина"
-  },
-  "loading": {
-    "title": "Ініціалізація інформаційної панелі",
-    "description": "Налаштування кешу бази даних для швидшого завантаження даних...",
-    "note": "Під час першого запуску це займе лише деякий час"
-  },
-  "empty": {
-    "noWidgets": "На інформаційній панелі немає віджетів",
-    "addFirst": "ДОДАТИ СВІЙ ПЕРШИЙ ВІДЖЕТ"
-  },
-  "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Перетягніть робочу область",
-    "layout": "Макет",
-    "custom": "Custom",
-    "empty": "Порожній",
-    "active": "АКТИВНИЙ",
-    "cache": "Кеш: УВІМКНЕНО",
-    "label": "Статус"
+    "noActiveMarkets": "[UK] No active markets found",
+    "indicator": "[UK] INDICATOR",
+    "value": "[UK] VALUE",
+    "chg": "[UK] CHG",
+    "overallRisk": "[UK] OVERALL RISK",
+    "openEconomicsTab": "[UK] Open Economics Tab",
+    "openGeopoliticsTab": "[UK] Open Geopolitics Tab",
+    "openPolymarketTab": "[UK] Open Polymarket Tab",
+    "noPortfolioFound": "[UK] No portfolio found",
+    "createPortfolioHint": "[UK] Create one in Portfolio tab",
+    "openPortfolioTab": "[UK] Open Portfolio Tab",
+    "action": "[UK] ACTION",
+    "markets": "[UK] MARKETS",
+    "performanceTracker": "[UK] PERFORMANCE TRACKER",
+    "totalPnL": "[UK] TOTAL P&L",
+    "viewDetailedAnalytics": "[UK] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "Макет інформаційної панелі збережено!",

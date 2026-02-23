@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bot, Wrench, Search, BarChart3, Layout, Activity, Library,
   Plus, Zap, ChevronRight,
 } from 'lucide-react';
+import { listAlgoDeployments } from './services/algoTradingService';
 import type { AlgoSubView, PythonStrategy } from './types';
 import StrategyEditor from './components/StrategyEditor';
 import StrategyManager from './components/StrategyManager';
@@ -12,24 +13,7 @@ import StrategyLibraryTab from './components/StrategyLibraryTab';
 import PythonBacktestPanel from './components/PythonBacktestPanel';
 import PythonStrategyEditor from './components/PythonStrategyEditor';
 import PythonDeployPanel from './components/PythonDeployPanel';
-
-const F = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-};
+import { F } from './constants/theme';
 
 const NAV_ITEMS: { key: AlgoSubView; label: string; icon: React.ElementType; description: string }[] = [
   { key: 'builder', label: 'STRATEGY BUILDER', icon: Wrench, description: 'Create & edit strategies' },
@@ -45,6 +29,20 @@ const AlgoTradingTab: React.FC = () => {
   const [clonePythonStrategy, setClonePythonStrategy] = useState<PythonStrategy | null>(null);
   const [backtestPythonStrategy, setBacktestPythonStrategy] = useState<PythonStrategy | null>(null);
   const [deployPythonStrategy, setDeployPythonStrategy] = useState<PythonStrategy | null>(null);
+  const [runningCount, setRunningCount] = useState(0);
+
+  // Lightweight poll just for the sidebar status indicator (30s interval, not 5s)
+  useEffect(() => {
+    const checkStatus = async () => {
+      const result = await listAlgoDeployments();
+      if (result.success && result.data) {
+        setRunningCount(result.data.filter(d => d.status === 'running').length);
+      }
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleEditStrategy = (id: string) => {
     setEditStrategyId(id);
@@ -72,8 +70,7 @@ const AlgoTradingTab: React.FC = () => {
     setClonePythonStrategy(null);
   };
 
-  const handlePythonEditorSave = (customId: string) => {
-    console.log('Python strategy saved with ID:', customId);
+  const handlePythonEditorSave = (_customId: string) => {
     setClonePythonStrategy(null);
     setActiveView('strategies');
   };
@@ -214,15 +211,19 @@ const AlgoTradingTab: React.FC = () => {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
             <Zap size={10} style={{ color: F.YELLOW }} />
-            <span style={{ fontSize: '8px', color: F.GRAY, letterSpacing: '0.5px' }}>SYSTEM STATUS</span>
+            <span style={{ fontSize: '8px', color: F.GRAY, letterSpacing: '0.5px' }}>DEPLOYMENTS</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: F.GREEN, display: 'inline-block' }} />
-              <span style={{ fontSize: '8px', color: F.GREEN }}>ONLINE</span>
+              <span style={{
+                width: '6px', height: '6px', borderRadius: '50%',
+                backgroundColor: runningCount > 0 ? F.GREEN : F.MUTED,
+                display: 'inline-block',
+              }} />
+              <span style={{ fontSize: '8px', color: runningCount > 0 ? F.GREEN : F.MUTED }}>
+                {runningCount > 0 ? `${runningCount} RUNNING` : 'IDLE'}
+              </span>
             </div>
-            <span style={{ fontSize: '8px', color: F.MUTED }}>|</span>
-            <span style={{ fontSize: '8px', color: F.MUTED }}>ENGINE READY</span>
           </div>
         </div>
       </div>
@@ -253,10 +254,12 @@ const AlgoTradingTab: React.FC = () => {
               {NAV_ITEMS.find(n => n.key === activeView)?.label}
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Activity size={10} style={{ color: F.GREEN }} />
-            <span style={{ fontSize: '8px', color: F.GREEN }}>LIVE</span>
-          </div>
+          {runningCount > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Activity size={10} style={{ color: F.GREEN }} />
+              <span style={{ fontSize: '8px', color: F.GREEN }}>{runningCount} LIVE</span>
+            </div>
+          )}
         </div>
 
         {/* View Content */}
@@ -305,11 +308,11 @@ const AlgoTradingTab: React.FC = () => {
         }}>
           <div style={{ display: 'flex', gap: '16px' }}>
             <span><span style={{ color: F.MUTED }}>ENGINE:</span> v1.0</span>
-            <span><span style={{ color: F.MUTED }}>MODE:</span> <span style={{ color: F.CYAN }}>PRODUCTION</span></span>
+            <span><span style={{ color: F.MUTED }}>DEPLOYMENTS:</span> <span style={{ color: runningCount > 0 ? F.GREEN : F.MUTED }}>{runningCount} active</span></span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: F.GREEN }} />
-            <span style={{ color: F.GREEN }}>READY</span>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: runningCount > 0 ? F.GREEN : F.MUTED }} />
+            <span style={{ color: runningCount > 0 ? F.GREEN : F.MUTED }}>{runningCount > 0 ? 'ACTIVE' : 'IDLE'}</span>
           </div>
         </div>
       </div>
@@ -336,8 +339,7 @@ const AlgoTradingTab: React.FC = () => {
         <PythonDeployPanel
           strategy={deployPythonStrategy}
           onClose={() => setDeployPythonStrategy(null)}
-          onDeployed={(deployId) => {
-            console.log('Strategy deployed:', deployId);
+          onDeployed={() => {
             setDeployPythonStrategy(null);
             setActiveView('dashboard');
           }}

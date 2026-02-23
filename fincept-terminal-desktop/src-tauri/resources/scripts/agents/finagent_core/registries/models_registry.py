@@ -273,7 +273,7 @@ class ModelsRegistry:
             "models": ["fincept-llm"],
             "api_key_env": "FINCEPT_API_KEY",
             "default_model": "fincept-llm",
-            "base_url": "https://finceptbackend.share.zrok.io/research/llm",
+            "base_url": "https://api.fincept.in/research/llm",
         },
     }
 

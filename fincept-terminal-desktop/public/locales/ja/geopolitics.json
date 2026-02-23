@@ -1,6 +1,66 @@
 {
-  "title": "地政学",
   "messages": {
-    "loading": "地政学データ読み込み中..."
+    "retry": "[JA] RETRY"
+  },
+  "header": {
+    "prefix": "[JA] GEO>",
+    "title": "[JA] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[JA] EVENTS"
+  },
+  "status": {
+    "stale": "[JA] STALE",
+    "loading": "[JA] LOADING...",
+    "error": "[JA] ERROR:"
+  },
+  "filters": {
+    "country": "[JA] Country...",
+    "cities": "[JA] Cities...",
+    "category": "[JA] Category...",
+    "apply": "[JA] APPLY",
+    "clear": "[JA] CLEAR",
+    "clearAllCities": "[JA] Clear all cities",
+    "selectedLabel": "[JA] Selected:"
+  },
+  "panel": {
+    "title": "[JA] INFO PANEL",
+    "expand": "[JA] Expand panel",
+    "collapse": "[JA] Collapse panel",
+    "eventsLoaded": "[JA] EVENTS LOADED",
+    "onMapVisualization": "[JA] on map visualization",
+    "topCategories": "[JA] TOP CATEGORIES",
+    "topCountries": "[JA] TOP COUNTRIES",
+    "eventDetails": "[JA] EVENT DETAILS",
+    "close": "[JA] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[JA] Country:",
+    "city": "[JA] City:",
+    "keywords": "[JA] Keywords:",
+    "coords": "[JA] Coords:",
+    "date": "[JA] Date:",
+    "source": "[JA] Source:",
+    "viewArticle": "[JA] View Article"
+  },
+  "legend": {
+    "title": "[JA] EVENT CATEGORIES",
+    "armedConflict": "[JA] Armed Conflict",
+    "terrorism": "[JA] Terrorism",
+    "protests": "[JA] Protests",
+    "civilianViolence": "[JA] Civilian Violence",
+    "riots": "[JA] Riots",
+    "politicalViolence": "[JA] Political Violence",
+    "crisis": "[JA] Crisis",
+    "explosions": "[JA] Explosions",
+    "strategic": "[JA] Strategic",
+    "unclassified": "[JA] Unclassified"
+  },
+  "footer": {
+    "tabName": "[JA] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[JA] EVENTS",
+    "labelEngine": "[JA] ENGINE",
+    "engineValue": "[JA] DECK.GL v9.2",
+    "labelSource": "[JA] SOURCE",
+    "sourceValue": "[JA] NEWS-EVENTS API",
+    "labelSelected": "[JA] SELECTED"
   }
 }

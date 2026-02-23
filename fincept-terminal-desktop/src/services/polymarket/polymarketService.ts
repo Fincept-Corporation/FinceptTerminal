@@ -30,6 +30,42 @@ export interface PolymarketMarket {
   spread?: number;
   volumeNum?: number;
   liquidityNum?: number;
+  // Gamma API nests the parent event(s) — used for constructing the correct URL
+  events?: Array<{ id?: string; slug: string; title?: string }>;
+  groupItemTitle?: string;
+  // Volume variants
+  volume24hr?: number;
+  volume1wk?: number;
+  volume1mo?: number;
+  // Price change (raw decimal, multiply ×100 for %)
+  oneDayPriceChange?: number;
+  oneWeekPriceChange?: number;
+  oneMonthPriceChange?: number;
+  oneHourPriceChange?: number;
+  // Live pricing from Gamma/CLOB
+  lastTradePrice?: number;
+  bestBid?: number;
+  bestAsk?: number;
+  // Status flags
+  featured?: boolean;
+  new?: boolean;
+  acceptingOrders?: boolean;
+  negRiskOther?: boolean;
+  // Resolution metadata
+  resolutionSource?: string;
+  umaResolutionStatus?: string;
+  resolvedBy?: string;
+  // Fees & order config
+  makerBaseFee?: number;
+  takerBaseFee?: number;
+  orderMinSize?: number;
+  orderPriceMinTickSize?: number;
+  // Rankings/discovery
+  competitive?: number;
+  score?: number;
+  curationOrder?: number;
+  // Sports
+  gameStartTime?: string;
 }
 
 export interface PolymarketEvent {

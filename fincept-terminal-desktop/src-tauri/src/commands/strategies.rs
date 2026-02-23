@@ -279,7 +279,7 @@ pub async fn deploy_strategy(
 
     let strategy_id = parsed["strategy_id"].as_str().unwrap_or("").to_string();
     let symbol = parsed["symbol"].as_str().unwrap_or("").to_string();
-    let asset_type = parsed["asset_type"].as_str().unwrap_or("equity").to_string();
+    let _asset_type = parsed["asset_type"].as_str().unwrap_or("equity").to_string();
 
     if strategy_id.is_empty() || symbol.is_empty() {
         return Ok(json!({

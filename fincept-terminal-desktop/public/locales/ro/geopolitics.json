@@ -1,6 +1,66 @@
 {
-  "title": "GEOPOLITICĂ",
   "messages": {
-    "loading": "Se încarcă datele..."
+    "retry": "[RO] RETRY"
+  },
+  "header": {
+    "prefix": "[RO] GEO>",
+    "title": "[RO] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[RO] EVENTS"
+  },
+  "status": {
+    "stale": "[RO] STALE",
+    "loading": "[RO] LOADING...",
+    "error": "[RO] ERROR:"
+  },
+  "filters": {
+    "country": "[RO] Country...",
+    "cities": "[RO] Cities...",
+    "category": "[RO] Category...",
+    "apply": "[RO] APPLY",
+    "clear": "[RO] CLEAR",
+    "clearAllCities": "[RO] Clear all cities",
+    "selectedLabel": "[RO] Selected:"
+  },
+  "panel": {
+    "title": "[RO] INFO PANEL",
+    "expand": "[RO] Expand panel",
+    "collapse": "[RO] Collapse panel",
+    "eventsLoaded": "[RO] EVENTS LOADED",
+    "onMapVisualization": "[RO] on map visualization",
+    "topCategories": "[RO] TOP CATEGORIES",
+    "topCountries": "[RO] TOP COUNTRIES",
+    "eventDetails": "[RO] EVENT DETAILS",
+    "close": "[RO] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[RO] Country:",
+    "city": "[RO] City:",
+    "keywords": "[RO] Keywords:",
+    "coords": "[RO] Coords:",
+    "date": "[RO] Date:",
+    "source": "[RO] Source:",
+    "viewArticle": "[RO] View Article"
+  },
+  "legend": {
+    "title": "[RO] EVENT CATEGORIES",
+    "armedConflict": "[RO] Armed Conflict",
+    "terrorism": "[RO] Terrorism",
+    "protests": "[RO] Protests",
+    "civilianViolence": "[RO] Civilian Violence",
+    "riots": "[RO] Riots",
+    "politicalViolence": "[RO] Political Violence",
+    "crisis": "[RO] Crisis",
+    "explosions": "[RO] Explosions",
+    "strategic": "[RO] Strategic",
+    "unclassified": "[RO] Unclassified"
+  },
+  "footer": {
+    "tabName": "[RO] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[RO] EVENTS",
+    "labelEngine": "[RO] ENGINE",
+    "engineValue": "[RO] DECK.GL v9.2",
+    "labelSource": "[RO] SOURCE",
+    "sourceValue": "[RO] NEWS-EVENTS API",
+    "labelSelected": "[RO] SELECTED"
   }
 }

@@ -32,7 +32,8 @@ import {
   Layers,
   AlertCircle,
   Cpu,
-  Server
+  Server,
+  Eye
 } from 'lucide-react';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
@@ -55,9 +56,10 @@ import { RollingRetrainingPanel } from './RollingRetrainingPanel';
 import { AdvancedModelsPanel } from './AdvancedModelsPanel';
 import { GluonTSPanel } from './GluonTSPanel';
 import { GsQuantPanel } from './GsQuantPanel';
+import { PatternIntelligencePanel } from './PatternIntelligencePanel';
 
 
-type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_signals' | 'functime' | 'fortitudo' | 'statsmodels' | 'cfa_quant' | 'deep_agent' | 'rl_trading' | 'online_learning' | 'hft' | 'meta_learning' | 'rolling_retraining' | 'advanced_models' | 'gluonts' | 'gs_quant';
+type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_signals' | 'functime' | 'fortitudo' | 'statsmodels' | 'cfa_quant' | 'deep_agent' | 'rl_trading' | 'online_learning' | 'hft' | 'meta_learning' | 'rolling_retraining' | 'advanced_models' | 'gluonts' | 'gs_quant' | 'pattern_intelligence';
 
 interface ModuleItem {
   id: ViewMode;
@@ -214,7 +216,10 @@ export default function AIQuantLabTab() {
     { id: 'statsmodels', label: 'Statsmodels', shortLabel: 'STATS', icon: Sigma, category: 'Analytics', color: moduleColors.cyan },
     { id: 'cfa_quant', label: 'CFA Quant', shortLabel: 'CFA', icon: Calculator, category: 'Analytics', color: moduleColors.orange },
     { id: 'gluonts', label: 'GluonTS', shortLabel: 'GLUON', icon: Brain, category: 'Analytics', color: moduleColors.magenta },
-    { id: 'gs_quant', label: 'GS Quant', shortLabel: 'GS-Q', icon: Sigma, category: 'Analytics', color: moduleColors.purple }
+    { id: 'gs_quant', label: 'GS Quant', shortLabel: 'GS-Q', icon: Sigma, category: 'Analytics', color: moduleColors.purple },
+
+    // AI/ML
+    { id: 'pattern_intelligence', label: 'Pattern Intelligence', shortLabel: 'PATTERN', icon: Eye, category: 'AI/ML', color: moduleColors.cyan }
   ];
 
   const activeModule = modules.find(m => m.id === state.activeView) || modules[0];
@@ -523,6 +528,7 @@ export default function AIQuantLabTab() {
             {state.activeView === 'cfa_quant' && <CFAQuantPanel />}
             {state.activeView === 'gluonts' && <GluonTSPanel />}
             {state.activeView === 'gs_quant' && <GsQuantPanel />}
+            {state.activeView === 'pattern_intelligence' && <PatternIntelligencePanel />}
           </div>
         </div>
 

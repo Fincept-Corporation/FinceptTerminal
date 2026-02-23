@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-numerical/quantlibNumericalApi.ts
 // 28 endpoints — differentiation, FFT, integration, interpolation, linalg, ODE, roots, optimize, least squares
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 let _apiKey: string | null = null;
 export function setNumericalApiKey(key: string | null) { _apiKey = key; }
 

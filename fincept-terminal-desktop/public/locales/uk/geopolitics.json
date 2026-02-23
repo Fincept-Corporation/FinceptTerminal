@@ -1,6 +1,66 @@
 {
-  "title": "ГЕОПОЛІТИКА",
   "messages": {
-    "loading": "Завантаження даних..."
+    "retry": "[UK] RETRY"
+  },
+  "header": {
+    "prefix": "[UK] GEO>",
+    "title": "[UK] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[UK] EVENTS"
+  },
+  "status": {
+    "stale": "[UK] STALE",
+    "loading": "[UK] LOADING...",
+    "error": "[UK] ERROR:"
+  },
+  "filters": {
+    "country": "[UK] Country...",
+    "cities": "[UK] Cities...",
+    "category": "[UK] Category...",
+    "apply": "[UK] APPLY",
+    "clear": "[UK] CLEAR",
+    "clearAllCities": "[UK] Clear all cities",
+    "selectedLabel": "[UK] Selected:"
+  },
+  "panel": {
+    "title": "[UK] INFO PANEL",
+    "expand": "[UK] Expand panel",
+    "collapse": "[UK] Collapse panel",
+    "eventsLoaded": "[UK] EVENTS LOADED",
+    "onMapVisualization": "[UK] on map visualization",
+    "topCategories": "[UK] TOP CATEGORIES",
+    "topCountries": "[UK] TOP COUNTRIES",
+    "eventDetails": "[UK] EVENT DETAILS",
+    "close": "[UK] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[UK] Country:",
+    "city": "[UK] City:",
+    "keywords": "[UK] Keywords:",
+    "coords": "[UK] Coords:",
+    "date": "[UK] Date:",
+    "source": "[UK] Source:",
+    "viewArticle": "[UK] View Article"
+  },
+  "legend": {
+    "title": "[UK] EVENT CATEGORIES",
+    "armedConflict": "[UK] Armed Conflict",
+    "terrorism": "[UK] Terrorism",
+    "protests": "[UK] Protests",
+    "civilianViolence": "[UK] Civilian Violence",
+    "riots": "[UK] Riots",
+    "politicalViolence": "[UK] Political Violence",
+    "crisis": "[UK] Crisis",
+    "explosions": "[UK] Explosions",
+    "strategic": "[UK] Strategic",
+    "unclassified": "[UK] Unclassified"
+  },
+  "footer": {
+    "tabName": "[UK] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[UK] EVENTS",
+    "labelEngine": "[UK] ENGINE",
+    "engineValue": "[UK] DECK.GL v9.2",
+    "labelSource": "[UK] SOURCE",
+    "sourceValue": "[UK] NEWS-EVENTS API",
+    "labelSelected": "[UK] SELECTED"
   }
 }

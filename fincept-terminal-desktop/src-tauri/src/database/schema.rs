@@ -69,7 +69,7 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
 
         -- Insert default Fincept LLM config if not exists
         INSERT OR IGNORE INTO llm_configs (provider, api_key, base_url, model, is_active)
-        VALUES ('fincept', '', 'https://finceptbackend.share.zrok.io/research/llm', 'fincept-llm', 1);
+        VALUES ('fincept', '', 'https://api.fincept.in/research/llm', 'fincept-llm', 1);
 
         -- Chat sessions table
         CREATE TABLE IF NOT EXISTS chat_sessions (

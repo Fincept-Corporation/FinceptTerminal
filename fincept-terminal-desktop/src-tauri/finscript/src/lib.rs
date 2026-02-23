@@ -8,7 +8,15 @@ pub mod types;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Instant;
-use types::OhlcvSeries;
+
+// Re-export core types for consumers
+pub use types::OhlcvSeries;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntegrationAction {
+    pub action_type: String,
+    pub payload: serde_json::Value,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinScriptResult {
@@ -19,6 +27,7 @@ pub struct FinScriptResult {
     pub errors: Vec<String>,
     pub alerts: Vec<AlertInfo>,
     pub drawings: Vec<DrawingInfo>,
+    pub integration_actions: Vec<IntegrationAction>,
     pub execution_time_ms: u64,
 }
 
@@ -69,54 +78,21 @@ pub struct DrawingInfo {
     pub width: f64,
 }
 
-/// Execute a FinScript program and return the result as JSON-serializable struct.
-pub fn execute(code: &str) -> FinScriptResult {
-    let start = Instant::now();
+fn build_error_result(start: Instant, msg: String) -> FinScriptResult {
+    FinScriptResult {
+        success: false,
+        output: String::new(),
+        signals: vec![],
+        plots: vec![],
+        errors: vec![msg],
+        alerts: vec![],
+        drawings: vec![],
+        integration_actions: vec![],
+        execution_time_ms: start.elapsed().as_millis() as u64,
+    }
+}
 
-    // 1. Tokenize
-    let tokens = match lexer::tokenize(code) {
-        Ok(t) => t,
-        Err(e) => {
-            return FinScriptResult {
-                success: false,
-                output: String::new(),
-                signals: vec![],
-                plots: vec![],
-                errors: vec![format!("Lexer error: {}", e)],
-                alerts: vec![],
-                drawings: vec![],
-                execution_time_ms: start.elapsed().as_millis() as u64,
-            };
-        }
-    };
-
-    // 2. Parse
-    let program = match parser::parse(tokens) {
-        Ok(p) => p,
-        Err(e) => {
-            return FinScriptResult {
-                success: false,
-                output: String::new(),
-                signals: vec![],
-                plots: vec![],
-                errors: vec![format!("Parse error: {}", e)],
-                alerts: vec![],
-                drawings: vec![],
-                execution_time_ms: start.elapsed().as_millis() as u64,
-            };
-        }
-    };
-
-    // 3. Collect symbols & generate data
-    let symbols = interpreter::collect_symbols(&program);
-    let symbol_data = generate_symbol_data(&symbols);
-
-    // 4. Interpret
-    let mut interp = interpreter::Interpreter::new(symbol_data);
-    let result = interp.execute(&program);
-
-    let execution_time_ms = start.elapsed().as_millis() as u64;
-
+fn build_result(result: interpreter::InterpreterResult, start: Instant) -> FinScriptResult {
     FinScriptResult {
         success: result.errors.is_empty(),
         output: result.output,
@@ -125,8 +101,62 @@ pub fn execute(code: &str) -> FinScriptResult {
         errors: result.errors,
         alerts: result.alerts,
         drawings: result.drawings,
-        execution_time_ms,
+        integration_actions: result.integration_actions,
+        execution_time_ms: start.elapsed().as_millis() as u64,
     }
+}
+
+/// Execute a FinScript program with synthetic demo data.
+/// Symbols referenced in the code get deterministic random-walk OHLCV data.
+pub fn execute(code: &str) -> FinScriptResult {
+    let start = Instant::now();
+
+    let tokens = match lexer::tokenize(code) {
+        Ok(t) => t,
+        Err(e) => return build_error_result(start, format!("Lexer error: {}", e)),
+    };
+
+    let program = match parser::parse(tokens) {
+        Ok(p) => p,
+        Err(e) => return build_error_result(start, format!("Parse error: {}", e)),
+    };
+
+    let symbols = interpreter::collect_symbols(&program);
+    let symbol_data = generate_symbol_data(&symbols);
+
+    let mut interp = interpreter::Interpreter::new(symbol_data);
+    let result = interp.execute(&program);
+
+    build_result(result, start)
+}
+
+/// Execute a FinScript program with externally-provided OHLCV data.
+/// Used for live market data integration from the Tauri host.
+pub fn execute_with_data(code: &str, symbol_data: HashMap<String, OhlcvSeries>) -> FinScriptResult {
+    let start = Instant::now();
+
+    let tokens = match lexer::tokenize(code) {
+        Ok(t) => t,
+        Err(e) => return build_error_result(start, format!("Lexer error: {}", e)),
+    };
+
+    let program = match parser::parse(tokens) {
+        Ok(p) => p,
+        Err(e) => return build_error_result(start, format!("Parse error: {}", e)),
+    };
+
+    let mut interp = interpreter::Interpreter::new(symbol_data);
+    let result = interp.execute(&program);
+
+    build_result(result, start)
+}
+
+/// Parse code and return the list of ticker symbols referenced in the AST.
+/// The host uses this to know which symbols to fetch data for before execution.
+pub fn extract_symbols(code: &str) -> Result<Vec<String>, String> {
+    let tokens = lexer::tokenize(code).map_err(|e| format!("Lexer error: {}", e))?;
+    let program = parser::parse(tokens).map_err(|e| format!("Parse error: {}", e))?;
+    Ok(interpreter::collect_symbols(&program))
 }
 
 /// Generate synthetic OHLCV data for symbols using a deterministic random walk.

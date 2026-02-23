@@ -1,7 +1,7 @@
 // File: src/contexts/LanguageContext.tsx
 // Language context for managing application language and translations
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { saveSetting, getSetting } from '@/services/core/sqliteService';
 
@@ -53,12 +53,18 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
   const { i18n } = useTranslation();
   const [currentLanguage, setCurrentLanguage] = useState(i18n.language || 'en');
   const [isRTL, setIsRTL] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     // Load saved language from storage on mount
     const loadLanguage = async () => {
       const savedLanguage = await getSetting('i18nextLng');
-      if (savedLanguage && languages.find(lang => lang.code === savedLanguage)) {
+      if (mountedRef.current && savedLanguage && languages.find(lang => lang.code === savedLanguage)) {
         changeLanguage(savedLanguage);
       }
     };

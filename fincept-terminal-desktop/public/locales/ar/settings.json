@@ -10,7 +10,8 @@
     "tabLayout": "تخطيط علامة التبويب",
     "appearance": "مظهر",
     "language": "لغة",
-    "storage": "التخزين وذاكرة التخزين المؤقت"
+    "storage": "التخزين وذاكرة التخزين المؤقت",
+    "notifications": "[AR] Notifications"
   },
   "credentials": {
     "title": "إدارة بيانات اعتماد API",
@@ -46,7 +47,31 @@
     "saveConfig": "حفظ التكوين",
     "reset": "إعادة ضبط",
     "saveSuccess": "تم حفظ مظهر المحطة الطرفية وتعيينات المفاتيح بنجاح",
-    "resetSuccess": "إعادة التعيين إلى المظهر الافتراضي وتعيينات المفاتيح"
+    "resetSuccess": "إعادة التعيين إلى المظهر الافتراضي وتعيينات المفاتيح",
+    "customColors": "[AR] Custom Colors",
+    "customColorsTitle": "[AR] CUSTOM COLORS",
+    "colorPrimary": "[AR] Primary",
+    "colorSecondary": "[AR] Secondary",
+    "colorSuccess": "[AR] Success",
+    "colorAlert": "[AR] Alert",
+    "colorWarning": "[AR] Warning",
+    "colorInfo": "[AR] Info",
+    "colorAccent": "[AR] Accent",
+    "colorPurple": "[AR] Purple",
+    "colorText": "[AR] Text",
+    "colorTextMuted": "[AR] Text Muted",
+    "colorBackground": "[AR] Background",
+    "colorPanel": "[AR] Panel",
+    "layoutSpacing": "[AR] LAYOUT & SPACING",
+    "contentDensity": "[AR] CONTENT DENSITY",
+    "borderRadius": "[AR] BORDER RADIUS",
+    "borderStyle": "[AR] BORDER STYLE",
+    "lineHeight": "[AR] LINE HEIGHT",
+    "letterSpacing": "[AR] LETTER SPACING",
+    "effects": "[AR] EFFECTS",
+    "widgetOpacity": "[AR] WIDGET OPACITY",
+    "enableGlow": "[AR] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[AR] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "قاعدة بيانات رمز الأسهم",
@@ -65,17 +90,8 @@
     "tip": "نصيحة: اسحب علامات التبويب لإعادة ترتيبها. استخدم أزرار الأسهم لتحريك علامات التبويب بين أقسام الرأس والقائمة. يتم حفظ التغييرات تلقائيا."
   },
   "llm": {
-    "title": "تكوين ماجستير",
-    "description": "تكوين نماذج وموفري الذكاء الاصطناعي",
     "connected": "متصل",
-    "disconnected": "غير متصل",
-    "provider": "مزود الذكاء الاصطناعي",
-    "globalSettings": "إعدادات الذكاء الاصطناعي العالمية",
-    "temperature": "درجة حرارة",
-    "maxTokens": "الحد الأقصى من الرموز",
-    "systemPrompt": "موجه النظام",
-    "modelLibrary": "المكتبة النموذجية",
-    "multiModelConfigs": "تكوينات متعددة النماذج"
+    "disconnected": "غير متصل"
   },
   "buttons": {
     "save": "يحفظ",
@@ -86,5 +102,18 @@
     "database": "قاعدة البيانات: سكليتي",
     "storage": "التخزين: قائم على الملفات",
     "secureStorage": "جميع البيانات مخزنة بشكل آمن في fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[AR] NOTIFICATION PROVIDERS",
+    "description": "[AR] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[AR] Event Filters",
+    "eventFilterDescription": "[AR] Choose which notification types to forward to external providers.",
+    "providers": "[AR] Providers",
+    "enabled": "[AR] Enabled",
+    "disabled": "[AR] Disabled",
+    "testButton": "[AR] TEST",
+    "testSuccess": "[AR] Test notification sent successfully!",
+    "testFailed": "[AR] Failed to send test notification. Check your configuration.",
+    "saved": "[AR] Configuration saved"
   }
 }

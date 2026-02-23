@@ -3,9 +3,7 @@
   "header": {
     "load": "[PL] Load",
     "save": "[PL] Save",
-    "saving": "[PL] Saving...",
-    "exportPdf": "[PL] Export PDF",
-    "generating": "[PL] Generating..."
+    "saving": "[PL] Saving..."
   },
   "components": {
     "title": "[PL] ADD COMPONENTS"

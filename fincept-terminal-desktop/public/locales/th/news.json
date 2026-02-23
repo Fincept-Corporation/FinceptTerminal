@@ -1,32 +1,63 @@
 {
   "title": "ข่าวมืออาชีพเทอร์มินัล FINCEPT",
   "header": {
-    "liveFeed": "ฟีดสด",
-    "live": "สด",
-    "refresh": "รีเฟรช",
-    "updating": "กำลังอัปเดต...",
-    "alerts": "การแจ้งเตือน",
-    "sources": "แหล่งข่าว",
-    "status": "สถานะ",
-    "demoMode": "โหมดสาธิต",
-    "articles": "บทความ",
-    "activeSources": "แหล่งข่าวที่ใช้งาน"
-  },
-  "autoRefresh": {
-    "title": "ช่วงเวลาอัปเดตอัตโนมัติ",
-    "minute": "นาที",
-    "minutes": "นาที"
+    "refresh": "รีเฟรช"
   },
   "messages": {
-    "loadingFeeds": "กำลังโหลดฟีดข่าว...",
-    "breaking": "ด่วน"
+    "loadingFeedsModal": "[TH] Loading feeds...",
+    "failedToLoad": "[TH] Failed to load RSS feeds",
+    "noCustomFeeds": "[TH] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[TH] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[TH] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[TH] PRIMARY NEWS FEED",
-    "secondary": "[TH] SECONDARY NEWS FEED",
-    "additional": "[TH] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[TH] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[TH] RSS FEED SETTINGS",
+    "subtitle": "[TH] MANAGE YOUR NEWS SOURCES",
+    "close": "[TH] CLOSE",
+    "myFeeds": "[TH] MY FEEDS",
+    "defaultFeeds": "[TH] DEFAULT FEEDS",
+    "noFeedsAvailable": "[TH] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[TH] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[TH] ADD NEW FEED",
+    "addNewRssFeed": "[TH] ADD NEW RSS FEED",
+    "editRssFeed": "[TH] EDIT RSS FEED",
+    "restoreDefaults": "[TH] RESTORE DEFAULTS",
+    "restoreAll": "[TH] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[TH] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[TH] DISPLAY NAME",
+    "sourceName": "[TH] SOURCE NAME (SHORT)",
+    "feedUrl": "[TH] RSS FEED URL",
+    "category": "[TH] CATEGORY",
+    "region": "[TH] REGION",
+    "required": "[TH] *",
+    "testUrl": "[TH] TEST URL",
+    "testing": "[TH] TESTING...",
+    "valid": "[TH] VALID",
+    "cancel": "[TH] CANCEL",
+    "saving": "[TH] SAVING...",
+    "addFeed": "[TH] ADD FEED",
+    "updateFeed": "[TH] UPDATE FEED",
+    "on": "[TH] ON",
+    "off": "[TH] OFF",
+    "default": "[TH] DEFAULT",
+    "total": "[TH] TOTAL",
+    "active": "[TH] ACTIVE",
+    "custom": "[TH] CUSTOM",
+    "placeholders": {
+      "displayName": "[TH] e.g., Bloomberg Markets",
+      "sourceName": "[TH] e.g., BLOOMBERG",
+      "feedUrl": "[TH] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[TH] Name is required",
+      "sourceRequired": "[TH] Source name is required",
+      "invalidUrl": "[TH] Please enter a valid URL",
+      "invalidRss": "[TH] URL does not appear to be a valid RSS feed",
+      "testFailed": "[TH] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[TH] Delete this RSS feed?",
+      "message": "[TH] This action cannot be undone."
+    }
   }
 }

@@ -1,29 +1,60 @@
 {
-  "title": "РЕДАКТОР КОДА",
   "header": {
-    "packages": "ПАКЕТЫ"
+    "finscriptIde": "[RU] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "НОВЫЙ ФАЙЛ",
-    "new": "НОВЫЙ",
-    "open": "ОТКРЫТЬ",
-    "save": "СОХРАНИТЬ",
     "run": "ВЫПОЛНИТЬ",
     "running": "ВЫПОЛНЯЕТСЯ...",
-    "runAll": "ВЫПОЛНИТЬ ВСЁ",
-    "history": "ИСТОРИЯ"
+    "toggleExplorer": "[RU] Toggle Explorer (Ctrl+B)",
+    "openFile": "[RU] Open File",
+    "saveShortcut": "[RU] Save (Ctrl+S)",
+    "findShortcut": "[RU] Find (Ctrl+F)",
+    "runShortcut": "[RU] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "РЕДАКТОР FINSCRIPT"
   },
-  "packages": {
-    "clickToLoad": "Нажмите для загрузки...",
-    "load": "ЗАГРУЗИТЬ ПАКЕТЫ"
+  "explorer": {
+    "title": "[RU] EXPLORER",
+    "openFiles": "[RU] OPEN FILES",
+    "examples": "[RU] EXAMPLES",
+    "runHistory": "[RU] RUN HISTORY",
+    "finscriptEngine": "[RU] FinScript Engine"
   },
-  "history": {
-    "title": "ИСТОРИЯ НОУТБУКОВ",
-    "loading": "Загрузка истории...",
-    "empty": "История ноутбуков пуста"
+  "output": {
+    "title": "[RU] OUTPUT",
+    "success": "[RU] SUCCESS",
+    "error": "[RU] ERROR",
+    "executing": "[RU] EXECUTING FINSCRIPT...",
+    "noOutput": "[RU] No output yet",
+    "pressToRun": "[RU] Press Ctrl+Enter to run",
+    "completed": "[RU] COMPLETED",
+    "failed": "[RU] FAILED",
+    "signals": "[RU] signals",
+    "clear": "[RU] CLEAR",
+    "errors": "[RU] ERRORS",
+    "signalsSection": "[RU] SIGNALS",
+    "outputSection": "[RU] OUTPUT",
+    "charts": "[RU] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[RU] OHLC",
+    "histogram": "[RU] Histogram",
+    "line": "[RU] Line",
+    "points": "[RU] points"
+  },
+  "statusBar": {
+    "modified": "[RU] MODIFIED",
+    "showOutput": "[RU] SHOW OUTPUT",
+    "encoding": "[RU] UTF-8",
+    "spaces": "[RU] 4 Spaces",
+    "runShortcut": "[RU] Ctrl+Enter: Run",
+    "lines": "[RU] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[RU] Close file without saving?",
+    "unsavedChanges": "[RU] You have unsaved changes."
   }
 }

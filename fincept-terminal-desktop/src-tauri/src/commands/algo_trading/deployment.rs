@@ -1,12 +1,78 @@
 //! Deployment lifecycle management
 //!
 //! Handles algo strategy deployment, monitoring, and termination.
+//! Includes process reaping, PID verification, and candle aggregation cleanup.
 
 use crate::database::pool::get_db;
 use serde_json::json;
 
 use super::helpers::{get_algo_scripts_dir, get_main_db_path_str};
 use super::candles::prefetch_historical_candles;
+
+/// Maximum number of concurrent deployments allowed (rate limiting)
+const MAX_CONCURRENT_DEPLOYMENTS: i64 = 10;
+
+/// Verify that a PID belongs to a Python algo runner process (not a recycled PID).
+/// Returns true if the process appears to be our algo runner, false otherwise.
+fn verify_pid_is_algo_runner(pid: i64) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        let output = std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+            .output();
+        match output {
+            Ok(o) => {
+                let stdout = String::from_utf8_lossy(&o.stdout).to_lowercase();
+                stdout.contains("python")
+            }
+            Err(_) => false,
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let cmdline_path = format!("/proc/{}/cmdline", pid);
+        match std::fs::read_to_string(&cmdline_path) {
+            Ok(cmdline) => cmdline.contains("algo_live_runner"),
+            Err(_) => false,
+        }
+    }
+}
+
+/// Safely kill a process after verifying it is our algo runner.
+/// Returns true if the process was killed, false if verification failed or kill failed.
+fn safe_kill_algo_process(pid: i64) -> bool {
+    if !verify_pid_is_algo_runner(pid) {
+        eprintln!("[AlgoDeploy] PID {} is not a Python algo runner, skipping kill", pid);
+        return false;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let result = std::process::Command::new("taskkill")
+            .args(["/F", "/PID", &pid.to_string()])
+            .output();
+        match result {
+            Ok(o) => o.status.success(),
+            Err(e) => {
+                eprintln!("[AlgoDeploy] Failed to kill PID {}: {}", pid, e);
+                false
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let result = std::process::Command::new("kill")
+            .arg(pid.to_string())
+            .output();
+        match result {
+            Ok(o) => o.status.success(),
+            Err(e) => {
+                eprintln!("[AlgoDeploy] Failed to kill PID {}: {}", pid, e);
+                false
+            }
+        }
+    }
+}
 
 /// Deploy an algo strategy (spawn Python algo_live_runner.py as background process)
 #[tauri::command]
@@ -41,12 +107,23 @@ pub async fn deploy_algo_strategy(
     println!("[AlgoDeploy] Strategy: {}, Symbol: {}, Mode: {}, TF: {}, Qty: {}", strategy_id, symbol, deploy_mode, deploy_timeframe, deploy_qty);
     println!("[AlgoDeploy] Provider: '{}', Params: {}", deploy_provider, deploy_params);
 
+    // Rate limit: max concurrent deployments
+    let conn = get_db().map_err(|e| e.to_string())?;
+    let running_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM algo_deployments WHERE status IN ('running', 'starting')",
+        [],
+        |r| r.get(0),
+    ).unwrap_or(0);
+    if running_count >= MAX_CONCURRENT_DEPLOYMENTS {
+        return Ok(json!({
+            "success": false,
+            "error": format!("Maximum {} concurrent deployments allowed. Stop an existing deployment first.", MAX_CONCURRENT_DEPLOYMENTS)
+        }).to_string());
+    }
+
     // Generate deployment ID
     let deploy_id = format!("algo-{}", uuid::Uuid::new_v4());
     println!("[AlgoDeploy] Deploy ID: {}", deploy_id);
-
-    // Insert deployment record
-    let conn = get_db().map_err(|e| e.to_string())?;
     conn.execute(
         "INSERT INTO algo_deployments (id, strategy_id, symbol, provider, mode, status, timeframe, quantity, params)
          VALUES (?1, ?2, ?3, ?4, ?5, 'starting', ?6, ?7, ?8)",
@@ -68,10 +145,12 @@ pub async fn deploy_algo_strategy(
 
     if !runner_path.exists() {
         // Update deployment status to error
-        let _ = conn.execute(
+        if let Err(e) = conn.execute(
             "UPDATE algo_deployments SET status = 'error', error_message = 'Runner script not found' WHERE id = ?1",
             rusqlite::params![deploy_id],
-        );
+        ) {
+            eprintln!("[AlgoDeploy] DB update failed: {}", e);
+        }
         return Ok(json!({
             "success": false,
             "error": "algo_live_runner.py not found"
@@ -118,15 +197,50 @@ pub async fn deploy_algo_strategy(
         .spawn();
 
     match child {
-        Ok(child) => {
+        Ok(mut child) => {
             let pid = child.id();
             println!("[AlgoDeploy] Python runner spawned OK, PID={}", pid);
 
             // Update deployment with PID and running status
-            let _ = conn.execute(
+            if let Err(e) = conn.execute(
                 "UPDATE algo_deployments SET status = 'running', pid = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
                 rusqlite::params![pid as i64, deploy_id],
-            );
+            ) {
+                eprintln!("[AlgoDeploy] DB update failed: {}", e);
+            }
+
+            // Spawn a background reaper task to wait for the child process.
+            // This prevents zombie processes and auto-updates DB status if the runner crashes.
+            let reaper_deploy_id = deploy_id.clone();
+            tokio::spawn(async move {
+                let exit_status = tokio::task::spawn_blocking(move || child.wait()).await;
+                match exit_status {
+                    Ok(Ok(status)) => {
+                        let new_status = if status.success() { "stopped" } else { "error" };
+                        let error_msg = if status.success() {
+                            None
+                        } else {
+                            Some(format!("Runner exited with code: {:?}", status.code()))
+                        };
+                        println!("[AlgoReaper] Deployment {} runner exited: {:?}", reaper_deploy_id, status);
+                        if let Ok(conn) = get_db() {
+                            // Only update if still marked as 'running' (avoid overwriting manual stop)
+                            if let Err(e) = conn.execute(
+                                "UPDATE algo_deployments SET status = ?1, error_message = COALESCE(?2, error_message), updated_at = CURRENT_TIMESTAMP WHERE id = ?3 AND status = 'running'",
+                                rusqlite::params![new_status, error_msg, reaper_deploy_id],
+                            ) {
+                                eprintln!("[AlgoReaper] DB update failed for {}: {}", reaper_deploy_id, e);
+                            }
+                        }
+                    }
+                    Ok(Err(e)) => {
+                        eprintln!("[AlgoReaper] Failed to wait for deployment {}: {}", reaper_deploy_id, e);
+                    }
+                    Err(e) => {
+                        eprintln!("[AlgoReaper] Spawn blocking error for {}: {}", reaper_deploy_id, e);
+                    }
+                }
+            });
 
             // Auto-start candle aggregation for this symbol+timeframe
             // IMPORTANT: For Indian brokers, normalize symbol format to match WebSocket ticks
@@ -209,10 +323,12 @@ pub async fn deploy_algo_strategy(
             }).to_string())
         }
         Err(e) => {
-            let _ = conn.execute(
+            if let Err(db_err) = conn.execute(
                 "UPDATE algo_deployments SET status = 'error', error_message = ?1 WHERE id = ?2",
                 rusqlite::params![format!("Failed to spawn: {}", e), deploy_id],
-            );
+            ) {
+                eprintln!("[AlgoDeploy] DB update failed: {}", db_err);
+            }
             Ok(json!({
                 "success": false,
                 "error": format!("Failed to spawn runner: {}", e)
@@ -221,33 +337,34 @@ pub async fn deploy_algo_strategy(
     }
 }
 
-/// Stop a running algo deployment (kill process, update DB)
+/// Stop a running algo deployment (kill process, cleanup candle subscriptions, update DB)
 #[tauri::command]
-pub async fn stop_algo_deployment(deploy_id: String) -> Result<String, String> {
+pub async fn stop_algo_deployment(
+    state: tauri::State<'_, crate::WebSocketState>,
+    deploy_id: String,
+) -> Result<String, String> {
     let conn = get_db().map_err(|e| e.to_string())?;
 
-    // Get PID from deployment record
-    let pid_result: Result<Option<i64>, _> = conn.query_row(
-        "SELECT pid FROM algo_deployments WHERE id = ?1 AND status = 'running'",
+    // Get PID, symbol, and timeframe from deployment record
+    let deploy_info: Result<(Option<i64>, String, String), _> = conn.query_row(
+        "SELECT pid, symbol, timeframe FROM algo_deployments WHERE id = ?1 AND status = 'running'",
         rusqlite::params![deploy_id],
-        |row| row.get(0),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     );
 
-    match pid_result {
-        Ok(Some(pid)) => {
-            // Kill the process
-            #[cfg(target_os = "windows")]
-            {
-                let _ = std::process::Command::new("taskkill")
-                    .args(["/F", "/PID", &pid.to_string()])
-                    .output();
+    match deploy_info {
+        Ok((pid, symbol, timeframe)) => {
+            if let Some(pid) = pid {
+                // Verify PID is our runner before killing (prevents killing recycled PIDs)
+                safe_kill_algo_process(pid);
             }
-            #[cfg(not(target_os = "windows"))]
-            {
-                let _ = std::process::Command::new("kill")
-                    .arg(pid.to_string())
-                    .output();
-            }
+
+            // Cleanup candle aggregation subscriptions
+            let services = state.services.read().await;
+            services.candle_aggregator.remove_subscription(symbol.clone(), timeframe.clone()).await;
+            // Also remove exchange-prefixed variant
+            let prefixed = format!("NSE:{}", symbol);
+            services.candle_aggregator.remove_subscription(prefixed, timeframe).await;
 
             // Update status
             conn.execute(
@@ -257,14 +374,6 @@ pub async fn stop_algo_deployment(deploy_id: String) -> Result<String, String> {
             .map_err(|e| format!("Failed to update deployment: {}", e))?;
 
             Ok(json!({ "success": true, "stopped": true }).to_string())
-        }
-        Ok(None) => {
-            // No PID but try to update status anyway
-            let _ = conn.execute(
-                "UPDATE algo_deployments SET status = 'stopped', stopped_at = CURRENT_TIMESTAMP WHERE id = ?1",
-                rusqlite::params![deploy_id],
-            );
-            Ok(json!({ "success": true, "stopped": true, "note": "No PID found" }).to_string())
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => {
             Ok(json!({ "success": false, "error": "Deployment not found or not running" }).to_string())
@@ -295,23 +404,14 @@ pub async fn stop_all_algo_deployments() -> Result<String, String> {
 
     let mut stopped = 0;
     for (id, pid) in &deployments {
-        #[cfg(target_os = "windows")]
-        {
-            let _ = std::process::Command::new("taskkill")
-                .args(["/F", "/PID", &pid.to_string()])
-                .output();
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            let _ = std::process::Command::new("kill")
-                .arg(pid.to_string())
-                .output();
-        }
+        safe_kill_algo_process(*pid);
 
-        let _ = conn.execute(
+        if let Err(e) = conn.execute(
             "UPDATE algo_deployments SET status = 'stopped', stopped_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
             rusqlite::params![id],
-        );
+        ) {
+            eprintln!("[AlgoStopAll] DB update failed for {}: {}", id, e);
+        }
         stopped += 1;
     }
 
@@ -335,37 +435,32 @@ pub async fn delete_algo_deployment(deploy_id: String) -> Result<String, String>
 
     match status_result {
         Ok((status, pid)) => {
-            // Kill process if still running
+            // Kill process if still running (with PID verification)
             if status == "running" {
                 if let Some(pid) = pid {
-                    #[cfg(target_os = "windows")]
-                    {
-                        let _ = std::process::Command::new("taskkill")
-                            .args(["/F", "/PID", &pid.to_string()])
-                            .output();
-                    }
-                    #[cfg(not(target_os = "windows"))]
-                    {
-                        let _ = std::process::Command::new("kill")
-                            .arg(pid.to_string())
-                            .output();
-                    }
+                    safe_kill_algo_process(pid);
                 }
             }
 
             // Delete associated records (trades, metrics, order signals)
-            let _ = conn.execute(
+            if let Err(e) = conn.execute(
                 "DELETE FROM algo_trades WHERE deployment_id = ?1",
                 rusqlite::params![deploy_id],
-            );
-            let _ = conn.execute(
+            ) {
+                eprintln!("[AlgoDelete] Failed to delete trades for {}: {}", deploy_id, e);
+            }
+            if let Err(e) = conn.execute(
                 "DELETE FROM algo_metrics WHERE deployment_id = ?1",
                 rusqlite::params![deploy_id],
-            );
-            let _ = conn.execute(
+            ) {
+                eprintln!("[AlgoDelete] Failed to delete metrics for {}: {}", deploy_id, e);
+            }
+            if let Err(e) = conn.execute(
                 "DELETE FROM algo_order_signals WHERE deployment_id = ?1",
                 rusqlite::params![deploy_id],
-            );
+            ) {
+                eprintln!("[AlgoDelete] Failed to delete signals for {}: {}", deploy_id, e);
+            }
 
             // Delete the deployment itself
             conn.execute(
@@ -440,7 +535,15 @@ pub async fn list_algo_deployments() -> Result<String, String> {
         })
         .map_err(|e| format!("Failed to query deployments: {}", e))?;
 
-    let deployments: Vec<serde_json::Value> = rows.filter_map(|r| r.ok()).collect();
+    let deployments: Vec<serde_json::Value> = rows
+        .filter_map(|r| match r {
+            Ok(v) => Some(v),
+            Err(e) => {
+                eprintln!("[AlgoList] Failed to parse deployment row: {}", e);
+                None
+            }
+        })
+        .collect();
 
     // Log deployment list summary to console (only when there are running deployments)
     let running_count = deployments.iter().filter(|d| d.get("status").and_then(|s| s.as_str()) == Some("running")).count();

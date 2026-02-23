@@ -1,29 +1,60 @@
 {
-  "title": "TRÌNH SOẠN MÃ",
   "header": {
-    "packages": "GÓI"
+    "finscriptIde": "[VI] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "TỆP MỚI",
-    "new": "MỚI",
-    "open": "MỞ",
-    "save": "LƯU",
     "run": "CHẠY",
     "running": "ĐANG CHẠY...",
-    "runAll": "CHẠY TẤT CẢ",
-    "history": "LỊCH SỬ"
+    "toggleExplorer": "[VI] Toggle Explorer (Ctrl+B)",
+    "openFile": "[VI] Open File",
+    "saveShortcut": "[VI] Save (Ctrl+S)",
+    "findShortcut": "[VI] Find (Ctrl+F)",
+    "runShortcut": "[VI] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "TRÌNH SOẠN FINSCRIPT"
   },
-  "packages": {
-    "clickToLoad": "Nhấn để tải...",
-    "load": "TẢI CÁC GÓI"
+  "explorer": {
+    "title": "[VI] EXPLORER",
+    "openFiles": "[VI] OPEN FILES",
+    "examples": "[VI] EXAMPLES",
+    "runHistory": "[VI] RUN HISTORY",
+    "finscriptEngine": "[VI] FinScript Engine"
   },
-  "history": {
-    "title": "LỊCH SỬ NOTEBOOK",
-    "loading": "Đang tải lịch sử...",
-    "empty": "Không có lịch sử notebook"
+  "output": {
+    "title": "[VI] OUTPUT",
+    "success": "[VI] SUCCESS",
+    "error": "[VI] ERROR",
+    "executing": "[VI] EXECUTING FINSCRIPT...",
+    "noOutput": "[VI] No output yet",
+    "pressToRun": "[VI] Press Ctrl+Enter to run",
+    "completed": "[VI] COMPLETED",
+    "failed": "[VI] FAILED",
+    "signals": "[VI] signals",
+    "clear": "[VI] CLEAR",
+    "errors": "[VI] ERRORS",
+    "signalsSection": "[VI] SIGNALS",
+    "outputSection": "[VI] OUTPUT",
+    "charts": "[VI] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[VI] OHLC",
+    "histogram": "[VI] Histogram",
+    "line": "[VI] Line",
+    "points": "[VI] points"
+  },
+  "statusBar": {
+    "modified": "[VI] MODIFIED",
+    "showOutput": "[VI] SHOW OUTPUT",
+    "encoding": "[VI] UTF-8",
+    "spaces": "[VI] 4 Spaces",
+    "runShortcut": "[VI] Ctrl+Enter: Run",
+    "lines": "[VI] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[VI] Close file without saving?",
+    "unsavedChanges": "[VI] You have unsaved changes."
   }
 }

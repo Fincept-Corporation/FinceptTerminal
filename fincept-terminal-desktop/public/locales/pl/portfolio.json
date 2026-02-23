@@ -1,63 +1,20 @@
 {
-    "title": "MENEDŻER PORTFELA FINCEPT",
-    "header": {
-        "live": "NA ŻYWO",
-        "updating": "AKTUALIZACJA",
-        "newPortfolio": "NOWY PORTFEL",
-        "refresh": "ODŚWIEŻ",
-        "exportCsv": "EKSPORT CSV"
-    },
-    "summary": {
-        "totalValue": "WARTOŚĆ CAŁKOWITA",
-        "dayPnl": "Z/S DNIA",
-        "totalPnl": "CAŁKOWITY Z/S",
-        "positions": "POZYCJE"
-    },
-    "views": {
-        "positions": "POZYCJE",
-        "addAsset": "DODAJ AKTYWO",
-        "sellAsset": "SPRZEDAJ AKTYWO",
-        "analytics": "ANALITYKA",
-        "history": "HISTORIA",
-        "activeMgmt": "AKTYWNE ZARZĄDZANIE",
-        "performance": "WYDAJNOŚĆ",
-        "rebalance": "REBALANS",
-        "reports": "RAPORTY",
-        "alerts": "ALERTY",
-        "sectors": "SEKTORY",
-        "help": "POMOC"
-    },
-    "sidebar": {
-        "portfolios": "PORTFELE",
-        "loading": "Ładowanie portfeli...",
-        "noPortfolios": "Brak portfeli.",
-        "clickCreate": "Kliknij NOWY PORTFEL aby utworzyć.",
-        "owner": "Właściciel",
-        "currency": "Waluta"
-    },
-    "content": {
-        "selectOrCreate": "Wybierz portfel lub utwórz nowy aby rozpocząć",
-        "loadingData": "Ładowanie danych portfela...",
-        "comingSoon": "widok wkrótce..."
-    },
-    "modals": {
-        "createNew": "UTWÓRZ NOWY PORTFEL",
-        "portfolioName": "NAZWA PORTFELA",
-        "owner": "WŁAŚCICIEL",
-        "currency": "WALUTA",
-        "cancel": "ANULUJ",
-        "create": "UTWÓRZ",
-        "addAssetTitle": "DODAJ AKTYWO DO PORTFELA",
-        "sellAssetTitle": "SPRZEDAJ AKTYWO",
-        "symbol": "SYMBOL",
-        "quantity": "ILOŚĆ",
-        "price": "CENA",
-        "add": "DODAJ",
-        "sell": "SPRZEDAJ"
-    },
-    "status": {
-        "version": "Fincept Portfolio Manager v2.1.0 | Śledzenie w czasie rzeczywistym z integracją yfinance",
-        "lastUpdated": "Ostatnia Aktualizacja",
-        "connected": "POŁĄCZONY"
-    }
+  "modals": {
+    "createNew": "UTWÓRZ NOWY PORTFEL",
+    "portfolioName": "NAZWA PORTFELA",
+    "owner": "WŁAŚCICIEL",
+    "currency": "WALUTA",
+    "cancel": "ANULUJ",
+    "create": "UTWÓRZ",
+    "addAssetTitle": "DODAJ AKTYWO DO PORTFELA",
+    "sellAssetTitle": "SPRZEDAJ AKTYWO",
+    "symbol": "SYMBOL",
+    "quantity": "ILOŚĆ",
+    "price": "CENA",
+    "add": "DODAJ",
+    "sell": "SPRZEDAJ"
+  },
+  "extracted": {
+    "areYouSureYou": "[PL] Are you sure you want to delete this portfolio? This action cannot be undone."
+  }
 }

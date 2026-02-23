@@ -29,13 +29,6 @@ pub struct StatusResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BrokerStatusesResponse {
-    pub success: bool,
-    pub statuses: Vec<MasterContractStatus>,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct CacheValidityResponse {
     pub success: bool,
     pub is_valid: bool,

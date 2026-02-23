@@ -1,32 +1,63 @@
 {
   "title": "FINCEPTターミナルプロフェッショナルニュース",
   "header": {
-    "liveFeed": "ライブフィード",
-    "live": "ライブ",
-    "refresh": "更新",
-    "updating": "更新中...",
-    "alerts": "アラート",
-    "sources": "ソース",
-    "status": "ステータス",
-    "demoMode": "デモモード",
-    "articles": "記事",
-    "activeSources": "アクティブソース"
-  },
-  "autoRefresh": {
-    "title": "自動更新間隔",
-    "minute": "分",
-    "minutes": "分"
+    "refresh": "更新"
   },
   "messages": {
-    "loadingFeeds": "フィードを読み込み中...",
-    "breaking": "速報"
+    "loadingFeedsModal": "[JA] Loading feeds...",
+    "failedToLoad": "[JA] Failed to load RSS feeds",
+    "noCustomFeeds": "[JA] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[JA] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[JA] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[JA] PRIMARY NEWS FEED",
-    "secondary": "[JA] SECONDARY NEWS FEED",
-    "additional": "[JA] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[JA] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[JA] RSS FEED SETTINGS",
+    "subtitle": "[JA] MANAGE YOUR NEWS SOURCES",
+    "close": "[JA] CLOSE",
+    "myFeeds": "[JA] MY FEEDS",
+    "defaultFeeds": "[JA] DEFAULT FEEDS",
+    "noFeedsAvailable": "[JA] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[JA] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[JA] ADD NEW FEED",
+    "addNewRssFeed": "[JA] ADD NEW RSS FEED",
+    "editRssFeed": "[JA] EDIT RSS FEED",
+    "restoreDefaults": "[JA] RESTORE DEFAULTS",
+    "restoreAll": "[JA] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[JA] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[JA] DISPLAY NAME",
+    "sourceName": "[JA] SOURCE NAME (SHORT)",
+    "feedUrl": "[JA] RSS FEED URL",
+    "category": "[JA] CATEGORY",
+    "region": "[JA] REGION",
+    "required": "[JA] *",
+    "testUrl": "[JA] TEST URL",
+    "testing": "[JA] TESTING...",
+    "valid": "[JA] VALID",
+    "cancel": "[JA] CANCEL",
+    "saving": "[JA] SAVING...",
+    "addFeed": "[JA] ADD FEED",
+    "updateFeed": "[JA] UPDATE FEED",
+    "on": "[JA] ON",
+    "off": "[JA] OFF",
+    "default": "[JA] DEFAULT",
+    "total": "[JA] TOTAL",
+    "active": "[JA] ACTIVE",
+    "custom": "[JA] CUSTOM",
+    "placeholders": {
+      "displayName": "[JA] e.g., Bloomberg Markets",
+      "sourceName": "[JA] e.g., BLOOMBERG",
+      "feedUrl": "[JA] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[JA] Name is required",
+      "sourceRequired": "[JA] Source name is required",
+      "invalidUrl": "[JA] Please enter a valid URL",
+      "invalidRss": "[JA] URL does not appear to be a valid RSS feed",
+      "testFailed": "[JA] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[JA] Delete this RSS feed?",
+      "message": "[JA] This action cannot be undone."
+    }
   }
 }

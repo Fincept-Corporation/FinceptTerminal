@@ -11,24 +11,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { useStockBrokerContextOptional } from '@/contexts/StockBrokerContext';
 import ParameterEditor from './ParameterEditor';
-
-const F = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-};
+import { F } from '../constants/theme';
 
 interface PythonDeployPanelProps {
   strategy: PythonStrategy;

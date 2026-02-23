@@ -219,36 +219,32 @@ interface PendingRequest<T> {
 }
 
 const pendingRequests = new Map<string, PendingRequest<unknown>>();
-const DEDUP_WINDOW_MS = 100;
+const DEDUP_WINDOW_MS = 2000;
 
 /**
- * Deduplicate concurrent requests with the same key
+ * Deduplicate identical concurrent requests within a time window.
+ * If a request with the same key is already in-flight, returns the existing promise.
  */
 export async function deduplicatedFetch<T>(
   key: string,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
 ): Promise<T> {
   const now = Date.now();
-
-  // Check for existing request
   const existing = pendingRequests.get(key);
+
   if (existing && now - existing.timestamp < DEDUP_WINDOW_MS) {
     return existing.promise as Promise<T>;
   }
 
-  // Create new request
-  const promise = fn();
-  pendingRequests.set(key, { promise, timestamp: now });
+  const promise = fn().finally(() => {
+    // Clean up after completion
+    const current = pendingRequests.get(key);
+    if (current && current.promise === promise) {
+      pendingRequests.delete(key);
+    }
+  });
 
-  try {
-    return await promise;
-  } finally {
-    // Cleanup after window
-    setTimeout(() => {
-      const current = pendingRequests.get(key);
-      if (current?.promise === promise) {
-        pendingRequests.delete(key);
-      }
-    }, DEDUP_WINDOW_MS);
-  }
+  pendingRequests.set(key, { promise, timestamp: now });
+  return promise;
 }
+

@@ -3,13 +3,7 @@ import { Plus, ChevronDown, ChevronRight, Zap, Layers, Sparkles } from 'lucide-r
 import type { ConditionItem } from '../types';
 import { getIndicatorDef } from '../constants/indicators';
 import ConditionRow from './ConditionRow';
-
-const F = {
-  ORANGE: '#FF8800', WHITE: '#FFFFFF', GRAY: '#787878', DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F', HEADER_BG: '#1A1A1A', BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F', CYAN: '#00E5FF', BLUE: '#0088FF', MUTED: '#4A4A4A',
-  GREEN: '#00D66F', RED: '#FF3B3B', YELLOW: '#FFD700', PURPLE: '#9D4EDD',
-};
+import { F } from '../constants/theme';
 
 interface ConditionBuilderProps {
   label: string;

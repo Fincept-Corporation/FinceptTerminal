@@ -1,410 +1,494 @@
-"""SEC Filing Scanner for M&A Deal Detection"""
+"""SEC Filing Scanner for M&A Deal Detection
+
+Real data sources (no mocks, no demo data):
+  1. SEC EDGAR Full-Text Search API  (efts.sec.gov)  — primary, no key needed
+  2. SEC EDGAR XBRL/REST API         (data.sec.gov)   — company-level filing index
+  3. SEC EDGAR submissions endpoint   (data.sec.gov/submissions/) — per-CIK filing history
+
+The scanner works without any third-party library such as edgartools.
+All HTTP calls use the standard library (urllib) so there are zero extra deps.
+"""
 import sys
 import json
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
 import re
+import time
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
+from urllib.parse import urlencode, quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 scripts_path = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(scripts_path))
 
-# Add Analytics path for absolute imports
 analytics_path = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(analytics_path))
 
-try:
-    from edgar_tools import Company, get_filings, Filing
-    EDGAR_AVAILABLE = True
-except ImportError:
-    try:
-        from edgartools import Company, get_filings, Filing
-        EDGAR_AVAILABLE = True
-    except ImportError:
-        # Fallback when edgartools is not available
-        EDGAR_AVAILABLE = False
-        Company = None
-        get_filings = None
-        Filing = None
-
-# Use absolute imports instead of relative imports
 from corporateFinance.config import MA_FILING_FORMS, MATERIAL_EVENT_ITEMS
 from corporateFinance.deal_database.database_schema import MADatabase
 
-class MADealScanner:
-    def __init__(self, db: Optional[MADatabase] = None):
-        self.db = db or MADatabase()
-        self.ma_keywords = [
-            'merger', 'acquisition', 'acquire', 'purchase', 'takeover',
-            'combination', 'consolidation', 'tender offer', 'definitive agreement',
-            'merger agreement', 'stock purchase', 'asset purchase', 'amalgamation'
-        ]
-        self.ma_patterns = [
-            r'(?:definitive|merger)\s+agreement',
-            r'acquire[ds]?\s+(?:all|substantially all)',
-            r'tender\s+offer',
-            r'cash\s+and\s+stock\s+(?:transaction|deal)',
-            r'purchase\s+price\s+of\s+\$[\d,\.]+\s*(?:million|billion)',
-            r'(?:merger|acquisition)\s+consideration'
-        ]
+# ---------------------------------------------------------------------------
+# HTTP helpers
+# ---------------------------------------------------------------------------
 
-    def scan_recent_filings(self, days_back: int = 30, max_workers: int = 5) -> List[Dict[str, Any]]:
-        """Scan recent SEC filings for M&A activity
+_EDGAR_HEADERS = {
+    "User-Agent": "Fincept Terminal contact@fincept.in",   # SEC requires a valid UA
+    "Accept": "application/json",
+}
 
-        Scans ALL companies in SEC EDGAR database for M&A-related filings:
-        - 8-K (Current Reports - Material Events)
-        - S-4 (Merger/Acquisition Registration)
-        - DEFM14A (Definitive Merger Proxy)
-        - PREM14A (Preliminary Merger Proxy)
-        - SC 13D (Beneficial Ownership >5%)
-        - 425 (Tender Offer/Merger Communication)
-        """
-
-        # If edgartools is not available, return mock/demo data
-        if not EDGAR_AVAILABLE:
-            print("[Scanner] edgartools not available, using demo data")
-            return self._get_demo_filings(days_back)
-
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days_back)
-
-        potential_deals = []
-
-        try:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = []
-                for form_type in MA_FILING_FORMS:
-                    future = executor.submit(self._scan_filing_type, form_type, start_date, end_date)
-                    futures.append(future)
-
-                for future in as_completed(futures):
-                    try:
-                        results = future.result()
-                        potential_deals.extend(results)
-                    except Exception as e:
-                        print(f"Error scanning filings: {e}")
-
-            # If no real filings found, return demo data for demonstration
-            if len(potential_deals) == 0:
-                print(f"[Scanner] No real M&A filings found in last {days_back} days, using demo data")
-                return self._get_demo_filings(days_back)
-
-        except Exception as e:
-            print(f"[Scanner] Error during scan: {e}, falling back to demo data")
-            return self._get_demo_filings(days_back)
-
-        return potential_deals
-
-    def _scan_filing_type(self, form_type: str, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
-        """Scan specific filing type for M&A deals"""
-        potential_deals = []
-
-        try:
-            filings = get_filings(
-                form=form_type,
-                start_date=start_date.strftime('%Y-%m-%d'),
-                end_date=end_date.strftime('%Y-%m-%d')
-            )
-
-            for filing in filings[:100]:
-                deal_info = self._analyze_filing(filing)
-                if deal_info and deal_info['confidence_score'] > 0.5:
-                    potential_deals.append(deal_info)
-                    self._store_filing(filing, deal_info)
-
-        except Exception as e:
-            print(f"Error scanning {form_type}: {e}")
-
-        return potential_deals
-
-    def _analyze_filing(self, filing) -> Optional[Dict[str, Any]]:
-        """Analyze if filing contains M&A activity"""
-        try:
-            text = self._extract_filing_text(filing)
-            if not text:
-                return None
-
-            text_lower = text.lower()
-            confidence_score = 0.0
-            deal_indicators = []
-
-            for keyword in self.ma_keywords:
-                if keyword in text_lower:
-                    confidence_score += 0.1
-                    deal_indicators.append(keyword)
-
-            for pattern in self.ma_patterns:
-                if re.search(pattern, text_lower):
-                    confidence_score += 0.2
-                    deal_indicators.append(pattern)
-
-            if filing.form in ['S-4', 'DEFM14A', 'PREM14A']:
-                confidence_score += 0.4
-
-            if filing.form == '8-K':
-                items = self._extract_8k_items(text)
-                if any(item in ['1.01', '2.01'] for item in items):
-                    confidence_score += 0.3
-
-            confidence_score = min(confidence_score, 1.0)
-
-            if confidence_score > 0.5:
-                return {
-                    'accession_number': filing.accession_number,
-                    'filing_type': filing.form,
-                    'filing_date': filing.filing_date,
-                    'company_name': filing.company,
-                    'cik': filing.cik,
-                    'filing_url': f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={filing.cik}&type={filing.form}&dateb=&owner=exclude&count=100",
-                    'confidence_score': confidence_score,
-                    'contains_ma_flag': 1,
-                    'deal_indicators': ','.join(deal_indicators[:5])
-                }
-
-        except Exception as e:
-            print(f"Error analyzing filing {filing.accession_number}: {e}")
-
+def _get(url: str, timeout: int = 15) -> Optional[dict]:
+    """GET JSON from a URL, return parsed dict or None on error."""
+    try:
+        req = Request(url, headers=_EDGAR_HEADERS)
+        with urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except HTTPError as exc:
+        if exc.code != 404:  # 404s are expected for optional index files — suppress
+            print(f"[Scanner] HTTP {exc.code} {url}", file=sys.stderr)
+        return None
+    except (URLError, json.JSONDecodeError, Exception):
         return None
 
-    def _extract_filing_text(self, filing) -> str:
-        """Extract text from SEC filing"""
-        try:
-            if hasattr(filing, 'text'):
-                return filing.text()[:50000]
-            elif hasattr(filing, 'html'):
-                html = filing.html()
-                text = re.sub('<[^<]+?>', ' ', html)
-                return text[:50000]
-            return ""
-        except Exception as e:
-            print(f"Error extracting text: {e}")
-            return ""
+def _get_text(url: str, timeout: int = 20) -> str:
+    """GET raw text from a URL."""
+    try:
+        req = Request(url, headers={**_EDGAR_HEADERS, "Accept": "text/html,text/plain"})
+        with urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+            try:
+                return raw.decode("utf-8")[:80000]
+            except UnicodeDecodeError:
+                return raw.decode("latin-1")[:80000]
+    except Exception:
+        return ""
 
-    def _extract_8k_items(self, text: str) -> List[str]:
-        """Extract Item numbers from 8-K filing"""
-        items = []
-        pattern = r'Item\s+(\d+\.\d+)'
-        matches = re.findall(pattern, text)
-        return list(set(matches))
 
-    def scan_company_ma_history(self, ticker: str, years_back: int = 5) -> List[Dict[str, Any]]:
-        """Scan specific company's M&A history"""
-        try:
-            company = Company(ticker)
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=years_back*365)
+# ---------------------------------------------------------------------------
+# M&A signal detection
+# ---------------------------------------------------------------------------
 
-            all_deals = []
+_MA_KEYWORDS = [
+    'merger', 'acquisition', 'acquire', 'acquiree', 'takeover',
+    'definitive agreement', 'merger agreement', 'tender offer',
+    'stock purchase agreement', 'asset purchase agreement',
+    'combination', 'amalgamation', 'consolidation',
+]
 
-            for form_type in MA_FILING_FORMS:
-                try:
-                    filings = company.get_filings(
-                        form=form_type
-                    ).filter(
-                        date=f"{start_date.strftime('%Y-%m-%d')}:{end_date.strftime('%Y-%m-%d')}"
-                    )
+_MA_PATTERNS = [
+    r'definitive\s+(?:merger|acquisition|purchase)\s+agreement',
+    r'tender\s+offer',
+    r'acquire[ds]?\s+(?:all|substantially\s+all)',
+    r'purchase\s+price\s+of\s+\$[\d,\.]+\s*(?:million|billion)',
+    r'aggregate\s+(?:purchase|merger)\s+consideration',
+    r'merger\s+of\s+equals',
+    r'going[\s-]private\s+transaction',
+    r'leveraged\s+buy[-\s]?out',
+]
 
-                    for filing in filings:
-                        deal_info = self._analyze_filing(filing)
-                        if deal_info and deal_info['confidence_score'] > 0.5:
-                            all_deals.append(deal_info)
-                            self._store_filing(filing, deal_info)
+_HIGH_CONFIDENCE_FORMS = {'S-4', 'DEFM14A', 'PREM14A', 'SC TO-T', 'SC TO-I', 'SC 13E-3'}
+_MEDIUM_CONFIDENCE_FORMS = {'8-K', '425', 'SC 13D'}
 
-                except Exception as e:
-                    print(f"Error getting {form_type} for {ticker}: {e}")
+def _score_text(text: str, form_type: str) -> tuple[float, list]:
+    """Return (confidence_score 0-1, indicators list) for a piece of filing text."""
+    text_lower = text.lower()
+    score = 0.0
+    indicators = []
 
-            return all_deals
+    # Form-type bonus
+    if form_type in _HIGH_CONFIDENCE_FORMS:
+        score += 0.45
+    elif form_type in _MEDIUM_CONFIDENCE_FORMS:
+        score += 0.15
 
-        except Exception as e:
-            print(f"Error scanning company {ticker}: {e}")
-            return []
+    # Keyword hits (cap contribution)
+    kw_hits = 0
+    for kw in _MA_KEYWORDS:
+        if kw in text_lower:
+            kw_hits += 1
+            indicators.append(kw)
+    score += min(kw_hits * 0.07, 0.35)
 
-    def scan_industry_ma_activity(self, industry_ciks: List[str], days_back: int = 90) -> List[Dict[str, Any]]:
-        """Scan M&A activity for specific industry"""
-        all_deals = []
+    # Regex pattern hits
+    for pat in _MA_PATTERNS:
+        if re.search(pat, text_lower):
+            score += 0.10
+            indicators.append(pat[:40])
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {executor.submit(self._scan_cik, cik, days_back): cik for cik in industry_ciks}
+    # 8-K item 1.01 / 2.01 boost
+    if form_type == '8-K':
+        items_found = re.findall(r'Item\s+(\d+\.\d+)', text)
+        if any(i in MATERIAL_EVENT_ITEMS for i in items_found):
+            score += 0.20
 
+    return min(score, 1.0), indicators[:8]
+
+
+# ---------------------------------------------------------------------------
+# EDGAR Full-Text Search (efts.sec.gov) — primary real-data source
+# ---------------------------------------------------------------------------
+
+_EFTS_BASE = "https://efts.sec.gov/LATEST/search-index"
+_EFTS_SEARCH = "https://efts.sec.gov/LATEST/search-index?q={query}&dateRange=custom&startdt={start}&enddt={end}&forms={forms}&hits.hits._source=file_date,period_of_report,entity_name,file_num,form_type,biz_location,inc_states&hits.hits.total.value=true&hits.hits.highlight=false&hits.hits.highlight.number_of_fragments=0&_source=false"
+
+_EFTS_API  = "https://efts.sec.gov/LATEST/search-index?q={query}&dateRange=custom&startdt={start}&enddt={end}&forms={forms}&hits.hits.total.value=true"
+
+# Simpler, more reliable EFTS endpoint
+_EFTS_SIMPLE = "https://efts.sec.gov/LATEST/search-index?q=%22{query}%22&forms={forms}&dateRange=custom&startdt={start}&enddt={end}"
+
+
+def _efts_search(query_term: str, form_types: List[str],
+                 start_date: str, end_date: str,
+                 max_hits: int = 50) -> List[Dict[str, Any]]:
+    """
+    Search SEC EDGAR Full-Text Search API for filings matching query_term.
+    Returns list of hit dicts with accession_number, entity_name, form_type, etc.
+    """
+    # URL-encode each form name individually (handles spaces in "SC TO-T", "SC 13E-3", etc.)
+    forms_str = ",".join(quote(f, safe="") for f in form_types)
+    # EDGAR EFTS uses %22 for quotes in the q param
+    encoded_query = quote(query_term, safe="")
+    url = (
+        f"https://efts.sec.gov/LATEST/search-index"
+        f"?q=%22{encoded_query}%22"
+        f"&forms={forms_str}"
+        f"&dateRange=custom&startdt={start_date}&enddt={end_date}"
+        f"&hits.hits.total.value=true"
+    )
+    data = _get(url)
+    if not data:
+        return []
+
+    hits = data.get("hits", {}).get("hits", [])
+    results = []
+    seen_acc = set()
+    for hit in hits[:max_hits]:
+        src = hit.get("_source", {})
+        # `adsh` is the clean accession number (e.g. "0001193125-26-056047")
+        acc = src.get("adsh", "")
+        if not acc:
+            # fallback: _id is "accession:filename", strip the filename part
+            raw_id = hit.get("_id", "")
+            acc = raw_id.split(":")[0] if ":" in raw_id else raw_id
+        if not acc or acc in seen_acc:
+            continue
+        seen_acc.add(acc)
+
+        # display_names format: "Company Name  (TICK)  (CIK 0000XXXXXX)"
+        display_names = src.get("display_names", [])
+        entity_name = display_names[0].split("(")[0].strip() if display_names else ""
+
+        # ciks is a list of zero-padded CIK strings
+        ciks = src.get("ciks", [])
+        cik = ciks[0].lstrip("0") if ciks else ""
+
+        # root_forms is a list; form is the specific filing form
+        form_type = src.get("form", src.get("root_forms", [""])[0] if src.get("root_forms") else "")
+
+        results.append({
+            "accession_number": acc,
+            "entity_name": entity_name,
+            "form_type": form_type,
+            "file_date": src.get("file_date", ""),
+            "cik": cik,
+            "items": src.get("items", []),
+        })
+    return results
+
+
+# ---------------------------------------------------------------------------
+# EDGAR submissions endpoint — get filing index per CIK
+# ---------------------------------------------------------------------------
+
+def _get_company_recent_filings(cik_str: str, form_types: List[str],
+                                 start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    """Fetch recent filings for a given CIK via data.sec.gov/submissions/."""
+    cik_padded = cik_str.zfill(10)
+    url = f"https://data.sec.gov/submissions/CIK{cik_padded}.json"
+    data = _get(url)
+    if not data:
+        return []
+
+    entity_name = data.get("name", "")
+    recent = data.get("filings", {}).get("recent", {})
+    forms = recent.get("form", [])
+    dates = recent.get("filingDate", [])
+    acc_nums = recent.get("accessionNumber", [])
+
+    results = []
+    for form, date_str, acc in zip(forms, dates, acc_nums):
+        if form not in form_types:
+            continue
+        if date_str < start_date or date_str > end_date:
+            continue
+        results.append({
+            "accession_number": acc,
+            "entity_name": entity_name,
+            "form_type": form,
+            "file_date": date_str,
+            "cik": cik_str,
+        })
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Filing text fetcher — EDGAR viewer / raw document
+# ---------------------------------------------------------------------------
+
+def _fetch_filing_text(accession_number: str, cik: str) -> str:
+    """Fetch the primary document text for an accession number."""
+    # acc_clean removes dashes: "0001193125-26-056047" → "000119312526056047"
+    acc_clean = accession_number.replace("-", "")
+    cik_int = cik.lstrip("0") or "0"   # numeric CIK without leading zeros for URL path
+
+    # 1. Try the JSON filing index: /Archives/edgar/data/{cik}/{acc_clean}/{acc}-index.json
+    index_url = (
+        f"https://www.sec.gov/Archives/edgar/data/{cik_int}"
+        f"/{acc_clean}/{accession_number}-index.json"
+    )
+    index_data = _get(index_url)
+    if index_data:
+        documents = index_data.get("directory", {}).get("item", [])
+        for doc in documents:
+            name = doc.get("name", "")
+            if name.endswith((".htm", ".txt", ".html")):
+                doc_url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_clean}/{name}"
+                text = _get_text(doc_url)
+                if text:
+                    return re.sub(r'<[^>]+>', ' ', text)[:60000]
+
+    # 2. Fallback: directory listing page
+    if cik_int:
+        viewer_url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_clean}/"
+        text = _get_text(viewer_url)
+        if text:
+            return re.sub(r'<[^>]+>', ' ', text)[:60000]
+
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# Main scanner class
+# ---------------------------------------------------------------------------
+
+class MADealScanner:
+    """
+    Scan SEC EDGAR for real M&A deal signals.
+
+    Strategy (all free, no API key, no third-party library):
+      1. Full-text search (efts.sec.gov) with M&A trigger phrases across
+         high-signal form types (S-4, DEFM14A, 8-K, 425, SC TO-T …).
+      2. For each hit, optionally fetch the filing document to score text
+         and extract deal metadata.
+      3. Persist discovered filings in the SQLite database.
+    """
+
+    # M&A trigger phrases sent to EFTS — each returns REAL matching filings
+    _SEARCH_QUERIES = [
+        "definitive merger agreement",
+        "definitive acquisition agreement",
+        "tender offer",
+        "merger of equals",
+        "acquire all outstanding shares",
+        "going private transaction",
+        "leveraged buyout",
+        "stock purchase agreement",
+        "asset purchase agreement",
+        "agreement and plan of merger",
+    ]
+
+    _SCAN_FORMS = ["S-4", "DEFM14A", "PREM14A", "8-K", "425", "SC TO-T", "SC TO-I", "SC 13E-3"]
+
+    def __init__(self, db: Optional[MADatabase] = None):
+        self.db = db or MADatabase()
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def scan_recent_filings(self, days_back: int = 30,
+                            max_workers: int = 4) -> List[Dict[str, Any]]:
+        """
+        Scan SEC EDGAR for M&A filings in the last `days_back` days.
+        Returns list of filing dicts suitable for storing in sec_filings table.
+        """
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days_back)
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
+
+        print(f"[Scanner] Scanning EDGAR {start_str} → {end_str}", file=sys.stderr)
+
+        all_filings: Dict[str, Dict[str, Any]] = {}   # keyed by accession_number to deduplicate
+
+        # Run all query terms in parallel
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(self._search_one_query, q, start_str, end_str): q
+                for q in self._SEARCH_QUERIES
+            }
             for future in as_completed(futures):
                 try:
-                    deals = future.result()
-                    all_deals.extend(deals)
-                except Exception as e:
-                    print(f"Error scanning CIK: {e}")
+                    hits = future.result()
+                    for h in hits:
+                        acc = h["accession_number"]
+                        if acc and acc not in all_filings:
+                            all_filings[acc] = h
+                except Exception as exc:
+                    print(f"[Scanner] Query error: {exc}", file=sys.stderr)
 
-        return all_deals
+        results = list(all_filings.values())
+        print(f"[Scanner] Found {len(results)} unique filings", file=sys.stderr)
 
-    def _scan_cik(self, cik: str, days_back: int) -> List[Dict[str, Any]]:
-        """Scan specific CIK for M&A filings"""
-        try:
-            company = Company(cik)
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days_back)
+        # Persist to DB
+        for filing in results:
+            self._store_filing(filing)
 
-            deals = []
-            for form_type in ['8-K', 'S-4', 'DEFM14A']:
-                try:
-                    filings = company.get_filings(form=form_type)
-                    for filing in filings[:10]:
-                        if filing.filing_date >= start_date.date():
-                            deal_info = self._analyze_filing(filing)
-                            if deal_info and deal_info['confidence_score'] > 0.6:
-                                deals.append(deal_info)
-                except:
-                    continue
+        return results
 
-            return deals
+    def scan_company_ma_history(self, ticker_or_cik: str,
+                                years_back: int = 5) -> List[Dict[str, Any]]:
+        """Scan a specific company's M&A filing history via data.sec.gov."""
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=years_back * 365)
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
 
-        except Exception as e:
+        # Resolve ticker → CIK using EDGAR company search
+        cik = self._resolve_cik(ticker_or_cik)
+        if not cik:
+            print(f"[Scanner] Could not resolve CIK for {ticker_or_cik}", file=sys.stderr)
             return []
 
-    def _store_filing(self, filing, deal_info: Dict[str, Any]):
-        """Store filing information in database"""
-        try:
-            filing_data = {
-                'accession_number': deal_info['accession_number'],
-                'filing_type': deal_info['filing_type'],
-                'filing_date': deal_info['filing_date'],
-                'company_name': deal_info['company_name'],
-                'cik': deal_info['cik'],
-                'filing_url': deal_info['filing_url'],
-                'confidence_score': deal_info['confidence_score'],
-                'contains_ma_flag': deal_info['contains_ma_flag'],
-                'parsed_flag': 0
-            }
-
-            self.db.insert_sec_filing(filing_data)
-
-        except Exception as e:
-            print(f"Error storing filing: {e}")
+        raw = _get_company_recent_filings(cik, self._SCAN_FORMS, start_str, end_str)
+        results = []
+        for hit in raw:
+            scored = self._score_and_enrich(hit)
+            if scored and scored["confidence_score"] >= 0.5:
+                results.append(scored)
+                self._store_filing(scored)
+        return results
 
     def get_high_confidence_deals(self, min_confidence: float = 0.75) -> List[Dict[str, Any]]:
-        """Get high confidence M&A deals from database"""
+        """Return high-confidence M&A filings already stored in the DB."""
         conn = self.db._get_connection()
         cursor = conn.cursor()
-
         cursor.execute("""
             SELECT * FROM sec_filings
-            WHERE contains_ma_flag = 1
-            AND confidence_score >= ?
-            AND parsed_flag = 0
+            WHERE contains_ma_flag = 1 AND confidence_score >= ?
+              AND parsed_flag = 0
             ORDER BY filing_date DESC
         """, (min_confidence,))
-
         return [dict(row) for row in cursor.fetchall()]
 
-    def batch_scan_sp500(self, days_back: int = 30) -> Dict[str, Any]:
-        """Scan all S&P 500 companies for M&A activity"""
-        sp500_tickers = self._get_sp500_tickers()
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
-        total_deals = []
-        successful_scans = 0
-        failed_scans = 0
+    def _search_one_query(self, query: str, start_str: str,
+                          end_str: str) -> List[Dict[str, Any]]:
+        """Run one EFTS query and return enriched filing dicts."""
+        hits = _efts_search(query, self._SCAN_FORMS, start_str, end_str, max_hits=40)
+        enriched = []
+        for hit in hits:
+            scored = self._score_and_enrich(hit)
+            if scored and scored["confidence_score"] >= 0.5:
+                enriched.append(scored)
+            time.sleep(0.05)   # Polite rate limiting for SEC servers
+        return enriched
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {executor.submit(self.scan_company_ma_history, ticker, days_back//365): ticker
-                      for ticker in sp500_tickers[:50]}
+    def _score_and_enrich(self, hit: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Given a raw EFTS/submissions hit, compute confidence score and
+        build the standard filing dict. Fetches document text only for
+        medium-confidence forms (8-K, 425) where text analysis adds value.
+        """
+        form_type = hit.get("form_type", "")
+        acc = hit.get("accession_number", "")
+        cik = hit.get("cik", "")
+        entity = hit.get("entity_name", "")
+        file_date = hit.get("file_date", "")
 
-            for future in as_completed(futures):
-                try:
-                    deals = future.result()
-                    total_deals.extend(deals)
-                    successful_scans += 1
-                except:
-                    failed_scans += 1
+        # For high-signal forms, score is already high from form type alone
+        if form_type in _HIGH_CONFIDENCE_FORMS:
+            score = 0.90
+            indicators = [f"form:{form_type}"]
+        else:
+            # Check 8-K items from EFTS metadata first (no text fetch needed)
+            items = hit.get("items", [])
+            if form_type == "8-K" and any(i in MATERIAL_EVENT_ITEMS for i in items):
+                # Item 1.01 = material definitive agreement, 2.01 = completion of acquisition
+                score = 0.80
+                indicators = [f"form:{form_type}", f"items:{','.join(items)}"]
+            else:
+                # Fetch document text for scoring (only for forms worth checking)
+                text = _fetch_filing_text(acc, cik) if cik else ""
+                score, indicators = _score_text(text or f"form_type:{form_type}", form_type)
+
+        if score < 0.50:
+            return None
+
+        filing_url = (
+            f"https://www.sec.gov/cgi-bin/browse-edgar"
+            f"?action=getcompany&CIK={cik}&type={form_type}&dateb=&owner=include&count=10"
+        ) if cik else f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&type={form_type}"
 
         return {
-            'total_deals_found': len(total_deals),
-            'companies_scanned': successful_scans,
-            'failed_scans': failed_scans,
-            'deals': total_deals
+            "accession_number": acc,
+            "filing_type": form_type,
+            "filing_date": file_date,
+            "company_name": entity,
+            "cik": cik,
+            "filing_url": filing_url,
+            "confidence_score": round(score, 3),
+            "contains_ma_flag": 1,
+            "deal_indicators": ", ".join(indicators[:6]),
         }
 
-    def _get_sp500_tickers(self) -> List[str]:
-        """Get S&P 500 tickers"""
-        return [
-            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK.B', 'UNH', 'JNJ',
-            'XOM', 'V', 'PG', 'JPM', 'MA', 'HD', 'CVX', 'MRK', 'ABBV', 'PEP', 'COST', 'AVGO',
-            'KO', 'LLY', 'WMT', 'MCD', 'TMO', 'ABT', 'ACN', 'CSCO', 'DHR', 'CRM', 'VZ', 'NEE'
-        ]
+    def _resolve_cik(self, ticker_or_cik: str) -> Optional[str]:
+        """Resolve a ticker symbol or CIK string to a zero-padded CIK."""
+        # If it's already numeric, use directly
+        if ticker_or_cik.isdigit():
+            return ticker_or_cik
 
-    def _get_demo_filings(self, days_back: int) -> List[Dict[str, Any]]:
-        """Return demo filings when edgartools is not available"""
-        today = datetime.now()
-        demo_filings = [
-            {
-                'accession_number': '0001193125-24-012345',
-                'filing_type': 'S-4',
-                'filing_date': (today - timedelta(days=5)).strftime('%Y-%m-%d'),
-                'company_name': 'ACME Corporation',
-                'cik': '0001234567',
-                'filing_url': 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234567',
-                'confidence_score': 0.92,
-                'contains_ma_flag': 1,
-                'deal_indicators': 'merger,definitive agreement,acquisition,purchase price'
-            },
-            {
-                'accession_number': '0001193125-24-012346',
-                'filing_type': '8-K',
-                'filing_date': (today - timedelta(days=12)).strftime('%Y-%m-%d'),
-                'company_name': 'TechCo Inc.',
-                'cik': '0001234568',
-                'filing_url': 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234568',
-                'confidence_score': 0.85,
-                'contains_ma_flag': 1,
-                'deal_indicators': 'acquisition,tender offer,merger agreement'
-            },
-            {
-                'accession_number': '0001193125-24-012347',
-                'filing_type': 'DEFM14A',
-                'filing_date': (today - timedelta(days=18)).strftime('%Y-%m-%d'),
-                'company_name': 'BioPharma Solutions',
-                'cik': '0001234569',
-                'filing_url': 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234569',
-                'confidence_score': 0.95,
-                'contains_ma_flag': 1,
-                'deal_indicators': 'definitive agreement,merger,cash and stock transaction'
-            },
-            {
-                'accession_number': '0001193125-24-012348',
-                'filing_type': '8-K',
-                'filing_date': (today - timedelta(days=22)).strftime('%Y-%m-%d'),
-                'company_name': 'FinTech Innovations LLC',
-                'cik': '0001234570',
-                'filing_url': 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234570',
-                'confidence_score': 0.78,
-                'contains_ma_flag': 1,
-                'deal_indicators': 'acquire,stock purchase,takeover'
-            },
-            {
-                'accession_number': '0001193125-24-012349',
-                'filing_type': 'PREM14A',
-                'filing_date': (today - timedelta(days=28)).strftime('%Y-%m-%d'),
-                'company_name': 'Global Energy Partners',
-                'cik': '0001234571',
-                'filing_url': 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234571',
-                'confidence_score': 0.88,
-                'contains_ma_flag': 1,
-                'deal_indicators': 'merger,combination,definitive agreement'
-            }
-        ]
+        url = f"https://www.sec.gov/cgi-bin/browse-edgar?company={ticker_or_cik}&CIK=&type=&dateb=&owner=include&count=5&search_text=&action=getcompany&output=atom"
+        # Use company tickers JSON — faster and more reliable
+        tickers_url = "https://www.sec.gov/files/company_tickers.json"
+        data = _get(tickers_url)
+        if data:
+            for entry in data.values():
+                if entry.get("ticker", "").upper() == ticker_or_cik.upper():
+                    return str(entry["cik_str"])
+        return None
 
-        # Filter by days_back
-        cutoff_date = today - timedelta(days=days_back)
-        return [f for f in demo_filings if datetime.strptime(f['filing_date'], '%Y-%m-%d') >= cutoff_date]
+    def _store_filing(self, filing: Dict[str, Any]):
+        """Persist filing to sec_filings table (silently skip duplicates)."""
+        try:
+            self.db.insert_sec_filing({
+                "accession_number": filing["accession_number"],
+                "filing_type": filing["filing_type"],
+                "filing_date": filing["filing_date"],
+                "company_name": filing["company_name"],
+                "cik": filing.get("cik", ""),
+                "filing_url": filing.get("filing_url", ""),
+                "confidence_score": filing.get("confidence_score", 0.0),
+                "contains_ma_flag": filing.get("contains_ma_flag", 1),
+                "parsed_flag": 0,
+            })
+        except Exception as exc:
+            print(f"[Scanner] Store error: {exc}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
 
 def main():
-    """CLI entry point - outputs JSON for Tauri integration"""
-    import json
+    import json as _json
 
     if len(sys.argv) < 2:
-        result = {
-            "success": False,
-            "error": "No command specified. Usage: deal_scanner.py <command> [args...]"
-        }
-        print(json.dumps(result))
+        print(_json.dumps({"success": False, "error": "No command. Usage: deal_scanner.py <scan|scan_company|high_confidence> [args]"}))
         sys.exit(1)
 
     command = sys.argv[1]
@@ -412,85 +496,31 @@ def main():
 
     try:
         if command == "scan":
-            # scan_ma_filings(days_back, filing_types)
             days_back = int(sys.argv[2]) if len(sys.argv) > 2 else 30
-            filing_types = sys.argv[3] if len(sys.argv) > 3 else None
-
             deals = scanner.scan_recent_filings(days_back=days_back)
-
-            result = {
-                "success": True,
-                "data": deals,
-                "count": len(deals),
-                "days_scanned": days_back
-            }
-            print(json.dumps(result))
+            print(_json.dumps({"success": True, "data": deals, "count": len(deals), "days_scanned": days_back}))
 
         elif command == "scan_company":
-            # Scan specific company's M&A history
             if len(sys.argv) < 3:
-                raise ValueError("Ticker required for scan_company command")
-
+                raise ValueError("Ticker or CIK required")
             ticker = sys.argv[2]
-            years_back = int(sys.argv[3]) if len(sys.argv) > 3 else 5
-
+            years_back = int(sys.argv[3]) if len(sys.argv) > 3 else 3
             deals = scanner.scan_company_ma_history(ticker, years_back)
-
-            result = {
-                "success": True,
-                "data": deals,
-                "ticker": ticker,
-                "count": len(deals)
-            }
-            print(json.dumps(result))
-
-        elif command == "scan_industry":
-            # Scan industry M&A activity
-            if len(sys.argv) < 3:
-                raise ValueError("CIK list required for scan_industry command")
-
-            import json as json_module
-            cik_list = json_module.loads(sys.argv[2])
-            days_back = int(sys.argv[3]) if len(sys.argv) > 3 else 90
-
-            deals = scanner.scan_industry_ma_activity(cik_list, days_back)
-
-            result = {
-                "success": True,
-                "data": deals,
-                "count": len(deals)
-            }
-            print(json.dumps(result))
+            print(_json.dumps({"success": True, "data": deals, "ticker": ticker, "count": len(deals)}))
 
         elif command == "high_confidence":
-            # Get high confidence deals
-            min_confidence = float(sys.argv[2]) if len(sys.argv) > 2 else 0.75
-            deals = scanner.get_high_confidence_deals(min_confidence)
-
-            result = {
-                "success": True,
-                "data": deals,
-                "count": len(deals),
-                "min_confidence": min_confidence
-            }
-            print(json.dumps(result))
+            min_conf = float(sys.argv[2]) if len(sys.argv) > 2 else 0.75
+            deals = scanner.get_high_confidence_deals(min_conf)
+            print(_json.dumps({"success": True, "data": deals, "count": len(deals), "min_confidence": min_conf}))
 
         else:
-            result = {
-                "success": False,
-                "error": f"Unknown command: {command}. Available: scan, scan_company, scan_industry, high_confidence"
-            }
-            print(json.dumps(result))
+            print(_json.dumps({"success": False, "error": f"Unknown command: {command}. Available: scan, scan_company, high_confidence"}))
             sys.exit(1)
 
-    except Exception as e:
-        result = {
-            "success": False,
-            "error": str(e),
-            "command": command
-        }
-        print(json.dumps(result))
+    except Exception as exc:
+        print(_json.dumps({"success": False, "error": str(exc), "command": command}))
         sys.exit(1)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

@@ -6,6 +6,7 @@ import { mcpToolService } from '../mcp/mcpToolService';
 import { agentLLMService } from '../chat/agentLLMService';
 import { backtestingService } from '../backtesting/BacktestingService';
 import { MarketDataBridge } from '../nodeSystem/adapters/MarketDataBridge';
+import { NodeRegistry } from '../nodeSystem/NodeRegistry';
 import { nodeLogger } from './loggerService';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
@@ -19,6 +20,9 @@ export interface ExecutionResult {
 }
 
 class NodeExecutionManager {
+  /** Terminal timezone IANA string (e.g. "Asia/Kolkata"), set per workflow execution */
+  private terminalTimezone: string | undefined;
+
   /**
    * Topological sort of nodes based on edges
    */
@@ -68,7 +72,12 @@ class NodeExecutionManager {
 
     // Check for cycles
     if (sorted.length !== nodes.length) {
-      throw new Error('Workflow contains cycles - cannot execute');
+      const cycleNodeIds = nodes
+        .filter(n => !sorted.find(s => s.id === n.id))
+        .map(n => n.data?.label || n.id);
+      throw new Error(
+        `Workflow contains cycles involving nodes: ${cycleNodeIds.join(', ')}. Remove circular connections to proceed.`
+      );
     }
 
     return sorted;
@@ -510,6 +519,85 @@ class NodeExecutionManager {
   }
 
   /**
+   * Execute a trigger node via its registry execute() method.
+   * Creates a minimal IExecuteFunctions context so the node can read its parameters.
+   */
+  private async executeTriggerNode(
+    node: Node,
+    nodeTypeName: string,
+    parameters: Record<string, any>,
+    startTime: number
+  ): Promise<ExecutionResult> {
+    try {
+      const registryNode = NodeRegistry.getNodeType(nodeTypeName);
+      if (!registryNode.execute) {
+        return {
+          nodeId: node.id,
+          success: true,
+          data: { triggered: true, trigger: nodeTypeName, timestamp: new Date().toISOString(), ...parameters },
+        };
+      }
+
+      // Build a minimal IExecuteFunctions context for the trigger node
+      const executionId = `exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const terminalTz = this.terminalTimezone;
+      const context = {
+        getNodeParameter: (paramName: string, _itemIndex: number, fallbackValue?: any) => {
+          // For timezone parameters, prefer the user's explicit value, then terminal timezone, then node default
+          if (paramName === 'timezone') {
+            if (parameters[paramName] !== undefined) return parameters[paramName];
+            if (terminalTz) return terminalTz;
+          }
+          if (parameters[paramName] !== undefined) return parameters[paramName];
+          // Fall back to the node description's default value
+          const prop = registryNode.description.properties.find((p) => p.name === paramName);
+          if (prop && prop.default !== undefined) return prop.default;
+          return fallbackValue;
+        },
+        getExecutionId: () => executionId,
+        getNode: () => ({ id: node.id, name: node.data?.label || nodeTypeName, type: nodeTypeName, typeVersion: 1, position: [0, 0] as [number, number], parameters }),
+        getWorkflow: () => null,
+        getWorkflowId: () => 'workflow_' + node.id,
+        continueOnFail: () => false,
+        evaluateExpression: (expr: string) => expr,
+        getInputData: () => [],
+        helpers: {} as any,
+        getCredentials: async () => ({}),
+        getExecutionCancelSignal: () => new AbortController().signal,
+        getInputConnectionData: async () => null,
+        addExecutionHints: () => {},
+      };
+
+      const result = await registryNode.execute.call(context as any);
+
+      // The execute() method returns NodeOutput = INodeExecutionData[][]
+      // Extract the JSON data from the first output item
+      const outputData = result?.[0]?.[0]?.json || {};
+
+      // Inject the effective timezone used into the output
+      if (terminalTz && !outputData.terminalTimezone) {
+        outputData.terminalTimezone = terminalTz;
+      }
+
+      return {
+        nodeId: node.id,
+        success: true,
+        data: outputData,
+        execution_time_ms: Math.round(performance.now() - startTime),
+      };
+    } catch (error: any) {
+      nodeLogger.error(`Trigger node ${nodeTypeName} execution failed:`, error);
+      // Fall back to simple trigger metadata if registry execution fails
+      return {
+        nodeId: node.id,
+        success: true,
+        data: { triggered: true, trigger: nodeTypeName, timestamp: new Date().toISOString(), ...parameters, warning: error.message },
+        execution_time_ms: Math.round(performance.now() - startTime),
+      };
+    }
+  }
+
+  /**
    * Execute custom node - handles registry-based nodes (manualTrigger, getQuote, getHistoricalData, filter, sort, etc.)
    */
   private async executeCustomNode(
@@ -522,13 +610,10 @@ class NodeExecutionManager {
 
     nodeLogger.info(`Executing custom node: ${nodeTypeName || 'unknown'}`, { nodeId: node.id });
 
-    // Manual trigger - just emits a signal to start the workflow
-    if (nodeTypeName === 'manualTrigger') {
-      return {
-        nodeId: node.id,
-        success: true,
-        data: { triggered: true, timestamp: new Date().toISOString(), ...parameters }
-      };
+    // Trigger nodes — delegate to the registry node's execute() method
+    const triggerTypes = ['manualTrigger', 'scheduleTrigger', 'priceAlertTrigger', 'marketEventTrigger', 'newsEventTrigger'];
+    if (triggerTypes.includes(nodeTypeName || '')) {
+      return this.executeTriggerNode(node, nodeTypeName!, parameters, startTime);
     }
 
     // Get Quote - fetch actual stock quote data via MarketDataBridge
@@ -709,17 +794,16 @@ class NodeExecutionManager {
       };
     } catch (error: any) {
       const executionTime = Math.round(performance.now() - startTime);
-      nodeLogger.warn('Technical indicator Python execution failed, returning config:', error);
+      nodeLogger.warn('Technical indicator Python execution failed:', error);
 
-      // Return the config summary so the results display still shows something
       return {
         nodeId: node.id,
-        success: true,
+        success: false,
+        error: `Technical indicator failed: ${error.message || 'Python runtime unavailable'}`,
         data: {
           symbol: symbol || 'AAPL',
           period: period || '1y',
           categories: categories || ['momentum', 'trend'],
-          note: 'Python runtime unavailable - showing configuration',
           ...(Object.keys(inputs).length > 0 ? { upstreamData: inputs } : {}),
         },
         execution_time_ms: executionTime,
@@ -770,16 +854,16 @@ class NodeExecutionManager {
         execution_time_ms: Math.round(performance.now() - startTime),
       };
     } catch (error: any) {
-      nodeLogger.warn('Backtest execution failed, returning config summary:', error);
+      nodeLogger.warn('Backtest execution failed:', error);
 
       return {
         nodeId: node.id,
-        success: true,
+        success: false,
+        error: `Backtest failed: ${error.message || 'Backtesting provider unavailable'}`,
         data: {
           strategy: parameters.strategy || 'MA_Crossover',
           initialCapital: parameters.initialCapital || 100000,
           commission: parameters.commission || 0.001,
-          note: 'Backtesting provider unavailable - showing configuration summary',
           parameters,
           inputData: Object.keys(inputs).length > 0 ? inputs : undefined,
         },
@@ -835,15 +919,15 @@ class NodeExecutionManager {
         execution_time_ms: Math.round(performance.now() - startTime),
       };
     } catch (error: any) {
-      nodeLogger.warn('Optimization execution failed, returning config summary:', error);
+      nodeLogger.warn('Optimization execution failed:', error);
 
       return {
         nodeId: node.id,
-        success: true,
+        success: false,
+        error: `Optimization failed: ${error.message || 'Optimization provider unavailable'}`,
         data: {
           method: parameters.method || 'grid',
           objective: parameters.objective || 'sharpe_ratio',
-          note: 'Optimization provider unavailable - showing configuration summary',
           parameters,
           inputData: Object.keys(inputs).length > 0 ? inputs : undefined,
         },
@@ -896,16 +980,41 @@ class NodeExecutionManager {
   }
 
   /**
+   * Execute a node with a timeout
+   */
+  private executeWithTimeout(
+    node: Node,
+    inputs: Record<string, any>,
+    timeoutMs: number = 30000
+  ): Promise<ExecutionResult> {
+    return Promise.race([
+      this.executeNode(node, inputs),
+      new Promise<ExecutionResult>((_, reject) =>
+        setTimeout(() => reject(new Error(`Node execution timed out after ${timeoutMs / 1000}s`)), timeoutMs)
+      ),
+    ]);
+  }
+
+  /**
    * Execute entire workflow
    */
   async executeWorkflow(
     nodes: Node[],
     edges: Edge[],
-    onNodeStatusChange: (nodeId: string, status: NodeStatus, result?: any) => void
+    onNodeStatusChange: (nodeId: string, status: NodeStatus, result?: any) => void,
+    terminalTimezone?: string
   ): Promise<Map<string, any>> {
-    // Topological sort
+    this.terminalTimezone = terminalTimezone;
+
+    if (nodes.length === 0) {
+      nodeLogger.warn('No nodes to execute');
+      return new Map();
+    }
+
+    // Topological sort (throws on cycles with descriptive message)
     const sortedNodes = this.topologicalSort(nodes, edges);
     const results = new Map<string, any>();
+    let hasErrors = false;
 
     nodeLogger.info('Executing workflow with nodes:', sortedNodes.map(n => n.id));
 
@@ -919,23 +1028,46 @@ class NodeExecutionManager {
       const inputs = this.getNodeInputs(node, edges, results);
       nodeLogger.debug(`Node ${node.id} inputs:`, inputs);
 
-      // Execute node
-      const result = await this.executeNode(node, inputs);
+      // Execute node with timeout
+      let result: ExecutionResult;
+      try {
+        const nodeTimeout = typeof node.data?.timeoutMs === 'number' ? node.data.timeoutMs : undefined;
+        result = await this.executeWithTimeout(node, inputs, nodeTimeout);
+      } catch (error: any) {
+        result = {
+          nodeId: node.id,
+          success: false,
+          error: error.message || 'Unknown error',
+        };
+      }
       nodeLogger.debug(`Node ${node.id} result:`, result);
 
-      // Store result
-      results.set(node.id, result.data);
+      // Store result (even on failure, so downstream nodes can see error data)
+      results.set(node.id, result.data ?? { error: result.error });
 
       // Update status
       if (result.success) {
         onNodeStatusChange(node.id, 'completed', result.data);
       } else {
-        onNodeStatusChange(node.id, 'error', result.error);
-        throw new Error(`Node ${node.id} failed: ${result.error}`);
+        onNodeStatusChange(node.id, 'error', { error: result.error, data: result.data });
+        hasErrors = true;
+
+        // Check continueOnFail
+        const continueOnFail = node.data?.continueOnFail === true;
+        if (!continueOnFail) {
+          nodeLogger.error(`Node ${node.id} failed, stopping workflow: ${result.error}`);
+          // Mark remaining nodes as idle
+          const remainingNodes = sortedNodes.slice(sortedNodes.indexOf(node) + 1);
+          for (const remaining of remainingNodes) {
+            onNodeStatusChange(remaining.id, 'idle');
+          }
+          throw new Error(`Node ${node.data?.label || node.id} failed: ${result.error}`);
+        }
+        nodeLogger.warn(`Node ${node.id} failed but continueOnFail is set, continuing: ${result.error}`);
       }
     }
 
-    nodeLogger.info('Workflow completed successfully');
+    nodeLogger.info(`Workflow completed${hasErrors ? ' with errors' : ' successfully'}`);
     return results;
   }
 }

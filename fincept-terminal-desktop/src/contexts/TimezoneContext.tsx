@@ -89,12 +89,6 @@ interface TimezoneContextValue {
   formatTimeShort: (date: Date) => string;
   /** Get the current time formatted in the selected timezone */
   getCurrentTimeFormatted: () => string;
-
-  // Aliases for backwards compatibility with Settings Tab
-  /** @deprecated Use timezone instead */
-  defaultTimezone: TimezoneOption;
-  /** @deprecated Use setTimezone instead */
-  setDefaultTimezone: (timezoneId: string) => void;
 }
 
 const TimezoneContext = createContext<TimezoneContextValue | undefined>(undefined);
@@ -194,9 +188,6 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     formatTime,
     formatTimeShort,
     getCurrentTimeFormatted,
-    // Backwards compatibility aliases
-    defaultTimezone: timezone,
-    setDefaultTimezone: setTimezone,
   };
 
   return (
@@ -251,8 +242,5 @@ export const useCurrentTime = (refreshInterval: number = 1000) => {
     timezone,
   };
 };
-
-// Keep useDefaultTime as alias for backwards compatibility
-export const useDefaultTime = useCurrentTime;
 
 export default TimezoneContext;

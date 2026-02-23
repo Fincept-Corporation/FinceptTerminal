@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
+import { useTimezone } from '@/contexts/TimezoneContext';
 import ReactFlow, {
   Node,
   Edge,
@@ -44,7 +45,8 @@ import {
 } from './components';
 
 // Local hooks
-import { useWorkflowManagement } from './hooks';
+import { useWorkflowManagement, useUndoRedo } from './hooks';
+import { stripCallbacks } from './utils';
 
 // Node components
 import {
@@ -78,9 +80,13 @@ import { TabFooter } from '@/components/common/TabFooter';
 
 export default function NodeEditorTab() {
   const { t } = useTranslation('nodeEditor');
+  const { timezone } = useTimezone();
 
   // MCP configurations
   const [mcpNodeConfigs, setMcpNodeConfigs] = useState<MCPNodeConfig[]>([]);
+
+  // Shared ref for undo/redo <-> auto-save coordination
+  const isUndoRedoActionRef = useRef<boolean>(false);
 
   // Workflow management hook
   const {
@@ -114,7 +120,7 @@ export default function NodeEditorTab() {
     deleteSelectedNodes,
     deleteSelectedEdges,
     onSelectionChange,
-  } = useWorkflowManagement();
+  } = useWorkflowManagement(isUndoRedoActionRef);
 
   // UI state
   const [showNodeMenu, setShowNodeMenu] = useState(false);
@@ -127,6 +133,9 @@ export default function NodeEditorTab() {
   const [showTemplateGallery, setShowTemplateGallery] = useState(false);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  // Clipboard for copy/paste
+  const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
 
   // Workspace tab state
   const getWorkspaceState = useCallback(() => ({
@@ -188,9 +197,14 @@ export default function NodeEditorTab() {
     []
   );
 
+  // Refs to hold undo/redo snapshot functions (breaks circular dependency)
+  const takeSnapshotRef = useRef<() => void>(() => {});
+  const takeDebouncedSnapshotRef = useRef<() => void>(() => {});
+
   // Handle label change
   const handleLabelChange = useCallback(
     (nodeId: string, newLabel: string) => {
+      takeDebouncedSnapshotRef.current();
       setNodes((nds) =>
         nds.map((node) => {
           if (node.id === nodeId) {
@@ -209,9 +223,36 @@ export default function NodeEditorTab() {
     [setNodes]
   );
 
+  // Re-attach function callbacks to nodes after undo/redo restore
+  const reattachCallbacks = useCallback(
+    (restoredNodes: Node[]): Node[] =>
+      restoredNodes.map((node) => {
+        if (node.type === 'custom') {
+          return { ...node, data: { ...node.data, onLabelChange: handleLabelChange } };
+        }
+        return node;
+      }),
+    [handleLabelChange]
+  );
+
+  // Undo/Redo hook
+  const { takeSnapshot, takeDebouncedSnapshot, undo, redo, canUndo, canRedo } = useUndoRedo({
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+    isUndoRedoActionRef,
+    restoreCallbacks: reattachCallbacks,
+  });
+
+  // Keep refs in sync with latest hook values
+  takeSnapshotRef.current = takeSnapshot;
+  takeDebouncedSnapshotRef.current = takeDebouncedSnapshot;
+
   // Handle connection
   const onConnect = useCallback(
     (params: Connection) => {
+      takeSnapshot();
       const newEdge = {
         ...params,
         animated: true,
@@ -220,19 +261,20 @@ export default function NodeEditorTab() {
       };
       setEdges((eds) => addEdge(newEdge, eds));
     },
-    [setEdges]
+    [setEdges, takeSnapshot]
   );
 
   // Add new node
   const addNode = useCallback(
     (config: any) => {
+      takeSnapshot();
       const isMCPNode = config.type === 'mcp-tool';
       const isResultsDisplay = config.type === 'results-display';
       const isAgentMediator = config.type === 'agent-mediator';
       const isDataSource = config.type === 'data-source';
       const isTechnicalIndicator = config.type === 'technical-indicator';
 
-      const nodeId = `node_${Date.now()}`;
+      const nodeId = `node_${crypto.randomUUID()}`;
 
       const newNode: Node = {
         id: nodeId,
@@ -350,7 +392,7 @@ export default function NodeEditorTab() {
       setNodes((nds) => [...nds, newNode]);
       setShowNodeMenu(false);
     },
-    [setNodes, handleLabelChange]
+    [setNodes, handleLabelChange, takeSnapshot]
   );
 
   // Handle node from palette
@@ -363,9 +405,10 @@ export default function NodeEditorTab() {
       } else if (nodeData.source === 'agent') {
         addNode({ ...nodeData.data, type: 'python-agent' });
       } else if (nodeData.source === 'registry') {
+        takeSnapshot();
         const registryNode = nodeData.data as INodeTypeDescription;
         const newNode: Node = {
-          id: `node_${Date.now()}`,
+          id: `node_${crypto.randomUUID()}`,
           type: 'custom',
           position: { x: Math.random() * 400 + 100, y: Math.random() * 300 + 100 },
           data: {
@@ -386,7 +429,7 @@ export default function NodeEditorTab() {
 
       setShowNodeMenu(false);
     },
-    [addNode, setNodes, handleLabelChange]
+    [addNode, setNodes, handleLabelChange, takeSnapshot]
   );
 
   // Handle drop from palette
@@ -407,9 +450,10 @@ export default function NodeEditorTab() {
       };
 
       if (nodeData.source === 'registry') {
+        takeSnapshot();
         const registryNode = nodeData.data as INodeTypeDescription;
         const newNode: Node = {
-          id: `node_${Date.now()}`,
+          id: `node_${crypto.randomUUID()}`,
           type: 'custom',
           position,
           data: {
@@ -430,7 +474,7 @@ export default function NodeEditorTab() {
         handlePaletteNodeAdd(nodeData.type, nodeData);
       }
     },
-    [setNodes, handlePaletteNodeAdd, handleLabelChange]
+    [setNodes, handlePaletteNodeAdd, handleLabelChange, takeSnapshot]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -438,10 +482,37 @@ export default function NodeEditorTab() {
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
+  // Connection validation
+  const isValidConnection = useCallback(
+    (connection: Connection) => {
+      // Prevent self-loops
+      if (connection.source === connection.target) return false;
+      // Prevent duplicate connections
+      const exists = edges.some(
+        (e) => e.source === connection.source && e.target === connection.target
+      );
+      if (exists) return false;
+      // Check hasInput/hasOutput from BUILTIN_NODE_CONFIGS
+      const sourceNode = nodes.find((n) => n.id === connection.source);
+      const targetNode = nodes.find((n) => n.id === connection.target);
+      const sourceConfig = BUILTIN_NODE_CONFIGS.find((c) => c.type === sourceNode?.type);
+      const targetConfig = BUILTIN_NODE_CONFIGS.find((c) => c.type === targetNode?.type);
+      if (sourceConfig && !sourceConfig.hasOutput) return false;
+      if (targetConfig && !targetConfig.hasInput) return false;
+      return true;
+    },
+    [edges, nodes]
+  );
+
   // Execute workflow
   const handleExecute = useCallback(async () => {
     if (isExecuting) {
       showWarning('A workflow is already executing. Please wait for it to complete.');
+      return;
+    }
+
+    if (nodes.length === 0) {
+      showWarning('No nodes in the workflow. Add nodes before executing.');
       return;
     }
 
@@ -474,32 +545,14 @@ export default function NodeEditorTab() {
             return node;
           })
         );
-      });
+      }, timezone.zone);
     } catch (error: any) {
       console.error('[NodeEditor] Workflow execution failed:', error);
+      showError('Execution failed', [{ label: 'Error', value: error.message }]);
     } finally {
       setIsExecuting(false);
     }
-  }, [isExecuting, nodes, edges, setNodes, setIsExecuting]);
-
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input field
-      const target = event.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        deleteSelectedNodes();
-        deleteSelectedEdges();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [deleteSelectedNodes, deleteSelectedEdges]);
+  }, [isExecuting, nodes, edges, setNodes, setIsExecuting, timezone.zone]);
 
   // Quick save draft handler
   const handleQuickSaveDraft = useCallback(async () => {
@@ -638,6 +691,7 @@ export default function NodeEditorTab() {
   // Handle parameter change for config panel
   const handleParameterChange = useCallback(
     (paramName: string, value: NodeParameterValue) => {
+      takeDebouncedSnapshot();
       if (selectedNodes.length === 1) {
         setNodes((nds) =>
           nds.map((node) => {
@@ -658,7 +712,29 @@ export default function NodeEditorTab() {
         );
       }
     },
-    [selectedNodes, setNodes]
+    [selectedNodes, setNodes, takeDebouncedSnapshot]
+  );
+
+  // Handle timeout change for per-node execution timeout
+  const handleTimeoutChange = useCallback(
+    (nodeId: string, timeoutMs: number | undefined) => {
+      takeDebouncedSnapshot();
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id === nodeId) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                timeoutMs,
+              },
+            };
+          }
+          return node;
+        })
+      );
+    },
+    [setNodes, takeDebouncedSnapshot]
   );
 
   // Handle duplicate node
@@ -666,19 +742,132 @@ export default function NodeEditorTab() {
     if (selectedNodes.length === 1) {
       const selectedNode = nodes.find((n) => n.id === selectedNodes[0]);
       if (selectedNode) {
+        takeSnapshot();
+        const newNodeId = `node_${crypto.randomUUID()}`;
+        // Deep clone data to avoid shared references between original and duplicate
+        const clonedData = JSON.parse(JSON.stringify(selectedNode.data));
+        // Re-attach callback for custom nodes
+        if (selectedNode.type === 'custom') {
+          clonedData.onLabelChange = handleLabelChange;
+        }
         const newNode = {
           ...selectedNode,
-          id: `node_${Date.now()}`,
+          id: newNodeId,
           position: {
             x: selectedNode.position.x + 50,
             y: selectedNode.position.y + 50,
           },
-          data: { ...selectedNode.data },
+          data: clonedData,
         };
         setNodes((nds) => [...nds, newNode]);
       }
     }
-  }, [selectedNodes, nodes, setNodes]);
+  }, [selectedNodes, nodes, setNodes, handleLabelChange, takeSnapshot]);
+
+  // Copy selected nodes and their interconnecting edges
+  const handleCopy = useCallback(() => {
+    if (selectedNodes.length === 0) return;
+    const selectedSet = new Set(selectedNodes);
+    const copiedNodes = nodes
+      .filter((n) => selectedSet.has(n.id))
+      .map((n) => ({
+        ...n,
+        data: stripCallbacks(n.data),
+      }));
+    const copiedEdges = edges.filter(
+      (e) => selectedSet.has(e.source) && selectedSet.has(e.target)
+    );
+    clipboardRef.current = { nodes: copiedNodes, edges: copiedEdges };
+  }, [selectedNodes, nodes, edges]);
+
+  // Paste copied nodes with new IDs and offset positions
+  const handlePaste = useCallback(() => {
+    if (!clipboardRef.current || clipboardRef.current.nodes.length === 0) return;
+    takeSnapshot();
+
+    const { nodes: copiedNodes, edges: copiedEdges } = clipboardRef.current;
+    // Build old→new ID map
+    const idMap = new Map<string, string>();
+    copiedNodes.forEach((n) => {
+      idMap.set(n.id, `node_${crypto.randomUUID()}`);
+    });
+
+    const pastedNodes: Node[] = copiedNodes.map((n) => {
+      const clonedData = JSON.parse(JSON.stringify(n.data));
+      // Re-attach callbacks based on node type
+      if (n.type === 'custom') {
+        clonedData.onLabelChange = handleLabelChange;
+      }
+      return {
+        ...n,
+        id: idMap.get(n.id)!,
+        position: { x: n.position.x + 50, y: n.position.y + 50 },
+        selected: true,
+        data: clonedData,
+      };
+    });
+
+    const pastedEdges: Edge[] = copiedEdges.map((e) => ({
+      ...e,
+      id: `edge_${crypto.randomUUID()}`,
+      source: idMap.get(e.source) || e.source,
+      target: idMap.get(e.target) || e.target,
+    }));
+
+    // Deselect existing nodes, add pasted ones (selected)
+    setNodes((nds) => [
+      ...nds.map((n) => ({ ...n, selected: false })),
+      ...pastedNodes,
+    ]);
+    setEdges((eds) => [...eds, ...pastedEdges]);
+
+    // Update selectedNodes to the newly pasted ones
+    setSelectedNodes(pastedNodes.map((n) => n.id));
+  }, [takeSnapshot, handleLabelChange, setNodes, setEdges, setSelectedNodes]);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input field
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        takeSnapshot();
+        deleteSelectedNodes();
+        deleteSelectedEdges();
+      }
+
+      // Copy: Ctrl+C
+      if ((event.ctrlKey || event.metaKey) && event.key === 'c') {
+        event.preventDefault();
+        handleCopy();
+      }
+
+      // Paste: Ctrl+V
+      if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+        event.preventDefault();
+        handlePaste();
+      }
+
+      // Undo: Ctrl+Z
+      if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+      }
+
+      // Redo: Ctrl+Shift+Z or Ctrl+Y
+      if ((event.ctrlKey || event.metaKey) && (event.key === 'y' || (event.key === 'z' && event.shiftKey) || (event.key === 'Z' && event.shiftKey))) {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deleteSelectedNodes, deleteSelectedEdges, takeSnapshot, undo, redo, handleCopy, handlePaste]);
 
   // Import workflow template
   const handleImportTemplate = useCallback(
@@ -788,6 +977,10 @@ export default function NodeEditorTab() {
         onShowDeployDialog={() => setShowDeployDialog(true)}
         onQuickSaveDraft={handleQuickSaveDraft}
         onShowTemplates={() => setShowTemplateGallery(true)}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
       />
 
       {/* Node Menu */}
@@ -971,6 +1164,8 @@ export default function NodeEditorTab() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onSelectionChange={onSelectionChange}
+              onNodeDragStart={takeSnapshot}
+              isValidConnection={isValidConnection}
               nodeTypes={nodeTypes}
               fitView
               style={{ background: '#0a0a0a' }}
@@ -1023,6 +1218,7 @@ export default function NodeEditorTab() {
               selectedNode={selectedNode}
               onLabelChange={handleLabelChange}
               onParameterChange={handleParameterChange}
+              onTimeoutChange={handleTimeoutChange}
               onClose={() => setSelectedNodes([])}
               onDelete={deleteSelectedNodes}
               onDuplicate={handleDuplicateNode}

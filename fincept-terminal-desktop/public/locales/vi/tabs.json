@@ -5,29 +5,7 @@
     "news": "Tin tức",
     "portfolio": "Danh mục",
     "backtesting": "Backtesting",
-    "watchlist": "Theo dõi",
-    "research": "Nghiên cứu",
-    "screener": "Bộ lọc",
     "chat": "AI Chat",
-    "agents": "Đại lý",
-    "settings": "Cài đặt",
     "profile": "Hồ sơ"
-  },
-  "functionKeys": {
-    "f1": "BẢNG",
-    "f2": "TTNG",
-    "f3": "TIN",
-    "f4": "DMUC",
-    "f5": "BKTS",
-    "f6": "TDOI",
-    "f7": "NCUU",
-    "f8": "BLOC",
-    "f9": "GDCH",
-    "f10": "AI",
-    "f11": "FULL",
-    "f12": "PROF"
-  },
-  "labels": {
-    "moreTabs": "Thêm tab trong menu thanh công cụ"
   }
 }

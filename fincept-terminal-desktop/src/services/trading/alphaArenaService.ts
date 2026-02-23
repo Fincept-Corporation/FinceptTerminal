@@ -99,46 +99,7 @@ export const alphaArenaService = {
    * Get API keys map for all configured providers
    */
   async getApiKeysMap(): Promise<Record<string, string>> {
-    try {
-      const apiKeys = await sqliteService.getAllApiKeys();
-      const llmConfigs = await sqliteService.getLLMConfigs();
-      const modelConfigs = await sqliteService.getLLMModelConfigs();
-
-      const result: Record<string, string> = {};
-
-      // From predefined API keys
-      if (apiKeys['OPENAI_API_KEY']) {
-        result['OPENAI_API_KEY'] = apiKeys['OPENAI_API_KEY'];
-      }
-      if (apiKeys['ANTHROPIC_API_KEY']) {
-        result['ANTHROPIC_API_KEY'] = apiKeys['ANTHROPIC_API_KEY'];
-      }
-
-      // From legacy LLM configs
-      for (const config of llmConfigs) {
-        if (config.api_key) {
-          const keyName = `${config.provider.toUpperCase()}_API_KEY`;
-          if (!result[keyName]) {
-            result[keyName] = config.api_key;
-          }
-        }
-      }
-
-      // From new model configs
-      for (const config of modelConfigs) {
-        if (config.api_key) {
-          const keyName = `${config.provider.toUpperCase()}_API_KEY`;
-          if (!result[keyName]) {
-            result[keyName] = config.api_key;
-          }
-        }
-      }
-
-      return result;
-    } catch (error) {
-      console.error('[Service] getApiKeysMap error:', error);
-      return {};
-    }
+    return sqliteService.buildApiKeysMap();
   },
 
   /**

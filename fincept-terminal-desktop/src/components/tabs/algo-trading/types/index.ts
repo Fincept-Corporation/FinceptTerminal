@@ -1,3 +1,16 @@
+export interface CandleData {
+  symbol: string;
+  provider: string;
+  timeframe: string;
+  open_time: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  volume: number;
+  is_closed: number;
+}
+
 export interface ConditionItem {
   indicator: string;
   params: Record<string, number>;

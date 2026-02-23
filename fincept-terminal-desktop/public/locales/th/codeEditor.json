@@ -1,29 +1,60 @@
 {
-  "title": "ตัวแก้ไขโค้ด",
   "header": {
-    "packages": "แพ็คเกจ"
+    "finscriptIde": "[TH] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "ไฟล์ใหม่",
-    "new": "ใหม่",
-    "open": "เปิด",
-    "save": "บันทึก",
     "run": "รันโค้ด",
     "running": "กำลังรัน...",
-    "runAll": "รันทั้งหมด",
-    "history": "ประวัติ"
+    "toggleExplorer": "[TH] Toggle Explorer (Ctrl+B)",
+    "openFile": "[TH] Open File",
+    "saveShortcut": "[TH] Save (Ctrl+S)",
+    "findShortcut": "[TH] Find (Ctrl+F)",
+    "runShortcut": "[TH] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "ตัวแก้ไข FINSCRIPT"
   },
-  "packages": {
-    "clickToLoad": "คลิกเพื่อโหลด...",
-    "load": "โหลดแพ็คเกจ"
+  "explorer": {
+    "title": "[TH] EXPLORER",
+    "openFiles": "[TH] OPEN FILES",
+    "examples": "[TH] EXAMPLES",
+    "runHistory": "[TH] RUN HISTORY",
+    "finscriptEngine": "[TH] FinScript Engine"
   },
-  "history": {
-    "title": "ประวัติ NOTEBOOK",
-    "loading": "กำลังโหลดประวัติ...",
-    "empty": "ไม่มีประวัติ notebook"
+  "output": {
+    "title": "[TH] OUTPUT",
+    "success": "[TH] SUCCESS",
+    "error": "[TH] ERROR",
+    "executing": "[TH] EXECUTING FINSCRIPT...",
+    "noOutput": "[TH] No output yet",
+    "pressToRun": "[TH] Press Ctrl+Enter to run",
+    "completed": "[TH] COMPLETED",
+    "failed": "[TH] FAILED",
+    "signals": "[TH] signals",
+    "clear": "[TH] CLEAR",
+    "errors": "[TH] ERRORS",
+    "signalsSection": "[TH] SIGNALS",
+    "outputSection": "[TH] OUTPUT",
+    "charts": "[TH] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[TH] OHLC",
+    "histogram": "[TH] Histogram",
+    "line": "[TH] Line",
+    "points": "[TH] points"
+  },
+  "statusBar": {
+    "modified": "[TH] MODIFIED",
+    "showOutput": "[TH] SHOW OUTPUT",
+    "encoding": "[TH] UTF-8",
+    "spaces": "[TH] 4 Spaces",
+    "runShortcut": "[TH] Ctrl+Enter: Run",
+    "lines": "[TH] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[TH] Close file without saving?",
+    "unsavedChanges": "[TH] You have unsaved changes."
   }
 }

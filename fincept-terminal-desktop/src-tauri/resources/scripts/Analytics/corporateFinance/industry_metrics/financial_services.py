@@ -366,6 +366,87 @@ class FinancialServicesMetrics:
             }
         }
 
+def _build_financial_standard_output(analysis: dict, sector: str) -> dict:
+    """Build valuation_metrics, benchmarks, and insights for financial services output."""
+    benchmarks_db = {
+        'banking': {
+            'net_interest_margin': {'p25': 2.5, 'median': 3.2, 'p75': 3.8},
+            'efficiency_ratio': {'p25': 50, 'median': 58, 'p75': 65},
+            'roe': {'p25': 8, 'median': 12, 'p75': 16},
+            'npa_ratio': {'p25': 0.4, 'median': 0.9, 'p75': 1.8},
+        },
+        'insurance': {
+            'combined_ratio': {'p25': 88, 'median': 95, 'p75': 101},
+            'loss_ratio': {'p25': 58, 'median': 65, 'p75': 72},
+            'roe': {'p25': 8, 'median': 12, 'p75': 16},
+            'investment_yield': {'p25': 3.0, 'median': 4.2, 'p75': 5.5},
+        },
+        'asset_management': {
+            'aum': {'p25': 20, 'median': 80, 'p75': 500},
+            'operating_margin': {'p25': 20, 'median': 32, 'p75': 42},
+            'fee_rate': {'p25': 25, 'median': 45, 'p75': 70},
+        },
+    }
+
+    vm = {}
+    insights = []
+
+    if sector == 'banking':
+        vm = {
+            'roe_pct': round(analysis.get('roe', 0), 1),
+            'net_interest_margin_pct': round(analysis.get('net_interest_margin', 0), 2),
+            'efficiency_ratio_pct': round(analysis.get('efficiency_ratio', 0), 1),
+            'npa_ratio_pct': round(analysis.get('npa_ratio', 0), 2),
+            'profitability_score': analysis.get('profitability_score', 0),
+            'asset_quality_score': round(analysis.get('asset_quality_score', 0), 0),
+        }
+        mr = analysis.get('price_to_tangible_book_range', {})
+        vm['ptbv_mid'] = round(mr.get('mid', 0), 2)
+        insights.append(f"Price-to-tangible-book range: {mr.get('low', 0):.2f}x – {mr.get('high', 0):.2f}x based on ROE and asset quality.")
+        if analysis.get('roe', 0) >= 12:
+            insights.append("ROE >= 12% supports a premium valuation relative to book value for banking M&A.")
+        if analysis.get('npa_ratio', 0) <= 1.0:
+            insights.append("NPA ratio <= 1% indicates strong asset quality — low credit risk premium in valuation.")
+
+    elif sector == 'insurance':
+        vm = {
+            'combined_ratio_pct': round(analysis.get('combined_ratio', 0), 1),
+            'underwriting_margin_pct': round(analysis.get('underwriting_profit_margin', 0), 1),
+            'loss_ratio_pct': round(analysis.get('loss_ratio', 0), 1),
+            'roe_pct': round(analysis.get('roe', 0), 1),
+            'insurance_quality_score': analysis.get('insurance_quality_score', 0),
+        }
+        mr = analysis.get('price_to_book_range', {})
+        vm['ptb_mid'] = round(mr.get('mid', 0), 2)
+        insights.append(f"Price-to-book range: {mr.get('low', 0):.2f}x – {mr.get('high', 0):.2f}x based on underwriting discipline and ROE.")
+        if analysis.get('combined_ratio', 100) <= 95:
+            insights.append("Combined ratio <= 95% indicates consistent underwriting profitability — key quality signal.")
+
+    elif sector == 'asset_management':
+        vm = {
+            'aum': round(analysis.get('aum', 0), 1),
+            'organic_growth_rate_pct': round(analysis.get('organic_growth_rate', 0), 2),
+            'operating_margin_pct': round(analysis.get('operating_margin', 0), 1),
+            'estimated_revenue': round(analysis.get('estimated_revenue', 0), 2),
+            'wealth_quality_score': analysis.get('wealth_quality_score', 0),
+        }
+        aum_mr = analysis.get('aum_multiple_range', {})
+        vm['aum_multiple_pct_mid'] = round(aum_mr.get('mid', 0) * 100, 2)
+        rev_mr = analysis.get('revenue_multiple_range', {})
+        vm['revenue_multiple_mid'] = round(rev_mr.get('mid', 0), 1)
+        insights.append(f"AUM multiple range: {aum_mr.get('low', 0)*100:.1f}% – {aum_mr.get('high', 0)*100:.1f}% of AUM.")
+        insights.append(f"Revenue multiple range: {rev_mr.get('low', 0):.1f}x – {rev_mr.get('high', 0):.1f}x.")
+        if analysis.get('organic_growth_rate', 0) >= 5:
+            insights.append("Organic flow growth >= 5% demonstrates strong client acquisition and retention momentum.")
+
+    return {
+        **analysis,
+        'valuation_metrics': vm,
+        'benchmarks': benchmarks_db.get(sector, {}),
+        'insights': insights,
+    }
+
+
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -393,42 +474,78 @@ def main():
                 'total_deposits': 'deposits', 'total_loans': 'loans',
                 'net_interest_income': 'net_interest_margin',
                 'tier1_capital': 'tier1_capital_ratio',
+                'cet1_ratio': 'tier1_capital_ratio',   # frontend sends cet1_ratio
                 'loan_loss_provision_rate': 'npa_ratio',
                 'npl_ratio': 'npa_ratio',
                 'return_on_equity': 'roe',
+                'gross_premiums': 'gross_written_premium',  # frontend sends gross_premiums
             }
             for old_key, new_key in key_aliases.items():
                 if old_key in institution_data and new_key not in institution_data:
                     institution_data[new_key] = institution_data.pop(old_key)
 
+            import inspect
+            sector_key = sector.lower()
+
             # Route to appropriate calculation based on sector
             if 'bank' in sector.lower():
                 # Provide defaults for required bank params
-                institution_data.setdefault('total_assets', institution_data.get('deposits', 0) * 1.2)
+                institution_data.setdefault('loans', institution_data.get('deposits', 0) * 0.75)
                 institution_data.setdefault('npa_ratio', 1.0)
                 institution_data.setdefault('roe', 10.0)
-                # Filter to only valid params
-                import inspect
+                institution_data.setdefault('tier1_capital_ratio', 12.0)
+                # Drop unknown keys
                 valid_params = set(inspect.signature(analyzer.calculate_bank_metrics).parameters.keys())
                 filtered = {k: v for k, v in institution_data.items() if k in valid_params}
                 analysis = analyzer.calculate_bank_metrics(**filtered)
+                sector_key = 'banking'
+
+            elif 'asset' in sector.lower() or 'asset_management' in sector.lower():
+                # Frontend sends: aum, net_flows, fee_rate (bps), operating_margin, active_vs_passive, alpha_generation
+                # Python expects: aum, net_flows, advisory_fee_rate (fraction), client_retention, advisor_productivity, operating_margin
+                if 'fee_rate' in institution_data and 'advisory_fee_rate' not in institution_data:
+                    # Convert bps to fraction (45 bps = 0.0045)
+                    institution_data['advisory_fee_rate'] = institution_data.pop('fee_rate') / 10000.0
+                institution_data.setdefault('client_retention', 92.0)
+                institution_data.setdefault('advisor_productivity', 80_000_000.0)
+                # Drop frontend-only keys
+                for drop_key in ('active_vs_passive', 'alpha_generation'):
+                    institution_data.pop(drop_key, None)
+                valid_params = set(inspect.signature(analyzer.calculate_wealth_management_metrics).parameters.keys())
+                filtered = {k: v for k, v in institution_data.items() if k in valid_params}
+                analysis = analyzer.calculate_wealth_management_metrics(**filtered)
+                sector_key = 'asset_management'
+
             elif 'wealth' in sector.lower():
-                analysis = analyzer.calculate_wealth_management_metrics(**institution_data)
+                valid_params = set(inspect.signature(analyzer.calculate_wealth_management_metrics).parameters.keys())
+                filtered = {k: v for k, v in institution_data.items() if k in valid_params}
+                analysis = analyzer.calculate_wealth_management_metrics(**filtered)
+                sector_key = 'asset_management'
+
             elif 'insurance' in sector.lower():
-                import inspect
                 valid_params = set(inspect.signature(analyzer.calculate_insurance_metrics).parameters.keys())
                 filtered = {k: v for k, v in institution_data.items() if k in valid_params}
                 analysis = analyzer.calculate_insurance_metrics(**filtered)
+                sector_key = 'insurance'
+
             elif 'fintech' in sector.lower():
-                import inspect
                 valid_params = set(inspect.signature(analyzer.calculate_fintech_metrics).parameters.keys())
                 filtered = {k: v for k, v in institution_data.items() if k in valid_params}
                 analysis = analyzer.calculate_fintech_metrics(**filtered)
+                sector_key = 'fintech'
+
             else:
                 # Default to bank metrics
-                analysis = analyzer.calculate_bank_metrics(**institution_data)
+                institution_data.setdefault('loans', institution_data.get('deposits', 0) * 0.75)
+                institution_data.setdefault('npa_ratio', 1.0)
+                institution_data.setdefault('tier1_capital_ratio', 12.0)
+                valid_params = set(inspect.signature(analyzer.calculate_bank_metrics).parameters.keys())
+                filtered = {k: v for k, v in institution_data.items() if k in valid_params}
+                analysis = analyzer.calculate_bank_metrics(**filtered)
+                sector_key = 'banking'
 
-            result = {"success": True, "data": analysis}
+            analysis_with_standard = _build_financial_standard_output(analysis, sector_key)
+            result = {"success": True, "data": analysis_with_standard}
             print(json.dumps(result))
 
         else:

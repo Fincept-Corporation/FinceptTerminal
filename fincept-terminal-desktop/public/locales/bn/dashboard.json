@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "কাস্টমাইজেবল ড্যাশবোর্ড",
-    "live": "লাইভ",
-    "widgets": "উইজেটস"
-  },
-  "buttons": {
-    "addWidget": "উইজেট যোগ করুন",
-    "saveLayout": "লেআউট সংরক্ষণ করুন",
-    "reset": "রিসেট",
-    "help": "সাহায্য"
-  },
   "widgets": {
     "loading": "লোড হচ্ছে...",
-    "error": "ত্রুটি",
     "globalIndices": "বৈশ্বিক সূচক - শীর্ষ 12",
     "forex": "ফরেক্স - প্রধান জোড়া",
     "crypto": "ক্রিপ্টোকারেন্সি",
@@ -20,8 +8,6 @@
     "news": "সংবাদ",
     "forum": "ফোরাম",
     "watchlist": "ওয়াচলিস্ট",
-    "maritimeIntelligence": "মেরিটাইম ইন্টেলিজেন্স",
-    "unknown": "অজানা উইজেট প্রকার",
     "index": "INDEX",
     "symbol": "SYMBOL",
     "price": "PRICE",
@@ -38,41 +24,22 @@
     "pair": "জোড়া",
     "rate": "হার",
     "commodity": "কমোডিটি",
-    "globe3D": "3D গ্লোব",
-    "vessels": "জাহাজ",
-    "routes": "রুট",
-    "vol24h": "VOL 24H",
-    "topTradeCorridors": "শীর্ষ বাণিজ্য করিডোর",
-    "ships": "জাহাজ",
-    "marketNews": "বাজারের খবর",
-    "secPressReleases": "এসইসি প্রেস রিলিজ",
-    "cryptoNews": "ক্রিপ্টো খবর",
-    "trendingForum": "ট্রেন্ডিং ফোরাম",
-    "techStocks": "টেক স্টক"
-  },
-  "tips": {
-    "drag": "পুনরায় সাজাতে উইজেট টেনে আনুন",
-    "resize": "নীচে-ডান কোণ থেকে আকার পরিবর্তন করুন",
-    "remove": "এক্স বোতাম দিয়ে উইজেটগুলি সরান",
-    "responsive": "প্রতিক্রিয়াশীল লেআউট - সম্পূর্ণ প্রস্থ ব্যবহার করে"
-  },
-  "loading": {
-    "title": "ড্যাশবোর্ড শুরু করা হচ্ছে",
-    "description": "দ্রুত ডেটা লোড করার জন্য ডাটাবেস ক্যাশে সেট আপ করা হচ্ছে...",
-    "note": "প্রথম লঞ্চে এটি শুধুমাত্র একটি মুহূর্ত লাগবে"
-  },
-  "empty": {
-    "noWidgets": "ড্যাশবোর্ডে কোন উইজেট নেই",
-    "addFirst": "আপনার প্রথম উইজেট যোগ করুন"
-  },
-  "status": {
-    "version": "Fincept কাস্টমাইজযোগ্য ড্যাশবোর্ড v2.0.0 | ওয়ার্কস্পেস টেনে আনুন",
-    "layout": "লেআউট",
-    "custom": "কাস্টম",
-    "empty": "খালি",
-    "active": "সক্রিয়",
-    "cache": "ক্যাশে: সক্ষম",
-    "label": "স্ট্যাটাস"
+    "noActiveMarkets": "[BN] No active markets found",
+    "indicator": "[BN] INDICATOR",
+    "value": "[BN] VALUE",
+    "chg": "[BN] CHG",
+    "overallRisk": "[BN] OVERALL RISK",
+    "openEconomicsTab": "[BN] Open Economics Tab",
+    "openGeopoliticsTab": "[BN] Open Geopolitics Tab",
+    "openPolymarketTab": "[BN] Open Polymarket Tab",
+    "noPortfolioFound": "[BN] No portfolio found",
+    "createPortfolioHint": "[BN] Create one in Portfolio tab",
+    "openPortfolioTab": "[BN] Open Portfolio Tab",
+    "action": "[BN] ACTION",
+    "markets": "[BN] MARKETS",
+    "performanceTracker": "[BN] PERFORMANCE TRACKER",
+    "totalPnL": "[BN] TOTAL P&L",
+    "viewDetailedAnalytics": "[BN] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "ড্যাশবোর্ড লেআউট সংরক্ষিত!",

@@ -1,25 +1,4 @@
 {
-  "appName": "Fincept Terminal",
   "loading": "Se încarcă...",
-  "error": "Eroare",
-  "success": "Succes",
-  "save": "Salvează",
-  "cancel": "Anulează",
-  "delete": "Șterge",
-  "edit": "Editează",
-  "add": "Adaugă",
-  "search": "Caută",
-  "filter": "Filtrează",
-  "back": "Înapoi",
-  "next": "Următorul",
-  "previous": "Anterior",
-  "submit": "Trimite",
-  "close": "Închide",
-  "open": "Deschide",
-  "yes": "Da",
-  "no": "Nu",
-  "ok": "OK",
-  "confirm": "Confirmă",
-  "language": "Limbă",
-  "selectLanguage": "Selectați limba"
+  "settings": "[RO] Settings"
 }

@@ -3,6 +3,8 @@ mod functions;
 mod builtin_indicators;
 mod builtin_utils;
 mod builtin_drawing;
+mod builtin_integration;
+mod builtin_risk;
 mod strategy;
 mod plotting;
 mod methods;
@@ -18,7 +20,7 @@ pub use symbols::collect_symbols;
 use std::collections::HashMap;
 use crate::ast::*;
 use crate::types::*;
-use crate::{Signal, PlotData, AlertInfo, DrawingInfo};
+use crate::{Signal, PlotData, AlertInfo, DrawingInfo, IntegrationAction};
 
 pub struct InterpreterResult {
     pub success: bool,
@@ -28,6 +30,7 @@ pub struct InterpreterResult {
     pub errors: Vec<String>,
     pub alerts: Vec<AlertInfo>,
     pub drawings: Vec<DrawingInfo>,
+    pub integration_actions: Vec<IntegrationAction>,
     pub execution_time_ms: u64,
 }
 
@@ -57,6 +60,7 @@ pub struct Interpreter {
     pub(crate) user_functions: HashMap<String, UserFunction>,
     pub(crate) alerts: Vec<AlertInfo>,
     pub(crate) drawings: Vec<DrawingInfo>,
+    pub(crate) integration_actions: Vec<IntegrationAction>,
     // Strategy state
     pub(crate) strategy_position: i64,
     pub(crate) strategy_entry_price: f64,
@@ -75,6 +79,7 @@ impl Interpreter {
             user_functions: HashMap::new(),
             alerts: Vec::new(),
             drawings: Vec::new(),
+            integration_actions: Vec::new(),
             strategy_position: 0,
             strategy_entry_price: 0.0,
             strategy_equity: 10000.0,
@@ -103,6 +108,7 @@ impl Interpreter {
             errors: self.errors.clone(),
             alerts: self.alerts.clone(),
             drawings: self.drawings.clone(),
+            integration_actions: self.integration_actions.clone(),
             execution_time_ms,
         }
     }

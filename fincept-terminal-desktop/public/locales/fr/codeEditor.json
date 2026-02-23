@@ -1,29 +1,60 @@
 {
-  "title": "ÉDITEUR DE CODE",
   "header": {
-    "packages": "PAQUETS"
+    "finscriptIde": "[FR] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "NOUVEAU FICHIER",
-    "new": "NOUVEAU",
-    "open": "OUVRIR",
-    "save": "ENREGISTRER",
     "run": "EXÉCUTER",
     "running": "EXÉCUTION...",
-    "runAll": "TOUT EXÉCUTER",
-    "history": "HISTORIQUE"
+    "toggleExplorer": "[FR] Toggle Explorer (Ctrl+B)",
+    "openFile": "[FR] Open File",
+    "saveShortcut": "[FR] Save (Ctrl+S)",
+    "findShortcut": "[FR] Find (Ctrl+F)",
+    "runShortcut": "[FR] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "ÉDITEUR FINSCRIPT"
   },
-  "packages": {
-    "clickToLoad": "Cliquez pour charger...",
-    "load": "CHARGER LES PAQUETS"
+  "explorer": {
+    "title": "[FR] EXPLORER",
+    "openFiles": "[FR] OPEN FILES",
+    "examples": "[FR] EXAMPLES",
+    "runHistory": "[FR] RUN HISTORY",
+    "finscriptEngine": "[FR] FinScript Engine"
   },
-  "history": {
-    "title": "HISTORIQUE DES NOTEBOOKS",
-    "loading": "Chargement de l'historique...",
-    "empty": "Aucun historique de notebooks"
+  "output": {
+    "title": "[FR] OUTPUT",
+    "success": "[FR] SUCCESS",
+    "error": "[FR] ERROR",
+    "executing": "[FR] EXECUTING FINSCRIPT...",
+    "noOutput": "[FR] No output yet",
+    "pressToRun": "[FR] Press Ctrl+Enter to run",
+    "completed": "[FR] COMPLETED",
+    "failed": "[FR] FAILED",
+    "signals": "[FR] signals",
+    "clear": "[FR] CLEAR",
+    "errors": "[FR] ERRORS",
+    "signalsSection": "[FR] SIGNALS",
+    "outputSection": "[FR] OUTPUT",
+    "charts": "[FR] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[FR] OHLC",
+    "histogram": "[FR] Histogram",
+    "line": "[FR] Line",
+    "points": "[FR] points"
+  },
+  "statusBar": {
+    "modified": "[FR] MODIFIED",
+    "showOutput": "[FR] SHOW OUTPUT",
+    "encoding": "[FR] UTF-8",
+    "spaces": "[FR] 4 Spaces",
+    "runShortcut": "[FR] Ctrl+Enter: Run",
+    "lines": "[FR] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[FR] Close file without saving?",
+    "unsavedChanges": "[FR] You have unsaved changes."
   }
 }

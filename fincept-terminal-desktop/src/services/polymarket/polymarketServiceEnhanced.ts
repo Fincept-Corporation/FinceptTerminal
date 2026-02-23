@@ -6,7 +6,6 @@ const CLOB_API_BASE = 'https://clob.polymarket.com';
 const DATA_API_BASE = 'https://data-api.polymarket.com';
 const WS_MARKET_BASE = 'wss://ws-subscriptions-clob.polymarket.com/ws/market';
 const WS_USER_BASE = 'wss://ws-subscriptions-clob.polymarket.com/ws/user';
-const WS_REALTIME_BASE = 'wss://ws-live-data.polymarket.com';
 
 // ==================== TYPE DEFINITIONS ====================
 
@@ -35,6 +34,42 @@ export interface PolymarketMarket {
   spread?: number;
   volumeNum?: number;
   liquidityNum?: number;
+  // Gamma API nests the parent event(s) — used for constructing the correct URL
+  events?: Array<{ id?: string; slug: string; title?: string }>;
+  groupItemTitle?: string;
+  // Volume variants
+  volume24hr?: number;
+  volume1wk?: number;
+  volume1mo?: number;
+  // Price change (raw decimal, multiply ×100 for %)
+  oneDayPriceChange?: number;
+  oneWeekPriceChange?: number;
+  oneMonthPriceChange?: number;
+  oneHourPriceChange?: number;
+  // Live pricing from Gamma/CLOB
+  lastTradePrice?: number;
+  bestBid?: number;
+  bestAsk?: number;
+  // Status flags
+  featured?: boolean;
+  new?: boolean;
+  acceptingOrders?: boolean;
+  negRiskOther?: boolean;
+  // Resolution metadata
+  resolutionSource?: string;
+  umaResolutionStatus?: string;
+  resolvedBy?: string;
+  // Fees & order config
+  makerBaseFee?: number;
+  takerBaseFee?: number;
+  orderMinSize?: number;
+  orderPriceMinTickSize?: number;
+  // Rankings/discovery
+  competitive?: number;
+  score?: number;
+  curationOrder?: number;
+  // Sports
+  gameStartTime?: string;
 }
 
 export interface PolymarketEvent {
@@ -64,10 +99,15 @@ export interface PolymarketTag {
 }
 
 export interface PolymarketSport {
-  id: string;
-  label: string;
-  slug: string;
-  tagId: string;
+  id: number;
+  sport: string;
+  image?: string;
+  resolution?: string;
+  ordering?: string;
+  /** Comma-separated tag IDs associated with this sport */
+  tags?: string;
+  series?: string;
+  createdAt?: string;
 }
 
 export interface PolymarketTrade {
@@ -91,6 +131,38 @@ export interface PolymarketOrderBook {
   asks: Array<{ price: string; size: string }>;
   timestamp: number;
   hash?: string;
+}
+
+// Enriched order book from GET /book?token_id= (includes extra fields vs /orderbook/:id)
+export interface PolymarketOrderBookEnriched extends PolymarketOrderBook {
+  min_order_size?: string;
+  tick_size?: string;
+  last_trade_price?: string;
+  neg_risk?: boolean;
+}
+
+// Top holders from Data API GET /holders?market={conditionId}
+export interface PolymarketHolder {
+  proxyWallet: string;
+  pseudonym?: string;
+  name?: string;
+  amount: number;
+  profileImage?: string;
+  profileImageOptimized?: string;
+  outcomeIndex: number;
+  asset?: string;
+  displayUsernamePublic?: boolean;
+}
+
+export interface PolymarketTopHolders {
+  token: string;
+  holders: PolymarketHolder[];
+}
+
+// Open interest from Data API GET /openInterest?market={conditionId}
+export interface PolymarketOpenInterest {
+  market: string;
+  value: number;
 }
 
 export interface PolymarketProfile {
@@ -152,8 +224,8 @@ export interface UserTradeHistory {
 
 // Pricing Types
 export interface PricePoint {
-  price: string;
-  timestamp: number;
+  price: number;   // normalized 0–1 float
+  timestamp: number; // unix seconds
 }
 
 export interface HistoricalPrice {
@@ -215,12 +287,38 @@ export interface CreateOrderResponse {
 }
 
 // WebSocket Types
+// Event types available with custom_feature_enabled=true:
+//   best_bid_ask, new_market, market_resolved
+// Standard event types (always available):
+//   book, price_change, tick_size_change, last_trade_price
+// Actual wire format from Polymarket WebSocket (verified against live data):
+// Fields are FLAT on the message object, not nested under "data".
+// The discriminant field is "event_type", not "type".
 export interface WSMarketUpdate {
-  type: 'book' | 'price_change' | 'tick_size_change' | 'last_trade_price';
+  event_type: 'book' | 'price_change' | 'tick_size_change' | 'last_trade_price' | 'best_bid_ask' | 'new_market' | 'market_resolved';
   market: string;
   asset_id?: string;
-  data: any;
-  timestamp: number;
+  timestamp: number | string;
+  hash?: string;
+  // book event
+  bids?: Array<{ price: string; size: string }>;
+  asks?: Array<{ price: string; size: string }>;
+  tick_size?: string;
+  last_trade_price?: string;
+  // price_change event
+  price?: string;
+  side?: 'BUY' | 'SELL';
+  size?: string;
+  // best_bid_ask event
+  best_bid?: string;
+  best_ask?: string;
+  spread?: string;
+  // new_market / market_resolved
+  question?: string;
+  outcomes?: string[];
+  winner?: string;
+  // keep data for any undocumented fields
+  data?: any;
 }
 
 export interface WSUserUpdate {
@@ -261,10 +359,13 @@ export interface EventQueryParams {
 
 export interface PriceHistoryParams {
   token_id: string;
-  interval?: '1m' | '1w' | '1d' | '6h' | '1h' | 'max';
+  /** Time window. Valid values: 'max' | 'all' | '1m' | '1w' | '1d' | '6h' | '1h'. Default: '1d' */
+  interval?: string;
+  /** Start timestamp in milliseconds (omit to use interval) */
   startTs?: number;
+  /** End timestamp in milliseconds (omit to use interval) */
   endTs?: number;
-  limit?: number;
+  /** Resolution accuracy in MINUTES (e.g. 1 = 1-minute resolution). Default: 1 */
   fidelity?: number;
 }
 
@@ -273,6 +374,7 @@ export interface APICredentials {
   apiKey: string;
   apiSecret: string;
   apiPassphrase: string;
+  walletAddress?: string;
 }
 
 // ==================== SERVICE CLASS ====================
@@ -283,7 +385,6 @@ class PolymarketServiceEnhanced {
   private dataApiBase: string;
   private wsMarketBase: string;
   private wsUserBase: string;
-  private wsRealtimeBase: string;
   private credentials?: APICredentials;
   private wsConnections: Map<string, WebSocket>;
 
@@ -293,7 +394,6 @@ class PolymarketServiceEnhanced {
     this.dataApiBase = DATA_API_BASE;
     this.wsMarketBase = WS_MARKET_BASE;
     this.wsUserBase = WS_USER_BASE;
-    this.wsRealtimeBase = WS_REALTIME_BASE;
     this.wsConnections = new Map();
   }
 
@@ -307,19 +407,39 @@ class PolymarketServiceEnhanced {
     this.credentials = undefined;
   }
 
-  private generateAuthHeaders(timestamp: number, method: string, path: string, body?: string): HeadersInit {
+  private async generateAuthHeaders(timestamp: number, method: string, path: string, body?: string): Promise<HeadersInit> {
     if (!this.credentials) {
       throw new Error('API credentials not set');
     }
 
-    // HMAC-SHA256 signature generation would go here
-    // For now, return basic headers
+    // Build the message to sign: timestamp + method + path + body
+    const message = timestamp.toString() + method.toUpperCase() + path + (body ?? '');
+
+    // HMAC-SHA256 signature using Web Crypto API
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(this.credentials.apiSecret);
+    const msgData = encoder.encode(message);
+
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, msgData);
+    const signatureBytes = new Uint8Array(signatureBuffer);
+    // Base64 encode the signature
+    const signature = btoa(String.fromCharCode(...signatureBytes));
+
     return {
       'Content-Type': 'application/json',
-      'POLY-API-KEY': this.credentials.apiKey,
-      'POLY-TIMESTAMP': timestamp.toString(),
-      'POLY-PASSPHRASE': this.credentials.apiPassphrase,
-      // 'POLY-SIGNATURE': signature // Would compute actual signature
+      'POLY_ADDRESS': this.credentials.walletAddress ?? '',
+      'POLY_API_KEY': this.credentials.apiKey,
+      'POLY_PASSPHRASE': this.credentials.apiPassphrase,
+      'POLY_SIGNATURE': signature,
+      'POLY_TIMESTAMP': timestamp.toString(),
     };
   }
 
@@ -451,7 +571,8 @@ class PolymarketServiceEnhanced {
 
   async getOrderBook(tokenId: string): Promise<PolymarketOrderBook> {
     try {
-      const url = `${this.clobApiBase}/book?token_id=${tokenId}`;
+      // Official endpoint: GET /orderbook/:tokenId (path parameter, not query string)
+      const url = `${this.clobApiBase}/orderbook/${tokenId}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`CLOB API error: ${response.status}`);
       return await response.json();
@@ -520,14 +641,13 @@ class PolymarketServiceEnhanced {
   async getPriceHistory(params: PriceHistoryParams): Promise<HistoricalPrice> {
     try {
       const queryParams = new URLSearchParams();
-      // API uses 'market' parameter, not 'token_id'
+      // API requires: market = numeric tokenId (NOT conditionId — conditionId returns empty)
       queryParams.append('market', params.token_id);
-      queryParams.append('interval', params.interval || 'max');
-
-      // Add fidelity parameter (resolution in minutes)
-      if (params.fidelity) {
-        queryParams.append('fidelity', params.fidelity.toString());
-      }
+      // 'interval' is MANDATORY — omitting it returns an API error
+      // Valid values: 'max' | 'all' | '1m' | '1w' | '1d' | '6h' | '1h'
+      queryParams.append('interval', params.interval ?? '1d');
+      // fidelity = resolution accuracy in MINUTES (default 1 = 1-minute resolution)
+      queryParams.append('fidelity', (params.fidelity ?? 1).toString());
 
       const url = `${this.clobApiBase}/prices-history?${queryParams.toString()}`;
       console.log('Price history URL:', url);
@@ -543,18 +663,22 @@ class PolymarketServiceEnhanced {
       console.log('Price history response:', data);
       console.log('First history item:', data.history?.[0]);
 
-      // API returns {history: [...]} - map to PricePoint format
-      const prices = (data.history || []).map((item: any) => ({
-        price: item.p || item.price || '0', // 'p' is the price field
-        timestamp: item.t || item.timestamp || 0 // 't' is the timestamp field
-      }));
-
-      console.log('Mapped prices:', prices.slice(0, 3));
+      // API returns { history: [{ p: number, t: number }, ...] }
+      // p = price (0–1 float), t = unix timestamp in seconds
+      const raw: any[] = data.history || data.prices || [];
+      const prices = raw
+        .map((item: any) => {
+          const p = parseFloat(item.p ?? item.price ?? '0');
+          const t = Number(item.t ?? item.timestamp ?? 0);
+          return { price: p, timestamp: t };
+        })
+        .filter(pt => !isNaN(pt.price) && pt.timestamp > 0)
+        .sort((a, b) => a.timestamp - b.timestamp); // ensure chronological order
 
       return {
         token_id: params.token_id,
         prices,
-        interval: params.interval || 'max'
+        interval: params.interval ?? '1d',
       };
     } catch (error) {
       console.error('Error fetching price history:', error);
@@ -608,7 +732,9 @@ class PolymarketServiceEnhanced {
       const url = `${this.clobApiBase}/data/trades${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`CLOB API error: ${response.status}`);
-      return await response.json();
+      const json = await response.json();
+      // CLOB API returns paginated: { data: PolymarketTrade[], count, limit, offset }
+      return Array.isArray(json) ? json : (json.data ?? []);
     } catch (error) {
       console.error('Error fetching trades:', error);
       throw error;
@@ -653,6 +779,67 @@ class PolymarketServiceEnhanced {
     }
   }
 
+  // ==================== DATA API - Market Data ====================
+
+  async getTopHolders(conditionId: string, limit: number = 20): Promise<PolymarketTopHolders> {
+    try {
+      const url = `${this.dataApiBase}/holders?market=${encodeURIComponent(conditionId)}&limit=${limit}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Data API error: ${response.status}`);
+      const data = await response.json();
+      // API returns array of MetaHolder objects: [{token, holders:[...]}, ...]
+      if (Array.isArray(data)) {
+        // Flatten all holders across token entries
+        const allHolders: PolymarketHolder[] = data.flatMap((entry: any) =>
+          (entry.holders ?? []).map((h: any) => ({
+            ...h,
+            outcomeIndex: h.outcomeIndex ?? (entry.token === data[0]?.token ? 0 : 1),
+          }))
+        );
+        return { token: data[0]?.token ?? '', holders: allHolders };
+      }
+      return data as PolymarketTopHolders;
+    } catch (error) {
+      console.error('Error fetching top holders:', error);
+      throw error;
+    }
+  }
+
+  async getOpenInterest(conditionIds: string[]): Promise<PolymarketOpenInterest[]> {
+    try {
+      const marketParam = conditionIds.map(encodeURIComponent).join(',');
+      const url = `${this.dataApiBase}/openInterest?market=${marketParam}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Data API error: ${response.status}`);
+      const data = await response.json();
+      return Array.isArray(data) ? data : [data];
+    } catch (error) {
+      console.error('Error fetching open interest:', error);
+      throw error;
+    }
+  }
+
+  async getOrderBookEnriched(tokenId: string): Promise<PolymarketOrderBookEnriched> {
+    try {
+      // Use /book?token_id= which returns extra fields: min_order_size, tick_size, last_trade_price, neg_risk
+      const url = `${this.clobApiBase}/book?token_id=${tokenId}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`CLOB API error: ${response.status}`);
+      const data = await response.json();
+      // Ensure bids sorted desc by price, asks sorted asc
+      if (data.bids) {
+        data.bids = data.bids.sort((a: any, b: any) => parseFloat(b.price) - parseFloat(a.price));
+      }
+      if (data.asks) {
+        data.asks = data.asks.sort((a: any, b: any) => parseFloat(a.price) - parseFloat(b.price));
+      }
+      return data as PolymarketOrderBookEnriched;
+    } catch (error) {
+      console.error('Error fetching enriched order book:', error);
+      throw error;
+    }
+  }
+
   // ==================== ORDER MANAGEMENT (L2) ====================
   // Note: These require authentication and proper signature generation
 
@@ -662,9 +849,10 @@ class PolymarketServiceEnhanced {
     }
 
     try {
-      const timestamp = Date.now();
+      const timestamp = Math.floor(Date.now() / 1000);
       const url = `${this.clobApiBase}/order`;
-      const headers = this.generateAuthHeaders(timestamp, 'POST', '/order', JSON.stringify(orderRequest));
+      const body = JSON.stringify(orderRequest);
+      const headers = await this.generateAuthHeaders(timestamp, 'POST', '/order', body);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -686,10 +874,10 @@ class PolymarketServiceEnhanced {
     }
 
     try {
-      const timestamp = Date.now();
+      const timestamp = Math.floor(Date.now() / 1000);
       const path = userAddress ? `/orders?user=${userAddress}` : '/orders';
       const url = `${this.clobApiBase}${path}`;
-      const headers = this.generateAuthHeaders(timestamp, 'GET', path);
+      const headers = await this.generateAuthHeaders(timestamp, 'GET', path);
 
       const response = await fetch(url, { headers });
       if (!response.ok) throw new Error(`CLOB API error: ${response.status}`);
@@ -706,10 +894,10 @@ class PolymarketServiceEnhanced {
     }
 
     try {
-      const timestamp = Date.now();
+      const timestamp = Math.floor(Date.now() / 1000);
       const path = `/order/${orderId}`;
       const url = `${this.clobApiBase}${path}`;
-      const headers = this.generateAuthHeaders(timestamp, 'DELETE', path);
+      const headers = await this.generateAuthHeaders(timestamp, 'DELETE', path);
 
       const response = await fetch(url, {
         method: 'DELETE',
@@ -730,14 +918,17 @@ class PolymarketServiceEnhanced {
     }
 
     try {
-      const timestamp = Date.now();
-      const path = marketId ? `/orders?market=${marketId}` : '/orders';
+      const timestamp = Math.floor(Date.now() / 1000);
+      // Official endpoint: DELETE /cancel-all (optionally with body { market })
+      const path = '/cancel-all';
+      const body = marketId ? JSON.stringify({ market: marketId }) : undefined;
       const url = `${this.clobApiBase}${path}`;
-      const headers = this.generateAuthHeaders(timestamp, 'DELETE', path);
+      const headers = await this.generateAuthHeaders(timestamp, 'DELETE', path, body);
 
       const response = await fetch(url, {
         method: 'DELETE',
-        headers
+        headers,
+        ...(body ? { body } : {}),
       });
 
       if (!response.ok) throw new Error(`CLOB API error: ${response.status}`);
@@ -751,6 +942,7 @@ class PolymarketServiceEnhanced {
   // ==================== WEBSOCKET CONNECTIONS ====================
 
   connectMarketWebSocket(
+    assetIds: string[],
     onMessage: (update: WSMarketUpdate) => void,
     onError?: (error: Event) => void
   ): WebSocket {
@@ -758,12 +950,34 @@ class PolymarketServiceEnhanced {
 
     ws.onopen = () => {
       console.log('Market WebSocket connected');
+      // Official subscribe format: type="market", assets_ids=[...tokenIds], initial_dump=true
+      // custom_feature_enabled=true enables extra event types: best_bid_ask, new_market, market_resolved
+      ws.send(JSON.stringify({
+        type: 'market',
+        assets_ids: assetIds,
+        initial_dump: true,
+        custom_feature_enabled: true,
+      }));
+      // Keepalive: docs require PING every 10 seconds (server closes after ~10s silence)
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send('PING');
+        } else {
+          clearInterval(pingInterval);
+        }
+      }, 10_000);
+      (ws as any)._pingInterval = pingInterval;
     };
 
     ws.onmessage = (event) => {
       try {
+        if (event.data === 'PONG') return;
         const data = JSON.parse(event.data);
-        onMessage(data);
+        // Polymarket sends messages as arrays of event objects
+        const messages: WSMarketUpdate[] = Array.isArray(data) ? data : [data];
+        for (const msg of messages) {
+          onMessage(msg);
+        }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
       }
@@ -776,6 +990,7 @@ class PolymarketServiceEnhanced {
 
     ws.onclose = () => {
       console.log('Market WebSocket disconnected');
+      if ((ws as any)._pingInterval) clearInterval((ws as any)._pingInterval);
     };
 
     this.wsConnections.set('market', ws);
@@ -783,6 +998,7 @@ class PolymarketServiceEnhanced {
   }
 
   connectUserWebSocket(
+    conditionIds: string[],
     onMessage: (update: WSUserUpdate) => void,
     onError?: (error: Event) => void
   ): WebSocket {
@@ -791,20 +1007,41 @@ class PolymarketServiceEnhanced {
     }
 
     const ws = new WebSocket(this.wsUserBase);
+    const creds = this.credentials;
 
     ws.onopen = () => {
       console.log('User WebSocket connected');
-      // Send authentication message
+      // Official auth format: auth object + type="user" + markets=[conditionIds]
       ws.send(JSON.stringify({
-        type: 'auth',
-        apiKey: this.credentials!.apiKey
+        auth: {
+          apiKey: creds.apiKey,
+          secret: creds.apiSecret,
+          passphrase: creds.apiPassphrase,
+        },
+        type: 'user',
+        markets: conditionIds,
+        initial_dump: true,
       }));
+      // Keepalive PING every 10 seconds (docs requirement)
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send('PING');
+        } else {
+          clearInterval(pingInterval);
+        }
+      }, 10_000);
+      (ws as any)._pingInterval = pingInterval;
     };
 
     ws.onmessage = (event) => {
       try {
+        if (event.data === 'PONG') return;
         const data = JSON.parse(event.data);
-        onMessage(data);
+        // Polymarket sends messages as arrays of event objects
+        const messages: WSUserUpdate[] = Array.isArray(data) ? data : [data];
+        for (const msg of messages) {
+          onMessage(msg);
+        }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
       }
@@ -817,30 +1054,28 @@ class PolymarketServiceEnhanced {
 
     ws.onclose = () => {
       console.log('User WebSocket disconnected');
+      if ((ws as any)._pingInterval) clearInterval((ws as any)._pingInterval);
     };
 
     this.wsConnections.set('user', ws);
     return ws;
   }
 
-  subscribeToMarket(marketId: string) {
+  subscribeToMarket(assetIds: string[]) {
     const ws = this.wsConnections.get('market');
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
-        type: 'subscribe',
-        market: marketId
+        type: 'market',
+        assets_ids: assetIds,
+        initial_dump: false,
       }));
     }
   }
 
-  unsubscribeFromMarket(marketId: string) {
-    const ws = this.wsConnections.get('market');
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'unsubscribe',
-        market: marketId
-      }));
-    }
+  unsubscribeFromMarket(_assetIds: string[]) {
+    // Polymarket WS does not have an explicit unsubscribe message;
+    // close and reconnect with a different assets_ids list if needed.
+    console.warn('[Polymarket WS] To unsubscribe, reconnect with updated assets_ids list.');
   }
 
   disconnectWebSocket(type: 'market' | 'user' | 'all' = 'all') {

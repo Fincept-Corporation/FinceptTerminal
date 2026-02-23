@@ -533,7 +533,7 @@ class LLMApiService {
     config: LLMConfig,
     onStream?: StreamCallback
   ): Promise<LLMResponse> {
-    const url = config.baseUrl || 'https://finceptbackend.share.zrok.io/research/llm';
+    const url = config.baseUrl || 'https://api.fincept.in/research/llm';
 
     try {
       // Build full prompt including system message and conversation history
@@ -1028,7 +1028,7 @@ Mention the year-over-year growth percentages when discussing financial performa
     onStream?: StreamCallback,
     onToolCall?: (toolName: string, args: any, result?: any) => void
   ): Promise<LLMResponse> {
-    const url = config.baseUrl || 'https://finceptbackend.share.zrok.io/research/llm';
+    const url = config.baseUrl || 'https://api.fincept.in/research/llm';
 
     try {
       // Build full prompt

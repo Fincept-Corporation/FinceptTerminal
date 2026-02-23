@@ -183,9 +183,31 @@ const AlphaArenaRightPanel: React.FC<AlphaArenaRightPanelProps> = ({
   );
 };
 
+// Get action color for Polymarket or crypto decisions
+const getActionColor = (action: string): string => {
+  switch (action?.toLowerCase()) {
+    case 'buy': case 'buy_yes': return '#00D66F';
+    case 'sell': case 'sell_yes': return '#FF3B3B';
+    case 'buy_no': return '#FF3B3B';
+    case 'sell_no': return '#00D66F';
+    case 'short': return '#9D4EDD';
+    default: return '#787878';
+  }
+};
+
+const getActionBg = (action: string): string => {
+  const color = getActionColor(action);
+  return `${color}20`;
+};
+
 // Decisions sub-content - Terminal style
 const DecisionsContent: React.FC<{ decisions: ModelDecision[] }> = ({ decisions }) => {
   const safeDecisions = Array.isArray(decisions) ? decisions : [];
+
+  // Check if decisions are Polymarket-style (action contains buy_yes, buy_no, etc.)
+  const isPolymarket = safeDecisions.some(d =>
+    ['buy_yes', 'buy_no', 'sell_yes', 'sell_no'].includes(d.action)
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', backgroundColor: FINCEPT.CARD_BG }}>
@@ -200,7 +222,9 @@ const DecisionsContent: React.FC<{ decisions: ModelDecision[] }> = ({ decisions 
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Brain size={14} style={{ color: FINCEPT.PURPLE }} />
-          <span style={{ fontWeight: 700, fontSize: '11px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>AI DECISIONS</span>
+          <span style={{ fontWeight: 700, fontSize: '11px', color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
+            {isPolymarket ? 'PM DECISIONS' : 'AI DECISIONS'}
+          </span>
         </div>
         <span style={{
           fontSize: '9px',
@@ -223,71 +247,110 @@ const DecisionsContent: React.FC<{ decisions: ModelDecision[] }> = ({ decisions 
           </div>
         ) : (
           <div>
-            {safeDecisions.slice(0, 50).map((decision, idx) => (
-              <div
-                key={`${decision.model_name}-${decision.cycle_number}-${idx}`}
-                style={{
-                  padding: '8px 10px',
-                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
-                  transition: 'background-color 0.15s',
-                  cursor: 'default',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.WHITE }}>
-                    {decision.model_name}
-                  </span>
-                  <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
-                    Cycle {decision.cycle_number}
-                  </span>
+            {safeDecisions.slice(0, 50).map((decision, idx) => {
+              const confidence = decision.confidence ?? 0;
+              const actionColor = getActionColor(decision.action);
+              const isHighConfidence = confidence >= 0.7;
+
+              return (
+                <div
+                  key={`${decision.model_name}-${decision.cycle_number}-${idx}`}
+                  style={{
+                    padding: '8px 10px',
+                    borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                    borderLeft: `3px solid ${actionColor}`,
+                    transition: 'background-color 0.15s',
+                    cursor: 'default',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.WHITE }}>
+                      {decision.model_name}
+                    </span>
+                    <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+                      Cycle {decision.cycle_number}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: '9px',
+                      padding: '1px 6px',
+                      fontWeight: 700,
+                      letterSpacing: '0.5px',
+                      backgroundColor: getActionBg(decision.action),
+                      color: actionColor,
+                    }}>
+                      {(decision.action || 'hold').toUpperCase().replace('_', ' ')}
+                    </span>
+                    <span style={{ fontSize: '9px', color: FINCEPT.GRAY, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {decision.symbol}
+                    </span>
+                    {decision.quantity > 0 && (
+                      <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+                        {isPolymarket ? `$${(decision.quantity ?? 0).toFixed(2)}` : `Qty: ${(decision.quantity ?? 0).toFixed(4)}`}
+                      </span>
+                    )}
+                    {isHighConfidence && decision.action !== 'hold' && (
+                      <span style={{
+                        fontSize: '8px',
+                        padding: '0 4px',
+                        fontWeight: 700,
+                        backgroundColor: `${FINCEPT.ORANGE}20`,
+                        color: FINCEPT.ORANGE,
+                      }}>
+                        HIGH EDGE
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Confidence bar */}
+                  <div style={{ marginTop: '5px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{
+                        flex: 1,
+                        height: '3px',
+                        backgroundColor: FINCEPT.BORDER,
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          width: `${confidence * 100}%`,
+                          height: '100%',
+                          backgroundColor: confidence >= 0.7 ? FINCEPT.GREEN : confidence >= 0.4 ? FINCEPT.ORANGE : FINCEPT.RED,
+                          transition: 'width 0.3s',
+                        }} />
+                      </div>
+                      <span style={{
+                        fontSize: '9px',
+                        fontWeight: 600,
+                        color: confidence >= 0.7 ? FINCEPT.GREEN : confidence >= 0.4 ? FINCEPT.ORANGE : FINCEPT.RED,
+                        minWidth: '30px',
+                        textAlign: 'right',
+                      }}>
+                        {(confidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {decision.reasoning && (
+                    <p style={{
+                      fontSize: '9px',
+                      marginTop: '4px',
+                      color: FINCEPT.MUTED,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                    }}>
+                      {decision.reasoning}
+                    </p>
+                  )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{
-                    fontSize: '9px',
-                    padding: '1px 6px',
-                    fontWeight: 700,
-                    letterSpacing: '0.5px',
-                    backgroundColor: decision.action === 'buy' ? `${FINCEPT.GREEN}20` :
-                      decision.action === 'sell' ? `${FINCEPT.RED}20` :
-                      decision.action === 'short' ? `${FINCEPT.PURPLE}20` :
-                      `${FINCEPT.GRAY}20`,
-                    color: decision.action === 'buy' ? FINCEPT.GREEN :
-                      decision.action === 'sell' ? FINCEPT.RED :
-                      decision.action === 'short' ? FINCEPT.PURPLE :
-                      FINCEPT.GRAY,
-                  }}>
-                    {(decision.action || 'hold').toUpperCase()}
-                  </span>
-                  <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
-                    {decision.symbol}
-                  </span>
-                  <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
-                    Qty: {(decision.quantity ?? 0).toFixed(4)}
-                  </span>
-                </div>
-                {decision.reasoning && (
-                  <p style={{
-                    fontSize: '9px',
-                    marginTop: '4px',
-                    color: FINCEPT.MUTED,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                  }}>
-                    {decision.reasoning}
-                  </p>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-                  <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
-                    Confidence: {((decision.confidence ?? 0) * 100).toFixed(0)}%
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

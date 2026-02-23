@@ -314,6 +314,8 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
   // Auto-create adapter when broker changes (including on startup)
   // adapterInitKey forces re-init when incremented (for re-selecting same broker)
   useEffect(() => {
+    let cancelled = false;
+
     const initializeAdapter = async () => {
       if (!activeBroker) {
         // If we're skipping init and isLoading is true, set it to false
@@ -328,6 +330,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
 
       try {
         const newAdapter = createStockBrokerAdapter(activeBroker);
+        if (cancelled) return;
         console.log(`[StockBrokerContext] Created adapter for: ${activeBroker}`);
 
         // Check if this is a paper-only broker that doesn't need credentials (like yfinance)
@@ -339,6 +342,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
 
           // Auto-authenticate for paper-only brokers (no real credentials needed)
           const authResult = await newAdapter.authenticate({ apiKey: 'paper_trading' });
+          if (cancelled) return;
 
           if (authResult.success) {
             console.log(`[StockBrokerContext] ✓ Paper trading auto-authenticated for ${activeBroker}`);
@@ -352,14 +356,17 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
             // Initialize unified trading session in paper mode
             try {
               await initTradingSession(activeBroker, 'paper');
+              if (cancelled) return;
               console.log(`[StockBrokerContext] ✓ Paper trading session initialized`);
             } catch (sessionErr) {
+              if (cancelled) return;
               console.error('[StockBrokerContext] Failed to init paper trading session:', sessionErr);
             }
 
             // Auto-download master contract for YFinance (CRITICAL for chart/symbol lookup)
             setMasterContractReady(false);
             symbolMaster.ensureMasterContract(activeBroker).then((result) => {
+              if (cancelled) return;
               if (result.success) {
                 console.log(`[StockBrokerContext] ✓ Master contract ready (paper trading): ${result.total_symbols} symbols`);
                 setMasterContractReady(true);
@@ -370,6 +377,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
                 setMasterContractReady(true);
               }
             }).catch((err) => {
+              if (cancelled) return;
               console.warn(`[StockBrokerContext] Master contract download failed:`, err);
               // For YFinance, we can still work without master contract (uses direct symbol)
               setMasterContractReady(true);
@@ -389,6 +397,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
         try {
           console.log(`[StockBrokerContext] Loading credentials from database (no auto-connect)...`);
           const storedCreds = await (newAdapter as any).loadCredentials();
+          if (cancelled) return;
 
           if (storedCreds && storedCreds.apiKey) {
             console.log(`[StockBrokerContext] Found stored credentials, loading into adapter memory...`);
@@ -439,16 +448,20 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
               // Initialize trading session and fetch data in background
               try {
                 await initTradingSession(activeBroker, tradingMode);
+                if (cancelled) return;
               } catch (sessionErr) {
+                if (cancelled) return;
                 console.error('[StockBrokerContext] Failed to init trading session:', sessionErr);
               }
               refreshAllData(newAdapter).catch(err => {
+                if (cancelled) return;
                 console.warn('[StockBrokerContext] Background data refresh failed:', err);
               });
 
               // Auto-download master contract if needed (CRITICAL for chart/symbol lookup)
               setMasterContractReady(false);
               symbolMaster.ensureMasterContract(activeBroker).then((result) => {
+                if (cancelled) return;
                 if (result.success) {
                   console.log(`[StockBrokerContext] ✓ Master contract ready (session restore): ${result.total_symbols} symbols`);
                   setMasterContractReady(true);
@@ -458,6 +471,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
                   setMasterContractReady(result.total_symbols > 0);
                 }
               }).catch((err) => {
+                if (cancelled) return;
                 console.warn(`[StockBrokerContext] Master contract download failed:`, err);
                 setMasterContractReady(false);
               });
@@ -500,6 +514,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
     };
 
     initializeAdapter();
+    return () => { cancelled = true; };
   }, [activeBroker, tradingMode, adapterInitKey]);
 
   // ============================================================================

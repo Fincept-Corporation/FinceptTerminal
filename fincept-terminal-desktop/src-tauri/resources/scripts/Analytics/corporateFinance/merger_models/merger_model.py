@@ -80,9 +80,15 @@ class MergerModel:
 
         sources_uses_table = self.sources_uses.auto_balance()
 
+        # Support both combined 'synergies' key and separate 'cost_synergies'/'revenue_synergies' keys
+        total_synergies = (
+            self.deal_terms.get('synergies') or
+            (self.deal_terms.get('cost_synergies', 0) + self.deal_terms.get('revenue_synergies', 0))
+        )
+
         deal_structure = {
             'new_debt': new_debt_needed,
-            'synergies': self.deal_terms.get('synergies', 0),
+            'synergies': total_synergies,
             'integration_costs': self.deal_terms.get('integration_costs', 0),
             'tax_rate': self.deal_terms.get('tax_rate', 0.21),
             'acquirer_stock_price': acquirer_stock_price,
@@ -134,7 +140,7 @@ class MergerModel:
 
         synergy_sensitivity = self.sensitivity_analyzer.synergy_sensitivity(
             min_synergies=0,
-            max_synergies=self.deal_terms.get('synergies', 0) * 2,
+            max_synergies=total_synergies * 2,
             steps=11
         )
 
@@ -196,14 +202,20 @@ class MergerModel:
                 'pro_forma_net_income': pf_y1['net_income']
             },
             'key_assumptions': {
-                'synergies': self.deal_terms.get('synergies', 0),
+                'synergies': (
+                    self.deal_terms.get('synergies') or
+                    (self.deal_terms.get('cost_synergies', 0) + self.deal_terms.get('revenue_synergies', 0))
+                ),
                 'integration_costs': self.deal_terms.get('integration_costs', 0),
                 'new_debt': model_results['sources_uses']['sources']['sources_breakdown']['new_debt']['amount'],
                 'new_shares_issued': model_results['new_shares_issued']
             },
             'breakeven_analysis': {
                 'breakeven_synergies': model_results['breakeven_synergies'],
-                'synergies_cushion': self.deal_terms.get('synergies', 0) - model_results['breakeven_synergies']
+                'synergies_cushion': (
+                    self.deal_terms.get('synergies') or
+                    (self.deal_terms.get('cost_synergies', 0) + self.deal_terms.get('revenue_synergies', 0))
+                ) - model_results['breakeven_synergies']
             }
         }
 

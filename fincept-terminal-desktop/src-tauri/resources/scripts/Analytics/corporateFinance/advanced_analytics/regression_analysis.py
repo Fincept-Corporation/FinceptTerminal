@@ -311,18 +311,74 @@ def main():
                 # Positional args: comp_data subject_metrics regression_type
                 comp_data = params if isinstance(params, list) else json.loads(sys.argv[2])
                 subject_metrics = json.loads(sys.argv[3]) if len(sys.argv) > 3 else {}
-                regression_type = sys.argv[4] if len(sys.argv) > 4 else "premium"
+                regression_type = sys.argv[4] if len(sys.argv) > 4 else "multiple"
 
                 analyzer = MARegression()
-                if regression_type == "premium":
+                # Both 'ols' and 'multiple' use multiple_regression_valuation with frontend data format
+                # (comp_data has 'ev', 'revenue', 'ebitda', 'growth' keys)
+                # Only route to premium_regression if comp_data has 'premium' key
+                has_premium_key = comp_data and 'premium' in comp_data[0]
+                if has_premium_key and regression_type == "premium":
                     analysis = analyzer.premium_regression(comp_data)
-                elif regression_type == "multiple":
-                    analysis = analyzer.multiple_regression(comp_data, subject_metrics)
                 else:
-                    analysis = analyzer.premium_regression(comp_data)
+                    # Filter out non-numeric keys (like 'name') from comp_data for regression
+                    numeric_keys = [k for k in comp_data[0].keys() if k != 'name'] if comp_data else []
+                    filtered_comp = [{k: v for k, v in row.items() if k in numeric_keys} for row in comp_data]
+                    # Also filter subject_metrics to only include keys that are features (not 'ev', not 'name')
+                    feature_keys = [k for k in numeric_keys if k != 'ev']
+                    filtered_subject = {k: v for k, v in subject_metrics.items() if k in feature_keys}
+                    analysis_raw = analyzer.multiple_regression_valuation(filtered_comp, filtered_subject)
+
+                    # Normalize output to what the frontend expects:
+                    # result.implied_ev, result.r_squared, result.adj_r_squared,
+                    # result.coefficients (key → plain number), result.implied_multiples
+                    rs = analysis_raw.get('regression_statistics', {})
+                    raw_coeffs = analysis_raw.get('coefficients', {})
+                    predicted_ev = analysis_raw.get('predicted_value', 0)
+
+                    # coefficients: flatten to {feature: coefficient_value}
+                    flat_coeffs = {
+                        feat: coeff_info['coefficient']
+                        for feat, coeff_info in raw_coeffs.items()
+                    }
+
+                    # implied_multiples: compute EV / metric for subject company
+                    implied_multiples = {}
+                    if filtered_subject.get('revenue', 0) > 0:
+                        implied_multiples['ev_revenue'] = predicted_ev / filtered_subject['revenue']
+                    if filtered_subject.get('ebitda', 0) > 0:
+                        implied_multiples['ev_ebitda'] = predicted_ev / filtered_subject['ebitda']
+
+                    # prediction_interval
+                    pi = analysis_raw.get('prediction_interval', {})
+
+                    analysis = {
+                        'implied_ev': predicted_ev,
+                        'prediction_interval_low': pi.get('lower', 0),
+                        'prediction_interval_high': pi.get('upper', 0),
+                        'r_squared': rs.get('r_squared', 0),
+                        'adj_r_squared': rs.get('adjusted_r_squared', 0),
+                        'intercept': rs.get('intercept', 0),
+                        'coefficients': flat_coeffs,
+                        'implied_multiples': implied_multiples,
+                        'num_comparables': analysis_raw.get('num_comparables', len(comp_data)),
+                        'regression_type': regression_type,
+                        'raw_coefficients': raw_coeffs,  # keep full detail for raw view
+                    }
 
             result = {"success": True, "data": analysis}
-            print(json.dumps(result, default=lambda o: bool(o) if isinstance(o, np.bool_) else float(o) if isinstance(o, (np.floating, np.integer)) else str(o)))
+
+            def safe_json(o):
+                if isinstance(o, np.bool_):
+                    return bool(o)
+                if isinstance(o, (np.floating, np.integer)):
+                    v = float(o)
+                    if v != v or v == float('inf') or v == float('-inf'):  # nan or inf
+                        return None
+                    return v
+                return str(o)
+
+            print(json.dumps(result, default=safe_json))
 
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}

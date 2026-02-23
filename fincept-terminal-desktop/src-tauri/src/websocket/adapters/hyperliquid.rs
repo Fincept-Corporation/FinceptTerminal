@@ -234,6 +234,7 @@ impl HyperLiquidAdapter {
                     close: None,
                     change: None,
                     change_percent: None,
+                    quote_volume: None,
                     timestamp: chrono::Utc::now().timestamp_millis() as u64,
                 }));
             }
@@ -325,6 +326,7 @@ impl WebSocketAdapter for HyperLiquidAdapter {
                                                         close: None,
                                                         change: None,
                                                         change_percent: None,
+                                                        quote_volume: None,
                                                         timestamp: chrono::Utc::now().timestamp_millis() as u64,
                                                     }));
                                                 }
@@ -403,6 +405,7 @@ impl WebSocketAdapter for HyperLiquidAdapter {
                                                     close: None,
                                                     change: None,
                                                     change_percent: None,
+                                                    quote_volume: None,
                                                     timestamp: bbo.time,
                                                 });
                                                 drop(states); // Release lock
@@ -455,6 +458,7 @@ impl WebSocketAdapter for HyperLiquidAdapter {
                                                     close: Some(close),
                                                     change: Some(change),
                                                     change_percent: Some(change_percent),
+                                                    quote_volume: None,
                                                     timestamp: candle.end_time,
                                                 });
                                                 drop(states); // Release lock

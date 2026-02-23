@@ -1,7 +1,8 @@
 #![allow(dead_code)]
-// Kraken WebSocket Adapter
+// Kraken WebSocket Adapter v2
 //
-// Implements Kraken WebSocket API v2
+// Implements Kraken WebSocket API v2 with proper real-time price streaming
+// Reference: https://docs.kraken.com/api/docs/websocket-v2/ticker
 // Supports: ticker, book, trade, ohlc channels
 
 use super::WebSocketAdapter;
@@ -10,13 +11,17 @@ use async_trait::async_trait;
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+// Kraken WebSocket v2 public endpoint
 const KRAKEN_WS_URL: &str = "wss://ws.kraken.com/v2";
+
+// Heartbeat interval (30 seconds - Kraken sends heartbeats)
+const HEARTBEAT_TIMEOUT_MS: u64 = 45_000;
 
 type WsStream = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 type WsSink = SplitSink<WsStream, Message>;
@@ -24,6 +29,7 @@ type WsSink = SplitSink<WsStream, Message>;
 /// Callback type for connection errors (used to trigger reconnection)
 type ErrorCallback = Box<dyn Fn(String) + Send + Sync>;
 
+/// Kraken WebSocket Adapter - implements proper v2 API
 pub struct KrakenAdapter {
     config: ProviderConfig,
     // Write half of the split stream — used by subscribe/unsubscribe/disconnect
@@ -31,7 +37,9 @@ pub struct KrakenAdapter {
     message_callback: Option<Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>>,
     error_callback: Option<Arc<ErrorCallback>>,
     connected: Arc<AtomicBool>,
-    last_message_time: Arc<RwLock<u64>>,
+    last_message_time: Arc<AtomicU64>,
+    // Shutdown signal for background tasks
+    shutdown: Arc<AtomicBool>,
 }
 
 impl KrakenAdapter {
@@ -42,7 +50,8 @@ impl KrakenAdapter {
             message_callback: None,
             error_callback: None,
             connected: Arc::new(AtomicBool::new(false)),
-            last_message_time: Arc::new(RwLock::new(0)),
+            last_message_time: Arc::new(AtomicU64::new(0)),
+            shutdown: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -58,9 +67,34 @@ impl KrakenAdapter {
         self.error_callback = Some(Arc::new(callback));
     }
 
-    /// Normalize Kraken symbol (XBT -> BTC)
-    fn normalize_kraken_symbol(symbol: &str) -> String {
-        symbol.replace("XBT", "BTC").replace('/', "")
+    /// Normalize Kraken symbol to standard format
+    /// Kraken API v2 uses standard format like "BTC/USD"
+    /// We normalize XBT -> BTC and remove slashes for internal matching
+    fn normalize_symbol(symbol: &str) -> String {
+        symbol
+            .replace("XBT", "BTC")
+            .replace("XDG", "DOGE")
+            .replace('/', "")
+    }
+
+    /// Convert standard symbol to Kraken format for subscription
+    /// Input: "BTC/USD" or "BTCUSD" -> Output: "BTC/USD" (Kraken v2 format)
+    fn to_kraken_symbol(symbol: &str) -> String {
+        // If already has slash, use as-is
+        if symbol.contains('/') {
+            return symbol.to_string();
+        }
+
+        // Otherwise try to detect the quote currency and add slash
+        let upper = symbol.to_uppercase();
+        for quote in ["USD", "USDT", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "BTC", "ETH"] {
+            if let Some(base) = upper.strip_suffix(quote) {
+                return format!("{}/{}", base, quote);
+            }
+        }
+
+        // Fallback: return as-is
+        symbol.to_string()
     }
 
     /// Message receiver loop — only holds the read half, never blocks writes
@@ -70,27 +104,31 @@ impl KrakenAdapter {
         callback: Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>,
         error_callback: Option<Arc<ErrorCallback>>,
         connected: Arc<AtomicBool>,
-        last_message_time: Arc<RwLock<u64>>,
+        last_message_time: Arc<AtomicU64>,
+        shutdown: Arc<AtomicBool>,
     ) {
+        eprintln!("[Kraken] Receive loop started");
+
         loop {
+            // Check shutdown signal
+            if shutdown.load(Ordering::SeqCst) {
+                eprintln!("[Kraken] Shutdown signal received, exiting receive loop");
+                break;
+            }
+
             let msg_result = read_stream.next().await;
 
             match msg_result {
                 Some(Ok(msg)) => {
                     // Update last message time
-                    *last_message_time.write().await = Self::now();
+                    last_message_time.store(Self::now(), Ordering::SeqCst);
 
                     match &msg {
                         Message::Text(text) => {
-                            let cb = callback.clone();
-                            let text_clone = text.clone();
-                            tokio::spawn(async move {
-                                if let Ok(data) = serde_json::from_str::<Value>(&text_clone) {
-                                    Self::process_message(&data, &cb);
-                                }
-                            });
+                            Self::handle_text_message(text, &callback);
                         }
                         Message::Ping(data) => {
+                            // Respond to ping with pong
                             let sink = write_sink.clone();
                             let pong_data = data.clone();
                             tokio::spawn(async move {
@@ -101,12 +139,12 @@ impl KrakenAdapter {
                             // Pong received - heartbeat acknowledged
                         }
                         Message::Close(frame) => {
-                            eprintln!("[Kraken WS] Close frame received: {:?}", frame);
+                            eprintln!("[Kraken] Close frame received: {:?}", frame);
                             connected.store(false, Ordering::SeqCst);
                             callback(MarketMessage::Status(StatusData {
                                 provider: "kraken".to_string(),
                                 status: ConnectionStatus::Disconnected,
-                                message: Some(format!("Server closed connection: {:?}", frame)),
+                                message: Some(format!("Server closed: {:?}", frame)),
                                 timestamp: Self::now(),
                             }));
                             break;
@@ -116,6 +154,7 @@ impl KrakenAdapter {
                 }
                 Some(Err(e)) => {
                     let error_msg = format!("WebSocket error: {}", e);
+                    eprintln!("[Kraken] {}", error_msg);
                     connected.store(false, Ordering::SeqCst);
 
                     callback(MarketMessage::Status(StatusData {
@@ -131,7 +170,8 @@ impl KrakenAdapter {
                     break;
                 }
                 None => {
-                    let error_msg = "WebSocket connection closed unexpectedly".to_string();
+                    let error_msg = "WebSocket connection closed".to_string();
+                    eprintln!("[Kraken] {}", error_msg);
                     connected.store(false, Ordering::SeqCst);
 
                     callback(MarketMessage::Status(StatusData {
@@ -148,75 +188,156 @@ impl KrakenAdapter {
                 }
             }
         }
+
+        eprintln!("[Kraken] Receive loop ended");
+    }
+
+    /// Handle incoming text message
+    fn handle_text_message(text: &str, callback: &Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>) {
+        // Debug: log first few raw messages
+        static RAW_MSG_COUNT: AtomicU64 = AtomicU64::new(0);
+        let count = RAW_MSG_COUNT.fetch_add(1, Ordering::Relaxed);
+        if count < 10 {
+            let preview = &text[..std::cmp::min(300, text.len())];
+            eprintln!("[Kraken] Raw msg #{}: {}", count, preview);
+        }
+
+        let cb = callback.clone();
+        let text_clone = text.to_string();
+
+        // Parse JSON and process
+        if let Ok(data) = serde_json::from_str::<Value>(&text_clone) {
+            Self::process_message(&data, &cb);
+        }
     }
 
     /// Process a parsed message and route to callback
     fn process_message(data: &Value, callback: &Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>) {
-        if let Some(channel) = data.get("channel").and_then(|c| c.as_str()) {
-            match channel {
-                "ticker" => {
-                    if let Some(ticker) = Self::parse_ticker_static(data) {
-                        callback(MarketMessage::Ticker(ticker));
-                    }
-                }
-                "book" => {
-                    let is_snapshot = data.get("type")
-                        .and_then(|t| t.as_str())
-                        .map(|t| t == "snapshot")
-                        .unwrap_or(false);
+        // Get channel type
+        let channel = match data.get("channel").and_then(|c| c.as_str()) {
+            Some(c) => c,
+            None => return, // Not a data message
+        };
 
-                    if let Some(book) = Self::parse_orderbook_static(data, is_snapshot) {
-                        callback(MarketMessage::OrderBook(book));
+        // Get message type (snapshot, update, etc.)
+        let msg_type = data.get("type").and_then(|t| t.as_str()).unwrap_or("");
+
+        match channel {
+            "ticker" => {
+                if let Some(ticker) = Self::parse_ticker(data) {
+                    // Debug log
+                    static TICKER_COUNT: AtomicU64 = AtomicU64::new(0);
+                    let count = TICKER_COUNT.fetch_add(1, Ordering::Relaxed);
+                    if count < 5 || count % 50 == 0 {
+                        eprintln!("[Kraken] Ticker #{}: {} @ {:.2}", count, ticker.symbol, ticker.price);
+                    }
+                    callback(MarketMessage::Ticker(ticker));
+                }
+            }
+            "book" => {
+                let is_snapshot = msg_type == "snapshot";
+                if let Some(book) = Self::parse_orderbook(data, is_snapshot) {
+                    callback(MarketMessage::OrderBook(book));
+                }
+            }
+            "trade" => {
+                if let Some(trades) = Self::parse_trades(data) {
+                    for trade in trades {
+                        callback(MarketMessage::Trade(trade));
                     }
                 }
-                "trade" => {
-                    if let Some(trades) = Self::parse_trade_static(data) {
-                        for trade in trades {
-                            callback(MarketMessage::Trade(trade));
-                        }
-                    }
+            }
+            "ohlc" => {
+                if let Some(candle) = Self::parse_candle(data) {
+                    callback(MarketMessage::Candle(candle));
                 }
-                "ohlc" => {
-                    if let Some(candle) = Self::parse_candle_static(data) {
-                        callback(MarketMessage::Candle(candle));
-                    }
+            }
+            "heartbeat" => {
+                // Heartbeat received - connection is alive
+                // eprintln!("[Kraken] Heartbeat received");
+            }
+            "status" => {
+                // System status message
+                if let Some(status) = data.get("data").and_then(|d| d.as_array()).and_then(|a| a.first()) {
+                    let system = status.get("system").and_then(|s| s.as_str()).unwrap_or("unknown");
+                    let version = status.get("version").and_then(|v| v.as_str()).unwrap_or("unknown");
+                    eprintln!("[Kraken] System status: {} v{}", system, version);
                 }
-                "heartbeat" | "status" => {
-                    // Heartbeat and status messages - ignore silently
+            }
+            _ => {
+                // Unknown channel - log for debugging
+                static UNKNOWN_COUNT: AtomicU64 = AtomicU64::new(0);
+                let count = UNKNOWN_COUNT.fetch_add(1, Ordering::Relaxed);
+                if count < 5 {
+                    eprintln!("[Kraken] Unknown channel: {}", channel);
                 }
-                _ => {}
             }
         }
     }
 
-    // Static parsing methods (don't need &self)
-    fn parse_ticker_static(data: &Value) -> Option<TickerData> {
-        let ticker_data = data.get("data")?.as_array()?.get(0)?;
-        let symbol = ticker_data.get("symbol")?.as_str()?;
-        let last = ticker_data.get("last")?.as_f64()?;
+    /// Parse ticker data from Kraken v2 format
+    /// Example response:
+    /// {
+    ///   "channel": "ticker",
+    ///   "type": "snapshot",
+    ///   "data": [{
+    ///     "symbol": "BTC/USD",
+    ///     "bid": 42000.0,
+    ///     "bid_qty": 0.5,
+    ///     "ask": 42010.0,
+    ///     "ask_qty": 0.3,
+    ///     "last": 42005.0,
+    ///     "volume": 1234.5,
+    ///     "vwap": 41950.0,
+    ///     "low": 41000.0,
+    ///     "high": 43000.0,
+    ///     "change": 500.0,
+    ///     "change_pct": 1.2
+    ///   }]
+    /// }
+    fn parse_ticker(data: &Value) -> Option<TickerData> {
+        let ticker_arr = data.get("data")?.as_array()?;
+        let ticker = ticker_arr.first()?;
+
+        let symbol = ticker.get("symbol")?.as_str()?;
+        let last = ticker.get("last")?.as_f64()?;
 
         Some(TickerData {
             provider: "kraken".to_string(),
-            symbol: Self::normalize_kraken_symbol(symbol),
+            symbol: Self::normalize_symbol(symbol),
             price: last,
-            bid: ticker_data.get("bid").and_then(|v| v.as_f64()),
-            ask: ticker_data.get("ask").and_then(|v| v.as_f64()),
-            bid_size: ticker_data.get("bid_qty").and_then(|v| v.as_f64()),
-            ask_size: ticker_data.get("ask_qty").and_then(|v| v.as_f64()),
-            volume: ticker_data.get("volume").and_then(|v| v.as_f64()),
-            high: ticker_data.get("high").and_then(|v| v.as_f64()),
-            low: ticker_data.get("low").and_then(|v| v.as_f64()),
-            open: ticker_data.get("open").and_then(|v| v.as_f64()),
+            bid: ticker.get("bid").and_then(|v| v.as_f64()),
+            ask: ticker.get("ask").and_then(|v| v.as_f64()),
+            bid_size: ticker.get("bid_qty").and_then(|v| v.as_f64()),
+            ask_size: ticker.get("ask_qty").and_then(|v| v.as_f64()),
+            volume: ticker.get("volume").and_then(|v| v.as_f64()),
+            high: ticker.get("high").and_then(|v| v.as_f64()),
+            low: ticker.get("low").and_then(|v| v.as_f64()),
+            open: None, // Kraken v2 doesn't provide open in ticker
             close: Some(last),
-            change: ticker_data.get("change").and_then(|v| v.as_f64()),
-            change_percent: ticker_data.get("change_pct").and_then(|v| v.as_f64()),
+            change: ticker.get("change").and_then(|v| v.as_f64()),
+            change_percent: ticker.get("change_pct").and_then(|v| v.as_f64()),
+            quote_volume: None,
             timestamp: Self::now(),
         })
     }
 
-    fn parse_orderbook_static(data: &Value, is_snapshot: bool) -> Option<OrderBookData> {
-        let book_data = data.get("data")?.as_array()?.get(0)?;
-        let symbol = book_data.get("symbol")?.as_str()?;
+    /// Parse order book data
+    /// Example response:
+    /// {
+    ///   "channel": "book",
+    ///   "type": "snapshot",
+    ///   "data": [{
+    ///     "symbol": "BTC/USD",
+    ///     "bids": [{"price": 42000.0, "qty": 0.5}, ...],
+    ///     "asks": [{"price": 42010.0, "qty": 0.3}, ...]
+    ///   }]
+    /// }
+    fn parse_orderbook(data: &Value, is_snapshot: bool) -> Option<OrderBookData> {
+        let book_arr = data.get("data")?.as_array()?;
+        let book = book_arr.first()?;
+
+        let symbol = book.get("symbol")?.as_str()?;
 
         let parse_levels = |levels: &Value| -> Vec<OrderBookLevel> {
             levels.as_array()
@@ -236,21 +357,33 @@ impl KrakenAdapter {
 
         Some(OrderBookData {
             provider: "kraken".to_string(),
-            symbol: Self::normalize_kraken_symbol(symbol),
-            bids: book_data.get("bids").map(parse_levels).unwrap_or_default(),
-            asks: book_data.get("asks").map(parse_levels).unwrap_or_default(),
+            symbol: Self::normalize_symbol(symbol),
+            bids: book.get("bids").map(parse_levels).unwrap_or_default(),
+            asks: book.get("asks").map(parse_levels).unwrap_or_default(),
             timestamp: Self::now(),
             is_snapshot,
         })
     }
 
-    fn parse_trade_static(data: &Value) -> Option<Vec<TradeData>> {
-        let trades_array = data.get("data")?.as_array()?;
-        if trades_array.is_empty() {
-            return None;
-        }
+    /// Parse trade data
+    /// Example response:
+    /// {
+    ///   "channel": "trade",
+    ///   "type": "update",
+    ///   "data": [{
+    ///     "symbol": "BTC/USD",
+    ///     "side": "buy",
+    ///     "price": 42005.0,
+    ///     "qty": 0.1,
+    ///     "ord_type": "limit",
+    ///     "trade_id": 12345,
+    ///     "timestamp": "2024-01-01T00:00:00.000Z"
+    ///   }]
+    /// }
+    fn parse_trades(data: &Value) -> Option<Vec<TradeData>> {
+        let trades_arr = data.get("data")?.as_array()?;
 
-        let trades: Vec<TradeData> = trades_array.iter()
+        let trades: Vec<TradeData> = trades_arr.iter()
             .filter_map(|trade| {
                 let symbol = trade.get("symbol")?.as_str()?;
                 let price = trade.get("price")?.as_f64()?;
@@ -263,10 +396,23 @@ impl KrakenAdapter {
                     _ => TradeSide::Unknown,
                 };
 
+                // Parse trade_id (can be number or string)
+                let trade_id = trade.get("trade_id")
+                    .map(|v| {
+                        if let Some(n) = v.as_u64() {
+                            n.to_string()
+                        } else if let Some(s) = v.as_str() {
+                            s.to_string()
+                        } else {
+                            String::new()
+                        }
+                    })
+                    .filter(|s| !s.is_empty());
+
                 Some(TradeData {
                     provider: "kraken".to_string(),
-                    symbol: Self::normalize_kraken_symbol(symbol),
-                    trade_id: trade.get("trade_id").and_then(|v| v.as_str()).map(String::from),
+                    symbol: Self::normalize_symbol(symbol),
+                    trade_id,
                     price,
                     quantity: qty,
                     side,
@@ -278,24 +424,26 @@ impl KrakenAdapter {
         if trades.is_empty() { None } else { Some(trades) }
     }
 
-    fn parse_candle_static(data: &Value) -> Option<CandleData> {
-        let candle_array = data.get("data")?.as_array()?;
-        let candle_data = candle_array.get(0)?;
-        let symbol = candle_data.get("symbol")?.as_str()?;
+    /// Parse OHLC/candle data
+    fn parse_candle(data: &Value) -> Option<CandleData> {
+        let candle_arr = data.get("data")?.as_array()?;
+        let candle = candle_arr.first()?;
+
+        let symbol = candle.get("symbol")?.as_str()?;
 
         Some(CandleData {
             provider: "kraken".to_string(),
-            symbol: Self::normalize_kraken_symbol(symbol),
-            open: candle_data.get("open")?.as_f64()?,
-            high: candle_data.get("high")?.as_f64()?,
-            low: candle_data.get("low")?.as_f64()?,
-            close: candle_data.get("close")?.as_f64()?,
-            volume: candle_data.get("volume")?.as_f64().unwrap_or(0.0),
+            symbol: Self::normalize_symbol(symbol),
+            open: candle.get("open")?.as_f64()?,
+            high: candle.get("high")?.as_f64()?,
+            low: candle.get("low")?.as_f64()?,
+            close: candle.get("close")?.as_f64()?,
+            volume: candle.get("volume").and_then(|v| v.as_f64()).unwrap_or(0.0),
             timestamp: Self::now(),
-            interval: candle_data.get("interval")
-                .and_then(|v| v.as_str())
-                .unwrap_or("1m")
-                .to_string(),
+            interval: candle.get("interval")
+                .and_then(|v| v.as_i64())
+                .map(|i| format!("{}m", i))
+                .unwrap_or_else(|| "1m".to_string()),
         })
     }
 }
@@ -303,50 +451,81 @@ impl KrakenAdapter {
 #[async_trait]
 impl WebSocketAdapter for KrakenAdapter {
     async fn connect(&mut self) -> anyhow::Result<()> {
-        let url = self.config.url.clone();
-        let connect_url = if url.is_empty() { KRAKEN_WS_URL } else { &url };
+        // Reset shutdown flag
+        self.shutdown.store(false, Ordering::SeqCst);
 
-        eprintln!("[Kraken] Connecting to WebSocket: {}", connect_url);
+        let url = if self.config.url.is_empty() {
+            KRAKEN_WS_URL
+        } else {
+            &self.config.url
+        };
 
-        let (ws_stream, _) = connect_async(connect_url).await
+        eprintln!("[Kraken] Connecting to {}", url);
+
+        let (ws_stream, response) = connect_async(url).await
             .map_err(|e| {
-                eprintln!("[Kraken] ✗ Failed to connect: {}", e);
+                eprintln!("[Kraken] Connection failed: {}", e);
                 e
             })?;
 
-        eprintln!("[Kraken] ✓ WebSocket connected successfully");
+        eprintln!("[Kraken] Connected! Response: {:?}", response.status());
 
         // Split into independent read/write halves
         let (write_half, read_half) = ws_stream.split();
         let sink = Arc::new(Mutex::new(write_half));
         self.ws_sink = Some(sink.clone());
         self.connected.store(true, Ordering::SeqCst);
+        self.last_message_time.store(Self::now(), Ordering::SeqCst);
 
-        // Start receive loop with only the read half — subscribe/unsubscribe won't block
+        // Start receive loop
         if let Some(callback) = self.message_callback.clone() {
             let connected = self.connected.clone();
             let error_callback = self.error_callback.clone();
             let last_message_time = self.last_message_time.clone();
-            eprintln!("[Kraken] Starting receive loop");
+            let shutdown = self.shutdown.clone();
+
             tokio::spawn(async move {
-                Self::receive_loop(read_half, sink, callback, error_callback, connected, last_message_time).await;
-                eprintln!("[Kraken] Receive loop ended");
+                Self::receive_loop(
+                    read_half,
+                    sink,
+                    callback,
+                    error_callback,
+                    connected,
+                    last_message_time,
+                    shutdown,
+                ).await;
             });
         } else {
             eprintln!("[Kraken] Warning: No message callback set");
+        }
+
+        // Emit connected status
+        if let Some(ref cb) = self.message_callback {
+            cb(MarketMessage::Status(StatusData {
+                provider: "kraken".to_string(),
+                status: ConnectionStatus::Connected,
+                message: Some("Connected to Kraken WebSocket v2".to_string()),
+                timestamp: Self::now(),
+            }));
         }
 
         Ok(())
     }
 
     async fn disconnect(&mut self) -> anyhow::Result<()> {
+        eprintln!("[Kraken] Disconnecting...");
+
+        // Signal shutdown
+        self.shutdown.store(true, Ordering::SeqCst);
         self.connected.store(false, Ordering::SeqCst);
 
+        // Close WebSocket
         if let Some(sink) = &self.ws_sink {
             let _ = sink.lock().await.close().await;
         }
 
         self.ws_sink = None;
+        eprintln!("[Kraken] Disconnected");
         Ok(())
     }
 
@@ -356,53 +535,57 @@ impl WebSocketAdapter for KrakenAdapter {
         channel: &str,
         params: Option<Value>,
     ) -> anyhow::Result<()> {
-        eprintln!("[Kraken] subscribe called: symbol={}, channel={}, connected={}",
-                  symbol, channel, self.connected.load(Ordering::SeqCst));
-
         if !self.connected.load(Ordering::SeqCst) {
-            return Err(anyhow::anyhow!("WebSocket not connected"));
+            return Err(anyhow::anyhow!("Not connected"));
         }
 
         let sink = self.ws_sink.as_ref()
-            .ok_or_else(|| {
-                eprintln!("[Kraken] subscribe failed: ws_sink is None");
-                anyhow::anyhow!("Not connected")
-            })?;
+            .ok_or_else(|| anyhow::anyhow!("WebSocket sink not available"))?;
 
-        // Build subscription message
+        // Convert symbol to Kraken format
+        let kraken_symbol = Self::to_kraken_symbol(symbol);
+
+        // Build Kraken v2 subscription message
         let mut sub_msg = serde_json::json!({
             "method": "subscribe",
             "params": {
                 "channel": channel,
-                "symbol": [symbol],
+                "symbol": [kraken_symbol],
             }
         });
 
-        // Add optional params (depth, snapshot, etc.)
+        // Add optional params (depth for book, interval for ohlc)
         if let Some(p) = params {
-            if let Some(obj) = sub_msg.get_mut("params") {
-                if let Some(params_obj) = obj.as_object_mut() {
-                    if let Some(p_obj) = p.as_object() {
-                        for (k, v) in p_obj {
-                            params_obj.insert(k.clone(), v.clone());
-                        }
+            if let Some(params_obj) = sub_msg.get_mut("params").and_then(|p| p.as_object_mut()) {
+                if let Some(p_obj) = p.as_object() {
+                    for (k, v) in p_obj {
+                        params_obj.insert(k.clone(), v.clone());
                     }
                 }
             }
         }
 
+        // Add default depth for book channel
+        if channel == "book" {
+            if let Some(params_obj) = sub_msg.get_mut("params").and_then(|p| p.as_object_mut()) {
+                if !params_obj.contains_key("depth") {
+                    params_obj.insert("depth".to_string(), serde_json::json!(25));
+                }
+            }
+        }
+
         let msg_str = serde_json::to_string(&sub_msg)?;
-        eprintln!("[Kraken] Sending subscription: {}", msg_str);
+        eprintln!("[Kraken] Subscribing: {}", msg_str);
 
         match sink.lock().await.send(Message::Text(msg_str)).await {
             Ok(_) => {
-                eprintln!("[Kraken] ✓ Subscription sent successfully for {} {}", symbol, channel);
+                eprintln!("[Kraken] Subscription sent for {} {}", kraken_symbol, channel);
                 Ok(())
             }
             Err(e) => {
-                eprintln!("[Kraken] ✗ Failed to send subscription: {}", e);
+                eprintln!("[Kraken] Subscription failed: {}", e);
                 self.connected.store(false, Ordering::SeqCst);
-                Err(anyhow::anyhow!("Failed to send subscription: {}", e))
+                Err(anyhow::anyhow!("Failed to subscribe: {}", e))
             }
         }
     }
@@ -411,17 +594,20 @@ impl WebSocketAdapter for KrakenAdapter {
         let sink = self.ws_sink.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Not connected"))?;
 
+        let kraken_symbol = Self::to_kraken_symbol(symbol);
+
         let unsub_msg = serde_json::json!({
             "method": "unsubscribe",
             "params": {
                 "channel": channel,
-                "symbol": [symbol],
+                "symbol": [kraken_symbol],
             }
         });
 
         let msg_str = serde_json::to_string(&unsub_msg)?;
-        sink.lock().await.send(Message::Text(msg_str)).await?;
+        eprintln!("[Kraken] Unsubscribing: {}", msg_str);
 
+        sink.lock().await.send(Message::Text(msg_str)).await?;
         Ok(())
     }
 

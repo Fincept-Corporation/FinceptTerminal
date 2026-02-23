@@ -1,25 +1,4 @@
 {
-  "appName": "Fincept Terminal",
   "loading": "Memuat...",
-  "error": "Kesalahan",
-  "success": "Berhasil",
-  "save": "Simpan",
-  "cancel": "Batal",
-  "delete": "Hapus",
-  "edit": "Edit",
-  "add": "Tambah",
-  "search": "Cari",
-  "filter": "Filter",
-  "back": "Kembali",
-  "next": "Lanjut",
-  "previous": "Sebelumnya",
-  "submit": "Kirim",
-  "close": "Tutup",
-  "open": "Buka",
-  "yes": "Ya",
-  "no": "Tidak",
-  "ok": "OK",
-  "confirm": "Konfirmasi",
-  "language": "Bahasa",
-  "selectLanguage": "Pilih bahasa"
+  "settings": "[ID] Settings"
 }

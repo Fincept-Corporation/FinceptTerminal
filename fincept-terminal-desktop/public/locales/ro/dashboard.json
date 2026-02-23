@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "TABLA DE BORD PERSONIZABILĂ",
-    "live": "TRĂI",
-    "widgets": "WIDGET-uri"
-  },
-  "buttons": {
-    "addWidget": "ADAUGĂ WIDGET",
-    "saveLayout": "SALVAȚI ASPECTUL",
-    "reset": "RESET",
-    "help": "AJUTOR"
-  },
   "widgets": {
     "loading": "Încărcare...",
-    "error": "Eroare",
     "globalIndices": "Indici globali - Top 12",
     "forex": "Forex - Perechi majore",
     "crypto": "CRIPTOMONEDE",
@@ -20,8 +8,6 @@
     "news": "ŞTIRI",
     "forum": "FORUM",
     "watchlist": "LISTĂ DE CERINȚARE",
-    "maritimeIntelligence": "Informații maritime",
-    "unknown": "Tip necunoscut de widget",
     "index": "INDEX",
     "symbol": "SIMBOL",
     "price": "PREŢ",
@@ -38,41 +24,22 @@
     "pair": "PERECHE",
     "rate": "RATA",
     "commodity": "MARFĂ",
-    "globe3D": "GLOBUL 3D",
-    "vessels": "NAVE",
-    "routes": "RUTE",
-    "vol24h": "VOL 24H",
-    "topTradeCorridors": "CORidoarele comerciale de top",
-    "ships": "navelor",
-    "marketNews": "Știri de piață",
-    "secPressReleases": "Comunicate de presă SEC",
-    "cryptoNews": "Știri Crypto",
-    "trendingForum": "Forum de tendințe",
-    "techStocks": "Stocuri de tehnologie"
-  },
-  "tips": {
-    "drag": "Trageți widget-uri pentru a rearanja",
-    "resize": "Redimensionați din colțul din dreapta jos",
-    "remove": "Eliminați widget-urile cu butonul X",
-    "responsive": "Aspect receptiv - folosește lățimea completă"
-  },
-  "loading": {
-    "title": "Inițializarea tabloului de bord",
-    "description": "Se configurează memoria cache a bazei de date pentru o încărcare mai rapidă a datelor...",
-    "note": "Acest lucru va dura doar un moment la prima lansare"
-  },
-  "empty": {
-    "noWidgets": "Fără widget-uri pe tabloul de bord",
-    "addFirst": "ADAUGĂ PRIMUL TĂU WIDGET"
-  },
-  "status": {
-    "version": "Tabloul de bord personalizabil Fincept v2.0.0 | Trageți și plasați spațiul de lucru",
-    "layout": "Aspect",
-    "custom": "Personalizat",
-    "empty": "Gol",
-    "active": "ACTIV",
-    "cache": "Cache: ACTIVAT",
-    "label": "Stare"
+    "noActiveMarkets": "[RO] No active markets found",
+    "indicator": "[RO] INDICATOR",
+    "value": "[RO] VALUE",
+    "chg": "[RO] CHG",
+    "overallRisk": "[RO] OVERALL RISK",
+    "openEconomicsTab": "[RO] Open Economics Tab",
+    "openGeopoliticsTab": "[RO] Open Geopolitics Tab",
+    "openPolymarketTab": "[RO] Open Polymarket Tab",
+    "noPortfolioFound": "[RO] No portfolio found",
+    "createPortfolioHint": "[RO] Create one in Portfolio tab",
+    "openPortfolioTab": "[RO] Open Portfolio Tab",
+    "action": "[RO] ACTION",
+    "markets": "[RO] MARKETS",
+    "performanceTracker": "[RO] PERFORMANCE TRACKER",
+    "totalPnL": "[RO] TOTAL P&L",
+    "viewDetailedAnalytics": "[RO] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "Aspectul tabloului de bord a fost salvat!",

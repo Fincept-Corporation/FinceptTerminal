@@ -10,7 +10,8 @@
     "tabLayout": "Disposizione scheda",
     "appearance": "Aspetto",
     "language": "Lingua",
-    "storage": "Archiviazione e cache"
+    "storage": "Archiviazione e cache",
+    "notifications": "[IT] Notifications"
   },
   "credentials": {
     "title": "GESTIONE CREDENZIALI API",
@@ -46,7 +47,31 @@
     "saveConfig": "SALVA CONFIGURAZIONE",
     "reset": "RESET",
     "saveSuccess": "Aspetto del terminale e mappature dei tasti salvate correttamente",
-    "resetSuccess": "Ripristina l'aspetto predefinito e le mappature dei tasti"
+    "resetSuccess": "Ripristina l'aspetto predefinito e le mappature dei tasti",
+    "customColors": "[IT] Custom Colors",
+    "customColorsTitle": "[IT] CUSTOM COLORS",
+    "colorPrimary": "[IT] Primary",
+    "colorSecondary": "[IT] Secondary",
+    "colorSuccess": "[IT] Success",
+    "colorAlert": "[IT] Alert",
+    "colorWarning": "[IT] Warning",
+    "colorInfo": "[IT] Info",
+    "colorAccent": "[IT] Accent",
+    "colorPurple": "[IT] Purple",
+    "colorText": "[IT] Text",
+    "colorTextMuted": "[IT] Text Muted",
+    "colorBackground": "[IT] Background",
+    "colorPanel": "[IT] Panel",
+    "layoutSpacing": "[IT] LAYOUT & SPACING",
+    "contentDensity": "[IT] CONTENT DENSITY",
+    "borderRadius": "[IT] BORDER RADIUS",
+    "borderStyle": "[IT] BORDER STYLE",
+    "lineHeight": "[IT] LINE HEIGHT",
+    "letterSpacing": "[IT] LETTER SPACING",
+    "effects": "[IT] EFFECTS",
+    "widgetOpacity": "[IT] WIDGET OPACITY",
+    "enableGlow": "[IT] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[IT] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "Database dei simboli azionari",
@@ -65,17 +90,8 @@
     "tip": "SUGGERIMENTO: trascina le schede per riordinarle. Utilizza i pulsanti freccia per spostare le schede tra le sezioni dell'intestazione e del menu. Le modifiche vengono salvate automaticamente."
   },
   "llm": {
-    "title": "CONFIGURAZIONE LLM",
-    "description": "Configura modelli e fornitori di intelligenza artificiale",
     "connected": "COLLEGATO",
-    "disconnected": "DISCONNESSO",
-    "provider": "FORNITORE DI IA",
-    "globalSettings": "IMPOSTAZIONI AI GLOBALI",
-    "temperature": "TEMPERATURA",
-    "maxTokens": "GETTONI MAX",
-    "systemPrompt": "RICHIESTA DI SISTEMA",
-    "modelLibrary": "BIBLIOTECA DI MODELLI",
-    "multiModelConfigs": "Configurazioni multi-modello"
+    "disconnected": "DISCONNESSO"
   },
   "buttons": {
     "save": "SALVA",
@@ -86,5 +102,18 @@
     "database": "Base dati: SQLite",
     "storage": "Archiviazione: basata su file",
     "secureStorage": "Tutti i dati archiviati in modo sicuro in fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[IT] NOTIFICATION PROVIDERS",
+    "description": "[IT] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[IT] Event Filters",
+    "eventFilterDescription": "[IT] Choose which notification types to forward to external providers.",
+    "providers": "[IT] Providers",
+    "enabled": "[IT] Enabled",
+    "disabled": "[IT] Disabled",
+    "testButton": "[IT] TEST",
+    "testSuccess": "[IT] Test notification sent successfully!",
+    "testFailed": "[IT] Failed to send test notification. Check your configuration.",
+    "saved": "[IT] Configuration saved"
   }
 }

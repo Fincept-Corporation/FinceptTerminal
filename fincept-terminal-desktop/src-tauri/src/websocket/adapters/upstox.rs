@@ -188,6 +188,7 @@ impl UpstoxAdapter {
             close: Some(tick.close),
             change: Some(tick.change),
             change_percent: None,
+            quote_volume: None,
             timestamp: tick.timestamp,
         })
     }

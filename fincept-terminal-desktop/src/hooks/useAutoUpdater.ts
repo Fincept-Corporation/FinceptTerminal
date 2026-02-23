@@ -29,6 +29,7 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
 
   const checkingRef = useRef<boolean>(false);
   const relaunchTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const errorClearTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const checkForUpdate = useCallback(async (silent = false) => {
     // Prevent duplicate checks
@@ -67,7 +68,8 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
         console.log('[AutoUpdater] No updates available');
         if (!silent) {
           setError('You are running the latest version!');
-          setTimeout(() => setError(null), 3000);
+          if (errorClearTimerRef.current) clearTimeout(errorClearTimerRef.current);
+          errorClearTimerRef.current = setTimeout(() => setError(null), 3000);
         }
       }
     } catch (err) {
@@ -186,6 +188,9 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
       clearInterval(interval);
       if (relaunchTimerRef.current) {
         clearTimeout(relaunchTimerRef.current);
+      }
+      if (errorClearTimerRef.current) {
+        clearTimeout(errorClearTimerRef.current);
       }
     };
   }, [checkForUpdate]);

@@ -61,22 +61,6 @@ const DEPTH_FIELDS: &[&str] = &[
     "type", "symbol"
 ];
 
-/// Exchange segment mapping (fytoken prefix -> segment name)
-#[allow(dead_code)]
-fn get_exchange_segment(segment_code: &str) -> &'static str {
-    match segment_code {
-        "1010" => "nse_cm",    // NSE Cash
-        "1011" => "nse_fo",    // NSE F&O
-        "1120" => "mcx_fo",    // MCX F&O
-        "1210" => "bse_cm",    // BSE Cash
-        "1211" => "bse_fo",    // BSE F&O
-        "1212" => "bcs_fo",    // BSE Currency
-        "1012" => "cde_fo",    // CDE F&O
-        "1020" => "nse_com",   // NSE Commodity
-        _ => "unknown",
-    }
-}
-
 // ============================================================================
 // FYERS DATA TYPES
 // ============================================================================
@@ -655,6 +639,7 @@ impl FyersAdapter {
             close: scrip_data.get("prev_close_price").map(|v| *v as f64 / divisor),
             change: None, // Calculate from ltp - prev_close
             change_percent: None,
+            quote_volume: None,
             timestamp: scrip_data.get("exch_feed_time").map(|v| *v as u64).unwrap_or_else(|| chrono::Utc::now().timestamp() as u64),
         };
 
@@ -735,6 +720,7 @@ impl FyersAdapter {
             close: index_data.get("prev_close_price").map(|v| *v as f64 / divisor),
             change: None,
             change_percent: None,
+            quote_volume: None,
             timestamp: index_data.get("exch_feed_time").map(|v| *v as u64).unwrap_or_else(|| chrono::Utc::now().timestamp() as u64),
         };
 
@@ -981,6 +967,7 @@ impl FyersAdapter {
                     close: cache_entry.get("prev_close_price").map(|v| *v as f64 / divisor),
                     change: None,
                     change_percent: None,
+                    quote_volume: None,
                     timestamp: cache_entry.get("exch_feed_time").map(|v| *v as u64).unwrap_or_else(|| chrono::Utc::now().timestamp() as u64),
                 };
 
@@ -1173,7 +1160,8 @@ impl WebSocketAdapter for FyersAdapter {
         }
 
         // Send authentication message
-        let hsm_key = self.hsm_key.as_ref().unwrap();
+        let hsm_key = self.hsm_key.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Fyers HSM key not set — call set_config with hsm_key before connecting"))?;
         let auth_msg = Self::create_auth_message(hsm_key);
 
         {

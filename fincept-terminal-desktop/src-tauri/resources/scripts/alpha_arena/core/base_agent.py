@@ -20,6 +20,9 @@ from alpha_arena.types.models import (
     PortfolioState,
     TradeAction,
     TradeResult,
+    PolymarketInfo,
+    PolymarketDecision,
+    PolymarketAction,
 )
 from alpha_arena.types.responses import StreamResponse, NotifyResponse
 from alpha_arena.utils.logging import get_logger
@@ -237,6 +240,42 @@ class BaseTradingAgent(BaseAgent):
             ModelDecision with action, quantity, confidence, and reasoning
         """
         raise NotImplementedError
+
+    async def make_polymarket_decision(
+        self,
+        markets: List[PolymarketInfo],
+        portfolio: PortfolioState,
+        cycle_number: int,
+        context: str = "",
+    ) -> List[PolymarketDecision]:
+        """
+        Make trading decisions for Polymarket prediction markets.
+
+        Args:
+            markets: List of Polymarket markets to analyze
+            portfolio: Current portfolio state
+            cycle_number: Current cycle number
+            context: Additional context string
+
+        Returns:
+            List of PolymarketDecision for each market
+        """
+        # Default implementation - subclasses should override for real LLM calls
+        decisions = []
+        for market in markets:
+            decisions.append(PolymarketDecision(
+                competition_id="",
+                model_name=self.name,
+                cycle_number=cycle_number,
+                market_id=market.id,
+                market_question=market.question,
+                action=PolymarketAction.HOLD,
+                amount_usd=0.0,
+                confidence=0.5,
+                estimated_probability=market.outcome_prices[0] if market.outcome_prices else 0.5,
+                reasoning="Default HOLD - no analysis performed",
+            ))
+        return decisions
 
     async def stream(
         self,
@@ -1051,7 +1090,7 @@ Respond ONLY with the JSON object, nothing else.
         import httpx
         import json
 
-        FINCEPT_URL = "https://finceptbackend.share.zrok.io/research/llm"
+        FINCEPT_URL = "https://api.fincept.in/research/llm"
 
         try:
             logger.info(f"Agent '{self.name}' calling Fincept LLM API...")
@@ -1122,4 +1161,230 @@ Respond ONLY with the JSON object, nothing else.
                 reasoning=f"Error: Fincept API - {str(e)}",
                 price_at_decision=market_data.price,
             )
+
+    async def make_polymarket_decision(
+        self,
+        markets: List[PolymarketInfo],
+        portfolio: PortfolioState,
+        cycle_number: int,
+        context: str = "",
+    ) -> List[PolymarketDecision]:
+        """
+        Make trading decisions for Polymarket prediction markets using the LLM.
+
+        Args:
+            markets: List of Polymarket markets to analyze
+            portfolio: Current portfolio state
+            cycle_number: Current cycle number
+            context: Additional context string
+
+        Returns:
+            List of PolymarketDecision for each market
+        """
+        import json
+
+        if self._llm is None:
+            logger.warning(f"Agent '{self.name}' has no LLM, returning HOLD decisions")
+            return [
+                PolymarketDecision(
+                    competition_id="",
+                    model_name=self.name,
+                    cycle_number=cycle_number,
+                    market_id=m.id,
+                    market_question=m.question,
+                    action=PolymarketAction.HOLD,
+                    amount_usd=0.0,
+                    confidence=0.5,
+                    estimated_probability=m.outcome_prices[0] if m.outcome_prices else 0.5,
+                    reasoning="No LLM available",
+                )
+                for m in markets
+            ]
+
+        # Build Polymarket-specific prompt
+        prompt = self._build_polymarket_prompt(markets, portfolio, cycle_number, context)
+
+        try:
+            logger.info(f"Agent '{self.name}' requesting Polymarket decisions...")
+
+            # Get response from LLM
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, self._llm.run, prompt)
+
+            content = self._extract_content(response)
+            logger.info(f"Agent '{self.name}' Polymarket response: {content[:300]}")
+
+            # Parse decisions from response
+            decisions = self._parse_polymarket_response(content, markets, cycle_number)
+            return decisions
+
+        except Exception as e:
+            logger.error(f"Error in Polymarket decision for '{self.name}': {e}")
+            return [
+                PolymarketDecision(
+                    competition_id="",
+                    model_name=self.name,
+                    cycle_number=cycle_number,
+                    market_id=m.id,
+                    market_question=m.question,
+                    action=PolymarketAction.HOLD,
+                    amount_usd=0.0,
+                    confidence=0.0,
+                    estimated_probability=m.outcome_prices[0] if m.outcome_prices else 0.5,
+                    reasoning=f"Error: {str(e)}",
+                )
+                for m in markets
+            ]
+
+    def _build_polymarket_prompt(
+        self,
+        markets: List[PolymarketInfo],
+        portfolio: PortfolioState,
+        cycle_number: int,
+        context: str = "",
+    ) -> str:
+        """Build prompt for Polymarket prediction market decisions."""
+        markets_info = []
+        for i, m in enumerate(markets):
+            yes_price = m.outcome_prices[0] if m.outcome_prices else 0.5
+            no_price = m.outcome_prices[1] if len(m.outcome_prices) > 1 else (1 - yes_price)
+            markets_info.append(f"""
+Market {i+1}:
+  ID: {m.id}
+  Question: {m.question}
+  YES Price: ${yes_price:.4f} ({yes_price*100:.1f}%)
+  NO Price: ${no_price:.4f} ({no_price*100:.1f}%)
+  Volume: ${m.volume:,.0f}
+  Liquidity: ${m.liquidity:,.0f}
+  End Date: {m.end_date or 'Unknown'}
+""")
+
+        return f"""You are an AI trading agent analyzing prediction markets on Polymarket.
+
+CURRENT PREDICTION MARKETS:
+{''.join(markets_info)}
+
+YOUR PORTFOLIO:
+  Cash: ${portfolio.cash:,.2f}
+  Total Value: ${portfolio.portfolio_value:,.2f}
+  Total P&L: ${portfolio.total_pnl:,.2f}
+
+CYCLE: {cycle_number}
+
+{context}
+
+YOUR TASK:
+Analyze each market and decide whether to:
+- BUY_YES: Buy YES shares (bet that the event will happen)
+- BUY_NO: Buy NO shares (bet that the event will NOT happen)
+- SELL_YES: Sell YES shares (if you hold any)
+- SELL_NO: Sell NO shares (if you hold any)
+- HOLD: Do nothing for this market
+
+For each market where you want to trade, estimate the TRUE probability and compare to the market price.
+If your estimated probability > market YES price, consider buying YES.
+If your estimated probability < market YES price, consider buying NO.
+
+RESPOND WITH VALID JSON ONLY - an array of decisions:
+[
+  {{
+    "market_id": "<market_id>",
+    "action": "buy_yes" | "buy_no" | "sell_yes" | "sell_no" | "hold",
+    "amount_usd": <amount to trade in USD, 0 for hold>,
+    "confidence": 0.0 to 1.0,
+    "estimated_probability": 0.0 to 1.0,
+    "reasoning": "brief explanation"
+  }}
+]
+
+RULES:
+- Maximum position per market: 25% of portfolio
+- Be selective - don't trade every market
+- Consider liquidity and volume
+- Factor in time to resolution
+- Respond ONLY with the JSON array, nothing else.
+"""
+
+    def _parse_polymarket_response(
+        self,
+        content: str,
+        markets: List[PolymarketInfo],
+        cycle_number: int,
+    ) -> List[PolymarketDecision]:
+        """Parse Polymarket decisions from LLM response."""
+        import json
+        import re
+
+        decisions = []
+        market_ids = {m.id: m for m in markets}
+
+        try:
+            # Try to parse as JSON array
+            content = content.strip()
+
+            # Remove markdown code blocks
+            if '```' in content:
+                parts = content.split('```')
+                for part in parts:
+                    part = part.strip()
+                    if part.startswith('json'):
+                        part = part[4:].strip()
+                    if part.startswith('['):
+                        content = part
+                        break
+
+            # Find JSON array
+            array_match = re.search(r'\[[\s\S]*\]', content)
+            if array_match:
+                content = array_match.group()
+
+            parsed = json.loads(content)
+
+            if isinstance(parsed, list):
+                for item in parsed:
+                    market_id = item.get("market_id", "")
+                    market = market_ids.get(market_id)
+                    if not market:
+                        continue
+
+                    action_str = item.get("action", "hold").lower()
+                    try:
+                        action = PolymarketAction(action_str)
+                    except ValueError:
+                        action = PolymarketAction.HOLD
+
+                    decisions.append(PolymarketDecision(
+                        competition_id="",
+                        model_name=self.name,
+                        cycle_number=cycle_number,
+                        market_id=market_id,
+                        market_question=market.question,
+                        action=action,
+                        amount_usd=float(item.get("amount_usd", 0)),
+                        confidence=float(item.get("confidence", 0.5)),
+                        estimated_probability=float(item.get("estimated_probability", 0.5)),
+                        reasoning=item.get("reasoning", ""),
+                    ))
+
+        except Exception as e:
+            logger.warning(f"Failed to parse Polymarket response: {e}")
+
+        # Add HOLD decisions for any markets not in the response
+        responded_ids = {d.market_id for d in decisions}
+        for m in markets:
+            if m.id not in responded_ids:
+                decisions.append(PolymarketDecision(
+                    competition_id="",
+                    model_name=self.name,
+                    cycle_number=cycle_number,
+                    market_id=m.id,
+                    market_question=m.question,
+                    action=PolymarketAction.HOLD,
+                    amount_usd=0.0,
+                    confidence=0.5,
+                    estimated_probability=m.outcome_prices[0] if m.outcome_prices else 0.5,
+                    reasoning="No decision from LLM",
+                ))
+
+        return decisions
 

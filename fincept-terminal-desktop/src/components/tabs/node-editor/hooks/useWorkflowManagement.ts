@@ -8,8 +8,9 @@ import { useState, useCallback, useEffect } from 'react';
 import { Node, Edge, useNodesState, useEdgesState } from 'reactflow';
 import { saveSetting, getSetting } from '@/services/core/sqliteService';
 import { workflowService, Workflow as WorkflowType } from '@/services/core/workflowService';
-import { workflowExecutor } from '../nodes/WorkflowExecutor';
-import { showWarning, showError, showConfirm } from '@/utils/notifications';
+import { nodeExecutionManager } from '@/services/core/nodeExecutionManager';
+import { showWarning, showError, showSuccess, showConfirm } from '@/utils/notifications';
+import { stripCallbacks } from '../utils';
 
 export interface UseWorkflowManagementReturn {
   // Node and edge state
@@ -55,7 +56,9 @@ export interface UseWorkflowManagementReturn {
   onSelectionChange: (params: any) => void;
 }
 
-export function useWorkflowManagement(): UseWorkflowManagementReturn {
+export function useWorkflowManagement(
+  isUndoRedoActionRef?: React.MutableRefObject<boolean>
+): UseWorkflowManagementReturn {
   // Node and edge state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -99,24 +102,38 @@ export function useWorkflowManagement(): UseWorkflowManagementReturn {
 
   // Auto-save workflow to storage whenever nodes or edges change
   useEffect(() => {
+    // If this state change came from undo/redo, use a longer delay
+    // to avoid rapid saves during undo/redo sequences
+    const delay = isUndoRedoActionRef?.current ? 2000 : 500;
+    if (isUndoRedoActionRef?.current) {
+      isUndoRedoActionRef.current = false;
+    }
+
     const saveWorkflowAuto = async () => {
       try {
-        const workflow = { nodes, edges };
+        const serializableNodes = nodes.map((n) => ({
+          ...n,
+          data: stripCallbacks(n.data),
+        }));
+        const workflow = { nodes: serializableNodes, edges };
         await saveSetting('nodeEditorWorkflow', JSON.stringify(workflow), 'node_editor');
       } catch (error) {
         console.error('[useWorkflowManagement] Failed to auto-save workflow:', error);
       }
     };
 
-    // Debounce saves
-    const timeoutId = setTimeout(saveWorkflowAuto, 500);
+    const timeoutId = setTimeout(saveWorkflowAuto, delay);
     return () => clearTimeout(timeoutId);
   }, [nodes, edges]);
 
   // Save workflow manually
   const saveWorkflow = useCallback(async () => {
     try {
-      const workflow = { nodes, edges };
+      const serializableNodes = nodes.map((n) => ({
+        ...n,
+        data: stripCallbacks(n.data),
+      }));
+      const workflow = { nodes: serializableNodes, edges };
       await saveSetting('nodeEditorWorkflow', JSON.stringify(workflow), 'node_editor');
     } catch (error) {
       console.error('[useWorkflowManagement] Failed to save workflow:', error);
@@ -125,8 +142,12 @@ export function useWorkflowManagement(): UseWorkflowManagementReturn {
 
   // Export workflow to JSON file
   const exportWorkflow = useCallback(() => {
+    const serializableNodes = nodes.map((n) => ({
+      ...n,
+      data: stripCallbacks(n.data),
+    }));
     const workflow = {
-      nodes: nodes,
+      nodes: serializableNodes,
       edges: edges,
     };
     const dataStr = JSON.stringify(workflow, null, 2);
@@ -175,7 +196,7 @@ export function useWorkflowManagement(): UseWorkflowManagementReturn {
     setWorkflowDescription('');
   }, [setNodes, setEdges]);
 
-  // Deploy workflow
+  // Deploy workflow — uses nodeExecutionManager for execution, then saves results
   const deployWorkflow = useCallback(
     async (statusCallback: (nodeId: string, status: string, result?: any) => void) => {
       if (!workflowName.trim()) {
@@ -188,38 +209,38 @@ export function useWorkflowManagement(): UseWorkflowManagementReturn {
         return;
       }
 
-      const name = workflowName;
-      const description = workflowDescription;
-      const currentNodes = nodes;
-      const currentEdges = edges;
+      if (nodes.length === 0) {
+        showWarning('No nodes in the workflow. Add nodes before deploying.');
+        return;
+      }
 
       setIsExecuting(true);
 
       try {
-        const result = await workflowExecutor.executeAndSave(
-          currentNodes,
-          currentEdges,
-          {
-            name: name,
-            description: description,
-            saveAsDraft: false,
-          },
-          statusCallback
-        );
+        // Execute through the centralized nodeExecutionManager
+        const results = await nodeExecutionManager.executeWorkflow(nodes, edges, statusCallback);
 
-        if (result.success) {
-          setNodes([]);
-          setEdges([]);
-          await saveSetting('nodeEditorWorkflow', '', 'node_editor');
-          setCurrentWorkflowId(null);
-          setWorkflowMode('new');
-          setEditingDraftId(null);
-        } else {
-          console.error('[useWorkflowManagement] Deployment failed:', result.error);
-          showError('Deployment failed', [
-            { label: 'ERROR', value: result.error || 'Unknown error' }
-          ]);
-        }
+        // Save the deployed workflow with results
+        const serializableNodes = nodes.map((n) => ({
+          ...n,
+          data: stripCallbacks(n.data),
+        }));
+
+        const deployedWorkflow: WorkflowType = {
+          id: `workflow_${Date.now()}`,
+          name: workflowName,
+          description: workflowDescription,
+          nodes: serializableNodes,
+          edges,
+          status: 'completed',
+          results: Object.fromEntries(results),
+        };
+
+        await workflowService.saveWorkflow(deployedWorkflow);
+
+        showSuccess('Workflow deployed successfully');
+        setWorkflowMode('deployed');
+        setEditingDraftId(null);
       } catch (error: any) {
         console.error('[useWorkflowManagement] Deploy failed:', error);
         showError('Deployment failed', [
@@ -229,7 +250,7 @@ export function useWorkflowManagement(): UseWorkflowManagementReturn {
         setIsExecuting(false);
       }
     },
-    [nodes, edges, workflowName, workflowDescription, isExecuting, setNodes, setEdges]
+    [nodes, edges, workflowName, workflowDescription, isExecuting]
   );
 
   // Save as draft
@@ -240,22 +261,33 @@ export function useWorkflowManagement(): UseWorkflowManagementReturn {
     }
 
     try {
+      const serializableNodes = nodes.map((n) => ({
+        ...n,
+        data: stripCallbacks(n.data),
+      }));
+
       let workflowId: string;
       if (editingDraftId) {
         await workflowService.updateDraft(
           editingDraftId,
           workflowName,
           workflowDescription,
-          nodes,
+          serializableNodes,
           edges
         );
         workflowId = editingDraftId;
         setEditingDraftId(null);
       } else {
-        workflowId = await workflowExecutor.saveDraft(workflowName, workflowDescription, nodes, edges);
+        workflowId = await workflowService.saveDraft(
+          workflowName,
+          workflowDescription,
+          serializableNodes,
+          edges
+        );
       }
       setCurrentWorkflowId(workflowId);
       setWorkflowMode('draft');
+      showSuccess('Draft saved successfully');
     } catch (error: any) {
       console.error('[useWorkflowManagement] Save draft failed:', error);
       showError('Save failed', [

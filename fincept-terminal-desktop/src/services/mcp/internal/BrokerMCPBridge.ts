@@ -46,7 +46,9 @@ export class BrokerMCPBridge {
     this.updateMCPContexts();
 
     // Pre-fetch markets in the background so first resolution is fast
-    this.getMarkets().catch(() => {});
+    this.getMarkets().catch((err) => {
+      console.warn('[BrokerMCPBridge] Background market pre-fetch failed:', err);
+    });
   }
 
   /**

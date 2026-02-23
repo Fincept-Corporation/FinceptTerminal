@@ -163,7 +163,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
     setFinceptCeicIndicator('');
     try {
       const res = await fetch(
-        `https://finceptbackend.share.zrok.io/macro/ceic/series/indicators?country=${encodeURIComponent(countrySlug)}`,
+        `https://api.fincept.in/macro/ceic/series/indicators?country=${encodeURIComponent(countrySlug)}`,
         { headers: { 'X-API-Key': 'fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo' } }
       );
       const parsed = await res.json();
@@ -439,7 +439,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
           break;
 
         case 'fincept': {
-          const BASE_URL = 'https://finceptbackend.share.zrok.io';
+          const BASE_URL = 'https://api.fincept.in';
           const FINCEPT_API_KEY = 'fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo';
           let url = '';
           switch (selectedIndicator) {

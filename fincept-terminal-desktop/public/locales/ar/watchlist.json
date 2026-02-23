@@ -1,25 +1,7 @@
 {
-  "title": "قائمة المراقبة",
-  "header": {
-    "export": "تصدير",
-    "updating": "تحديث",
-    "live": "مباشر"
-  },
   "sidebar": {
-    "groups": "مجموعات القوائم",
-    "new": "جديد",
     "noWatchlists": "لا توجد قوائم بعد.",
     "clickNew": "انقر جديد للإنشاء.",
-    "stocks": "أسهم",
-    "marketMovers": "المحركون",
-    "gainer": "الرابحون",
-    "loser": "الخاسرون",
-    "volumeLeaders": "الأعلى حجماً"
-  },
-  "emptyState": {
-    "selectWatchlist": "اختر قائمة أو أنشئ واحدة جديدة"
-  },
-  "list": {
-    "symbols": "الرموز"
+    "stocks": "أسهم"
   }
 }

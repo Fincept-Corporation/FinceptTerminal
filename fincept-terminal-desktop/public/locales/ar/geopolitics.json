@@ -1,6 +1,66 @@
 {
-  "title": "الجيوسياسية",
   "messages": {
-    "loading": "جاري تحميل البيانات..."
+    "retry": "[AR] RETRY"
+  },
+  "header": {
+    "prefix": "[AR] GEO>",
+    "title": "[AR] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[AR] EVENTS"
+  },
+  "status": {
+    "stale": "[AR] STALE",
+    "loading": "[AR] LOADING...",
+    "error": "[AR] ERROR:"
+  },
+  "filters": {
+    "country": "[AR] Country...",
+    "cities": "[AR] Cities...",
+    "category": "[AR] Category...",
+    "apply": "[AR] APPLY",
+    "clear": "[AR] CLEAR",
+    "clearAllCities": "[AR] Clear all cities",
+    "selectedLabel": "[AR] Selected:"
+  },
+  "panel": {
+    "title": "[AR] INFO PANEL",
+    "expand": "[AR] Expand panel",
+    "collapse": "[AR] Collapse panel",
+    "eventsLoaded": "[AR] EVENTS LOADED",
+    "onMapVisualization": "[AR] on map visualization",
+    "topCategories": "[AR] TOP CATEGORIES",
+    "topCountries": "[AR] TOP COUNTRIES",
+    "eventDetails": "[AR] EVENT DETAILS",
+    "close": "[AR] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[AR] Country:",
+    "city": "[AR] City:",
+    "keywords": "[AR] Keywords:",
+    "coords": "[AR] Coords:",
+    "date": "[AR] Date:",
+    "source": "[AR] Source:",
+    "viewArticle": "[AR] View Article"
+  },
+  "legend": {
+    "title": "[AR] EVENT CATEGORIES",
+    "armedConflict": "[AR] Armed Conflict",
+    "terrorism": "[AR] Terrorism",
+    "protests": "[AR] Protests",
+    "civilianViolence": "[AR] Civilian Violence",
+    "riots": "[AR] Riots",
+    "politicalViolence": "[AR] Political Violence",
+    "crisis": "[AR] Crisis",
+    "explosions": "[AR] Explosions",
+    "strategic": "[AR] Strategic",
+    "unclassified": "[AR] Unclassified"
+  },
+  "footer": {
+    "tabName": "[AR] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[AR] EVENTS",
+    "labelEngine": "[AR] ENGINE",
+    "engineValue": "[AR] DECK.GL v9.2",
+    "labelSource": "[AR] SOURCE",
+    "sourceValue": "[AR] NEWS-EVENTS API",
+    "labelSelected": "[AR] SELECTED"
   }
 }

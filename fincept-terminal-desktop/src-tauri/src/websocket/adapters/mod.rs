@@ -8,6 +8,15 @@ use async_trait::async_trait;
 pub mod kraken;
 pub mod hyperliquid;
 pub mod binance;
+pub mod okx;
+pub mod bybit;
+pub mod coinbase;
+pub mod kucoin;
+pub mod gateio;
+pub mod huobi;
+pub mod mexc;
+pub mod bitget;
+pub mod bitfinex;
 
 // Indian stock broker adapters
 pub mod fyers;
@@ -27,6 +36,15 @@ pub mod shoonya;
 pub use kraken::KrakenAdapter;
 pub use hyperliquid::HyperLiquidAdapter;
 pub use binance::BinanceAdapter;
+pub use okx::OkxAdapter;
+pub use bybit::BybitAdapter;
+pub use coinbase::CoinbaseAdapter;
+pub use kucoin::KucoinAdapter;
+pub use gateio::GateioAdapter;
+pub use huobi::HuobiAdapter;
+pub use mexc::MexcAdapter;
+pub use bitget::BitgetAdapter;
+pub use bitfinex::BitfinexAdapter;
 
 // Indian broker exports
 pub use fyers::FyersAdapter;
@@ -89,7 +107,16 @@ pub fn create_adapter(
         // Crypto exchanges
         "kraken" => Ok(Box::new(KrakenAdapter::new(config))),
         "hyperliquid" => Ok(Box::new(HyperLiquidAdapter::new(config))),
-        "binance" => Ok(Box::new(BinanceAdapter::new(config))),
+        "binance" | "binanceus" => Ok(Box::new(BinanceAdapter::new(config))),
+        "okx" => Ok(Box::new(OkxAdapter::new(config))),
+        "bybit" => Ok(Box::new(BybitAdapter::new(config))),
+        "coinbase" | "coinbasepro" => Ok(Box::new(CoinbaseAdapter::new(config))),
+        "kucoin" => Ok(Box::new(KucoinAdapter::new(config))),
+        "gateio" | "gate" => Ok(Box::new(GateioAdapter::new(config))),
+        "huobi" | "htx" => Ok(Box::new(HuobiAdapter::new(config))),
+        "mexc" => Ok(Box::new(MexcAdapter::new(config))),
+        "bitget" => Ok(Box::new(BitgetAdapter::new(config))),
+        "bitfinex" => Ok(Box::new(BitfinexAdapter::new(config))),
         // Indian stock brokers
         "fyers" => Ok(Box::new(FyersAdapter::new(config))),
         "zerodha" | "kite" => Ok(Box::new(ZerodhaAdapter::new(config))),

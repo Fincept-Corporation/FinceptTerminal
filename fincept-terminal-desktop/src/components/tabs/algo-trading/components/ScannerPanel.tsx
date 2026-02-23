@@ -6,13 +6,7 @@ import { runAlgoScan } from '../services/algoTradingService';
 import { useStockBrokerContextOptional } from '@/contexts/StockBrokerContext';
 import { useBrokerContext } from '@/contexts/BrokerContext';
 import ConditionBuilder from './ConditionBuilder';
-
-const F = {
-  ORANGE: '#FF8800', WHITE: '#FFFFFF', RED: '#FF3B3B', GREEN: '#00D66F',
-  GRAY: '#787878', DARK_BG: '#000000', PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A', BORDER: '#2A2A2A', MUTED: '#4A4A4A', CYAN: '#00E5FF',
-  YELLOW: '#FFD600', PURPLE: '#9D4EDD', BLUE: '#0088FF',
-};
+import { F } from '../constants/theme';
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '8px 10px', backgroundColor: F.DARK_BG,

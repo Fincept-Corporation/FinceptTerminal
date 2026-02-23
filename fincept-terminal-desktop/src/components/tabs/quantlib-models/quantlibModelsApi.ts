@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-models/quantlibModelsApi.ts
 // API service for QuantLib Models endpoints
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 
 let _apiKey: string | null = null;
 export function setModelsApiKey(key: string | null) { _apiKey = key; }

@@ -171,9 +171,13 @@ export function useCache<T>(options: UseCacheOptions<T>): UseCacheResult<T> {
   const fetchIdRef = useRef(0); // Track fetch operations to handle race conditions
   const previousKeyRef = useRef<string>(key);
 
-  // Memoize fetcher to prevent unnecessary re-renders
+  // Memoize fetcher and callbacks to prevent stale closures in async operations
   const stableFetcher = useRef(fetcher);
   stableFetcher.current = fetcher;
+  const stableOnSuccess = useRef(onSuccess);
+  stableOnSuccess.current = onSuccess;
+  const stableOnError = useRef(onError);
+  stableOnError.current = onError;
 
   // Reset state when key changes
   useEffect(() => {
@@ -225,7 +229,7 @@ export function useCache<T>(options: UseCacheOptions<T>): UseCacheResult<T> {
         setData(cached.data);
         setIsStale(cached.isStale);
         setIsLoading(false);
-        onSuccess?.(cached.data);
+        stableOnSuccess.current?.(cached.data);
 
         // If data is stale and staleWhileRevalidate is enabled, fetch fresh in background
         if (cached.isStale && staleWhileRevalidate && isOnline) {
@@ -253,7 +257,7 @@ export function useCache<T>(options: UseCacheOptions<T>): UseCacheResult<T> {
             await cacheService.set(key, freshData, category, ttl);
             setData(freshData);
             setIsStale(false);
-            onSuccess?.(freshData);
+            stableOnSuccess.current?.(freshData);
           } catch (fetchError) {
             // Silently fail background refresh, we already have stale data
             if (!(fetchError instanceof Error && fetchError.message === 'Request aborted')) {
@@ -270,7 +274,7 @@ export function useCache<T>(options: UseCacheOptions<T>): UseCacheResult<T> {
             setData(staleData.data);
             setIsStale(true);
             setIsLoading(false);
-            onSuccess?.(staleData.data);
+            stableOnSuccess.current?.(staleData.data);
             return;
           }
           throw new Error('No cached data available offline');
@@ -300,7 +304,7 @@ export function useCache<T>(options: UseCacheOptions<T>): UseCacheResult<T> {
         setData(freshData);
         setIsStale(false);
         setIsLoading(false);
-        onSuccess?.(freshData);
+        stableOnSuccess.current?.(freshData);
       }
     } catch (err) {
       // Check if still valid
@@ -314,7 +318,7 @@ export function useCache<T>(options: UseCacheOptions<T>): UseCacheResult<T> {
       if (error.message !== 'Request aborted') {
         setError(error);
         setIsLoading(false);
-        onError?.(error);
+        stableOnError.current?.(error);
       }
     } finally {
       // Check if still valid
@@ -322,7 +326,7 @@ export function useCache<T>(options: UseCacheOptions<T>): UseCacheResult<T> {
         setIsFetching(false);
       }
     }
-  }, [key, category, ttl, staleWhileRevalidate, retry, retryDelay, isOnline, onSuccess, onError, data]);
+  }, [key, category, ttl, staleWhileRevalidate, retry, retryDelay, isOnline, data]);
 
   // Force refresh - bypasses cache
   const refresh = useCallback(async () => {
@@ -355,7 +359,7 @@ export function useCache<T>(options: UseCacheOptions<T>): UseCacheResult<T> {
       await cacheService.set(key, freshData, category, ttl);
       setData(freshData);
       setIsStale(false);
-      onSuccess?.(freshData);
+      stableOnSuccess.current?.(freshData);
     } catch (err) {
       if (fetchId !== fetchIdRef.current || !mountedRef.current) {
         return;
@@ -364,14 +368,14 @@ export function useCache<T>(options: UseCacheOptions<T>): UseCacheResult<T> {
       const error = err instanceof Error ? err : new Error(String(err));
       if (error.message !== 'Request aborted') {
         setError(error);
-        onError?.(error);
+        stableOnError.current?.(error);
       }
     } finally {
       if (fetchId === fetchIdRef.current && mountedRef.current) {
         setIsFetching(false);
       }
     }
-  }, [key, category, ttl, retry, retryDelay, isOnline, onSuccess, onError]);
+  }, [key, category, ttl, retry, retryDelay, isOnline]);
 
   // Invalidate cache and reset state
   const invalidate = useCallback(async () => {

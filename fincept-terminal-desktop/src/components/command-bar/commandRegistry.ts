@@ -301,6 +301,15 @@ export const COMMANDS: Command[] = [
     keywords: ['code', 'editor', 'development', 'programming']
   },
   {
+    id: 'datamap',
+    name: 'Data Mapping',
+    description: 'API integration & schema transformation',
+    aliases: ['datamap', 'data-mapping', 'mapping', 'schema', 'transform'],
+    category: 'tool',
+    action: 'data-mapping',
+    keywords: ['data', 'mapping', 'schema', 'transform', 'api', 'integration', 'field', 'parser']
+  },
+  {
     id: 'datasrc',
     name: 'Data Sources',
     description: 'Manage data sources',

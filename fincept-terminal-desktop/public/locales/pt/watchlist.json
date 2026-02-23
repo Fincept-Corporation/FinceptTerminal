@@ -1,25 +1,7 @@
 {
-  "title": "LISTA DE INTERESSE",
-  "header": {
-    "export": "EXPORTAR",
-    "updating": "ATUALIZANDO",
-    "live": "AO VIVO"
-  },
   "sidebar": {
-    "groups": "GRUPOS DE LISTAS",
-    "new": "NOVA",
     "noWatchlists": "Ainda não há listas.",
     "clickNew": "Clique NOVA para criar.",
-    "stocks": "ações",
-    "marketMovers": "LÍDERES DO MERCADO",
-    "gainer": "EM ALTA",
-    "loser": "EM BAIXA",
-    "volumeLeaders": "LÍDERES DE VOLUME"
-  },
-  "emptyState": {
-    "selectWatchlist": "Selecione uma lista ou crie uma nova para começar"
-  },
-  "list": {
-    "symbols": "Símbolos"
+    "stocks": "ações"
   }
 }

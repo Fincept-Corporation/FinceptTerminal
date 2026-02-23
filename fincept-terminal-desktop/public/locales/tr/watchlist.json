@@ -1,25 +1,7 @@
 {
-  "title": "İZLEME LİSTESİ",
-  "header": {
-    "export": "DIŞA AKTAR",
-    "updating": "GÜNCELLEME",
-    "live": "CANLI"
-  },
   "sidebar": {
-    "groups": "LİSTE GRUPLARI",
-    "new": "YENİ",
     "noWatchlists": "Henüz liste yok.",
     "clickNew": "Oluşturmak için YENİ'ye tıklayın.",
-    "stocks": "hisse",
-    "marketMovers": "PİYASA LİDERLERİ",
-    "gainer": "YÜKSELENLER",
-    "loser": "DÜŞENLER",
-    "volumeLeaders": "HACİM LİDERLERİ"
-  },
-  "emptyState": {
-    "selectWatchlist": "Başlamak için bir liste seçin veya yeni oluşturun"
-  },
-  "list": {
-    "symbols": "Semboller"
+    "stocks": "hisse"
   }
 }

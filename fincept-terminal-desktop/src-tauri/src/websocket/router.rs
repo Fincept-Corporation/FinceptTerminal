@@ -81,6 +81,8 @@ impl MessageRouter {
     #[inline]
     fn normalize_symbol(symbol: &str) -> String {
         symbol
+            .replace("XBT", "BTC")  // Kraken uses XBT; normalize to BTC for matching
+            .replace("XDG", "DOGE") // Kraken uses XDG for DOGE
             .replace('/', "")
             .replace('-', "")
             .replace('_', "")
@@ -95,12 +97,14 @@ impl MessageRouter {
         // Topic format: "provider.channel.symbol"
         let parts: Vec<&str> = topic.splitn(3, '.').collect();
         if parts.len() == 3 {
-            let provider = parts[0];
+            // Normalize provider to lowercase for consistent matching with Rust adapters
+            let provider = parts[0].to_lowercase();
             let channel = parts[1];
             let symbol = parts[2];
             let normalized = Self::normalize_symbol(symbol);
 
             let key = format!("{}.{}", provider, channel);
+            eprintln!("[Router] subscribe_frontend: topic='{}' => key='{}' normalized='{}'", topic, key, normalized);
             self.normalized_subscriptions
                 .entry(key)
                 .or_insert_with(HashSet::new)
@@ -115,7 +119,8 @@ impl MessageRouter {
         // Remove from normalized cache
         let parts: Vec<&str> = topic.splitn(3, '.').collect();
         if parts.len() == 3 {
-            let provider = parts[0];
+            // Normalize provider to lowercase for consistent matching
+            let provider = parts[0].to_lowercase();
             let channel = parts[1];
             let symbol = parts[2];
             let normalized = Self::normalize_symbol(symbol);
@@ -136,7 +141,25 @@ impl MessageRouter {
         // Fast lookup using pre-computed normalized subscriptions
         let key = format!("{}.{}", provider, channel);
         if let Some(symbols) = self.normalized_subscriptions.get(&key) {
-            return symbols.contains(&normalized_symbol);
+            let found = symbols.contains(&normalized_symbol);
+            if !found {
+                // Debug: log mismatch (only first few to avoid spam)
+                static DEBUG_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                let count = DEBUG_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if count < 20 {
+                    eprintln!("[Router] Symbol mismatch: incoming='{}' normalized='{}' | subscribed={:?}",
+                        symbol, normalized_symbol, symbols.iter().take(5).collect::<Vec<_>>());
+                }
+            }
+            return found;
+        }
+
+        // Debug: no subscriptions at all for this provider.channel
+        static NO_SUB_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let count = NO_SUB_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count < 10 {
+            eprintln!("[Router] No subscriptions for key='{}' (symbol='{}' normalized='{}')",
+                key, symbol, normalized_symbol);
         }
 
         false

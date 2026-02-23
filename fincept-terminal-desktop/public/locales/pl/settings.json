@@ -10,7 +10,8 @@
     "tabLayout": "Układ zakładek",
     "appearance": "Wygląd",
     "language": "Język",
-    "storage": "Przechowywanie i pamięć podręczna"
+    "storage": "Przechowywanie i pamięć podręczna",
+    "notifications": "[PL] Notifications"
   },
   "credentials": {
     "title": "ZARZĄDZANIE UPRAWNIENIAMI API",
@@ -46,7 +47,31 @@
     "saveConfig": "ZAPISZ KONFIGURACJĘ",
     "reset": "NASTAWIĆ",
     "saveSuccess": "Wygląd terminala i mapowania klawiszy zostały pomyślnie zapisane",
-    "resetSuccess": "Przywróć domyślny wygląd i mapowania klawiszy"
+    "resetSuccess": "Przywróć domyślny wygląd i mapowania klawiszy",
+    "customColors": "[PL] Custom Colors",
+    "customColorsTitle": "[PL] CUSTOM COLORS",
+    "colorPrimary": "[PL] Primary",
+    "colorSecondary": "[PL] Secondary",
+    "colorSuccess": "[PL] Success",
+    "colorAlert": "[PL] Alert",
+    "colorWarning": "[PL] Warning",
+    "colorInfo": "[PL] Info",
+    "colorAccent": "[PL] Accent",
+    "colorPurple": "[PL] Purple",
+    "colorText": "[PL] Text",
+    "colorTextMuted": "[PL] Text Muted",
+    "colorBackground": "[PL] Background",
+    "colorPanel": "[PL] Panel",
+    "layoutSpacing": "[PL] LAYOUT & SPACING",
+    "contentDensity": "[PL] CONTENT DENSITY",
+    "borderRadius": "[PL] BORDER RADIUS",
+    "borderStyle": "[PL] BORDER STYLE",
+    "lineHeight": "[PL] LINE HEIGHT",
+    "letterSpacing": "[PL] LETTER SPACING",
+    "effects": "[PL] EFFECTS",
+    "widgetOpacity": "[PL] WIDGET OPACITY",
+    "enableGlow": "[PL] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[PL] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "Baza danych symboli giełdowych",
@@ -65,17 +90,8 @@
     "tip": "WSKAZÓWKA: Przeciągnij karty, aby zmienić ich kolejność. Użyj przycisków strzałek, aby przenosić karty pomiędzy sekcjami nagłówka i menu. Zmiany są zapisywane automatycznie."
   },
   "llm": {
-    "title": "KONFIGURACJA LLM",
-    "description": "Skonfiguruj modele i dostawców AI",
     "connected": "POŁĄCZONY",
-    "disconnected": "BEZŁADNY",
-    "provider": "DOSTAWCA AI",
-    "globalSettings": "GLOBALNE USTAWIENIA AI",
-    "temperature": "TEMPERATURA",
-    "maxTokens": "MAX ŻETONÓW",
-    "systemPrompt": "WSKAZÓWKA SYSTEMOWA",
-    "modelLibrary": "BIBLIOTEKA MODELI",
-    "multiModelConfigs": "Konfiguracje wielu modeli"
+    "disconnected": "BEZŁADNY"
   },
   "buttons": {
     "save": "RATOWAĆ",
@@ -86,5 +102,18 @@
     "database": "Baza danych: SQLite",
     "storage": "Przechowywanie: oparte na plikach",
     "secureStorage": "Wszystkie dane są bezpiecznie przechowywane w fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[PL] NOTIFICATION PROVIDERS",
+    "description": "[PL] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[PL] Event Filters",
+    "eventFilterDescription": "[PL] Choose which notification types to forward to external providers.",
+    "providers": "[PL] Providers",
+    "enabled": "[PL] Enabled",
+    "disabled": "[PL] Disabled",
+    "testButton": "[PL] TEST",
+    "testSuccess": "[PL] Test notification sent successfully!",
+    "testFailed": "[PL] Failed to send test notification. Check your configuration.",
+    "saved": "[PL] Configuration saved"
   }
 }

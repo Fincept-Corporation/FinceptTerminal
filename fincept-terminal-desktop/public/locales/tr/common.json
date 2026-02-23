@@ -1,25 +1,4 @@
 {
-  "appName": "Fincept Terminal",
   "loading": "Yükleniyor...",
-  "error": "Hata",
-  "success": "Başarılı",
-  "save": "Kaydet",
-  "cancel": "İptal",
-  "delete": "Sil",
-  "edit": "Düzenle",
-  "add": "Ekle",
-  "search": "Ara",
-  "filter": "Filtrele",
-  "back": "Geri",
-  "next": "İleri",
-  "previous": "Önceki",
-  "submit": "Gönder",
-  "close": "Kapat",
-  "open": "Aç",
-  "yes": "Evet",
-  "no": "Hayır",
-  "ok": "Tamam",
-  "confirm": "Onayla",
-  "language": "Dil",
-  "selectLanguage": "Dil seçin"
+  "settings": "[TR] Settings"
 }

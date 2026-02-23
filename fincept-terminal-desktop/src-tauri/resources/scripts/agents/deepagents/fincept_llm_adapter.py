@@ -22,7 +22,7 @@ class FinceptLLMAdapter(BaseChatModel):
     Supports streaming, function calling, and all DeepAgents features.
     """
 
-    api_endpoint: str = "https://finceptbackend.share.zrok.io/research/llm"
+    api_endpoint: str = "https://api.fincept.in/research/llm"
     api_key: Optional[str] = None
     model_name: str = "fincept-default"
     temperature: float = 0.7

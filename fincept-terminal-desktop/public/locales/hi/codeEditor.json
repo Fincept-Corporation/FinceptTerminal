@@ -1,29 +1,60 @@
 {
-  "title": "कोड एडिटर",
   "header": {
-    "packages": "पैकेज"
+    "finscriptIde": "[HI] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "नई फाइल",
-    "new": "नया",
-    "open": "खोलें",
-    "save": "सहेजें",
     "run": "कोड चलाएं",
     "running": "चल रहा है...",
-    "runAll": "सभी चलाएं",
-    "history": "इतिहास"
+    "toggleExplorer": "[HI] Toggle Explorer (Ctrl+B)",
+    "openFile": "[HI] Open File",
+    "saveShortcut": "[HI] Save (Ctrl+S)",
+    "findShortcut": "[HI] Find (Ctrl+F)",
+    "runShortcut": "[HI] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "ज्यूपिटर नोटबुक",
     "finscript": "फिनस्क्रिप्ट एडिटर"
   },
-  "packages": {
-    "clickToLoad": "पैकेज लोड करने के लिए क्लिक करें...",
-    "load": "पैकेज लोड करें"
+  "explorer": {
+    "title": "[HI] EXPLORER",
+    "openFiles": "[HI] OPEN FILES",
+    "examples": "[HI] EXAMPLES",
+    "runHistory": "[HI] RUN HISTORY",
+    "finscriptEngine": "[HI] FinScript Engine"
   },
-  "history": {
-    "title": "नोटबुक इतिहास",
-    "loading": "इतिहास लोड हो रहा है...",
-    "empty": "अभी तक कोई नोटबुक इतिहास नहीं"
+  "output": {
+    "title": "[HI] OUTPUT",
+    "success": "[HI] SUCCESS",
+    "error": "[HI] ERROR",
+    "executing": "[HI] EXECUTING FINSCRIPT...",
+    "noOutput": "[HI] No output yet",
+    "pressToRun": "[HI] Press Ctrl+Enter to run",
+    "completed": "[HI] COMPLETED",
+    "failed": "[HI] FAILED",
+    "signals": "[HI] signals",
+    "clear": "[HI] CLEAR",
+    "errors": "[HI] ERRORS",
+    "signalsSection": "[HI] SIGNALS",
+    "outputSection": "[HI] OUTPUT",
+    "charts": "[HI] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[HI] OHLC",
+    "histogram": "[HI] Histogram",
+    "line": "[HI] Line",
+    "points": "[HI] points"
+  },
+  "statusBar": {
+    "modified": "[HI] MODIFIED",
+    "showOutput": "[HI] SHOW OUTPUT",
+    "encoding": "[HI] UTF-8",
+    "spaces": "[HI] 4 Spaces",
+    "runShortcut": "[HI] Ctrl+Enter: Run",
+    "lines": "[HI] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[HI] Close file without saving?",
+    "unsavedChanges": "[HI] You have unsaved changes."
   }
 }

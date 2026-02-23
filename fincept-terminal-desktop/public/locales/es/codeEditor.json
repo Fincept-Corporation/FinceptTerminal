@@ -1,29 +1,60 @@
 {
-  "title": "EDITOR DE CÓDIGO",
   "header": {
-    "packages": "PAQUETES"
+    "finscriptIde": "[ES] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "NUEVO ARCHIVO",
-    "new": "NUEVO",
-    "open": "ABRIR",
-    "save": "GUARDAR",
     "run": "EJECUTAR",
     "running": "EJECUTANDO...",
-    "runAll": "EJECUTAR TODO",
-    "history": "HISTORIAL"
+    "toggleExplorer": "[ES] Toggle Explorer (Ctrl+B)",
+    "openFile": "[ES] Open File",
+    "saveShortcut": "[ES] Save (Ctrl+S)",
+    "findShortcut": "[ES] Find (Ctrl+F)",
+    "runShortcut": "[ES] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "EDITOR FINSCRIPT"
   },
-  "packages": {
-    "clickToLoad": "Clic para cargar paquetes...",
-    "load": "CARGAR PAQUETES"
+  "explorer": {
+    "title": "[ES] EXPLORER",
+    "openFiles": "[ES] OPEN FILES",
+    "examples": "[ES] EXAMPLES",
+    "runHistory": "[ES] RUN HISTORY",
+    "finscriptEngine": "[ES] FinScript Engine"
   },
-  "history": {
-    "title": "HISTORIAL DE NOTEBOOKS",
-    "loading": "Cargando historial...",
-    "empty": "Sin historial de notebooks"
+  "output": {
+    "title": "[ES] OUTPUT",
+    "success": "[ES] SUCCESS",
+    "error": "[ES] ERROR",
+    "executing": "[ES] EXECUTING FINSCRIPT...",
+    "noOutput": "[ES] No output yet",
+    "pressToRun": "[ES] Press Ctrl+Enter to run",
+    "completed": "[ES] COMPLETED",
+    "failed": "[ES] FAILED",
+    "signals": "[ES] signals",
+    "clear": "[ES] CLEAR",
+    "errors": "[ES] ERRORS",
+    "signalsSection": "[ES] SIGNALS",
+    "outputSection": "[ES] OUTPUT",
+    "charts": "[ES] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[ES] OHLC",
+    "histogram": "[ES] Histogram",
+    "line": "[ES] Line",
+    "points": "[ES] points"
+  },
+  "statusBar": {
+    "modified": "[ES] MODIFIED",
+    "showOutput": "[ES] SHOW OUTPUT",
+    "encoding": "[ES] UTF-8",
+    "spaces": "[ES] 4 Spaces",
+    "runShortcut": "[ES] Ctrl+Enter: Run",
+    "lines": "[ES] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[ES] Close file without saving?",
+    "unsavedChanges": "[ES] You have unsaved changes."
   }
 }

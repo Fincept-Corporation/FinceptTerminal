@@ -1,25 +1,7 @@
 {
-  "title": "관심목록",
-  "header": {
-    "export": "내보내기",
-    "updating": "업데이트 중",
-    "live": "실시간"
-  },
   "sidebar": {
-    "groups": "관심목록 그룹",
-    "new": "새로 만들기",
     "noWatchlists": "관심목록이 없습니다.",
     "clickNew": "새로 만들기를 클릭하세요.",
-    "stocks": "종목",
-    "marketMovers": "시장 주도주",
-    "gainer": "상승",
-    "loser": "하락",
-    "volumeLeaders": "거래량 상위"
-  },
-  "emptyState": {
-    "selectWatchlist": "관심목록을 선택하거나 새로 만들어 시작하세요"
-  },
-  "list": {
-    "symbols": "심볼"
+    "stocks": "종목"
   }
 }

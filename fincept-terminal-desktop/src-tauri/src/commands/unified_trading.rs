@@ -262,7 +262,7 @@ async fn place_zerodha_order(order: &UnifiedOrder) -> Result<UnifiedOrderRespons
         return Err("Zerodha credentials not found. Please authenticate first.".to_string());
     }
 
-    let cred_data = creds.data.unwrap();
+    let cred_data = creds.data.ok_or("Zerodha credentials data missing")?;
     let api_key = cred_data.get("apiKey")
         .and_then(|v| v.as_str())
         .ok_or("API key not found")?
@@ -294,7 +294,12 @@ async fn place_zerodha_order(order: &UnifiedOrder) -> Result<UnifiedOrderRespons
     params.insert("transaction_type".to_string(), Value::String(transaction_type));
     params.insert("order_type".to_string(), Value::String(zerodha_order_type.to_string()));
     params.insert("product".to_string(), Value::String(product.to_string()));
-    params.insert("quantity".to_string(), Value::Number(serde_json::Number::from(order.quantity as i64)));
+    let qty_i64 = if order.quantity < 0.0 || order.quantity > i64::MAX as f64 || !order.quantity.is_finite() {
+        return Err("Invalid order quantity".to_string());
+    } else {
+        order.quantity as i64
+    };
+    params.insert("quantity".to_string(), Value::Number(serde_json::Number::from(qty_i64)));
 
     if let Some(price) = order.price {
         params.insert("price".to_string(), Value::Number(serde_json::Number::from_f64(price).unwrap_or(serde_json::Number::from(0))));
@@ -335,7 +340,7 @@ async fn place_fyers_order(order: &UnifiedOrder) -> Result<UnifiedOrderResponse,
         return Err("Fyers credentials not found. Please authenticate first.".to_string());
     }
 
-    let cred_data = creds.data.unwrap();
+    let cred_data = creds.data.ok_or("Fyers credentials data missing")?;
     let api_key = cred_data.get("apiKey")
         .and_then(|v| v.as_str())
         .ok_or("Fyers API key not found")?
@@ -377,7 +382,12 @@ async fn place_fyers_order(order: &UnifiedOrder) -> Result<UnifiedOrderResponse,
         api_key,
         access_token,
         fyers_symbol,
-        order.quantity as i32,
+        {
+            if order.quantity < 0.0 || order.quantity > i32::MAX as f64 || !order.quantity.is_finite() {
+                return Err("Invalid order quantity for Fyers".to_string());
+            }
+            order.quantity as i32
+        },
         fyers_order_type,
         fyers_side,
         product_type,
@@ -532,7 +542,7 @@ async fn get_live_positions(session: &TradingSession) -> Result<Vec<UnifiedPosit
                 return Err("Credentials not found".to_string());
             }
 
-            let cred_data = creds.data.unwrap();
+            let cred_data = creds.data.ok_or("Zerodha credentials data missing")?;
             let api_key = cred_data.get("apiKey")
                 .and_then(|v| v.as_str())
                 .ok_or("API key not found")?
@@ -587,7 +597,7 @@ async fn get_live_positions(session: &TradingSession) -> Result<Vec<UnifiedPosit
                 return Err("Fyers credentials not found".to_string());
             }
 
-            let cred_data = creds.data.unwrap();
+            let cred_data = creds.data.ok_or("Fyers credentials data missing")?;
             let api_key = cred_data.get("apiKey")
                 .and_then(|v| v.as_str())
                 .ok_or("API key not found")?

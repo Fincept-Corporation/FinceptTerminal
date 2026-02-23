@@ -267,7 +267,9 @@ export function CryptoTopNav({
                       cursor: 'pointer',
                       fontSize: '11px',
                       backgroundColor: activeBroker === broker.id ? `${FINCEPT.ORANGE}15` : 'transparent',
-                      borderLeft: activeBroker === broker.id ? `3px solid ${FINCEPT.ORANGE}` : '3px solid transparent',
+                      borderLeftWidth: '3px',
+                      borderLeftStyle: 'solid',
+                      borderLeftColor: activeBroker === broker.id ? FINCEPT.ORANGE : 'transparent',
                       transition: 'all 0.15s',
                     }}
                     onMouseEnter={(e) => {

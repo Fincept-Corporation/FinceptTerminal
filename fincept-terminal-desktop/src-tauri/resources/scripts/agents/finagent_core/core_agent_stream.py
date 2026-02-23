@@ -54,6 +54,19 @@ class StreamingCoreAgent:
         """Emit a stream chunk"""
         self.stream_callback(chunk_type, content, metadata)
 
+    def _resolve_provider_from_keys(self) -> str:
+        """Derive provider from api_keys instead of defaulting to openai."""
+        keys = self.api_keys or {}
+        preferred = ["fincept", "ollama", "anthropic", "google", "groq",
+                     "deepseek", "openai", "openrouter"]
+        for provider in preferred:
+            if keys.get(provider) or keys.get(f"{provider.upper()}_API_KEY"):
+                return provider
+        for k, v in keys.items():
+            if k.endswith("_API_KEY") and v:
+                return k[:-8].lower()
+        return "openai"
+
     def run_streaming(
         self,
         query: str,
@@ -71,10 +84,12 @@ class StreamingCoreAgent:
 
         # Check if model supports streaming
         model_config = config.get("model", {})
-        provider = model_config.get("provider", "openai")
+        # Resolve provider from api_keys if not explicitly set in config
+        provider = model_config.get("provider") or self._resolve_provider_from_keys()
 
         # Providers that support native streaming
-        streaming_providers = ["openai", "anthropic", "groq", "together", "fireworks", "ollama"]
+        streaming_providers = ["openai", "anthropic", "groq", "together", "fireworks", "ollama",
+                               "fincept", "google", "deepseek", "openrouter"]
 
         if provider in streaming_providers:
             # Use native streaming
@@ -186,43 +201,37 @@ class StreamingCoreAgent:
         team_config: Dict[str, Any],
         session_id: Optional[str] = None
     ) -> Generator[Dict[str, Any], None, None]:
-        """Stream team execution with agent-by-agent updates."""
+        """Stream team execution using CoreAgent.run_team (Agno Team orchestration)."""
         try:
-            self.emit("thinking", "Initializing team...")
+            from core_agent import CoreAgent
 
             members = team_config.get("agents", team_config.get("members", []))
             mode = team_config.get("mode", "coordinate")
 
-            self.emit("thinking", f"Team mode: {mode} with {len(members)} agents")
+            self.emit("thinking", f"Initializing team ({mode} mode, {len(members)} agents)...")
 
-            # Process each agent (simplified - real implementation would use Agno teams)
-            results = []
-            for i, member_config in enumerate(members):
-                agent_name = member_config.get("name", f"Agent {i+1}")
-                self.emit("thinking", f"Agent '{agent_name}' is working...")
+            core = CoreAgent(api_keys=self.api_keys, user_id=self.user_id)
 
-                # Run individual agent
-                for chunk in self.run_streaming(query, member_config, session_id):
-                    if chunk["type"] == "token":
-                        yield {
-                            "type": "agent_token",
-                            "agent": agent_name,
-                            "content": chunk["content"]
-                        }
-                    elif chunk["type"] == "done":
-                        results.append({
-                            "agent": agent_name,
-                            "response": chunk["content"]
-                        })
-                        self.emit("agent_done", f"Agent '{agent_name}' completed")
+            self.emit("thinking", "Running team via Agno Team orchestration...")
 
-            # Emit final aggregated result
-            final_result = "\n\n".join([
-                f"**{r['agent']}:**\n{r['response']}"
-                for r in results
-            ])
-            self.emit("done", final_result, {"agents": len(results)})
-            yield {"type": "done", "content": final_result}
+            # run_team returns an Agno TeamRunOutput object (not a dict).
+            # Use get_response_content() to safely extract text — same as main.py does.
+            team_response = core.run_team(query, team_config, session_id)
+            content = core.get_response_content(team_response)
+
+            if content:
+                # Chunk the response for smoother streaming UI
+                chunk_size = 50
+                for i in range(0, len(content), chunk_size):
+                    piece = content[i:i + chunk_size]
+                    self.emit("token", piece)
+                    yield {"type": "token", "content": piece}
+
+                self.emit("done", content, {"agents": len(members)})
+                yield {"type": "done", "content": content}
+            else:
+                self.emit("done", "", {"agents": len(members)})
+                yield {"type": "done", "content": ""}
 
         except Exception as e:
             self.emit("error", str(e))
@@ -252,7 +261,7 @@ def main(args=None):
         chunks = []
 
         def collect_callback(chunk_type: str, content: str, metadata: Optional[Dict] = None):
-            """Collect chunks and print as JSON lines"""
+            """Collect chunks and print with prefixes Rust execute_with_stream_callback expects."""
             nonlocal full_response
             chunk = {
                 "stream_id": stream_id,
@@ -260,11 +269,27 @@ def main(args=None):
                 "content": content,
                 "metadata": metadata
             }
-            # Print as JSON line for real-time capture
-            print(f"STREAM:{json.dumps(chunk)}", flush=True)
             chunks.append(chunk)
+            # Escape backslashes first, then newlines so each printed line is one
+            # logical chunk. Rust unescapes \n -> newline after stripping prefix.
+            safe = content.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "")
             if chunk_type in ["token", "agent_token"]:
                 full_response += content
+                # Rust recognises TOKEN: prefix -> "token" chunk type
+                print(f"TOKEN:{safe}", flush=True)
+            elif chunk_type == "thinking":
+                print(f"THINKING:{safe}", flush=True)
+            elif chunk_type == "tool_call":
+                print(f"TOOL:{safe}", flush=True)
+            elif chunk_type == "tool_result":
+                print(f"TOOL_RESULT:{safe}", flush=True)
+            elif chunk_type in ["done", "agent_done"]:
+                print(f"DONE:{safe}", flush=True)
+            elif chunk_type == "error":
+                print(f"ERROR:{safe}", flush=True)
+            else:
+                # Fallback: emit as token so Rust forwards it
+                print(f"TOKEN:{safe}", flush=True)
 
         agent = StreamingCoreAgent(
             api_keys=api_keys,

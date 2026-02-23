@@ -9,13 +9,9 @@
   "percentChange": "%UBH",
   "high": "TINGGI",
   "low": "RENDAH",
-  "loading": "Memuat...",
   "noData": "Tidak ada data tersedia",
   "refresh": "SEGARKAN",
   "auto": "OTOMATIS",
   "on": "AKTIF",
-  "off": "MATI",
-  "lastUpdate": "UPDATE TERAKHIR",
-  "updating": "MEMPERBARUI",
-  "live": "LANGSUNG"
+  "off": "MATI"
 }

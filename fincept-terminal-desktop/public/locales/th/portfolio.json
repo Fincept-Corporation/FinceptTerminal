@@ -1,63 +1,20 @@
 {
-    "title": "ตัวจัดการพอร์ตโฟลิโอ FINCEPT",
-    "header": {
-        "live": "สด",
-        "updating": "กำลังอัปเดต",
-        "newPortfolio": "พอร์ตใหม่",
-        "refresh": "รีเฟรช",
-        "exportCsv": "ส่งออก CSV"
-    },
-    "summary": {
-        "totalValue": "มูลค่ารวม",
-        "dayPnl": "กำไร/ขาดทุนวันนี้",
-        "totalPnl": "กำไร/ขาดทุนรวม",
-        "positions": "ตำแหน่ง"
-    },
-    "views": {
-        "positions": "ตำแหน่ง",
-        "addAsset": "เพิ่มสินทรัพย์",
-        "sellAsset": "ขายสินทรัพย์",
-        "analytics": "การวิเคราะห์",
-        "history": "ประวัติ",
-        "activeMgmt": "การจัดการเชิงรุก",
-        "performance": "ผลการดำเนินงาน",
-        "rebalance": "ปรับสมดุล",
-        "reports": "รายงาน",
-        "alerts": "การแจ้งเตือน",
-        "sectors": "กลุ่มอุตสาหกรรม",
-        "help": "ช่วยเหลือ"
-    },
-    "sidebar": {
-        "portfolios": "พอร์ตโฟลิโอ",
-        "loading": "กำลังโหลดพอร์ต...",
-        "noPortfolios": "ยังไม่มีพอร์ต",
-        "clickCreate": "คลิก พอร์ตใหม่ เพื่อสร้าง",
-        "owner": "เจ้าของ",
-        "currency": "สกุลเงิน"
-    },
-    "content": {
-        "selectOrCreate": "เลือกพอร์ตหรือสร้างใหม่เพื่อเริ่มต้น",
-        "loadingData": "กำลังโหลดข้อมูลพอร์ต...",
-        "comingSoon": "มาเร็วๆ นี้..."
-    },
-    "modals": {
-        "createNew": "สร้างพอร์ตใหม่",
-        "portfolioName": "ชื่อพอร์ต",
-        "owner": "เจ้าของ",
-        "currency": "สกุลเงิน",
-        "cancel": "ยกเลิก",
-        "create": "สร้าง",
-        "addAssetTitle": "เพิ่มสินทรัพย์ในพอร์ต",
-        "sellAssetTitle": "ขายสินทรัพย์",
-        "symbol": "สัญลักษณ์",
-        "quantity": "จำนวน",
-        "price": "ราคา",
-        "add": "เพิ่ม",
-        "sell": "ขาย"
-    },
-    "status": {
-        "version": "Fincept Portfolio Manager v2.1.0 | ติดตามเรียลไทม์พร้อมการรวม yfinance",
-        "lastUpdated": "อัปเดตล่าสุด",
-        "connected": "เชื่อมต่อแล้ว"
-    }
+  "modals": {
+    "createNew": "สร้างพอร์ตใหม่",
+    "portfolioName": "ชื่อพอร์ต",
+    "owner": "เจ้าของ",
+    "currency": "สกุลเงิน",
+    "cancel": "ยกเลิก",
+    "create": "สร้าง",
+    "addAssetTitle": "เพิ่มสินทรัพย์ในพอร์ต",
+    "sellAssetTitle": "ขายสินทรัพย์",
+    "symbol": "สัญลักษณ์",
+    "quantity": "จำนวน",
+    "price": "ราคา",
+    "add": "เพิ่ม",
+    "sell": "ขาย"
+  },
+  "extracted": {
+    "areYouSureYou": "[TH] Are you sure you want to delete this portfolio? This action cannot be undone."
+  }
 }

@@ -5,29 +5,7 @@
     "news": "Știri",
     "portfolio": "Portofoliu",
     "backtesting": "Backtesting",
-    "watchlist": "Listă urmărire",
-    "research": "Cercetare",
-    "screener": "Screener",
     "chat": "AI Chat",
-    "agents": "Agenți",
-    "settings": "Setări",
     "profile": "Profil"
-  },
-  "functionKeys": {
-    "f1": "TABL",
-    "f2": "PIET",
-    "f3": "STIR",
-    "f4": "PORT",
-    "f5": "BKTS",
-    "f6": "WACH",
-    "f7": "CERC",
-    "f8": "SCRN",
-    "f9": "TRDG",
-    "f10": "AI",
-    "f11": "FULL",
-    "f12": "PROF"
-  },
-  "labels": {
-    "moreTabs": "Mai multe file în meniurile toolbar"
   }
 }

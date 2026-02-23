@@ -25,7 +25,7 @@ export function useSymbolSearch(): UseSymbolSearchReturn {
   // HTTP Symbol Search function
   const searchSymbolsHttp = async (query: string) => {
     try {
-      const response = await fetch(`https://finceptbackend.share.zrok.io/search/symbols?query=${encodeURIComponent(query)}&limit=50`);
+      const response = await fetch(`https://api.fincept.in/search/symbols?query=${encodeURIComponent(query)}&limit=50`);
       if (response.ok) {
         const data = await response.json();
         console.log('[Search] HTTP results:', data);

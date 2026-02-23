@@ -798,8 +798,10 @@ export const MergerAnalysis: React.FC = () => {
       ];
 
       const dealOverview = result.deal_overview || {};
-      const goodwill = result.goodwill || {};
-      const breakeven = result.breakeven_synergies || {};
+      // goodwill from Python is a raw float, not an object
+      const goodwillAmount = typeof result.goodwill === 'number' ? result.goodwill : (result.goodwill?.goodwill_amount || result.goodwill?.goodwill || 0);
+      // breakeven_synergies from Python is a raw float, not an object
+      const breakevenAmount = typeof result.breakeven_synergies === 'number' ? result.breakeven_synergies : (result.breakeven_synergies?.required_synergies || result.breakeven_synergies?.breakeven_amount || 0);
       const contribAnalysis = result.contribution_analysis || {};
 
       // Pro forma comparison chart
@@ -904,13 +906,12 @@ export const MergerAnalysis: React.FC = () => {
             />
             <MAMetricCard
               label="Goodwill Created"
-              value={formatCurrency(goodwill.goodwill_amount || goodwill.goodwill || 0)}
+              value={formatCurrency(goodwillAmount)}
               accentColor={CHART_PALETTE[2]}
             />
             <MAMetricCard
               label="Breakeven Synergies"
-              value={formatCurrency(breakeven.required_synergies || breakeven.breakeven_amount || 0)}
-              subtitle={breakeven.as_pct_of_target_revenue ? `${breakeven.as_pct_of_target_revenue.toFixed(1)}% of target rev` : undefined}
+              value={formatCurrency(breakevenAmount)}
               accentColor={FINCEPT.CYAN}
             />
             <MAMetricCard

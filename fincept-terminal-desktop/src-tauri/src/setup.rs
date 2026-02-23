@@ -714,10 +714,12 @@ async fn create_venv(app: &AppHandle, install_dir: &PathBuf, venv_name: &str) ->
         cmd
     };
 
+    let venv_path_str = venv_path.to_str().ok_or_else(|| format!("Invalid venv path encoding: {:?}", venv_path))?;
+    let python_exe_str = python_exe.to_str().ok_or_else(|| format!("Invalid python path encoding: {:?}", python_exe))?;
     cmd.args(&[
         "venv",
-        venv_path.to_str().unwrap(),
-        "--python", python_exe.to_str().unwrap()
+        venv_path_str,
+        "--python", python_exe_str
     ]);
 
     #[cfg(target_os = "windows")]
@@ -787,10 +789,12 @@ async fn install_packages_in_venv(
         cmd
     };
 
+    let venv_python_str = venv_python.to_str().ok_or_else(|| format!("Invalid venv python path encoding: {:?}", venv_python))?;
+    let requirements_path_str = requirements_path.to_str().ok_or_else(|| format!("Invalid requirements path encoding: {:?}", requirements_path))?;
     cmd.args(&[
         "pip", "install",
-        "--python", venv_python.to_str().unwrap(),
-        "-r", requirements_path.to_str().unwrap()
+        "--python", venv_python_str,
+        "-r", requirements_path_str
     ]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);

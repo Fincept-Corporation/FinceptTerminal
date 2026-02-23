@@ -165,7 +165,7 @@ fn parse_dhan_csv(csv_text: &str, segment: &str) -> Result<Vec<SymbolRecord>> {
 
 fn parse_dhan_row(fields: &[&str], segment: &str) -> Option<SymbolRecord> {
     let exchange = fields.get(COL_EXCHANGE)?.trim();
-    let segment_code = fields.get(COL_SEGMENT)?.trim();
+    let _segment_code = fields.get(COL_SEGMENT)?.trim();
     let security_id = fields.get(COL_SECURITY_ID)?.trim();
     let instrument_name = fields.get(COL_INSTRUMENT_NAME)?.trim();
     let instrument_type = fields.get(COL_INSTRUMENT_TYPE)?.trim();
@@ -175,7 +175,7 @@ fn parse_dhan_row(fields: &[&str], segment: &str) -> Option<SymbolRecord> {
     let expiry_raw = fields.get(COL_EXPIRY_DATE)?.trim();
     let strike: f64 = fields.get(COL_STRIKE)?.trim().parse().unwrap_or(0.0);
     let option_type = fields.get(COL_OPTION_TYPE)?.trim();
-    let custom_symbol = fields.get(COL_CUSTOM_SYMBOL)?.trim();
+    let _custom_symbol = fields.get(COL_CUSTOM_SYMBOL)?.trim();
 
     // Determine unified exchange
     let unified_exchange = match segment {

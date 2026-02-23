@@ -5,6 +5,23 @@ use crate::data_sources::yfinance::{YFinanceProvider, QuoteData, HistoricalData}
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+const MAX_SYMBOL_LEN: usize = 20;
+const MAX_SYMBOLS_BATCH: usize = 100;
+
+fn validate_symbol(symbol: &str) -> Result<(), String> {
+    let trimmed = symbol.trim();
+    if trimmed.is_empty() {
+        return Err("Symbol cannot be empty".to_string());
+    }
+    if trimmed.len() > MAX_SYMBOL_LEN {
+        return Err(format!("Symbol too long (max {} chars)", MAX_SYMBOL_LEN));
+    }
+    if !trimmed.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '-' || c == '^' || c == '=' || c == '/') {
+        return Err(format!("Symbol contains invalid characters: {}", trimmed));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QuoteResponse {
     pub success: bool,
@@ -36,7 +53,7 @@ pub struct PeriodReturnsResponse {
 /// Fetch a single quote
 #[tauri::command]
 pub async fn get_market_quote(app: tauri::AppHandle, symbol: String) -> Result<QuoteResponse, String> {
-
+    validate_symbol(&symbol)?;
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_quote(&symbol).await {
@@ -56,7 +73,12 @@ pub async fn get_market_quote(app: tauri::AppHandle, symbol: String) -> Result<Q
 /// Fetch multiple quotes (batch)
 #[tauri::command]
 pub async fn get_market_quotes(app: tauri::AppHandle, symbols: Vec<String>) -> Result<QuotesResponse, String> {
-
+    if symbols.len() > MAX_SYMBOLS_BATCH {
+        return Err(format!("Too many symbols (max {})", MAX_SYMBOLS_BATCH));
+    }
+    for s in &symbols {
+        validate_symbol(s)?;
+    }
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
     let quotes = provider.get_quotes(symbols).await;
 
@@ -70,7 +92,7 @@ pub async fn get_market_quotes(app: tauri::AppHandle, symbols: Vec<String>) -> R
 /// Fetch period returns (7D, 30D)
 #[tauri::command]
 pub async fn get_period_returns(app: tauri::AppHandle, symbol: String) -> Result<PeriodReturnsResponse, String> {
-
+    validate_symbol(&symbol)?;
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_period_returns(&symbol).await {
@@ -113,6 +135,7 @@ pub async fn get_historical_data(
     start_date: String,
     end_date: String,
 ) -> Result<HistoricalResponse, String> {
+    validate_symbol(&symbol)?;
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_historical(&symbol, &start_date, &end_date).await {
@@ -139,6 +162,7 @@ pub struct StockInfoResponse {
 /// Fetch stock info (company data, metrics, etc.)
 #[tauri::command]
 pub async fn get_stock_info(app: tauri::AppHandle, symbol: String) -> Result<StockInfoResponse, String> {
+    validate_symbol(&symbol)?;
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_info(&symbol).await {
@@ -165,6 +189,7 @@ pub struct FinancialsResponse {
 /// Fetch financial statements (income, balance sheet, cash flow)
 #[tauri::command]
 pub async fn get_financials(app: tauri::AppHandle, symbol: String) -> Result<FinancialsResponse, String> {
+    validate_symbol(&symbol)?;
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_financials(&symbol).await {

@@ -60,7 +60,8 @@ interface SearchState {
 // ─── Language Config (moved inside component to access theme colors) ────────────────
 
 const DEFAULT_FINSCRIPT = `// FinScript - EMA/RSI Crossover Strategy
-// Data is generated synthetically for instant execution
+// Toggle LIVE DATA in toolbar to use real Yahoo Finance market data
+// In DEMO mode, synthetic data is generated for instant execution
 
 // Calculate indicators on AAPL
 ema_fast = ema(AAPL, 12)
@@ -125,6 +126,16 @@ export default function CodeEditorTab() {
   const [activeFileId, setActiveFileId] = useState('1');
   const [isRunning, setIsRunning] = useState(false);
   const [finscriptResult, setFinscriptResult] = useState<FinScriptExecutionResult | null>(null);
+  const [useLiveData, setUseLiveData] = useState(false);
+  const [dateRange, setDateRange] = useState(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setFullYear(start.getFullYear() - 1);
+    return {
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0],
+    };
+  });
   const [showExplorer, setShowExplorer] = useState(true);
   const [outputHeight, setOutputHeight] = useState(280);
   const [isOutputMaximized, setIsOutputMaximized] = useState(false);
@@ -412,10 +423,29 @@ export default function CodeEditorTab() {
     setShowOutput(true);
 
     try {
-      const result = await invoke<FinScriptExecutionResult>('execute_finscript', {
-        code: activeFile.content
-      });
+      let result: FinScriptExecutionResult;
+      if (useLiveData) {
+        result = await invoke<FinScriptExecutionResult>('execute_finscript_live', {
+          code: activeFile.content,
+          dataConfig: {
+            start_date: dateRange.startDate,
+            end_date: dateRange.endDate,
+          },
+        });
+      } else {
+        result = await invoke<FinScriptExecutionResult>('execute_finscript', {
+          code: activeFile.content,
+        });
+      }
       setFinscriptResult(result);
+
+      // Process integration actions from FinScript
+      if (result.integration_actions && result.integration_actions.length > 0) {
+        for (const action of result.integration_actions) {
+          console.log(`[FinScript Integration] ${action.action_type}:`, action.payload);
+        }
+      }
+
       setExecutionHistory(prev => [...prev.slice(-9), {
         time: new Date().toLocaleTimeString(),
         status: result.success ? 'success' : 'error',
@@ -428,6 +458,9 @@ export default function CodeEditorTab() {
         signals: [],
         plots: [],
         errors: [String(error)],
+        alerts: [],
+        drawings: [],
+        integration_actions: [],
         execution_time_ms: 0,
       };
       setFinscriptResult(errorResult);
@@ -638,8 +671,60 @@ export default function CodeEditorTab() {
             }}
           >
             <Play size={11} fill={F.DARK_BG} />
-            {isRunning ? t('toolbar.running') : t('toolbar.run')}
+            {isRunning ? (useLiveData ? 'FETCHING...' : t('toolbar.running')) : t('toolbar.run')}
           </button>
+
+          <div style={{ width: '1px', height: '18px', backgroundColor: F.BORDER, margin: '0 4px' }} />
+
+          {/* Live Data Toggle */}
+          <button
+            onClick={() => setUseLiveData(!useLiveData)}
+            style={{
+              padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '5px',
+              backgroundColor: useLiveData ? `${F.GREEN}18` : 'transparent',
+              border: `1px solid ${useLiveData ? F.GREEN : F.BORDER}`,
+              borderRadius: '2px',
+              color: useLiveData ? F.GREEN : F.GRAY,
+              fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px',
+              cursor: 'pointer', fontFamily: FONT, transition: 'all 0.2s',
+            }}
+            title={useLiveData ? 'Using real Yahoo Finance data' : 'Using synthetic demo data'}
+          >
+            <div style={{
+              width: 6, height: 6, borderRadius: '50%',
+              backgroundColor: useLiveData ? F.GREEN : F.GRAY,
+            }} />
+            {useLiveData ? 'LIVE' : 'DEMO'}
+          </button>
+
+          {/* Date Range (visible only in live mode) */}
+          {useLiveData && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="date"
+                value={dateRange.startDate}
+                onChange={(e) => setDateRange(d => ({ ...d, startDate: e.target.value }))}
+                style={{
+                  padding: '3px 5px', backgroundColor: F.PANEL_BG,
+                  border: `1px solid ${F.BORDER}`, borderRadius: '2px',
+                  color: F.GRAY, fontSize: '9px', fontFamily: FONT,
+                  outline: 'none', colorScheme: 'dark',
+                }}
+              />
+              <span style={{ color: F.MUTED, fontSize: '9px', fontFamily: FONT }}>to</span>
+              <input
+                type="date"
+                value={dateRange.endDate}
+                onChange={(e) => setDateRange(d => ({ ...d, endDate: e.target.value }))}
+                style={{
+                  padding: '3px 5px', backgroundColor: F.PANEL_BG,
+                  border: `1px solid ${F.BORDER}`, borderRadius: '2px',
+                  color: F.GRAY, fontSize: '9px', fontFamily: FONT,
+                  outline: 'none', colorScheme: 'dark',
+                }}
+              />
+            </div>
+          )}
         </div>
         )}
       </div>

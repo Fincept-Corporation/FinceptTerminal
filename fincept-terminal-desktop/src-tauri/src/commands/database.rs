@@ -785,6 +785,13 @@ pub async fn db_admin_get_table_data(
     limit: i64,
     offset: i64,
 ) -> Result<Vec<TableRow>, String> {
+    validate_sql_identifier(&table_name, "Table name")?;
+    if limit < 0 || limit > 10000 {
+        return Err("Limit must be between 0 and 10000".to_string());
+    }
+    if offset < 0 {
+        return Err("Offset must be non-negative".to_string());
+    }
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     let query = format!(
@@ -837,14 +844,30 @@ pub async fn db_admin_execute_query(
     db_path: String,
     query: String,
 ) -> Result<Vec<TableRow>, String> {
-    // Security: Only allow SELECT queries
-    let query_upper = query.trim().to_uppercase();
+    // Security: Only allow SELECT queries — reject anything that could modify data
+    let query_trimmed = query.trim();
+    let query_upper = query_trimmed.to_uppercase();
     if !query_upper.starts_with("SELECT") {
         return Err("Only SELECT queries are allowed".to_string());
     }
+    // Reject queries containing multiple statements or dangerous keywords after SELECT
+    let dangerous_keywords = ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "ATTACH", "DETACH", "PRAGMA"];
+    // Check for semicolons (multi-statement) — only allow the trailing one
+    let without_trailing = query_trimmed.trim_end_matches(';').trim();
+    if without_trailing.contains(';') {
+        return Err("Multiple SQL statements are not allowed".to_string());
+    }
+    // Check for dangerous keywords in the rest of the query (skip the leading SELECT)
+    let rest_upper = query_upper.get(6..).unwrap_or("");
+    for kw in &dangerous_keywords {
+        // Match whole word boundaries to avoid false positives (e.g. column named "updated")
+        if rest_upper.split_whitespace().any(|word| word == *kw) {
+            return Err(format!("Query contains disallowed keyword: {}", kw));
+        }
+    }
 
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(query_trimmed).map_err(|e| e.to_string())?;
 
     let column_count = stmt.column_count();
     let column_names: Vec<String> = (0..column_count)
@@ -893,6 +916,11 @@ pub async fn db_admin_update_row(
     primary_key_column: String,
     primary_key_value: serde_json::Value,
 ) -> Result<String, String> {
+    validate_sql_identifier(&table_name, "Table name")?;
+    validate_sql_identifier(&primary_key_column, "Primary key column")?;
+    for col in row_data.keys() {
+        validate_sql_identifier(col, "Column name")?;
+    }
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     let mut set_clauses = Vec::new();
@@ -932,6 +960,10 @@ pub async fn db_admin_insert_row(
     table_name: String,
     row_data: HashMap<String, serde_json::Value>,
 ) -> Result<String, String> {
+    validate_sql_identifier(&table_name, "Table name")?;
+    for col in row_data.keys() {
+        validate_sql_identifier(col, "Column name")?;
+    }
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     let columns: Vec<String> = row_data.keys().map(|k| format!("\"{}\"", k)).collect();
@@ -961,6 +993,8 @@ pub async fn db_admin_delete_row(
     primary_key_column: String,
     primary_key_value: serde_json::Value,
 ) -> Result<String, String> {
+    validate_sql_identifier(&table_name, "Table name")?;
+    validate_sql_identifier(&primary_key_column, "Primary key column")?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     let query = format!(
@@ -982,12 +1016,33 @@ pub async fn db_admin_rename_table(
     old_name: String,
     new_name: String,
 ) -> Result<String, String> {
+    validate_sql_identifier(&old_name, "Old table name")?;
+    validate_sql_identifier(&new_name, "New table name")?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     let query = format!("ALTER TABLE \"{}\" RENAME TO \"{}\"", old_name, new_name);
     conn.execute(&query, []).map_err(|e| e.to_string())?;
 
     Ok("Table renamed successfully".to_string())
+}
+
+/// Validates a SQL identifier (table name, column name) to prevent injection.
+/// Only allows alphanumeric characters, underscores, and spaces (for quoted identifiers).
+/// Rejects empty strings and strings containing quotes, semicolons, or other dangerous chars.
+fn validate_sql_identifier(name: &str, kind: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err(format!("{} cannot be empty", kind));
+    }
+    if name.len() > 128 {
+        return Err(format!("{} too long (max 128 chars)", kind));
+    }
+    // Reject characters that could break out of double-quoted identifiers
+    if name.contains('"') || name.contains(';') || name.contains('\\')
+        || name.contains('\0') || name.contains('\'')
+    {
+        return Err(format!("{} contains invalid characters: {}", kind, name));
+    }
+    Ok(())
 }
 
 // Helper function to convert JSON value to SQL value

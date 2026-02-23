@@ -10,6 +10,12 @@ export type CompetitionStatus = 'created' | 'running' | 'paused' | 'completed' |
 export type TradeAction = 'buy' | 'sell' | 'hold' | 'short';
 export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'ollama' | 'fincept';
 
+// Competition Type - crypto or prediction markets
+export type CompetitionType = 'crypto' | 'polymarket';
+
+// Polymarket-specific action types
+export type PolymarketAction = 'buy_yes' | 'buy_no' | 'sell_yes' | 'sell_no' | 'hold';
+
 // Response Events
 export type StreamResponseEvent =
   | 'message_chunk'
@@ -157,6 +163,72 @@ export interface MarketData {
   timestamp: string;
 }
 
+// Polymarket-specific types
+export interface PolymarketMarketInfo {
+  id: string;
+  question: string;
+  description?: string;
+  outcomes: string[];           // e.g., ["Yes", "No"]
+  outcome_prices: number[];     // e.g., [0.65, 0.35]
+  token_ids: string[];          // CLOB token IDs for each outcome
+  volume: number;
+  liquidity: number;
+  end_date?: string;
+  image?: string;
+  category?: string;
+}
+
+export interface PolymarketPosition {
+  market_id: string;
+  market_question: string;
+  outcome: string;              // "YES" or "NO"
+  shares: number;
+  avg_price: number;
+  current_price: number;
+  unrealized_pnl: number;
+  realized_pnl: number;
+  resolved: boolean;
+}
+
+export interface PolymarketPortfolioState {
+  model_name: string;
+  cash: number;
+  portfolio_value: number;
+  positions: Record<string, PolymarketPosition>;  // keyed by market_id
+  total_pnl: number;
+  unrealized_pnl: number;
+  trades_count: number;
+}
+
+export interface PolymarketDecision {
+  competition_id: string;
+  model_name: string;
+  cycle_number: number;
+  market_id: string;
+  market_question: string;
+  action: PolymarketAction;
+  amount_usd: number;
+  confidence: number;
+  estimated_probability: number;  // Agent's estimate of true probability
+  reasoning: string;
+  trade_executed?: PolymarketTradeResult;
+  timestamp: string;
+}
+
+export interface PolymarketTradeResult {
+  status: 'executed' | 'rejected' | 'partial';
+  action: PolymarketAction;
+  market_id: string;
+  outcome: string;  // "YES" or "NO"
+  shares: number;
+  price: number;
+  cost?: number;
+  proceeds?: number;
+  pnl?: number;
+  reason?: string;
+  timestamp: string;
+}
+
 export interface TradeResult {
   status: 'executed' | 'rejected' | 'partial';
   action: TradeAction;
@@ -211,6 +283,11 @@ export interface CompetitionConfig {
   exchange_id: string;
   max_cycles?: number;
   custom_prompt?: string;
+  // Competition type - crypto or polymarket
+  competition_type?: CompetitionType;
+  // Polymarket-specific config
+  polymarket_markets?: PolymarketMarketInfo[];
+  polymarket_category?: string;
 }
 
 export interface Competition {
@@ -304,6 +381,11 @@ export interface CreateCompetitionRequest {
     max_tokens: number;
     system_prompt: string;
   };
+  // Competition type - crypto or polymarket
+  competition_type?: CompetitionType;
+  // Polymarket-specific params
+  polymarket_market_ids?: string[];
+  polymarket_category?: string;
 }
 
 export interface CreateCompetitionResponse {

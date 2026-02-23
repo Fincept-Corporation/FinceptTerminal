@@ -9,13 +9,9 @@
   "percentChange": "%VAR",
   "high": "HAUT",
   "low": "BAS",
-  "loading": "Chargement...",
   "noData": "Aucune donnée disponible",
   "refresh": "ACTUALISER",
   "auto": "AUTO",
   "on": "ON",
-  "off": "OFF",
-  "lastUpdate": "DERNIÈRE MISE À JOUR",
-  "updating": "MISE À JOUR",
-  "live": "EN DIRECT"
+  "off": "OFF"
 }

@@ -156,6 +156,7 @@ export function LLMConfigSection({
           newModelConfig={state.newModelConfig}
           setNewModelConfig={state.setNewModelConfig}
           newModelConfigModels={state.newModelConfigModels}
+          availableProviders={state.availableProviders}
           useManualEntry={state.useManualEntryAddModel}
           setUseManualEntry={state.setUseManualEntryAddModel}
           showApiKeys={state.showApiKeys}

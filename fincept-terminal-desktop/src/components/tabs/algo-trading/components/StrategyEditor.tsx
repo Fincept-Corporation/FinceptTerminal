@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Save, Play, Loader, ArrowLeft, Shield, AlertTriangle, ChevronDown, ChevronRight,
   Target, TrendingUp, TrendingDown, BarChart3, Clock, Percent, Activity,
@@ -8,14 +8,7 @@ import type { ConditionItem } from '../types';
 import { TIMEFRAMES } from '../constants/indicators';
 import { saveAlgoStrategy, getAlgoStrategy, runAlgoBacktest } from '../services/algoTradingService';
 import ConditionBuilder from './ConditionBuilder';
-
-const F = {
-  ORANGE: '#FF8800', WHITE: '#FFFFFF', RED: '#FF3B3B', GREEN: '#00D66F',
-  GRAY: '#787878', DARK_BG: '#000000', PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A', BORDER: '#2A2A2A', HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A', CYAN: '#00E5FF', YELLOW: '#FFD700', PURPLE: '#9D4EDD',
-  BLUE: '#0088FF',
-};
+import { F } from '../constants/theme';
 
 interface StrategyEditorProps {
   editStrategyId: string | null;
@@ -89,11 +82,7 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
   const [showDebug, setShowDebug] = useState(false);
   const [showBacktest, setShowBacktest] = useState(true);
 
-  useEffect(() => {
-    if (editStrategyId) loadStrategy(editStrategyId);
-  }, [editStrategyId]);
-
-  const loadStrategy = async (id: string) => {
+  const loadStrategy = useCallback(async (id: string) => {
     const result = await getAlgoStrategy(id);
     if (result.success && result.data) {
       const s = result.data;
@@ -107,7 +96,11 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
         setExitConditions(JSON.parse(s.exit_conditions).filter((c: unknown) => typeof c === 'object'));
       } catch { /* keep defaults */ }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (editStrategyId) loadStrategy(editStrategyId);
+  }, [editStrategyId, loadStrategy]);
 
   const buildConditionsJson = (conditions: ConditionItem[], logic: string): string => {
     if (conditions.length === 0) return '[]';
@@ -120,7 +113,7 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
     if (!name.trim()) { setError('Strategy name is required'); return; }
     if (entryConditions.length === 0) { setError('At least one entry condition is required'); return; }
     setSaving(true); setError('');
-    const id = editStrategyId || `algo-${Date.now()}`;
+    const id = editStrategyId || `algo-${crypto.randomUUID()}`;
     const result = await saveAlgoStrategy({
       id, name: name.trim(), description: description.trim(),
       entry_conditions: buildConditionsJson(entryConditions, entryLogic),
@@ -408,7 +401,7 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
                 <div>
                   <label style={labelStyle}>TRAILING STOP (%)</label>
                   <input type="number" value={trailingStop} onChange={e => setTrailingStop(e.target.value)} placeholder="e.g. 1.5" step="0.1" min="0" style={inputStyle} />
-                  <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>Not yet implemented</div>
+                  <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>Exit if pullback from peak &ge; this %</div>
                 </div>
               </div>
 

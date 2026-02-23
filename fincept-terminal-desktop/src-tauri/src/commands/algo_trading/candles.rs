@@ -275,7 +275,7 @@ pub async fn evaluate_conditions_once(
         }).to_string());
     }
 
-    let output = Command::new("python")
+    let child = Command::new("python")
         .arg(&evaluator_path)
         .arg("--mode")
         .arg("once")
@@ -287,8 +287,25 @@ pub async fn evaluate_conditions_once(
         .arg(&tf)
         .arg("--db")
         .arg(&db_path)
-        .output()
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|e| format!("Failed to evaluate conditions: {}", e))?;
+
+    // Wait with a 30-second timeout to prevent hanging
+    let timeout_duration = std::time::Duration::from_secs(30);
+    let output = match tokio::time::timeout(timeout_duration, tokio::task::spawn_blocking(move || child.wait_with_output())).await {
+        Ok(Ok(Ok(out))) => out,
+        Ok(Ok(Err(e))) => {
+            return Ok(json!({ "success": false, "error": format!("Process error: {}", e) }).to_string());
+        }
+        Ok(Err(e)) => {
+            return Ok(json!({ "success": false, "error": format!("Spawn error: {}", e) }).to_string());
+        }
+        Err(_) => {
+            return Ok(json!({ "success": false, "error": "Condition evaluation timed out after 30 seconds" }).to_string());
+        }
+    };
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);

@@ -1,29 +1,60 @@
 {
-  "title": "EDITOR CODICE",
   "header": {
-    "packages": "PACCHETTI"
+    "finscriptIde": "[IT] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "NUOVO FILE",
-    "new": "NUOVO",
-    "open": "APRI",
-    "save": "SALVA",
     "run": "ESEGUI",
     "running": "IN ESECUZIONE...",
-    "runAll": "ESEGUI TUTTO",
-    "history": "CRONOLOGIA"
+    "toggleExplorer": "[IT] Toggle Explorer (Ctrl+B)",
+    "openFile": "[IT] Open File",
+    "saveShortcut": "[IT] Save (Ctrl+S)",
+    "findShortcut": "[IT] Find (Ctrl+F)",
+    "runShortcut": "[IT] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "EDITOR FINSCRIPT"
   },
-  "packages": {
-    "clickToLoad": "Clicca per caricare...",
-    "load": "CARICA PACCHETTI"
+  "explorer": {
+    "title": "[IT] EXPLORER",
+    "openFiles": "[IT] OPEN FILES",
+    "examples": "[IT] EXAMPLES",
+    "runHistory": "[IT] RUN HISTORY",
+    "finscriptEngine": "[IT] FinScript Engine"
   },
-  "history": {
-    "title": "CRONOLOGIA NOTEBOOK",
-    "loading": "Caricamento cronologia...",
-    "empty": "Nessuna cronologia notebook"
+  "output": {
+    "title": "[IT] OUTPUT",
+    "success": "[IT] SUCCESS",
+    "error": "[IT] ERROR",
+    "executing": "[IT] EXECUTING FINSCRIPT...",
+    "noOutput": "[IT] No output yet",
+    "pressToRun": "[IT] Press Ctrl+Enter to run",
+    "completed": "[IT] COMPLETED",
+    "failed": "[IT] FAILED",
+    "signals": "[IT] signals",
+    "clear": "[IT] CLEAR",
+    "errors": "[IT] ERRORS",
+    "signalsSection": "[IT] SIGNALS",
+    "outputSection": "[IT] OUTPUT",
+    "charts": "[IT] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[IT] OHLC",
+    "histogram": "[IT] Histogram",
+    "line": "[IT] Line",
+    "points": "[IT] points"
+  },
+  "statusBar": {
+    "modified": "[IT] MODIFIED",
+    "showOutput": "[IT] SHOW OUTPUT",
+    "encoding": "[IT] UTF-8",
+    "spaces": "[IT] 4 Spaces",
+    "runShortcut": "[IT] Ctrl+Enter: Run",
+    "lines": "[IT] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[IT] Close file without saving?",
+    "unsavedChanges": "[IT] You have unsaved changes."
   }
 }

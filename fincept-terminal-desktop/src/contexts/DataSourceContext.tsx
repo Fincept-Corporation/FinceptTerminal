@@ -121,6 +121,8 @@ export const DataSourceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [state, dispatch] = useReducer(dataSourceReducer, initialState);
   const mountedRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Track active test connection IDs to prevent duplicate concurrent tests
+  const activeTestRef = useRef<string | null>(null);
 
   // Load connections from SQLite on mount
   const loadConnections = useCallback(async () => {
@@ -242,6 +244,10 @@ export const DataSourceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const testConnection = useCallback(async (connection: DataSourceConnection) => {
     if (!mountedRef.current) return;
 
+    // Prevent duplicate concurrent tests for the same connection
+    if (activeTestRef.current === connection.id) return;
+    activeTestRef.current = connection.id;
+
     dispatch({ type: 'SET_TESTING', payload: connection.id });
 
     try {
@@ -252,7 +258,7 @@ export const DataSourceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // Use the actual adapter's test method
         const result = await adapter.testConnection();
 
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || activeTestRef.current !== connection.id) return;
 
         if (result.success) {
           dispatch({ type: 'SET_CONNECTED', payload: connection.id });
@@ -263,15 +269,19 @@ export const DataSourceProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // No adapter available, simulate test
         await new Promise((resolve) => setTimeout(resolve, 1500));
 
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || activeTestRef.current !== connection.id) return;
         dispatch({ type: 'SET_CONNECTED', payload: connection.id });
       }
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || activeTestRef.current !== connection.id) return;
       dispatch({
         type: 'SET_ERROR',
         payload: { id: connection.id, message: error instanceof Error ? error.message : 'Connection test failed' },
       });
+    } finally {
+      if (activeTestRef.current === connection.id) {
+        activeTestRef.current = null;
+      }
     }
   }, []);
 

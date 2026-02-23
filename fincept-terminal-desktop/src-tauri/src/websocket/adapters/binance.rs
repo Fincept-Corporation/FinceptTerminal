@@ -36,7 +36,7 @@ impl BinanceAdapter {
     fn now() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_millis() as u64
     }
 
@@ -64,7 +64,7 @@ impl BinanceAdapter {
         let high = data.get("h")?.as_str()?.parse::<f64>().ok();
         let low = data.get("l")?.as_str()?.parse::<f64>().ok();
         let volume = data.get("v")?.as_str()?.parse::<f64>().ok();
-        let _quote_volume = data.get("q")?.as_str()?.parse::<f64>().ok();
+        let quote_volume = data.get("q")?.as_str()?.parse::<f64>().ok();
 
         // Calculate change percent
         let change_percent = if let Some(open_price) = open {
@@ -92,6 +92,7 @@ impl BinanceAdapter {
             close: Some(close),
             change: None,
             change_percent,
+            quote_volume,
             timestamp: Self::now(),
         })
     }
@@ -121,6 +122,7 @@ impl BinanceAdapter {
             close: Some(price),
             change: None,
             change_percent: None,
+            quote_volume: None,
             timestamp: Self::now(),
         })
     }

@@ -293,11 +293,11 @@ def main():
                 deal_id=d.get('deal_id', ''),
                 target_name=d.get('target_name', d.get('target', '')),
                 acquirer_name=d.get('acquirer_name', d.get('acquirer', '')),
-                deal_value=d.get('deal_value', 0),
+                deal_value=float(d.get('deal_value', 0) or 0),
                 offer_price_per_share=d.get('offer_price_per_share', d.get('offer_price', None)),
-                premium_1day=d.get('premium_1day', d.get('premium', 0)),
-                payment_cash_pct=d.get('payment_cash_pct', d.get('cash_pct', 0)),
-                payment_stock_pct=d.get('payment_stock_pct', d.get('stock_pct', 0)),
+                premium_1day=float(d.get('premium_1day', d.get('premium', 0)) or 0),
+                payment_cash_pct=float(d.get('payment_cash_pct', d.get('cash_pct', 0)) or 0),
+                payment_stock_pct=float(d.get('payment_stock_pct', d.get('stock_pct', 0)) or 0),
                 ev_revenue=d.get('ev_revenue', None),
                 ev_ebitda=d.get('ev_ebitda', None),
                 synergies=d.get('synergies', None),
@@ -307,40 +307,122 @@ def main():
             ))
         return deals
 
+    def _safe(v):
+        """Convert numpy types and non-finite floats to JSON-safe values"""
+        try:
+            import numpy as np
+            if isinstance(v, (np.floating, np.integer)):
+                v = v.item()
+        except ImportError:
+            pass
+        if isinstance(v, float) and (v != v or v == float('inf') or v == float('-inf')):
+            return None
+        return v
+
     try:
         if command == "compare":
-            # Rust sends: "compare" deals_json
+            # Frontend expects: { comparison: {metric: [v1,v2,...]}, summary: {metric: value} }
             if len(sys.argv) < 3:
                 raise ValueError("Deals data required")
 
             deals_data = json.loads(sys.argv[2])
             deals = _parse_deals(deals_data)
-            comparator = DealComparator()
 
-            if len(deals) >= 2:
-                analysis = comparator.compare_deals(deals)
+            if len(deals) < 2:
+                analysis = {"comparison": {}, "summary": {}, "num_deals": len(deals)}
             else:
-                analysis = {"deals_count": len(deals), "deals_data": deals_data}
+                # Build comparison: metric -> list of values per deal (in deal order)
+                metrics = [
+                    'deal_value', 'premium_1day', 'ev_revenue', 'ev_ebitda',
+                    'synergies', 'payment_cash_pct', 'payment_stock_pct',
+                ]
+                comparison = {}
+                for metric in metrics:
+                    vals = []
+                    for d in deals:
+                        v = getattr(d, metric, None)
+                        vals.append(_safe(v) if v is not None else None)
+                    comparison[metric] = vals
+
+                # Build summary: aggregate stats across all deals
+                deal_values = [d.deal_value for d in deals]
+                premiums = [d.premium_1day for d in deals]
+                ev_revenues = [d.ev_revenue for d in deals if d.ev_revenue is not None]
+                ev_ebitdas = [d.ev_ebitda for d in deals if d.ev_ebitda is not None]
+                synergies_list = [d.synergies for d in deals if d.synergies is not None]
+
+                summary = {
+                    'num_deals': len(deals),
+                    'avg_deal_value': float(np.mean(deal_values)) if deal_values else 0,
+                    'avg_premium': float(np.mean(premiums)) if premiums else 0,
+                    'median_premium': float(np.median(premiums)) if premiums else 0,
+                }
+                if ev_revenues:
+                    summary['avg_ev_revenue'] = float(np.mean(ev_revenues))
+                if ev_ebitdas:
+                    summary['avg_ev_ebitda'] = float(np.mean(ev_ebitdas))
+                if synergies_list:
+                    summary['total_synergies'] = float(sum(synergies_list))
+
+                analysis = {
+                    'comparison': comparison,
+                    'summary': summary,
+                    'num_deals': len(deals),
+                }
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result, default=str))
 
         elif command == "rank":
-            # Rust sends: "rank" deals_json criteria
+            # Frontend expects: { rankings: [{target_name, acquirer_name, premium_1day|deal_value|ev_revenue|ev_ebitda|synergies}] }
             if len(sys.argv) < 4:
                 raise ValueError("Deals data and criteria required")
 
             deals_data = json.loads(sys.argv[2])
             criteria = sys.argv[3]
             deals = _parse_deals(deals_data)
-            comparator = DealComparator()
 
-            analysis = comparator.rank_deals(deals, criteria=criteria)
+            criteria_map = {
+                'premium': 'premium_1day',
+                'deal_value': 'deal_value',
+                'ev_revenue': 'ev_revenue',
+                'ev_ebitda': 'ev_ebitda',
+                'synergies': 'synergies',
+            }
+            attr = criteria_map.get(criteria, 'premium_1day')
+
+            def sort_key(d):
+                v = getattr(d, attr, None)
+                return float(v) if v is not None else -1
+
+            sorted_deals = sorted(deals, key=sort_key, reverse=True)
+
+            rankings = []
+            for rank, d in enumerate(sorted_deals, 1):
+                row = {
+                    'rank': rank,
+                    'deal_id': d.deal_id,
+                    'target_name': d.target_name,
+                    'acquirer_name': d.acquirer_name,
+                    # Include the actual criteria field with real name so frontend can read it
+                    'premium_1day': _safe(d.premium_1day),
+                    'deal_value': _safe(d.deal_value),
+                    'ev_revenue': _safe(d.ev_revenue),
+                    'ev_ebitda': _safe(d.ev_ebitda),
+                    'synergies': _safe(d.synergies),
+                    'synergy_value': _safe(d.synergies),  # alias for frontend compatibility
+                }
+                rankings.append(row)
+
+            analysis = {
+                'ranking_criteria': criteria,
+                'rankings': rankings,
+            }
             result = {"success": True, "data": analysis}
             print(json.dumps(result, default=str))
 
         elif command == "benchmark":
-            # Rust sends: "benchmark" target_deal_json comparable_deals_json
+            # Frontend expects: { premium_comparison: {target, median, percentile}, insight: str }
             if len(sys.argv) < 4:
                 raise ValueError("Target deal and comparable deals required")
 
@@ -349,39 +431,156 @@ def main():
 
             target_deals = _parse_deals([target_deal_data])
             comparable_deals = _parse_deals(comparable_deals_data)
-            comparator = DealComparator()
 
-            if target_deals and comparable_deals:
-                analysis = comparator.premium_benchmarking(target_deals[0], comparable_deals)
-            else:
+            if not target_deals or not comparable_deals:
                 analysis = {"error": "Insufficient data for benchmarking"}
+            else:
+                target = target_deals[0]
+                comp_premiums = [d.premium_1day for d in comparable_deals]
+                target_premium = float(target.premium_1day)
+
+                p25 = float(np.percentile(comp_premiums, 25))
+                p50 = float(np.percentile(comp_premiums, 50))
+                p75 = float(np.percentile(comp_premiums, 75))
+                mean_prem = float(np.mean(comp_premiums))
+                min_prem = float(min(comp_premiums))
+                max_prem = float(max(comp_premiums))
+
+                # Calculate percentile rank of target within comparables
+                pct_below = float(np.mean([p < target_premium for p in comp_premiums]) * 100)
+
+                if target_premium < p25:
+                    position = "below 25th percentile"
+                elif target_premium < p50:
+                    position = "between 25th and 50th percentile"
+                elif target_premium < p75:
+                    position = "between 50th and 75th percentile"
+                else:
+                    position = "above 75th percentile"
+
+                insight = (
+                    f"{target.target_name}'s acquisition premium of {target_premium:.1f}% is "
+                    f"{position} relative to {len(comparable_deals)} comparable deals "
+                    f"(median: {p50:.1f}%, mean: {mean_prem:.1f}%). "
+                    f"The target's premium ranks at approximately the {pct_below:.0f}th percentile."
+                )
+
+                analysis = {
+                    'premium_comparison': {
+                        'target': target_premium,
+                        'median': p50,
+                        'mean': mean_prem,
+                        'percentile': pct_below,
+                        'p25': p25,
+                        'p75': p75,
+                        'min': min_prem,
+                        'max': max_prem,
+                    },
+                    'target_deal': {
+                        'deal_id': target.deal_id,
+                        'target_name': target.target_name,
+                        'premium': target_premium,
+                    },
+                    'target_position': position,
+                    'above_median': bool(target_premium > p50),
+                    'num_comparables': len(comparable_deals),
+                    'insight': insight,
+                }
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result, default=str))
 
         elif command == "payment_analysis":
-            # Rust sends: "payment_analysis" deals_json
+            # Frontend expects:
+            #   { distribution: {all_cash: count, all_stock: count, mixed: count},
+            #     stats_by_type: {all_cash: {avg_premium, avg_value, count}, ...} }
             if len(sys.argv) < 3:
                 raise ValueError("Deals data required")
 
             deals_data = json.loads(sys.argv[2])
             deals = _parse_deals(deals_data)
-            comparator = DealComparator()
 
-            analysis = comparator.payment_structure_analysis(deals)
+            # Categorize each deal
+            all_cash_deals = [d for d in deals if d.payment_cash_pct >= 100]
+            all_stock_deals = [d for d in deals if d.payment_stock_pct >= 100]
+            mixed_deals = [d for d in deals if d.payment_cash_pct < 100 and d.payment_stock_pct < 100]
+
+            def _type_stats(group):
+                if not group:
+                    return None
+                premiums = [d.premium_1day for d in group]
+                values = [d.deal_value for d in group]
+                return {
+                    'count': len(group),
+                    'avg_premium': float(np.mean(premiums)),
+                    'avg_value': float(np.mean(values)),
+                }
+
+            # Build stats_by_type only for non-empty categories
+            stats_by_type = {}
+            s = _type_stats(all_cash_deals)
+            if s:
+                stats_by_type['all_cash'] = s
+            s = _type_stats(all_stock_deals)
+            if s:
+                stats_by_type['all_stock'] = s
+            s = _type_stats(mixed_deals)
+            if s:
+                stats_by_type['mixed'] = s
+
+            analysis = {
+                'total_deals': len(deals),
+                'distribution': {
+                    'all_cash': len(all_cash_deals),
+                    'all_stock': len(all_stock_deals),
+                    'mixed': len(mixed_deals),
+                },
+                'stats_by_type': stats_by_type,
+                'average_cash_pct': float(np.mean([d.payment_cash_pct for d in deals])),
+                'average_stock_pct': float(np.mean([d.payment_stock_pct for d in deals])),
+            }
             result = {"success": True, "data": analysis}
             print(json.dumps(result, default=str))
 
         elif command == "industry_analysis":
-            # Rust sends: "industry_analysis" deals_json
+            # Frontend expects:
+            #   { by_industry: {IndustryName: {count, avg_premium, avg_ev_revenue, avg_ev_ebitda, total_value}} }
             if len(sys.argv) < 3:
                 raise ValueError("Deals data required")
 
             deals_data = json.loads(sys.argv[2])
             deals = _parse_deals(deals_data)
-            comparator = DealComparator()
 
-            analysis = comparator.industry_analysis(deals)
+            # Group by industry
+            industry_groups: dict = {}
+            for d in deals:
+                ind = d.industry or 'Unknown'
+                if ind not in industry_groups:
+                    industry_groups[ind] = []
+                industry_groups[ind].append(d)
+
+            by_industry = {}
+            for ind, group in industry_groups.items():
+                premiums = [d.premium_1day for d in group]
+                deal_vals = [d.deal_value for d in group]
+                ev_revenues = [d.ev_revenue for d in group if d.ev_revenue is not None]
+                ev_ebitdas = [d.ev_ebitda for d in group if d.ev_ebitda is not None]
+
+                by_industry[ind] = {
+                    'count': len(group),
+                    'avg_premium': float(np.mean(premiums)),
+                    'median_premium': float(np.median(premiums)),
+                    'total_value': float(sum(deal_vals)),
+                    'avg_deal_value': float(np.mean(deal_vals)),
+                    'avg_ev_revenue': float(np.mean(ev_revenues)) if ev_revenues else None,
+                    'avg_ev_ebitda': float(np.mean(ev_ebitdas)) if ev_ebitdas else None,
+                }
+
+            analysis = {
+                'by_industry': by_industry,
+                'industries': list(industry_groups.keys()),
+                'total_deals': len(deals),
+            }
             result = {"success": True, "data": analysis}
             print(json.dumps(result, default=str))
 

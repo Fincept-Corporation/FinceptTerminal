@@ -85,7 +85,10 @@ export class WorkflowDataProxy implements IWorkflowDataProxy {
   }
 
   /**
-   * Get nodes connected to a specific node's input
+   * Get nodes connected to a specific node's input (parent/upstream nodes)
+   *
+   * connections[sourceName] maps source -> targets, so to find parents of nodeName
+   * we must search all connection entries for those that point TO nodeName.
    */
   getParentNodes(nodeName: string, inputIndex: number = 0): Array<{
     node: INode;
@@ -93,23 +96,23 @@ export class WorkflowDataProxy implements IWorkflowDataProxy {
   }> {
     const parents: Array<{ node: INode; outputIndex: number }> = [];
 
-    // Get connections for this node
-    const nodeConnections = this.workflow.connections[nodeName];
-    if (!nodeConnections) {
-      return parents;
-    }
+    // Search all connections to find sources that connect TO nodeName
+    for (const [sourceNodeName, nodeConnections] of Object.entries(this.workflow.connections)) {
+      for (const connections of Object.values(nodeConnections)) {
+        for (let outputIndex = 0; outputIndex < connections.length; outputIndex++) {
+          const outputConnections = connections[outputIndex];
 
-    // Look through all connection types
-    for (const [connectionType, connections] of Object.entries(nodeConnections)) {
-      if (!connections[inputIndex]) continue;
-
-      for (const connection of connections[inputIndex]) {
-        const parentNode = this.getNode(connection.node);
-        if (parentNode) {
-          parents.push({
-            node: parentNode,
-            outputIndex: connection.index,
-          });
+          for (const connection of outputConnections) {
+            if (connection.node === nodeName && connection.index === inputIndex) {
+              const parentNode = this.getNode(sourceNodeName);
+              if (parentNode) {
+                parents.push({
+                  node: parentNode,
+                  outputIndex,
+                });
+              }
+            }
+          }
         }
       }
     }
@@ -118,7 +121,10 @@ export class WorkflowDataProxy implements IWorkflowDataProxy {
   }
 
   /**
-   * Get nodes connected to a specific node's output
+   * Get nodes connected to a specific node's output (child/downstream nodes)
+   *
+   * connections[sourceName] maps source -> targets, so connections[nodeName]
+   * directly gives us the children.
    */
   getChildNodes(nodeName: string, outputIndex: number = 0): Array<{
     node: INode;
@@ -126,23 +132,23 @@ export class WorkflowDataProxy implements IWorkflowDataProxy {
   }> {
     const children: Array<{ node: INode; inputIndex: number }> = [];
 
-    // Search through all node connections
-    for (const [targetNodeName, nodeConnections] of Object.entries(this.workflow.connections)) {
-      for (const connections of Object.values(nodeConnections)) {
-        for (let inputIndex = 0; inputIndex < connections.length; inputIndex++) {
-          const inputConnections = connections[inputIndex];
+    // connections[nodeName] gives outgoing connections FROM nodeName
+    const nodeConnections = this.workflow.connections[nodeName];
+    if (!nodeConnections) {
+      return children;
+    }
 
-          for (const connection of inputConnections) {
-            if (connection.node === nodeName && connection.index === outputIndex) {
-              const childNode = this.getNode(targetNodeName);
-              if (childNode) {
-                children.push({
-                  node: childNode,
-                  inputIndex,
-                });
-              }
-            }
-          }
+    // Look through all connection types at the specified output index
+    for (const [connectionType, connections] of Object.entries(nodeConnections)) {
+      if (!connections[outputIndex]) continue;
+
+      for (const connection of connections[outputIndex]) {
+        const childNode = this.getNode(connection.node);
+        if (childNode) {
+          children.push({
+            node: childNode,
+            inputIndex: connection.index,
+          });
         }
       }
     }

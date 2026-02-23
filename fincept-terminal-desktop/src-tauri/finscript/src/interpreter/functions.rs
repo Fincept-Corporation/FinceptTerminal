@@ -141,6 +141,18 @@ impl Interpreter {
             // Alert function (also handled as statement, but can be called as function)
             "alert" => self.eval_alert_fn(args),
             "alertcondition" => self.eval_alertcondition(args),
+            // Risk & portfolio analytics
+            "sharpe" => self.eval_sharpe(args),
+            "sortino" => self.eval_sortino(args),
+            "max_drawdown" => self.eval_max_drawdown(args),
+            "correlation" => self.eval_correlation(args),
+            "beta" => self.eval_beta(args),
+            "returns" => self.eval_returns(args),
+            // Terminal integration functions
+            "watchlist_add" => self.eval_watchlist_add(args),
+            "paper_trade" => self.eval_paper_trade(args),
+            "alert_create" => self.eval_alert_create(args),
+            "screener_scan" => self.eval_screener_scan(args),
             _ => Err(format!("Unknown function '{}'", name)),
         }
     }

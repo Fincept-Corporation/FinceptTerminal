@@ -1,18 +1,6 @@
 {
-  "header": {
-    "title": "ANPASSBARES DASHBOARD",
-    "live": "LIVE",
-    "widgets": "WIDGETS"
-  },
-  "buttons": {
-    "addWidget": "WIDGET HINZUFÜGEN",
-    "saveLayout": "LAYOUT SPEICHERN",
-    "reset": "ZURÜCKSETZEN",
-    "help": "HELFEN"
-  },
   "widgets": {
     "loading": "Laden...",
-    "error": "Fehler",
     "globalIndices": "Globale Indizes – Top 12",
     "forex": "Forex – Hauptpaare",
     "crypto": "KRYPTOWÄHRUNGEN",
@@ -20,8 +8,6 @@
     "news": "NACHRICHT",
     "forum": "FORUM",
     "watchlist": "WATCHLISTE",
-    "maritimeIntelligence": "Maritimer Geheimdienst",
-    "unknown": "Unbekannter Widget-Typ",
     "index": "INDEX",
     "symbol": "SYMBOL",
     "price": "PREIS",
@@ -38,41 +24,22 @@
     "pair": "PAAR",
     "rate": "RATE",
     "commodity": "WARE",
-    "globe3D": "3D-GLOBUS",
-    "vessels": "SCHIFFE",
-    "routes": "ROUTEN",
-    "vol24h": "VOL 24H",
-    "topTradeCorridors": "Top-Handelskorridore",
-    "ships": "Schiffe",
-    "marketNews": "Marktnachrichten",
-    "secPressReleases": "Pressemitteilungen der SEC",
-    "cryptoNews": "Krypto-Neuigkeiten",
-    "trendingForum": "Trendforum",
-    "techStocks": "Tech-Aktien"
-  },
-  "tips": {
-    "drag": "Ziehen Sie Widgets, um sie neu anzuordnen",
-    "resize": "Ändern Sie die Größe in der unteren rechten Ecke",
-    "remove": "Entfernen Sie Widgets mit der X-Taste",
-    "responsive": "Responsives Layout – nutzt die volle Breite"
-  },
-  "loading": {
-    "title": "Dashboard wird initialisiert",
-    "description": "Datenbank-Cache für schnelleres Laden von Daten einrichten ...",
-    "note": "Dies dauert beim ersten Start nur einen Moment"
-  },
-  "empty": {
-    "noWidgets": "Keine Widgets im Dashboard",
-    "addFirst": "FÜGEN SIE IHR ERSTES WIDGET HINZU"
-  },
-  "status": {
-    "version": "Fincept Anpassbares Dashboard v2.0.0 | Arbeitsbereich per Drag & Drop verschieben",
-    "layout": "Layout",
-    "custom": "Brauch",
-    "empty": "Leer",
-    "active": "AKTIV",
-    "cache": "Cache: AKTIVIERT",
-    "label": "Status"
+    "noActiveMarkets": "[DE] No active markets found",
+    "indicator": "[DE] INDICATOR",
+    "value": "[DE] VALUE",
+    "chg": "[DE] CHG",
+    "overallRisk": "[DE] OVERALL RISK",
+    "openEconomicsTab": "[DE] Open Economics Tab",
+    "openGeopoliticsTab": "[DE] Open Geopolitics Tab",
+    "openPolymarketTab": "[DE] Open Polymarket Tab",
+    "noPortfolioFound": "[DE] No portfolio found",
+    "createPortfolioHint": "[DE] Create one in Portfolio tab",
+    "openPortfolioTab": "[DE] Open Portfolio Tab",
+    "action": "[DE] ACTION",
+    "markets": "[DE] MARKETS",
+    "performanceTracker": "[DE] PERFORMANCE TRACKER",
+    "totalPnL": "[DE] TOTAL P&L",
+    "viewDetailedAnalytics": "[DE] View Detailed Analytics"
   },
   "messages": {
     "layoutSaved": "Dashboard-Layout gespeichert!",

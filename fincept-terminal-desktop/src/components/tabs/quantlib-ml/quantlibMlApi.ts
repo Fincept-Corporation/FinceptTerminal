@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-ml/quantlibMlApi.ts
 // API service for QuantLib ML endpoints (48 endpoints)
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 
 let _apiKey: string | null = null;
 export function setMlApiKey(key: string | null) { _apiKey = key; }

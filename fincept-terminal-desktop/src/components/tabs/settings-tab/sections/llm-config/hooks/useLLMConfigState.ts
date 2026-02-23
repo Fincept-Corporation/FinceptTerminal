@@ -47,6 +47,16 @@ export function useLLMConfigState({
   const [showAddModel, setShowAddModel] = useState(false);
   const [newModelConfig, setNewModelConfig] = useState<NewModelConfig>({ ...DEFAULT_NEW_MODEL_CONFIG });
   const [newModelConfigModels, setNewModelConfigModels] = useState<ModelInfo[]>([]);
+  const [availableProviders, setAvailableProviders] = useState<Array<{ value: string; label: string }>>([]);
+
+  // Load dynamic providers from LiteLLM data
+  useEffect(() => {
+    LLMModelsService.getProviders().then(providers => {
+      if (providers.length > 0) {
+        setAvailableProviders(providers.map(p => ({ value: p.id, label: LLMModelsService.getProviderDisplayName(p.id) })));
+      }
+    }).catch(() => {});
+  }, []);
 
   // API key visibility state
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
@@ -267,6 +277,7 @@ export function useLLMConfigState({
     setNewModelConfig,
     newModelConfigModels,
     resetNewModelConfig,
+    availableProviders,
 
     // API key visibility
     showApiKeys,

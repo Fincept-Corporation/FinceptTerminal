@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-statistics/quantlibStatisticsApi.ts
 // API service for QuantLib Statistics endpoints (52 endpoints)
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 
 let _apiKey: string | null = null;
 export function setStatisticsApiKey(key: string | null) { _apiKey = key; }

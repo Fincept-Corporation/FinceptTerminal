@@ -274,7 +274,7 @@ pub async fn skfolio_generate_report(
 
 #[command]
 pub async fn skfolio_export_weights(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     weights: String,
     asset_names: String,
     filename: Option<String>,

@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-core/quantlibCoreApi.ts
 // API service for QuantLib Core endpoints
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 
 let _apiKey: string | null = null;
 export function setQuantLibApiKey(key: string | null) { _apiKey = key; }

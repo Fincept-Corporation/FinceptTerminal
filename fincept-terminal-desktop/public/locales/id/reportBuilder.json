@@ -3,9 +3,7 @@
   "header": {
     "load": "[ID] Load",
     "save": "[ID] Save",
-    "saving": "[ID] Saving...",
-    "exportPdf": "[ID] Export PDF",
-    "generating": "[ID] Generating..."
+    "saving": "[ID] Saving..."
   },
   "components": {
     "title": "[ID] ADD COMPONENTS"

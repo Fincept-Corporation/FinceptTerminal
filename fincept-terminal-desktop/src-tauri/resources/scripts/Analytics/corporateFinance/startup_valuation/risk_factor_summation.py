@@ -197,24 +197,47 @@ def main():
             risk_assessments = json.loads(sys.argv[3])
 
             rfs = RiskFactorSummation(base_valuation=base_valuation)
-            # Map frontend keys to quick_assessment params
-            key_map = {
-                'management_risk': 'management_risk',
-                'stage_of_business': 'stage_risk', 'stage_risk': 'stage_risk',
-                'technology_risk': 'technology_risk',
-                'competition_risk': 'competition_risk',
-                'market_risk': 'market_risk', 'sales_risk': 'market_risk',
-                'funding_risk': 'funding_risk', 'funding_capital': 'funding_risk',
+            # Map all frontend key variants to RiskFactor enum values
+            enum_key_map = {
+                # management
+                'management': RiskFactor.MANAGEMENT, 'management_risk': RiskFactor.MANAGEMENT,
+                # stage
+                'stage': RiskFactor.STAGE_OF_BUSINESS, 'stage_of_business': RiskFactor.STAGE_OF_BUSINESS,
+                'stage_risk': RiskFactor.STAGE_OF_BUSINESS,
+                # legislation/political
+                'legislation': RiskFactor.LEGISLATION_POLITICAL,
+                'legislation_political': RiskFactor.LEGISLATION_POLITICAL,
+                # manufacturing
+                'manufacturing': RiskFactor.MANUFACTURING,
+                # sales/marketing
+                'sales_marketing': RiskFactor.SALES_MARKETING, 'sales_risk': RiskFactor.SALES_MARKETING,
+                'market_risk': RiskFactor.SALES_MARKETING, 'marketing': RiskFactor.SALES_MARKETING,
+                # funding
+                'funding': RiskFactor.FUNDING_CAPITAL, 'funding_risk': RiskFactor.FUNDING_CAPITAL,
+                'funding_capital': RiskFactor.FUNDING_CAPITAL,
+                # competition
+                'competition': RiskFactor.COMPETITION, 'competition_risk': RiskFactor.COMPETITION,
+                # technology
+                'technology': RiskFactor.TECHNOLOGY, 'technology_risk': RiskFactor.TECHNOLOGY,
+                # litigation
+                'litigation': RiskFactor.LITIGATION,
+                # international
+                'international': RiskFactor.INTERNATIONAL,
+                # reputation
+                'reputation': RiskFactor.REPUTATION,
+                # exit
+                'exit': RiskFactor.LUCRATIVE_EXIT, 'lucrative_exit': RiskFactor.LUCRATIVE_EXIT,
             }
-            mapped = {}
+            enum_assessments = {}
             for k, v in risk_assessments.items():
-                if k in key_map:
-                    mapped[key_map[k]] = v
-            # Ensure all required params have defaults (0 = average risk)
-            for required_key in ('management_risk', 'stage_risk', 'technology_risk', 'competition_risk', 'market_risk', 'funding_risk'):
-                if required_key not in mapped:
-                    mapped[required_key] = 0
-            valuation = rfs.quick_assessment(base_valuation=base_valuation, **mapped)
+                rf = enum_key_map.get(k)
+                if rf:
+                    enum_assessments[rf] = int(v)
+            # Fill missing with 0 (average)
+            for rf in RiskFactor:
+                if rf not in enum_assessments:
+                    enum_assessments[rf] = 0
+            valuation = rfs.calculate_valuation(enum_assessments)
 
             result = {"success": True, "data": valuation}
             print(json.dumps(result))

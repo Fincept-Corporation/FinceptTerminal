@@ -1,25 +1,7 @@
 {
-  "title": "СПИСОК СПОСТЕРЕЖЕННЯ",
-  "header": {
-    "export": "ЕКСПОРТ",
-    "updating": "ОНОВЛЕННЯ",
-    "live": "НАЖИВО"
-  },
   "sidebar": {
-    "groups": "ГРУПИ СПИСКІВ",
-    "new": "НОВИЙ",
     "noWatchlists": "Ще немає списків.",
     "clickNew": "Натисніть НОВИЙ для створення.",
-    "stocks": "акції",
-    "marketMovers": "ЛІДЕРИ РИНКУ",
-    "gainer": "ЗРОСТАЮТЬ",
-    "loser": "ПАДАЮТЬ",
-    "volumeLeaders": "ЛІДЕРИ ОБСЯГУ"
-  },
-  "emptyState": {
-    "selectWatchlist": "Виберіть список або створіть новий для початку"
-  },
-  "list": {
-    "symbols": "Символи"
+    "stocks": "акції"
   }
 }

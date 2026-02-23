@@ -17,6 +17,7 @@ export function ModelLibraryPanel({
   newModelConfig,
   setNewModelConfig,
   newModelConfigModels,
+  availableProviders,
   useManualEntry,
   setUseManualEntry,
   showApiKeys,
@@ -86,10 +87,10 @@ export function ModelLibraryPanel({
           newModelConfig={newModelConfig}
           setNewModelConfig={setNewModelConfig}
           newModelConfigModels={newModelConfigModels}
+          availableProviders={availableProviders}
           useManualEntry={useManualEntry}
           setUseManualEntry={setUseManualEntry}
           onSubmit={handleAddModelConfig}
-          onCancel={() => setShowAddModel(false)}
         />
       )}
 

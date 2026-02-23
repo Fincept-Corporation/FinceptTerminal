@@ -78,6 +78,7 @@ export interface ModelLibraryPanelProps {
   newModelConfig: NewModelConfig;
   setNewModelConfig: React.Dispatch<React.SetStateAction<NewModelConfig>>;
   newModelConfigModels: ModelInfo[];
+  availableProviders: Array<{ value: string; label: string }>;
   useManualEntry: boolean;
   setUseManualEntry: (value: boolean) => void;
   showApiKeys: Record<string, boolean>;
@@ -90,10 +91,10 @@ export interface AddModelFormProps {
   newModelConfig: NewModelConfig;
   setNewModelConfig: React.Dispatch<React.SetStateAction<NewModelConfig>>;
   newModelConfigModels: ModelInfo[];
+  availableProviders: Array<{ value: string; label: string }>;
   useManualEntry: boolean;
   setUseManualEntry: (value: boolean) => void;
   onSubmit: () => void;
-  onCancel: () => void;
 }
 
 export interface ModelListItemProps {

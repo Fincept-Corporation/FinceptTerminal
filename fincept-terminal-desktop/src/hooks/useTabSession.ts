@@ -141,7 +141,9 @@ export function useTabSession<T extends object>(
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
         // Synchronous save on unmount is not ideal but ensures data isn't lost
-        cacheService.setTabSession(tabId, tabName, stateRef.current).catch(() => {});
+        cacheService.setTabSession(tabId, tabName, stateRef.current).catch((err) => {
+          console.warn(`[useTabSession] Failed to save on unmount for ${tabId}:`, err);
+        });
       }
     };
   }, [tabId, tabName]);

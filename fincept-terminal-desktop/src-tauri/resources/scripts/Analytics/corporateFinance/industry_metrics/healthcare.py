@@ -359,6 +359,153 @@ class HealthcareMetrics:
             }
         }
 
+def _calculate_pharma_company_metrics(data: dict) -> dict:
+    """Company-level pharma/biotech valuation from frontend inputs."""
+    revenue = float(data.get('revenue', 0))
+    pipeline_value = float(data.get('pipeline_value', 0))
+    phase3_count = int(data.get('phase3_count', 0))
+    patent_expiry_pct = float(data.get('patent_expiry_revenue', 0))
+    r_and_d_spend = float(data.get('r_and_d_spend', 0))
+    ebitda_margin_pct = float(data.get('ebitda_margin', 0))
+    ebitda = revenue * ebitda_margin_pct / 100.0
+    marketed_value = revenue * 4.0
+    pipeline_contribution = (pipeline_value / (marketed_value + pipeline_value) * 100) if (marketed_value + pipeline_value) > 0 else 0
+    r_and_d_efficiency = (pipeline_value / r_and_d_spend) if r_and_d_spend > 0 else 0
+    patent_cliff_risk = 'high' if patent_expiry_pct > 30 else ('moderate' if patent_expiry_pct > 15 else 'low')
+    return {
+        'revenue': revenue,
+        'pipeline_value': pipeline_value,
+        'phase3_count': phase3_count,
+        'marketed_products_value': marketed_value,
+        'ebitda': ebitda,
+        'ebitda_margin': ebitda_margin_pct,
+        'pipeline_contribution_pct': pipeline_contribution,
+        'r_and_d_efficiency': r_and_d_efficiency,
+        'patent_cliff_risk': patent_cliff_risk,
+        'patent_expiry_revenue_pct': patent_expiry_pct,
+    }
+
+
+def _calculate_biotech_company_metrics(data: dict) -> dict:
+    """Company-level biotech valuation from frontend inputs."""
+    cash_position = float(data.get('cash_position', 0))
+    burn_rate = float(data.get('burn_rate', 0))
+    pipeline_value = float(data.get('pipeline_value', 0))
+    lead_phase = int(data.get('lead_program_phase', 1))
+    platform_value = float(data.get('platform_value', 0))
+    partnership_revenue = float(data.get('partnership_revenue', 0))
+    cash_runway_months = (cash_position / burn_rate) if burn_rate > 0 else 999
+    total_value = pipeline_value + platform_value
+    phase_premium = {1: 0.3, 2: 0.55, 3: 0.8}.get(lead_phase, 0.3)
+    rnpv_estimate = total_value * phase_premium
+    return {
+        'cash_position': cash_position,
+        'burn_rate': burn_rate,
+        'cash_runway_months': cash_runway_months,
+        'pipeline_value': pipeline_value,
+        'lead_program_phase': lead_phase,
+        'platform_value': platform_value,
+        'partnership_revenue': partnership_revenue,
+        'total_asset_value': total_value,
+        'rnpv_estimate': rnpv_estimate,
+        'phase_success_premium': phase_premium * 100,
+    }
+
+
+def _build_healthcare_standard_output(analysis: dict, sector: str) -> dict:
+    """Build valuation_metrics, benchmarks, and insights for healthcare output."""
+    benchmarks_db = {
+        'pharma': {
+            'revenue': {'p25': 2000, 'median': 8000, 'p75': 25000},
+            'ebitda_margin': {'p25': 20, 'median': 32, 'p75': 42},
+            'r_and_d_efficiency': {'p25': 2, 'median': 4, 'p75': 8},
+        },
+        'biotech': {
+            'cash_position': {'p25': 100, 'median': 350, 'p75': 800},
+            'cash_runway_months': {'p25': 12, 'median': 24, 'p75': 48},
+            'pipeline_value': {'p25': 300, 'median': 900, 'p75': 2500},
+        },
+        'devices': {
+            'revenue': {'p25': 100, 'median': 400, 'p75': 1500},
+            'gross_margin': {'p25': 55, 'median': 65, 'p75': 72},
+            'recurring_revenue_pct': {'p25': 20, 'median': 35, 'p75': 55},
+        },
+        'services': {
+            'revenue': {'p25': 200, 'median': 700, 'p75': 2500},
+            'ebitda_margin': {'p25': 10, 'median': 16, 'p75': 22},
+            'same_store_growth': {'p25': 2, 'median': 4, 'p75': 7},
+        },
+    }
+
+    vm = {}
+    insights = []
+
+    if sector == 'pharma':
+        vm = {
+            'revenue': round(analysis.get('revenue', 0), 1),
+            'ebitda_margin_pct': round(analysis.get('ebitda_margin', 0), 1),
+            'pipeline_contribution_pct': round(analysis.get('pipeline_contribution_pct', 0), 1),
+            'r_and_d_efficiency': round(analysis.get('r_and_d_efficiency', 0), 2),
+            'marketed_products_value': round(analysis.get('marketed_products_value', 0), 1),
+        }
+        if analysis.get('patent_cliff_risk') == 'high':
+            insights.append("High patent cliff risk — >30% of revenue faces near-term patent expiry. Pipeline strength is critical.")
+        else:
+            insights.append(f"Patent cliff risk: {analysis.get('patent_cliff_risk', 'unknown')}.")
+        insights.append(f"Pipeline contributes {vm['pipeline_contribution_pct']:.0f}% of total estimated enterprise value.")
+        if analysis.get('r_and_d_efficiency', 0) >= 4:
+            insights.append("R&D efficiency above 4x (pipeline NPV / R&D spend) — strong innovation productivity.")
+
+    elif sector == 'biotech':
+        vm = {
+            'cash_position': round(analysis.get('cash_position', 0), 1),
+            'cash_runway_months': round(analysis.get('cash_runway_months', 0), 1),
+            'pipeline_value': round(analysis.get('pipeline_value', 0), 1),
+            'rnpv_estimate': round(analysis.get('rnpv_estimate', 0), 1),
+            'phase_success_premium_pct': round(analysis.get('phase_success_premium', 0), 0),
+        }
+        if analysis.get('cash_runway_months', 0) < 18:
+            insights.append("Cash runway below 18 months — financing risk is elevated; near-term dilution likely.")
+        else:
+            insights.append(f"Cash runway of {vm['cash_runway_months']:.0f} months provides adequate operational buffer.")
+        insights.append(f"Risk-adjusted NPV estimate: ${vm['rnpv_estimate']:.0f}M based on lead program phase {analysis.get('lead_program_phase', 1)}.")
+
+    elif sector == 'devices':
+        vm = {
+            'revenue': round(analysis.get('revenue', 0), 1),
+            'gross_margin_pct': round(analysis.get('gross_margin', 0), 1),
+            'device_quality_score': analysis.get('device_quality_score', 0),
+            'regulatory_score': analysis.get('regulatory_score', 0),
+            'recurring_revenue_pct': round(analysis.get('recurring_revenue_pct') or 0, 1),
+        }
+        mr = analysis.get('revenue_multiple_range', {})
+        vm['revenue_multiple_mid'] = round(mr.get('mid', 0), 1)
+        insights.append(f"Revenue multiple range: {mr.get('low', 0):.1f}x – {mr.get('high', 0):.1f}x based on device quality profile.")
+        if analysis.get('device_quality_score', 0) >= 60:
+            insights.append("Strong device quality score reflects clinical evidence, regulatory approvals, and reimbursement coverage.")
+
+    elif sector == 'services':
+        vm = {
+            'revenue': round(analysis.get('revenue', 0), 1),
+            'ebitda_margin_pct': round(analysis.get('ebitda_margin', 0), 1),
+            'same_store_growth': round(analysis.get('same_store_growth', 0), 1),
+            'payor_quality_score': round(analysis.get('payor_quality_score', 0), 1),
+            'services_quality_score': analysis.get('services_quality_score', 0),
+        }
+        mr = analysis.get('ebitda_multiple_range', {})
+        vm['ebitda_multiple_mid'] = round(mr.get('mid', 0), 1)
+        insights.append(f"EBITDA multiple range: {mr.get('low', 0):.1f}x – {mr.get('high', 0):.1f}x.")
+        if analysis.get('same_store_growth', 0) >= 4:
+            insights.append("Same-store growth above 4% demonstrates organic volume expansion without acquisition dependency.")
+
+    return {
+        **analysis,
+        'valuation_metrics': vm,
+        'benchmarks': benchmarks_db.get(sector, {}),
+        'insights': insights,
+    }
+
+
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -394,48 +541,83 @@ def main():
                 segment = HealthcareSegment.PHARMA  # default
 
             analyzer = HealthcareMetrics(segment)
+            sector_key = sector.lower()
 
-            # Map alternative key names to expected parameter names
-            pharma_aliases = {
-                'peak_sales_estimate': 'peak_sales',
-                'patent_years_remaining': 'patent_life_remaining',
-                'success_probability': 'probability_of_success',
-                'dev_costs': 'development_costs_remaining',
-                'target_market_size': None,  # informational only, not a method param
-                'drug_name': None,  # informational only
-                'phase': None,  # informational only
-            }
-            for old_key, new_key in pharma_aliases.items():
-                if old_key in company_data:
-                    if new_key:
-                        company_data[new_key] = company_data.pop(old_key)
-                    else:
-                        company_data.pop(old_key)
-
-            # Route to appropriate calculation
             import inspect
-            if segment in (HealthcareSegment.PHARMA, HealthcareSegment.BIOTECH):
-                # Provide defaults for required params
-                company_data.setdefault('probability_of_success', 0.5)
-                company_data.setdefault('development_costs_remaining', 0)
-                # Filter to only accepted kwargs
-                valid_params = set(inspect.signature(analyzer.value_drug_candidate).parameters.keys())
-                filtered = {k: v for k, v in company_data.items() if k in valid_params}
-                analysis = analyzer.value_drug_candidate(**filtered)
+
+            if segment == HealthcareSegment.PHARMA:
+                # Frontend sends company-level data — use company-level calculation
+                analysis = _calculate_pharma_company_metrics(company_data)
+
+            elif segment == HealthcareSegment.BIOTECH:
+                # Frontend sends company-level biotech data — use company-level calculation
+                analysis = _calculate_biotech_company_metrics(company_data)
+                sector_key = 'biotech'
+
             elif segment == HealthcareSegment.MEDICAL_DEVICES:
+                # Map frontend keys to Python parameter names
+                # fda_clearances (int) → regulatory_approvals (List[str])
+                if 'fda_clearances' in company_data:
+                    n = int(company_data.pop('fda_clearances'))
+                    approvals = ['FDA'] if n >= 1 else []
+                    if n >= 2:
+                        approvals.append('CE_Mark')
+                    company_data.setdefault('regulatory_approvals', approvals)
+
+                # gross_margin: normalize to fraction if given as percentage
+                if 'gross_margin' in company_data and company_data['gross_margin'] > 1:
+                    company_data['gross_margin'] = company_data['gross_margin'] / 100.0
+
+                # recurring_revenue_pct: normalize to fraction
+                if 'recurring_revenue_pct' in company_data and company_data['recurring_revenue_pct'] > 1:
+                    company_data['recurring_revenue_pct'] = company_data['recurring_revenue_pct'] / 100.0
+
+                # Provide defaults for required params not in frontend form
+                company_data.setdefault('regulatory_approvals', ['FDA'])
+                company_data.setdefault('clinical_evidence_strength', 60)
+                company_data.setdefault('reimbursement_coverage', 70.0)
+
+                # Drop unknown keys
                 valid_params = set(inspect.signature(analyzer.calculate_medical_device_metrics).parameters.keys())
                 filtered = {k: v for k, v in company_data.items() if k in valid_params}
                 analysis = analyzer.calculate_medical_device_metrics(**filtered)
+                sector_key = 'devices'
+
             elif segment == HealthcareSegment.HEALTHCARE_SERVICES:
-                valid_params = set(inspect.signature(analyzer.calculate_healthcare_services_metrics).parameters.keys())
-                filtered = {k: v for k, v in company_data.items() if k in valid_params}
-                analysis = analyzer.calculate_healthcare_services_metrics(**filtered)
+                # Map frontend keys to Python parameter names
+                revenue = float(company_data.get('revenue', 0))
+                ebitda_margin_pct = float(company_data.get('ebitda_margin', 0))
+                ebitda = revenue * ebitda_margin_pct / 100.0
+                same_store_growth = float(company_data.get('same_store_growth', 0))
+                commercial_pct = float(company_data.get('payor_mix_commercial', 55)) / 100.0
+                # Remaining split between medicare and medicaid
+                remaining = max(0.0, 1.0 - commercial_pct)
+                payor_mix = {
+                    'commercial': commercial_pct,
+                    'medicare': remaining * 0.6,
+                    'medicaid': remaining * 0.4,
+                }
+                quality_scores = {'patient_satisfaction': 4.0, 'clinical_quality': 4.0}
+                regulatory_compliance_score = 85
+
+                analysis = analyzer.calculate_healthcare_services_metrics(
+                    revenue=revenue,
+                    ebitda=ebitda,
+                    same_store_growth=same_store_growth,
+                    payor_mix=payor_mix,
+                    quality_scores=quality_scores,
+                    regulatory_compliance_score=regulatory_compliance_score,
+                )
+                sector_key = 'services'
+
             elif segment == HealthcareSegment.HEALTHTECH:
                 valid_params = set(inspect.signature(analyzer.calculate_healthtech_metrics).parameters.keys())
                 filtered = {k: v for k, v in company_data.items() if k in valid_params}
                 analysis = analyzer.calculate_healthtech_metrics(**filtered)
+                sector_key = 'healthtech'
 
-            result = {"success": True, "data": analysis}
+            analysis_with_standard = _build_healthcare_standard_output(analysis, sector_key)
+            result = {"success": True, "data": analysis_with_standard}
             print(json.dumps(result))
 
         else:

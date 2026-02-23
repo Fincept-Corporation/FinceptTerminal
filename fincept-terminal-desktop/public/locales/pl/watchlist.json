@@ -1,25 +1,7 @@
 {
-  "title": "LISTA OBSERWOWANYCH",
-  "header": {
-    "export": "EKSPORTUJ",
-    "updating": "AKTUALIZACJA",
-    "live": "NA ŻYWO"
-  },
   "sidebar": {
-    "groups": "GRUPY LIST",
-    "new": "NOWA",
     "noWatchlists": "Brak list obserwowanych.",
     "clickNew": "Kliknij NOWA aby utworzyć.",
-    "stocks": "akcje",
-    "marketMovers": "LIDERZY RYNKU",
-    "gainer": "ZYSKUJĄ",
-    "loser": "TRACĄ",
-    "volumeLeaders": "LIDERZY WOLUMENU"
-  },
-  "emptyState": {
-    "selectWatchlist": "Wybierz listę lub utwórz nową aby rozpocząć"
-  },
-  "list": {
-    "symbols": "Symbole"
+    "stocks": "akcje"
   }
 }

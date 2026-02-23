@@ -201,9 +201,11 @@ def run_backtest(
     stop_loss_pct: float = 0,
     take_profit_pct: float = 0,
     initial_capital: float = 100000,
+    timeframe: str = '1d',
 ):
     """
     Walk forward through candle data and generate trades.
+    Uses proper position sizing based on available capital.
 
     Returns dict with trades, equity curve, and metrics.
     """
@@ -212,6 +214,7 @@ def run_backtest(
     in_position = False
     entry_price = 0.0
     entry_bar = 0
+    position_shares = 0
     capital = initial_capital
     peak_capital = initial_capital
     max_drawdown = 0.0
@@ -229,6 +232,12 @@ def run_backtest(
                 in_position = True
                 entry_price = current_price
                 entry_bar = current_bar
+                # Position sizing: invest all available capital
+                position_shares = math.floor(capital / entry_price) if entry_price > 0 else 0
+                if position_shares <= 0:
+                    in_position = False  # Can't afford even 1 share
+                    continue
+                capital -= position_shares * entry_price
         else:
             # Check risk management first
             pnl_pct = ((current_price - entry_price) / entry_price) * 100
@@ -236,60 +245,66 @@ def run_backtest(
             # Stop loss
             if stop_loss_pct > 0 and pnl_pct <= -stop_loss_pct:
                 exit_price = current_price
-                pnl = exit_price - entry_price
-                capital += pnl
+                pnl = (exit_price - entry_price) * position_shares
+                capital += position_shares * exit_price
                 trades.append({
                     'entry_bar': entry_bar,
                     'exit_bar': current_bar,
                     'entry_price': round(entry_price, 2),
                     'exit_price': round(exit_price, 2),
+                    'shares': position_shares,
                     'pnl': round(pnl, 2),
                     'pnl_pct': round(pnl_pct, 2),
                     'reason': 'stop_loss',
                     'bars_held': current_bar - entry_bar,
                 })
                 in_position = False
+                position_shares = 0
                 continue
 
             # Take profit
             if take_profit_pct > 0 and pnl_pct >= take_profit_pct:
                 exit_price = current_price
-                pnl = exit_price - entry_price
-                capital += pnl
+                pnl = (exit_price - entry_price) * position_shares
+                capital += position_shares * exit_price
                 trades.append({
                     'entry_bar': entry_bar,
                     'exit_bar': current_bar,
                     'entry_price': round(entry_price, 2),
                     'exit_price': round(exit_price, 2),
+                    'shares': position_shares,
                     'pnl': round(pnl, 2),
                     'pnl_pct': round(pnl_pct, 2),
                     'reason': 'take_profit',
                     'bars_held': current_bar - entry_bar,
                 })
                 in_position = False
+                position_shares = 0
                 continue
 
             # Check exit conditions
             result = evaluate_condition_group(exit_conditions, window)
             if result['result']:
                 exit_price = current_price
-                pnl = exit_price - entry_price
-                capital += pnl
+                pnl = (exit_price - entry_price) * position_shares
+                capital += position_shares * exit_price
                 trades.append({
                     'entry_bar': entry_bar,
                     'exit_bar': current_bar,
                     'entry_price': round(entry_price, 2),
                     'exit_price': round(exit_price, 2),
+                    'shares': position_shares,
                     'pnl': round(pnl, 2),
                     'pnl_pct': round(pnl_pct, 2),
                     'reason': 'exit_signal',
                     'bars_held': current_bar - entry_bar,
                 })
                 in_position = False
+                position_shares = 0
 
         # Track equity curve
-        unrealized = (current_price - entry_price) if in_position else 0
-        current_equity = capital + unrealized
+        unrealized = (current_price - entry_price) * position_shares if in_position else 0
+        current_equity = capital + (position_shares * current_price if in_position else 0)
         equity_curve.append(round(current_equity, 2))
 
         if current_equity > peak_capital:
@@ -301,14 +316,15 @@ def run_backtest(
     # Close any open position at last bar
     if in_position and len(df) > 0:
         exit_price = df['close'].iloc[-1]
-        pnl = exit_price - entry_price
+        pnl = (exit_price - entry_price) * position_shares
         pnl_pct = ((exit_price - entry_price) / entry_price) * 100
-        capital += pnl
+        capital += position_shares * exit_price
         trades.append({
             'entry_bar': entry_bar,
             'exit_bar': len(df) - 1,
             'entry_price': round(entry_price, 2),
             'exit_price': round(exit_price, 2),
+            'shares': position_shares,
             'pnl': round(pnl, 2),
             'pnl_pct': round(pnl_pct, 2),
             'reason': 'end_of_data',
@@ -348,7 +364,15 @@ def run_backtest(
     gross_loss = abs(sum(t['pnl'] for t in losses)) if losses else 0
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float('inf') if gross_profit > 0 else 0
 
-    # Simple Sharpe approximation (annualized using daily returns)
+    # Annualization factor based on timeframe (bars per year)
+    BARS_PER_YEAR = {
+        '1m': 252 * 390, '3m': 252 * 130, '5m': 252 * 78, '10m': 252 * 39,
+        '15m': 252 * 26, '30m': 252 * 13, '1h': int(252 * 6.5), '4h': int(252 * 1.625),
+        '1d': 252, '1D': 252, 'D': 252, '1w': 52, '1W': 52, '1M': 12,
+    }
+    ann_factor = BARS_PER_YEAR.get(timeframe, 252)
+
+    # Sharpe ratio (annualized using timeframe-aware factor)
     if len(equity_curve) > 1:
         returns = []
         for i in range(1, len(equity_curve)):
@@ -357,7 +381,7 @@ def run_backtest(
         if returns:
             mean_ret = sum(returns) / len(returns)
             std_ret = (sum((r - mean_ret) ** 2 for r in returns) / len(returns)) ** 0.5
-            sharpe = (mean_ret / std_ret) * (252 ** 0.5) if std_ret > 0 else 0
+            sharpe = (mean_ret / std_ret) * (ann_factor ** 0.5) if std_ret > 0 else 0
         else:
             sharpe = 0
     else:
@@ -367,9 +391,19 @@ def run_backtest(
     if math.isinf(profit_factor):
         profit_factor = 999.99
 
+    # Downsample equity curve if too large (keep full shape visible)
+    if len(equity_curve) > 500:
+        step = len(equity_curve) // 500
+        equity_curve_out = equity_curve[::step]
+        # Ensure the last point is always included
+        if equity_curve_out[-1] != equity_curve[-1]:
+            equity_curve_out.append(equity_curve[-1])
+    else:
+        equity_curve_out = equity_curve
+
     return {
         'trades': trades,
-        'equity_curve': equity_curve[-100:],  # Last 100 points for chart
+        'equity_curve': equity_curve_out,
         'metrics': {
             'total_trades': total_trades,
             'winning_trades': len(wins),
@@ -473,6 +507,7 @@ def main():
             stop_loss_pct=args.stop_loss,
             take_profit_pct=args.take_profit,
             initial_capital=args.initial_capital,
+            timeframe=args.timeframe,
         )
         debug(f"Backtest completed: {result.get('metrics', {}).get('total_trades', 'N/A')} trades")
     except Exception as e:

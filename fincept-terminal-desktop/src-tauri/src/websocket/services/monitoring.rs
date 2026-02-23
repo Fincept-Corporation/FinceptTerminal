@@ -178,9 +178,9 @@ impl MonitoringService {
                                 "[MonitoringService] {} alert(s) triggered — provider={} symbol={} price={}",
                                 alerts.len(), ticker.provider, ticker.symbol, ticker.price
                             );
-                            if app_handle.is_some() {
+                            if let Some(handle) = app_handle.as_ref() {
                                 for alert in alerts {
-                                    let _ = app_handle.as_ref().unwrap().emit("monitor_alert", &alert);
+                                    let _ = handle.emit("monitor_alert", &alert);
                                 }
                             }
                         }
@@ -213,12 +213,26 @@ impl MonitoringService {
 
             let conditions = stmt
                 .query_map([], |row| {
+                    let field_str: String = row.get(3)?;
+                    let operator_str: String = row.get(4)?;
+                    let field = MonitorField::from_str(&field_str).ok_or_else(|| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            3, rusqlite::types::Type::Text,
+                            Box::from(format!("invalid monitor field: {}", field_str)),
+                        )
+                    })?;
+                    let operator = MonitorOperator::from_str(&operator_str).ok_or_else(|| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            4, rusqlite::types::Type::Text,
+                            Box::from(format!("invalid monitor operator: {}", operator_str)),
+                        )
+                    })?;
                     Ok(MonitorCondition {
                         id: Some(row.get(0)?),
                         provider: row.get(1)?,
                         symbol: row.get(2)?,
-                        field: MonitorField::from_str(&row.get::<_, String>(3)?).unwrap(),
-                        operator: MonitorOperator::from_str(&row.get::<_, String>(4)?).unwrap(),
+                        field,
+                        operator,
                         value: row.get(5)?,
                         value2: row.get(6)?,
                         enabled: row.get::<_, i32>(7)? == 1,
@@ -406,7 +420,7 @@ impl MonitoringService {
     fn now() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_millis() as u64
     }
 }

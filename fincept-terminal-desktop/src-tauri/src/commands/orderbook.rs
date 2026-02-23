@@ -41,6 +41,8 @@ pub struct OrderBookUpdate {
 /// - Pre-allocated capacity to avoid reallocation
 ///
 /// Benchmark: ~2-5μs per update (vs 50-100μs in TypeScript)
+const MAX_ORDERBOOK_DEPTH: usize = 1000;
+
 #[tauri::command]
 pub fn merge_orderbook(
     existing_bids: Vec<OrderBookLevel>,
@@ -49,6 +51,7 @@ pub fn merge_orderbook(
     update_asks: Option<Vec<OrderBookLevel>>,
     max_depth: usize,
 ) -> Result<(Vec<OrderBookLevel>, Vec<OrderBookLevel>), String> {
+    let max_depth = max_depth.min(MAX_ORDERBOOK_DEPTH);
     // Process bids
     let merged_bids = if let Some(updates) = update_bids {
         merge_levels(existing_bids, updates, max_depth, false)
@@ -140,6 +143,7 @@ pub fn update_orderbook_snapshot(
     mut asks: Vec<OrderBookLevel>,
     max_depth: usize,
 ) -> Result<(Vec<OrderBookLevel>, Vec<OrderBookLevel>), String> {
+    let max_depth = max_depth.min(MAX_ORDERBOOK_DEPTH);
     // Sort bids descending
     bids.sort_unstable_by(|a, b| {
         b.price.partial_cmp(&a.price).unwrap_or(Ordering::Equal)
@@ -208,6 +212,7 @@ pub fn batch_merge_orderbook(
     updates: Vec<OrderBookUpdate>,
     max_depth: usize,
 ) -> Result<(Vec<OrderBookLevel>, Vec<OrderBookLevel>), String> {
+    let max_depth = max_depth.min(MAX_ORDERBOOK_DEPTH);
     for update in updates {
         if let Some(bid_updates) = update.bids {
             current_bids = merge_levels(current_bids, bid_updates, max_depth, false);

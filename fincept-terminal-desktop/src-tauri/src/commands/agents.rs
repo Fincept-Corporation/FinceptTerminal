@@ -13,12 +13,12 @@ use once_cell::sync::Lazy;
 // Global registry for active streams (for cancellation)
 static ACTIVE_STREAMS: Lazy<Mutex<HashMap<String, Arc<AtomicBool>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
-/// Default timeout for agent operations (120 seconds - LLM calls can take 30-60s+)
-const AGENT_TIMEOUT_SECS: u64 = 120;
-/// Shorter timeout for discovery/listing operations (15 seconds)
-const DISCOVERY_TIMEOUT_SECS: u64 = 15;
-/// Timeout for routing-only operations (no LLM call, just keyword matching)
-const ROUTING_TIMEOUT_SECS: u64 = 10;
+/// Default timeout for agent operations (300 seconds - Fincept endpoint can take up to 70s+)
+const AGENT_TIMEOUT_SECS: u64 = 300;
+/// Timeout for discovery/listing operations (60 seconds)
+const DISCOVERY_TIMEOUT_SECS: u64 = 60;
+/// Timeout for routing operations (includes Python startup + rate limiter + LLM call)
+const ROUTING_TIMEOUT_SECS: u64 = 300;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentParameter {
@@ -45,15 +45,6 @@ pub struct AgentMetadata {
     pub outputs: Vec<String>,
     pub icon: String,
     pub color: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AgentExecutionResult {
-    pub success: bool,
-    pub data: Option<serde_json::Value>,
-    pub error: Option<String>,
-    pub execution_time_ms: u64,
-    pub agent_type: String,
 }
 
 /// Execute CoreAgent with single JSON payload (unified entry point)
@@ -183,47 +174,6 @@ async fn execute_core_agent_with_timeout(
     }
 }
 
-/// Execute CoreAgent with streaming output via Tauri events
-/// Returns stream_id for the frontend to listen to events: `agent-stream-{stream_id}`
-#[tauri::command]
-pub async fn execute_core_agent_streaming(
-    app: tauri::AppHandle,
-    payload: serde_json::Value,
-    stream_id: String,
-) -> Result<String, String> {
-    let payload_str = serde_json::to_string(&payload)
-        .map_err(|e| format!("Failed to serialize payload: {}", e))?;
-
-    // Create cancellation flag
-    let cancel_flag = Arc::new(AtomicBool::new(false));
-
-    // Register stream for potential cancellation
-    {
-        let mut streams = ACTIVE_STREAMS.lock().await;
-        streams.insert(stream_id.clone(), cancel_flag.clone());
-    }
-
-    let args: Vec<String> = vec![payload_str];
-    let stream_id_clone = stream_id.clone();
-
-    // Execute with streaming
-    let result = python::execute_streaming(
-        app,
-        "agents/finagent_core/main.py",
-        args,
-        stream_id_clone,
-        cancel_flag,
-    ).await;
-
-    // Cleanup stream registration
-    {
-        let mut streams = ACTIVE_STREAMS.lock().await;
-        streams.remove(&stream_id);
-    }
-
-    result
-}
-
 /// Deliver a tool execution result from TypeScript back to the waiting Python agent.
 /// TypeScript calls this after executing a terminal MCP tool triggered by the Python agent.
 ///
@@ -304,6 +254,21 @@ pub async fn create_stock_analysis_plan(
     let payload = serde_json::json!({
         "action": "create_stock_plan",
         "params": { "symbol": symbol }
+    });
+    execute_core_agent(app, payload).await
+}
+
+/// Generate a dynamic execution plan using LLM based on a natural-language query
+#[tauri::command]
+pub async fn generate_dynamic_plan(
+    app: tauri::AppHandle,
+    query: String,
+    api_keys: Option<std::collections::HashMap<String, String>>,
+) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "action": "generate_dynamic_plan",
+        "api_keys": api_keys.unwrap_or_default(),
+        "params": { "query": query }
     });
     execute_core_agent(app, payload).await
 }

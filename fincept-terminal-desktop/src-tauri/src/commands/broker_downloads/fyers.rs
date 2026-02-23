@@ -251,7 +251,7 @@ fn build_unified_symbol(
     symbol_details: &str,
     expiry_raw: &str,
     strike: f64,
-    option_type: &str,
+    _option_type: &str,
     instrument_type: &str,
 ) -> String {
     let normalized_underlying = normalize_index_symbol(underlying);

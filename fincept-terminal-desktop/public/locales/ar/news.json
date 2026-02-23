@@ -1,32 +1,63 @@
 {
   "title": "أخبار محطة FINCEPT الاحترافية",
   "header": {
-    "liveFeed": "بث مباشر",
-    "live": "مباشر",
-    "refresh": "تحديث",
-    "updating": "جاري التحديث...",
-    "alerts": "التنبيهات",
-    "sources": "المصادر",
-    "status": "الحالة",
-    "demoMode": "وضع تجريبي",
-    "articles": "المقالات",
-    "activeSources": "المصادر النشطة"
-  },
-  "autoRefresh": {
-    "title": "فترة التحديث التلقائي",
-    "minute": "دقيقة",
-    "minutes": "دقائق"
+    "refresh": "تحديث"
   },
   "messages": {
-    "loadingFeeds": "جاري تحميل الموجزات...",
-    "breaking": "عاجل"
+    "loadingFeedsModal": "[AR] Loading feeds...",
+    "failedToLoad": "[AR] Failed to load RSS feeds",
+    "noCustomFeeds": "[AR] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[AR] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[AR] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[AR] PRIMARY NEWS FEED",
-    "secondary": "[AR] SECONDARY NEWS FEED",
-    "additional": "[AR] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[AR] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[AR] RSS FEED SETTINGS",
+    "subtitle": "[AR] MANAGE YOUR NEWS SOURCES",
+    "close": "[AR] CLOSE",
+    "myFeeds": "[AR] MY FEEDS",
+    "defaultFeeds": "[AR] DEFAULT FEEDS",
+    "noFeedsAvailable": "[AR] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[AR] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[AR] ADD NEW FEED",
+    "addNewRssFeed": "[AR] ADD NEW RSS FEED",
+    "editRssFeed": "[AR] EDIT RSS FEED",
+    "restoreDefaults": "[AR] RESTORE DEFAULTS",
+    "restoreAll": "[AR] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[AR] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[AR] DISPLAY NAME",
+    "sourceName": "[AR] SOURCE NAME (SHORT)",
+    "feedUrl": "[AR] RSS FEED URL",
+    "category": "[AR] CATEGORY",
+    "region": "[AR] REGION",
+    "required": "[AR] *",
+    "testUrl": "[AR] TEST URL",
+    "testing": "[AR] TESTING...",
+    "valid": "[AR] VALID",
+    "cancel": "[AR] CANCEL",
+    "saving": "[AR] SAVING...",
+    "addFeed": "[AR] ADD FEED",
+    "updateFeed": "[AR] UPDATE FEED",
+    "on": "[AR] ON",
+    "off": "[AR] OFF",
+    "default": "[AR] DEFAULT",
+    "total": "[AR] TOTAL",
+    "active": "[AR] ACTIVE",
+    "custom": "[AR] CUSTOM",
+    "placeholders": {
+      "displayName": "[AR] e.g., Bloomberg Markets",
+      "sourceName": "[AR] e.g., BLOOMBERG",
+      "feedUrl": "[AR] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[AR] Name is required",
+      "sourceRequired": "[AR] Source name is required",
+      "invalidUrl": "[AR] Please enter a valid URL",
+      "invalidRss": "[AR] URL does not appear to be a valid RSS feed",
+      "testFailed": "[AR] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[AR] Delete this RSS feed?",
+      "message": "[AR] This action cannot be undone."
+    }
   }
 }

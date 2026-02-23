@@ -147,6 +147,41 @@ export abstract class CoreExchangeAdapter {
     }
   }
 
+  /**
+   * Returns two maps built from the already-loaded CCXT markets:
+   *   wsIdToUnified:  wsId (what the exchange sends on WS wire) → unified symbol (e.g. "XBT/USD" → "BTC/USD")
+   *   unifiedToWsId:  unified symbol → wsId (e.g. "BTC/USD" → "XBT/USD")
+   *
+   * Falls back to the unified symbol itself when wsId is not present (most exchanges use the
+   * unified symbol on their WS feed directly).
+   * Only includes active spot USD markets to keep the list relevant.
+   */
+  getMarketSymbolMap(): {
+    wsIdToUnified: Map<string, string>;
+    unifiedToWsId: Map<string, string>;
+    activeUsdSymbols: string[];
+  } {
+    const wsIdToUnified = new Map<string, string>();
+    const unifiedToWsId = new Map<string, string>();
+    const activeUsdSymbols: string[] = [];
+
+    const markets = this.exchange.markets;
+    if (!markets) return { wsIdToUnified, unifiedToWsId, activeUsdSymbols };
+
+    for (const [unified, market] of Object.entries(markets)) {
+      if (!market.active) continue;
+      if (!market.spot) continue;
+      if (market.quote !== 'USD' && market.quote !== 'USDT') continue;
+
+      const wsId: string = (market as any).wsId ?? unified;
+      wsIdToUnified.set(wsId, unified);
+      unifiedToWsId.set(unified, wsId);
+      activeUsdSymbols.push(unified);
+    }
+
+    return { wsIdToUnified, unifiedToWsId, activeUsdSymbols };
+  }
+
   async fetchStatus(): Promise<any> {
     try {
       await this.ensureConnected();

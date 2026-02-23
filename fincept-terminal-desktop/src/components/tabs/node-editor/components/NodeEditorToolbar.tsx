@@ -14,6 +14,8 @@ import {
   Trash2,
   Rocket,
   LayoutTemplate,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { NodeEditorToolbarProps } from '../types';
@@ -39,6 +41,10 @@ const NodeEditorToolbar: React.FC<NodeEditorToolbarProps> = ({
   onShowDeployDialog,
   onQuickSaveDraft,
   onShowTemplates,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }) => {
   const { t } = useTranslation('nodeEditor');
 
@@ -186,6 +192,77 @@ const NodeEditorToolbar: React.FC<NodeEditorToolbarProps> = ({
           >
             <Play size={14} />
             {isExecuting ? 'EXECUTING...' : 'EXECUTE'}
+          </button>
+
+          <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }} />
+
+          {/* Undo / Redo */}
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            style={{
+              backgroundColor: 'transparent',
+              color: canUndo ? '#a3a3a3' : '#525252',
+              border: `1px solid ${canUndo ? '#404040' : '#333333'}`,
+              padding: '6px 10px',
+              fontSize: '11px',
+              cursor: canUndo ? 'pointer' : 'not-allowed',
+              borderRadius: '3px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              opacity: canUndo ? 1 : 0.4,
+            }}
+            onMouseEnter={(e) => {
+              if (canUndo) {
+                e.currentTarget.style.backgroundColor = '#2d2d2d';
+                e.currentTarget.style.color = 'white';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (canUndo) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#a3a3a3';
+              }
+            }}
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 size={14} />
+            UNDO
+          </button>
+
+          <button
+            onClick={onRedo}
+            disabled={!canRedo}
+            style={{
+              backgroundColor: 'transparent',
+              color: canRedo ? '#a3a3a3' : '#525252',
+              border: `1px solid ${canRedo ? '#404040' : '#333333'}`,
+              padding: '6px 10px',
+              fontSize: '11px',
+              cursor: canRedo ? 'pointer' : 'not-allowed',
+              borderRadius: '3px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              opacity: canRedo ? 1 : 0.4,
+            }}
+            onMouseEnter={(e) => {
+              if (canRedo) {
+                e.currentTarget.style.backgroundColor = '#2d2d2d';
+                e.currentTarget.style.color = 'white';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (canRedo) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#a3a3a3';
+              }
+            }}
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            <Redo2 size={14} />
+            REDO
           </button>
 
           <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }} />

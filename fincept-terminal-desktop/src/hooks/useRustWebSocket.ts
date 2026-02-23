@@ -13,9 +13,14 @@ import {
 
 /**
  * Normalize a symbol for comparison (removes slashes, dashes, underscores, uppercase)
+ * Also maps exchange-specific aliases: XBT→BTC (Kraken), XDG→DOGE (Kraken)
  */
 function normalizeSymbol(symbol: string): string {
-  return symbol.replace(/[/\-_]/g, '').toUpperCase();
+  return symbol
+    .replace(/XBT/g, 'BTC')
+    .replace(/XDG/g, 'DOGE')
+    .replace(/[/\-_]/g, '')
+    .toUpperCase();
 }
 
 // ============================================================================
@@ -28,6 +33,9 @@ export function useRustTicker(provider: string, symbol: string, autoConnect = tr
   // Track subscription state with the actual provider/symbol we subscribed to
   const subscriptionRef = useRef<{ provider: string; symbol: string } | null>(null);
   const listenerRef = useRef<(() => void) | null>(null);
+
+  // Normalize provider to lowercase for consistent matching
+  const normalizedProvider = provider.toLowerCase();
 
   useEffect(() => {
     let mounted = true;
@@ -43,27 +51,36 @@ export function useRustTicker(provider: string, symbol: string, autoConnect = tr
 
         // Unsubscribe from old subscription if provider/symbol changed
         if (subscriptionRef.current &&
-            (subscriptionRef.current.provider !== provider ||
+            (subscriptionRef.current.provider !== normalizedProvider ||
              subscriptionRef.current.symbol !== symbol)) {
           await websocketBridge.unsubscribe(
             subscriptionRef.current.provider,
             subscriptionRef.current.symbol,
             'ticker'
-          ).catch(() => {});
+          ).catch((e) => console.warn('[useRustTicker] unsubscribe error:', e));
           subscriptionRef.current = null;
         }
 
         // Subscribe to ticker channel
         if (!subscriptionRef.current) {
-          await websocketBridge.subscribe(provider, symbol, 'ticker');
-          subscriptionRef.current = { provider, symbol };
+          console.log(`[useRustTicker] Subscribing: provider='${normalizedProvider}' symbol='${symbol}'`);
+          await websocketBridge.subscribe(normalizedProvider, symbol, 'ticker');
+          subscriptionRef.current = { provider: normalizedProvider, symbol };
         }
 
         // Listen to ticker events
         const unlisten = await websocketBridge.onTicker((tickerData) => {
           // Only process if mounted and matches our symbol/provider
           if (!mounted) return;
-          if (tickerData.provider !== provider) return;
+
+          // Debug: log first few incoming ticks
+          const debugCount = (window as any).__tickerDebugCount || 0;
+          if (debugCount < 5) {
+            console.log(`[useRustTicker] Received: provider='${tickerData.provider}' symbol='${tickerData.symbol}' price=${tickerData.price}`);
+            (window as any).__tickerDebugCount = debugCount + 1;
+          }
+
+          if (tickerData.provider !== normalizedProvider) return;
           if (normalizeSymbol(tickerData.symbol) !== normalizedInputSymbol) return;
 
           setData(tickerData);
@@ -92,11 +109,11 @@ export function useRustTicker(provider: string, symbol: string, autoConnect = tr
           subscriptionRef.current.provider,
           subscriptionRef.current.symbol,
           'ticker'
-        ).catch(() => {});
+        ).catch((e) => console.warn('[useRustTicker] cleanup unsubscribe error:', e));
         subscriptionRef.current = null;
       }
     };
-  }, [provider, symbol, autoConnect]);
+  }, [normalizedProvider, symbol, autoConnect]);
 
   return { data, error };
 }
@@ -116,6 +133,9 @@ export function useRustOrderBook(
   const subscriptionRef = useRef<{ provider: string; symbol: string } | null>(null);
   const listenerRef = useRef<(() => void) | null>(null);
 
+  // Normalize provider to lowercase for consistent matching
+  const normalizedProvider = provider.toLowerCase();
+
   useEffect(() => {
     let mounted = true;
     const normalizedInputSymbol = normalizeSymbol(symbol);
@@ -130,26 +150,26 @@ export function useRustOrderBook(
 
         // Unsubscribe from old subscription if provider/symbol changed
         if (subscriptionRef.current &&
-            (subscriptionRef.current.provider !== provider ||
+            (subscriptionRef.current.provider !== normalizedProvider ||
              subscriptionRef.current.symbol !== symbol)) {
           await websocketBridge.unsubscribe(
             subscriptionRef.current.provider,
             subscriptionRef.current.symbol,
             'book'
-          ).catch(() => {});
+          ).catch((e) => console.warn('[useRustOrderBook] unsubscribe error:', e));
           subscriptionRef.current = null;
         }
 
         // Subscribe to book channel with depth parameter
         if (!subscriptionRef.current) {
-          await websocketBridge.subscribe(provider, symbol, 'book', { depth });
-          subscriptionRef.current = { provider, symbol };
+          await websocketBridge.subscribe(normalizedProvider, symbol, 'book', { depth });
+          subscriptionRef.current = { provider: normalizedProvider, symbol };
         }
 
         // Listen to orderbook events
         const unlisten = await websocketBridge.onOrderBook((bookData) => {
           if (!mounted) return;
-          if (bookData.provider !== provider) return;
+          if (bookData.provider !== normalizedProvider) return;
           if (normalizeSymbol(bookData.symbol) !== normalizedInputSymbol) return;
 
           setData(bookData);
@@ -178,11 +198,11 @@ export function useRustOrderBook(
           subscriptionRef.current.provider,
           subscriptionRef.current.symbol,
           'book'
-        ).catch(() => {});
+        ).catch((e) => console.warn('[useRustOrderBook] cleanup unsubscribe error:', e));
         subscriptionRef.current = null;
       }
     };
-  }, [provider, symbol, depth, autoConnect]);
+  }, [normalizedProvider, symbol, depth, autoConnect]);
 
   return { data, error };
 }
@@ -196,6 +216,9 @@ export function useRustTrades(provider: string, symbol: string, maxTrades = 50, 
   const [error, setError] = useState<string | null>(null);
   const subscriptionRef = useRef<{ provider: string; symbol: string } | null>(null);
   const listenerRef = useRef<(() => void) | null>(null);
+
+  // Normalize provider to lowercase for consistent matching
+  const normalizedProvider = provider.toLowerCase();
 
   useEffect(() => {
     let mounted = true;
@@ -211,13 +234,13 @@ export function useRustTrades(provider: string, symbol: string, maxTrades = 50, 
 
         // Unsubscribe from old subscription if provider/symbol changed
         if (subscriptionRef.current &&
-            (subscriptionRef.current.provider !== provider ||
+            (subscriptionRef.current.provider !== normalizedProvider ||
              subscriptionRef.current.symbol !== symbol)) {
           await websocketBridge.unsubscribe(
             subscriptionRef.current.provider,
             subscriptionRef.current.symbol,
             'trade'
-          ).catch(() => {});
+          ).catch((e) => console.warn('[useRustTrades] unsubscribe error:', e));
           subscriptionRef.current = null;
           // Clear old trades when symbol changes
           setTrades([]);
@@ -225,14 +248,14 @@ export function useRustTrades(provider: string, symbol: string, maxTrades = 50, 
 
         // Subscribe to trade channel
         if (!subscriptionRef.current) {
-          await websocketBridge.subscribe(provider, symbol, 'trade');
-          subscriptionRef.current = { provider, symbol };
+          await websocketBridge.subscribe(normalizedProvider, symbol, 'trade');
+          subscriptionRef.current = { provider: normalizedProvider, symbol };
         }
 
         // Listen to trade events
         const unlisten = await websocketBridge.onTrade((tradeData) => {
           if (!mounted) return;
-          if (tradeData.provider !== provider) return;
+          if (tradeData.provider !== normalizedProvider) return;
           if (normalizeSymbol(tradeData.symbol) !== normalizedInputSymbol) return;
 
           setTrades((prev) => {
@@ -264,11 +287,11 @@ export function useRustTrades(provider: string, symbol: string, maxTrades = 50, 
           subscriptionRef.current.provider,
           subscriptionRef.current.symbol,
           'trade'
-        ).catch(() => {});
+        ).catch((e) => console.warn('[useRustTrades] cleanup unsubscribe error:', e));
         subscriptionRef.current = null;
       }
     };
-  }, [provider, symbol, maxTrades, autoConnect]);
+  }, [normalizedProvider, symbol, maxTrades, autoConnect]);
 
   return { trades, error };
 }
@@ -289,6 +312,9 @@ export function useRustCandles(
   const subscriptionRef = useRef<{ provider: string; symbol: string; interval: string } | null>(null);
   const listenerRef = useRef<(() => void) | null>(null);
 
+  // Normalize provider to lowercase for consistent matching
+  const normalizedProvider = provider.toLowerCase();
+
   useEffect(() => {
     let mounted = true;
     const normalizedInputSymbol = normalizeSymbol(symbol);
@@ -303,14 +329,14 @@ export function useRustCandles(
 
         // Unsubscribe from old subscription if provider/symbol/interval changed
         if (subscriptionRef.current &&
-            (subscriptionRef.current.provider !== provider ||
+            (subscriptionRef.current.provider !== normalizedProvider ||
              subscriptionRef.current.symbol !== symbol ||
              subscriptionRef.current.interval !== interval)) {
           await websocketBridge.unsubscribe(
             subscriptionRef.current.provider,
             subscriptionRef.current.symbol,
             'ohlc'
-          ).catch(() => {});
+          ).catch((e) => console.warn('[useRustCandles] unsubscribe error:', e));
           subscriptionRef.current = null;
           // Clear old candles when symbol/interval changes
           setCandles([]);
@@ -319,14 +345,14 @@ export function useRustCandles(
 
         // Subscribe to candle channel
         if (!subscriptionRef.current) {
-          await websocketBridge.subscribe(provider, symbol, 'ohlc', { interval });
-          subscriptionRef.current = { provider, symbol, interval };
+          await websocketBridge.subscribe(normalizedProvider, symbol, 'ohlc', { interval });
+          subscriptionRef.current = { provider: normalizedProvider, symbol, interval };
         }
 
         // Listen to candle events
         const unlisten = await websocketBridge.onCandle((candleData) => {
           if (!mounted) return;
-          if (candleData.provider !== provider) return;
+          if (candleData.provider !== normalizedProvider) return;
           // Use normalized symbol comparison (fixes the inconsistency)
           if (normalizeSymbol(candleData.symbol) !== normalizedInputSymbol) return;
           if (candleData.interval !== interval) return;
@@ -368,11 +394,11 @@ export function useRustCandles(
           subscriptionRef.current.provider,
           subscriptionRef.current.symbol,
           'ohlc'
-        ).catch(() => {});
+        ).catch((e) => console.warn('[useRustCandles] cleanup unsubscribe error:', e));
         subscriptionRef.current = null;
       }
     };
-  }, [provider, symbol, interval, autoConnect]);
+  }, [normalizedProvider, symbol, interval, autoConnect]);
 
   return { candles, latestCandle, error };
 }
@@ -385,6 +411,9 @@ export function useConnectionStatus(provider: string) {
   const [status, setStatus] = useState<StatusData | null>(null);
   const [metrics, setMetrics] = useState<ConnectionMetrics | null>(null);
 
+  // Normalize provider to lowercase for consistent matching
+  const normalizedProvider = provider.toLowerCase();
+
   useEffect(() => {
     let mounted = true;
     let unlisten: (() => void) | null = null;
@@ -393,7 +422,7 @@ export function useConnectionStatus(provider: string) {
     const setup = async () => {
       // Listen to status events
       unlisten = await websocketBridge.onStatus((statusData) => {
-        if (mounted && statusData.provider === provider) {
+        if (mounted && statusData.provider === normalizedProvider) {
           setStatus(statusData);
         }
       });
@@ -402,7 +431,7 @@ export function useConnectionStatus(provider: string) {
       const fetchMetrics = async () => {
         if (mounted) {
           try {
-            const m = await websocketBridge.getMetrics(provider);
+            const m = await websocketBridge.getMetrics(normalizedProvider);
             if (m) {
               setMetrics(m);
             }
@@ -429,7 +458,7 @@ export function useConnectionStatus(provider: string) {
         clearInterval(intervalId);
       }
     };
-  }, [provider]);
+  }, [normalizedProvider]);
 
   return { status, metrics };
 }
@@ -445,8 +474,9 @@ export function useMultiProviderTicker(providers: string[], symbol: string) {
   const subscriptionsRef = useRef<Map<string, { provider: string; symbol: string }>>(new Map());
   const listenerRef = useRef<(() => void) | null>(null);
 
-  // Memoize providers string to prevent unnecessary re-renders
-  const providersKey = providers.join(',');
+  // Normalize providers to lowercase
+  const normalizedProviders = providers.map(p => p.toLowerCase());
+  const providersKey = normalizedProviders.join(',');
 
   useEffect(() => {
     let mounted = true;
@@ -462,14 +492,14 @@ export function useMultiProviderTicker(providers: string[], symbol: string) {
 
         // Unsubscribe from providers no longer in the list
         for (const [key, sub] of subscriptionsRef.current.entries()) {
-          if (!providers.includes(sub.provider) || sub.symbol !== symbol) {
-            await websocketBridge.unsubscribe(sub.provider, sub.symbol, 'ticker').catch(() => {});
+          if (!normalizedProviders.includes(sub.provider) || sub.symbol !== symbol) {
+            await websocketBridge.unsubscribe(sub.provider, sub.symbol, 'ticker').catch((e) => console.warn('[useMultiProviderTicker] unsubscribe error:', e));
             subscriptionsRef.current.delete(key);
           }
         }
 
-        // Subscribe to new providers
-        for (const provider of providers) {
+        // Subscribe to new providers (using normalized names)
+        for (const provider of normalizedProviders) {
           const key = `${provider}:${symbol}`;
           if (!subscriptionsRef.current.has(key)) {
             await websocketBridge.subscribe(provider, symbol, 'ticker');
@@ -480,7 +510,7 @@ export function useMultiProviderTicker(providers: string[], symbol: string) {
         // Listen to ticker events from all providers
         const unlisten = await websocketBridge.onTicker((tickerData) => {
           if (!mounted) return;
-          if (!providers.includes(tickerData.provider)) return;
+          if (!normalizedProviders.includes(tickerData.provider)) return;
           if (normalizeSymbol(tickerData.symbol) !== normalizedInputSymbol) return;
 
           setPrices((prev) => {
@@ -498,7 +528,7 @@ export function useMultiProviderTicker(providers: string[], symbol: string) {
       }
     };
 
-    if (providers.length > 0 && symbol) {
+    if (normalizedProviders.length > 0 && symbol) {
       subscribe();
     }
 
@@ -510,7 +540,7 @@ export function useMultiProviderTicker(providers: string[], symbol: string) {
       }
       // Unsubscribe from all on cleanup
       for (const sub of subscriptionsRef.current.values()) {
-        websocketBridge.unsubscribe(sub.provider, sub.symbol, 'ticker').catch(() => {});
+        websocketBridge.unsubscribe(sub.provider, sub.symbol, 'ticker').catch((e) => console.warn('[useMultiProviderTicker] cleanup unsubscribe error:', e));
       }
       subscriptionsRef.current.clear();
       setPrices(new Map());

@@ -40,11 +40,11 @@ export interface UserProfileResponse {
 export interface DeviceRegisterResponse {
   success: boolean;
   data?: {
-    api_key?: string;
-    temp_api_key?: string;
-    expires_at?: string;
-    daily_limit?: number;
-    requests_today?: number;
+    api_key: string;
+    expires_at: string;
+    credit_balance: number;
+    user_type: 'guest';
+    message: string;
   };
   message?: string;
   error?: string;
@@ -128,7 +128,7 @@ export interface SessionData {
     mfa_enabled?: boolean;
   };
   expires_at?: string;
-  daily_limit?: number;
+  credit_balance?: number;
   requests_today?: number;
   subscription?: UserSubscription;
 }
@@ -361,7 +361,6 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
           mfa_enabled: userProfile.mfa_enabled
         } : apiData.user,
         expires_at: apiData.user_type === 'guest' ? apiData.guest?.expires_at : undefined,
-        daily_limit: apiData.user_type === 'guest' ? apiData.guest?.daily_limit : undefined,
         requests_today: apiData.user_type === 'guest' ? apiData.guest?.requests_today : undefined,
         subscription: userSubscription || undefined
       };
@@ -374,16 +373,21 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
 
   // Initialize session on app load
   useEffect(() => {
+    let mounted = true;
+
     const initializeSession = async () => {
       try {
         const isFirstTime = await checkIsFirstTimeUser();
+        if (!mounted) return;
         setIsFirstTimeUser(isFirstTime);
 
         const savedSession = await loadSession();
+        if (!mounted) return;
 
         if (savedSession) {
           if (savedSession.user_type === 'registered') {
             const validatedSession = await validateSession(savedSession);
+            if (!mounted) return;
             if (validatedSession) {
               setSession(validatedSession);
               await saveSession(validatedSession);
@@ -398,11 +402,12 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
       } catch (error) {
         console.error('Session initialization error:', error);
       } finally {
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
 
     initializeSession();
+    return () => { mounted = false; };
   }, []);
 
   // Check API connectivity
@@ -780,38 +785,16 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
   // Guest access setup
   const setupGuestAccess = async (): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (import.meta.env.DEV) {
-        const mockGuestSession: SessionData = {
-          authenticated: true,
-          user_type: 'guest',
-          api_key: 'mock_guest_api_key_' + Date.now(),
-          device_id: generateDeviceId(),
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          daily_limit: 50,
-          requests_today: 0
-        };
-
-        setSession(mockGuestSession);
-        await saveSession(mockGuestSession);
-        const isFirstTime = await checkIsFirstTimeUser();
-        setIsFirstTimeUser(isFirstTime);
-
-        return { success: true };
-      }
-
       const deviceId = generateDeviceId();
 
-      const result = await AuthApiService.registerDevice({
+      const result = await AuthApiService.createGuestSession({
         device_id: deviceId,
         device_name: `Fincept Terminal - ${navigator.platform}`,
         platform: 'desktop',
         hardware_info: {
-          platform: navigator.platform,
-          user_agent: navigator.userAgent,
-          language: navigator.language,
-          screen_resolution: `${window.screen.width}x${window.screen.height}`,
           cpu_cores: navigator.hardwareConcurrency || 4,
-          memory_gb: (navigator as any).deviceMemory || 8
+          memory_gb: (navigator as any).deviceMemory || 8,
+          screen_resolution: `${window.screen.width}x${window.screen.height}`
         }
       }) as DeviceRegisterResponse;
 
@@ -820,15 +803,14 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
         const guestSession: SessionData = {
           authenticated: true,
           user_type: 'guest',
-          api_key: apiData.api_key || apiData.temp_api_key || null,
+          api_key: apiData.api_key,
           device_id: deviceId,
           expires_at: apiData.expires_at,
-          daily_limit: apiData.daily_limit || 50,
-          requests_today: apiData.requests_today || 0
+          credit_balance: apiData.credit_balance
         };
 
         setSession(guestSession);
-        saveSession(guestSession);
+        await saveSession(guestSession);
         const isFirstTime = await checkIsFirstTimeUser();
         setIsFirstTimeUser(isFirstTime);
 

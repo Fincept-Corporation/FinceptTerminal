@@ -1,25 +1,7 @@
 {
-  "title": "LISTA DE SEGUIMIENTO",
-  "header": {
-    "export": "EXPORTAR",
-    "updating": "ACTUALIZANDO",
-    "live": "EN VIVO"
-  },
   "sidebar": {
-    "groups": "GRUPOS DE LISTAS",
-    "new": "NUEVA",
     "noWatchlists": "Aún no hay listas.",
     "clickNew": "Haga clic en NUEVA para crear.",
-    "stocks": "acciones",
-    "marketMovers": "LÍDERES DEL MERCADO",
-    "gainer": "AL ALZA",
-    "loser": "A LA BAJA",
-    "volumeLeaders": "LÍDERES DE VOLUMEN"
-  },
-  "emptyState": {
-    "selectWatchlist": "Seleccione una lista o cree una nueva para comenzar"
-  },
-  "list": {
-    "symbols": "Símbolos"
+    "stocks": "acciones"
   }
 }

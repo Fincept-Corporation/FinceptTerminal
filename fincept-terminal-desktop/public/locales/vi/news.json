@@ -1,32 +1,63 @@
 {
   "title": "TIN TỨC CHUYÊN NGHIỆP TERMINAL FINCEPT",
   "header": {
-    "liveFeed": "FEED TRỰC TIẾP",
-    "live": "TRỰC TIẾP",
-    "refresh": "LÀM MỚI",
-    "updating": "ĐANG CẬP NHẬT...",
-    "alerts": "CẢNH BÁO",
-    "sources": "NGUỒN",
-    "status": "TRẠNG THÁI",
-    "demoMode": "CHẾ ĐỘ DEMO",
-    "articles": "BÀI VIẾT",
-    "activeSources": "NGUỒN HOẠT ĐỘNG"
-  },
-  "autoRefresh": {
-    "title": "KHOẢNG CÁCH TỰ ĐỘNG CẬP NHẬT",
-    "minute": "phút",
-    "minutes": "phút"
+    "refresh": "LÀM MỚI"
   },
   "messages": {
-    "loadingFeeds": "Đang tải nguồn cấp...",
-    "breaking": "NÓNG"
+    "loadingFeedsModal": "[VI] Loading feeds...",
+    "failedToLoad": "[VI] Failed to load RSS feeds",
+    "noCustomFeeds": "[VI] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[VI] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[VI] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[VI] PRIMARY NEWS FEED",
-    "secondary": "[VI] SECONDARY NEWS FEED",
-    "additional": "[VI] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[VI] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[VI] RSS FEED SETTINGS",
+    "subtitle": "[VI] MANAGE YOUR NEWS SOURCES",
+    "close": "[VI] CLOSE",
+    "myFeeds": "[VI] MY FEEDS",
+    "defaultFeeds": "[VI] DEFAULT FEEDS",
+    "noFeedsAvailable": "[VI] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[VI] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[VI] ADD NEW FEED",
+    "addNewRssFeed": "[VI] ADD NEW RSS FEED",
+    "editRssFeed": "[VI] EDIT RSS FEED",
+    "restoreDefaults": "[VI] RESTORE DEFAULTS",
+    "restoreAll": "[VI] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[VI] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[VI] DISPLAY NAME",
+    "sourceName": "[VI] SOURCE NAME (SHORT)",
+    "feedUrl": "[VI] RSS FEED URL",
+    "category": "[VI] CATEGORY",
+    "region": "[VI] REGION",
+    "required": "[VI] *",
+    "testUrl": "[VI] TEST URL",
+    "testing": "[VI] TESTING...",
+    "valid": "[VI] VALID",
+    "cancel": "[VI] CANCEL",
+    "saving": "[VI] SAVING...",
+    "addFeed": "[VI] ADD FEED",
+    "updateFeed": "[VI] UPDATE FEED",
+    "on": "[VI] ON",
+    "off": "[VI] OFF",
+    "default": "[VI] DEFAULT",
+    "total": "[VI] TOTAL",
+    "active": "[VI] ACTIVE",
+    "custom": "[VI] CUSTOM",
+    "placeholders": {
+      "displayName": "[VI] e.g., Bloomberg Markets",
+      "sourceName": "[VI] e.g., BLOOMBERG",
+      "feedUrl": "[VI] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[VI] Name is required",
+      "sourceRequired": "[VI] Source name is required",
+      "invalidUrl": "[VI] Please enter a valid URL",
+      "invalidRss": "[VI] URL does not appear to be a valid RSS feed",
+      "testFailed": "[VI] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[VI] Delete this RSS feed?",
+      "message": "[VI] This action cannot be undone."
+    }
   }
 }

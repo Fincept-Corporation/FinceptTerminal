@@ -1,25 +1,7 @@
 {
-  "title": "WATCHLIST",
-  "header": {
-    "export": "EXPORT",
-    "updating": "UPDATING",
-    "live": "LIVE"
-  },
   "sidebar": {
-    "groups": "WATCHLIST GROUPS",
-    "new": "NEW",
     "noWatchlists": "No watchlists yet.",
     "clickNew": "Click NEW to create one.",
-    "stocks": "stocks",
-    "marketMovers": "MARKET MOVERS",
-    "gainer": "GAINER",
-    "loser": "LOSER",
-    "volumeLeaders": "VOLUME LEADERS"
-  },
-  "emptyState": {
-    "selectWatchlist": "Select a watchlist or create a new one to get started"
-  },
-  "list": {
-    "symbols": "Symbols"
+    "stocks": "stocks"
   }
 }

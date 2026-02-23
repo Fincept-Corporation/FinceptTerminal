@@ -14,10 +14,14 @@ try:
 except ImportError:
     HTTPX_AVAILABLE = False
 
-from alpha_arena.types.models import MarketData
+from alpha_arena.types.models import MarketData, PolymarketInfo
 from alpha_arena.utils.logging import get_logger
 
 logger = get_logger("market_data")
+
+# Polymarket API endpoints
+POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com"
+POLYMARKET_CLOB_API = "https://clob.polymarket.com"
 
 
 class MarketDataProvider:
@@ -256,3 +260,191 @@ async def reset_market_data_provider():
             logger.warning(f"Error closing market data provider: {e}")
         _provider = None
         logger.info("Market data provider reset")
+
+
+# =============================================================================
+# Polymarket Data Provider
+# =============================================================================
+
+class PolymarketDataProvider:
+    """
+    Async Polymarket data provider using httpx.
+
+    Fetches prediction market data from Polymarket's Gamma and CLOB APIs.
+    """
+
+    def __init__(self, timeout: float = 10.0):
+        self.timeout = timeout
+        self._client: Optional[Any] = None
+        self._cache: Dict[str, PolymarketInfo] = {}
+        self._cache_ttl = 5  # seconds
+        self._last_fetch: Dict[str, datetime] = {}
+
+    async def __aenter__(self):
+        await self.initialize()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+
+    async def initialize(self):
+        """Initialize the HTTP client."""
+        if HTTPX_AVAILABLE:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+        logger.info("Polymarket data provider initialized")
+
+    async def close(self):
+        """Close the HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+    async def get_market(self, market_id: str) -> PolymarketInfo:
+        """
+        Get current data for a Polymarket market.
+
+        Args:
+            market_id: Polymarket market ID (condition_id)
+
+        Returns:
+            PolymarketInfo with current prices and metadata
+        """
+        # Check cache first
+        if market_id in self._cache and market_id in self._last_fetch:
+            age = (datetime.now() - self._last_fetch[market_id]).total_seconds()
+            if age < self._cache_ttl:
+                return self._cache[market_id]
+
+        if not HTTPX_AVAILABLE:
+            raise RuntimeError("httpx is not installed")
+        if not self._client:
+            raise RuntimeError("HTTP client not initialized")
+
+        try:
+            # Fetch from Gamma API
+            url = f"{POLYMARKET_GAMMA_API}/markets/{market_id}"
+            response = await self._client.get(url)
+            data = response.json()
+
+            # Parse outcomes and prices
+            outcomes = ["Yes", "No"]
+            outcome_prices = [0.5, 0.5]
+            token_ids = []
+
+            if "outcomes" in data:
+                raw_outcomes = data["outcomes"]
+                if isinstance(raw_outcomes, str):
+                    import json
+                    outcomes = json.loads(raw_outcomes)
+                elif isinstance(raw_outcomes, list):
+                    outcomes = raw_outcomes
+
+            if "outcomePrices" in data:
+                raw_prices = data["outcomePrices"]
+                if isinstance(raw_prices, str):
+                    import json
+                    outcome_prices = [float(p) for p in json.loads(raw_prices)]
+                elif isinstance(raw_prices, list):
+                    outcome_prices = [float(p) for p in raw_prices]
+
+            if "clobTokenIds" in data:
+                raw_tokens = data["clobTokenIds"]
+                if isinstance(raw_tokens, str):
+                    import json
+                    token_ids = json.loads(raw_tokens)
+                elif isinstance(raw_tokens, list):
+                    token_ids = raw_tokens
+
+            market_info = PolymarketInfo(
+                id=market_id,
+                question=data.get("question", "Unknown"),
+                description=data.get("description"),
+                outcomes=outcomes,
+                outcome_prices=outcome_prices,
+                token_ids=token_ids,
+                volume=float(data.get("volumeNum", data.get("volume", 0)) or 0),
+                liquidity=float(data.get("liquidityNum", data.get("liquidity", 0)) or 0),
+                end_date=data.get("endDate"),
+                category=data.get("tags", [{}])[0].get("label") if data.get("tags") else None,
+            )
+
+            self._cache[market_id] = market_info
+            self._last_fetch[market_id] = datetime.now()
+            return market_info
+
+        except Exception as e:
+            logger.error(f"Polymarket fetch error for {market_id}: {e}")
+            raise RuntimeError(f"Failed to fetch market {market_id}: {e}") from e
+
+    async def get_markets(self, market_ids: List[str]) -> Dict[str, PolymarketInfo]:
+        """Get data for multiple markets."""
+        results = {}
+        errors = []
+        for market_id in market_ids:
+            try:
+                results[market_id] = await self.get_market(market_id)
+            except Exception as e:
+                logger.error(f"Failed to fetch {market_id}: {e}")
+                errors.append(f"{market_id}: {e}")
+        if errors and not results:
+            raise RuntimeError(f"Failed to fetch any markets: {'; '.join(errors)}")
+        return results
+
+    async def get_live_prices(self, token_ids: List[str]) -> Dict[str, float]:
+        """
+        Fetch live prices from CLOB API for given token IDs.
+
+        Returns dict of token_id -> price
+        """
+        if not token_ids:
+            return {}
+
+        if not HTTPX_AVAILABLE or not self._client:
+            return {}
+
+        try:
+            # CLOB prices endpoint
+            url = f"{POLYMARKET_CLOB_API}/prices"
+            params = {"token_ids": ",".join(token_ids)}
+            response = await self._client.get(url, params=params)
+            data = response.json()
+
+            prices = {}
+            for token_id, price_data in data.items():
+                if isinstance(price_data, dict) and "price" in price_data:
+                    prices[token_id] = float(price_data["price"])
+                elif isinstance(price_data, (int, float, str)):
+                    prices[token_id] = float(price_data)
+
+            return prices
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch live prices: {e}")
+            return {}
+
+
+# Singleton instance for Polymarket
+_polymarket_provider: Optional[PolymarketDataProvider] = None
+
+
+async def get_polymarket_provider() -> PolymarketDataProvider:
+    """Get or create the Polymarket data provider."""
+    global _polymarket_provider
+
+    if _polymarket_provider is None:
+        _polymarket_provider = PolymarketDataProvider()
+        await _polymarket_provider.initialize()
+
+    return _polymarket_provider
+
+
+async def reset_polymarket_provider():
+    """Reset the Polymarket data provider singleton."""
+    global _polymarket_provider
+    if _polymarket_provider:
+        try:
+            await _polymarket_provider.close()
+        except Exception as e:
+            logger.warning(f"Error closing Polymarket provider: {e}")
+        _polymarket_provider = None
+        logger.info("Polymarket data provider reset")

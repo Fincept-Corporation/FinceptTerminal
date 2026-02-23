@@ -1,29 +1,60 @@
 {
-  "title": "代码编辑器",
   "header": {
-    "packages": "包"
+    "finscriptIde": "[ZH] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "新建文件",
-    "new": "新建",
-    "open": "打开",
-    "save": "保存",
     "run": "运行代码",
     "running": "运行中...",
-    "runAll": "全部运行",
-    "history": "历史"
+    "toggleExplorer": "[ZH] Toggle Explorer (Ctrl+B)",
+    "openFile": "[ZH] Open File",
+    "saveShortcut": "[ZH] Save (Ctrl+S)",
+    "findShortcut": "[ZH] Find (Ctrl+F)",
+    "runShortcut": "[ZH] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER笔记本",
     "finscript": "FINSCRIPT编辑器"
   },
-  "packages": {
-    "clickToLoad": "点击加载包...",
-    "load": "加载包"
+  "explorer": {
+    "title": "[ZH] EXPLORER",
+    "openFiles": "[ZH] OPEN FILES",
+    "examples": "[ZH] EXAMPLES",
+    "runHistory": "[ZH] RUN HISTORY",
+    "finscriptEngine": "[ZH] FinScript Engine"
   },
-  "history": {
-    "title": "笔记本历史",
-    "loading": "加载历史中...",
-    "empty": "暂无笔记本历史"
+  "output": {
+    "title": "[ZH] OUTPUT",
+    "success": "[ZH] SUCCESS",
+    "error": "[ZH] ERROR",
+    "executing": "[ZH] EXECUTING FINSCRIPT...",
+    "noOutput": "[ZH] No output yet",
+    "pressToRun": "[ZH] Press Ctrl+Enter to run",
+    "completed": "[ZH] COMPLETED",
+    "failed": "[ZH] FAILED",
+    "signals": "[ZH] signals",
+    "clear": "[ZH] CLEAR",
+    "errors": "[ZH] ERRORS",
+    "signalsSection": "[ZH] SIGNALS",
+    "outputSection": "[ZH] OUTPUT",
+    "charts": "[ZH] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[ZH] OHLC",
+    "histogram": "[ZH] Histogram",
+    "line": "[ZH] Line",
+    "points": "[ZH] points"
+  },
+  "statusBar": {
+    "modified": "[ZH] MODIFIED",
+    "showOutput": "[ZH] SHOW OUTPUT",
+    "encoding": "[ZH] UTF-8",
+    "spaces": "[ZH] 4 Spaces",
+    "runShortcut": "[ZH] Ctrl+Enter: Run",
+    "lines": "[ZH] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[ZH] Close file without saving?",
+    "unsavedChanges": "[ZH] You have unsaved changes."
   }
 }

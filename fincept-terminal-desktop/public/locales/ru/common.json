@@ -1,25 +1,4 @@
 {
-  "appName": "Fincept Terminal",
   "loading": "Загрузка...",
-  "error": "Ошибка",
-  "success": "Успех",
-  "save": "Сохранить",
-  "cancel": "Отмена",
-  "delete": "Удалить",
-  "edit": "Редактировать",
-  "add": "Добавить",
-  "search": "Поиск",
-  "filter": "Фильтр",
-  "back": "Назад",
-  "next": "Далее",
-  "previous": "Назад",
-  "submit": "Отправить",
-  "close": "Закрыть",
-  "open": "Открыть",
-  "yes": "Да",
-  "no": "Нет",
-  "ok": "ОК",
-  "confirm": "Подтвердить",
-  "language": "Язык",
-  "selectLanguage": "Выбрать язык"
+  "settings": "[RU] Settings"
 }

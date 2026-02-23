@@ -1,29 +1,60 @@
 {
-  "title": "KOD EDİTÖRÜ",
   "header": {
-    "packages": "PAKETLER"
+    "finscriptIde": "[TR] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "YENİ DOSYA",
-    "new": "YENİ",
-    "open": "AÇ",
-    "save": "KAYDET",
     "run": "ÇALIŞTIR",
     "running": "ÇALIŞIYOR...",
-    "runAll": "TÜMÜNÜ ÇALIŞTIR",
-    "history": "GEÇMİŞ"
+    "toggleExplorer": "[TR] Toggle Explorer (Ctrl+B)",
+    "openFile": "[TR] Open File",
+    "saveShortcut": "[TR] Save (Ctrl+S)",
+    "findShortcut": "[TR] Find (Ctrl+F)",
+    "runShortcut": "[TR] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "FINSCRIPT EDİTÖRÜ"
   },
-  "packages": {
-    "clickToLoad": "Yüklemek için tıkla...",
-    "load": "PAKETLERİ YÜKLE"
+  "explorer": {
+    "title": "[TR] EXPLORER",
+    "openFiles": "[TR] OPEN FILES",
+    "examples": "[TR] EXAMPLES",
+    "runHistory": "[TR] RUN HISTORY",
+    "finscriptEngine": "[TR] FinScript Engine"
   },
-  "history": {
-    "title": "NOTEBOOK GEÇMİŞİ",
-    "loading": "Geçmiş yükleniyor...",
-    "empty": "Notebook geçmişi yok"
+  "output": {
+    "title": "[TR] OUTPUT",
+    "success": "[TR] SUCCESS",
+    "error": "[TR] ERROR",
+    "executing": "[TR] EXECUTING FINSCRIPT...",
+    "noOutput": "[TR] No output yet",
+    "pressToRun": "[TR] Press Ctrl+Enter to run",
+    "completed": "[TR] COMPLETED",
+    "failed": "[TR] FAILED",
+    "signals": "[TR] signals",
+    "clear": "[TR] CLEAR",
+    "errors": "[TR] ERRORS",
+    "signalsSection": "[TR] SIGNALS",
+    "outputSection": "[TR] OUTPUT",
+    "charts": "[TR] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[TR] OHLC",
+    "histogram": "[TR] Histogram",
+    "line": "[TR] Line",
+    "points": "[TR] points"
+  },
+  "statusBar": {
+    "modified": "[TR] MODIFIED",
+    "showOutput": "[TR] SHOW OUTPUT",
+    "encoding": "[TR] UTF-8",
+    "spaces": "[TR] 4 Spaces",
+    "runShortcut": "[TR] Ctrl+Enter: Run",
+    "lines": "[TR] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[TR] Close file without saving?",
+    "unsavedChanges": "[TR] You have unsaved changes."
   }
 }

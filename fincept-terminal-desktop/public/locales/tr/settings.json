@@ -10,7 +10,8 @@
     "tabLayout": "Sekme Düzeni",
     "appearance": "Dış görünüş",
     "language": "Dil",
-    "storage": "Depolama ve Önbellek"
+    "storage": "Depolama ve Önbellek",
+    "notifications": "[TR] Notifications"
   },
   "credentials": {
     "title": "API KİMLİK BİLGİLERİ YÖNETİMİ",
@@ -46,7 +47,31 @@
     "saveConfig": "YAPILANDIRMAYI KAYDET",
     "reset": "SIFIRLAMA",
     "saveSuccess": "Terminal görünümü ve tuş eşlemeleri başarıyla kaydedildi",
-    "resetSuccess": "Varsayılan görünüme ve tuş eşlemelerine sıfırla"
+    "resetSuccess": "Varsayılan görünüme ve tuş eşlemelerine sıfırla",
+    "customColors": "[TR] Custom Colors",
+    "customColorsTitle": "[TR] CUSTOM COLORS",
+    "colorPrimary": "[TR] Primary",
+    "colorSecondary": "[TR] Secondary",
+    "colorSuccess": "[TR] Success",
+    "colorAlert": "[TR] Alert",
+    "colorWarning": "[TR] Warning",
+    "colorInfo": "[TR] Info",
+    "colorAccent": "[TR] Accent",
+    "colorPurple": "[TR] Purple",
+    "colorText": "[TR] Text",
+    "colorTextMuted": "[TR] Text Muted",
+    "colorBackground": "[TR] Background",
+    "colorPanel": "[TR] Panel",
+    "layoutSpacing": "[TR] LAYOUT & SPACING",
+    "contentDensity": "[TR] CONTENT DENSITY",
+    "borderRadius": "[TR] BORDER RADIUS",
+    "borderStyle": "[TR] BORDER STYLE",
+    "lineHeight": "[TR] LINE HEIGHT",
+    "letterSpacing": "[TR] LETTER SPACING",
+    "effects": "[TR] EFFECTS",
+    "widgetOpacity": "[TR] WIDGET OPACITY",
+    "enableGlow": "[TR] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[TR] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "Hisse Senedi Sembol Veritabanı",
@@ -65,17 +90,8 @@
     "tip": "İPUCU: Yeniden sıralamak için sekmeleri sürükleyin. Sekmeleri başlık ve menü bölümleri arasında taşımak için ok düğmelerini kullanın. Değişiklikler otomatik olarak kaydedilir."
   },
   "llm": {
-    "title": "LLM YAPILANDIRMASI",
-    "description": "Yapay zeka modellerini ve sağlayıcılarını yapılandırma",
     "connected": "BAĞLI",
-    "disconnected": "BAĞLANTI KESİLDİ",
-    "provider": "Yapay Zeka Sağlayıcı",
-    "globalSettings": "KÜRESEL YZ AYARLARI",
-    "temperature": "SICAKLIK",
-    "maxTokens": "MAKS TOKEN",
-    "systemPrompt": "SİSTEM İSTEMİ",
-    "modelLibrary": "MODEL KÜTÜPHANE",
-    "multiModelConfigs": "Çok modelli yapılandırmalar"
+    "disconnected": "BAĞLANTI KESİLDİ"
   },
   "buttons": {
     "save": "KAYDETMEK",
@@ -86,5 +102,18 @@
     "database": "Veritabanı: SQLite",
     "storage": "Depolama: Dosya tabanlı",
     "secureStorage": "Tüm veriler fincept_terminal.db'de güvenli bir şekilde saklanır"
+  },
+  "notifications": {
+    "title": "[TR] NOTIFICATION PROVIDERS",
+    "description": "[TR] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[TR] Event Filters",
+    "eventFilterDescription": "[TR] Choose which notification types to forward to external providers.",
+    "providers": "[TR] Providers",
+    "enabled": "[TR] Enabled",
+    "disabled": "[TR] Disabled",
+    "testButton": "[TR] TEST",
+    "testSuccess": "[TR] Test notification sent successfully!",
+    "testFailed": "[TR] Failed to send test notification. Check your configuration.",
+    "saved": "[TR] Configuration saved"
   }
 }

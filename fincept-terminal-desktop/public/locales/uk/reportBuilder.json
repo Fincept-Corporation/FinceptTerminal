@@ -3,9 +3,7 @@
   "header": {
     "load": "[UK] Load",
     "save": "[UK] Save",
-    "saving": "[UK] Saving...",
-    "exportPdf": "[UK] Export PDF",
-    "generating": "[UK] Generating..."
+    "saving": "[UK] Saving..."
   },
   "components": {
     "title": "[UK] ADD COMPONENTS"

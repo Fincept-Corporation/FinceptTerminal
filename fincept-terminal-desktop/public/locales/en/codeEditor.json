@@ -1,19 +1,11 @@
 {
-  "title": "CODE EDITOR",
   "header": {
-    "packages": "PACKAGES",
-    "finscriptIde": "FINSCRIPT IDE",
-    "version": "v1.0"
+    "finscriptIde": "FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "NEW FILE",
-    "new": "NEW",
-    "open": "OPEN",
-    "save": "SAVE",
     "run": "RUN",
     "running": "RUNNING...",
-    "runAll": "RUN ALL",
-    "history": "HISTORY",
     "toggleExplorer": "Toggle Explorer (Ctrl+B)",
     "openFile": "Open File",
     "saveShortcut": "Save (Ctrl+S)",
@@ -23,15 +15,6 @@
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "FINSCRIPT EDITOR"
-  },
-  "packages": {
-    "clickToLoad": "Click to load packages...",
-    "load": "LOAD PACKAGES"
-  },
-  "history": {
-    "title": "NOTEBOOK HISTORY",
-    "loading": "Loading history...",
-    "empty": "No notebook history yet"
   },
   "explorer": {
     "title": "EXPLORER",
@@ -73,14 +56,5 @@
   "dialogs": {
     "closeUnsaved": "Close file without saving?",
     "unsavedChanges": "You have unsaved changes."
-  },
-  "categories": {
-    "gettingStarted": "Getting Started",
-    "technicalAnalysis": "Technical Analysis",
-    "strategies": "Strategies",
-    "dataStructures": "Data Structures",
-    "visualization": "Visualization",
-    "automation": "Automation",
-    "advanced": "Advanced"
   }
 }

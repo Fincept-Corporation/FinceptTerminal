@@ -1,6 +1,66 @@
 {
-  "title": "地缘政治",
   "messages": {
-    "loading": "加载地缘政治数据..."
+    "retry": "[ZH] RETRY"
+  },
+  "header": {
+    "prefix": "[ZH] GEO>",
+    "title": "[ZH] GEOPOLITICAL CONFLICT MONITOR",
+    "events": "[ZH] EVENTS"
+  },
+  "status": {
+    "stale": "[ZH] STALE",
+    "loading": "[ZH] LOADING...",
+    "error": "[ZH] ERROR:"
+  },
+  "filters": {
+    "country": "[ZH] Country...",
+    "cities": "[ZH] Cities...",
+    "category": "[ZH] Category...",
+    "apply": "[ZH] APPLY",
+    "clear": "[ZH] CLEAR",
+    "clearAllCities": "[ZH] Clear all cities",
+    "selectedLabel": "[ZH] Selected:"
+  },
+  "panel": {
+    "title": "[ZH] INFO PANEL",
+    "expand": "[ZH] Expand panel",
+    "collapse": "[ZH] Collapse panel",
+    "eventsLoaded": "[ZH] EVENTS LOADED",
+    "onMapVisualization": "[ZH] on map visualization",
+    "topCategories": "[ZH] TOP CATEGORIES",
+    "topCountries": "[ZH] TOP COUNTRIES",
+    "eventDetails": "[ZH] EVENT DETAILS",
+    "close": "[ZH] CLOSE"
+  },
+  "eventDetails": {
+    "country": "[ZH] Country:",
+    "city": "[ZH] City:",
+    "keywords": "[ZH] Keywords:",
+    "coords": "[ZH] Coords:",
+    "date": "[ZH] Date:",
+    "source": "[ZH] Source:",
+    "viewArticle": "[ZH] View Article"
+  },
+  "legend": {
+    "title": "[ZH] EVENT CATEGORIES",
+    "armedConflict": "[ZH] Armed Conflict",
+    "terrorism": "[ZH] Terrorism",
+    "protests": "[ZH] Protests",
+    "civilianViolence": "[ZH] Civilian Violence",
+    "riots": "[ZH] Riots",
+    "politicalViolence": "[ZH] Political Violence",
+    "crisis": "[ZH] Crisis",
+    "explosions": "[ZH] Explosions",
+    "strategic": "[ZH] Strategic",
+    "unclassified": "[ZH] Unclassified"
+  },
+  "footer": {
+    "tabName": "[ZH] GEOPOLITICAL CONFLICT MONITOR",
+    "labelEvents": "[ZH] EVENTS",
+    "labelEngine": "[ZH] ENGINE",
+    "engineValue": "[ZH] DECK.GL v9.2",
+    "labelSource": "[ZH] SOURCE",
+    "sourceValue": "[ZH] NEWS-EVENTS API",
+    "labelSelected": "[ZH] SELECTED"
   }
 }

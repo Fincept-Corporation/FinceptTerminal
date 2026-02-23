@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-curves/quantlibCurvesApi.ts
 // 31 endpoints — yield curves, interpolation, shifts, Nelson-Siegel, inflation, multicurve
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 let _apiKey: string | null = null;
 export function setCurvesApiKey(key: string | null) { _apiKey = key; }
 

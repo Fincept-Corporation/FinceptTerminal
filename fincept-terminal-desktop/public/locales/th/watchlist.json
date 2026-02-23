@@ -1,25 +1,7 @@
 {
-  "title": "รายการติดตาม",
-  "header": {
-    "export": "ส่งออก",
-    "updating": "กำลังอัปเดต",
-    "live": "สด"
-  },
   "sidebar": {
-    "groups": "กลุ่มรายการติดตาม",
-    "new": "ใหม่",
     "noWatchlists": "ยังไม่มีรายการติดตาม",
     "clickNew": "คลิก ใหม่ เพื่อสร้าง",
-    "stocks": "หุ้น",
-    "marketMovers": "ตัวขับเคลื่อนตลาด",
-    "gainer": "ขึ้น",
-    "loser": "ลง",
-    "volumeLeaders": "ปริมาณสูงสุด"
-  },
-  "emptyState": {
-    "selectWatchlist": "เลือกรายการติดตามหรือสร้างใหม่เพื่อเริ่มต้น"
-  },
-  "list": {
-    "symbols": "สัญลักษณ์"
+    "stocks": "หุ้น"
   }
 }

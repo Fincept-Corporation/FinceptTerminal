@@ -19,7 +19,6 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,14 +114,41 @@ function updatePackageJson(newVersion: string): string {
   }
 }
 
-// Run sync-version script
-function runSyncVersion(): void {
+// Sync version to all required files
+function runSyncVersion(newVersion: string): void {
+  logInfo('\nSyncing version across all files...\n');
+
+  // 1. src/constants/version.ts
   try {
-    logInfo('\nSyncing version across all files...\n');
-    execSync('bun run sync-version', { stdio: 'inherit', cwd: rootDir });
+    const versionTsPath = path.join(rootDir, 'src/constants/version.ts');
+    let content = fs.readFileSync(versionTsPath, 'utf8');
+    content = content.replace(/export const APP_VERSION = '[^']+';/, `export const APP_VERSION = '${newVersion}';`);
+    fs.writeFileSync(versionTsPath, content, 'utf8');
+    logSuccess(`Updated src/constants/version.ts`);
   } catch (error) {
-    logError('Failed to run sync-version script');
-    process.exit(1);
+    logError(`Failed to update version.ts: ${(error as Error).message}`);
+  }
+
+  // 2. src-tauri/tauri.conf.json
+  try {
+    const tauriConfPath = path.join(rootDir, 'src-tauri/tauri.conf.json');
+    const tauriConf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'));
+    tauriConf.version = newVersion;
+    fs.writeFileSync(tauriConfPath, JSON.stringify(tauriConf, null, 2) + '\n', 'utf8');
+    logSuccess(`Updated src-tauri/tauri.conf.json`);
+  } catch (error) {
+    logError(`Failed to update tauri.conf.json: ${(error as Error).message}`);
+  }
+
+  // 3. src-tauri/Cargo.toml
+  try {
+    const cargoTomlPath = path.join(rootDir, 'src-tauri/Cargo.toml');
+    let content = fs.readFileSync(cargoTomlPath, 'utf8');
+    content = content.replace(/^version = "[^"]+"/m, `version = "${newVersion}"`);
+    fs.writeFileSync(cargoTomlPath, content, 'utf8');
+    logSuccess(`Updated src-tauri/Cargo.toml`);
+  } catch (error) {
+    logError(`Failed to update Cargo.toml: ${(error as Error).message}`);
   }
 }
 
@@ -156,8 +182,8 @@ function main(): void {
   // Update package.json
   updatePackageJson(newVersion);
 
-  // Run sync-version to update all other files
-  runSyncVersion();
+  // Sync version to all other files
+  runSyncVersion(newVersion);
 
   log('\n' + '='.repeat(60), colors.bright);
   logSuccess('Version bump completed!');

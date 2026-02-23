@@ -10,7 +10,8 @@
     "tabLayout": "タブのレイアウト",
     "appearance": "外観",
     "language": "言語",
-    "storage": "ストレージとキャッシュ"
+    "storage": "ストレージとキャッシュ",
+    "notifications": "[JA] Notifications"
   },
   "credentials": {
     "title": "API 認証情報の管理",
@@ -46,7 +47,31 @@
     "saveConfig": "設定の保存",
     "reset": "リセット",
     "saveSuccess": "端末の外観とキーマッピングが正常に保存されました",
-    "resetSuccess": "デフォルトの外観とキーマッピングにリセットします"
+    "resetSuccess": "デフォルトの外観とキーマッピングにリセットします",
+    "customColors": "[JA] Custom Colors",
+    "customColorsTitle": "[JA] CUSTOM COLORS",
+    "colorPrimary": "[JA] Primary",
+    "colorSecondary": "[JA] Secondary",
+    "colorSuccess": "[JA] Success",
+    "colorAlert": "[JA] Alert",
+    "colorWarning": "[JA] Warning",
+    "colorInfo": "[JA] Info",
+    "colorAccent": "[JA] Accent",
+    "colorPurple": "[JA] Purple",
+    "colorText": "[JA] Text",
+    "colorTextMuted": "[JA] Text Muted",
+    "colorBackground": "[JA] Background",
+    "colorPanel": "[JA] Panel",
+    "layoutSpacing": "[JA] LAYOUT & SPACING",
+    "contentDensity": "[JA] CONTENT DENSITY",
+    "borderRadius": "[JA] BORDER RADIUS",
+    "borderStyle": "[JA] BORDER STYLE",
+    "lineHeight": "[JA] LINE HEIGHT",
+    "letterSpacing": "[JA] LETTER SPACING",
+    "effects": "[JA] EFFECTS",
+    "widgetOpacity": "[JA] WIDGET OPACITY",
+    "enableGlow": "[JA] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[JA] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "銘柄記号データベース",
@@ -65,17 +90,8 @@
     "tip": "ヒント: タブをドラッグして順序を変更します。矢印ボタンを使用して、ヘッダー セクションとメニュー セクション間でタブを移動します。変更は自動的に保存されます。"
   },
   "llm": {
-    "title": "LLM の構成",
-    "description": "AI モデルとプロバイダーを構成する",
     "connected": "接続済み",
-    "disconnected": "切断されました",
-    "provider": "AIプロバイダー",
-    "globalSettings": "グローバル AI 設定",
-    "temperature": "温度",
-    "maxTokens": "最大トークン",
-    "systemPrompt": "システムプロンプト",
-    "modelLibrary": "モデルライブラリ",
-    "multiModelConfigs": "マルチモデル構成"
+    "disconnected": "切断されました"
   },
   "buttons": {
     "save": "保存",
@@ -86,5 +102,18 @@
     "database": "データベース: SQLite",
     "storage": "ストレージ: ファイルベース",
     "secureStorage": "すべてのデータは fincept_terminal.db に安全に保存されます"
+  },
+  "notifications": {
+    "title": "[JA] NOTIFICATION PROVIDERS",
+    "description": "[JA] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[JA] Event Filters",
+    "eventFilterDescription": "[JA] Choose which notification types to forward to external providers.",
+    "providers": "[JA] Providers",
+    "enabled": "[JA] Enabled",
+    "disabled": "[JA] Disabled",
+    "testButton": "[JA] TEST",
+    "testSuccess": "[JA] Test notification sent successfully!",
+    "testFailed": "[JA] Failed to send test notification. Check your configuration.",
+    "saved": "[JA] Configuration saved"
   }
 }

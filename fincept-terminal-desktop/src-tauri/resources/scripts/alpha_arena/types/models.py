@@ -36,6 +36,21 @@ class TradeAction(str, Enum):
     SHORT = "short"
 
 
+class CompetitionType(str, Enum):
+    """Competition type - crypto or prediction markets."""
+    CRYPTO = "crypto"
+    POLYMARKET = "polymarket"
+
+
+class PolymarketAction(str, Enum):
+    """Possible Polymarket trading actions."""
+    BUY_YES = "buy_yes"
+    BUY_NO = "buy_no"
+    SELL_YES = "sell_yes"
+    SELL_NO = "sell_no"
+    HOLD = "hold"
+
+
 class ModelProvider(str, Enum):
     """Supported LLM providers."""
     OPENAI = "openai"
@@ -271,6 +286,26 @@ class CompetitionConfig(BaseModel):
     temperature: float = Field(0.7, ge=0.0, le=2.0, description="LLM temperature from Settings")
     max_tokens: int = Field(2000, ge=100, description="LLM max tokens from Settings")
 
+    # Competition type - crypto or polymarket
+    competition_type: CompetitionType = Field(
+        CompetitionType.CRYPTO,
+        description="Competition type: crypto trading or prediction markets"
+    )
+
+    # Polymarket-specific config
+    polymarket_markets: Optional[List[PolymarketInfo]] = Field(
+        None,
+        description="Polymarket markets for prediction market competitions"
+    )
+    polymarket_market_ids: Optional[List[str]] = Field(
+        None,
+        description="Polymarket market IDs (alternative to full market info)"
+    )
+    polymarket_category: Optional[str] = Field(
+        None,
+        description="Filter markets by category"
+    )
+
     class Config:
         use_enum_values = True
 
@@ -312,3 +347,73 @@ class PerformanceSnapshot(BaseModel):
     positions_count: int = Field(0, description="Open positions")
     trades_count: int = Field(0, description="Total trades")
     timestamp: datetime = Field(default_factory=datetime.now, description="Snapshot time")
+
+
+# =============================================================================
+# Polymarket-specific Models
+# =============================================================================
+
+class PolymarketInfo(BaseModel):
+    """Polymarket prediction market information."""
+
+    id: str = Field(..., description="Market ID")
+    question: str = Field(..., description="Market question")
+    description: Optional[str] = Field(None, description="Market description")
+    outcomes: List[str] = Field(default=["Yes", "No"], description="Outcome names")
+    outcome_prices: List[float] = Field(default=[0.5, 0.5], description="Current outcome prices (0-1)")
+    token_ids: List[str] = Field(default_factory=list, description="CLOB token IDs")
+    volume: float = Field(0.0, description="Total trading volume")
+    liquidity: float = Field(0.0, description="Current liquidity")
+    end_date: Optional[str] = Field(None, description="Resolution date")
+    category: Optional[str] = Field(None, description="Market category")
+
+
+class PolymarketPosition(BaseModel):
+    """Position in a Polymarket prediction market."""
+
+    market_id: str = Field(..., description="Market ID")
+    market_question: str = Field(..., description="Market question for display")
+    outcome_index: int = Field(..., description="Outcome index (0=Yes, 1=No, etc.)")
+    outcome_name: str = Field(..., description="Outcome name")
+    shares: float = Field(..., description="Number of shares held")
+    entry_price: float = Field(..., description="Average entry price")
+    current_price: float = Field(0.0, description="Current price")
+    unrealized_pnl: float = Field(0.0, description="Unrealized P&L")
+
+
+class PolymarketDecision(BaseModel):
+    """Trading decision for a Polymarket prediction market."""
+
+    competition_id: str = Field(..., description="Competition ID")
+    model_name: str = Field(..., description="Model that made the decision")
+    cycle_number: int = Field(..., ge=0, description="Cycle number")
+    market_id: str = Field(..., description="Polymarket market ID")
+    market_question: str = Field(..., description="Market question")
+    action: PolymarketAction = Field(..., description="Trading action")
+    amount_usd: float = Field(0.0, ge=0, description="Amount in USD to trade")
+    confidence: float = Field(0.5, ge=0.0, le=1.0, description="Decision confidence")
+    estimated_probability: float = Field(0.5, ge=0.0, le=1.0, description="Agent's probability estimate")
+    reasoning: str = Field("", description="Explanation for the decision")
+    timestamp: datetime = Field(default_factory=datetime.now, description="Decision time")
+
+    class Config:
+        use_enum_values = True
+
+
+class PolymarketTradeResult(BaseModel):
+    """Result of a Polymarket trade execution."""
+
+    status: str = Field(..., description="executed, rejected, or partial")
+    action: PolymarketAction = Field(..., description="Trade action taken")
+    market_id: str = Field(..., description="Market ID")
+    outcome: str = Field("", description="Outcome traded (YES/NO)")
+    shares: float = Field(0, description="Shares traded")
+    price: float = Field(0, description="Execution price")
+    cost: Optional[float] = Field(None, description="Total cost")
+    proceeds: Optional[float] = Field(None, description="Proceeds from sale")
+    pnl: Optional[float] = Field(None, description="Realized P&L")
+    reason: Optional[str] = Field(None, description="Rejection reason if failed")
+    timestamp: datetime = Field(default_factory=datetime.now, description="Execution time")
+
+    class Config:
+        use_enum_values = True

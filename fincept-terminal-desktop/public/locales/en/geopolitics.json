@@ -1,5 +1,4 @@
 {
-  "title": "GEOPOLITICS",
   "header": {
     "prefix": "GEO>",
     "title": "GEOPOLITICAL CONFLICT MONITOR",
@@ -8,13 +7,11 @@
   "status": {
     "stale": "STALE",
     "loading": "LOADING...",
-    "complete": "Complete",
     "error": "ERROR:"
   },
   "filters": {
     "country": "Country...",
     "cities": "Cities...",
-    "citiesSelected": "{{count}} cities",
     "category": "Category...",
     "apply": "APPLY",
     "clear": "CLEAR",
@@ -22,11 +19,7 @@
     "selectedLabel": "Selected:"
   },
   "messages": {
-    "loading": "Loading geopolitical data...",
-    "noEventsFilter": "No events found for: {{filters}}",
-    "noEventsGeneral": "No events found with valid coordinates. Try filtering by country (e.g., Ukraine, Syria, Israel)",
-    "retry": "RETRY",
-    "eventsCount": "{{count}} events"
+    "retry": "RETRY"
   },
   "panel": {
     "title": "INFO PANEL",
@@ -68,7 +61,6 @@
     "engineValue": "DECK.GL v9.2",
     "labelSource": "SOURCE",
     "sourceValue": "NEWS-EVENTS API",
-    "labelSelected": "SELECTED",
-    "statusInfo": "REAL-TIME GLOBAL INTELLIGENCE | AUTO-REFRESH: 5MIN | {{time}}"
+    "labelSelected": "SELECTED"
   }
 }

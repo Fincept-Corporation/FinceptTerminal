@@ -10,7 +10,8 @@
     "tabLayout": "Tab-Layout",
     "appearance": "Aussehen",
     "language": "Sprache",
-    "storage": "Speicherung und Cache"
+    "storage": "Speicherung und Cache",
+    "notifications": "[DE] Notifications"
   },
   "credentials": {
     "title": "API-ANMELDUNGSVERWALTUNG",
@@ -46,7 +47,31 @@
     "saveConfig": "KONFIGURATION SPEICHERN",
     "reset": "ZURÜCKSETZEN",
     "saveSuccess": "Terminal-Erscheinungsbild und Tastenzuordnungen erfolgreich gespeichert",
-    "resetSuccess": "Auf Standarddarstellung und Tastenbelegung zurücksetzen"
+    "resetSuccess": "Auf Standarddarstellung und Tastenbelegung zurücksetzen",
+    "customColors": "[DE] Custom Colors",
+    "customColorsTitle": "[DE] CUSTOM COLORS",
+    "colorPrimary": "[DE] Primary",
+    "colorSecondary": "[DE] Secondary",
+    "colorSuccess": "[DE] Success",
+    "colorAlert": "[DE] Alert",
+    "colorWarning": "[DE] Warning",
+    "colorInfo": "[DE] Info",
+    "colorAccent": "[DE] Accent",
+    "colorPurple": "[DE] Purple",
+    "colorText": "[DE] Text",
+    "colorTextMuted": "[DE] Text Muted",
+    "colorBackground": "[DE] Background",
+    "colorPanel": "[DE] Panel",
+    "layoutSpacing": "[DE] LAYOUT & SPACING",
+    "contentDensity": "[DE] CONTENT DENSITY",
+    "borderRadius": "[DE] BORDER RADIUS",
+    "borderStyle": "[DE] BORDER STYLE",
+    "lineHeight": "[DE] LINE HEIGHT",
+    "letterSpacing": "[DE] LETTER SPACING",
+    "effects": "[DE] EFFECTS",
+    "widgetOpacity": "[DE] WIDGET OPACITY",
+    "enableGlow": "[DE] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[DE] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "Aktiensymboldatenbank",
@@ -65,17 +90,8 @@
     "tip": "TIPP: Ziehen Sie die Registerkarten, um sie neu anzuordnen. Verwenden Sie die Pfeiltasten, um Registerkarten zwischen Kopfzeilen- und Menüabschnitten zu verschieben. Änderungen werden automatisch gespeichert."
   },
   "llm": {
-    "title": "LLM-KONFIGURATION",
-    "description": "Konfigurieren Sie KI-Modelle und -Anbieter",
     "connected": "VERBUNDEN",
-    "disconnected": "GETRENNT",
-    "provider": "KI-ANBIETER",
-    "globalSettings": "GLOBALE KI-EINSTELLUNGEN",
-    "temperature": "TEMPERATUR",
-    "maxTokens": "MAX. TOKEN",
-    "systemPrompt": "SYSTEMAUFFORDERUNG",
-    "modelLibrary": "MODELLBIBLIOTHEK",
-    "multiModelConfigs": "Konfigurationen mit mehreren Modellen"
+    "disconnected": "GETRENNT"
   },
   "buttons": {
     "save": "SPEICHERN",
@@ -86,5 +102,18 @@
     "database": "Datenbank: SQLite",
     "storage": "Speicherung: Dateibasiert",
     "secureStorage": "Alle Daten werden sicher in fincept_terminal.db gespeichert"
+  },
+  "notifications": {
+    "title": "[DE] NOTIFICATION PROVIDERS",
+    "description": "[DE] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[DE] Event Filters",
+    "eventFilterDescription": "[DE] Choose which notification types to forward to external providers.",
+    "providers": "[DE] Providers",
+    "enabled": "[DE] Enabled",
+    "disabled": "[DE] Disabled",
+    "testButton": "[DE] TEST",
+    "testSuccess": "[DE] Test notification sent successfully!",
+    "testFailed": "[DE] Failed to send test notification. Check your configuration.",
+    "saved": "[DE] Configuration saved"
   }
 }

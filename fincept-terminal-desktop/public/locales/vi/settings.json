@@ -10,7 +10,8 @@
     "tabLayout": "Bố cục tab",
     "appearance": "Vẻ bề ngoài",
     "language": "Ngôn ngữ",
-    "storage": "Bộ nhớ & Bộ nhớ đệm"
+    "storage": "Bộ nhớ & Bộ nhớ đệm",
+    "notifications": "[VI] Notifications"
   },
   "credentials": {
     "title": "QUẢN LÝ CHỨNG NHẬN API",
@@ -46,7 +47,31 @@
     "saveConfig": "LƯU CẤU HÌNH",
     "reset": "CÀI LẠI",
     "saveSuccess": "Đã lưu thành công giao diện thiết bị đầu cuối và ánh xạ khóa",
-    "resetSuccess": "Đặt lại về giao diện mặc định và ánh xạ phím"
+    "resetSuccess": "Đặt lại về giao diện mặc định và ánh xạ phím",
+    "customColors": "[VI] Custom Colors",
+    "customColorsTitle": "[VI] CUSTOM COLORS",
+    "colorPrimary": "[VI] Primary",
+    "colorSecondary": "[VI] Secondary",
+    "colorSuccess": "[VI] Success",
+    "colorAlert": "[VI] Alert",
+    "colorWarning": "[VI] Warning",
+    "colorInfo": "[VI] Info",
+    "colorAccent": "[VI] Accent",
+    "colorPurple": "[VI] Purple",
+    "colorText": "[VI] Text",
+    "colorTextMuted": "[VI] Text Muted",
+    "colorBackground": "[VI] Background",
+    "colorPanel": "[VI] Panel",
+    "layoutSpacing": "[VI] LAYOUT & SPACING",
+    "contentDensity": "[VI] CONTENT DENSITY",
+    "borderRadius": "[VI] BORDER RADIUS",
+    "borderStyle": "[VI] BORDER STYLE",
+    "lineHeight": "[VI] LINE HEIGHT",
+    "letterSpacing": "[VI] LETTER SPACING",
+    "effects": "[VI] EFFECTS",
+    "widgetOpacity": "[VI] WIDGET OPACITY",
+    "enableGlow": "[VI] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[VI] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "Cơ sở dữ liệu ký hiệu chứng khoán",
@@ -65,17 +90,8 @@
     "tip": "MẸO: Kéo các tab để sắp xếp lại chúng. Sử dụng các nút mũi tên để di chuyển các tab giữa phần tiêu đề và menu. Các thay đổi được lưu tự động."
   },
   "llm": {
-    "title": "CẤU HÌNH LLM",
-    "description": "Định cấu hình các mô hình và nhà cung cấp AI",
     "connected": "ĐÃ KẾT NỐI",
-    "disconnected": "ĐÃ NGẮT KẾT NỐI",
-    "provider": "NHÀ CUNG CẤP AI",
-    "globalSettings": "CÀI ĐẶT AI TOÀN CẦU",
-    "temperature": "NHIỆT ĐỘ",
-    "maxTokens": "TỐI ĐA",
-    "systemPrompt": "NHẮC NHỞ HỆ THỐNG",
-    "modelLibrary": "THƯ VIỆN MẪU",
-    "multiModelConfigs": "Cấu hình đa mô hình"
+    "disconnected": "ĐÃ NGẮT KẾT NỐI"
   },
   "buttons": {
     "save": "CỨU",
@@ -86,5 +102,18 @@
     "database": "Cơ sở dữ liệu: SQLite",
     "storage": "Lưu trữ: Dựa trên tệp",
     "secureStorage": "Tất cả dữ liệu được lưu trữ an toàn trong fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[VI] NOTIFICATION PROVIDERS",
+    "description": "[VI] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[VI] Event Filters",
+    "eventFilterDescription": "[VI] Choose which notification types to forward to external providers.",
+    "providers": "[VI] Providers",
+    "enabled": "[VI] Enabled",
+    "disabled": "[VI] Disabled",
+    "testButton": "[VI] TEST",
+    "testSuccess": "[VI] Test notification sent successfully!",
+    "testFailed": "[VI] Failed to send test notification. Check your configuration.",
+    "saved": "[VI] Configuration saved"
   }
 }

@@ -9,13 +9,9 @@
   "percentChange": "変動%",
   "high": "高値",
   "low": "安値",
-  "loading": "読み込み中...",
   "noData": "データなし",
   "refresh": "更新",
   "auto": "自動",
   "on": "オン",
-  "off": "オフ",
-  "lastUpdate": "最終更新",
-  "updating": "更新中",
-  "live": "ライブ"
+  "off": "オフ"
 }

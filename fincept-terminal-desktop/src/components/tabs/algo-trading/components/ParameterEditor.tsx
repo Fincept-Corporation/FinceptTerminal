@@ -2,13 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, Loader2, AlertCircle, RefreshCw, Code, Hash, ToggleLeft, Type } from 'lucide-react';
 import type { StrategyParameter } from '../types';
 import { extractStrategyParameters } from '../services/algoTradingService';
-
-const F = {
-  ORANGE: '#FF8800', WHITE: '#FFFFFF', RED: '#FF3B3B', GREEN: '#00D66F',
-  GRAY: '#787878', DARK_BG: '#000000', PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A', BORDER: '#2A2A2A', HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A', CYAN: '#00E5FF', YELLOW: '#FFD700', BLUE: '#0088FF',
-};
+import { F } from '../constants/theme';
 
 const inputBaseStyle: React.CSSProperties = {
   width: '100%', padding: '8px 10px', backgroundColor: F.DARK_BG,

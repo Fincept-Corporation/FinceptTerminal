@@ -10,7 +10,8 @@
     "tabLayout": "Layout da guia",
     "appearance": "Aparência",
     "language": "Linguagem",
-    "storage": "Armazenamento e Cache"
+    "storage": "Armazenamento e Cache",
+    "notifications": "[PT] Notifications"
   },
   "credentials": {
     "title": "GERENCIAMENTO DE CREDENCIAIS API",
@@ -46,7 +47,31 @@
     "saveConfig": "SALVAR CONFIGURAÇÃO",
     "reset": "REINICIAR",
     "saveSuccess": "Aparência do terminal e mapeamentos de teclas salvos com sucesso",
-    "resetSuccess": "Redefinir para a aparência padrão e mapeamentos de teclas"
+    "resetSuccess": "Redefinir para a aparência padrão e mapeamentos de teclas",
+    "customColors": "[PT] Custom Colors",
+    "customColorsTitle": "[PT] CUSTOM COLORS",
+    "colorPrimary": "[PT] Primary",
+    "colorSecondary": "[PT] Secondary",
+    "colorSuccess": "[PT] Success",
+    "colorAlert": "[PT] Alert",
+    "colorWarning": "[PT] Warning",
+    "colorInfo": "[PT] Info",
+    "colorAccent": "[PT] Accent",
+    "colorPurple": "[PT] Purple",
+    "colorText": "[PT] Text",
+    "colorTextMuted": "[PT] Text Muted",
+    "colorBackground": "[PT] Background",
+    "colorPanel": "[PT] Panel",
+    "layoutSpacing": "[PT] LAYOUT & SPACING",
+    "contentDensity": "[PT] CONTENT DENSITY",
+    "borderRadius": "[PT] BORDER RADIUS",
+    "borderStyle": "[PT] BORDER STYLE",
+    "lineHeight": "[PT] LINE HEIGHT",
+    "letterSpacing": "[PT] LETTER SPACING",
+    "effects": "[PT] EFFECTS",
+    "widgetOpacity": "[PT] WIDGET OPACITY",
+    "enableGlow": "[PT] ENABLE GLOW EFFECTS",
+    "glowIntensity": "[PT] GLOW INTENSITY"
   },
   "stockSymbols": {
     "title": "Banco de dados de símbolos de ações",
@@ -65,17 +90,8 @@
     "tip": "DICA: arraste as guias para reordená-las. Use os botões de seta para mover as guias entre as seções do cabeçalho e do menu. As alterações são salvas automaticamente."
   },
   "llm": {
-    "title": "CONFIGURAÇÃO LLM",
-    "description": "Configurar modelos e provedores de IA",
     "connected": "CONECTADO",
-    "disconnected": "DESCONECTADO",
-    "provider": "FORNECEDOR DE IA",
-    "globalSettings": "CONFIGURAÇÕES GLOBAIS DE IA",
-    "temperature": "TEMPERATURA",
-    "maxTokens": "MÁXIMO DE TOKENS",
-    "systemPrompt": "AVISO DO SISTEMA",
-    "modelLibrary": "BIBLIOTECA DE MODELOS",
-    "multiModelConfigs": "Configurações de vários modelos"
+    "disconnected": "DESCONECTADO"
   },
   "buttons": {
     "save": "SALVAR",
@@ -86,5 +102,18 @@
     "database": "Banco de dados: SQLite",
     "storage": "Armazenamento: baseado em arquivo",
     "secureStorage": "Todos os dados armazenados com segurança em fincept_terminal.db"
+  },
+  "notifications": {
+    "title": "[PT] NOTIFICATION PROVIDERS",
+    "description": "[PT] Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "[PT] Event Filters",
+    "eventFilterDescription": "[PT] Choose which notification types to forward to external providers.",
+    "providers": "[PT] Providers",
+    "enabled": "[PT] Enabled",
+    "disabled": "[PT] Disabled",
+    "testButton": "[PT] TEST",
+    "testSuccess": "[PT] Test notification sent successfully!",
+    "testFailed": "[PT] Failed to send test notification. Check your configuration.",
+    "saved": "[PT] Configuration saved"
   }
 }

@@ -1,32 +1,63 @@
 {
   "title": "BERITA PROFESIONAL TERMINAL FINCEPT",
   "header": {
-    "liveFeed": "FEED LANGSUNG",
-    "live": "LANGSUNG",
-    "refresh": "SEGARKAN",
-    "updating": "MEMPERBARUI...",
-    "alerts": "PERINGATAN",
-    "sources": "SUMBER",
-    "status": "STATUS",
-    "demoMode": "MODE DEMO",
-    "articles": "ARTIKEL",
-    "activeSources": "SUMBER AKTIF"
-  },
-  "autoRefresh": {
-    "title": "INTERVAL PEMBARUAN OTOMATIS",
-    "minute": "menit",
-    "minutes": "menit"
+    "refresh": "SEGARKAN"
   },
   "messages": {
-    "loadingFeeds": "Memuat feed berita...",
-    "breaking": "BREAKING"
+    "loadingFeedsModal": "[ID] Loading feeds...",
+    "failedToLoad": "[ID] Failed to load RSS feeds",
+    "noCustomFeeds": "[ID] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[ID] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[ID] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[ID] PRIMARY NEWS FEED",
-    "secondary": "[ID] SECONDARY NEWS FEED",
-    "additional": "[ID] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[ID] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[ID] RSS FEED SETTINGS",
+    "subtitle": "[ID] MANAGE YOUR NEWS SOURCES",
+    "close": "[ID] CLOSE",
+    "myFeeds": "[ID] MY FEEDS",
+    "defaultFeeds": "[ID] DEFAULT FEEDS",
+    "noFeedsAvailable": "[ID] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[ID] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[ID] ADD NEW FEED",
+    "addNewRssFeed": "[ID] ADD NEW RSS FEED",
+    "editRssFeed": "[ID] EDIT RSS FEED",
+    "restoreDefaults": "[ID] RESTORE DEFAULTS",
+    "restoreAll": "[ID] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[ID] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[ID] DISPLAY NAME",
+    "sourceName": "[ID] SOURCE NAME (SHORT)",
+    "feedUrl": "[ID] RSS FEED URL",
+    "category": "[ID] CATEGORY",
+    "region": "[ID] REGION",
+    "required": "[ID] *",
+    "testUrl": "[ID] TEST URL",
+    "testing": "[ID] TESTING...",
+    "valid": "[ID] VALID",
+    "cancel": "[ID] CANCEL",
+    "saving": "[ID] SAVING...",
+    "addFeed": "[ID] ADD FEED",
+    "updateFeed": "[ID] UPDATE FEED",
+    "on": "[ID] ON",
+    "off": "[ID] OFF",
+    "default": "[ID] DEFAULT",
+    "total": "[ID] TOTAL",
+    "active": "[ID] ACTIVE",
+    "custom": "[ID] CUSTOM",
+    "placeholders": {
+      "displayName": "[ID] e.g., Bloomberg Markets",
+      "sourceName": "[ID] e.g., BLOOMBERG",
+      "feedUrl": "[ID] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[ID] Name is required",
+      "sourceRequired": "[ID] Source name is required",
+      "invalidUrl": "[ID] Please enter a valid URL",
+      "invalidRss": "[ID] URL does not appear to be a valid RSS feed",
+      "testFailed": "[ID] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[ID] Delete this RSS feed?",
+      "message": "[ID] This action cannot be undone."
+    }
   }
 }

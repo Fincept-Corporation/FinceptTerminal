@@ -1,7 +1,7 @@
 // Python Agent Service - Interface to execute Python agents via finagent_core
 import { invoke } from '@tauri-apps/api/core';
 import { pythonAgentLogger } from '../core/loggerService';
-import { getLLMConfigs } from '../core/sqliteService';
+import { buildApiKeysMap, getLLMConfigs } from '../core/sqliteService';
 export interface AgentParameter {
   name: string;
   label: string;
@@ -53,18 +53,7 @@ const AGENT_INSTRUCTIONS_FALLBACK: Record<string, string> = {
 };
 
 async function buildApiKeys(): Promise<Record<string, string>> {
-  try {
-    const configs = await getLLMConfigs();
-    const apiKeys: Record<string, string> = {};
-    for (const config of configs) {
-      if (config.api_key) {
-        apiKeys[config.provider.toUpperCase() + '_API_KEY'] = config.api_key;
-        apiKeys[config.provider] = config.api_key;
-      }
-      if (config.base_url) apiKeys[config.provider.toUpperCase() + '_BASE_URL'] = config.base_url;
-    }
-    return apiKeys;
-  } catch { return {}; }
+  return buildApiKeysMap();
 }
 
 function extractQuery(parameters: Record<string, any>, inputs: Record<string, any>): string {

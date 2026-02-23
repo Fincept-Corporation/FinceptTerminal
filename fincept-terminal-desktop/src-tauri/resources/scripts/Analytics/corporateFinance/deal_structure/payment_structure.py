@@ -25,6 +25,14 @@ class PaymentStructureAnalyzer:
                  acquirer_share_price: float,
                  target_shares_outstanding: float,
                  target_share_price: float):
+        if acquirer_shares_outstanding <= 0:
+            raise ValueError("Acquirer shares outstanding must be positive")
+        if acquirer_share_price <= 0:
+            raise ValueError("Acquirer share price must be positive")
+        if target_shares_outstanding <= 0:
+            raise ValueError("Target shares outstanding must be positive")
+        if target_share_price <= 0:
+            raise ValueError("Target share price must be positive")
         self.acquirer_shares = acquirer_shares_outstanding
         self.acquirer_price = acquirer_share_price
         self.target_shares = target_shares_outstanding

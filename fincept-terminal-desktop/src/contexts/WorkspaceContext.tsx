@@ -201,11 +201,13 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
   const restoredTabStates = useRef<Record<string, unknown>>({});
   const mountedRef = useRef(true);
 
-  // Point 3: Cleanup on unmount
+  // Cleanup on unmount — release all registry references to allow GC
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      tabStateRegistry.current.clear();
+      restoredTabStates.current = {};
     };
   }, []);
 

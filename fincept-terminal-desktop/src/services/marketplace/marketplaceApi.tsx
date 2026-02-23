@@ -5,7 +5,7 @@ import { fetch } from '@tauri-apps/plugin-http';
 
 // API Configuration
 const API_CONFIG = {
-  BASE_URL: import.meta.env.DEV ? '/api' : 'https://finceptbackend.share.zrok.io',
+  BASE_URL: import.meta.env.DEV ? '/api' : 'https://api.fincept.in',
   API_VERSION: 'v1',
   CONNECTION_TIMEOUT: 10000,
   REQUEST_TIMEOUT: 30000

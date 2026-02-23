@@ -32,9 +32,9 @@ interface DebateArenaPanelProps {
 }
 
 export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: DebateArenaPanelProps) {
-  const [bullModel, setBullModel] = useState('openai:gpt-4o-mini');
-  const [bearModel, setBearModel] = useState('anthropic:claude-sonnet-4');
-  const [analystModel, setAnalystModel] = useState('google:gemini-2.0-flash-exp');
+  const [bullModel, setBullModel] = useState('');
+  const [bearModel, setBearModel] = useState('');
+  const [analystModel, setAnalystModel] = useState('');
   const [isDebating, setIsDebating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [debateResult, setDebateResult] = useState<DebateResult | null>(null);

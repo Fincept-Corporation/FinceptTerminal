@@ -5,29 +5,7 @@
     "news": "Noticias",
     "portfolio": "Portafolio",
     "backtesting": "Backtesting",
-    "watchlist": "Lista de Seguimiento",
-    "research": "Investigación",
-    "screener": "Screener",
     "chat": "AI Chat",
-    "agents": "Agentes",
-    "settings": "Configuración",
     "profile": "Perfil"
-  },
-  "functionKeys": {
-    "f1": "PANL",
-    "f2": "MERC",
-    "f3": "NOTI",
-    "f4": "PORT",
-    "f5": "BKTS",
-    "f6": "SEGU",
-    "f7": "INVS",
-    "f8": "SCRN",
-    "f9": "TRDG",
-    "f10": "AI",
-    "f11": "FULL",
-    "f12": "PERF"
-  },
-  "labels": {
-    "moreTabs": "Más pestañas en menús de herramientas"
   }
 }

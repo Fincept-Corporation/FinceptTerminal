@@ -5,29 +5,7 @@
     "news": "Wiadomości",
     "portfolio": "Portfel",
     "backtesting": "Backtesting",
-    "watchlist": "Lista obserwowanych",
-    "research": "Badania",
-    "screener": "Skaner",
     "chat": "AI Chat",
-    "agents": "Agenci",
-    "settings": "Ustawienia",
     "profile": "Profil"
-  },
-  "functionKeys": {
-    "f1": "PULT",
-    "f2": "RNKI",
-    "f3": "NEWS",
-    "f4": "PORT",
-    "f5": "BKTS",
-    "f6": "OBSW",
-    "f7": "BAD",
-    "f8": "SKAN",
-    "f9": "TRDG",
-    "f10": "AI",
-    "f11": "FULL",
-    "f12": "PROF"
-  },
-  "labels": {
-    "moreTabs": "Więcej kart w menu paska narzędzi"
   }
 }

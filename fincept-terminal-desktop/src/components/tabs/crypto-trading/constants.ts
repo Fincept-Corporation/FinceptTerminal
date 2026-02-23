@@ -17,14 +17,15 @@ export const FINCEPT = {
   MUTED: '#4A4A4A'
 } as const;
 
-// Top 30 most traded crypto pairs
+// Top crypto pairs available on Kraken
+// Removed: BNB, POL, SHIB, TRX, APT, ARB, OP, LDO, STX (not listed on Kraken)
 export const DEFAULT_CRYPTO_WATCHLIST = [
-  'BTC/USD', 'ETH/USD', 'BNB/USD', 'SOL/USD', 'XRP/USD',
-  'ADA/USD', 'DOGE/USD', 'AVAX/USD', 'DOT/USD', 'POL/USD',
-  'LTC/USD', 'SHIB/USD', 'TRX/USD', 'LINK/USD', 'UNI/USD',
-  'ATOM/USD', 'XLM/USD', 'ETC/USD', 'BCH/USD', 'NEAR/USD',
-  'APT/USD', 'ARB/USD', 'OP/USD', 'LDO/USD', 'FIL/USD',
-  'ICP/USD', 'INJ/USD', 'STX/USD', 'MKR/USD', 'AAVE/USD'
+  'BTC/USD', 'ETH/USD', 'SOL/USD', 'XRP/USD', 'ADA/USD',
+  'DOGE/USD', 'AVAX/USD', 'DOT/USD', 'LTC/USD', 'LINK/USD',
+  'UNI/USD', 'ATOM/USD', 'XLM/USD', 'ETC/USD', 'BCH/USD',
+  'NEAR/USD', 'FIL/USD', 'ICP/USD', 'INJ/USD', 'MKR/USD',
+  'AAVE/USD', 'PEPE/USD', 'WIF/USD', 'BONK/USD', 'JUP/USD',
+  'SUI/USD', 'TIA/USD', 'SEI/USD', 'RENDER/USD', 'TAO/USD'
 ];
 
 // CSS styles for the crypto trading terminal

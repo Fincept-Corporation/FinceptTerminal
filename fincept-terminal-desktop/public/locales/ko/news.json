@@ -1,32 +1,63 @@
 {
   "title": "FINCEPT 터미널 전문 뉴스",
   "header": {
-    "liveFeed": "실시간 피드",
-    "live": "라이브",
-    "refresh": "새로고침",
-    "updating": "업데이트 중...",
-    "alerts": "알림",
-    "sources": "소스",
-    "status": "상태",
-    "demoMode": "데모 모드",
-    "articles": "기사",
-    "activeSources": "활성 소스"
-  },
-  "autoRefresh": {
-    "title": "자동 새로고침 간격",
-    "minute": "분",
-    "minutes": "분"
+    "refresh": "새로고침"
   },
   "messages": {
-    "loadingFeeds": "피드 로딩 중...",
-    "breaking": "속보"
+    "loadingFeedsModal": "[KO] Loading feeds...",
+    "failedToLoad": "[KO] Failed to load RSS feeds",
+    "noCustomFeeds": "[KO] No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "[KO] All feeds have been deleted. Add a new feed or restore defaults.",
+    "defaultFeedsInfo": "[KO] Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
-  "feeds": {
-    "primary": "[KO] PRIMARY NEWS FEED",
-    "secondary": "[KO] SECONDARY NEWS FEED",
-    "additional": "[KO] ADDITIONAL HEADLINES"
-  },
-  "analytics": {
-    "title": "[KO] REAL-TIME NEWS ANALYTICS"
+  "rssSettings": {
+    "title": "[KO] RSS FEED SETTINGS",
+    "subtitle": "[KO] MANAGE YOUR NEWS SOURCES",
+    "close": "[KO] CLOSE",
+    "myFeeds": "[KO] MY FEEDS",
+    "defaultFeeds": "[KO] DEFAULT FEEDS",
+    "noFeedsAvailable": "[KO] NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "[KO] ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "[KO] ADD NEW FEED",
+    "addNewRssFeed": "[KO] ADD NEW RSS FEED",
+    "editRssFeed": "[KO] EDIT RSS FEED",
+    "restoreDefaults": "[KO] RESTORE DEFAULTS",
+    "restoreAll": "[KO] RESTORE ALL",
+    "restoreAllDefaultFeeds": "[KO] RESTORE ALL DEFAULT FEEDS",
+    "displayName": "[KO] DISPLAY NAME",
+    "sourceName": "[KO] SOURCE NAME (SHORT)",
+    "feedUrl": "[KO] RSS FEED URL",
+    "category": "[KO] CATEGORY",
+    "region": "[KO] REGION",
+    "required": "[KO] *",
+    "testUrl": "[KO] TEST URL",
+    "testing": "[KO] TESTING...",
+    "valid": "[KO] VALID",
+    "cancel": "[KO] CANCEL",
+    "saving": "[KO] SAVING...",
+    "addFeed": "[KO] ADD FEED",
+    "updateFeed": "[KO] UPDATE FEED",
+    "on": "[KO] ON",
+    "off": "[KO] OFF",
+    "default": "[KO] DEFAULT",
+    "total": "[KO] TOTAL",
+    "active": "[KO] ACTIVE",
+    "custom": "[KO] CUSTOM",
+    "placeholders": {
+      "displayName": "[KO] e.g., Bloomberg Markets",
+      "sourceName": "[KO] e.g., BLOOMBERG",
+      "feedUrl": "[KO] https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "[KO] Name is required",
+      "sourceRequired": "[KO] Source name is required",
+      "invalidUrl": "[KO] Please enter a valid URL",
+      "invalidRss": "[KO] URL does not appear to be a valid RSS feed",
+      "testFailed": "[KO] Failed to test URL"
+    },
+    "confirmDelete": {
+      "title": "[KO] Delete this RSS feed?",
+      "message": "[KO] This action cannot be undone."
+    }
   }
 }

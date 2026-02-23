@@ -1,29 +1,60 @@
 {
-  "title": "EDITOR KODE",
   "header": {
-    "packages": "PAKET"
+    "finscriptIde": "[ID] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "FILE BARU",
-    "new": "BARU",
-    "open": "BUKA",
-    "save": "SIMPAN",
     "run": "JALANKAN",
     "running": "MENJALANKAN...",
-    "runAll": "JALANKAN SEMUA",
-    "history": "RIWAYAT"
+    "toggleExplorer": "[ID] Toggle Explorer (Ctrl+B)",
+    "openFile": "[ID] Open File",
+    "saveShortcut": "[ID] Save (Ctrl+S)",
+    "findShortcut": "[ID] Find (Ctrl+F)",
+    "runShortcut": "[ID] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "EDITOR FINSCRIPT"
   },
-  "packages": {
-    "clickToLoad": "Klik untuk memuat...",
-    "load": "MUAT PAKET"
+  "explorer": {
+    "title": "[ID] EXPLORER",
+    "openFiles": "[ID] OPEN FILES",
+    "examples": "[ID] EXAMPLES",
+    "runHistory": "[ID] RUN HISTORY",
+    "finscriptEngine": "[ID] FinScript Engine"
   },
-  "history": {
-    "title": "RIWAYAT NOTEBOOK",
-    "loading": "Memuat riwayat...",
-    "empty": "Tidak ada riwayat notebook"
+  "output": {
+    "title": "[ID] OUTPUT",
+    "success": "[ID] SUCCESS",
+    "error": "[ID] ERROR",
+    "executing": "[ID] EXECUTING FINSCRIPT...",
+    "noOutput": "[ID] No output yet",
+    "pressToRun": "[ID] Press Ctrl+Enter to run",
+    "completed": "[ID] COMPLETED",
+    "failed": "[ID] FAILED",
+    "signals": "[ID] signals",
+    "clear": "[ID] CLEAR",
+    "errors": "[ID] ERRORS",
+    "signalsSection": "[ID] SIGNALS",
+    "outputSection": "[ID] OUTPUT",
+    "charts": "[ID] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[ID] OHLC",
+    "histogram": "[ID] Histogram",
+    "line": "[ID] Line",
+    "points": "[ID] points"
+  },
+  "statusBar": {
+    "modified": "[ID] MODIFIED",
+    "showOutput": "[ID] SHOW OUTPUT",
+    "encoding": "[ID] UTF-8",
+    "spaces": "[ID] 4 Spaces",
+    "runShortcut": "[ID] Ctrl+Enter: Run",
+    "lines": "[ID] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[ID] Close file without saving?",
+    "unsavedChanges": "[ID] You have unsaved changes."
   }
 }

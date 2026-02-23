@@ -1,29 +1,60 @@
 {
-  "title": "コードエディタ",
   "header": {
-    "packages": "パッケージ"
+    "finscriptIde": "[JA] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "新規ファイル",
-    "new": "新規",
-    "open": "開く",
-    "save": "保存",
     "run": "コード実行",
     "running": "実行中...",
-    "runAll": "すべて実行",
-    "history": "履歴"
+    "toggleExplorer": "[JA] Toggle Explorer (Ctrl+B)",
+    "openFile": "[JA] Open File",
+    "saveShortcut": "[JA] Save (Ctrl+S)",
+    "findShortcut": "[JA] Find (Ctrl+F)",
+    "runShortcut": "[JA] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTERノートブック",
     "finscript": "FINSCRIPTエディタ"
   },
-  "packages": {
-    "clickToLoad": "クリックしてロード...",
-    "load": "パッケージをロード"
+  "explorer": {
+    "title": "[JA] EXPLORER",
+    "openFiles": "[JA] OPEN FILES",
+    "examples": "[JA] EXAMPLES",
+    "runHistory": "[JA] RUN HISTORY",
+    "finscriptEngine": "[JA] FinScript Engine"
   },
-  "history": {
-    "title": "ノートブック履歴",
-    "loading": "履歴を読込中...",
-    "empty": "ノートブック履歴なし"
+  "output": {
+    "title": "[JA] OUTPUT",
+    "success": "[JA] SUCCESS",
+    "error": "[JA] ERROR",
+    "executing": "[JA] EXECUTING FINSCRIPT...",
+    "noOutput": "[JA] No output yet",
+    "pressToRun": "[JA] Press Ctrl+Enter to run",
+    "completed": "[JA] COMPLETED",
+    "failed": "[JA] FAILED",
+    "signals": "[JA] signals",
+    "clear": "[JA] CLEAR",
+    "errors": "[JA] ERRORS",
+    "signalsSection": "[JA] SIGNALS",
+    "outputSection": "[JA] OUTPUT",
+    "charts": "[JA] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[JA] OHLC",
+    "histogram": "[JA] Histogram",
+    "line": "[JA] Line",
+    "points": "[JA] points"
+  },
+  "statusBar": {
+    "modified": "[JA] MODIFIED",
+    "showOutput": "[JA] SHOW OUTPUT",
+    "encoding": "[JA] UTF-8",
+    "spaces": "[JA] 4 Spaces",
+    "runShortcut": "[JA] Ctrl+Enter: Run",
+    "lines": "[JA] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[JA] Close file without saving?",
+    "unsavedChanges": "[JA] You have unsaved changes."
   }
 }

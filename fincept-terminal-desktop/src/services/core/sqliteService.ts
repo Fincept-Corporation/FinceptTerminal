@@ -63,7 +63,7 @@ export const LLM_PROVIDERS = [
     id: 'fincept',
     name: 'Fincept LLM',
     description: 'Fincept Research API (Default - 5 credits/response)',
-    endpoint: 'https://finceptbackend.share.zrok.io/research/llm',
+    endpoint: 'https://api.fincept.in/research/llm',
     requiresApiKey: true,
     isDefault: true,
     models: ['fincept-llm']
@@ -226,6 +226,49 @@ export const saveLLMConfig = async (config: LLMConfig): Promise<void> => {
 export const getActiveLLMConfig = async (): Promise<LLMConfig | null> => {
   const configs = await getLLMConfigs();
   return configs.find(c => c.is_active) || null;
+};
+
+/**
+ * Build a complete api_keys map from LLM configs — the canonical implementation.
+ * Matches exactly what useAgentConfig.getApiKeys() does so all panels behave the same.
+ *
+ * Keys emitted per provider:
+ *   OPENAI_API_KEY, openai, openai_base_url, OPENAI_BASE_URL, …
+ * Plus fincept fallback from the stored session key.
+ */
+export const buildApiKeysMap = async (): Promise<Record<string, string>> => {
+  try {
+    const llmConfigs = await getLLMConfigs();
+    const apiKeys: Record<string, string> = {};
+
+    for (const config of llmConfigs) {
+      if (config.api_key) {
+        const providerUpper = config.provider.toUpperCase();
+        apiKeys[`${providerUpper}_API_KEY`] = config.api_key;
+        apiKeys[config.provider] = config.api_key;
+        apiKeys[config.provider.toLowerCase()] = config.api_key;
+      }
+      if (config.base_url) {
+        const providerUpper = config.provider.toUpperCase();
+        apiKeys[`${providerUpper}_BASE_URL`] = config.base_url;
+        apiKeys[`${config.provider}_base_url`] = config.base_url;
+      }
+    }
+
+    // Fincept session key — always include so Python agents can use the
+    // fincept provider even if the user hasn't added it in LLM Settings.
+    if (!apiKeys['fincept']) {
+      const finceptKey = await getSetting('fincept_api_key');
+      if (finceptKey) {
+        apiKeys['fincept'] = finceptKey;
+        apiKeys['FINCEPT_API_KEY'] = finceptKey;
+      }
+    }
+
+    return apiKeys;
+  } catch {
+    return {};
+  }
 };
 
 export const getLLMGlobalSettings = async (): Promise<LLMGlobalSettings> => {
@@ -1210,6 +1253,7 @@ class SqliteService {
   getActiveLLMConfig = getActiveLLMConfig;
   getLLMGlobalSettings = getLLMGlobalSettings;
   saveLLMGlobalSettings = saveLLMGlobalSettings;
+  buildApiKeysMap = buildApiKeysMap;
 
   async ensureDefaultLLMConfigs() {
     // Not needed with Rust backend - schema handles defaults

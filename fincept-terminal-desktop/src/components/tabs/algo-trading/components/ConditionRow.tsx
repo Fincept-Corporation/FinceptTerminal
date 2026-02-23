@@ -2,13 +2,7 @@ import React from 'react';
 import { Clock, ArrowRight, AlertTriangle } from 'lucide-react';
 import type { ConditionItem } from '../types';
 import { INDICATOR_DEFINITIONS, OPERATORS, getIndicatorDef } from '../constants/indicators';
-
-const F = {
-  ORANGE: '#FF8800', WHITE: '#FFFFFF', GRAY: '#787878', DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F', BORDER: '#2A2A2A', HOVER: '#1F1F1F', MUTED: '#4A4A4A',
-  CYAN: '#00E5FF', RED: '#FF3B3B', GREEN: '#00D66F', YELLOW: '#FFD600',
-  PURPLE: '#9D4EDD', BLUE: '#0088FF', HEADER_BG: '#1A1A1A',
-};
+import { F } from '../constants/theme';
 
 // Operator labels for readable display
 const OPERATOR_LABELS: Record<string, string> = {

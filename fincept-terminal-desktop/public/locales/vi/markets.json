@@ -9,13 +9,9 @@
   "percentChange": "%THAY ĐỔI",
   "high": "CAO",
   "low": "THẤP",
-  "loading": "Đang tải...",
   "noData": "Không có dữ liệu",
   "refresh": "LÀM MỚI",
   "auto": "TỰ ĐỘNG",
   "on": "BẬT",
-  "off": "TẮT",
-  "lastUpdate": "CẬP NHẬT CUỐI",
-  "updating": "ĐANG CẬP NHẬT",
-  "live": "TRỰC TIẾP"
+  "off": "TẮT"
 }

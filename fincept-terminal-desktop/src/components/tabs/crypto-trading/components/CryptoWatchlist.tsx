@@ -85,7 +85,9 @@ export function CryptoWatchlist({
                 padding: '8px 10px',
                 cursor: 'pointer',
                 borderBottom: `1px solid ${FINCEPT.BORDER}20`,
-                borderLeft: isSelected ? `3px solid ${FINCEPT.ORANGE}` : '3px solid transparent',
+                borderLeftWidth: '3px',
+                borderLeftStyle: 'solid',
+                borderLeftColor: isSelected ? FINCEPT.ORANGE : 'transparent',
                 backgroundColor: isSelected ? `${FINCEPT.ORANGE}10` : 'transparent',
                 transition: 'all 0.15s',
               }}

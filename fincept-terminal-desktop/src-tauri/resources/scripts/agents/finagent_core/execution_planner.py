@@ -570,6 +570,149 @@ class ExecutionPlanner:
         return builder.build()
 
 
+# =========================================================================
+# Dynamic LLM-based Plan Generation
+# =========================================================================
+
+_PLAN_GENERATION_SYSTEM_PROMPT = """You are an expert financial analyst AI that creates structured execution plans.
+Given a user's analysis request, generate a step-by-step execution plan as a JSON object.
+
+The plan must follow this exact JSON schema:
+{
+  "name": "Human-readable plan title",
+  "description": "Brief description of what this plan does",
+  "steps": [
+    {
+      "id": "step_1",
+      "name": "Step Name",
+      "step_type": "agent",
+      "query": "The specific prompt/query this step will execute",
+      "tools": ["yfinance", "duckduckgo"],
+      "dependencies": [],
+      "reasoning": false
+    }
+  ]
+}
+
+Rules:
+- step_type must be one of: agent, tool, checkpoint
+- tools can include: yfinance, duckduckgo, calculator, edgar, fred, worldbank
+- dependencies is a list of step IDs that must complete before this step
+- Set reasoning=true for analysis/synthesis steps that require deep thinking
+- Keep steps focused — each step should do one clear thing
+- Use parallel steps (empty dependencies) for independent data fetching
+- Final steps should synthesize earlier results
+- Return ONLY valid JSON, no markdown fences, no extra text"""
+
+
+def generate_dynamic_plan(query: str, api_keys: Dict[str, str] = None) -> Dict[str, Any]:
+    """
+    Use an LLM to dynamically generate an execution plan from a natural language query.
+    Returns an ExecutionPlan dict ready for display and execution.
+    """
+    import time
+    api_keys = api_keys or {}
+
+    try:
+        from finagent_core.core_agent import CoreAgent
+
+        agent = CoreAgent(api_keys=api_keys)
+
+        # Build a minimal model config preferring fast/cheap models
+        config = {
+            "instructions": _PLAN_GENERATION_SYSTEM_PROMPT,
+            "markdown": False,
+            "reasoning": False,
+        }
+
+        prompt = (
+            f"Create an execution plan for the following financial analysis request:\n\n"
+            f"{query}\n\n"
+            f"Return ONLY the JSON plan object, no extra text."
+        )
+
+        response = agent.run(prompt, config)
+        raw = agent.get_response_content(response)
+
+        # Strip any accidental markdown fences
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```", 2)[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.rsplit("```", 1)[0].strip()
+
+        plan_spec = json.loads(raw)
+
+        # Build ExecutionPlan from LLM output
+        plan_id = f"dynamic_{int(time.time())}"
+        builder = PlanBuilder(
+            plan_id=plan_id,
+            name=plan_spec.get("name", "Custom Analysis Plan"),
+            description=plan_spec.get("description", query),
+        )
+
+        # First pass: add all steps, collect id mapping
+        step_id_map: Dict[str, str] = {}
+        for i, s in enumerate(plan_spec.get("steps", []), start=1):
+            logical_id = s.get("id", f"step_{i}")
+            tools = s.get("tools", [])
+            agent_cfg: Dict[str, Any] = {}
+            if tools:
+                agent_cfg["tools"] = tools
+            if s.get("reasoning"):
+                agent_cfg["reasoning"] = True
+
+            # Resolve dependencies to builder step IDs
+            deps = [step_id_map[d] for d in s.get("dependencies", []) if d in step_id_map]
+
+            step_type = s.get("step_type", "agent")
+            if step_type == "checkpoint":
+                real_id = builder.add_checkpoint(
+                    name=s.get("name", f"Step {i}"),
+                    dependencies=deps,
+                )
+            else:
+                real_id = builder.add_agent_step(
+                    name=s.get("name", f"Step {i}"),
+                    query=s.get("query", ""),
+                    agent_config=agent_cfg,
+                    dependencies=deps,
+                )
+
+            step_id_map[logical_id] = real_id
+
+        plan = builder.build()
+        return {"success": True, "plan": plan.to_dict(), "generated_by": "llm"}
+
+    except json.JSONDecodeError as e:
+        logger.warning(f"LLM returned invalid JSON for plan generation: {e}. Falling back to template.")
+        return _fallback_plan_from_query(query)
+    except Exception as e:
+        logger.warning(f"Dynamic plan generation failed: {e}. Falling back to template.")
+        return _fallback_plan_from_query(query)
+
+
+def _fallback_plan_from_query(query: str) -> Dict[str, Any]:
+    """Fallback: derive a reasonable plan from keywords in the query."""
+    import time
+    query_lower = query.lower()
+
+    # Detect symbol — first uppercase word-like token
+    import re
+    symbol_match = re.search(r'\b([A-Z]{1,5}(?:\.[A-Z]{1,2})?)\b', query)
+    symbol = symbol_match.group(1) if symbol_match else "AAPL"
+
+    if any(w in query_lower for w in ["portfolio", "rebalance", "holdings"]):
+        plan = ExecutionPlanner.portfolio_rebalance_plan(symbol)
+    else:
+        plan = ExecutionPlanner.stock_analysis_plan(symbol)
+
+    result = plan.to_dict()
+    result["id"] = f"fallback_{int(time.time())}"
+    return {"success": True, "plan": result, "generated_by": "fallback"}
+
+
 # Entry points for Tauri commands
 def create_stock_analysis_plan(symbol: str) -> Dict[str, Any]:
     """Create a stock analysis plan"""

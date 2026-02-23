@@ -49,15 +49,8 @@
     "colorPanel": "Panel",
     "layoutSpacing": "LAYOUT & SPACING",
     "contentDensity": "CONTENT DENSITY",
-    "densityCompact": "Compact",
-    "densityDefault": "Default",
-    "densityComfortable": "Comfortable",
     "borderRadius": "BORDER RADIUS",
     "borderStyle": "BORDER STYLE",
-    "borderNone": "None",
-    "borderSubtle": "Subtle",
-    "borderNormal": "Normal",
-    "borderProminent": "Prominent",
     "lineHeight": "LINE HEIGHT",
     "letterSpacing": "LETTER SPACING",
     "effects": "EFFECTS",
@@ -97,17 +90,8 @@
     "tip": "TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
   },
   "llm": {
-    "title": "LLM CONFIGURATION",
-    "description": "Configure AI models and providers",
     "connected": "CONNECTED",
-    "disconnected": "DISCONNECTED",
-    "provider": "AI PROVIDER",
-    "globalSettings": "GLOBAL AI SETTINGS",
-    "temperature": "TEMPERATURE",
-    "maxTokens": "MAX TOKENS",
-    "systemPrompt": "SYSTEM PROMPT",
-    "modelLibrary": "MODEL LIBRARY",
-    "multiModelConfigs": "Multi-model configs"
+    "disconnected": "DISCONNECTED"
   },
   "buttons": {
     "save": "SAVE",

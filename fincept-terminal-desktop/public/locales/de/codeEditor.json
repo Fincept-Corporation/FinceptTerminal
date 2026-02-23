@@ -1,29 +1,60 @@
 {
-  "title": "CODE-EDITOR",
   "header": {
-    "packages": "PAKETE"
+    "finscriptIde": "[DE] FINSCRIPT IDE"
   },
   "toolbar": {
     "newFile": "NEUE DATEI",
-    "new": "NEU",
-    "open": "ÖFFNEN",
-    "save": "SPEICHERN",
     "run": "AUSFÜHREN",
     "running": "LÄUFT...",
-    "runAll": "ALLE AUSFÜHREN",
-    "history": "VERLAUF"
+    "toggleExplorer": "[DE] Toggle Explorer (Ctrl+B)",
+    "openFile": "[DE] Open File",
+    "saveShortcut": "[DE] Save (Ctrl+S)",
+    "findShortcut": "[DE] Find (Ctrl+F)",
+    "runShortcut": "[DE] Run (Ctrl+Enter)"
   },
   "tabs": {
     "notebook": "JUPYTER NOTEBOOK",
     "finscript": "FINSCRIPT EDITOR"
   },
-  "packages": {
-    "clickToLoad": "Klicken zum Laden...",
-    "load": "PAKETE LADEN"
+  "explorer": {
+    "title": "[DE] EXPLORER",
+    "openFiles": "[DE] OPEN FILES",
+    "examples": "[DE] EXAMPLES",
+    "runHistory": "[DE] RUN HISTORY",
+    "finscriptEngine": "[DE] FinScript Engine"
   },
-  "history": {
-    "title": "NOTEBOOK-VERLAUF",
-    "loading": "Verlauf wird geladen...",
-    "empty": "Kein Notebook-Verlauf"
+  "output": {
+    "title": "[DE] OUTPUT",
+    "success": "[DE] SUCCESS",
+    "error": "[DE] ERROR",
+    "executing": "[DE] EXECUTING FINSCRIPT...",
+    "noOutput": "[DE] No output yet",
+    "pressToRun": "[DE] Press Ctrl+Enter to run",
+    "completed": "[DE] COMPLETED",
+    "failed": "[DE] FAILED",
+    "signals": "[DE] signals",
+    "clear": "[DE] CLEAR",
+    "errors": "[DE] ERRORS",
+    "signalsSection": "[DE] SIGNALS",
+    "outputSection": "[DE] OUTPUT",
+    "charts": "[DE] CHARTS"
+  },
+  "chart": {
+    "ohlc": "[DE] OHLC",
+    "histogram": "[DE] Histogram",
+    "line": "[DE] Line",
+    "points": "[DE] points"
+  },
+  "statusBar": {
+    "modified": "[DE] MODIFIED",
+    "showOutput": "[DE] SHOW OUTPUT",
+    "encoding": "[DE] UTF-8",
+    "spaces": "[DE] 4 Spaces",
+    "runShortcut": "[DE] Ctrl+Enter: Run",
+    "lines": "[DE] lines"
+  },
+  "dialogs": {
+    "closeUnsaved": "[DE] Close file without saving?",
+    "unsavedChanges": "[DE] You have unsaved changes."
   }
 }

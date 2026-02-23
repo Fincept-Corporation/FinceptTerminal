@@ -11,11 +11,13 @@ pub async fn run_quantstats_analysis(
     benchmark: Option<String>,
     period: Option<String>,
     risk_free_rate: Option<f64>,
+    num_sims: Option<u32>,
 ) -> Result<String, String> {
     let action = action.unwrap_or_else(|| "full_report".to_string());
     let benchmark = benchmark.unwrap_or_else(|| "SPY".to_string());
     let period = period.unwrap_or_else(|| "1y".to_string());
     let rf = risk_free_rate.unwrap_or(0.02);
+    let sims = num_sims.unwrap_or(1000);
 
     let args = vec![
         action,
@@ -23,6 +25,7 @@ pub async fn run_quantstats_analysis(
         benchmark,
         period,
         rf.to_string(),
+        sims.to_string(),
     ];
 
     python::execute(&app, "Analytics/quantstats_analytics.py", args).await

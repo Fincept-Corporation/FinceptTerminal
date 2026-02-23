@@ -254,20 +254,6 @@ pub fn get_status(broker_id: &str) -> Result<MasterContractStatus> {
     }))
 }
 
-/// Check if master contracts are ready for a broker
-pub fn is_ready(broker_id: &str) -> Result<bool> {
-    let db = get_db()?;
-
-    let is_ready: Option<i32> = db
-        .query_row(
-            "SELECT is_ready FROM master_contract_status WHERE broker_id = ?",
-            params![broker_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-
-    Ok(is_ready.unwrap_or(0) == 1)
-}
 
 // ============================================================================
 // SYMBOL OPERATIONS
@@ -727,14 +713,6 @@ pub fn build_options_symbol(underlying: &str, expiry: &str, strike: f64, option_
     format!("{}{}{}{}", normalized, formatted_expiry, strike_str, option_type.to_uppercase())
 }
 
-/// Format strike price (remove trailing .0)
-pub fn format_strike(strike: f64) -> String {
-    if strike.fract() == 0.0 {
-        format!("{}", strike as i64)
-    } else {
-        format!("{}", strike)
-    }
-}
 
 // ============================================================================
 // MASTER CONTRACT DOWNLOAD HELPER

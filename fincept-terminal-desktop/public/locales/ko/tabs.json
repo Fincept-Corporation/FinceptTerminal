@@ -5,29 +5,7 @@
     "news": "뉴스",
     "portfolio": "포트폴리오",
     "backtesting": "백테스팅",
-    "watchlist": "관심목록",
-    "research": "리서치",
-    "screener": "스크리너",
     "chat": "AI 채팅",
-    "agents": "에이전트",
-    "settings": "설정",
     "profile": "프로필"
-  },
-  "functionKeys": {
-    "f1": "대시",
-    "f2": "시장",
-    "f3": "뉴스",
-    "f4": "포트",
-    "f5": "백테",
-    "f6": "관심",
-    "f7": "리서",
-    "f8": "스크",
-    "f9": "트레",
-    "f10": "AI",
-    "f11": "전체",
-    "f12": "프로"
-  },
-  "labels": {
-    "moreTabs": "도구 모음 메뉴에 더 많은 탭"
   }
 }

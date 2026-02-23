@@ -60,7 +60,7 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
   const [error, setError] = useState<string | null>(null);
 
   // Quick Actions State
-  const [selectedModel, setSelectedModel] = useState('openai:gpt-4o-mini');
+  const [selectedModel, setSelectedModel] = useState('');
   const [analysisType, setAnalysisType] = useState<'quick' | 'comprehensive' | 'deep'>('comprehensive');
   const [strategy, setStrategy] = useState<'momentum' | 'breakout' | 'reversal' | 'trend_following'>('momentum');
   const [hasConfiguredKeys, setHasConfiguredKeys] = useState(false);
@@ -497,11 +497,7 @@ function QuickActionsView({
   onStartCompetition,
   onExecuteTrade
 }: QuickActionsViewProps) {
-  const models = availableModels.length > 0 ? availableModels : [
-    { value: 'openai:gpt-4o-mini', label: 'GPT-4o Mini (Configure in Settings)' },
-    { value: 'anthropic:claude-sonnet-4', label: 'Claude Sonnet 4 (Configure in Settings)' },
-    { value: 'google:gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash (Configure in Settings)' },
-  ];
+  const models = availableModels;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

@@ -466,16 +466,26 @@ export class DirectedGraph {
 
   /**
    * Clone the graph
+   *
+   * Remaps connection references to point to the cloned node objects
+   * so that === comparisons work correctly within the cloned graph.
    */
   clone(): DirectedGraph {
     const cloned = new DirectedGraph();
+    const nodeMap = new Map<string, INode>();
 
     for (const node of this.nodes.values()) {
-      cloned.addNode({ ...node });
+      const clonedNode = { ...node };
+      cloned.addNode(clonedNode);
+      nodeMap.set(node.name, clonedNode);
     }
 
     for (const connection of this.connections.values()) {
-      cloned.addConnection({ ...connection });
+      cloned.addConnection({
+        ...connection,
+        from: nodeMap.get(connection.from.name) || connection.from,
+        to: nodeMap.get(connection.to.name) || connection.to,
+      });
     }
 
     return cloned;

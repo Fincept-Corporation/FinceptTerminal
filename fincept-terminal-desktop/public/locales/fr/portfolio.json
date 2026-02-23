@@ -1,63 +1,20 @@
 {
-    "title": "GESTIONNAIRE DE PORTEFEUILLE FINCEPT",
-    "header": {
-        "live": "EN DIRECT",
-        "updating": "MISE À JOUR",
-        "newPortfolio": "NOUVEAU PORTEFEUILLE",
-        "refresh": "ACTUALISER",
-        "exportCsv": "EXPORTER CSV"
-    },
-    "summary": {
-        "totalValue": "VALEUR TOTALE",
-        "dayPnl": "G/P JOUR",
-        "totalPnl": "G/P TOTAL",
-        "positions": "POSITIONS"
-    },
-    "views": {
-        "positions": "POSITIONS",
-        "addAsset": "AJOUTER ACTIF",
-        "sellAsset": "VENDRE ACTIF",
-        "analytics": "ANALYTIQUE",
-        "history": "HISTORIQUE",
-        "activeMgmt": "GESTION ACTIVE",
-        "performance": "PERFORMANCE",
-        "rebalance": "RÉÉQUILIBRAGE",
-        "reports": "RAPPORTS",
-        "alerts": "ALERTES",
-        "sectors": "SECTEURS",
-        "help": "AIDE"
-    },
-    "sidebar": {
-        "portfolios": "PORTEFEUILLES",
-        "loading": "Chargement des portefeuilles...",
-        "noPortfolios": "Aucun portefeuille encore.",
-        "clickCreate": "Cliquez sur NOUVEAU PORTEFEUILLE pour en créer un.",
-        "owner": "Propriétaire",
-        "currency": "Devise"
-    },
-    "content": {
-        "selectOrCreate": "Sélectionnez un portefeuille ou créez-en un nouveau pour commencer",
-        "loadingData": "Chargement des données du portefeuille...",
-        "comingSoon": "vue à venir..."
-    },
-    "modals": {
-        "createNew": "CRÉER NOUVEAU PORTEFEUILLE",
-        "portfolioName": "NOM DU PORTEFEUILLE",
-        "owner": "PROPRIÉTAIRE",
-        "currency": "DEVISE",
-        "cancel": "ANNULER",
-        "create": "CRÉER",
-        "addAssetTitle": "AJOUTER ACTIF AU PORTEFEUILLE",
-        "sellAssetTitle": "VENDRE ACTIF",
-        "symbol": "SYMBOLE",
-        "quantity": "QUANTITÉ",
-        "price": "PRIX",
-        "add": "AJOUTER",
-        "sell": "VENDRE"
-    },
-    "status": {
-        "version": "Fincept Portfolio Manager v2.1.0 | Suivi en temps réel avec intégration yfinance",
-        "lastUpdated": "Dernière Mise à Jour",
-        "connected": "CONNECTÉ"
-    }
+  "modals": {
+    "createNew": "CRÉER NOUVEAU PORTEFEUILLE",
+    "portfolioName": "NOM DU PORTEFEUILLE",
+    "owner": "PROPRIÉTAIRE",
+    "currency": "DEVISE",
+    "cancel": "ANNULER",
+    "create": "CRÉER",
+    "addAssetTitle": "AJOUTER ACTIF AU PORTEFEUILLE",
+    "sellAssetTitle": "VENDRE ACTIF",
+    "symbol": "SYMBOLE",
+    "quantity": "QUANTITÉ",
+    "price": "PRIX",
+    "add": "AJOUTER",
+    "sell": "VENDRE"
+  },
+  "extracted": {
+    "areYouSureYou": "[FR] Are you sure you want to delete this portfolio? This action cannot be undone."
+  }
 }

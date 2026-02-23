@@ -1,7 +1,7 @@
 // File: src/components/tabs/quantlib-regulatory/quantlibRegulatoryApi.ts
 // API service for QuantLib Regulatory endpoints
 
-const BASE_URL = 'https://finceptbackend.share.zrok.io';
+const BASE_URL = 'https://api.fincept.in';
 
 let _apiKey: string | null = null;
 export function setRegulatoryApiKey(key: string | null) { _apiKey = key; }

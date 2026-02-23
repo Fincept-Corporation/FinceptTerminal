@@ -1,25 +1,7 @@
 {
-  "title": "ウォッチリスト",
-  "header": {
-    "export": "エクスポート",
-    "updating": "更新中",
-    "live": "ライブ"
-  },
   "sidebar": {
-    "groups": "ウォッチリストグループ",
-    "new": "新規",
     "noWatchlists": "まだウォッチリストがありません。",
     "clickNew": "新規をクリックして作成。",
-    "stocks": "銘柄",
-    "marketMovers": "マーケットムーバー",
-    "gainer": "上昇",
-    "loser": "下落",
-    "volumeLeaders": "出来高リーダー"
-  },
-  "emptyState": {
-    "selectWatchlist": "ウォッチリストを選択するか新規作成してください"
-  },
-  "list": {
-    "symbols": "銘柄"
+    "stocks": "銘柄"
   }
 }

@@ -15,7 +15,7 @@ fn parse_strategy_registry(registry_path: &PathBuf) -> Result<Vec<serde_json::Va
 
     // Find the STRATEGY_REGISTRY dict content
     let start_marker = "STRATEGY_REGISTRY = {";
-    let end_marker = "}";
+    let _end_marker = "}";
 
     if let Some(start_idx) = content.find(start_marker) {
         let dict_content = &content[start_idx + start_marker.len()..];

@@ -1,6 +1,6 @@
 // Support API Service - Feedback, Contact, Newsletter endpoints
 
-const API_BASE_URL = 'https://finceptbackend.share.zrok.io';
+const API_BASE_URL = 'https://api.fincept.in';
 
 // Types
 export interface ContactFormData {

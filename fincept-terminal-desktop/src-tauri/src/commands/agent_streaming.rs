@@ -338,8 +338,19 @@ where
                     continue;
                 }
 
-                // Determine chunk type based on content prefix
-                let (chunk_type, content) = if trimmed.starts_with("THINKING:") {
+                // Determine chunk type based on content prefix.
+                // Python escapes \n as \\n so newlines survive line-by-line reading;
+                // unescape them back here before forwarding to the callback.
+                let unescape = |s: &str| -> String {
+                    s.replace("\\\\", "\x00BS\x00")
+                     .replace("\\n", "\n")
+                     .replace("\\r", "\r")
+                     .replace("\x00BS\x00", "\\")
+                };
+
+                let (chunk_type, raw_content) = if trimmed.starts_with("TOKEN:") {
+                    ("token", trimmed.strip_prefix("TOKEN:").unwrap_or(trimmed))
+                } else if trimmed.starts_with("THINKING:") {
                     ("thinking", trimmed.strip_prefix("THINKING:").unwrap_or(trimmed).trim())
                 } else if trimmed.starts_with("TOOL:") {
                     ("tool_call", trimmed.strip_prefix("TOOL:").unwrap_or(trimmed).trim())
@@ -354,6 +365,9 @@ where
                 } else {
                     ("token", trimmed)
                 };
+
+                let content_owned = unescape(raw_content);
+                let content = content_owned.as_str();
 
                 full_output.push_str(content);
                 full_output.push('\n');
