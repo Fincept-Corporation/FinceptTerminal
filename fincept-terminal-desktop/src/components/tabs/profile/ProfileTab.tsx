@@ -153,6 +153,22 @@ function profileReducer(state: ProfileState, action: ProfileAction): ProfileStat
   }
 }
 
+// ─── Profile completeness helper ─────────────────────────────────────────────
+function getProfileCompleteness(session: any): { missing: string[]; percent: number } {
+  if (session?.user_type !== 'registered') return { missing: [], percent: 100 };
+  const info = session?.user_info || {};
+  const checks: { key: string; label: string }[] = [
+    { key: 'username', label: 'Username' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone number' },
+    { key: 'country', label: 'Country' },
+    { key: 'country_code', label: 'Country code' },
+  ];
+  const missing = checks.filter(c => !info[c.key]).map(c => c.label);
+  const percent = Math.round(((checks.length - missing.length) / checks.length) * 100);
+  return { missing, percent };
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ProfileTab: React.FC = () => {
   const { session, logout, refreshUserData, updateApiKey, isLoggingOut } = useAuth();
@@ -447,51 +463,184 @@ const ProfileTab: React.FC = () => {
 
 // ─── Overview Section ─────────────────────────────────────────────────────────
 const OverviewSection: React.FC<{ session: any; onLogout: () => void; isLoggingOut?: boolean }> = ({ session, onLogout, isLoggingOut }) => {
+  const { refreshUserData } = useAuth();
   const accountType = session?.user_info?.account_type || 'free';
+  const { missing, percent } = getProfileCompleteness(session);
+
+  // Edit profile state
+  const [editing, setEditing] = useState(false);
+  const [editUsername, setEditUsername] = useState(session?.user_info?.username || '');
+  const [editPhone, setEditPhone] = useState(session?.user_info?.phone || '');
+  const [editCountry, setEditCountry] = useState(session?.user_info?.country || '');
+  const [editCountryCode, setEditCountryCode] = useState(session?.user_info?.country_code || '');
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleSaveProfile = async () => {
+    if (!session?.api_key) return;
+    setSaveLoading(true);
+    setSaveStatus(null);
+    try {
+      const result = await withTimeout(
+        UserApiService.updateUserProfile(session.api_key, {
+          username: editUsername.trim() || undefined,
+          phone: editPhone.trim() || null,
+          country: editCountry.trim() || null,
+          country_code: editCountryCode.trim() || null,
+        }),
+        API_TIMEOUT_MS,
+        'Profile update timeout'
+      );
+      setSaveLoading(false);
+      if (result.success) {
+        setSaveStatus({ type: 'success', text: 'Profile updated successfully!' });
+        await refreshUserData();
+        setTimeout(() => { setSaveStatus(null); setEditing(false); }, 2000);
+      } else {
+        setSaveStatus({ type: 'error', text: result.error || 'Failed to update profile' });
+      }
+    } catch (err) {
+      setSaveLoading(false);
+      setSaveStatus({ type: 'error', text: err instanceof Error ? err.message : 'Network error' });
+    }
+  };
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-      <Panel title="ACCOUNT INFORMATION" icon={<User size={14} />}>
-        <DataRow label="USERNAME" value={session?.user_info?.username || 'N/A'} />
-        <DataRow label="EMAIL" value={session?.user_info?.email || 'N/A'} />
-        <DataRow label="USER TYPE" value={session?.user_type?.toUpperCase() || 'N/A'} />
-        <DataRow label="ACCOUNT TYPE" value={accountType.toUpperCase()} valueColor={F.ORANGE} />
-        <DataRow
-          label="EMAIL VERIFIED"
-          value={session?.user_info?.is_verified ? 'YES' : 'NO'}
-          valueColor={session?.user_info?.is_verified ? F.GREEN : F.RED}
-        />
-        <DataRow
-          label="2FA ENABLED"
-          value={session?.user_info?.mfa_enabled ? 'YES' : 'NO'}
-          valueColor={session?.user_info?.mfa_enabled ? F.GREEN : F.RED}
-        />
-      </Panel>
-
-      <Panel title="CREDITS & BALANCE" icon={<Zap size={14} />}>
-        <div style={{ padding: '20px 0', textAlign: 'center', borderBottom: `1px solid ${F.BORDER}` }}>
-          <div style={{ fontSize: '36px', color: F.CYAN, fontWeight: 700, marginBottom: '8px', fontFamily: FONT }}>
-            {(session?.user_info?.credit_balance || 0).toLocaleString()}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Profile Completeness Banner */}
+      {session?.user_type === 'registered' && missing.length > 0 && (
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: `${F.YELLOW}15`,
+          border: `1px solid ${F.YELLOW}`,
+          borderRadius: '2px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+            <AlertCircle size={14} color={F.YELLOW} />
+            <div>
+              <div style={{ fontSize: '9px', fontWeight: 700, color: F.YELLOW, letterSpacing: '0.5px', marginBottom: '2px' }}>
+                PROFILE INCOMPLETE ({percent}%) — Required for payment processing
+              </div>
+              <div style={{ fontSize: '9px', color: F.GRAY }}>
+                Missing: {missing.join(', ')}
+              </div>
+            </div>
           </div>
-          <div style={{ fontSize: '9px', color: F.GRAY, letterSpacing: '0.5px', fontWeight: 700 }}>AVAILABLE CREDITS</div>
+          {/* Completeness bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '80px', height: '4px', backgroundColor: F.BORDER, borderRadius: '2px' }}>
+              <div style={{ width: `${percent}%`, height: '100%', backgroundColor: percent === 100 ? F.GREEN : F.YELLOW, borderRadius: '2px', transition: 'width 0.3s' }} />
+            </div>
+            <SecondaryBtn label="COMPLETE NOW" onClick={() => setEditing(true)} />
+          </div>
         </div>
-        <div style={{ padding: '12px 0' }}>
-          <DataRow label="PLAN" value={accountType.toUpperCase()} valueColor={F.ORANGE} />
-          {session?.user_type === 'guest' && (
-            <>
-              <DataRow label="CREDITS" value={session?.credit_balance?.toString() || '0'} />
-              <DataRow label="REQUESTS TODAY" value={session?.requests_today?.toString() || '0'} />
-            </>
-          )}
-        </div>
-      </Panel>
+      )}
 
-      <div style={{ gridColumn: '1 / -1' }}>
-        <Panel title="QUICK ACTIONS" icon={<Activity size={14} />}>
-          <div style={{ display: 'flex', gap: '12px', padding: '8px 0' }}>
-            <ActionBtn label={isLoggingOut ? "LOGGING OUT..." : "LOGOUT"} onClick={onLogout} danger disabled={isLoggingOut} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <Panel title="ACCOUNT INFORMATION" icon={<User size={14} />}>
+          <DataRow label="USERNAME" value={session?.user_info?.username || 'N/A'} />
+          <DataRow label="EMAIL" value={session?.user_info?.email || 'N/A'} />
+          <DataRow label="USER TYPE" value={session?.user_type?.toUpperCase() || 'N/A'} />
+          <DataRow label="ACCOUNT TYPE" value={accountType.toUpperCase()} valueColor={F.ORANGE} />
+          <DataRow label="PHONE" value={session?.user_info?.phone || '—'} valueColor={session?.user_info?.phone ? F.WHITE : F.MUTED} />
+          <DataRow label="COUNTRY" value={session?.user_info?.country || '—'} valueColor={session?.user_info?.country ? F.WHITE : F.MUTED} />
+          <DataRow label="COUNTRY CODE" value={session?.user_info?.country_code || '—'} valueColor={session?.user_info?.country_code ? F.WHITE : F.MUTED} />
+          <DataRow
+            label="EMAIL VERIFIED"
+            value={session?.user_info?.is_verified ? 'YES' : 'NO'}
+            valueColor={session?.user_info?.is_verified ? F.GREEN : F.RED}
+          />
+          <DataRow
+            label="2FA ENABLED"
+            value={session?.user_info?.mfa_enabled ? 'YES' : 'NO'}
+            valueColor={session?.user_info?.mfa_enabled ? F.GREEN : F.RED}
+          />
+          <div style={{ paddingTop: '10px' }}>
+            <SecondaryBtn icon={<User size={10} />} label="EDIT PROFILE" onClick={() => setEditing(true)} />
           </div>
         </Panel>
+
+        <Panel title="CREDITS & BALANCE" icon={<Zap size={14} />}>
+          <div style={{ padding: '20px 0', textAlign: 'center', borderBottom: `1px solid ${F.BORDER}` }}>
+            <div style={{ fontSize: '36px', color: F.CYAN, fontWeight: 700, marginBottom: '8px', fontFamily: FONT }}>
+              {(session?.user_info?.credit_balance || 0).toLocaleString()}
+            </div>
+            <div style={{ fontSize: '9px', color: F.GRAY, letterSpacing: '0.5px', fontWeight: 700 }}>AVAILABLE CREDITS</div>
+          </div>
+          <div style={{ padding: '12px 0' }}>
+            <DataRow label="PLAN" value={accountType.toUpperCase()} valueColor={F.ORANGE} />
+            {session?.user_type === 'guest' && (
+              <>
+                <DataRow label="CREDITS" value={session?.credit_balance?.toString() || '0'} />
+                <DataRow label="REQUESTS TODAY" value={session?.requests_today?.toString() || '0'} />
+              </>
+            )}
+          </div>
+        </Panel>
+
+        <div style={{ gridColumn: '1 / -1' }}>
+          <Panel title="QUICK ACTIONS" icon={<Activity size={14} />}>
+            <div style={{ display: 'flex', gap: '12px', padding: '8px 0' }}>
+              <SecondaryBtn icon={<User size={10} />} label="EDIT PROFILE" onClick={() => setEditing(true)} />
+              <ActionBtn label={isLoggingOut ? "LOGGING OUT..." : "LOGOUT"} onClick={onLogout} danger disabled={isLoggingOut} />
+            </div>
+          </Panel>
+        </div>
       </div>
+
+      {/* Edit Profile Modal */}
+      {editing && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: F.PANEL_BG, border: `1px solid ${F.ORANGE}`,
+            borderRadius: '2px', padding: '24px', width: '480px', maxWidth: '95vw',
+          }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: F.ORANGE, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: FONT, letterSpacing: '0.5px' }}>
+              <User size={14} />
+              EDIT PROFILE
+            </div>
+
+            {saveStatus && <StatusBadge type={saveStatus.type} text={saveStatus.text} />}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <InputField label="USERNAME" value={editUsername} onChange={setEditUsername} placeholder="Your username" />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <InputField
+                  label="PHONE NUMBER (with country dial code, e.g. +91 9876543210)"
+                  value={editPhone}
+                  onChange={setEditPhone}
+                  placeholder="+1 5551234567"
+                  type="tel"
+                />
+                <div style={{ fontSize: '9px', color: F.MUTED, marginTop: '-8px', marginBottom: '12px' }}>
+                  Required for payment processing (Cashfree). Include country dial code.
+                </div>
+              </div>
+              <InputField label="COUNTRY (e.g. India)" value={editCountry} onChange={setEditCountry} placeholder="India" />
+              <InputField label="COUNTRY CODE (e.g. IN)" value={editCountryCode} onChange={setEditCountryCode} placeholder="IN" />
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <SecondaryBtn label="CANCEL" onClick={() => { setEditing(false); setSaveStatus(null); }} />
+              <PrimaryBtn
+                label={saveLoading ? 'SAVING...' : 'SAVE CHANGES'}
+                onClick={handleSaveProfile}
+                disabled={saveLoading}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -78,7 +78,12 @@ export class UserApiService {
     return makeApiRequest('/user/profile', 'GET', apiKey);
   }
 
-  static async updateUserProfile(apiKey: string, profileData: any): Promise<ApiResponse> {
+  static async updateUserProfile(apiKey: string, profileData: {
+    username?: string;
+    phone?: string | null;
+    country?: string | null;
+    country_code?: string | null;
+  }): Promise<ApiResponse> {
     return makeApiRequest('/user/profile', 'PUT', apiKey, profileData);
   }
 

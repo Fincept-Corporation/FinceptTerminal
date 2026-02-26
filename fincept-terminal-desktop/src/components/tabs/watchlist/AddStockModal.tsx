@@ -28,7 +28,6 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
       await onAdd(trimmedSymbol, notes.trim());
       onClose();
     } catch (error) {
-      console.error('Error adding stock:', error);
       showError(error instanceof Error ? error.message : 'Failed to add stock');
     } finally {
       setLoading(false);

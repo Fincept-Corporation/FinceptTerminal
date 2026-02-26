@@ -300,8 +300,8 @@ pub async fn db_remove_watchlist_stock(watchlist_id: String, symbol: String) -> 
 }
 
 #[tauri::command]
-pub async fn db_delete_watchlist(id: String) -> Result<String, String> {
-    queries::delete_watchlist(&id).map_err(|e| e.to_string())?;
+pub async fn db_delete_watchlist(watchlist_id: String) -> Result<String, String> {
+    queries::delete_watchlist(&watchlist_id).map_err(|e| e.to_string())?;
     Ok("Watchlist deleted successfully".to_string())
 }
 

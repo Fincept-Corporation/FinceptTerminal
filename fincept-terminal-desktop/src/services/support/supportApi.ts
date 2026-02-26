@@ -1,6 +1,13 @@
 // Support API Service - Feedback, Contact, Newsletter endpoints
 
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+
 const API_BASE_URL = 'https://api.fincept.in';
+
+// Use native fetch in dev (for Vite proxy), Tauri fetch in production
+const safeFetch: typeof fetch = import.meta.env.DEV
+  ? window.fetch.bind(window)
+  : (tauriFetch as unknown as typeof fetch);
 
 // Types
 export interface ContactFormData {
@@ -35,7 +42,7 @@ export interface ApiResponse<T = any> {
  */
 export async function submitContactForm(data: ContactFormData): Promise<ApiResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/support/contact`, {
+    const response = await safeFetch(`${API_BASE_URL}/support/contact`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -58,7 +65,6 @@ export async function submitContactForm(data: ContactFormData): Promise<ApiRespo
       message: 'Contact form submitted successfully',
     };
   } catch (error) {
-    console.error('Contact form submission error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Network error',
@@ -71,7 +77,7 @@ export async function submitContactForm(data: ContactFormData): Promise<ApiRespo
  */
 export async function submitFeedback(data: FeedbackFormData, apiKey: string): Promise<ApiResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/support/feedback`, {
+    const response = await safeFetch(`${API_BASE_URL}/support/feedback`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -99,7 +105,6 @@ export async function submitFeedback(data: FeedbackFormData, apiKey: string): Pr
       message: 'Feedback submitted successfully',
     };
   } catch (error) {
-    console.error('Feedback submission error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Network error',
@@ -112,7 +117,7 @@ export async function submitFeedback(data: FeedbackFormData, apiKey: string): Pr
  */
 export async function subscribeToNewsletter(data: NewsletterSubscribeData): Promise<ApiResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/support/newsletter/subscribe`, {
+    const response = await safeFetch(`${API_BASE_URL}/support/newsletter/subscribe`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -135,7 +140,6 @@ export async function subscribeToNewsletter(data: NewsletterSubscribeData): Prom
       message: 'Successfully subscribed to newsletter',
     };
   } catch (error) {
-    console.error('Newsletter subscription error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Network error',
@@ -148,7 +152,7 @@ export async function subscribeToNewsletter(data: NewsletterSubscribeData): Prom
  */
 export async function getSupportCategories(): Promise<ApiResponse<string[]>> {
   try {
-    const response = await fetch(`${API_BASE_URL}/support/categories`, {
+    const response = await safeFetch(`${API_BASE_URL}/support/categories`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -169,7 +173,6 @@ export async function getSupportCategories(): Promise<ApiResponse<string[]>> {
       data: result,
     };
   } catch (error) {
-    console.error('Get categories error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Network error',

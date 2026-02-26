@@ -126,6 +126,9 @@ export interface SessionData {
     credit_balance?: number;
     is_verified?: boolean;
     mfa_enabled?: boolean;
+    phone?: string | null;
+    country?: string | null;
+    country_code?: string | null;
   };
   expires_at?: string;
   credit_balance?: number;
@@ -158,7 +161,7 @@ interface AuthContextType {
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   // Payment methods
   fetchPlans: () => Promise<{ success: boolean; error?: string }>;
-  createPaymentSession: (planId: string, currency?: string) => Promise<{ success: boolean; data?: PaymentSession; error?: string }>;
+  createPaymentSession: (planId: string, currency?: string, customerPhone?: string) => Promise<{ success: boolean; data?: PaymentSession; error?: string }>;
   getUserSubscription: () => Promise<{ success: boolean; data?: UserSubscription; error?: string }>;
   refreshUserData: () => Promise<void>;
   // API key management - centralized for all components
@@ -313,7 +316,10 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
             account_type: userProfile.account_type,
             credit_balance: userProfile.credit_balance,
             is_verified: userProfile.is_verified,
-            mfa_enabled: userProfile.mfa_enabled
+            mfa_enabled: userProfile.mfa_enabled,
+            phone: (userProfile as any).phone ?? null,
+            country: (userProfile as any).country ?? null,
+            country_code: (userProfile as any).country_code ?? null,
           },
           subscription: userSubscription || undefined
         };
@@ -358,7 +364,10 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
           account_type: userProfile.account_type,
           credit_balance: userProfile.credit_balance,
           is_verified: userProfile.is_verified,
-          mfa_enabled: userProfile.mfa_enabled
+          mfa_enabled: userProfile.mfa_enabled,
+          phone: (userProfile as any).phone ?? null,
+          country: (userProfile as any).country ?? null,
+          country_code: (userProfile as any).country_code ?? null,
         } : apiData.user,
         expires_at: apiData.user_type === 'guest' ? apiData.guest?.expires_at : undefined,
         requests_today: apiData.user_type === 'guest' ? apiData.guest?.requests_today : undefined,
@@ -449,15 +458,19 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
   };
 
   // Create payment session - Updated for new API format
-  const createPaymentSession = async (planId: string, currency: string = 'USD'): Promise<{ success: boolean; data?: PaymentSession; error?: string }> => {
+  const createPaymentSession = async (planId: string, currency: string = 'USD', customerPhone?: string): Promise<{ success: boolean; data?: PaymentSession; error?: string }> => {
     if (!session?.api_key) {
       return { success: false, error: 'No API key available' };
     }
 
+    // Use provided phone or fall back to profile phone
+    const phoneToUse = customerPhone || session?.user_info?.phone || undefined;
+
     try {
       const result = await PaymentApiService.createCheckoutSession(session.api_key, {
         plan_id: planId,
-        currency: currency
+        currency: currency,
+        ...(phoneToUse ? { customer_phone: phoneToUse } : {}),
       });
 
       if (result.success && result.data) {
@@ -568,7 +581,10 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
             account_type: userProfile.account_type,
             credit_balance: userProfile.credit_balance,
             is_verified: userProfile.is_verified,
-            mfa_enabled: userProfile.mfa_enabled
+            mfa_enabled: userProfile.mfa_enabled,
+            phone: (userProfile as any).phone ?? null,
+            country: (userProfile as any).country ?? null,
+            country_code: (userProfile as any).country_code ?? null,
           } : {
             email: email,
             account_type: 'free',
@@ -662,7 +678,10 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
             account_type: userProfile.account_type,
             credit_balance: userProfile.credit_balance,
             is_verified: userProfile.is_verified,
-            mfa_enabled: userProfile.mfa_enabled
+            mfa_enabled: userProfile.mfa_enabled,
+            phone: (userProfile as any).phone ?? null,
+            country: (userProfile as any).country ?? null,
+            country_code: (userProfile as any).country_code ?? null,
           } : {
             email: email,
             account_type: 'free',
@@ -718,7 +737,10 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
             account_type: userProfile.account_type,
             credit_balance: userProfile.credit_balance,
             is_verified: userProfile.is_verified,
-            mfa_enabled: userProfile.mfa_enabled
+            mfa_enabled: userProfile.mfa_enabled,
+            phone: (userProfile as any).phone ?? null,
+            country: (userProfile as any).country ?? null,
+            country_code: (userProfile as any).country_code ?? null,
           } : {
             email: email,
             account_type: 'free',

@@ -25,6 +25,7 @@ interface PaymentApiResponse<T = any> {
 interface CheckoutRequest {
   plan_id: string; // Valid values: free, basic, standard, pro, enterprise
   currency: string; // USD, EUR, INR, etc.
+  customer_phone?: string; // Required by Cashfree for some payment methods
 }
 
 // Response Types - Matches backend exactly
@@ -245,10 +246,13 @@ export class PaymentApiService {
       'X-API-Key': apiKey
     };
 
-    const requestBody = {
+    const requestBody: Record<string, string> = {
       plan_id: request.plan_id,
       currency: request.currency || 'USD'
     };
+    if (request.customer_phone) {
+      requestBody.customer_phone = request.customer_phone;
+    }
 
     const response = await makePaymentApiRequest<{ data: CheckoutResponse }>('POST', '/cashfree/create-order', requestBody, headers);
 
