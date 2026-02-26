@@ -2,6 +2,44 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 
+const CURRENCIES = [
+  { code: 'USD', name: 'US Dollar' },
+  { code: 'EUR', name: 'Euro' },
+  { code: 'GBP', name: 'British Pound' },
+  { code: 'JPY', name: 'Japanese Yen' },
+  { code: 'CNY', name: 'Chinese Yuan' },
+  { code: 'INR', name: 'Indian Rupee' },
+  { code: 'CAD', name: 'Canadian Dollar' },
+  { code: 'AUD', name: 'Australian Dollar' },
+  { code: 'CHF', name: 'Swiss Franc' },
+  { code: 'KRW', name: 'South Korean Won' },
+  { code: 'SGD', name: 'Singapore Dollar' },
+  { code: 'HKD', name: 'Hong Kong Dollar' },
+  { code: 'SEK', name: 'Swedish Krona' },
+  { code: 'NOK', name: 'Norwegian Krone' },
+  { code: 'DKK', name: 'Danish Krone' },
+  { code: 'NZD', name: 'New Zealand Dollar' },
+  { code: 'MXN', name: 'Mexican Peso' },
+  { code: 'BRL', name: 'Brazilian Real' },
+  { code: 'ZAR', name: 'South African Rand' },
+  { code: 'RUB', name: 'Russian Ruble' },
+  { code: 'TRY', name: 'Turkish Lira' },
+  { code: 'PLN', name: 'Polish Zloty' },
+  { code: 'THB', name: 'Thai Baht' },
+  { code: 'IDR', name: 'Indonesian Rupiah' },
+  { code: 'MYR', name: 'Malaysian Ringgit' },
+  { code: 'PHP', name: 'Philippine Peso' },
+  { code: 'AED', name: 'UAE Dirham' },
+  { code: 'SAR', name: 'Saudi Riyal' },
+  { code: 'ILS', name: 'Israeli Shekel' },
+  { code: 'ARS', name: 'Argentine Peso' },
+  { code: 'CLP', name: 'Chilean Peso' },
+  { code: 'COP', name: 'Colombian Peso' },
+  { code: 'CZK', name: 'Czech Koruna' },
+  { code: 'HUF', name: 'Hungarian Forint' },
+  { code: 'RON', name: 'Romanian Leu' },
+] as const;
+
 interface CreatePortfolioModalProps {
   show: boolean;
   formState: {
@@ -155,10 +193,11 @@ const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
               cursor: 'pointer',
             }}
           >
-            <option value="USD">USD - US Dollar</option>
-            <option value="EUR">EUR - Euro</option>
-            <option value="GBP">GBP - British Pound</option>
-            <option value="INR">INR - Indian Rupee</option>
+            {CURRENCIES.map(({ code, name }) => (
+              <option key={code} value={code}>
+                {code} - {name}
+              </option>
+            ))}
           </select>
         </div>
 

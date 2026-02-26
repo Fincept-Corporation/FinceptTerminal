@@ -6,56 +6,43 @@
 #
 # Strategy ID: FCT-185C6BF9
 # Category: Options
-# Description: This algorithm demonstrate how to use Option Strategies (e.g. OptionStrategies.STRADDLE) helper classes to batch send...
+# Description: Options-inspired hedged momentum strategy. Buys SPY when above
+#   both 10 and 30-day EMAs (strong uptrend). Uses tight stop (2%) to simulate
+#   option-like risk profile. Re-enters on trend resumption.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
-### <summary>
-### This algorithm demonstrate how to use Option Strategies (e.g. OptionStrategies.STRADDLE) helper classes to batch send orders for common strategies.
-### It also shows how you can prefilter contracts easily based on strikes and expirations, and how you can inspect the
-### option chain to pick a specific option contract to trade.
-### </summary>
-### <meta name="tag" content="using data" />
-### <meta name="tag" content="options" />
-### <meta name="tag" content="option strategies" />
-### <meta name="tag" content="filter selection" />
 class BasicTemplateOptionStrategyAlgorithm(QCAlgorithm):
+    """Hedged momentum with tight stop-loss."""
 
     def initialize(self):
-        # Set the cash we'd like to use for our backtest
-        self.set_cash(1000000)
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-        # Start and end dates for the backtest.
-        self.set_start_date(2015,12,24)
-        self.set_end_date(2015,12,24)
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-        # Add assets you'd like to see
-        option = self.add_option("GOOG")
-        self.option_symbol = option.symbol
+        self._ema10 = self.ema(self.symbol, 10, Resolution.DAILY)
+        self._ema30 = self.ema(self.symbol, 30, Resolution.DAILY)
+        self._entry_price = 0
 
-        # set our strike/expiry filter for this option chain
-        # SetFilter method accepts timedelta objects or integer for days.
-        # The following statements yield the same filtering criteria
-        option.set_filter(-2, +2, 0, 180)
-        # option.set_filter(-2,2, timedelta(0), timedelta(180))
+    def on_data(self, data):
+        if not self._ema30.is_ready:
+            return
+        if self.symbol not in data:
+            return
 
-        # use the underlying equity as the benchmark
-        self.set_benchmark("GOOG")
+        price = data[self.symbol].close
+        e10 = self._ema10.current.value
+        e30 = self._ema30.current.value
 
-    def on_data(self,slice):
         if not self.portfolio.invested:
-            for kvp in slice.option_chains:
-                chain = kvp.value
-                contracts = sorted(sorted(chain, key = lambda x: abs(chain.underlying.price - x.strike)),
-                                                 key = lambda x: x.expiry, reverse=False)
-
-                if len(contracts) == 0: continue
-                atm_straddle = contracts[0]
-                if atm_straddle != None:
-                    self.sell(OptionStrategies.STRADDLE(self.option_symbol, atm_straddle.strike, atm_straddle.expiry), 2)
+            if price > e10 and e10 > e30:
+                self.set_holdings(self.symbol, 1)
+                self._entry_price = price
         else:
-            self.liquidate()
-
-    def on_order_event(self, order_event):
-        self.log(str(order_event))
+            # Tight stop-loss (2%) or trend reversal
+            if price < self._entry_price * 0.98 or e10 < e30:
+                self.liquidate()

@@ -176,7 +176,7 @@ class TTSService {
     });
 
     // Inline formulas: \( ... \) or $ ... $
-    text = text.replace(/\\\((.*?)\\\)|\$([^\$\n]+?)\$/g, (_, i1, i2) => {
+    text = text.replace(/\\\((.*?)\\\)|\$([^$\n]+?)\$/g, (_, i1, i2) => {
       const formula = i1 || i2;
       return ' ' + this.latexToSpeech(formula) + ' ';
     });

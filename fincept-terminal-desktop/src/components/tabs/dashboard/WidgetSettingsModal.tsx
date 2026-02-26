@@ -529,6 +529,91 @@ export const WidgetSettingsModal: React.FC<WidgetSettingsModalProps> = ({
           </div>
         );
 
+      case 'videoplayer':
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div>
+              <label style={{ fontSize: '9px', color: FC.GRAY, fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                WIDGET TITLE
+              </label>
+              <input
+                type="text"
+                value={config.videoTitle || 'Video Player'}
+                onChange={(e) => setConfig({ ...config, videoTitle: e.target.value })}
+                placeholder="e.g. Bloomberg TV"
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FC.DARK_BG,
+                  border: `1px solid ${FC.BORDER}`,
+                  color: FC.WHITE,
+                  fontSize: '10px',
+                  borderRadius: '2px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '9px', color: FC.GRAY, fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                VIDEO URL
+              </label>
+              <input
+                type="text"
+                value={config.videoUrl || ''}
+                onChange={(e) => setConfig({ ...config, videoUrl: e.target.value })}
+                placeholder="YouTube, HLS (.m3u8), or MP4 URL"
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FC.DARK_BG,
+                  border: `1px solid ${FC.BORDER}`,
+                  color: FC.WHITE,
+                  fontSize: '10px',
+                  borderRadius: '2px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ fontSize: '8px', color: FC.MUTED, marginTop: '4px' }}>
+                Supports YouTube links, HLS streams (.m3u8), and MP4 URLs. Leave blank to show preset channels.
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: '9px', color: FC.GRAY, fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                PRESET CHANNELS
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {[
+                  { url: 'https://www.youtube.com/watch?v=dp8PhLsUcFE', label: 'Bloomberg TV' },
+                  { url: 'https://www.youtube.com/watch?v=9ApRjK3RVSY', label: 'CNBC Live' },
+                  { url: 'https://www.youtube.com/watch?v=vAvNMaWlkrc', label: 'Reuters TV' },
+                  { url: 'https://www.youtube.com/watch?v=WUm7b7GiTFM', label: 'Yahoo Finance' },
+                  { url: 'https://www.youtube.com/watch?v=6IlWB5R_Oso', label: 'Fox Business' },
+                ].map(ch => (
+                  <button
+                    key={ch.url}
+                    onClick={() => setConfig({ ...config, videoUrl: ch.url, videoTitle: ch.label })}
+                    style={{
+                      padding: '5px 8px',
+                      backgroundColor: config.videoUrl === ch.url ? FC.ORANGE + '20' : FC.DARK_BG,
+                      border: `1px solid ${config.videoUrl === ch.url ? FC.ORANGE : FC.BORDER}`,
+                      color: config.videoUrl === ch.url ? FC.ORANGE : FC.GRAY,
+                      fontSize: '9px',
+                      borderRadius: '2px',
+                      cursor: 'pointer',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {ch.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+
       case 'notes':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -594,7 +679,7 @@ export const WidgetSettingsModal: React.FC<WidgetSettingsModalProps> = ({
   // Non-configurable widgets
   const isConfigurable = [
     'news', 'market', 'watchlist', 'forum', 'datasource', 'calendar', 'notes',
-    'stockquote', 'screener', 'watchlistalerts', 'dbnomics', 'performance'
+    'stockquote', 'screener', 'watchlistalerts', 'dbnomics', 'performance', 'videoplayer'
   ].includes(widgetType);
 
   return (

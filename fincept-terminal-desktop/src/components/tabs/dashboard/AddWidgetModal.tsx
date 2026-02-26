@@ -6,7 +6,7 @@ import { X, Plus, Newspaper, BarChart3, Eye, MessageSquare, Bitcoin,
   Package, Globe, DollarSign, Ship, Database, TrendingUp,
   Activity, Briefcase, Bell, Calendar, Zap, Shield, LineChart, StickyNote,
   Quote, ArrowUpDown, Search, AlertTriangle, Brain, Bot, Trophy, TestTube,
-  BellRing, Cpu, DatabaseZap, Flag, Anchor } from 'lucide-react';
+  BellRing, Cpu, DatabaseZap, Flag, Anchor, Video } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { WidgetType, DEFAULT_WIDGET_CONFIGS } from './widgets';
 import { watchlistService } from '../../../services/core/watchlistService';
@@ -78,6 +78,7 @@ const WIDGET_OPTIONS: WidgetOption[] = [
   { type: 'alphaarena', label: 'ALPHA ARENA', description: 'AI model competition leaderboard', icon: <Trophy size={14} />, color: FC.YELLOW, category: 'tools' },
   { type: 'watchlistalerts', label: 'WATCHLIST ALERTS', description: 'Big movers in your watchlists', icon: <BellRing size={14} />, color: FC.ORANGE, category: 'tools' },
   { type: 'livesignals', label: 'LIVE SIGNALS', description: 'AI Quant Lab trading signals', icon: <Cpu size={14} />, color: FC.GREEN, category: 'tools' },
+  { type: 'videoplayer', label: 'VIDEO PLAYER', description: 'Live financial TV streams and custom video URLs', icon: <Video size={14} />, color: FC.PURPLE, category: 'tools' },
 ];
 
 const CATEGORIES = [
@@ -106,6 +107,8 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
   const [screenerPreset, setScreenerPreset] = useState<'value' | 'growth' | 'momentum'>('value');
   const [alertThreshold, setAlertThreshold] = useState(3);
   const [dbnomicsSeriesId, setDbnomicsSeriesId] = useState('FRED/UNRATE');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoTitle, setVideoTitle] = useState('Video Player');
   const { t } = useTranslation('dashboard');
 
   useEffect(() => {
@@ -141,23 +144,26 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
       case 'news':
         config = { newsCategory, newsLimit: 5 };
         break;
-      case 'market':
+      case 'market': {
         const tickers = marketCategory === 'Indices' ? ['^GSPC', '^IXIC', '^DJI', '^RUT']
           : marketCategory === 'Tech' ? ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA']
           : ['GC=F', 'CL=F', 'SI=F'];
         config = { marketCategory, marketTickers: tickers };
         break;
-      case 'watchlist':
+      }
+      case 'watchlist': {
         const wl = watchlists.find(w => w.id === selectedWatchlist);
         config = { watchlistId: selectedWatchlist, watchlistName: wl?.name || 'Watchlist' };
         break;
+      }
       case 'forum':
         config = { forumCategoryName: forumCategory, forumLimit: 5 };
         break;
-      case 'datasource':
+      case 'datasource': {
         const ds = dataSources.find(d => d.alias === selectedDataSource);
         config = { dataSourceAlias: selectedDataSource, dataSourceDisplayName: ds?.display_name };
         break;
+      }
       case 'stockquote':
         config = { stockSymbol };
         break;
@@ -169,6 +175,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
         break;
       case 'dbnomics':
         config = { dbnomicsSeriesId };
+        break;
+      case 'videoplayer':
+        config = { videoUrl: videoUrl.trim(), videoTitle: videoTitle.trim() || 'Video Player' };
         break;
     }
     onAdd(selectedType, config);
@@ -490,7 +499,49 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
             />
           )}
 
-          {!['news', 'market', 'watchlist', 'forum', 'datasource', 'stockquote', 'screener', 'watchlistalerts', 'dbnomics'].includes(selectedType) && (
+          {selectedType === 'videoplayer' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <input
+                type="text"
+                value={videoTitle}
+                onChange={(e) => setVideoTitle(e.target.value)}
+                placeholder="Widget title (e.g. Bloomberg TV)"
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FC.DARK_BG,
+                  border: `1px solid ${FC.BORDER}`,
+                  color: FC.WHITE,
+                  fontSize: '10px',
+                  borderRadius: '2px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <input
+                type="text"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                placeholder="YouTube, HLS (.m3u8) or MP4 URL — leave blank to pick preset"
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FC.DARK_BG,
+                  border: `1px solid ${FC.BORDER}`,
+                  color: FC.WHITE,
+                  fontSize: '10px',
+                  borderRadius: '2px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ fontSize: '9px', color: FC.MUTED }}>
+                Supports YouTube links, HLS streams (.m3u8), and MP4 files. Leave blank to choose from preset financial channels.
+              </div>
+            </div>
+          )}
+
+          {!['news', 'market', 'watchlist', 'forum', 'datasource', 'stockquote', 'screener', 'watchlistalerts', 'dbnomics', 'videoplayer'].includes(selectedType) && (
             <InfoText text={selectedOption?.description || 'No additional configuration needed.'} />
           )}
 

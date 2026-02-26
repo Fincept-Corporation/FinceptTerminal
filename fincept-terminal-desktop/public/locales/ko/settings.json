@@ -115,5 +115,10 @@
     "testSuccess": "[KO] Test notification sent successfully!",
     "testFailed": "[KO] Failed to send test notification. Check your configuration.",
     "saved": "[KO] Configuration saved"
+  },
+  "language": {
+    "title": "[KO] LANGUAGE SETTINGS",
+    "selectLanguage": "[KO] Select your preferred language for the terminal interface",
+    "currentLanguage": "[KO] CURRENT LANGUAGE"
   }
 }

@@ -68,7 +68,7 @@ export const useModalState = (operations: PortfolioOps) => {
 
   const confirmDeletePortfolio = useCallback(async () => {
     if (!portfolioToDelete) return;
-    try { await operations.deletePortfolio(portfolioToDelete); } catch {}
+    try { await operations.deletePortfolio(portfolioToDelete); } catch { /* ignore delete error */ }
     setShowDeleteConfirm(false);
     setPortfolioToDelete(null);
   }, [operations, portfolioToDelete]);

@@ -13,5 +13,8 @@
   "refresh": "ОБНОВИТЬ",
   "auto": "АВТО",
   "on": "ВКЛ",
-  "off": "ВЫКЛ"
+  "off": "ВЫКЛ",
+  "loading": {
+    "title": "[RU] Initializing..."
+  }
 }

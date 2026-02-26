@@ -309,10 +309,8 @@ export async function stopOrderSignalBridge(): Promise<ApiResult> {
 // ============================================================================
 
 /** List all Python strategies from the library registry */
-export async function listPythonStrategies(
-  category?: string
-): Promise<ApiResult<PythonStrategy[]>> {
-  const raw = await invoke<string>('list_python_strategies', { category: category || null });
+export async function listPythonStrategies(): Promise<ApiResult<PythonStrategy[]>> {
+  const raw = await invoke<string>('list_python_strategies');
   return parseResult(raw);
 }
 
@@ -326,7 +324,7 @@ export async function getStrategyCategories(): Promise<ApiResult<string[]>> {
 export async function getPythonStrategy(
   strategyId: string
 ): Promise<ApiResult<PythonStrategy>> {
-  const raw = await invoke<string>('get_python_strategy', { strategyId });
+  const raw = await invoke<string>('get_python_strategy', { id: strategyId });
   return parseResult(raw);
 }
 
@@ -334,7 +332,7 @@ export async function getPythonStrategy(
 export async function getPythonStrategyCode(
   strategyId: string
 ): Promise<ApiResult<{ code: string }>> {
-  const raw = await invoke<string>('get_python_strategy_code', { strategyId });
+  const raw = await invoke<string>('get_python_strategy_code', { id: strategyId });
   return parseResult(raw);
 }
 
@@ -420,17 +418,52 @@ export async function validatePythonSyntax(
 export async function runPythonBacktest(
   request: PythonBacktestRequest
 ): Promise<ApiResult<PythonBacktestResult>> {
-  const raw = await invoke<string>('run_python_backtest', {
+  console.log('[algoTradingService] runPythonBacktest invoke params:', {
     strategyId: request.strategy_id,
-    customCode: request.custom_code || null,
-    symbols: request.symbols,
+    symbol: request.symbol,
     startDate: request.start_date,
     endDate: request.end_date,
-    initialCash: request.initial_cash,
-    parameters: request.parameters || {},
-    dataProvider: request.data_provider,
+    initialCapital: request.initial_capital,
+    params: request.params || null,
   });
-  return parseResult(raw);
+  const raw = await invoke<string>('run_python_backtest', {
+    strategyId: request.strategy_id,
+    symbol: request.symbol,
+    startDate: request.start_date,
+    endDate: request.end_date,
+    initialCapital: request.initial_capital,
+    params: request.params || null,
+  });
+  console.log('[algoTradingService] runPythonBacktest raw response:', raw);
+
+  // Rust now passes through the Python engine JSON directly:
+  // { success: true, trades: [...], equity_curve: [...], metrics: {...}, debug: [...] }
+  // or { success: false, error: "...", debug: [...] }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    console.log('[algoTradingService] Parsed backtest response:', parsed);
+
+    if (!parsed.success) {
+      const debugInfo = parsed.debug as string[] | undefined;
+      if (debugInfo) {
+        console.warn('[algoTradingService] Backtest debug log:', debugInfo);
+      }
+      return { success: false, error: (parsed.error as string) || 'Backtest failed', debug: debugInfo };
+    }
+
+    // Map flat response to ApiResult<PythonBacktestResult>
+    const data: PythonBacktestResult = {
+      success: true,
+      trades: (parsed.trades || []) as PythonBacktestResult['trades'],
+      equity_curve: (parsed.equity_curve || []) as PythonBacktestResult['equity_curve'],
+      metrics: (parsed.metrics || {}) as PythonBacktestResult['metrics'],
+      debug: parsed.debug as string[] | undefined,
+    };
+    return { success: true, data };
+  } catch (e) {
+    console.error('[algoTradingService] Failed to parse backtest response:', e, raw);
+    return { success: false, error: 'Failed to parse backtest response' };
+  }
 }
 
 /** Extract parameters from Python strategy code */
@@ -438,7 +471,27 @@ export async function extractStrategyParameters(
   code: string
 ): Promise<ApiResult<StrategyParameter[]>> {
   const raw = await invoke<string>('extract_strategy_parameters', { code });
-  return parseResult(raw);
+  console.log('[algoTradingService] extractStrategyParameters raw:', raw);
+
+  // Rust returns { success, parameters: [{ name, default, type }] }
+  // We need to map to ApiResult<StrategyParameter[]> with default_value field
+  try {
+    const parsed = JSON.parse(raw) as { success: boolean; parameters?: Array<{ name: string; default: string; type: string }>; error?: string };
+
+    if (parsed.success && parsed.parameters) {
+      const mapped: StrategyParameter[] = parsed.parameters.map(p => ({
+        name: p.name,
+        type: (p.type || 'string') as StrategyParameter['type'],
+        default_value: String(p.default ?? ''),
+      }));
+      console.log('[algoTradingService] Extracted parameters:', mapped);
+      return { success: true, data: mapped };
+    }
+
+    return { success: false, error: parsed.error || 'No parameters found' };
+  } catch {
+    return { success: false, error: 'Failed to parse parameter extraction response' };
+  }
 }
 
 // ============================================================================

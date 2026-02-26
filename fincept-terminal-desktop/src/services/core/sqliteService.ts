@@ -458,7 +458,7 @@ export const getChatStatistics = async (): Promise<ChatStatistics> => {
     console.warn('[SqliteService] db_get_chat_statistics not implemented, using fallback');
     const sessions = await getChatSessions(10000);
     let totalMessages = 0;
-    let totalTokens = 0;
+    const totalTokens = 0;
 
     for (const session of sessions) {
       totalMessages += session.message_count || 0;

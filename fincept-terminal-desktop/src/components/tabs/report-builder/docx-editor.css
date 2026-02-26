@@ -1,0 +1,345 @@
+/* ══════════════════════════════════════════════════════════════════
+   TipTap Editor Content Styles
+   Fincept Terminal Design System
+   ══════════════════════════════════════════════════════════════════ */
+
+.tiptap {
+  outline: none;
+  min-height: 297mm;
+  line-height: 1.6;
+  color: #000;
+  font-size: 11pt;
+  font-family: 'Calibri', 'Arial', 'Helvetica Neue', sans-serif;
+}
+
+.tiptap:focus {
+  outline: none;
+}
+
+.tiptap p {
+  margin-bottom: 0.5em;
+}
+
+/* Headings — use document fonts (Calibri/Cambria as in Word) */
+.tiptap h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; font-family: 'Cambria', 'Georgia', 'Times New Roman', serif; }
+.tiptap h2 { font-size: 1.5em; font-weight: bold; margin: 0.83em 0; font-family: 'Cambria', 'Georgia', 'Times New Roman', serif; }
+.tiptap h3 { font-size: 1.17em; font-weight: bold; margin: 1em 0; font-family: 'Cambria', 'Georgia', 'Times New Roman', serif; }
+.tiptap h4 { font-size: 1em; font-weight: bold; margin: 1.33em 0; }
+.tiptap h5 { font-size: 0.83em; font-weight: bold; margin: 1.67em 0; }
+.tiptap h6 { font-size: 0.67em; font-weight: bold; margin: 2.33em 0; }
+
+/* ── Document styles (mapped from mammoth) ─────────────────────── */
+.tiptap h1.doc-title {
+  font-size: 28pt;
+  font-weight: bold;
+  text-align: center;
+  margin: 0.5em 0;
+  font-family: 'Cambria', 'Georgia', 'Times New Roman', serif;
+  color: #1a1a2e;
+}
+
+.tiptap h2.doc-subtitle {
+  font-size: 16pt;
+  font-weight: normal;
+  text-align: center;
+  margin: 0.3em 0 1em;
+  font-family: 'Cambria', 'Georgia', 'Times New Roman', serif;
+  color: #444;
+}
+
+/* TOC styles */
+.tiptap h2.toc-heading {
+  font-size: 16pt;
+  font-weight: bold;
+  margin: 1em 0 0.5em;
+}
+
+.tiptap p.toc-1 { padding-left: 0; margin: 4px 0; }
+.tiptap p.toc-2 { padding-left: 1.5em; margin: 3px 0; }
+.tiptap p.toc-3 { padding-left: 3em; margin: 2px 0; font-size: 0.9em; }
+
+/* Caption & footnote styles */
+.tiptap p.caption { font-size: 0.85em; color: #666; font-style: italic; text-align: center; margin: 0.5em 0; }
+.tiptap p.footnote { font-size: 0.8em; color: #555; border-top: 1px solid #ddd; padding-top: 4px; margin-top: 1em; }
+.tiptap p.endnote { font-size: 0.8em; color: #555; }
+.tiptap p.comment { font-size: 0.8em; color: #888; background: #fff9e6; padding: 4px 8px; border-left: 3px solid #f0c040; }
+
+/* Book title character style */
+.tiptap em.book-title { font-style: italic; font-weight: bold; }
+
+/* ── Tables ────────────────────────────────────────────────────── */
+.tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  table-layout: fixed;
+  overflow: hidden;
+}
+
+.tiptap td,
+.tiptap th {
+  border: 1px solid #ccc;
+  padding: 8px 12px;
+  min-width: 80px;
+  vertical-align: top;
+  position: relative;
+}
+
+.tiptap th {
+  background: #f5f5f5;
+  font-weight: bold;
+}
+
+.tiptap .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: rgba(255, 136, 0, 0.15);
+  pointer-events: none;
+}
+
+.tiptap .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: #FF8800;
+  pointer-events: none;
+}
+
+.tiptap .tableWrapper {
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.tiptap .resize-cursor {
+  cursor: col-resize;
+}
+
+/* ── Images ────────────────────────────────────────────────────── */
+.tiptap img {
+  max-width: 100%;
+  height: auto;
+  margin: 0.5em 0;
+  display: block;
+}
+
+.tiptap img.ProseMirror-selectednode {
+  outline: 2px solid #FF8800;
+  border-radius: 2px;
+}
+
+/* ── Lists (CRITICAL: ensure visible text on white page) ─────── */
+.tiptap ul,
+.tiptap ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+  color: #000;
+}
+
+.tiptap li {
+  margin: 0.25em 0;
+  color: #000;
+}
+
+.tiptap li p {
+  margin: 0;
+  color: #000;
+}
+
+.tiptap ul li::marker {
+  color: #000;
+}
+
+.tiptap ol li::marker {
+  color: #000;
+}
+
+/* ── Blockquotes ───────────────────────────────────────────────── */
+.tiptap blockquote {
+  border-left: 3px solid #FF8800;
+  padding-left: 1em;
+  margin: 1em 0;
+  color: #444;
+  font-style: italic;
+}
+
+/* ── Code Blocks ───────────────────────────────────────────────── */
+.tiptap pre {
+  background: #1a1a1a;
+  color: #00E5FF;
+  padding: 12px 16px;
+  border-radius: 2px;
+  font-family: 'IBM Plex Mono', 'Consolas', monospace;
+  font-size: 0.9em;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.tiptap code {
+  background: #f0f0f0;
+  color: #c7254e;
+  padding: 2px 4px;
+  border-radius: 2px;
+  font-family: 'IBM Plex Mono', 'Consolas', monospace;
+  font-size: 0.9em;
+}
+
+.tiptap pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+
+/* ── Horizontal Rule ───────────────────────────────────────────── */
+.tiptap hr {
+  border: none;
+  border-top: 1px solid #ccc;
+  margin: 1.5em 0;
+}
+
+/* ── Links ─────────────────────────────────────────────────────── */
+.tiptap a {
+  color: #0066cc;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ── Placeholder ───────────────────────────────────────────────── */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #adb5bd;
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}
+
+/* ── Mark Highlight ────────────────────────────────────────────── */
+.tiptap mark {
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* ── Strikethrough ─────────────────────────────────────────────── */
+.tiptap s {
+  text-decoration: line-through;
+}
+
+/* ── Superscript / Subscript ───────────────────────────────────── */
+.tiptap sup {
+  font-size: 0.75em;
+  vertical-align: super;
+}
+
+.tiptap sub {
+  font-size: 0.75em;
+  vertical-align: sub;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   docx-preview container overrides (dark theme)
+   ══════════════════════════════════════════════════════════════════ */
+.docx-preview-container {
+  background: #000000;
+  padding: 24px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.docx-preview-container .docx-wrapper {
+  background: #000000 !important;
+}
+
+.docx-preview-container section.docx {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+  margin-bottom: 20px;
+}
+
+/* ── Compact mode (split view) ─────────────────────────────────── */
+.docx-preview-compact {
+  padding: 8px !important;
+}
+
+.docx-preview-compact .docx-wrapper {
+  padding: 0 !important;
+}
+
+.docx-preview-compact section.docx {
+  margin-bottom: 8px !important;
+  transform-origin: top left;
+  transform: scale(0.85);
+  width: 117.6%;
+}
+
+/* ── Fidelity Warning Banner ───────────────────────────────────── */
+.docx-fidelity-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 136, 0, 0.08);
+  border: 1px solid rgba(255, 136, 0, 0.25);
+  border-radius: 2px;
+  font-size: 10px;
+  color: #FF8800;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ── Page Break Visual Indicator ───────────────────────────────── */
+.tiptap .page-break {
+  page-break-after: always;
+  border-top: 2px dashed #ccc;
+  margin: 2em 0;
+  position: relative;
+}
+
+.tiptap .page-break::after {
+  content: 'Page Break';
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  padding: 0 8px;
+  color: #999;
+  font-size: 9px;
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ── Select dropdown dark fix (prevents white-on-white) ──────── */
+.docx-toolbar-select {
+  background-color: #000 !important;
+  color: #fff !important;
+}
+
+.docx-toolbar-select option {
+  background-color: #000 !important;
+  color: #fff !important;
+}
+
+/* ── Scrollbar Styling (Fincept Terminal) ─────────────────────── */
+.docx-preview-container::-webkit-scrollbar,
+.tiptap::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.docx-preview-container::-webkit-scrollbar-track,
+.tiptap::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+.docx-preview-container::-webkit-scrollbar-thumb,
+.tiptap::-webkit-scrollbar-thumb {
+  background: #2A2A2A;
+  border-radius: 3px;
+}
+
+.docx-preview-container::-webkit-scrollbar-thumb:hover,
+.tiptap::-webkit-scrollbar-thumb:hover {
+  background: #4A4A4A;
+}

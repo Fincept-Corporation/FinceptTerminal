@@ -186,13 +186,14 @@ export class GetTickerStatsNode implements INodeType {
             };
             break;
 
-          case 'performance':
+          case 'performance': {
             const periods = this.getNodeParameter('performancePeriods', 0) as string[];
             result.performance = {};
             for (const period of periods) {
               (result.performance as Record<string, any>)[period] = GetTickerStatsNode.calculatePerformance(stats, period);
             }
             break;
+          }
 
           case 'ath':
             result.allTimeHigh = null;

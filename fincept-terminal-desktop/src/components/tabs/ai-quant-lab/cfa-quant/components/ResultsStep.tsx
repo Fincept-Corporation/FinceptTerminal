@@ -51,24 +51,22 @@ export function ResultsStep({
   refAreaLeft,
   refAreaRight,
 }: ResultsStepProps) {
-  if (!analysisResult?.result) return null;
-
   const config = analysisConfigs.find(a => a.id === selectedAnalysis);
-  const result = analysisResult.result as Record<string, unknown>;
+  const result = (analysisResult?.result ?? {}) as Record<string, unknown>;
 
   const keyMetrics = useMemo(() =>
-    extractKeyMetrics(selectedAnalysis, result, priceData),
-    [selectedAnalysis, result, priceData]
+    analysisResult?.result ? extractKeyMetrics(selectedAnalysis, result, priceData) : [],
+    [analysisResult, selectedAnalysis, result, priceData]
   );
 
   const resultChartData = useMemo(() =>
-    buildResultChartData(selectedAnalysis, result, chartData, priceData),
-    [selectedAnalysis, result, chartData, priceData]
+    analysisResult?.result ? buildResultChartData(selectedAnalysis, result, chartData, priceData) : [],
+    [analysisResult, selectedAnalysis, result, chartData, priceData]
   );
 
   // Compute cluster boundary for unsupervised learning
   const clusterBoundary = useMemo(() => {
-    if (selectedAnalysis !== 'unsupervised_learning') return null;
+    if (!analysisResult?.result || selectedAnalysis !== 'unsupervised_learning') return null;
     const value = result.value as Record<string, Record<string, unknown>>;
     if (value?.kmeans) {
       const clusterLabels = value.kmeans.cluster_labels as number[];
@@ -87,28 +85,30 @@ export function ResultsStep({
       }
     }
     return null;
-  }, [selectedAnalysis, result, priceData]);
+  }, [analysisResult, selectedAnalysis, result, priceData]);
 
   // Bootstrap reference values
   const bootstrapRefs = useMemo(() => {
-    if (selectedAnalysis !== 'resampling_methods') return null;
+    if (!analysisResult?.result || selectedAnalysis !== 'resampling_methods') return null;
     const value = result.value as Record<string, Record<string, unknown>>;
     if (value?.bootstrap) {
       const mean = value.bootstrap.mean as number;
       const ci = value.bootstrap.confidence_interval as [number, number];
-      if (resultChartData.length > 0 && (resultChartData[0] as any)?.meanBinIdx !== undefined) {
+      if (resultChartData.length > 0 && (resultChartData[0] as Record<string, unknown>)?.meanBinIdx !== undefined) {
         return {
           mean,
           ciLow: ci?.[0],
           ciHigh: ci?.[1],
-          meanIdx: (resultChartData[0] as any).meanBinIdx as number,
-          ciLowIdx: (resultChartData[0] as any).ciLowIdx as number,
-          ciHighIdx: (resultChartData[0] as any).ciHighIdx as number,
+          meanIdx: (resultChartData[0] as Record<string, unknown>).meanBinIdx as number,
+          ciLowIdx: (resultChartData[0] as Record<string, unknown>).ciLowIdx as number,
+          ciHighIdx: (resultChartData[0] as Record<string, unknown>).ciHighIdx as number,
         };
       }
     }
     return null;
-  }, [selectedAnalysis, result, resultChartData]);
+  }, [analysisResult, selectedAnalysis, result, resultChartData]);
+
+  if (!analysisResult?.result) return null;
 
   const exportResults = () => {
     if (!analysisResult) return;

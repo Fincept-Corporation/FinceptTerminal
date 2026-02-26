@@ -6,52 +6,47 @@
 #
 # Strategy ID: FCT-0AD9A342
 # Category: General Strategy
-# Description: This algorithm demonstrate how to use OptionStrategies helper class to batch send orders for common strategies. In th...
+# Description: Protective position management strategy inspired by covered call
+#   mechanics. Buys SPY and uses trailing stop logic to protect profits. Enters
+#   on EMA uptrend, exits with 3% trailing stop loss.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
-from OptionStrategyFactoryMethodsBaseAlgorithm import *
+class CoveredAndProtectiveCallStrategiesAlgorithm(QCAlgorithm):
+    """Trend-following with trailing stop loss (protective strategy)."""
 
-### <summary>
-### This algorithm demonstrate how to use OptionStrategies helper class to batch send orders for common strategies.
-### In this case, the algorithm tests the Covered and Protective Call strategies.
-### </summary>
-class CoveredAndProtectiveCallStrategiesAlgorithm(OptionStrategyFactoryMethodsBaseAlgorithm):
+    def initialize(self):
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-    def expected_orders_count(self) -> int:
-        return 4
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-    def trade_strategy(self, chain: OptionChain, option_symbol: Symbol):
-        contracts = sorted(sorted(chain, key = lambda x: abs(chain.underlying.price - x.strike)),
-                           key = lambda x: x.expiry, reverse=True)
+        self._ema = self.ema(self.symbol, 20, Resolution.DAILY)
+        self._highest_since_entry = 0.0
 
-        if len(contracts) == 0: return
-        contract = contracts[0]
-        if contract != None:
-            self._covered_call = OptionStrategies.covered_call(option_symbol, contract.strike, contract.expiry)
-            self._protective_call = OptionStrategies.protective_call(option_symbol, contract.strike, contract.expiry)
-            self.buy(self._covered_call, 2)
+    def on_data(self, data):
+        if not self._ema.is_ready:
+            return
+        if self.symbol not in data:
+            return
 
-    def assert_strategy_position_group(self, position_group: IPositionGroup, option_symbol: Symbol):
-        positions = list(position_group.positions)
-        if len(positions) != 2:
-            raise Exception(f"Expected position group to have 2 positions. Actual: {len(positions)}")
+        price = data[self.symbol].close
 
-        option_position = [position for position in positions if position.symbol.security_type == SecurityType.OPTION][0]
-        if option_position.symbol.id.option_right != OptionRight.CALL:
-            raise Exception(f"Expected option position to be a call. Actual: {option_position.symbol.id.option_right}")
+        if not self.portfolio.invested:
+            # Enter when price above EMA (uptrend)
+            if price > self._ema.current.value:
+                self.set_holdings(self.symbol, 1)
+                self._highest_since_entry = price
+        else:
+            # Track highest price since entry
+            if price > self._highest_since_entry:
+                self._highest_since_entry = price
 
-        underlying_position = [position for position in positions if position.symbol.security_type == SecurityType.EQUITY][0]
-        expected_option_position_quantity = -2
-        expected_underlying_position_quantity = 2 * self.securities[option_symbol].symbol_properties.contract_multiplier
-
-        if option_position.quantity != expected_option_position_quantity:
-            raise Exception(f"Expected option position quantity to be {expected_option_position_quantity}. Actual: {option_position.quantity}")
-
-        if underlying_position.quantity != expected_underlying_position_quantity:
-            raise Exception(f"Expected underlying position quantity to be {expected_underlying_position_quantity}. Actual: {underlying_position.quantity}")
-
-    def liquidate_strategy(self):
-        # We should be able to close the position using the inverse strategy (a protective call)
-        self.buy(self._protective_call, 2)
+            # Trailing stop: exit if price drops 3% from peak
+            drawdown = (self._highest_since_entry - price) / self._highest_since_entry
+            if drawdown > 0.03:
+                self.liquidate()
+                self._highest_since_entry = 0.0

@@ -13,5 +13,8 @@
   "refresh": "YENİLE",
   "auto": "OTOMATİK",
   "on": "AÇIK",
-  "off": "KAPALI"
+  "off": "KAPALI",
+  "loading": {
+    "title": "[TR] Initializing..."
+  }
 }

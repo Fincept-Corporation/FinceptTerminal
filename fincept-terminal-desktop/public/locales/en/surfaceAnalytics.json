@@ -150,26 +150,26 @@
     "configureApiKey": "Configure Databento API key for batch downloads"
   },
   "surfaceAnalytics": {
-    "apiKeyRequired": "[EN] surfaceAnalytics.apiKeyRequired",
-    "apiKeyDescription": "[EN] surfaceAnalytics.apiKeyDescription",
+    "apiKeyRequired": "DATABENTO API KEY REQUIRED",
+    "apiKeyDescription": "Surface Analytics uses Databento for institutional-grade market data including options chains, historical bars, and real-time feeds. Connect your API key to access live volatility surfaces and correlation analytics.",
     "features": {
-      "volatility": "[EN] surfaceAnalytics.features.volatility",
-      "volatilityDesc": "[EN] surfaceAnalytics.features.volatilityDesc",
-      "correlation": "[EN] surfaceAnalytics.features.correlation",
-      "correlationDesc": "[EN] surfaceAnalytics.features.correlationDesc",
-      "yieldCurves": "[EN] surfaceAnalytics.features.yieldCurves",
-      "yieldCurvesDesc": "[EN] surfaceAnalytics.features.yieldCurvesDesc",
-      "pca": "[EN] surfaceAnalytics.features.pca",
-      "pcaDesc": "[EN] surfaceAnalytics.features.pcaDesc"
+      "volatility": "VOL SURFACE",
+      "volatilityDesc": "3D implied volatility surface across strikes & expirations",
+      "correlation": "CORRELATION",
+      "correlationDesc": "Multi-asset rolling correlation matrix",
+      "yieldCurves": "YIELD CURVES",
+      "yieldCurvesDesc": "U.S. Treasury yield curve historical evolution",
+      "pca": "PCA FACTORS",
+      "pcaDesc": "Principal component analysis factor loadings"
     },
-    "configureApiKey": "[EN] surfaceAnalytics.configureApiKey",
-    "getApiKey": "[EN] surfaceAnalytics.getApiKey",
-    "useDemoData": "[EN] surfaceAnalytics.useDemoData",
-    "syntheticData": "[EN] surfaceAnalytics.syntheticData",
-    "paidServiceNotice": "[EN] surfaceAnalytics.paidServiceNotice"
+    "configureApiKey": "CONFIGURE API KEY",
+    "getApiKey": "GET API KEY",
+    "useDemoData": "USE DEMO DATA",
+    "syntheticData": "synthetic",
+    "paidServiceNotice": "Databento is a paid service. API usage incurs costs based on data volume and schema type. Use demo mode to explore the interface without charges."
   },
   "common": {
-    "or": "[EN] common.or",
-    "note": "[EN] common.note"
+    "or": "or",
+    "note": "NOTE"
   }
 }

@@ -6,47 +6,40 @@
 #
 # Strategy ID: FCT-0CB9D7FA
 # Category: Regression Test
-# Description: This regression algorithm is expected to stop executing after Initialization. Related to GH 6168 issue
+# Description: Quick-entry momentum strategy. Immediately buys SPY when price
+#   is above 10-day EMA and RSI is below 70. Exits when RSI exceeds 80 or
+#   price drops below EMA. Originally a regression test for init behavior.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
-# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
-# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from AlgorithmImports import *
 
-### <summary>
-###  This regression algorithm is expected to stop executing after Initialization. Related to GH 6168 issue
-### </summary>
 class QuitAfterInitializationRegressionAlgorithm(QCAlgorithm):
-    '''Basic template algorithm simply initializes the date range and cash'''
+    """Quick-entry momentum strategy with RSI filter."""
 
     def initialize(self):
-        '''Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.'''
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-        self.set_start_date(2013,10, 7)  #Set Start Date
-        self.set_end_date(2013,10,11)    #Set End Date
-        self.set_cash(100000)           #Set Strategy Cash
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-        self.add_equity("SPY", Resolution.DAILY)
-        self._stopped = False
+        self._ema = self.ema(self.symbol, 10, Resolution.DAILY)
+        self._rsi = self.rsi(self.symbol, 14, Resolution.DAILY)
 
     def on_data(self, data):
-        '''OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
+        if not self._ema.is_ready or not self._rsi.is_ready:
+            return
+        if self.symbol not in data:
+            return
 
-        Arguments:
-            data: Slice object keyed by symbol containing the stock data
-        '''
-        if self._stopped:
-            raise ValueError("Algorithm should of stopped!")
-        self._stopped = True
-        self.quit()
+        price = data[self.symbol].close
+        ema_val = self._ema.current.value
+        rsi_val = self._rsi.current.value
+
+        if not self.portfolio.invested:
+            if price > ema_val and rsi_val < 70:
+                self.set_holdings(self.symbol, 1)
+        else:
+            if rsi_val > 80 or price < ema_val:
+                self.liquidate()

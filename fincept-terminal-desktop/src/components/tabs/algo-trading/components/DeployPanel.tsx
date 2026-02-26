@@ -10,20 +10,9 @@ import type { SymbolSearchResult, SupportedBroker } from '@/services/trading/mas
 import type { StockExchange } from '@/brokers/stocks/types';
 
 import { F } from '../constants/theme';
+import { S } from '../constants/styles';
 
 type AssetType = 'crypto' | 'stock';
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '8px 10px', backgroundColor: F.DARK_BG,
-  color: F.WHITE, border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-  fontSize: '10px', fontFamily: '"IBM Plex Mono", monospace', outline: 'none',
-  transition: 'border-color 0.2s',
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px',
-  marginBottom: '4px', display: 'block',
-};
 
 interface DeployPanelProps {
   strategyId: string;
@@ -120,89 +109,76 @@ const DeployPanel: React.FC<DeployPanelProps> = ({ strategyId, strategyName, onC
   };
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex',
-      alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-    }}
+    <div
+      className={S.modalOverlay}
+      style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{
-        width: '520px', backgroundColor: F.PANEL_BG,
-        border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-        overflow: 'visible',
-      }}>
+      <div
+        className="rounded overflow-visible"
+        style={{ width: '560px', backgroundColor: F.PANEL_BG, border: `1px solid ${F.BORDER}` }}
+      >
         {/* Header */}
-        <div style={{
-          padding: '14px 16px',
-          backgroundColor: F.HEADER_BG,
-          borderBottom: `2px solid ${F.GREEN}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '28px', height: '28px', borderRadius: '2px',
-              backgroundColor: `${F.GREEN}20`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Rocket size={14} color={F.GREEN} />
+        <div
+          className="flex items-center justify-between px-5 py-4"
+          style={{ backgroundColor: F.HEADER_BG, borderBottom: `2px solid ${F.GREEN}` }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="w-8 h-8 rounded flex items-center justify-center"
+              style={{ backgroundColor: `${F.GREEN}20` }}
+            >
+              <Rocket size={16} color={F.GREEN} />
             </div>
             <div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
+              <div className="text-[13px] font-bold tracking-wide" style={{ color: F.WHITE }}>
                 DEPLOY STRATEGY
               </div>
-              <div style={{ fontSize: '9px', color: F.MUTED, marginTop: '2px' }}>
+              <div className="text-[10px] mt-0.5" style={{ color: F.MUTED }}>
                 {strategyName.toUpperCase()}
               </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              padding: '6px', backgroundColor: 'transparent', border: `1px solid ${F.BORDER}`,
-              color: F.MUTED, cursor: 'pointer', borderRadius: '2px', transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = F.RED; e.currentTarget.style.color = F.RED; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = F.BORDER; e.currentTarget.style.color = F.MUTED; }}
+          <button onClick={onClose} className={S.btnGhost} style={{ color: F.MUTED }}
+            onMouseEnter={e => { e.currentTarget.style.color = F.RED; }}
+            onMouseLeave={e => { e.currentTarget.style.color = F.MUTED; }}
           >
-            <X size={12} />
+            <X size={14} />
           </button>
         </div>
 
         {/* Asset Type Toggle */}
-        <div style={{
-          display: 'flex', padding: '0', borderBottom: `1px solid ${F.BORDER}`,
-        }}>
+        <div className="flex" style={{ borderBottom: `1px solid ${F.BORDER}` }}>
           {(['stock', 'crypto'] as AssetType[]).map(at => (
-            <button key={at} onClick={() => setAssetType(at)} style={{
-              flex: 1, padding: '10px', border: 'none', cursor: 'pointer',
-              backgroundColor: assetType === at ? `${at === 'crypto' ? F.CYAN : F.ORANGE}12` : 'transparent',
-              borderBottom: assetType === at ? `2px solid ${at === 'crypto' ? F.CYAN : F.ORANGE}` : '2px solid transparent',
-              color: assetType === at ? (at === 'crypto' ? F.CYAN : F.ORANGE) : F.MUTED,
-              fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', transition: 'all 0.2s',
-            }}>
+            <button
+              key={at}
+              onClick={() => setAssetType(at)}
+              className="flex-1 py-3 border-none cursor-pointer text-[11px] font-bold tracking-wide transition-all duration-200"
+              style={{
+                backgroundColor: assetType === at ? `${at === 'crypto' ? F.CYAN : F.ORANGE}12` : 'transparent',
+                borderBottom: assetType === at ? `2px solid ${at === 'crypto' ? F.CYAN : F.ORANGE}` : '2px solid transparent',
+                color: assetType === at ? (at === 'crypto' ? F.CYAN : F.ORANGE) : F.MUTED,
+              }}
+            >
               {at === 'crypto' ? 'CRYPTO' : 'INDIAN STOCK'}
             </button>
           ))}
         </div>
 
         {/* Broker Status Bar */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          padding: '10px 16px',
-          backgroundColor: brokerConnected ? `${F.GREEN}08` : `${F.YELLOW}08`,
-          borderBottom: `1px solid ${F.BORDER}`,
-        }}>
-          <div style={{
-            width: '8px', height: '8px', borderRadius: '50%',
-            backgroundColor: brokerConnected ? F.GREEN : F.YELLOW,
-          }} />
-          <Server size={10} color={brokerConnected ? F.GREEN : F.YELLOW} />
-          <span style={{
-            fontSize: '9px', fontWeight: 700,
-            color: brokerConnected ? F.GREEN : F.YELLOW,
-            letterSpacing: '0.5px',
-          }}>
+        <div
+          className="flex items-center gap-3 px-5 py-3"
+          style={{
+            backgroundColor: brokerConnected ? `${F.GREEN}08` : `${F.YELLOW}08`,
+            borderBottom: `1px solid ${F.BORDER}`,
+          }}
+        >
+          <div
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: brokerConnected ? F.GREEN : F.YELLOW }}
+          />
+          <Server size={12} color={brokerConnected ? F.GREEN : F.YELLOW} />
+          <span className="text-[11px] font-bold tracking-wide" style={{ color: brokerConnected ? F.GREEN : F.YELLOW }}>
             {brokerName.toUpperCase()} -- {brokerConnected
               ? (stockHasStoredCreds && !stockContextConnected && !isCrypto
                 ? 'CREDENTIALS STORED (AUTO-CONNECT ON DEPLOY)'
@@ -211,23 +187,23 @@ const DeployPanel: React.FC<DeployPanelProps> = ({ strategyId, strategyName, onC
             {brokerConnected && stockContextConnected && tradingMode === 'paper' && ' (PAPER MODE)'}
           </span>
           {!isCrypto && !brokerConnected && (
-            <span style={{ fontSize: '8px', color: F.MUTED, marginLeft: 'auto' }}>
+            <span className="text-[10px] ml-auto" style={{ color: F.MUTED }}>
               Login via Equity Trading tab
             </span>
           )}
         </div>
 
         {/* Config Form */}
-        <div style={{ padding: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-            <div style={{ position: 'relative', zIndex: 100 }}>
-              <label style={labelStyle}>SYMBOL</label>
+        <div className="p-5">
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="relative z-[100]">
+              <label className={S.label}>SYMBOL</label>
               {isCrypto ? (
                 <input
                   value={symbol}
                   onChange={e => setSymbol(e.target.value)}
                   placeholder="e.g. BTC/USD"
-                  style={inputStyle}
+                  className={S.input}
                   onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
                   onBlur={e => { e.currentTarget.style.borderColor = F.BORDER; }}
                 />
@@ -244,34 +220,38 @@ const DeployPanel: React.FC<DeployPanelProps> = ({ strategyId, strategyName, onC
                 />
               )}
               {!isCrypto && selectedToken && (
-                <div style={{ fontSize: '8px', color: F.CYAN, marginTop: '2px' }}>
+                <div className="text-[10px] mt-1" style={{ color: F.CYAN }}>
                   {selectedExchange}:{selectedToken}
                 </div>
               )}
             </div>
             <div>
-              <label style={labelStyle}>EXECUTION MODE</label>
-              <select value={mode} onChange={e => setMode(e.target.value as 'paper' | 'live')} style={{
-                ...inputStyle,
-                color: mode === 'live' ? F.RED : F.GREEN,
-                borderColor: mode === 'live' ? `${F.RED}40` : `${F.GREEN}40`,
-              }}>
+              <label className={S.label}>EXECUTION MODE</label>
+              <select
+                value={mode}
+                onChange={e => setMode(e.target.value as 'paper' | 'live')}
+                className={S.select}
+                style={{
+                  color: mode === 'live' ? F.RED : F.GREEN,
+                  borderColor: mode === 'live' ? `${F.RED}40` : `${F.GREEN}40`,
+                }}
+              >
                 <option value="paper">Paper Trading</option>
                 <option value="live">Live Trading</option>
               </select>
             </div>
             <div>
-              <label style={labelStyle}>TIMEFRAME</label>
-              <select value={timeframe} onChange={e => setTimeframe(e.target.value)} style={inputStyle}>
+              <label className={S.label}>TIMEFRAME</label>
+              <select value={timeframe} onChange={e => setTimeframe(e.target.value)} className={S.select}>
                 {TIMEFRAMES.map(tf => <option key={tf.value} value={tf.value}>{tf.label}</option>)}
               </select>
             </div>
             <div>
-              <label style={labelStyle}>QUANTITY</label>
+              <label className={S.label}>QUANTITY</label>
               <input
                 type="number" value={quantity}
                 onChange={e => setQuantity(e.target.value)}
-                min="0.01" step="any" style={inputStyle}
+                min="0.01" step="any" className={S.input}
                 onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
                 onBlur={e => { e.currentTarget.style.borderColor = F.BORDER; }}
               />
@@ -280,25 +260,23 @@ const DeployPanel: React.FC<DeployPanelProps> = ({ strategyId, strategyName, onC
 
           {/* Warnings */}
           {mode === 'live' && !brokerConnected && (
-            <div style={{
-              padding: '8px 12px', backgroundColor: `${F.RED}12`,
-              border: `1px solid ${F.RED}30`, borderRadius: '2px',
-              display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px',
-            }}>
-              <AlertTriangle size={10} color={F.RED} />
-              <span style={{ fontSize: '9px', fontWeight: 700, color: F.RED }}>
+            <div
+              className="flex items-center gap-2 rounded px-4 py-3 mb-3"
+              style={{ backgroundColor: `${F.RED}12`, border: `1px solid ${F.RED}30` }}
+            >
+              <AlertTriangle size={14} color={F.RED} />
+              <span className="text-[11px] font-bold" style={{ color: F.RED }}>
                 LIVE MODE REQUIRES AN ACTIVE BROKER CONNECTION
               </span>
             </div>
           )}
           {mode === 'live' && brokerConnected && (
-            <div style={{
-              padding: '8px 12px', backgroundColor: `${F.YELLOW}12`,
-              border: `1px solid ${F.YELLOW}30`, borderRadius: '2px',
-              display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px',
-            }}>
-              <Zap size={10} color={F.YELLOW} />
-              <span style={{ fontSize: '9px', fontWeight: 700, color: F.YELLOW }}>
+            <div
+              className="flex items-center gap-2 rounded px-4 py-3 mb-3"
+              style={{ backgroundColor: `${F.YELLOW}12`, border: `1px solid ${F.YELLOW}30` }}
+            >
+              <Zap size={14} color={F.YELLOW} />
+              <span className="text-[11px] font-bold" style={{ color: F.YELLOW }}>
                 LIVE MODE -- REAL ORDERS WILL BE PLACED VIA {brokerName.toUpperCase()}
               </span>
             </div>
@@ -306,17 +284,15 @@ const DeployPanel: React.FC<DeployPanelProps> = ({ strategyId, strategyName, onC
 
           {/* Result */}
           {result && (
-            <div style={{
-              padding: '8px 12px', borderRadius: '2px', marginBottom: '10px',
-              display: 'flex', alignItems: 'center', gap: '6px',
-              backgroundColor: result.success ? `${F.GREEN}15` : `${F.RED}15`,
-              border: `1px solid ${result.success ? F.GREEN + '40' : F.RED + '40'}`,
-            }}>
-              <Activity size={10} color={result.success ? F.GREEN : F.RED} />
-              <span style={{
-                fontSize: '9px', fontWeight: 700,
-                color: result.success ? F.GREEN : F.RED,
-              }}>
+            <div
+              className="flex items-center gap-2 rounded px-4 py-3 mb-3"
+              style={{
+                backgroundColor: result.success ? `${F.GREEN}15` : `${F.RED}15`,
+                border: `1px solid ${result.success ? F.GREEN + '40' : F.RED + '40'}`,
+              }}
+            >
+              <Activity size={14} color={result.success ? F.GREEN : F.RED} />
+              <span className="text-[11px] font-bold" style={{ color: result.success ? F.GREEN : F.RED }}>
                 {result.message}
               </span>
             </div>
@@ -326,19 +302,16 @@ const DeployPanel: React.FC<DeployPanelProps> = ({ strategyId, strategyName, onC
           <button
             onClick={handleDeploy}
             disabled={deploying || !symbol.trim()}
+            className={`${S.btnPrimary} w-full border-none`}
             style={{
-              width: '100%', padding: '12px',
+              padding: '14px',
               backgroundColor: mode === 'live' ? F.RED : F.GREEN,
               color: mode === 'live' ? F.WHITE : F.DARK_BG,
-              border: 'none', borderRadius: '2px',
-              fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px',
               cursor: (deploying || !symbol.trim()) ? 'not-allowed' : 'pointer',
               opacity: (deploying || !symbol.trim()) ? 0.5 : 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-              transition: 'all 0.2s',
             }}
           >
-            <Rocket size={12} />
+            <Rocket size={14} />
             {deploying ? 'DEPLOYING STRATEGY...' : mode === 'live' ? 'DEPLOY TO LIVE' : 'DEPLOY TO PAPER'}
           </button>
         </div>

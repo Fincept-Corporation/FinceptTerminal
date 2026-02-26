@@ -158,27 +158,31 @@ export class ScheduleTriggerNode implements INodeType {
         cronExpression = '0 * * * *';
         nextRun = new Date(now.getTime() + 3600000);
         break;
-      case 'everyDay':
+      case 'everyDay': {
         const time = this.getNodeParameter('time', 0) as string;
         const [hour, minute] = time.split(':').map(Number);
         cronExpression = `${minute} ${hour} * * *`;
         nextRun = ScheduleTriggerNode.getNextDailyRun(hour, minute, timezone);
         break;
-      case 'everyWeek':
+      }
+      case 'everyWeek': {
         const daysOfWeek = this.getNodeParameter('daysOfWeek', 0) as string[];
         cronExpression = `0 9 * * ${daysOfWeek.join(',')}`;
         nextRun = ScheduleTriggerNode.getNextWeeklyRun(daysOfWeek, timezone);
         break;
-      case 'marketOpen':
+      }
+      case 'marketOpen': {
         const openExchange = this.getNodeParameter('exchange', 0) as string;
         cronExpression = ScheduleTriggerNode.getMarketOpenCron(openExchange);
         nextRun = ScheduleTriggerNode.getNextMarketOpen(openExchange);
         break;
-      case 'marketClose':
+      }
+      case 'marketClose': {
         const closeExchange = this.getNodeParameter('exchange', 0) as string;
         cronExpression = ScheduleTriggerNode.getMarketCloseCron(closeExchange);
         nextRun = ScheduleTriggerNode.getNextMarketClose(closeExchange);
         break;
+      }
       case 'cron':
         cronExpression = this.getNodeParameter('cronExpression', 0) as string;
         nextRun = new Date(now.getTime() + 60000); // Approximate

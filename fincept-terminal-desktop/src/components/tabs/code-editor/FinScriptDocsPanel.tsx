@@ -58,7 +58,7 @@ export const FinScriptDocsPanel: React.FC<FinScriptDocsPanelProps> = ({ onClose,
       if (line.trimStart().startsWith('•') || line.trimStart().startsWith('-')) {
         const bulletItems: string[] = [];
         while (i < lines.length && (lines[i].trimStart().startsWith('•') || lines[i].trimStart().startsWith('-'))) {
-          bulletItems.push(lines[i].trimStart().replace(/^[•\-]\s*/, ''));
+          bulletItems.push(lines[i].trimStart().replace(/^[•-]\s*/, ''));
           i++;
         }
         elements.push(

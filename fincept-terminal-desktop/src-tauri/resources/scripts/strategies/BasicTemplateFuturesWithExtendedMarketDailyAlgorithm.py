@@ -6,31 +6,37 @@
 #
 # Strategy ID: FCT-074CBF2C
 # Category: Futures
-# Description: This example demonstrates how to add futures with daily resolution and extended market hours
+# Description: EMA crossover strategy adapted from futures daily template.
+#   Uses 10/30 EMA crossover to generate buy/sell signals. Buys when fast EMA
+#   crosses above slow EMA, exits when fast crosses below.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
-# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
-# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from AlgorithmImports import *
-from BasicTemplateFuturesDailyAlgorithm import BasicTemplateFuturesDailyAlgorithm
 
-### <summary>
-### This example demonstrates how to add futures with daily resolution and extended market hours.
-### </summary>
-### <meta name="tag" content="using data" />
-### <meta name="tag" content="benchmarks" />
-### <meta name="tag" content="futures" />
-class BasicTemplateFuturesWithExtendedMarketDailyAlgorithm(BasicTemplateFuturesDailyAlgorithm):
-    def get_extended_market_hours(self):
-        return True
+class BasicTemplateFuturesWithExtendedMarketDailyAlgorithm(QCAlgorithm):
+    """EMA 10/30 crossover strategy (adapted from futures daily template)."""
+
+    def initialize(self):
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
+
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
+
+        self._fast_ema = self.ema(self.symbol, 10, Resolution.DAILY)
+        self._slow_ema = self.ema(self.symbol, 30, Resolution.DAILY)
+
+    def on_data(self, data):
+        if not self._fast_ema.is_ready or not self._slow_ema.is_ready:
+            return
+        if self.symbol not in data:
+            return
+
+        fast = self._fast_ema.current.value
+        slow = self._slow_ema.current.value
+
+        if not self.portfolio.invested and fast > slow:
+            self.set_holdings(self.symbol, 0.9)
+        elif self.portfolio.invested and fast < slow:
+            self.liquidate()

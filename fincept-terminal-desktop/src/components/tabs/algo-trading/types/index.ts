@@ -169,16 +169,14 @@ export interface StrategyParameter {
   max?: number;
 }
 
-/** Python backtest request */
+/** Python backtest request — matches Rust run_python_backtest command params */
 export interface PythonBacktestRequest {
   strategy_id: string;
-  custom_code?: string;          // Optional override
-  symbols: string[];
+  symbol: string;                // comma-separated symbols (Rust param: symbol)
   start_date: string;
   end_date: string;
-  initial_cash: number;
-  parameters?: Record<string, string>;
-  data_provider: 'yfinance' | 'fyers';
+  initial_capital: number;       // Rust param: initial_capital
+  params?: string;               // JSON-stringified parameters (Rust param: params: Option<String>)
 }
 
 /** Python backtest result */

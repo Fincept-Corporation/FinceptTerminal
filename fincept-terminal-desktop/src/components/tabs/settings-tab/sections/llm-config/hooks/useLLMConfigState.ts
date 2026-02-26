@@ -206,19 +206,20 @@ export function useLLMConfigState({
 
       if (provider === LLM_PROVIDERS.OLLAMA) {
         fetchOllamaModels();
-      } else if (provider !== LLM_PROVIDERS.FINCEPT) {
-        fetchProviderModels();
       }
+      // Skip auto-fetching external provider models - only load on user click
     };
 
     loadModels();
-  }, [activeProvider, getCurrentLLMConfig, fetchOllamaModels, fetchProviderModels]);
+  }, [activeProvider, getCurrentLLMConfig, fetchOllamaModels]);
 
-  // Load models for new model config form
+  // Load models for new model config form (LAZY - only on manual trigger)
   useEffect(() => {
     const loadNewModelConfigModels = async () => {
       if (!showAddModel) return;
-
+      // Don't auto-fetch - let user click button or use manual entry
+      setNewModelConfigModels([]);
+      /* Disabled auto-fetch for performance
       try {
         const models = await LLMModelsService.getModelsByProvider(newModelConfig.provider);
         if (models && models.length > 0) {
@@ -228,11 +229,11 @@ export function useLLMConfigState({
         }
       } catch {
         setNewModelConfigModels([]);
-      }
+      } */
     };
 
     loadNewModelConfigModels();
-  }, [newModelConfig.provider, showAddModel]);
+  }, [showAddModel]);
 
   // Reset new model config when closing form
   const resetNewModelConfig = useCallback(() => {

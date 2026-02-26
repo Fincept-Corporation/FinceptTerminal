@@ -1314,7 +1314,7 @@ export const portfolioPanelTools: InternalTool[] = [
         for (const sym of symbols) {
           const m = fullAnalysis[sym] ?? fullAnalysis?.metrics?.[sym];
           if (m) {
-            message += `  ${sym}: CAGR ${(m.cagr_pct ?? m.cagr * 100 ?? 0).toFixed(1)}%`;
+            message += `  ${sym}: CAGR ${(m.cagr_pct ?? (m.cagr != null ? m.cagr * 100 : 0)).toFixed(1)}%`;
             if (m.sharpe_ratio !== undefined) message += `  Sharpe ${m.sharpe_ratio.toFixed(2)}`;
             if (m.max_drawdown !== undefined) message += `  MaxDD ${(m.max_drawdown * 100).toFixed(1)}%`;
             message += '\n';

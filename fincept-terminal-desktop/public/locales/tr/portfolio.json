@@ -12,9 +12,111 @@
     "quantity": "MİKTAR",
     "price": "FİYAT",
     "add": "EKLE",
-    "sell": "SAT"
+    "sell": "SAT",
+    "confirmDelete": "[TR] CONFIRM DELETE",
+    "deleteTransactionWarning": "[TR] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[TR] DELETE",
+    "editTransaction": "[TR] EDIT TRANSACTION",
+    "transactionDate": "[TR] TRANSACTION DATE",
+    "notes": "[TR] NOTES",
+    "notesPlaceholder": "[TR] Optional notes...",
+    "totalValue": "[TR] TOTAL VALUE",
+    "save": "[TR] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[TR] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[TR] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[TR] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[TR] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[TR] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[TR] FINCEPT",
+    "portfolioTerminal": "[TR] PORTFOLIO TERMINAL",
+    "live": "[TR] LIVE",
+    "pos": "[TR] POS",
+    "ins": "[TR] INS",
+    "nav": "[TR] NAV",
+    "pnl": "[TR] P&L",
+    "day": "[TR] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[TR] TOTAL VALUE",
+    "unrealizedPnl": "[TR] UNREALIZED P&L",
+    "dayChange": "[TR] DAY CHANGE",
+    "costBasis": "[TR] COST BASIS",
+    "fifo": "[TR] FIFO",
+    "positions": "[TR] POSITIONS",
+    "concTop3": "[TR] CONC. TOP3",
+    "weight": "[TR] WEIGHT",
+    "sharpe": "[TR] SHARPE",
+    "annualized": "[TR] ANNUALIZED",
+    "beta": "[TR] BETA",
+    "vsSpy": "[TR] VS SPY",
+    "volatility": "[TR] VOLATILITY",
+    "ann30d": "[TR] 30D ANN.",
+    "maxDrawdown": "[TR] MAX DRAWDOWN",
+    "sinceIncep": "[TR] SINCE INCEP.",
+    "riskScore": "[TR] RISK SCORE",
+    "composite": "[TR] COMPOSITE",
+    "var95": "[TR] VAR (95%)",
+    "oneDay": "[TR] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[TR] SECTOR ALLOCATION",
+    "sectors": "[TR] sectors",
+    "correlation": "[TR] CORRELATION",
+    "dayChangeProxy": "[TR] (day change proxy)",
+    "needTwoHoldings": "[TR] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[TR] POSITIONS BLOTTER",
+    "instruments": "[TR] instruments"
+  },
+  "chart": {
+    "performance": "[TR] PERFORMANCE",
+    "portfolio": "[TR] PORTFOLIO",
+    "totalReturn": "[TR] TOTAL RETURN",
+    "historyMessage": "[TR] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[TR] ORDER ENTRY",
+    "price": "[TR] PRICE",
+    "qtyHeld": "[TR] QTY HELD",
+    "mktVal": "[TR] MKT VAL",
+    "clickToBuyMore": "[TR] Click to buy more",
+    "clickToSell": "[TR] Click to sell",
+    "clickToBuy": "[TR] Click to buy an asset",
+    "clickToSellAsset": "[TR] Click to sell an asset",
+    "openBuyOrder": "[TR] OPEN BUY ORDER",
+    "openSellOrder": "[TR] OPEN SELL ORDER",
+    "ordersRecorded": "[TR] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[TR] HOLDINGS",
+    "noHoldings": "[TR] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[TR] RISK SCORE",
+    "low": "[TR] LOW",
+    "high": "[TR] HIGH",
+    "topMovers": "[TR] TOP MOVERS",
+    "quickStats": "[TR] QUICK STATS",
+    "concTop3": "[TR] CONC. TOP3",
+    "volatility": "[TR] VOLATILITY",
+    "newPortfolio": "[TR] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[TR] SELECT PORTFOLIO",
+    "searchPortfolios": "[TR] Search portfolios...",
+    "newPortfolio": "[TR] NEW PORTFOLIO",
+    "nav": "[TR] NAV",
+    "pnl": "[TR] P&L",
+    "day": "[TR] DAY",
+    "pos": "[TR] POS",
+    "wl": "[TR] W/L"
+  },
+  "actions": {
+    "buy": "[TR] BUY",
+    "sell": "[TR] SELL"
   }
 }

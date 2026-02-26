@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Save, Play, Loader, ArrowLeft, Shield, AlertTriangle, ChevronDown, ChevronRight,
-  Target, TrendingUp, TrendingDown, BarChart3, Clock, Percent, Activity,
-  ArrowUpRight, ArrowDownRight, Hash,
+  Target, TrendingUp, BarChart3, Clock, Percent, Activity,
+  ArrowUpRight, ArrowDownRight, Hash, Crosshair, Gauge, Zap, Plus, Trash2, Copy,
 } from 'lucide-react';
 import type { ConditionItem } from '../types';
-import { TIMEFRAMES } from '../constants/indicators';
+import { TIMEFRAMES, getIndicatorDef } from '../constants/indicators';
 import { saveAlgoStrategy, getAlgoStrategy, runAlgoBacktest } from '../services/algoTradingService';
-import ConditionBuilder from './ConditionBuilder';
+import ConditionRow from './ConditionRow';
 import { F } from '../constants/theme';
 
 interface StrategyEditorProps {
@@ -28,42 +28,24 @@ interface BacktestResult {
   metrics: BacktestMetrics;
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '8px 10px', backgroundColor: F.DARK_BG,
-  color: F.WHITE, border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-  fontSize: '10px', fontFamily: '"IBM Plex Mono", monospace', outline: 'none',
-};
+/* ── Inline style helpers per UI_DESIGN_SYSTEM.md ── */
+const font = '"IBM Plex Mono", "Consolas", monospace';
+const lbl: React.CSSProperties = { fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px', textTransform: 'uppercase' };
+const inputStyle: React.CSSProperties = { padding: '6px 8px', backgroundColor: F.DARK_BG, color: F.WHITE, borderWidth: '1px', borderStyle: 'solid', borderColor: F.BORDER, borderRadius: '2px', fontSize: '10px', fontFamily: font, outline: 'none' };
+const selectStyle: React.CSSProperties = { ...inputStyle, cursor: 'pointer' };
+const btnPrimary: React.CSSProperties = { padding: '6px 14px', backgroundColor: F.ORANGE, color: F.DARK_BG, borderWidth: 0, borderStyle: 'none', borderColor: 'transparent', borderRadius: '2px', fontSize: '9px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '0.5px', fontFamily: font };
+const btnOutline: React.CSSProperties = { padding: '5px 10px', backgroundColor: 'transparent', borderWidth: '1px', borderStyle: 'solid', borderColor: F.BORDER, color: F.GRAY, fontSize: '9px', fontWeight: 700, borderRadius: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s', fontFamily: font };
+const badge = (bg: string, fg: string): React.CSSProperties => ({ padding: '2px 6px', backgroundColor: bg, color: fg, fontSize: '8px', fontWeight: 700, borderRadius: '2px', letterSpacing: '0.5px', display: 'inline-flex', alignItems: 'center', gap: '3px' });
 
-const labelStyle: React.CSSProperties = {
-  fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px',
-  marginBottom: '4px', display: 'block',
-};
-
-const sectionStyle: React.CSSProperties = {
-  backgroundColor: F.PANEL_BG,
-  border: `1px solid ${F.BORDER}`,
-  borderRadius: '2px',
-};
-
-const sectionHeaderStyle: React.CSSProperties = {
-  padding: '10px 16px',
-  backgroundColor: F.HEADER_BG,
-  borderBottom: `1px solid ${F.BORDER}`,
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-};
+const DEFAULT_ENTRY: ConditionItem = { indicator: 'RSI', params: { period: 14 }, field: 'value', operator: 'crosses_below', value: 30 };
+const DEFAULT_EXIT: ConditionItem = { indicator: 'RSI', params: { period: 14 }, field: 'value', operator: 'crosses_above', value: 70 };
 
 const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved, onCancel }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [timeframe, setTimeframe] = useState('5m');
-  const [entryConditions, setEntryConditions] = useState<ConditionItem[]>([
-    { indicator: 'RSI', params: { period: 14 }, field: 'value', operator: 'crosses_below', value: 30 },
-  ]);
-  const [exitConditions, setExitConditions] = useState<ConditionItem[]>([
-    { indicator: 'RSI', params: { period: 14 }, field: 'value', operator: 'crosses_above', value: 70 },
-  ]);
+  const [entryConditions, setEntryConditions] = useState<ConditionItem[]>([{ ...DEFAULT_ENTRY }]);
+  const [exitConditions, setExitConditions] = useState<ConditionItem[]>([{ ...DEFAULT_EXIT }]);
   const [entryLogic, setEntryLogic] = useState<'AND' | 'OR'>('AND');
   const [exitLogic, setExitLogic] = useState<'AND' | 'OR'>('AND');
   const [stopLoss, setStopLoss] = useState<string>('');
@@ -72,6 +54,7 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
   const [useExitConditions, setUseExitConditions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Backtest
   const [btSymbol, setBtSymbol] = useState('');
   const [btPeriod, setBtPeriod] = useState('1y');
   const [btProvider, setBtProvider] = useState<'yfinance' | 'fyers'>('fyers');
@@ -98,9 +81,7 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
     }
   }, []);
 
-  useEffect(() => {
-    if (editStrategyId) loadStrategy(editStrategyId);
-  }, [editStrategyId, loadStrategy]);
+  useEffect(() => { if (editStrategyId) loadStrategy(editStrategyId); }, [editStrategyId, loadStrategy]);
 
   const buildConditionsJson = (conditions: ConditionItem[], logic: string): string => {
     if (conditions.length === 0) return '[]';
@@ -125,8 +106,7 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
       timeframe,
     });
     setSaving(false);
-    if (result.success) onSaved();
-    else setError(result.error || 'Failed to save');
+    if (result.success) onSaved(); else setError(result.error || 'Failed to save');
   };
 
   const handleBacktest = async () => {
@@ -140,522 +120,447 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
       symbol: btSymbol.trim(),
       entryConditions: buildConditionsJson(entryConditions, entryLogic),
       exitConditions: useExitConditions ? buildConditionsJson(exitConditions, exitLogic) : '[]',
-      timeframe: ['1m','3m','5m'].includes(timeframe) ? '1d' : timeframe,
+      timeframe: ['1m', '3m', '5m'].includes(timeframe) ? '1d' : timeframe,
       period: btPeriod,
       stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
       takeProfit: takeProfit ? parseFloat(takeProfit) : undefined,
       provider: btProvider,
     });
     setBacktesting(false);
-
-    if (res.debug) {
-      setBtDebug(res.debug);
-    } else if (res.data?.debug) {
-      setBtDebug(res.data.debug);
-    }
-
-    if (res.success && res.data) {
-      setBtResult(res.data);
-      if (res.data.debug) setBtDebug(res.data.debug);
-    } else {
-      setBtError(res.error || 'Backtest failed');
-    }
+    if (res.debug) setBtDebug(res.debug); else if (res.data?.debug) setBtDebug(res.data.debug);
+    if (res.success && res.data) { setBtResult(res.data); if (res.data.debug) setBtDebug(res.data.debug); setShowBacktest(true); }
+    else setBtError(res.error || 'Backtest failed');
   };
 
+  const handleConditionChange = (
+    setter: React.Dispatch<React.SetStateAction<ConditionItem[]>>,
+    index: number,
+    updated: ConditionItem,
+  ) => {
+    setter(prev => { const next = [...prev]; next[index] = updated; return next; });
+  };
+
+  const handleRemoveCondition = (
+    setter: React.Dispatch<React.SetStateAction<ConditionItem[]>>,
+    index: number,
+  ) => {
+    setter(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDuplicateCondition = (
+    setter: React.Dispatch<React.SetStateAction<ConditionItem[]>>,
+    index: number,
+  ) => {
+    setter(prev => {
+      const clone = JSON.parse(JSON.stringify(prev[index]));
+      const next = [...prev];
+      next.splice(index + 1, 0, clone);
+      return next;
+    });
+  };
+
+  const rrRatio = stopLoss && takeProfit && parseFloat(stopLoss) > 0
+    ? (parseFloat(takeProfit) / parseFloat(stopLoss)).toFixed(2)
+    : null;
+
+  /* ──────────────────────── RENDER ──────────────────────── */
   return (
-    <div style={{
-      width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
-      overflow: 'hidden', fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-    }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: font, color: F.WHITE, backgroundColor: F.DARK_BG }}>
 
-      {/* ═══════ TOOLBAR ═══════ */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 20px', backgroundColor: F.HEADER_BG,
-        borderBottom: `1px solid ${F.BORDER}`, flexShrink: 0,
-      }}>
-        {/* Left */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: '6px 8px', backgroundColor: 'transparent', border: `1px solid ${F.BORDER}`,
-              color: F.GRAY, cursor: 'pointer', borderRadius: '2px', display: 'flex', alignItems: 'center',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = F.ORANGE; e.currentTarget.style.color = F.WHITE; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = F.BORDER; e.currentTarget.style.color = F.GRAY; }}
-          >
-            <ArrowLeft size={12} />
-          </button>
-          <div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
-              {editStrategyId ? 'EDIT STRATEGY' : 'CREATE NEW STRATEGY'}
-            </div>
-            <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>
-              Visual condition-based strategy builder
-            </div>
-          </div>
-        </div>
-
-        {/* Center: Name + Timeframe */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <input
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Strategy Name..."
-            style={{
-              width: '240px', padding: '7px 10px', backgroundColor: F.DARK_BG,
-              color: F.WHITE, border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-              fontSize: '11px', fontWeight: 600, outline: 'none',
-            }}
-            onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
-            onBlur={e => { e.currentTarget.style.borderColor = F.BORDER; }}
-          />
-          <select
-            value={timeframe}
-            onChange={e => setTimeframe(e.target.value)}
-            style={{
-              padding: '7px 8px', backgroundColor: F.DARK_BG, color: F.CYAN,
-              border: `1px solid ${F.BORDER}`, borderRadius: '2px', fontSize: '10px',
-              fontWeight: 700, cursor: 'pointer', outline: 'none',
-            }}
-          >
-            {TIMEFRAMES.map(tf => <option key={tf.value} value={tf.value}>{tf.label}</option>)}
-          </select>
-        </div>
-
-        {/* Right: Actions */}
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: '7px 14px', backgroundColor: 'transparent', color: F.GRAY,
-              border: `1px solid ${F.BORDER}`, borderRadius: '2px', fontSize: '9px',
-              fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = F.WHITE; e.currentTarget.style.borderColor = F.GRAY; }}
-            onMouseLeave={e => { e.currentTarget.style.color = F.GRAY; e.currentTarget.style.borderColor = F.BORDER; }}
-          >
-            CANCEL
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              padding: '7px 16px', backgroundColor: F.ORANGE, color: F.DARK_BG,
-              border: 'none', borderRadius: '2px', fontSize: '9px', fontWeight: 700,
-              cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center',
-              gap: '4px', opacity: saving ? 0.5 : 1, letterSpacing: '0.5px',
-            }}
-          >
-            <Save size={10} />
-            {saving ? 'SAVING...' : 'SAVE'}
+      {/* ═══ TOOLBAR ═══ */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0', padding: '0 12px', height: '36px', flexShrink: 0, backgroundColor: F.PANEL_BG, borderBottom: `1px solid ${F.BORDER}` }}>
+        <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.GRAY, padding: '4px', display: 'flex', alignItems: 'center', marginRight: '8px', transition: 'color 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.color = F.WHITE; }}
+          onMouseLeave={e => { e.currentTarget.style.color = F.GRAY; }}
+        ><ArrowLeft size={14} /></button>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Strategy Name..."
+          style={{ background: 'transparent', border: 'none', outline: 'none', color: F.ORANGE, fontSize: '12px', fontWeight: 700, fontFamily: font, width: '200px', letterSpacing: '0.5px' }}
+        />
+        <div style={{ width: '1px', height: '18px', backgroundColor: F.BORDER, margin: '0 10px' }} />
+        <span style={{ ...lbl, marginRight: '4px' }}>TF</span>
+        <select value={timeframe} onChange={e => setTimeframe(e.target.value)} style={{ ...selectStyle, width: 'auto', padding: '3px 6px', fontSize: '9px', color: F.CYAN }}>
+          {TIMEFRAMES.map(tf => <option key={tf.value} value={tf.value}>{tf.label}</option>)}
+        </select>
+        <div style={{ width: '1px', height: '18px', backgroundColor: F.BORDER, margin: '0 10px' }} />
+        <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Description (optional)"
+          style={{ background: 'transparent', border: 'none', outline: 'none', color: F.GRAY, fontSize: '10px', fontFamily: font, flex: 1, minWidth: '100px' }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
+          <button onClick={onCancel} style={btnOutline}>CANCEL</button>
+          <button onClick={handleSave} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.5 : 1 }}>
+            <Save size={10} />{saving ? 'SAVING...' : 'SAVE'}
           </button>
         </div>
       </div>
 
-      {/* Error Banner */}
+      {/* Error bar */}
       {error && (
-        <div style={{
-          padding: '8px 20px', backgroundColor: `${F.RED}15`, borderBottom: `1px solid ${F.RED}40`,
-          display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0,
-        }}>
-          <AlertTriangle size={10} color={F.RED} />
-          <span style={{ fontSize: '9px', fontWeight: 700, color: F.RED }}>{error}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 16px', backgroundColor: `${F.RED}15`, borderBottom: `1px solid ${F.RED}40`, flexShrink: 0 }}>
+          <AlertTriangle size={11} color={F.RED} />
+          <span style={{ fontSize: '10px', fontWeight: 700, color: F.RED }}>{error}</span>
         </div>
       )}
 
-      {/* ═══════ TWO-COLUMN BODY ═══════ */}
+      {/* ═══ MAIN CONTENT — horizontal split: left=rules, right=backtest ═══ */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
-        {/* ──── LEFT COLUMN: Strategy Builder ──── */}
-        <div style={{
-          flex: 1, overflow: 'auto', padding: '16px 20px',
-          display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0,
-        }}>
-          {/* Description */}
-          <div>
-            <label style={labelStyle}>DESCRIPTION (OPTIONAL)</label>
-            <input
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Describe your strategy logic..."
-              style={inputStyle}
-            />
-          </div>
+        {/* ──── LEFT: RULE SHEET (scrollable) ──── */}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minWidth: 0 }}>
 
-          {/* ── ENTRY CONDITIONS SECTION ── */}
-          <div style={sectionStyle}>
-            <div style={{
-              ...sectionHeaderStyle,
-              borderLeft: `3px solid ${F.GREEN}`,
-            }}>
-              <ArrowUpRight size={14} color={F.GREEN} />
-              <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
-                ENTRY CONDITIONS
-              </span>
-              <span style={{ fontSize: '9px', color: F.GREEN, marginLeft: '4px' }}>BUY WHEN</span>
+          {/* ─── ENTRY CONDITIONS ─── */}
+          <div style={{ borderBottom: `1px solid ${F.BORDER}` }}>
+            {/* Section header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}` }}>
+              <ArrowUpRight size={12} style={{ color: F.GREEN }} />
+              <span style={{ fontSize: '10px', fontWeight: 700, color: F.GREEN, letterSpacing: '0.5px' }}>ENTRY CONDITIONS</span>
+              {entryConditions.length > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '8px' }}>
+                  {(['AND', 'OR'] as const).map(l => (
+                    <button key={l} onClick={() => setEntryLogic(l)} style={{
+                      padding: '2px 8px', border: 'none', borderRadius: '2px', cursor: 'pointer', fontFamily: font,
+                      backgroundColor: entryLogic === l ? F.ORANGE : `${F.BORDER}`, color: entryLogic === l ? F.DARK_BG : F.GRAY,
+                      fontSize: '8px', fontWeight: 700, transition: 'all 0.15s',
+                    }}>{l}</button>
+                  ))}
+                </div>
+              )}
               <div style={{ flex: 1 }} />
-              <div style={{
-                padding: '3px 8px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-                backgroundColor: `${F.GREEN}20`, color: F.GREEN,
-              }}>
-                {entryConditions.length} CONDITION{entryConditions.length !== 1 ? 'S' : ''}
-              </div>
+              <span style={badge(`${F.GREEN}20`, F.GREEN)}>{entryConditions.length} RULE{entryConditions.length !== 1 ? 'S' : ''}</span>
+              <button
+                onClick={() => setEntryConditions(prev => [...prev, { ...DEFAULT_ENTRY }])}
+                style={{ ...btnOutline, padding: '3px 8px', fontSize: '8px', color: F.GREEN, borderColor: `${F.GREEN}40` }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = F.GREEN; e.currentTarget.style.color = F.WHITE; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = `${F.GREEN}40`; e.currentTarget.style.color = F.GREEN; }}
+              ><Plus size={10} /> ADD</button>
             </div>
-            <div style={{ padding: '8px 0' }}>
-              <ConditionBuilder
-                label=""
-                conditions={entryConditions}
-                logic={entryLogic}
-                onConditionsChange={setEntryConditions}
-                onLogicChange={setEntryLogic}
-              />
-            </div>
-          </div>
 
-          {/* ── EXIT CONDITIONS SECTION ── */}
-          <div style={sectionStyle}>
-            <div style={{
-              ...sectionHeaderStyle,
-              borderLeft: `3px solid ${F.RED}`,
-              justifyContent: 'space-between',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ArrowDownRight size={14} color={F.RED} />
-                <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
-                  EXIT CONDITIONS
-                </span>
-                <span style={{ fontSize: '9px', color: F.RED, marginLeft: '4px' }}>SELL WHEN</span>
-                {!useExitConditions && (
-                  <span style={{
-                    padding: '2px 6px', borderRadius: '2px', fontSize: '8px',
-                    fontWeight: 700, backgroundColor: `${F.YELLOW}20`, color: F.YELLOW,
-                  }}>
-                    DISABLED
-                  </span>
-                )}
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                <span style={{ fontSize: '8px', color: useExitConditions ? F.GREEN : F.MUTED }}>
-                  {useExitConditions ? 'ENABLED' : 'SL/TP ONLY'}
-                </span>
-                <input
-                  type="checkbox"
-                  checked={useExitConditions}
-                  onChange={e => setUseExitConditions(e.target.checked)}
-                  style={{ accentColor: F.ORANGE, cursor: 'pointer' }}
-                />
-              </label>
-            </div>
-            {useExitConditions ? (
-              <div style={{ padding: '8px 0' }}>
-                <ConditionBuilder
-                  label=""
-                  conditions={exitConditions}
-                  logic={exitLogic}
-                  onConditionsChange={setExitConditions}
-                  onLogicChange={setExitLogic}
-                />
-              </div>
-            ) : (
-              <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-                <Shield size={20} color={F.MUTED} style={{ marginBottom: '6px' }} />
-                <div style={{ fontSize: '9px', color: F.MUTED }}>
-                  Exit conditions disabled. Trades exit via Stop Loss or Take Profit only.
+            {/* Condition rows */}
+            {entryConditions.map((cond, i) => (
+              <div key={i} style={{ borderBottom: `1px solid ${F.BORDER}30` }}>
+                {/* Row number + logic connector */}
+                <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                  <div style={{ width: '40px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: `${F.GREEN}08`, borderRight: `1px solid ${F.BORDER}30` }}>
+                    {i === 0 ? (
+                      <span style={{ fontSize: '9px', fontWeight: 700, color: F.GREEN }}>#{i + 1}</span>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '7px', fontWeight: 700, color: F.ORANGE, marginBottom: '2px' }}>{entryLogic}</span>
+                        <span style={{ fontSize: '9px', fontWeight: 700, color: F.GREEN }}>#{i + 1}</span>
+                      </>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <ConditionRow condition={cond} index={i}
+                      onChange={(idx, updated) => handleConditionChange(setEntryConditions, idx, updated)}
+                      onRemove={() => handleRemoveCondition(setEntryConditions, i)}
+                    />
+                  </div>
+                  <div style={{ width: '36px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', borderLeft: `1px solid ${F.BORDER}30` }}>
+                    <button onClick={() => handleDuplicateCondition(setEntryConditions, i)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.MUTED, padding: '2px', transition: 'color 0.15s' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = F.CYAN; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = F.MUTED; }}
+                      title="Duplicate"
+                    ><Copy size={10} /></button>
+                    {entryConditions.length > 1 && (
+                      <button onClick={() => handleRemoveCondition(setEntryConditions, i)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.MUTED, padding: '2px', transition: 'color 0.15s' }}
+                        onMouseEnter={e => { e.currentTarget.style.color = F.RED; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = F.MUTED; }}
+                        title="Remove"
+                      ><Trash2 size={10} /></button>
+                    )}
+                  </div>
                 </div>
-                <div style={{ fontSize: '8px', color: F.YELLOW, marginTop: '4px' }}>
-                  Ensure SL and/or TP are configured in the Risk Management panel.
-                </div>
+              </div>
+            ))}
+            {entryConditions.length === 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', gap: '8px' }}>
+                <Zap size={14} style={{ color: F.MUTED, opacity: 0.5 }} />
+                <span style={{ fontSize: '10px', color: F.MUTED }}>No entry rules — click ADD above</span>
               </div>
             )}
           </div>
 
-          {/* ── RISK MANAGEMENT SECTION ── */}
-          <div style={sectionStyle}>
-            <div style={{
-              ...sectionHeaderStyle,
-              borderLeft: `3px solid ${F.YELLOW}`,
-            }}>
-              <Shield size={14} color={F.YELLOW} />
-              <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
-                RISK MANAGEMENT
-              </span>
-              <span style={{ fontSize: '8px', color: F.MUTED, marginLeft: '8px' }}>
-                Priority: SL → TP → Exit Condition
-              </span>
+          {/* ─── EXIT CONDITIONS ─── */}
+          <div style={{ borderBottom: `1px solid ${F.BORDER}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}` }}>
+              <ArrowDownRight size={12} style={{ color: useExitConditions ? F.RED : F.MUTED }} />
+              <span style={{ fontSize: '10px', fontWeight: 700, color: useExitConditions ? F.RED : F.MUTED, letterSpacing: '0.5px' }}>EXIT CONDITIONS</span>
+              {exitConditions.length > 1 && useExitConditions && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '8px' }}>
+                  {(['AND', 'OR'] as const).map(l => (
+                    <button key={l} onClick={() => setExitLogic(l)} style={{
+                      padding: '2px 8px', border: 'none', borderRadius: '2px', cursor: 'pointer', fontFamily: font,
+                      backgroundColor: exitLogic === l ? F.ORANGE : `${F.BORDER}`, color: exitLogic === l ? F.DARK_BG : F.GRAY,
+                      fontSize: '8px', fontWeight: 700, transition: 'all 0.15s',
+                    }}>{l}</button>
+                  ))}
+                </div>
+              )}
+              <div style={{ flex: 1 }} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                <span style={{ fontSize: '8px', fontWeight: 700, color: useExitConditions ? F.GREEN : F.MUTED }}>{useExitConditions ? 'ON' : 'OFF'}</span>
+                <input type="checkbox" checked={useExitConditions} onChange={e => setUseExitConditions(e.target.checked)} style={{ accentColor: F.ORANGE, cursor: 'pointer' }} />
+              </label>
+              {useExitConditions && (
+                <>
+                  <span style={badge(`${F.RED}20`, F.RED)}>{exitConditions.length} RULE{exitConditions.length !== 1 ? 'S' : ''}</span>
+                  <button
+                    onClick={() => setExitConditions(prev => [...prev, { ...DEFAULT_EXIT }])}
+                    style={{ ...btnOutline, padding: '3px 8px', fontSize: '8px', color: F.RED, borderColor: `${F.RED}40` }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = F.RED; e.currentTarget.style.color = F.WHITE; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = `${F.RED}40`; e.currentTarget.style.color = F.RED; }}
+                  ><Plus size={10} /> ADD</button>
+                </>
+              )}
             </div>
-            <div style={{ padding: '12px 16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={labelStyle}>STOP LOSS (%)</label>
-                  <input type="number" value={stopLoss} onChange={e => setStopLoss(e.target.value)} placeholder="e.g. 2" step="0.1" min="0" style={inputStyle} />
-                  <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>Exit if loss &ge; this %</div>
-                </div>
-                <div>
-                  <label style={labelStyle}>TAKE PROFIT (%)</label>
-                  <input type="number" value={takeProfit} onChange={e => setTakeProfit(e.target.value)} placeholder="e.g. 5" step="0.1" min="0" style={inputStyle} />
-                  <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>Exit if profit &ge; this %</div>
-                </div>
-                <div>
-                  <label style={labelStyle}>TRAILING STOP (%)</label>
-                  <input type="number" value={trailingStop} onChange={e => setTrailingStop(e.target.value)} placeholder="e.g. 1.5" step="0.1" min="0" style={inputStyle} />
-                  <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>Exit if pullback from peak &ge; this %</div>
-                </div>
-              </div>
 
-              {/* Validation Warnings */}
+            {useExitConditions ? (
+              <>
+                {exitConditions.map((cond, i) => (
+                  <div key={i} style={{ borderBottom: `1px solid ${F.BORDER}30` }}>
+                    <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                      <div style={{ width: '40px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: `${F.RED}08`, borderRight: `1px solid ${F.BORDER}30` }}>
+                        {i === 0 ? (
+                          <span style={{ fontSize: '9px', fontWeight: 700, color: F.RED }}>#{i + 1}</span>
+                        ) : (
+                          <>
+                            <span style={{ fontSize: '7px', fontWeight: 700, color: F.ORANGE, marginBottom: '2px' }}>{exitLogic}</span>
+                            <span style={{ fontSize: '9px', fontWeight: 700, color: F.RED }}>#{i + 1}</span>
+                          </>
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <ConditionRow condition={cond} index={i}
+                          onChange={(idx, updated) => handleConditionChange(setExitConditions, idx, updated)}
+                          onRemove={() => handleRemoveCondition(setExitConditions, i)}
+                        />
+                      </div>
+                      <div style={{ width: '36px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', borderLeft: `1px solid ${F.BORDER}30` }}>
+                        <button onClick={() => handleDuplicateCondition(setExitConditions, i)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.MUTED, padding: '2px', transition: 'color 0.15s' }}
+                          onMouseEnter={e => { e.currentTarget.style.color = F.CYAN; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = F.MUTED; }}
+                          title="Duplicate"
+                        ><Copy size={10} /></button>
+                        {exitConditions.length > 1 && (
+                          <button onClick={() => handleRemoveCondition(setExitConditions, i)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.MUTED, padding: '2px', transition: 'color 0.15s' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = F.RED; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = F.MUTED; }}
+                            title="Remove"
+                          ><Trash2 size={10} /></button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {exitConditions.length === 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', gap: '8px' }}>
+                    <Zap size={14} style={{ color: F.MUTED, opacity: 0.5 }} />
+                    <span style={{ fontSize: '10px', color: F.MUTED }}>No exit rules — click ADD above</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', gap: '8px' }}>
+                <Shield size={12} style={{ color: F.MUTED }} />
+                <span style={{ fontSize: '10px', color: F.MUTED }}>Exit conditions disabled — using SL/TP only</span>
+              </div>
+            )}
+          </div>
+
+          {/* ─── RISK MANAGEMENT ─── */}
+          <div style={{ borderBottom: `1px solid ${F.BORDER}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}` }}>
+              <Shield size={12} style={{ color: F.YELLOW }} />
+              <span style={{ fontSize: '10px', fontWeight: 700, color: F.YELLOW, letterSpacing: '0.5px' }}>RISK MANAGEMENT</span>
+              <div style={{ flex: 1 }} />
+              {rrRatio && (
+                <span style={{ fontSize: '9px', color: parseFloat(rrRatio) >= 1 ? F.GREEN : F.RED }}>
+                  R:R <span style={{ fontWeight: 700 }}>1:{rrRatio}</span>
+                </span>
+              )}
               {stopLoss && takeProfit && parseFloat(stopLoss) >= parseFloat(takeProfit) && (
-                <div style={{
-                  marginTop: '12px', padding: '8px 10px',
-                  backgroundColor: `${F.YELLOW}15`, border: `1px solid ${F.YELLOW}40`, borderRadius: '2px',
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                }}>
-                  <AlertTriangle size={10} color={F.YELLOW} />
-                  <span style={{ fontSize: '9px', color: F.YELLOW }}>
-                    Stop Loss ({stopLoss}%) &ge; Take Profit ({takeProfit}%). Adjust for better risk/reward.
-                  </span>
-                </div>
+                <span style={{ ...badge(`${F.YELLOW}20`, F.YELLOW) }}><AlertTriangle size={8} /> SL ≥ TP</span>
               )}
-              {useExitConditions && exitConditions.length > 0 && takeProfit && (
-                <div style={{
-                  marginTop: '8px', padding: '8px 10px',
-                  backgroundColor: `${F.CYAN}10`, border: `1px solid ${F.CYAN}30`, borderRadius: '2px',
-                }}>
-                  <span style={{ fontSize: '9px', color: F.CYAN }}>
-                    Exit conditions trigger AFTER SL/TP checks. May exit before {takeProfit}% target.
-                  </span>
+            </div>
+            <div style={{ display: 'flex', gap: '0', alignItems: 'stretch' }}>
+              {/* Stop Loss */}
+              <div style={{ flex: 1, padding: '10px 16px', borderRight: `1px solid ${F.BORDER}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
+                  <Target size={10} style={{ color: F.RED }} />
+                  <span style={{ ...lbl, color: F.RED }}>STOP LOSS %</span>
                 </div>
-              )}
+                <input type="number" value={stopLoss} onChange={e => setStopLoss(e.target.value)} placeholder="0.0" step="0.1" min="0"
+                  style={{ ...inputStyle, width: '100%', borderColor: stopLoss ? `${F.RED}40` : F.BORDER }}
+                  onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = stopLoss ? `${F.RED}40` : F.BORDER; }}
+                />
+                <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '3px' }}>Exit if loss ≥ this %</div>
+              </div>
+              {/* Take Profit */}
+              <div style={{ flex: 1, padding: '10px 16px', borderRight: `1px solid ${F.BORDER}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
+                  <TrendingUp size={10} style={{ color: F.GREEN }} />
+                  <span style={{ ...lbl, color: F.GREEN }}>TAKE PROFIT %</span>
+                </div>
+                <input type="number" value={takeProfit} onChange={e => setTakeProfit(e.target.value)} placeholder="0.0" step="0.1" min="0"
+                  style={{ ...inputStyle, width: '100%', borderColor: takeProfit ? `${F.GREEN}40` : F.BORDER }}
+                  onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = takeProfit ? `${F.GREEN}40` : F.BORDER; }}
+                />
+                <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '3px' }}>Exit if profit ≥ this %</div>
+              </div>
+              {/* Trailing Stop */}
+              <div style={{ flex: 1, padding: '10px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
+                  <Gauge size={10} style={{ color: F.YELLOW }} />
+                  <span style={{ ...lbl, color: F.YELLOW }}>TRAILING STOP %</span>
+                </div>
+                <input type="number" value={trailingStop} onChange={e => setTrailingStop(e.target.value)} placeholder="0.0" step="0.1" min="0"
+                  style={{ ...inputStyle, width: '100%', borderColor: trailingStop ? `${F.YELLOW}40` : F.BORDER }}
+                  onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = trailingStop ? `${F.YELLOW}40` : F.BORDER; }}
+                />
+                <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '3px' }}>Pullback from peak ≥ this %</div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* ──── RIGHT COLUMN: Backtest Panel ──── */}
-        <div style={{
-          width: showBacktest ? '360px' : '40px',
-          backgroundColor: F.PANEL_BG,
-          borderLeft: `1px solid ${F.BORDER}`,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          flexShrink: 0,
-          transition: 'width 0.3s ease',
-        }}>
-          {/* Toggle Header */}
+        {/* ──── RIGHT: BACKTEST PANEL (320px, collapsible) ──── */}
+        <div style={{ width: showBacktest ? '340px' : '44px', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderLeft: `1px solid ${F.BORDER}`, transition: 'width 0.2s ease' }}>
+          {/* Backtest toggle header */}
           <div
             onClick={() => setShowBacktest(!showBacktest)}
-            style={{
-              ...sectionHeaderStyle,
-              borderLeft: `3px solid ${F.PURPLE}`,
-              cursor: 'pointer',
-              justifyContent: 'space-between',
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}`, cursor: 'pointer', flexShrink: 0 }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <BarChart3 size={14} color={F.PURPLE} />
-              {showBacktest && (
-                <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
-                  QUICK BACKTEST
-                </span>
-              )}
-            </div>
-            {showBacktest ? <ChevronRight size={12} color={F.MUTED} /> : <ChevronDown size={12} color={F.MUTED} />}
+            <Crosshair size={12} style={{ color: F.PURPLE }} />
+            {showBacktest && (
+              <>
+                <span style={{ fontSize: '9px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px', flex: 1 }}>BACKTEST</span>
+                {btResult && (
+                  <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: font, color: btResult.metrics.total_return_pct >= 0 ? F.GREEN : F.RED }}>
+                    {btResult.metrics.total_return_pct >= 0 ? '+' : ''}{btResult.metrics.total_return_pct}%
+                  </span>
+                )}
+              </>
+            )}
           </div>
 
           {showBacktest && (
-            <div style={{ flex: 1, overflow: 'auto' }}>
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
               {/* Config */}
-              <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div>
-                  <label style={labelStyle}>DATA SOURCE</label>
-                  <select value={btProvider} onChange={e => setBtProvider(e.target.value as 'yfinance' | 'fyers')} style={inputStyle}>
-                    <option value="fyers">Fyers (Local Cache)</option>
-                    <option value="yfinance">Yahoo Finance</option>
-                  </select>
+              <div style={{ padding: '10px 12px', borderBottom: `1px solid ${F.BORDER}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                  <div>
+                    <span style={{ ...lbl, display: 'block', marginBottom: '3px', fontSize: '8px' }}>SOURCE</span>
+                    <select value={btProvider} onChange={e => setBtProvider(e.target.value as 'yfinance' | 'fyers')} style={{ ...selectStyle, width: '100%', padding: '5px 6px' }}>
+                      <option value="fyers">Fyers</option><option value="yfinance">Yahoo</option>
+                    </select>
+                  </div>
+                  <div>
+                    <span style={{ ...lbl, display: 'block', marginBottom: '3px', fontSize: '8px' }}>PERIOD</span>
+                    <select value={btPeriod} onChange={e => setBtPeriod(e.target.value)} style={{ ...selectStyle, width: '100%', padding: '5px 6px' }}>
+                      {[['1mo', '1M'], ['3mo', '3M'], ['6mo', '6M'], ['1y', '1Y'], ['2y', '2Y'], ['5y', '5Y']].map(([v, l]) => (
+                        <option key={v} value={v}>{l}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label style={labelStyle}>SYMBOL</label>
-                  <input
-                    value={btSymbol}
-                    onChange={e => setBtSymbol(e.target.value)}
-                    placeholder={btProvider === 'fyers' ? 'RELIANCE, TCS' : 'RELIANCE.NS, AAPL'}
-                    style={inputStyle}
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input value={btSymbol} onChange={e => setBtSymbol(e.target.value)}
+                    placeholder={btProvider === 'fyers' ? 'RELIANCE' : 'AAPL'}
+                    style={{ ...inputStyle, flex: 1, padding: '5px 8px' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = F.BORDER; }}
                   />
+                  <button onClick={handleBacktest} disabled={backtesting}
+                    style={{ ...btnPrimary, backgroundColor: F.PURPLE, color: F.WHITE, padding: '5px 12px', opacity: backtesting ? 0.5 : 1, whiteSpace: 'nowrap' }}
+                  >
+                    {backtesting ? <Loader size={11} className="animate-spin" /> : <Play size={11} />}
+                    {backtesting ? 'RUN...' : 'RUN'}
+                  </button>
                 </div>
-                <div>
-                  <label style={labelStyle}>PERIOD</label>
-                  <select value={btPeriod} onChange={e => setBtPeriod(e.target.value)} style={inputStyle}>
-                    {[['1mo','1 Month'],['3mo','3 Months'],['6mo','6 Months'],['1y','1 Year'],['2y','2 Years'],['5y','5 Years']].map(([v,l]) => (
-                      <option key={v} value={v}>{l}</option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  onClick={handleBacktest}
-                  disabled={backtesting}
-                  style={{
-                    width: '100%', padding: '10px', backgroundColor: F.PURPLE, color: F.WHITE,
-                    border: 'none', borderRadius: '2px', fontSize: '9px', fontWeight: 700,
-                    cursor: backtesting ? 'not-allowed' : 'pointer',
-                    opacity: backtesting ? 0.5 : 1, display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', gap: '6px', letterSpacing: '0.5px',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  {backtesting ? <Loader size={10} className="animate-spin" /> : <Play size={10} />}
-                  {backtesting ? 'RUNNING BACKTEST...' : 'RUN BACKTEST'}
-                </button>
               </div>
 
-              {/* Backtest Error */}
+              {/* BT Error */}
               {btError && (
-                <div style={{
-                  margin: '0 16px 8px', padding: '8px 10px',
-                  backgroundColor: `${F.RED}15`, border: `1px solid ${F.RED}30`,
-                  borderRadius: '2px',
-                }}>
-                  <span style={{ fontSize: '9px', color: F.RED, lineHeight: '1.4' }}>{btError}</span>
+                <div style={{ padding: '6px 12px', backgroundColor: `${F.RED}15`, borderBottom: `1px solid ${F.RED}30` }}>
+                  <span style={{ fontSize: '9px', color: F.RED }}>{btError}</span>
                 </div>
               )}
 
-              {/* Debug Log */}
+              {/* Debug */}
               {btDebug.length > 0 && (
-                <div style={{ margin: '0 16px 8px' }}>
-                  <button
-                    onClick={() => setShowDebug(!showDebug)}
-                    style={{
-                      width: '100%', padding: '6px 8px', backgroundColor: F.HEADER_BG,
-                      border: `1px solid ${F.BORDER}`, color: F.MUTED, fontSize: '8px',
-                      fontWeight: 700, cursor: 'pointer', textAlign: 'left', borderRadius: '2px',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    }}
-                  >
-                    <span>DEBUG LOG ({btDebug.length})</span>
-                    {showDebug ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                <div style={{ padding: '5px 12px', borderBottom: `1px solid ${F.BORDER}` }}>
+                  <button onClick={() => setShowDebug(!showDebug)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', fontFamily: font, color: F.MUTED, fontSize: '8px', fontWeight: 700 }}>
+                    <span>DEBUG ({btDebug.length})</span>
+                    {showDebug ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
                   </button>
                   {showDebug && (
-                    <div style={{
-                      marginTop: '2px', padding: '6px 8px', backgroundColor: '#0a0a0a',
-                      border: `1px solid ${F.BORDER}`, borderRadius: '2px', maxHeight: '150px',
-                      overflow: 'auto', fontSize: '8px', lineHeight: '1.4',
-                    }}>
+                    <div style={{ marginTop: '4px', padding: '4px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', maxHeight: '100px', overflowY: 'auto', fontSize: '8px', lineHeight: 1.4 }}>
                       {btDebug.map((line, i) => (
-                        <div key={i} style={{
-                          color: line.includes('ERROR') ? F.RED : line.includes('WARNING') ? F.YELLOW : F.MUTED,
-                          marginBottom: '1px', wordBreak: 'break-all',
-                        }}>
-                          {line}
-                        </div>
+                        <div key={i} style={{ wordBreak: 'break-all', color: line.includes('ERROR') ? F.RED : line.includes('WARNING') ? F.YELLOW : F.MUTED }}>{line}</div>
                       ))}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* ─── BACKTEST RESULTS ─── */}
+              {/* Results */}
               {btResult && (
-                <div style={{ borderTop: `1px solid ${F.BORDER}` }}>
-                  {/* Summary Bar */}
-                  <div style={{
-                    padding: '12px 16px', backgroundColor: F.HEADER_BG,
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    borderBottom: `1px solid ${F.BORDER}`,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {btResult.metrics.total_return_pct >= 0
-                        ? <TrendingUp size={14} color={F.GREEN} />
-                        : <TrendingDown size={14} color={F.RED} />
-                      }
-                      <span style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px' }}>
-                        RESULTS
-                      </span>
-                    </div>
-                    <span style={{
-                      fontSize: '14px', fontWeight: 700,
-                      color: btResult.metrics.total_return_pct >= 0 ? F.GREEN : F.RED,
-                    }}>
-                      {btResult.metrics.total_return_pct >= 0 ? '+' : ''}{btResult.metrics.total_return_pct}%
-                    </span>
-                  </div>
-
-                  {/* Metrics Grid */}
-                  <div style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <>
+                  <div style={{ padding: '10px 12px', borderBottom: `1px solid ${F.BORDER}` }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
                       {[
-                        { label: 'WIN RATE', value: `${btResult.metrics.win_rate}%`, color: btResult.metrics.win_rate >= 50 ? F.GREEN : F.YELLOW, icon: Target },
-                        { label: 'MAX DRAWDOWN', value: `${btResult.metrics.max_drawdown}%`, color: F.RED, icon: ArrowDownRight },
-                        { label: 'SHARPE', value: btResult.metrics.sharpe.toFixed(2), color: btResult.metrics.sharpe >= 1 ? F.GREEN : F.YELLOW, icon: Percent },
-                        { label: 'PROFIT FACTOR', value: btResult.metrics.profit_factor.toFixed(2), color: btResult.metrics.profit_factor >= 1.5 ? F.GREEN : F.YELLOW, icon: Activity },
-                        { label: 'TRADES', value: String(btResult.metrics.total_trades), color: F.CYAN, icon: Hash },
-                        { label: 'AVG P&L', value: btResult.metrics.avg_pnl.toFixed(2), color: btResult.metrics.avg_pnl >= 0 ? F.GREEN : F.RED, icon: TrendingUp },
-                        { label: 'AVG BARS', value: btResult.metrics.avg_bars_held.toFixed(1), color: F.CYAN, icon: Clock },
-                        { label: 'W / L', value: `${btResult.metrics.winning_trades} / ${btResult.metrics.losing_trades}`, color: F.WHITE, icon: BarChart3 },
+                        { l: 'WIN RATE', v: `${btResult.metrics.win_rate}%`, c: btResult.metrics.win_rate >= 50 ? F.GREEN : F.YELLOW, ic: Target },
+                        { l: 'DRAWDOWN', v: `${btResult.metrics.max_drawdown}%`, c: F.RED, ic: ArrowDownRight },
+                        { l: 'SHARPE', v: btResult.metrics.sharpe.toFixed(2), c: btResult.metrics.sharpe >= 1 ? F.GREEN : F.YELLOW, ic: Percent },
+                        { l: 'PF', v: btResult.metrics.profit_factor.toFixed(2), c: btResult.metrics.profit_factor >= 1.5 ? F.GREEN : F.YELLOW, ic: Activity },
+                        { l: 'TRADES', v: String(btResult.metrics.total_trades), c: F.CYAN, ic: Hash },
+                        { l: 'AVG P&L', v: btResult.metrics.avg_pnl.toFixed(2), c: btResult.metrics.avg_pnl >= 0 ? F.GREEN : F.RED, ic: TrendingUp },
+                        { l: 'AVG BARS', v: btResult.metrics.avg_bars_held.toFixed(1), c: F.CYAN, ic: Clock },
+                        { l: 'W / L', v: `${btResult.metrics.winning_trades}/${btResult.metrics.losing_trades}`, c: F.WHITE, ic: BarChart3 },
                       ].map((m, i) => (
-                        <div key={i} style={{
-                          backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`,
-                          borderRadius: '2px', padding: '10px',
-                        }}>
-                          <div style={{
-                            display: 'flex', alignItems: 'center', gap: '4px',
-                            fontSize: '8px', fontWeight: 700, color: F.MUTED,
-                            letterSpacing: '0.5px', marginBottom: '4px',
-                          }}>
-                            <m.icon size={9} />
-                            {m.label}
+                        <div key={i} style={{ padding: '6px', backgroundColor: F.PANEL_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '3px' }}>
+                            <m.ic size={8} style={{ color: F.GRAY }} />
+                            <span style={{ fontSize: '7px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px' }}>{m.l}</span>
                           </div>
-                          <div style={{
-                            fontSize: '13px', fontWeight: 700, color: m.color,
-                          }}>{m.value}</div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: font, color: m.c }}>{m.v}</div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Trade Log */}
                   {btResult.trades.length > 0 && (
                     <div>
-                      <div style={{
-                        padding: '8px 16px', backgroundColor: F.HEADER_BG,
-                        borderTop: `1px solid ${F.BORDER}`,
-                        borderBottom: `1px solid ${F.BORDER}`,
-                      }}>
-                        <span style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px' }}>
-                          TRADE LOG ({btResult.trades.length})
-                        </span>
+                      <div style={{ padding: '5px 12px', backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}` }}>
+                        <span style={{ fontSize: '8px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px' }}>TRADES ({btResult.trades.length})</span>
                       </div>
-                      <div style={{ maxHeight: '200px', overflow: 'auto' }}>
-                        <table style={{
-                          width: '100%', borderCollapse: 'collapse', fontSize: '9px',
-                        }}>
+                      <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                           <thead>
                             <tr>
                               {['#', 'ENTRY', 'EXIT', 'P&L%', 'BARS'].map(h => (
-                                <th key={h} style={{
-                                  padding: '6px 8px',
-                                  textAlign: h === '#' ? 'left' : 'right',
-                                  fontSize: '8px', fontWeight: 700, color: F.GRAY,
-                                  letterSpacing: '0.5px', position: 'sticky', top: 0,
-                                  backgroundColor: F.HEADER_BG,
-                                  borderBottom: `1px solid ${F.BORDER}`,
-                                }}>{h}</th>
+                                <th key={h} style={{ padding: '4px 6px', fontSize: '7px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px', textAlign: h === '#' ? 'left' : 'right', backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}`, position: 'sticky', top: 0 }}>{h}</th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
                             {btResult.trades.map((t, i) => (
-                              <tr key={i} style={{ borderBottom: `1px solid ${F.BORDER}30` }}>
-                                <td style={{ padding: '5px 8px', color: F.MUTED }}>{i + 1}</td>
-                                <td style={{ padding: '5px 8px', textAlign: 'right', color: F.WHITE }}>{t.entry_price}</td>
-                                <td style={{ padding: '5px 8px', textAlign: 'right', color: F.WHITE }}>{t.exit_price}</td>
-                                <td style={{
-                                  padding: '5px 8px', textAlign: 'right', fontWeight: 700,
-                                  color: t.pnl_pct >= 0 ? F.GREEN : F.RED,
-                                }}>
-                                  {t.pnl_pct >= 0 ? '+' : ''}{t.pnl_pct}%
-                                </td>
-                                <td style={{ padding: '5px 8px', textAlign: 'right', color: F.CYAN }}>{t.bars_held}</td>
+                              <tr key={i} style={{ borderBottom: `1px solid ${F.BORDER}30` }}
+                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = F.HOVER; }}
+                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                              >
+                                <td style={{ padding: '3px 6px', fontSize: '9px', fontFamily: font, color: F.MUTED }}>{i + 1}</td>
+                                <td style={{ padding: '3px 6px', fontSize: '9px', fontFamily: font, color: F.WHITE, textAlign: 'right' }}>{t.entry_price}</td>
+                                <td style={{ padding: '3px 6px', fontSize: '9px', fontFamily: font, color: F.WHITE, textAlign: 'right' }}>{t.exit_price}</td>
+                                <td style={{ padding: '3px 6px', fontSize: '9px', fontFamily: font, fontWeight: 700, color: t.pnl_pct >= 0 ? F.GREEN : F.RED, textAlign: 'right' }}>{t.pnl_pct >= 0 ? '+' : ''}{t.pnl_pct}%</td>
+                                <td style={{ padding: '3px 6px', fontSize: '9px', fontFamily: font, color: F.CYAN, textAlign: 'right' }}>{t.bars_held}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -663,19 +568,13 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
                       </div>
                     </div>
                   )}
-                </div>
+                </>
               )}
 
-              {/* Empty state */}
               {!btResult && !backtesting && !btError && (
-                <div style={{
-                  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  justifyContent: 'center', padding: '32px 16px', opacity: 0.5,
-                }}>
-                  <BarChart3 size={28} color={F.MUTED} style={{ marginBottom: '8px' }} />
-                  <div style={{ fontSize: '9px', color: F.MUTED, textAlign: 'center', lineHeight: '1.5' }}>
-                    Configure symbol and period, then click RUN BACKTEST to see results.
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 12px', color: F.MUTED, fontSize: '10px', textAlign: 'center' }}>
+                  <Crosshair size={20} style={{ marginBottom: '6px', opacity: 0.5 }} />
+                  <span>Enter symbol & click RUN</span>
                 </div>
               )}
             </div>

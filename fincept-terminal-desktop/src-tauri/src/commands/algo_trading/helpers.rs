@@ -10,13 +10,23 @@ pub(super) fn get_algo_scripts_dir(app: &tauri::AppHandle) -> Result<PathBuf, St
         .resource_dir()
         .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-    let scripts_dir = resource_dir
+    // Production: tauri bundles resources/scripts -> scripts/
+    let bundled_dir = resource_dir
+        .join("scripts")
+        .join("algo_trading");
+
+    if bundled_dir.exists() {
+        return Ok(bundled_dir);
+    }
+
+    // Alternate: some builds keep the resources/ prefix
+    let alt_dir = resource_dir
         .join("resources")
         .join("scripts")
         .join("algo_trading");
 
-    if scripts_dir.exists() {
-        return Ok(scripts_dir);
+    if alt_dir.exists() {
+        return Ok(alt_dir);
     }
 
     // Fallback for development mode
@@ -64,14 +74,23 @@ pub(super) fn get_strategies_dir(app: &tauri::AppHandle) -> Result<PathBuf, Stri
         .resource_dir()
         .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-    let strategies_dir = resource_dir
-        .join("resources")
+    // Production: tauri bundles resources/scripts -> scripts/
+    let bundled_dir = resource_dir
         .join("scripts")
-        .join("algo_trading")
         .join("strategies");
 
-    if strategies_dir.exists() {
-        return Ok(strategies_dir);
+    if bundled_dir.exists() {
+        return Ok(bundled_dir);
+    }
+
+    // Alternate: some builds keep the resources/ prefix
+    let alt_dir = resource_dir
+        .join("resources")
+        .join("scripts")
+        .join("strategies");
+
+    if alt_dir.exists() {
+        return Ok(alt_dir);
     }
 
     // Fallback for development mode
@@ -80,7 +99,6 @@ pub(super) fn get_strategies_dir(app: &tauri::AppHandle) -> Result<PathBuf, Stri
         .join("src-tauri")
         .join("resources")
         .join("scripts")
-        .join("algo_trading")
         .join("strategies");
 
     if dev_dir.exists() {

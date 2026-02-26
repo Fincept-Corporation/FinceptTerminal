@@ -74,6 +74,25 @@ def load_registry() -> Dict[str, Any]:
     return registry_globals.get('STRATEGY_REGISTRY', {})
 
 
+def _is_strategy_class(obj, name: str) -> bool:
+    """Check if an object is a valid QCAlgorithm strategy class."""
+    if not isinstance(obj, type):
+        return False
+    if name == 'QCAlgorithm':
+        return False
+    # Must be a QCAlgorithm subclass (not just any class with initialize)
+    try:
+        from fincept_engine.algorithm import QCAlgorithm as _QCA
+        if issubclass(obj, _QCA) and obj is not _QCA:
+            return True
+    except ImportError:
+        pass
+    # Fallback: check for both initialize and on_data (strategy signature)
+    if hasattr(obj, 'initialize') and hasattr(obj, 'on_data'):
+        return True
+    return False
+
+
 def load_strategy_class(strategy_id: str, custom_code: Optional[str] = None):
     """Load a strategy class by ID or from custom code."""
     if custom_code:
@@ -83,7 +102,7 @@ def load_strategy_class(strategy_id: str, custom_code: Optional[str] = None):
         exec(custom_code, strategy_globals)
         # Find the QCAlgorithm subclass
         for name, obj in strategy_globals.items():
-            if isinstance(obj, type) and hasattr(obj, 'initialize') and name != 'QCAlgorithm':
+            if _is_strategy_class(obj, name):
                 return obj
         raise ValueError("No valid QCAlgorithm subclass found in custom code")
 
@@ -105,11 +124,20 @@ def load_strategy_class(strategy_id: str, custom_code: Optional[str] = None):
     # Execute the module
     spec.loader.exec_module(module)
 
-    # Find the QCAlgorithm subclass
+    # Find the QCAlgorithm subclass — prefer the class matching the file name
+    expected_class = strategy_info['name']
+    candidates = []
     for name in dir(module):
         obj = getattr(module, name)
-        if isinstance(obj, type) and hasattr(obj, 'initialize') and name != 'QCAlgorithm':
-            return obj
+        if _is_strategy_class(obj, name):
+            if name == expected_class:
+                debug(f"Found exact match class: {name}")
+                return obj
+            candidates.append((name, obj))
+
+    if candidates:
+        debug(f"Found {len(candidates)} candidate classes: {[c[0] for c in candidates]}, using first")
+        return candidates[0][1]
 
     raise ValueError(f"No valid QCAlgorithm subclass found in {strategy_info['path']}")
 
@@ -148,15 +176,69 @@ def fetch_historical_data(symbols: List[str], start_date: str, end_date: str,
     return data
 
 
+class EmptyDataDict:
+    """Empty placeholder for option_chains / future_chains / quote_bars etc.
+    Supports dict-like access plus QuantConnect-style .contains_key() / .ContainsKey()."""
+    def __contains__(self, item):
+        return False
+    def __getitem__(self, key):
+        return None
+    def __len__(self):
+        return 0
+    def __bool__(self):
+        return False
+    def __iter__(self):
+        return iter([])
+    def keys(self):
+        return []
+    def values(self):
+        return []
+    def items(self):
+        return []
+    def get(self, key, default=None):
+        return default
+    def contains_key(self, key) -> bool:
+        return False
+    def ContainsKey(self, key) -> bool:
+        return False
+
+_EMPTY_DATA = EmptyDataDict()
+
+
 class BacktestSlice:
     """Represents a single time slice of market data."""
 
     def __init__(self, timestamp: datetime, bars: Dict[str, Any]):
         self._timestamp = timestamp
         self._bars = bars
+        # Many strategies access slice.bars or slice.Bars
+        self.bars = self
+        self.Bars = self
+        # Derivative data stubs (strategies check these)
+        self.option_chains = _EMPTY_DATA
+        self.OptionChains = _EMPTY_DATA
+        self.future_chains = _EMPTY_DATA
+        self.FutureChains = _EMPTY_DATA
+        self.quote_bars = _EMPTY_DATA
+        self.QuoteBars = _EMPTY_DATA
+        self.ticks = _EMPTY_DATA
+        self.Ticks = _EMPTY_DATA
+        self.splits = _EMPTY_DATA
+        self.Splits = _EMPTY_DATA
+        self.dividends = _EMPTY_DATA
+        self.Dividends = _EMPTY_DATA
+        self.delistings = _EMPTY_DATA
+        self.Delistings = _EMPTY_DATA
+        self.symbol_changed_events = _EMPTY_DATA
+        self.SymbolChangedEvents = _EMPTY_DATA
+        self.has_data = len(bars) > 0
 
     @property
     def time(self) -> datetime:
+        return self._timestamp
+
+    @property
+    def Time(self) -> datetime:
         return self._timestamp
 
     def __contains__(self, symbol):
@@ -168,11 +250,36 @@ class BacktestSlice:
             return None
         return self._bars[ticker]
 
+    def __len__(self):
+        return len(self._bars)
+
+    def __bool__(self):
+        return len(self._bars) > 0
+
     def keys(self):
         return self._bars.keys()
 
+    def values(self):
+        return self._bars.values()
+
     def items(self):
         return self._bars.items()
+
+    def get(self, symbol, default=None):
+        ticker = str(symbol).upper()
+        return self._bars.get(ticker, default)
+
+    def contains_key(self, symbol) -> bool:
+        return str(symbol).upper() in self._bars
+
+    def ContainsKey(self, symbol) -> bool:
+        return self.contains_key(symbol)
+
+    @property
+    def count(self) -> int:
+        return len(self._bars)
+
+    Count = property(lambda self: self.count)
 
 
 class BacktestBar:
@@ -218,6 +325,18 @@ def run_backtest(
     all_dates = sorted(all_dates)
     debug(f"Total trading days: {len(all_dates)}")
 
+    # Monkey-patch register_indicator to capture symbol→indicator mappings
+    _indicator_symbol_map: Dict[str, str] = {}  # indicator_name → symbol
+    _original_register = algo.register_indicator
+
+    def _patched_register(symbol, indicator, resolution_or_consolidator=None, selector=None):
+        _original_register(symbol, indicator, resolution_or_consolidator, selector)
+        ind_name = getattr(indicator, 'name', str(id(indicator)))
+        sym_str = str(symbol).upper()
+        _indicator_symbol_map[ind_name] = sym_str
+
+    algo.register_indicator = _patched_register
+
     # Initialize algorithm
     debug("Calling initialize()...")
     try:
@@ -232,6 +351,36 @@ def run_backtest(
             'metrics': {}
         }
 
+    # Re-apply initial cash AFTER initialize() since strategies often override set_cash
+    # This ensures the backtest uses the user-specified capital
+    algo.set_cash(initial_cash)
+    debug(f"Cash after re-apply: {algo.portfolio.cash}")
+
+    # Normalize _indicators to dict if a strategy stored it as a list
+    if isinstance(algo._indicators, list):
+        ind_dict = {}
+        for ind in algo._indicators:
+            name = getattr(ind, 'name', str(id(ind)))
+            ind_dict[name] = ind
+        algo._indicators = ind_dict
+
+    # Build indicator→symbol map from registered indicators
+    data_symbols = [s.upper() for s in historical_data.keys()]
+    default_symbol = data_symbols[0] if data_symbols else None
+
+    for ind_key, indicator in algo._indicators.items():
+        if ind_key in _indicator_symbol_map:
+            continue  # Already mapped via register_indicator
+        # Try to extract symbol from indicator key (e.g. "MACD_SPY", "SMA_SPY_20")
+        for sym in data_symbols:
+            if sym in ind_key.upper():
+                _indicator_symbol_map[ind_key] = sym
+                break
+        if ind_key not in _indicator_symbol_map and default_symbol:
+            _indicator_symbol_map[ind_key] = default_symbol
+
+    debug(f"Indicator→symbol map ({len(_indicator_symbol_map)} indicators): {list(_indicator_symbol_map.keys())[:10]}")
+
     # Track trades and equity
     trades = []
     equity_curve = []
@@ -244,7 +393,10 @@ def run_backtest(
     # Initialize security prices
     for symbol, df in historical_data.items():
         if len(df) > 0:
-            algo.securities[symbol].set_market_price(df['close'].iloc[0])
+            sec = algo.securities[symbol]
+            sec.price = float(df['close'].iloc[0])
+            sec.close = sec.price
+            sec.has_data = True
 
     # Track entry info per symbol for trade recording
     entry_info: Dict[str, Dict] = {}
@@ -263,9 +415,37 @@ def run_backtest(
                 bars[symbol] = bar
                 # Update security price
                 if symbol in algo.securities:
-                    algo.securities[symbol].set_market_price(bar.close)
+                    sec = algo.securities[symbol]
+                    sec.price = bar.close
+                    sec.close = bar.close
+                    sec.open = bar.open
+                    sec.high = bar.high
+                    sec.low = bar.low
+                    sec.volume = bar.volume
+                    sec.has_data = True
 
         slice_data = BacktestSlice(timestamp, bars)
+
+        # Update portfolio holdings' market prices so equity tracks correctly
+        price_updates = {sym: bar.close for sym, bar in bars.items()}
+        if price_updates:
+            algo.portfolio.update_market_prices(price_updates)
+
+        # Update registered indicators with new bar data
+        for ind_key, indicator in algo._indicators.items():
+            if not hasattr(indicator, 'update'):
+                continue
+            sym = _indicator_symbol_map.get(ind_key)
+            if sym and sym in bars:
+                try:
+                    bar = bars[sym]
+                    # Pass full bar to indicators that need OHLC (e.g. ATR)
+                    if hasattr(indicator, 'update_bar') and hasattr(bar, 'high'):
+                        indicator.update(bar)
+                    else:
+                        indicator.update(timestamp, bar.close)
+                except Exception:
+                    pass
 
         # Record positions before on_data
         positions_before = {sym: algo.portfolio[sym].quantity for sym in historical_data.keys()}
@@ -327,6 +507,10 @@ def run_backtest(
                             del entry_info[symbol]
                         else:
                             entry_info[symbol]['quantity'] = remaining
+
+        # Update portfolio market prices again after on_data (fills may have changed holdings)
+        if price_updates:
+            algo.portfolio.update_market_prices(price_updates)
 
         # Record equity
         equity = algo.portfolio.total_portfolio_value

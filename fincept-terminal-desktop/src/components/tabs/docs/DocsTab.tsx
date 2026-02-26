@@ -147,7 +147,7 @@ function ContentRenderer({ content, colors }: { content: string; colors: ReturnT
     if (line.trimStart().startsWith('•') || line.trimStart().startsWith('-')) {
       const bulletItems: string[] = [];
       while (i < lines.length && (lines[i].trimStart().startsWith('•') || lines[i].trimStart().startsWith('-'))) {
-        bulletItems.push(lines[i].trimStart().replace(/^[•\-]\s*/, ''));
+        bulletItems.push(lines[i].trimStart().replace(/^[•-]\s*/, ''));
         i++;
       }
       elements.push(
@@ -481,10 +481,108 @@ function OutputPanel({ result, isRunning, colors }: {
   );
 }
 
+// ─── RunnableCodeBlock ───────────────────────────────────────────────────────
+// Extracted as a proper component so hooks (useState, useMemo) are valid
+
+interface RunnableCodeBlockProps {
+  code: string;
+  colors: ReturnType<typeof getColors>;
+  activeCode: string | null;
+  isRunning: boolean;
+  onRun: (code: string) => void;
+}
+
+function RunnableCodeBlock({ code, colors: c, activeCode, isRunning, onRun }: RunnableCodeBlockProps) {
+  const [copied, setCopied] = useState(false);
+  const highlighted = useMemo(() => highlightCode(code, c), [code, c]);
+  const isActive = activeCode === code;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div style={{
+      margin: '8px 0',
+      backgroundColor: '#0d0d0d',
+      border: `1px solid ${isActive ? c.ORANGE : '#222'}`,
+      borderRadius: '3px',
+      overflow: 'hidden',
+      transition: 'border-color 0.2s'
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '3px 8px',
+        backgroundColor: '#141414',
+        borderBottom: `1px solid #222`
+      }}>
+        <span style={{ fontSize: '9px', color: c.ORANGE, letterSpacing: '0.5px', fontWeight: 'bold' }}>FINSCRIPT</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button
+            onClick={handleCopy}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px',
+              background: 'none',
+              border: 'none',
+              color: copied ? c.GREEN : c.GRAY,
+              fontSize: '9px',
+              cursor: 'pointer',
+              padding: '2px 5px'
+            }}
+          >
+            {copied ? <Check size={9} /> : <Copy size={9} />}
+            {copied ? 'COPIED' : 'COPY'}
+          </button>
+          <button
+            onClick={() => onRun(code)}
+            disabled={isRunning}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px',
+              backgroundColor: isRunning ? '#333' : c.ORANGE,
+              color: isRunning ? c.GRAY : '#000',
+              border: 'none',
+              fontSize: '9px',
+              fontWeight: 'bold',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              padding: '2px 8px',
+              borderRadius: '2px'
+            }}
+          >
+            {isRunning ? <Square size={8} /> : <Play size={8} />}
+            {isRunning ? 'RUNNING' : 'RUN'}
+          </button>
+        </div>
+      </div>
+      <pre style={{
+        margin: 0,
+        padding: '8px',
+        overflowX: 'auto',
+        fontSize: '10px',
+        lineHeight: '1.5',
+        fontFamily: 'Consolas, monospace',
+        color: c.WHITE,
+        maxHeight: '300px',
+        overflowY: 'auto'
+      }}>
+        <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+      </pre>
+    </div>
+  );
+}
+
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function DocsTab() {
-  const { colors: themeColors } = useTerminalTheme();
+  useTerminalTheme();
   const COLORS = getColors();
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
@@ -581,92 +679,7 @@ export default function DocsTab() {
   }, []);
 
   // Runnable code block component
-  const RunnableCodeBlock = useCallback(({ code, colors: c }: { code: string; colors: ReturnType<typeof getColors> }) => {
-    const [copied, setCopied] = useState(false);
-    const highlighted = useMemo(() => highlightCode(code, c), [code, c]);
-    const isActive = activeCode === code;
-
-    const handleCopy = () => {
-      navigator.clipboard.writeText(code).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      });
-    };
-
-    return (
-      <div style={{
-        margin: '8px 0',
-        backgroundColor: '#0d0d0d',
-        border: `1px solid ${isActive ? c.ORANGE : '#222'}`,
-        borderRadius: '3px',
-        overflow: 'hidden',
-        transition: 'border-color 0.2s'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '3px 8px',
-          backgroundColor: '#141414',
-          borderBottom: `1px solid #222`
-        }}>
-          <span style={{ fontSize: '9px', color: c.ORANGE, letterSpacing: '0.5px', fontWeight: 'bold' }}>FINSCRIPT</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <button
-              onClick={handleCopy}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '3px',
-                background: 'none',
-                border: 'none',
-                color: copied ? c.GREEN : c.GRAY,
-                fontSize: '9px',
-                cursor: 'pointer',
-                padding: '2px 5px'
-              }}
-            >
-              {copied ? <Check size={9} /> : <Copy size={9} />}
-              {copied ? 'COPIED' : 'COPY'}
-            </button>
-            <button
-              onClick={() => runCode(code)}
-              disabled={isRunning}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '3px',
-                backgroundColor: isRunning ? '#333' : c.ORANGE,
-                color: isRunning ? c.GRAY : '#000',
-                border: 'none',
-                fontSize: '9px',
-                fontWeight: 'bold',
-                cursor: isRunning ? 'not-allowed' : 'pointer',
-                padding: '2px 8px',
-                borderRadius: '2px'
-              }}
-            >
-              {isRunning ? <Square size={8} /> : <Play size={8} />}
-              {isRunning ? 'RUNNING' : 'RUN'}
-            </button>
-          </div>
-        </div>
-        <pre style={{
-          margin: 0,
-          padding: '8px',
-          overflowX: 'auto',
-          fontSize: '10px',
-          lineHeight: '1.5',
-          fontFamily: 'Consolas, monospace',
-          color: c.WHITE,
-          maxHeight: '300px',
-          overflowY: 'auto'
-        }}>
-          <code dangerouslySetInnerHTML={{ __html: highlighted }} />
-        </pre>
-      </div>
-    );
-  }, [activeCode, isRunning, runCode]);
+  // RunnableCodeBlock is defined as a proper component above DocsTab (hooks-safe)
 
   return (
     <div
@@ -947,7 +960,13 @@ export default function DocsTab() {
                       {isFinScriptSection ? 'RUNNABLE EXAMPLE' : 'EXAMPLE'}
                     </div>
                     {isFinScriptSection ? (
-                      <RunnableCodeBlock code={currentContent.codeExample} colors={COLORS} />
+                      <RunnableCodeBlock
+                        code={currentContent.codeExample}
+                        colors={COLORS}
+                        activeCode={activeCode}
+                        isRunning={isRunning}
+                        onRun={runCode}
+                      />
                     ) : (
                       <CodeBlock code={currentContent.codeExample} colors={COLORS} />
                     )}

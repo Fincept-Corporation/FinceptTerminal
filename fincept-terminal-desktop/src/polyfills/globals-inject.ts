@@ -23,7 +23,7 @@ if (typeof globalThis.process === 'undefined') {
     env: { NODE_ENV: import.meta.env.MODE || 'production' },
     version: 'v18.0.0',
     browser: true,
-    nextTick: (fn: Function, ...args: any[]) => setTimeout(() => fn(...args), 0),
+    nextTick: (fn: (...a: unknown[]) => void, ...args: unknown[]) => setTimeout(() => fn(...args), 0),
     cwd: () => '/',
     platform: 'browser',
     argv: [],

@@ -234,7 +234,7 @@ export function isValidSymbol(symbol: string): boolean {
   if (!symbol || typeof symbol !== 'string') return false;
 
   // Basic validation: alphanumeric, can contain & and -
-  return /^[A-Z0-9&\-]+$/i.test(symbol);
+  return /^[A-Z0-9&-]+$/i.test(symbol);
 }
 
 /**

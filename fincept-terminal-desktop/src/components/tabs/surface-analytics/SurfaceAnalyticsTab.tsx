@@ -69,58 +69,59 @@ const ApiKeySetupScreen: React.FC<{
       alignItems: 'center',
       justifyContent: 'center',
       height: '100%',
-      padding: '48px',
+      padding: '16px',
       backgroundColor: colors.background,
     }}
   >
     {/* Main Container */}
     <div
       style={{
-        maxWidth: '560px',
-        padding: '32px',
+        maxWidth: '480px',
+        width: '100%',
+        padding: '16px',
         backgroundColor: colors.panel,
         border: `1px solid ${colors.textMuted}`,
         borderRadius: 'var(--ft-border-radius)',
         textAlign: 'center',
       }}
     >
-      {/* Icon */}
-      <div
-        style={{
-          width: '64px',
-          height: '64px',
-          margin: '0 auto 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.primary + '15',
-          borderRadius: '50%',
-        }}
-      >
-        <Database size={32} style={{ color: colors.primary }} />
+      {/* Icon + Title row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
+        <div
+          style={{
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.primary + '15',
+            borderRadius: '50%',
+            flexShrink: 0,
+          }}
+        >
+          <Database size={14} style={{ color: colors.primary }} />
+        </div>
+        <h2
+          style={{
+            fontSize: fontSize.subheading,
+            fontWeight: 700,
+            color: colors.text,
+            margin: 0,
+            fontFamily,
+            letterSpacing: '0.5px',
+          }}
+        >
+          {t('surfaceAnalytics.apiKeyRequired')}
+        </h2>
       </div>
-
-      {/* Title */}
-      <h2
-        style={{
-          fontSize: fontSize.heading,
-          fontWeight: 700,
-          color: colors.text,
-          marginBottom: '12px',
-          fontFamily,
-          letterSpacing: '0.5px',
-        }}
-      >
-        {t('surfaceAnalytics.apiKeyRequired')}
-      </h2>
 
       {/* Description */}
       <p
         style={{
-          fontSize: fontSize.body,
+          fontSize: fontSize.small,
           color: colors.textMuted,
-          marginBottom: '24px',
-          lineHeight: '1.6',
+          marginBottom: '12px',
+          lineHeight: '1.5',
           fontFamily,
         }}
       >
@@ -132,8 +133,8 @@ const ApiKeySetupScreen: React.FC<{
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
-          gap: '12px',
-          marginBottom: '24px',
+          gap: '6px',
+          marginBottom: '12px',
           textAlign: 'left',
         }}
       >
@@ -148,14 +149,14 @@ const ApiKeySetupScreen: React.FC<{
             style={{
               display: 'flex',
               alignItems: 'flex-start',
-              gap: '8px',
-              padding: '8px',
+              gap: '6px',
+              padding: '6px',
               backgroundColor: colors.background,
               border: `1px solid ${colors.textMuted}`,
               borderRadius: 'var(--ft-border-radius)',
             }}
           >
-            <Icon size={14} style={{ color: colors.primary, marginTop: '2px' }} />
+            <Icon size={12} style={{ color: colors.primary, marginTop: '2px', flexShrink: 0 }} />
             <div>
               <div style={{ fontSize: fontSize.tiny, fontWeight: 700, color: colors.text, letterSpacing: '0.5px' }}>
                 {label}
@@ -169,28 +170,28 @@ const ApiKeySetupScreen: React.FC<{
       </div>
 
       {/* Action Buttons */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
         {/* Primary action row */}
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
           <button
             onClick={onOpenSettings}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              padding: '10px 20px',
+              gap: '6px',
+              padding: '7px 14px',
               backgroundColor: colors.primary,
               color: colors.background,
               border: 'none',
               borderRadius: 'var(--ft-border-radius)',
-              fontSize: fontSize.small,
+              fontSize: fontSize.tiny,
               fontWeight: 700,
               cursor: 'pointer',
               fontFamily,
               letterSpacing: '0.5px',
             }}
           >
-            <Key size={14} />
+            <Key size={12} />
             {t('surfaceAnalytics.configureApiKey')}
           </button>
 
@@ -201,13 +202,13 @@ const ApiKeySetupScreen: React.FC<{
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              padding: '10px 20px',
+              gap: '6px',
+              padding: '7px 14px',
               backgroundColor: 'transparent',
               color: colors.info,
               border: `1px solid ${colors.textMuted}`,
               borderRadius: 'var(--ft-border-radius)',
-              fontSize: fontSize.small,
+              fontSize: fontSize.tiny,
               fontWeight: 700,
               cursor: 'pointer',
               textDecoration: 'none',
@@ -215,21 +216,21 @@ const ApiKeySetupScreen: React.FC<{
               letterSpacing: '0.5px',
             }}
           >
-            <ExternalLink size={14} />
+            <ExternalLink size={12} />
             {t('surfaceAnalytics.getApiKey')}
           </a>
         </div>
 
         {/* Demo mode option */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>{t('common.or')}</span>
           <button
             onClick={onUseDemoData}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
+              gap: '5px',
+              padding: '6px 12px',
               backgroundColor: 'transparent',
               color: colors.success,
               border: `1px solid ${colors.success}50`,
@@ -241,7 +242,7 @@ const ApiKeySetupScreen: React.FC<{
               letterSpacing: '0.5px',
             }}
           >
-            <BarChart3 size={12} />
+            <BarChart3 size={11} />
             {t('surfaceAnalytics.useDemoData')}
           </button>
           <span style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>({t('surfaceAnalytics.syntheticData')})</span>
@@ -251,17 +252,17 @@ const ApiKeySetupScreen: React.FC<{
       {/* Cost Notice */}
       <div
         style={{
-          marginTop: '20px',
-          padding: '10px',
+          marginTop: '10px',
+          padding: '7px 10px',
           backgroundColor: colors.warning + '10',
           border: `1px solid ${colors.warning}30`,
           borderRadius: 'var(--ft-border-radius)',
           display: 'flex',
           alignItems: 'flex-start',
-          gap: '8px',
+          gap: '6px',
         }}
       >
-        <AlertTriangle size={14} style={{ color: colors.warning, flexShrink: 0, marginTop: '2px' }} />
+        <AlertTriangle size={12} style={{ color: colors.warning, flexShrink: 0, marginTop: '2px' }} />
         <span style={{ fontSize: fontSize.tiny, color: colors.textMuted, textAlign: 'left' }}>
           <strong style={{ color: colors.warning }}>{t('common.note')}:</strong> {t('surfaceAnalytics.paidServiceNotice')}
         </span>
@@ -496,7 +497,7 @@ const SurfaceAnalyticsTab: React.FC = () => {
   // Compute real metrics from actual data
   const currentMetrics: ChartMetric[] = useMemo(() => {
     switch (activeChart) {
-      case 'volatility':
+      case 'volatility': {
         if (!volatilityData) {
           return [
             { label: 'ATM VOL', value: '--', change: '--', positive: null },
@@ -523,8 +524,9 @@ const SurfaceAnalyticsTab: React.FC = () => {
           { label: 'SPOT', value: `$${volatilityData.spotPrice.toFixed(2)}`, change: volatilityData.underlying, positive: null },
           { label: 'OPTIONS', value: `${volatilityData.strikes.length * volatilityData.expirations.length}`, change: 'CONTRACTS', positive: null },
         ];
+      }
 
-      case 'correlation':
+      case 'correlation': {
         if (!correlationData) {
           return [
             { label: 'AVG CORR', value: '--', change: '--', positive: null },
@@ -549,8 +551,9 @@ const SurfaceAnalyticsTab: React.FC = () => {
           { label: 'MIN CORR', value: minCorr.toFixed(3), change: minCorr < 0 ? 'NEGATIVE' : 'POSITIVE', positive: minCorr > 0 },
           { label: 'ASSETS', value: `${correlationData.assets.length}`, change: `${correlationData.window}D WINDOW`, positive: null },
         ];
+      }
 
-      case 'yield-curve':
+      case 'yield-curve': {
         if (!yieldCurveData) {
           return [
             { label: '2Y YIELD', value: '--', change: '--', positive: null },
@@ -574,8 +577,9 @@ const SurfaceAnalyticsTab: React.FC = () => {
           { label: '2-10 SPREAD', value: `${spread2_10.toFixed(2)}%`, change: spread2_10 < 0 ? 'INVERTED' : 'NORMAL', positive: spread2_10 >= 0 },
           { label: 'CURVE', value: spread2_10 < 0 ? 'INVERTED' : 'NORMAL', change: `${yieldCurveData.maturities.length} TENORS`, positive: spread2_10 >= 0 },
         ];
+      }
 
-      case 'pca':
+      case 'pca': {
         if (!pcaData) {
           return [
             { label: 'PC1 VAR', value: '--', change: '--', positive: null },
@@ -592,6 +596,7 @@ const SurfaceAnalyticsTab: React.FC = () => {
           { label: 'PC3 VAR', value: `${(pcaData.varianceExplained[2] * 100).toFixed(1)}%`, change: 'TERTIARY', positive: null },
           { label: 'TOP 3', value: `${(totalVar * 100).toFixed(1)}%`, change: totalVar > 0.9 ? 'EXCELLENT' : 'GOOD', positive: totalVar > 0.9 },
         ];
+      }
 
       default:
         return [];

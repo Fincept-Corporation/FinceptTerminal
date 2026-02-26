@@ -217,7 +217,7 @@ export default function DataMappingTab() {
   }, []);
 
   const initializeDatabase = async () => {
-    try { await mappingDatabase.initialize(); } catch {}
+    try { await mappingDatabase.initialize(); } catch { /* db init failed, will retry on next use */ }
   };
 
   const loadSavedMappings = async () => {
@@ -225,7 +225,7 @@ export default function DataMappingTab() {
     try {
       const mappings = await mappingDatabase.getAllMappings();
       dispatch({ type: 'SET_MAPPINGS', payload: mappings });
-    } catch {}
+    } catch { /* failed to load mappings, start with empty state */ }
     finally { dispatch({ type: 'SET_LOADING', payload: false }); }
   };
 

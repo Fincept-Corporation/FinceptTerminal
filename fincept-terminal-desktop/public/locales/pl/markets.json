@@ -13,5 +13,8 @@
   "refresh": "ODŚWIEŻ",
   "auto": "AUTO",
   "on": "WŁ",
-  "off": "WYŁ"
+  "off": "WYŁ",
+  "loading": {
+    "title": "[PL] Initializing..."
+  }
 }

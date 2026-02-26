@@ -110,7 +110,7 @@ export function usePxWebData(): UsePxWebDataReturn {
       setPathStack(prev => [...prev, newPath]);
       fetchNodes(newPath);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [currentPath, fetchNodes]);
 
   const navigateBack = useCallback(() => {
@@ -160,7 +160,7 @@ export function usePxWebData(): UsePxWebDataReturn {
   const fetchMetadata = useCallback(async (tablePath: string) => {
     setSelectedTable(tablePath);
     await fetchMetadataInternal(tablePath);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   const fetchData = useCallback(async (tablePath: string, query: any[] = []) => {

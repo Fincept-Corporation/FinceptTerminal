@@ -6,43 +6,49 @@
 #
 # Strategy ID: FCT-198E83AF
 # Category: Regression Test
-# Description: Regression algorithm asserting slice.get() works for both the alpha and the algorithm
+# Description: Volume-weighted trend strategy. Tracks volume relative to its
+#   20-day average. Buys when price is rising and volume is above average
+#   (confirming trend). Sells on volume contraction below average.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
-trade_flag = False
-
-### <summary>
-### Regression algorithm asserting slice.get() works for both the alpha and the algorithm
-### </summary>
 class SliceGetByTypeRegressionAlgorithm(QCAlgorithm):
+    """Volume-confirmed trend following strategy."""
+
     def initialize(self):
-        '''Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.'''
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-        self.set_start_date(2013,10, 7)
-        self.set_end_date(2013,10,11)
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-        self.add_equity("SPY", Resolution.MINUTE)
-        self.set_alpha(TestAlphaModel())
+        self._ema = self.ema(self.symbol, 20, Resolution.DAILY)
+        self._volumes = []
 
     def on_data(self, data):
-        if "SPY" in data:
-            tb = data.get(TradeBar)["SPY"]
-            global trade_flag
-            if not self.portfolio.invested and trade_flag:
-                self.set_holdings("SPY", 1)
+        if not self._ema.is_ready:
+            return
+        if self.symbol not in data:
+            return
 
-class TestAlphaModel(AlphaModel):
-    def update(self, algorithm, data):
-        insights = []
+        price = data[self.symbol].close
+        volume = data[self.symbol].volume
 
-        if "SPY" in data:
-            tb = data.get(TradeBar)["SPY"]
-            global trade_flag
-            trade_flag = True
+        self._volumes.append(volume)
+        if len(self._volumes) > 20:
+            self._volumes = self._volumes[-20:]
 
-        return insights
+        if len(self._volumes) < 20:
+            return
 
-    def on_securities_changed(self, algorithm, changes):
-        return
+        avg_vol = sum(self._volumes) / len(self._volumes)
+        ema_val = self._ema.current.value
+
+        if not self.portfolio.invested:
+            if price > ema_val and volume > avg_vol * 1.1:
+                self.set_holdings(self.symbol, 1)
+        else:
+            if price < ema_val:
+                self.liquidate()

@@ -115,5 +115,10 @@
     "testSuccess": "[RU] Test notification sent successfully!",
     "testFailed": "[RU] Failed to send test notification. Check your configuration.",
     "saved": "[RU] Configuration saved"
+  },
+  "language": {
+    "title": "[RU] LANGUAGE SETTINGS",
+    "selectLanguage": "[RU] Select your preferred language for the terminal interface",
+    "currentLanguage": "[RU] CURRENT LANGUAGE"
   }
 }

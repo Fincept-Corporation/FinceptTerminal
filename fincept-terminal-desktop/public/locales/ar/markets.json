@@ -13,5 +13,8 @@
   "refresh": "تحديث",
   "auto": "تلقائي",
   "on": "مفعل",
-  "off": "معطل"
+  "off": "معطل",
+  "loading": {
+    "title": "[AR] Initializing..."
+  }
 }

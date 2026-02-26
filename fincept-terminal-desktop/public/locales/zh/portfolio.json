@@ -12,9 +12,111 @@
     "quantity": "数量",
     "price": "价格",
     "add": "添加",
-    "sell": "卖出"
+    "sell": "卖出",
+    "confirmDelete": "[ZH] CONFIRM DELETE",
+    "deleteTransactionWarning": "[ZH] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[ZH] DELETE",
+    "editTransaction": "[ZH] EDIT TRANSACTION",
+    "transactionDate": "[ZH] TRANSACTION DATE",
+    "notes": "[ZH] NOTES",
+    "notesPlaceholder": "[ZH] Optional notes...",
+    "totalValue": "[ZH] TOTAL VALUE",
+    "save": "[ZH] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[ZH] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[ZH] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[ZH] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[ZH] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[ZH] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[ZH] FINCEPT",
+    "portfolioTerminal": "[ZH] PORTFOLIO TERMINAL",
+    "live": "[ZH] LIVE",
+    "pos": "[ZH] POS",
+    "ins": "[ZH] INS",
+    "nav": "[ZH] NAV",
+    "pnl": "[ZH] P&L",
+    "day": "[ZH] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[ZH] TOTAL VALUE",
+    "unrealizedPnl": "[ZH] UNREALIZED P&L",
+    "dayChange": "[ZH] DAY CHANGE",
+    "costBasis": "[ZH] COST BASIS",
+    "fifo": "[ZH] FIFO",
+    "positions": "[ZH] POSITIONS",
+    "concTop3": "[ZH] CONC. TOP3",
+    "weight": "[ZH] WEIGHT",
+    "sharpe": "[ZH] SHARPE",
+    "annualized": "[ZH] ANNUALIZED",
+    "beta": "[ZH] BETA",
+    "vsSpy": "[ZH] VS SPY",
+    "volatility": "[ZH] VOLATILITY",
+    "ann30d": "[ZH] 30D ANN.",
+    "maxDrawdown": "[ZH] MAX DRAWDOWN",
+    "sinceIncep": "[ZH] SINCE INCEP.",
+    "riskScore": "[ZH] RISK SCORE",
+    "composite": "[ZH] COMPOSITE",
+    "var95": "[ZH] VAR (95%)",
+    "oneDay": "[ZH] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[ZH] SECTOR ALLOCATION",
+    "sectors": "[ZH] sectors",
+    "correlation": "[ZH] CORRELATION",
+    "dayChangeProxy": "[ZH] (day change proxy)",
+    "needTwoHoldings": "[ZH] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[ZH] POSITIONS BLOTTER",
+    "instruments": "[ZH] instruments"
+  },
+  "chart": {
+    "performance": "[ZH] PERFORMANCE",
+    "portfolio": "[ZH] PORTFOLIO",
+    "totalReturn": "[ZH] TOTAL RETURN",
+    "historyMessage": "[ZH] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[ZH] ORDER ENTRY",
+    "price": "[ZH] PRICE",
+    "qtyHeld": "[ZH] QTY HELD",
+    "mktVal": "[ZH] MKT VAL",
+    "clickToBuyMore": "[ZH] Click to buy more",
+    "clickToSell": "[ZH] Click to sell",
+    "clickToBuy": "[ZH] Click to buy an asset",
+    "clickToSellAsset": "[ZH] Click to sell an asset",
+    "openBuyOrder": "[ZH] OPEN BUY ORDER",
+    "openSellOrder": "[ZH] OPEN SELL ORDER",
+    "ordersRecorded": "[ZH] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[ZH] HOLDINGS",
+    "noHoldings": "[ZH] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[ZH] RISK SCORE",
+    "low": "[ZH] LOW",
+    "high": "[ZH] HIGH",
+    "topMovers": "[ZH] TOP MOVERS",
+    "quickStats": "[ZH] QUICK STATS",
+    "concTop3": "[ZH] CONC. TOP3",
+    "volatility": "[ZH] VOLATILITY",
+    "newPortfolio": "[ZH] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[ZH] SELECT PORTFOLIO",
+    "searchPortfolios": "[ZH] Search portfolios...",
+    "newPortfolio": "[ZH] NEW PORTFOLIO",
+    "nav": "[ZH] NAV",
+    "pnl": "[ZH] P&L",
+    "day": "[ZH] DAY",
+    "pos": "[ZH] POS",
+    "wl": "[ZH] W/L"
+  },
+  "actions": {
+    "buy": "[ZH] BUY",
+    "sell": "[ZH] SELL"
   }
 }

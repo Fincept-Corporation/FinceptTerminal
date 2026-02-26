@@ -112,7 +112,7 @@ function cleanColumnNames(columns: string[]): string[] {
 
     // Remove special characters that might cause issues
     // Keep: letters, numbers, Chinese characters, spaces, underscores, hyphens
-    cleaned = cleaned.replace(/[^\w\u4e00-\u9fa5\s\-]/g, '_');
+    cleaned = cleaned.replace(/[^\w\u4e00-\u9fa5\s-]/g, '_');
 
     return cleaned;
   });

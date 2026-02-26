@@ -326,7 +326,7 @@ class NodeExecutionManager {
 
     try {
       // Get input data (first input or merged inputs)
-      let data = Object.values(inputs)[0];
+      const data = Object.values(inputs)[0];
 
       if (!data) {
         return {
@@ -400,7 +400,7 @@ class NodeExecutionManager {
           }
           break;
 
-        case 'select':
+        case 'select': {
           // Select specific fields
           const { selectFields } = transformConfig || {};
           if (selectFields && Array.isArray(selectFields)) {
@@ -424,6 +424,7 @@ class NodeExecutionManager {
             result = data;
           }
           break;
+        }
 
         default:
           // Pass through if no transformation type

@@ -39,6 +39,7 @@ export function initTauriCORS() {
     });
 
   } else {
+    // Non-Tauri environment: no CORS config needed
   }
 }
 

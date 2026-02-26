@@ -238,7 +238,7 @@ export const CreateAgentView: React.FC = () => {
       });
       setEditingId(agent.id);
       setExpandedSection('model');
-    } catch {}
+    } catch { /* invalid config JSON, skip edit */ }
   };
 
   // ─── Import JSON ──────────────────────────────────────────────────────────
@@ -255,7 +255,7 @@ export const CreateAgentView: React.FC = () => {
         //  1. Full agent config_json: { model, instructions, tools, ... }
         //  2. Wrapped export: { name, description, category, config_json: {...} }
         let cfg: AgentConfigData & { user_created?: boolean } = {};
-        let meta = { name: '', description: '', category: 'custom' };
+        const meta = { name: '', description: '', category: 'custom' };
 
         if (raw.config_json) {
           // Wrapped export format
@@ -303,7 +303,7 @@ export const CreateAgentView: React.FC = () => {
   const handleExportAgent = (agent: AgentConfig) => {
     // Export the full wrapped format — same shape that handleImport accepts
     let cfg: Record<string, any> = {};
-    try { cfg = JSON.parse(agent.config_json); } catch {}
+    try { cfg = JSON.parse(agent.config_json); } catch { /* invalid JSON, export with empty config */ }
 
     const exportData = {
       name: agent.name,
@@ -806,7 +806,7 @@ export const CreateAgentView: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {savedAgents.map(agent => {
                 let cfg: AgentConfigData & { user_created?: boolean } = {};
-                try { cfg = JSON.parse(agent.config_json); } catch {}
+                try { cfg = JSON.parse(agent.config_json); } catch { /* invalid JSON, render with empty config */ }
 
                 return (
                   <div key={agent.id} style={{

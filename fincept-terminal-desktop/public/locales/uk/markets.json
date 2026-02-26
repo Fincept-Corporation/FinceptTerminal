@@ -13,5 +13,8 @@
   "refresh": "ОНОВИТИ",
   "auto": "АВТО",
   "on": "УВІМК",
-  "off": "ВИМК"
+  "off": "ВИМК",
+  "loading": {
+    "title": "[UK] Initializing..."
+  }
 }

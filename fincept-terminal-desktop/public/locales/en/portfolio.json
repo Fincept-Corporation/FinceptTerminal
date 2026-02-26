@@ -12,9 +12,111 @@
     "quantity": "QUANTITY",
     "price": "PRICE",
     "add": "ADD",
-    "sell": "SELL"
+    "sell": "SELL",
+    "confirmDelete": "CONFIRM DELETE",
+    "deleteTransactionWarning": "Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "DELETE",
+    "editTransaction": "EDIT TRANSACTION",
+    "transactionDate": "TRANSACTION DATE",
+    "notes": "NOTES",
+    "notesPlaceholder": "Optional notes...",
+    "totalValue": "TOTAL VALUE",
+    "save": "SAVE"
   },
   "extracted": {
-    "areYouSureYou": "Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "FINCEPT",
+    "portfolioTerminal": "PORTFOLIO TERMINAL",
+    "live": "LIVE",
+    "pos": "POS",
+    "ins": "INS",
+    "nav": "NAV",
+    "pnl": "P&L",
+    "day": "DAY"
+  },
+  "ribbon": {
+    "totalValue": "TOTAL VALUE",
+    "unrealizedPnl": "UNREALIZED P&L",
+    "dayChange": "DAY CHANGE",
+    "costBasis": "COST BASIS",
+    "fifo": "FIFO",
+    "positions": "POSITIONS",
+    "concTop3": "CONC. TOP3",
+    "weight": "WEIGHT",
+    "sharpe": "SHARPE",
+    "annualized": "ANNUALIZED",
+    "beta": "BETA",
+    "vsSpy": "VS SPY",
+    "volatility": "VOLATILITY",
+    "ann30d": "30D ANN.",
+    "maxDrawdown": "MAX DRAWDOWN",
+    "sinceIncep": "SINCE INCEP.",
+    "riskScore": "RISK SCORE",
+    "composite": "COMPOSITE",
+    "var95": "VAR (95%)",
+    "oneDay": "1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "SECTOR ALLOCATION",
+    "sectors": "sectors",
+    "correlation": "CORRELATION",
+    "dayChangeProxy": "(day change proxy)",
+    "needTwoHoldings": "Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "POSITIONS BLOTTER",
+    "instruments": "instruments"
+  },
+  "chart": {
+    "performance": "PERFORMANCE",
+    "portfolio": "PORTFOLIO",
+    "totalReturn": "TOTAL RETURN",
+    "historyMessage": "Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "ORDER ENTRY",
+    "price": "PRICE",
+    "qtyHeld": "QTY HELD",
+    "mktVal": "MKT VAL",
+    "clickToBuyMore": "Click to buy more",
+    "clickToSell": "Click to sell",
+    "clickToBuy": "Click to buy an asset",
+    "clickToSellAsset": "Click to sell an asset",
+    "openBuyOrder": "OPEN BUY ORDER",
+    "openSellOrder": "OPEN SELL ORDER",
+    "ordersRecorded": "Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "HOLDINGS",
+    "noHoldings": "No holdings yet. Click BUY to add positions.",
+    "riskScore": "RISK SCORE",
+    "low": "LOW",
+    "high": "HIGH",
+    "topMovers": "TOP MOVERS",
+    "quickStats": "QUICK STATS",
+    "concTop3": "CONC. TOP3",
+    "volatility": "VOLATILITY",
+    "newPortfolio": "NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "SELECT PORTFOLIO",
+    "searchPortfolios": "Search portfolios...",
+    "newPortfolio": "NEW PORTFOLIO",
+    "nav": "NAV",
+    "pnl": "P&L",
+    "day": "DAY",
+    "pos": "POS",
+    "wl": "W/L"
+  },
+  "actions": {
+    "buy": "BUY",
+    "sell": "SELL"
   }
 }

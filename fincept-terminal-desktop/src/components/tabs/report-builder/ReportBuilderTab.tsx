@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import {
   FolderOpen,
@@ -7,6 +7,7 @@ import {
   Bot,
   MessageCircle,
   History,
+  FileType,
 } from 'lucide-react';
 import { toast } from '@/components/ui/terminal-toast';
 import { useTranslation } from 'react-i18next';
@@ -41,6 +42,14 @@ import {
   ShortcutsDialog,
 } from './ProductivityFeatures';
 
+// Lazy-load DOCX editor components for bundle optimization
+const DocxEditorToolbar = lazy(() => import('./DocxEditorToolbar'));
+const DocxEditorCanvas = lazy(() => import('./DocxEditorCanvas'));
+const DocxPropertiesPanel = lazy(() => import('./DocxPropertiesPanel'));
+
+// Import DOCX editor hook (lightweight, no heavy deps)
+import { useDocxEditor } from './useDocxEditor';
+
 // Import hooks
 import {
   useReportTemplate,
@@ -51,12 +60,18 @@ import {
 } from './hooks';
 
 // Import types and constants
-import { PageTheme, RightPanelView } from './types';
+import { PageTheme, RightPanelView, ReportBuilderMode } from './types';
 
 const ReportBuilderTab: React.FC = () => {
   const { t } = useTranslation('reportBuilder');
   const { colors, fontSize } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Builder mode: 'builder' (existing) or 'docx' (new DOCX editor)
+  const [builderMode, setBuilderMode] = useState<ReportBuilderMode>('builder');
+
+  // DOCX Editor hook (always initialized so TipTap editor is ready when switching modes)
+  const docxEditor = useDocxEditor();
 
   // Template management hook
   const {
@@ -159,13 +174,15 @@ const ReportBuilderTab: React.FC = () => {
     fontFamily,
     defaultFontSize,
     rightPanelView,
-  }), [pageTheme, fontFamily, defaultFontSize, rightPanelView]);
+    builderMode,
+  }), [pageTheme, fontFamily, defaultFontSize, rightPanelView, builderMode]);
 
   const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
     if (typeof state.pageTheme === 'string') setPageTheme(state.pageTheme as PageTheme);
     if (typeof state.fontFamily === 'string') setFontFamily(state.fontFamily);
     if (typeof state.defaultFontSize === 'number') setDefaultFontSize(state.defaultFontSize);
     if (typeof state.rightPanelView === 'string') setRightPanelView(state.rightPanelView as RightPanelView);
+    if (typeof state.builderMode === 'string') setBuilderMode(state.builderMode as ReportBuilderMode);
   }, []);
 
   useWorkspaceTabState('report-builder', getWorkspaceState, setWorkspaceState);
@@ -332,59 +349,117 @@ const ReportBuilderTab: React.FC = () => {
         onShortcuts={() => setShowShortcuts(true)}
         onTemplateGallery={() => setShowTemplateGallery(true)}
         onLoad={loadTemplate}
-        onSave={saveTemplate}
-        onExport={() => setShowExportDialog(true)}
+        onSave={builderMode === 'docx' ? docxEditor.saveDocx : saveTemplate}
+        onExport={builderMode === 'docx' ? docxEditor.exportDocx : () => setShowExportDialog(true)}
         isSaving={isSaving}
         isAutoSaving={isAutoSaving}
         lastSaved={lastSaved}
         hasComponents={template.components.length > 0}
+        builderMode={builderMode}
+        onModeChange={setBuilderMode}
+        onImportDocx={docxEditor.importDocx}
+        onExportDocx={docxEditor.exportDocx}
+        docxFileName={docxEditor.docxState.fileName}
+        isDocxDirty={docxEditor.docxState.isDirty}
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Components */}
-        <ComponentToolbar
-          onAddComponent={handleAddComponent}
-          template={template}
-          selectedComponent={selectedComponent}
-          onSelectComponent={setSelectedComponent}
-          onDeleteComponent={deleteComponent}
-          onDuplicateComponent={duplicateComponent}
-          onDragEnd={handleDragEnd}
-          pageTheme={pageTheme}
-          onPageThemeChange={setPageTheme}
-          customBgColor={customBgColor}
-          onCustomBgColorChange={setCustomBgColor}
-          showColorPicker={showColorPicker}
-          onShowColorPickerChange={setShowColorPicker}
-          fontFamily={fontFamily}
-          onFontFamilyChange={setFontFamily}
-          defaultFontSize={defaultFontSize}
-          onDefaultFontSizeChange={setDefaultFontSize}
-          isBold={isBold}
-          onIsBoldChange={setIsBold}
-          isItalic={isItalic}
-          onIsItalicChange={setIsItalic}
-        />
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+        {builderMode === 'builder' ? (
+          <>
+            {/* Left Panel - Components */}
+            <ComponentToolbar
+              onAddComponent={handleAddComponent}
+              template={template}
+              selectedComponent={selectedComponent}
+              onSelectComponent={setSelectedComponent}
+              onDeleteComponent={deleteComponent}
+              onDuplicateComponent={duplicateComponent}
+              onDragEnd={handleDragEnd}
+              pageTheme={pageTheme}
+              onPageThemeChange={setPageTheme}
+              customBgColor={customBgColor}
+              onCustomBgColorChange={setCustomBgColor}
+              showColorPicker={showColorPicker}
+              onShowColorPickerChange={setShowColorPicker}
+              fontFamily={fontFamily}
+              onFontFamilyChange={setFontFamily}
+              defaultFontSize={defaultFontSize}
+              onDefaultFontSizeChange={setDefaultFontSize}
+              isBold={isBold}
+              onIsBoldChange={setIsBold}
+              isItalic={isItalic}
+              onIsItalicChange={setIsItalic}
+            />
 
-        {/* Center - Canvas */}
-        <DocumentCanvas
-          template={template}
-          selectedComponent={selectedComponent}
-          onSelectComponent={setSelectedComponent}
-          onUpdateComponent={updateComponent}
-          pageTheme={pageTheme}
-          customBgColor={customBgColor}
-          fontFamily={fontFamily}
-          defaultFontSize={defaultFontSize}
-          isBold={isBold}
-          isItalic={isItalic}
-          advancedStyles={advancedStyles}
-          tocItems={tocItems}
-        />
+            {/* Center - Canvas */}
+            <DocumentCanvas
+              template={template}
+              selectedComponent={selectedComponent}
+              onSelectComponent={setSelectedComponent}
+              onUpdateComponent={updateComponent}
+              pageTheme={pageTheme}
+              customBgColor={customBgColor}
+              fontFamily={fontFamily}
+              defaultFontSize={defaultFontSize}
+              isBold={isBold}
+              isItalic={isItalic}
+              advancedStyles={advancedStyles}
+              tocItems={tocItems}
+            />
+          </>
+        ) : (
+          /* DOCX Editor Mode */
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+            <Suspense fallback={
+              <div className="flex-1 flex items-center justify-center" style={{ color: colors.textMuted }}>
+                Loading DOCX editor...
+              </div>
+            }>
+              {/* DOCX Toolbar */}
+              <DocxEditorToolbar
+                editor={docxEditor.editor}
+                viewMode={docxEditor.docxState.viewMode}
+                onViewModeChange={docxEditor.setViewMode}
+                onInsertImage={docxEditor.insertImage}
+                onToggleWatermark={docxEditor.toggleWatermark}
+                watermarkEnabled={docxEditor.pageSettings.watermarkEnabled}
+                onToggleHeader={docxEditor.toggleHeader}
+                onToggleFooter={docxEditor.toggleFooter}
+                headerEnabled={docxEditor.pageSettings.headerEnabled}
+                footerEnabled={docxEditor.pageSettings.footerEnabled}
+                lineSpacing={docxEditor.pageSettings.lineSpacing}
+                onLineSpacingChange={(spacing) => docxEditor.updatePageSettings({ lineSpacing: spacing })}
+                zoom={docxEditor.zoom}
+                onZoomChange={docxEditor.setZoom}
+              />
+              {/* DOCX Canvas */}
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                <DocxEditorCanvas
+                  editor={docxEditor.editor}
+                  viewMode={docxEditor.docxState.viewMode}
+                  originalArrayBuffer={docxEditor.docxState.originalArrayBuffer}
+                  watermarkEnabled={docxEditor.pageSettings.watermarkEnabled}
+                  watermarkText={docxEditor.pageSettings.watermarkText}
+                  headerEnabled={docxEditor.pageSettings.headerEnabled}
+                  footerEnabled={docxEditor.pageSettings.footerEnabled}
+                  headerText={docxEditor.pageSettings.headerText}
+                  footerText={docxEditor.pageSettings.footerText}
+                  onToggleHeader={docxEditor.toggleHeader}
+                  onToggleFooter={docxEditor.toggleFooter}
+                  onHeaderTextChange={(text) => docxEditor.updatePageSettings({ headerText: text })}
+                  onFooterTextChange={(text) => docxEditor.updatePageSettings({ footerText: text })}
+                  lineSpacing={docxEditor.pageSettings.lineSpacing}
+                  margins={docxEditor.pageSettings.margins}
+                  zoom={docxEditor.zoom}
+                />
+              </div>
+            </Suspense>
+          </div>
+        )}
 
         {/* Right Panel - Properties, AI Chat, and Advanced Styling */}
-        <div className="w-1/5 border-l flex flex-col min-h-0" style={{ borderColor: colors.panel, backgroundColor: colors.panel }}>
+        <div style={{ width: '280px', minWidth: '280px', maxWidth: '280px', borderLeft: `1px solid ${colors.panel}`, display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: colors.panel, flexShrink: 0 }}>
           {/* Toggle Buttons */}
           <div className="flex flex-wrap border-b" style={{ borderColor: colors.panel }}>
             <button
@@ -465,15 +540,34 @@ const ReportBuilderTab: React.FC = () => {
           {/* Properties Section */}
           {(rightPanelView === 'properties' || rightPanelView === 'split') && (
             <div className={`${rightPanelView === 'split' ? 'flex-1 border-b' : 'flex-1'} overflow-y-auto min-h-0`} style={{ borderColor: colors.panel }}>
-              <PropertiesPanel
-                selectedComponent={selectedComp}
-                onUpdateComponent={updateComponent}
-                onDeleteComponent={deleteComponent}
-                onDuplicateComponent={duplicateComponent}
-                onClearSelection={() => setSelectedComponent(null)}
-                onSaveAsTemplate={saveAsTemplate}
-                onImageUpload={handleImageUpload}
-              />
+              {builderMode === 'docx' ? (
+                <Suspense fallback={<div className="p-3 text-xs" style={{ color: colors.textMuted }}>Loading...</div>}>
+                  <DocxPropertiesPanel
+                    metadata={docxEditor.docxState.metadata}
+                    onMetadataChange={docxEditor.updateMetadata}
+                    htmlContent={docxEditor.docxState.htmlContent}
+                    filePath={docxEditor.docxState.filePath}
+                    fileId={docxEditor.docxState.fileId}
+                    isDirty={docxEditor.docxState.isDirty}
+                    onCreateSnapshot={docxEditor.createSnapshot}
+                    onRestoreSnapshot={docxEditor.restoreSnapshot}
+                    onDeleteSnapshot={docxEditor.deleteSnapshot}
+                    snapshots={docxEditor.snapshots}
+                    pageSettings={docxEditor.pageSettings}
+                    onPageSettingsChange={docxEditor.updatePageSettings}
+                  />
+                </Suspense>
+              ) : (
+                <PropertiesPanel
+                  selectedComponent={selectedComp}
+                  onUpdateComponent={updateComponent}
+                  onDeleteComponent={deleteComponent}
+                  onDuplicateComponent={duplicateComponent}
+                  onClearSelection={() => setSelectedComponent(null)}
+                  onSaveAsTemplate={saveAsTemplate}
+                  onImageUpload={handleImageUpload}
+                />
+              )}
             </div>
           )}
 
@@ -583,6 +677,9 @@ const ReportBuilderTab: React.FC = () => {
         onClose={() => setShowExportDialog(false)}
         template={template}
         brandKit={activeBrandKit}
+        builderMode={builderMode}
+        docxHtmlContent={builderMode === 'docx' ? (docxEditor.editor?.getHTML() || docxEditor.docxState.htmlContent) : undefined}
+        docxMetadata={builderMode === 'docx' ? docxEditor.docxState.metadata : undefined}
       />
 
       {/* Template Gallery Dialog */}
@@ -615,7 +712,11 @@ const ReportBuilderTab: React.FC = () => {
 
       <TabFooter
         tabName="REPORT BUILDER"
-        leftInfo={[
+        leftInfo={builderMode === 'docx' ? [
+          { label: `Mode: DOCX Editor`, color: colors.primary },
+          { label: docxEditor.docxState.fileName, color: colors.text },
+          { label: docxEditor.docxState.isDirty ? 'Modified' : 'Saved', color: docxEditor.docxState.isDirty ? '#FFA500' : '#10b981' },
+        ] : [
           { label: `Components: ${template.components.length}`, color: colors.text },
           { label: `Theme: ${pageTheme.charAt(0).toUpperCase() + pageTheme.slice(1)}`, color: colors.text },
           ...(activeBrandKit ? [{ label: `Brand: ${activeBrandKit.name}`, color: colors.primary }] : []),

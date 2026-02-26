@@ -6,27 +6,26 @@
 #
 # Strategy ID: FCT-0C67D5F6
 # Category: Benchmark
-# Description: History Request Benchmark
+# Description: Buy-and-hold benchmark strategy. Invests 100% in SPY on first
+#   data point and holds for the entire period. Used as a performance baseline
+#   for comparing active strategies.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
 class HistoryRequestBenchmark(QCAlgorithm):
+    """Buy-and-hold benchmark for performance comparison."""
 
     def initialize(self):
-        self.set_start_date(2010, 1, 1)
-        self.set_end_date(2018, 1, 1)
-        self.set_cash(10000)
-        self._symbol = self.add_equity("SPY").symbol
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-    def on_end_of_day(self, symbol):
-        minute_history = self.history([self._symbol], 60, Resolution.MINUTE)
-        last_hour_high = 0
-        for index, row in minute_history.loc["SPY"].iterrows():
-            if last_hour_high < row["high"]:
-                last_hour_high = row["high"]
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-        daily_history = self.history([self._symbol], 1, Resolution.DAILY).loc["SPY"].head()
-        daily_history_high = daily_history["high"]
-        daily_history_low = daily_history["low"]
-        daily_history_open = daily_history["open"]
+    def on_data(self, data):
+        if self.symbol not in data:
+            return
+        if not self.portfolio.invested:
+            self.set_holdings(self.symbol, 1)

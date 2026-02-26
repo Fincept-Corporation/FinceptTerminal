@@ -3,13 +3,7 @@ import { Settings, Loader2, AlertCircle, RefreshCw, Code, Hash, ToggleLeft, Type
 import type { StrategyParameter } from '../types';
 import { extractStrategyParameters } from '../services/algoTradingService';
 import { F } from '../constants/theme';
-
-const inputBaseStyle: React.CSSProperties = {
-  width: '100%', padding: '8px 10px', backgroundColor: F.DARK_BG,
-  color: F.WHITE, border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-  fontSize: '10px', fontFamily: '"IBM Plex Mono", monospace', outline: 'none',
-  transition: 'border-color 0.2s',
-};
+import { S } from '../constants/styles';
 
 interface ParameterEditorProps {
   code?: string;
@@ -72,39 +66,30 @@ const ParameterEditor: React.FC<ParameterEditorProps> = ({
 
   if (loading) {
     return (
-      <div style={{
-        padding: '24px', display: 'flex', flexDirection: 'column',
-        alignItems: 'center', gap: '8px', color: F.GRAY,
-      }}>
-        <Loader2 size={18} className="animate-spin" style={{ color: F.ORANGE }} />
-        <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px' }}>
-          EXTRACTING PARAMETERS...
-        </span>
+      <div className="flex flex-col items-center gap-2 py-6" style={{ color: F.GRAY }}>
+        <Loader2 size={20} className="animate-spin" style={{ color: F.ORANGE }} />
+        <span className="text-[11px] font-bold tracking-wide">EXTRACTING PARAMETERS...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{
-        padding: '12px', backgroundColor: `${F.RED}15`,
-        border: `1px solid ${F.RED}40`, borderRadius: '2px',
-        display: 'flex', alignItems: 'center', gap: '8px',
-      }}>
-        <AlertCircle size={12} color={F.RED} />
-        <span style={{ fontSize: '9px', color: F.RED, fontWeight: 700 }}>{error}</span>
+      <div
+        className="flex items-center gap-2 rounded px-4 py-3"
+        style={{ backgroundColor: `${F.RED}15`, border: `1px solid ${F.RED}40` }}
+      >
+        <AlertCircle size={14} color={F.RED} />
+        <span className="text-[11px] font-bold" style={{ color: F.RED }}>{error}</span>
       </div>
     );
   }
 
   if (parameters.length === 0) {
     return (
-      <div style={{
-        padding: '24px', textAlign: 'center',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-      }}>
-        <Code size={18} color={F.MUTED} style={{ opacity: 0.5 }} />
-        <span style={{ fontSize: '9px', color: F.MUTED, fontWeight: 700 }}>
+      <div className="flex flex-col items-center gap-2 py-6">
+        <Code size={20} style={{ color: F.MUTED, opacity: 0.5 }} />
+        <span className="text-[11px] font-bold" style={{ color: F.MUTED }}>
           NO CONFIGURABLE PARAMETERS
         </span>
       </div>
@@ -112,64 +97,46 @@ const ParameterEditor: React.FC<ParameterEditorProps> = ({
   }
 
   return (
-    <div style={{
-      backgroundColor: F.PANEL_BG, borderRadius: '2px',
-      border: `1px solid ${F.BORDER}`, overflow: 'hidden',
-    }}>
+    <div className={S.section} style={{ backgroundColor: F.PANEL_BG }}>
       {/* Header */}
-      <div style={{
-        padding: '10px 12px', borderBottom: `1px solid ${F.BORDER}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        backgroundColor: F.HEADER_BG,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Settings size={12} color={F.ORANGE} />
-          <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
+      <div
+        className={`${S.sectionHeader} justify-between`}
+        style={{ backgroundColor: F.HEADER_BG }}
+      >
+        <div className="flex items-center gap-2">
+          <Settings size={14} color={F.ORANGE} />
+          <span className="text-[11px] font-bold tracking-wide" style={{ color: F.WHITE }}>
             STRATEGY PARAMETERS
           </span>
-          <span style={{
-            padding: '2px 6px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-            backgroundColor: `${F.ORANGE}20`, color: F.ORANGE,
-          }}>
+          <span
+            className={S.badge}
+            style={{ backgroundColor: `${F.ORANGE}20`, color: F.ORANGE }}
+          >
             {parameters.length}
           </span>
         </div>
         <button
           onClick={handleReset}
           disabled={disabled}
-          style={{
-            padding: '4px 10px', backgroundColor: 'transparent',
-            border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-            color: F.GRAY, fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px',
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            display: 'flex', alignItems: 'center', gap: '4px',
-            opacity: disabled ? 0.5 : 1, transition: 'all 0.2s',
-          }}
+          className={S.btnOutline}
+          style={{ opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
           onMouseEnter={e => {
-            if (!disabled) {
-              e.currentTarget.style.borderColor = F.ORANGE;
-              e.currentTarget.style.color = F.WHITE;
-            }
+            if (!disabled) { e.currentTarget.style.borderColor = F.ORANGE; e.currentTarget.style.color = F.WHITE; }
           }}
           onMouseLeave={e => {
-            if (!disabled) {
-              e.currentTarget.style.borderColor = F.BORDER;
-              e.currentTarget.style.color = F.GRAY;
-            }
+            if (!disabled) { e.currentTarget.style.borderColor = F.BORDER; e.currentTarget.style.color = F.GRAY; }
           }}
         >
-          <RefreshCw size={9} />
+          <RefreshCw size={10} />
           RESET DEFAULTS
         </button>
       </div>
 
       {/* Parameters Grid */}
-      <div style={{
-        padding: '12px',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-        gap: '10px',
-      }}>
+      <div
+        className="p-4 grid gap-3"
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
+      >
         {parameters.map((param) => (
           <ParameterInput
             key={param.name}
@@ -210,8 +177,6 @@ const ParameterInput: React.FC<{
   const typeColor = TYPE_COLORS[parameter.type] || F.GRAY;
 
   const renderInput = () => {
-    const baseStyle = { ...inputBaseStyle, cursor: disabled ? 'not-allowed' : undefined };
-
     switch (parameter.type) {
       case 'bool':
         return (
@@ -219,7 +184,11 @@ const ParameterInput: React.FC<{
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            style={{ ...baseStyle, color: value === 'true' ? F.GREEN : F.RED }}
+            className={S.select}
+            style={{
+              color: value === 'true' ? F.GREEN : F.RED,
+              cursor: disabled ? 'not-allowed' : undefined,
+            }}
           >
             <option value="true">True</option>
             <option value="false">False</option>
@@ -232,7 +201,8 @@ const ParameterInput: React.FC<{
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
             min={parameter.min} max={parameter.max} step={1}
-            style={{ ...baseStyle, color: F.CYAN }}
+            className={S.input}
+            style={{ color: F.CYAN, cursor: disabled ? 'not-allowed' : undefined }}
             onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
             onBlur={e => { e.currentTarget.style.borderColor = F.BORDER; }}
           />
@@ -244,7 +214,8 @@ const ParameterInput: React.FC<{
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
             min={parameter.min} max={parameter.max} step={0.01}
-            style={{ ...baseStyle, color: F.BLUE }}
+            className={S.input}
+            style={{ color: F.BLUE, cursor: disabled ? 'not-allowed' : undefined }}
             onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
             onBlur={e => { e.currentTarget.style.borderColor = F.BORDER; }}
           />
@@ -255,7 +226,8 @@ const ParameterInput: React.FC<{
             type="text" value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            style={baseStyle}
+            className={S.input}
+            style={{ cursor: disabled ? 'not-allowed' : undefined }}
             onFocus={e => { e.currentTarget.style.borderColor = F.ORANGE; }}
             onBlur={e => { e.currentTarget.style.borderColor = F.BORDER; }}
           />
@@ -264,38 +236,30 @@ const ParameterInput: React.FC<{
   };
 
   return (
-    <div style={{
-      backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`,
-      borderRadius: '2px', padding: '10px', transition: 'border-color 0.2s',
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: '6px',
-      }}>
-        <label style={{
-          fontSize: '9px', fontWeight: 700, color: F.GRAY,
-          letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '4px',
-        }}>
+    <div
+      className="rounded p-3 transition-colors duration-200"
+      style={{ backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}` }}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-[10px] font-bold tracking-wide flex items-center gap-1.5" style={{ color: F.GRAY }}>
           {parameter.name.toUpperCase()}
         </label>
-        <span style={{
-          fontSize: '8px', padding: '2px 6px',
-          backgroundColor: `${typeColor}15`, color: typeColor,
-          borderRadius: '2px', fontWeight: 700, letterSpacing: '0.5px',
-          display: 'flex', alignItems: 'center', gap: '3px',
-        }}>
-          <TypeIcon size={8} />
+        <span
+          className={`${S.badge} flex items-center gap-1`}
+          style={{ backgroundColor: `${typeColor}15`, color: typeColor }}
+        >
+          <TypeIcon size={10} />
           {parameter.type.toUpperCase()}
         </span>
       </div>
       {renderInput()}
       {parameter.description && (
-        <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '4px', lineHeight: '1.4' }}>
+        <div className="text-[10px] mt-1.5 leading-relaxed" style={{ color: F.MUTED }}>
           {parameter.description}
         </div>
       )}
       {(parameter.min !== undefined || parameter.max !== undefined) && (
-        <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>
+        <div className="text-[10px] mt-1" style={{ color: F.MUTED }}>
           {parameter.min !== undefined && `Min: ${parameter.min}`}
           {parameter.min !== undefined && parameter.max !== undefined && ' | '}
           {parameter.max !== undefined && `Max: ${parameter.max}`}

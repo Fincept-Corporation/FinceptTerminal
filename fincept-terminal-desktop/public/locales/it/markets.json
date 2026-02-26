@@ -13,5 +13,8 @@
   "refresh": "AGGIORNA",
   "auto": "AUTO",
   "on": "ON",
-  "off": "OFF"
+  "off": "OFF",
+  "loading": {
+    "title": "[IT] Initializing..."
+  }
 }

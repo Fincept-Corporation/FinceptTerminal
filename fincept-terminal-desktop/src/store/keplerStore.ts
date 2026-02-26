@@ -1,8 +1,8 @@
 // Redux store configuration for Kepler.gl
 import { createStore, combineReducers, applyMiddleware, compose } from 'redux';
-// @ts-ignore
+// @ts-expect-error no types for react-palm
 import { taskMiddleware } from 'react-palm/tasks';
-// @ts-ignore
+// @ts-expect-error no types for kepler.gl
 import keplerGlReducer from 'kepler.gl/reducers';
 
 const customizedKeplerGlReducer = keplerGlReducer.initialState({

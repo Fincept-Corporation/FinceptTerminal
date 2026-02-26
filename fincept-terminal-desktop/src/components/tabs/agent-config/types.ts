@@ -188,7 +188,7 @@ export const DEFAULT_TAB_SESSION: AgentTabSessionState = {
  * Extract the actual readable text from an agent response string.
  */
 export function extractAgentResponseText(raw: string): string {
-  if (!raw || typeof raw !== 'string') return raw || '';
+  if (!raw || typeof raw !== 'string') return typeof raw === 'object' ? JSON.stringify(raw, null, 2) : (raw || '');
 
   try {
     const parsed = JSON.parse(raw);

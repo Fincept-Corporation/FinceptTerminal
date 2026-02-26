@@ -12,9 +12,111 @@
     "quantity": "मात्रा",
     "price": "मूल्य",
     "add": "जोड़ें",
-    "sell": "बेचें"
+    "sell": "बेचें",
+    "confirmDelete": "[HI] CONFIRM DELETE",
+    "deleteTransactionWarning": "[HI] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[HI] DELETE",
+    "editTransaction": "[HI] EDIT TRANSACTION",
+    "transactionDate": "[HI] TRANSACTION DATE",
+    "notes": "[HI] NOTES",
+    "notesPlaceholder": "[HI] Optional notes...",
+    "totalValue": "[HI] TOTAL VALUE",
+    "save": "[HI] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[HI] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[HI] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[HI] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[HI] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[HI] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[HI] FINCEPT",
+    "portfolioTerminal": "[HI] PORTFOLIO TERMINAL",
+    "live": "[HI] LIVE",
+    "pos": "[HI] POS",
+    "ins": "[HI] INS",
+    "nav": "[HI] NAV",
+    "pnl": "[HI] P&L",
+    "day": "[HI] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[HI] TOTAL VALUE",
+    "unrealizedPnl": "[HI] UNREALIZED P&L",
+    "dayChange": "[HI] DAY CHANGE",
+    "costBasis": "[HI] COST BASIS",
+    "fifo": "[HI] FIFO",
+    "positions": "[HI] POSITIONS",
+    "concTop3": "[HI] CONC. TOP3",
+    "weight": "[HI] WEIGHT",
+    "sharpe": "[HI] SHARPE",
+    "annualized": "[HI] ANNUALIZED",
+    "beta": "[HI] BETA",
+    "vsSpy": "[HI] VS SPY",
+    "volatility": "[HI] VOLATILITY",
+    "ann30d": "[HI] 30D ANN.",
+    "maxDrawdown": "[HI] MAX DRAWDOWN",
+    "sinceIncep": "[HI] SINCE INCEP.",
+    "riskScore": "[HI] RISK SCORE",
+    "composite": "[HI] COMPOSITE",
+    "var95": "[HI] VAR (95%)",
+    "oneDay": "[HI] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[HI] SECTOR ALLOCATION",
+    "sectors": "[HI] sectors",
+    "correlation": "[HI] CORRELATION",
+    "dayChangeProxy": "[HI] (day change proxy)",
+    "needTwoHoldings": "[HI] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[HI] POSITIONS BLOTTER",
+    "instruments": "[HI] instruments"
+  },
+  "chart": {
+    "performance": "[HI] PERFORMANCE",
+    "portfolio": "[HI] PORTFOLIO",
+    "totalReturn": "[HI] TOTAL RETURN",
+    "historyMessage": "[HI] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[HI] ORDER ENTRY",
+    "price": "[HI] PRICE",
+    "qtyHeld": "[HI] QTY HELD",
+    "mktVal": "[HI] MKT VAL",
+    "clickToBuyMore": "[HI] Click to buy more",
+    "clickToSell": "[HI] Click to sell",
+    "clickToBuy": "[HI] Click to buy an asset",
+    "clickToSellAsset": "[HI] Click to sell an asset",
+    "openBuyOrder": "[HI] OPEN BUY ORDER",
+    "openSellOrder": "[HI] OPEN SELL ORDER",
+    "ordersRecorded": "[HI] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[HI] HOLDINGS",
+    "noHoldings": "[HI] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[HI] RISK SCORE",
+    "low": "[HI] LOW",
+    "high": "[HI] HIGH",
+    "topMovers": "[HI] TOP MOVERS",
+    "quickStats": "[HI] QUICK STATS",
+    "concTop3": "[HI] CONC. TOP3",
+    "volatility": "[HI] VOLATILITY",
+    "newPortfolio": "[HI] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[HI] SELECT PORTFOLIO",
+    "searchPortfolios": "[HI] Search portfolios...",
+    "newPortfolio": "[HI] NEW PORTFOLIO",
+    "nav": "[HI] NAV",
+    "pnl": "[HI] P&L",
+    "day": "[HI] DAY",
+    "pos": "[HI] POS",
+    "wl": "[HI] W/L"
+  },
+  "actions": {
+    "buy": "[HI] BUY",
+    "sell": "[HI] SELL"
   }
 }

@@ -6,69 +6,42 @@
 #
 # Strategy ID: FCT-1855F876
 # Category: Options
-# Description: This regression algorithm tests In The Money (ITM) future option calls across different strike prices. We expect 6 or...
+# Description: Intraday-inspired reversal strategy. Uses short-period RSI (7)
+#   combined with EMA filter. Buys on deep oversold (RSI < 25) when above
+#   EMA. Quick exit on RSI > 55 for short-term mean reversion captures.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
-### <summary>
-### This regression algorithm tests In The Money (ITM) future option calls across different strike prices.
-### We expect 6 orders from the algorithm, which are:
-###
-###   * (1) Initial entry, buy ES Call Option (ES19M20 expiring ITM)
-###   * (2) Initial entry, sell ES Call Option at different strike (ES20H20 expiring ITM)
-###   * [2] Option assignment, opens a position in the underlying (ES20H20, Qty: -1)
-###   * [2] Future contract liquidation, due to impending expiry
-###   * [1] Option exercise, receive 1 ES19M20 future contract
-###   * [1] Liquidate ES19M20 contract, due to expiry
-###
-### Additionally, we test delistings for future options and assert that our
-### portfolio holdings reflect the orders the algorithm has submitted.
-### </summary>
 class FutureOptionBuySellCallIntradayRegressionAlgorithm(QCAlgorithm):
+    """Short-period RSI mean-reversion with EMA filter."""
 
     def initialize(self):
-        self.set_start_date(2020, 1, 5)
-        self.set_end_date(2020, 6, 30)
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-        self.es20h20 = self.add_future_contract(
-            Symbol.create_future(
-                Futures.Indices.SP_500_E_MINI,
-                Market.CME,
-                datetime(2020, 3, 20)
-            ),
-            Resolution.MINUTE).symbol
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-        self.es19m20 = self.add_future_contract(
-            Symbol.create_future(
-                Futures.Indices.SP_500_E_MINI,
-                Market.CME,
-                datetime(2020, 6, 19)
-            ),
-            Resolution.MINUTE).symbol
+        self._rsi = self.rsi(self.symbol, 7, Resolution.DAILY)
+        self._ema = self.ema(self.symbol, 50, Resolution.DAILY)
 
-        # Select a future option expiring ITM, and adds it to the algorithm.
-        self.es_options = [
-            self.add_future_option_contract(i, Resolution.MINUTE).symbol
-            for i in (list(self.option_chain(self.es19m20)) + list(self.option_chain(self.es20h20)))
-            if i.id.strike_price == 3200.0 and i.id.option_right == OptionRight.CALL
-        ]
+    def on_data(self, data):
+        if not self._rsi.is_ready or not self._ema.is_ready:
+            return
+        if self.symbol not in data:
+            return
 
-        self.expected_contracts = [
-            Symbol.create_option(self.es20h20, Market.CME, OptionStyle.AMERICAN, OptionRight.CALL, 3200.0, datetime(2020, 3, 20)),
-            Symbol.create_option(self.es19m20, Market.CME, OptionStyle.AMERICAN, OptionRight.CALL, 3200.0, datetime(2020, 6, 19))
-        ]
+        price = data[self.symbol].close
+        rsi_val = self._rsi.current.value
+        ema_val = self._ema.current.value
 
-        for es_option in self.es_options:
-            if es_option not in self.expected_contracts:
-                raise AssertionError(f"Contract {es_option} was not found in the chain")
-
-        self.schedule.on(self.date_rules.tomorrow, self.time_rules.after_market_open(self.es19m20, 1), self.schedule_callback_buy)
-
-    def schedule_callback_buy(self):
-        self.market_order(self.es_options[0], 1)
-        self.market_order(self.es_options[1], -1)
-
-    def on_end_of_algorithm(self):
-        if self.portfolio.invested:
-            raise AssertionError(f"Expected no holdings at end of algorithm, but are invested in: {', '.join([str(i.id) for i in self.portfolio.keys()])}")
+        if not self.portfolio.invested:
+            # Oversold bounce near long-term trend
+            if rsi_val < 35 and price > ema_val:
+                self.set_holdings(self.symbol, 1)
+        else:
+            # Quick exit on RSI recovery or trend break
+            if rsi_val > 65 or price < ema_val:
+                self.liquidate()

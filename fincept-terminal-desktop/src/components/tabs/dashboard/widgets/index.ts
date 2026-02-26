@@ -29,6 +29,7 @@ export { LiveSignalsWidget } from './LiveSignalsWidget';
 export { DBnomicsWidget } from './DBnomicsWidget';
 export { AkShareWidget } from './AkShareWidget';
 export { MaritimeWidget } from './MaritimeWidget';
+export { VideoPlayerWidget } from './VideoPlayerWidget';
 
 // Widget type definitions
 export type WidgetType =
@@ -62,7 +63,8 @@ export type WidgetType =
   | 'livesignals'
   | 'dbnomics'
   | 'akshare'
-  | 'maritime';
+  | 'maritime'
+  | 'videoplayer';
 
 export interface WidgetConfig {
   id: string;
@@ -113,6 +115,10 @@ export interface WidgetConfig {
 
     // DBnomics widget config
     dbnomicsSeriesId?: string;
+
+    // Video Player widget config
+    videoUrl?: string;
+    videoTitle?: string;
 
   };
 }
@@ -289,5 +295,10 @@ export const DEFAULT_WIDGET_CONFIGS: Record<WidgetType, Partial<WidgetConfig>> =
     type: 'maritime',
     title: 'Maritime Sector',
     config: {}
+  },
+  videoplayer: {
+    type: 'videoplayer',
+    title: 'Video Player',
+    config: { videoUrl: '', videoTitle: 'Video Player' }
   }
 };

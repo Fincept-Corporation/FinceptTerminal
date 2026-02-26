@@ -13,5 +13,8 @@
   "refresh": "SEGARKAN",
   "auto": "OTOMATIS",
   "on": "AKTIF",
-  "off": "MATI"
+  "off": "MATI",
+  "loading": {
+    "title": "[ID] Initializing..."
+  }
 }

@@ -362,13 +362,59 @@ const PortfolioTab: React.FC = () => {
 
         {/* Empty state when nothing selected */}
         {!selectedPortfolio ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <Briefcase size={36} color={FINCEPT.MUTED} style={{ opacity: 0.2, marginBottom: '16px' }} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+            <Briefcase size={36} color={FINCEPT.MUTED} style={{ opacity: 0.2 }} />
             <div style={{ color: FINCEPT.GRAY, fontSize: '12px', fontWeight: 700, letterSpacing: '1px' }}>
               {t('extracted.noPortfolioSelected', 'NO PORTFOLIO SELECTED')}
             </div>
-            <div style={{ color: FINCEPT.MUTED, fontSize: '10px', marginTop: '6px' }}>
+            <div style={{ color: FINCEPT.MUTED, fontSize: '10px' }}>
               {t('content.selectOrCreate', 'Select a portfolio or create a new one')}
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <button
+                onClick={() => modals.setShowCreatePortfolio(true)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: FINCEPT.ORANGE,
+                  border: 'none',
+                  color: '#000',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  letterSpacing: '0.5px',
+                  borderRadius: '2px',
+                  transition: 'opacity 0.2s ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
+              >
+                CREATE NEW
+              </button>
+              <button
+                onClick={() => modals.setShowImportPortfolio(true)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.GRAY,
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  letterSpacing: '0.5px',
+                  borderRadius: '2px',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                  e.currentTarget.style.color = FINCEPT.WHITE;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = FINCEPT.GRAY;
+                }}
+              >
+                IMPORT JSON
+              </button>
             </div>
           </div>
         ) : !portfolioSummary ? (

@@ -202,7 +202,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
 
   const renderBooleanInput = () => (
     <div
-      onClick={() => !disabled && onChange(!Boolean(value))}
+      onClick={() => !disabled && onChange(!value)}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -223,7 +223,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
       <div style={{
         width: '32px',
         height: '16px',
-        backgroundColor: Boolean(value) ? FINCEPT.GREEN : FINCEPT.GRAY,
+        backgroundColor: value ? FINCEPT.GREEN : FINCEPT.GRAY,
         borderRadius: '8px',
         position: 'relative',
         transition: 'all 0.15s ease',
@@ -231,7 +231,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
         <div style={{
           position: 'absolute',
           top: '2px',
-          left: Boolean(value) ? '16px' : '2px',
+          left: value ? '16px' : '2px',
           width: '12px',
           height: '12px',
           backgroundColor: FINCEPT.WHITE,
@@ -240,13 +240,13 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
         }} />
       </div>
       <span style={{
-        color: Boolean(value) ? FINCEPT.GREEN : FINCEPT.GRAY,
+        color: value ? FINCEPT.GREEN : FINCEPT.GRAY,
         fontSize: '13px',
         fontFamily: FONT_FAMILY,
         fontWeight: 600,
         textTransform: 'uppercase',
       }}>
-        {Boolean(value) ? 'ENABLED' : 'DISABLED'}
+        {value ? 'ENABLED' : 'DISABLED'}
       </span>
     </div>
   );

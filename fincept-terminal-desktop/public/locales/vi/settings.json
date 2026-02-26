@@ -115,5 +115,10 @@
     "testSuccess": "[VI] Test notification sent successfully!",
     "testFailed": "[VI] Failed to send test notification. Check your configuration.",
     "saved": "[VI] Configuration saved"
+  },
+  "language": {
+    "title": "[VI] LANGUAGE SETTINGS",
+    "selectLanguage": "[VI] Select your preferred language for the terminal interface",
+    "currentLanguage": "[VI] CURRENT LANGUAGE"
   }
 }

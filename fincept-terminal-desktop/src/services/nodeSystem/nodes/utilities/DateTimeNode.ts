@@ -130,7 +130,7 @@ export class DateTimeNode implements INodeType {
             };
             break;
 
-          case 'add':
+          case 'add': {
             const added = this.addTime(inputDate, amount, unit);
             result = {
               original: inputDate.toISOString(),
@@ -138,8 +138,9 @@ export class DateTimeNode implements INodeType {
               formatted: this.formatDate(added, format),
             };
             break;
+          }
 
-          case 'subtract':
+          case 'subtract': {
             const subtracted = this.addTime(inputDate, -amount, unit);
             result = {
               original: inputDate.toISOString(),
@@ -147,8 +148,9 @@ export class DateTimeNode implements INodeType {
               formatted: this.formatDate(subtracted, format),
             };
             break;
+          }
 
-          case 'diff':
+          case 'diff': {
             const now = new Date();
             const diffMs = now.getTime() - inputDate.getTime();
             result = {
@@ -159,6 +161,7 @@ export class DateTimeNode implements INodeType {
               days: Math.floor(diffMs / 86400000),
             };
             break;
+          }
 
           case 'extract':
             result = {

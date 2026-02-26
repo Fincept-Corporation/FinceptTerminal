@@ -13,5 +13,8 @@
   "refresh": "REÎMPROSPĂTEAZĂ",
   "auto": "AUTO",
   "on": "PORNIT",
-  "off": "OPRIT"
+  "off": "OPRIT",
+  "loading": {
+    "title": "[RO] Initializing..."
+  }
 }

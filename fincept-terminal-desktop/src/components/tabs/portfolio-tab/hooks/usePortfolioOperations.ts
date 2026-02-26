@@ -33,7 +33,7 @@ function loadRefreshInterval(): number {
       const val = parseInt(saved, 10);
       if (val > 0) return val;
     }
-  } catch {}
+  } catch { /* localStorage not available */ }
   return DEFAULT_REFRESH_MS;
 }
 
@@ -44,16 +44,16 @@ export const usePortfolioOperations = () => {
 
   const setRefreshIntervalMs = useCallback((ms: number) => {
     _setRefreshIntervalMs(ms);
-    try { localStorage.setItem(REFRESH_INTERVAL_KEY, String(ms)); } catch {}
+    try { localStorage.setItem(REFRESH_INTERVAL_KEY, String(ms)); } catch { /* localStorage not available */ }
   }, []);
 
   // Wrap setter to persist selection to localStorage
   const setSelectedPortfolio = useCallback((p: Portfolio | null) => {
     _setSelectedPortfolio(p);
     if (p) {
-      try { localStorage.setItem(LAST_PORTFOLIO_KEY, p.id); } catch {}
+      try { localStorage.setItem(LAST_PORTFOLIO_KEY, p.id); } catch { /* localStorage not available */ }
     } else {
-      try { localStorage.removeItem(LAST_PORTFOLIO_KEY); } catch {}
+      try { localStorage.removeItem(LAST_PORTFOLIO_KEY); } catch { /* localStorage not available */ }
     }
   }, []);
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
@@ -359,7 +359,7 @@ export const usePortfolioOperations = () => {
                 restored = true;
               }
             }
-          } catch {}
+          } catch { /* localStorage not available */ }
 
           // Fallback to first portfolio if no saved selection
           if (!restored) {

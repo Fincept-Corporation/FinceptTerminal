@@ -12,9 +12,111 @@
     "quantity": "КІЛЬКІСТЬ",
     "price": "ЦІНА",
     "add": "ДОДАТИ",
-    "sell": "ПРОДАТИ"
+    "sell": "ПРОДАТИ",
+    "confirmDelete": "[UK] CONFIRM DELETE",
+    "deleteTransactionWarning": "[UK] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[UK] DELETE",
+    "editTransaction": "[UK] EDIT TRANSACTION",
+    "transactionDate": "[UK] TRANSACTION DATE",
+    "notes": "[UK] NOTES",
+    "notesPlaceholder": "[UK] Optional notes...",
+    "totalValue": "[UK] TOTAL VALUE",
+    "save": "[UK] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[UK] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[UK] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[UK] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[UK] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[UK] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[UK] FINCEPT",
+    "portfolioTerminal": "[UK] PORTFOLIO TERMINAL",
+    "live": "[UK] LIVE",
+    "pos": "[UK] POS",
+    "ins": "[UK] INS",
+    "nav": "[UK] NAV",
+    "pnl": "[UK] P&L",
+    "day": "[UK] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[UK] TOTAL VALUE",
+    "unrealizedPnl": "[UK] UNREALIZED P&L",
+    "dayChange": "[UK] DAY CHANGE",
+    "costBasis": "[UK] COST BASIS",
+    "fifo": "[UK] FIFO",
+    "positions": "[UK] POSITIONS",
+    "concTop3": "[UK] CONC. TOP3",
+    "weight": "[UK] WEIGHT",
+    "sharpe": "[UK] SHARPE",
+    "annualized": "[UK] ANNUALIZED",
+    "beta": "[UK] BETA",
+    "vsSpy": "[UK] VS SPY",
+    "volatility": "[UK] VOLATILITY",
+    "ann30d": "[UK] 30D ANN.",
+    "maxDrawdown": "[UK] MAX DRAWDOWN",
+    "sinceIncep": "[UK] SINCE INCEP.",
+    "riskScore": "[UK] RISK SCORE",
+    "composite": "[UK] COMPOSITE",
+    "var95": "[UK] VAR (95%)",
+    "oneDay": "[UK] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[UK] SECTOR ALLOCATION",
+    "sectors": "[UK] sectors",
+    "correlation": "[UK] CORRELATION",
+    "dayChangeProxy": "[UK] (day change proxy)",
+    "needTwoHoldings": "[UK] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[UK] POSITIONS BLOTTER",
+    "instruments": "[UK] instruments"
+  },
+  "chart": {
+    "performance": "[UK] PERFORMANCE",
+    "portfolio": "[UK] PORTFOLIO",
+    "totalReturn": "[UK] TOTAL RETURN",
+    "historyMessage": "[UK] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[UK] ORDER ENTRY",
+    "price": "[UK] PRICE",
+    "qtyHeld": "[UK] QTY HELD",
+    "mktVal": "[UK] MKT VAL",
+    "clickToBuyMore": "[UK] Click to buy more",
+    "clickToSell": "[UK] Click to sell",
+    "clickToBuy": "[UK] Click to buy an asset",
+    "clickToSellAsset": "[UK] Click to sell an asset",
+    "openBuyOrder": "[UK] OPEN BUY ORDER",
+    "openSellOrder": "[UK] OPEN SELL ORDER",
+    "ordersRecorded": "[UK] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[UK] HOLDINGS",
+    "noHoldings": "[UK] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[UK] RISK SCORE",
+    "low": "[UK] LOW",
+    "high": "[UK] HIGH",
+    "topMovers": "[UK] TOP MOVERS",
+    "quickStats": "[UK] QUICK STATS",
+    "concTop3": "[UK] CONC. TOP3",
+    "volatility": "[UK] VOLATILITY",
+    "newPortfolio": "[UK] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[UK] SELECT PORTFOLIO",
+    "searchPortfolios": "[UK] Search portfolios...",
+    "newPortfolio": "[UK] NEW PORTFOLIO",
+    "nav": "[UK] NAV",
+    "pnl": "[UK] P&L",
+    "day": "[UK] DAY",
+    "pos": "[UK] POS",
+    "wl": "[UK] W/L"
+  },
+  "actions": {
+    "buy": "[UK] BUY",
+    "sell": "[UK] SELL"
   }
 }

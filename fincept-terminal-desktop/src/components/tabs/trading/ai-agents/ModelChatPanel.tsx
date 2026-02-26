@@ -278,7 +278,7 @@ function DecisionCard({ decision, modelColor, actionColor, formatTimestamp }: De
           {/* Display action/sentiment/recommendation based on type */}
           {(() => {
             let label = '';
-            let showIcon = true;
+            const showIcon = true;
 
             if (decision.type === 'signal') {
               label = (decision.direction || decision.action || 'HOLD').toUpperCase();

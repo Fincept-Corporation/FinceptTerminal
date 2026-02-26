@@ -444,7 +444,7 @@ export const MarketSimTab: React.FC = () => {
       if (resp.success && resp.data) {
         setAnalytics(resp.data);
       }
-    } catch (_) {}
+    } catch { /* analytics fetch errors are non-fatal */ }
   }, []);
 
   const injectNews = useCallback(async () => {

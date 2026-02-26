@@ -49,6 +49,7 @@ import {
   DBnomicsWidget,
   AkShareWidget,
   MaritimeWidget,
+  VideoPlayerWidget,
   WidgetType,
   WidgetConfig
 } from './widgets';
@@ -446,19 +447,20 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
 
   // Add widget
   const handleAddWidget = useCallback((widgetType: WidgetType, config?: any) => {
+    const isVideoPlayer = widgetType === 'videoplayer';
     const newWidget: WidgetInstance = {
       id: `${widgetType}-${state.nextId}`,
       type: widgetType,
-      title: config?.watchlistName || config?.marketCategory || config?.newsCategory || config?.forumCategoryName || widgetType,
+      title: config?.videoTitle || config?.watchlistName || config?.marketCategory || config?.newsCategory || config?.forumCategoryName || widgetType,
       config: config || {},
       layout: {
         i: `${widgetType}-${state.nextId}`,
         x: (state.widgets.length * 4) % 12,
         y: Infinity,
-        w: 4,
-        h: 4,
-        minW: 2,
-        minH: 3,
+        w: isVideoPlayer ? 6 : 4,
+        h: isVideoPlayer ? 6 : 4,
+        minW: isVideoPlayer ? 4 : 2,
+        minH: isVideoPlayer ? 5 : 3,
       },
     };
     dispatch({ type: 'ADD_WIDGET', widget: newWidget });
@@ -581,6 +583,8 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         return <AkShareWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('akshare-data')} />;
       case 'maritime':
         return <MaritimeWidget id={widget.id} onRemove={() => handleRemoveWidget(widget.id)} onNavigate={() => onNavigateToTab?.('maritime')} />;
+      case 'videoplayer':
+        return <VideoPlayerWidget id={widget.id} videoUrl={widget.config?.videoUrl} videoTitle={widget.config?.videoTitle} onRemove={() => handleRemoveWidget(widget.id)} onConfigure={() => handleConfigureWidget(widget.id)} />;
       default:
         return <div style={{ padding: '12px', color: FC.MUTED, fontSize: '10px' }}>UNKNOWN WIDGET</div>;
     }

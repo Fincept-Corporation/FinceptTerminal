@@ -6,70 +6,60 @@
 #
 # Strategy ID: FCT-1A300907
 # Category: Indicators
-# Description: Regression algorithm that asserts Stochastic indicator, registered with a different resolution consolidator, is warme...
+# Description: Stochastic oscillator strategy with SMA trend filter. Buys when
+#   stochastic %K crosses above 20 (oversold) while price is above 50-day SMA.
+#   Sells when %K crosses below 80 (overbought) or price drops below SMA.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
-from datetime import timedelta
 from AlgorithmImports import *
 
-### <summary>
-### Regression algorithm that asserts Stochastic indicator, registered with a different resolution consolidator,
-### is warmed up properly by calling QCAlgorithm.WarmUpIndicator
-### </summary>
 class StochasticIndicatorWarmsUpProperlyRegressionAlgorithm(QCAlgorithm):
+    """Stochastic oversold/overbought strategy with SMA filter."""
+
     def initialize(self):
-        self.set_start_date(2020, 1, 1)  # monday = holiday..
-        self.set_end_date(2020, 2, 1)
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
         self.set_cash(100000)
 
-        self.data_points_received = False;
-        self.spy = self.add_equity("SPY", Resolution.HOUR).symbol
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-        self.daily_consolidator = TradeBarConsolidator(timedelta(days=1))
+        self._sma = self.sma(self.symbol, 50, Resolution.DAILY)
+        # Manual stochastic: track 14-day high/low
+        self._highs = []
+        self._lows = []
+        self._prev_k = 50
 
-        self._rsi = RelativeStrengthIndex(14, MovingAverageType.WILDERS)
-        self._sto = Stochastic("FIRST", 14, 3, 3)
-        self.register_indicator(self.spy, self._rsi, self.daily_consolidator)
-        self.register_indicator(self.spy, self._sto, self.daily_consolidator)
-
-        # warm_up indicator
-        self.warm_up_indicator(self.spy, self._rsi, timedelta(days=1))
-        self.warm_up_indicator(self.spy, self._sto, timedelta(days=1))
-        
-
-        self._rsi_history = RelativeStrengthIndex(14, MovingAverageType.WILDERS)
-        self._sto_history = Stochastic("SECOND", 14, 3, 3)
-        self.register_indicator(self.spy, self._rsi_history, self.daily_consolidator)
-        self.register_indicator(self.spy, self._sto_history, self.daily_consolidator)
-
-        # history warm up
-        history = self.history[TradeBar](self.spy, max(self._rsi_history.warm_up_period, self._sto_history.warm_up_period), Resolution.DAILY)
-        for bar in history:
-            self._rsi_history.update(bar.end_time, bar.close)
-            if self._rsi_history.samples == 1:
-                continue
-            self._sto_history.update(bar)
-
-        indicators = [self._rsi, self._sto, self._rsi_history, self._sto_history]
-        for indicator in indicators:
-            if not indicator.is_ready:
-                raise Exception(f"{indicator.name} should be ready, but it is not. Number of samples: {indicator.samples}")
-
-    def on_data(self, data: Slice):
-        if self.is_warming_up:
+    def on_data(self, data):
+        if not self._sma.is_ready:
+            return
+        if self.symbol not in data:
             return
 
-        if data.contains_key(self.spy):
-            self.data_points_received = True
-            if self._rsi.current.value != self._rsi_history.current.value:
-                raise Exception(f"Values of indicators differ: {self._rsi.name}: {self._rsi.current.value} | {self._rsi_history.name}: {self._rsi_history.current.value}")
-            
-            if self._sto.stoch_k.current.value != self._sto_history.stoch_k.current.value:
-                raise Exception(f"Stoch K values of indicators differ: {self._sto.name}.StochK: {self._sto.stoch_k.current.value} | {self._sto_history.name}.StochK: {self._sto_history.stoch_k.current.value}")
-            
-            if self._sto.stoch_d.current.value != self._sto_history.stoch_d.current.value:
-                raise Exception(f"Stoch D values of indicators differ: {self._sto.name}.StochD: {self._sto.stoch_d.current.value} | {self._sto_history.name}.StochD: {self._sto_history.stoch_d.current.value}")
+        bar = data[self.symbol]
+        price = bar.close
+        self._highs.append(bar.high)
+        self._lows.append(bar.low)
+        if len(self._highs) > 14:
+            self._highs = self._highs[-14:]
+            self._lows = self._lows[-14:]
 
-    def on_end_of_algorithm(self):
-        if not self.data_points_received:
-            raise Exception("No data points received")
+        if len(self._highs) < 14:
+            return
+
+        highest = max(self._highs)
+        lowest = min(self._lows)
+        k_range = highest - lowest
+        k = ((price - lowest) / k_range * 100) if k_range > 0 else 50
+
+        sma_val = self._sma.current.value
+        crossed_up_20 = self._prev_k <= 20 and k > 20
+        crossed_down_80 = self._prev_k >= 80 and k < 80
+        self._prev_k = k
+
+        if not self.portfolio.invested:
+            if crossed_up_20 and price > sma_val:
+                self.set_holdings(self.symbol, 1)
+        else:
+            if crossed_down_80 or price < sma_val:
+                self.liquidate()

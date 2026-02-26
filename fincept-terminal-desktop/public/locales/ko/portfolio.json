@@ -12,9 +12,111 @@
     "quantity": "수량",
     "price": "가격",
     "add": "추가",
-    "sell": "매도"
+    "sell": "매도",
+    "confirmDelete": "[KO] CONFIRM DELETE",
+    "deleteTransactionWarning": "[KO] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[KO] DELETE",
+    "editTransaction": "[KO] EDIT TRANSACTION",
+    "transactionDate": "[KO] TRANSACTION DATE",
+    "notes": "[KO] NOTES",
+    "notesPlaceholder": "[KO] Optional notes...",
+    "totalValue": "[KO] TOTAL VALUE",
+    "save": "[KO] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[KO] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[KO] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[KO] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[KO] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[KO] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[KO] FINCEPT",
+    "portfolioTerminal": "[KO] PORTFOLIO TERMINAL",
+    "live": "[KO] LIVE",
+    "pos": "[KO] POS",
+    "ins": "[KO] INS",
+    "nav": "[KO] NAV",
+    "pnl": "[KO] P&L",
+    "day": "[KO] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[KO] TOTAL VALUE",
+    "unrealizedPnl": "[KO] UNREALIZED P&L",
+    "dayChange": "[KO] DAY CHANGE",
+    "costBasis": "[KO] COST BASIS",
+    "fifo": "[KO] FIFO",
+    "positions": "[KO] POSITIONS",
+    "concTop3": "[KO] CONC. TOP3",
+    "weight": "[KO] WEIGHT",
+    "sharpe": "[KO] SHARPE",
+    "annualized": "[KO] ANNUALIZED",
+    "beta": "[KO] BETA",
+    "vsSpy": "[KO] VS SPY",
+    "volatility": "[KO] VOLATILITY",
+    "ann30d": "[KO] 30D ANN.",
+    "maxDrawdown": "[KO] MAX DRAWDOWN",
+    "sinceIncep": "[KO] SINCE INCEP.",
+    "riskScore": "[KO] RISK SCORE",
+    "composite": "[KO] COMPOSITE",
+    "var95": "[KO] VAR (95%)",
+    "oneDay": "[KO] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[KO] SECTOR ALLOCATION",
+    "sectors": "[KO] sectors",
+    "correlation": "[KO] CORRELATION",
+    "dayChangeProxy": "[KO] (day change proxy)",
+    "needTwoHoldings": "[KO] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[KO] POSITIONS BLOTTER",
+    "instruments": "[KO] instruments"
+  },
+  "chart": {
+    "performance": "[KO] PERFORMANCE",
+    "portfolio": "[KO] PORTFOLIO",
+    "totalReturn": "[KO] TOTAL RETURN",
+    "historyMessage": "[KO] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[KO] ORDER ENTRY",
+    "price": "[KO] PRICE",
+    "qtyHeld": "[KO] QTY HELD",
+    "mktVal": "[KO] MKT VAL",
+    "clickToBuyMore": "[KO] Click to buy more",
+    "clickToSell": "[KO] Click to sell",
+    "clickToBuy": "[KO] Click to buy an asset",
+    "clickToSellAsset": "[KO] Click to sell an asset",
+    "openBuyOrder": "[KO] OPEN BUY ORDER",
+    "openSellOrder": "[KO] OPEN SELL ORDER",
+    "ordersRecorded": "[KO] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[KO] HOLDINGS",
+    "noHoldings": "[KO] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[KO] RISK SCORE",
+    "low": "[KO] LOW",
+    "high": "[KO] HIGH",
+    "topMovers": "[KO] TOP MOVERS",
+    "quickStats": "[KO] QUICK STATS",
+    "concTop3": "[KO] CONC. TOP3",
+    "volatility": "[KO] VOLATILITY",
+    "newPortfolio": "[KO] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[KO] SELECT PORTFOLIO",
+    "searchPortfolios": "[KO] Search portfolios...",
+    "newPortfolio": "[KO] NEW PORTFOLIO",
+    "nav": "[KO] NAV",
+    "pnl": "[KO] P&L",
+    "day": "[KO] DAY",
+    "pos": "[KO] POS",
+    "wl": "[KO] W/L"
+  },
+  "actions": {
+    "buy": "[KO] BUY",
+    "sell": "[KO] SELL"
   }
 }

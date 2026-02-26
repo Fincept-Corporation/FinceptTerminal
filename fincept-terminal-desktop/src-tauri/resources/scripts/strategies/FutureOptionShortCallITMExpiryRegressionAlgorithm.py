@@ -6,107 +6,43 @@
 #
 # Strategy ID: FCT-129041A8
 # Category: Options
-# Description: This regression algorithm tests In The Money (ITM) future option expiry for short calls. We expect 3 orders from the ...
+# Description: Short-term mean reversion strategy inspired by options expiry
+#   patterns. Buys on RSI oversold (<35) conditions and sells on overbought
+#   (>65) or after 5-day maximum holding period.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
-### <summary>
-### This regression algorithm tests In The Money (ITM) future option expiry for short calls.
-### We expect 3 orders from the algorithm, which are:
-###
-###   * Initial entry, sell ES Call Option (expiring ITM)
-###   * Option assignment, sell 1 contract of the underlying (ES)
-###   * Future contract expiry, liquidation (buy 1 ES future)
-###
-### Additionally, we test delistings for future options and assert that our
-### portfolio holdings reflect the orders the algorithm has submitted.
-### </summary>
 class FutureOptionShortCallITMExpiryRegressionAlgorithm(QCAlgorithm):
+    """Short-term RSI mean-reversion with time-based exit."""
 
     def initialize(self):
-        self.set_start_date(2020, 1, 5)
-        self.set_end_date(2020, 6, 30)
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-        self.es19m20 = self.add_future_contract(
-            Symbol.create_future(
-                Futures.Indices.SP_500_E_MINI,
-                Market.CME,
-                datetime(2020, 6, 19)),
-            Resolution.MINUTE).symbol
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-        # Select a future option expiring ITM, and adds it to the algorithm.
-        self.es_option = self.add_future_option_contract(
-            list(
-                sorted(
-                    [x for x in self.option_chain(self.es19m20) if x.id.strike_price <= 3100.0 and x.id.option_right == OptionRight.CALL],
-                    key=lambda x: x.id.strike_price,
-                    reverse=True
-                )
-            )[0], Resolution.MINUTE).symbol
+        self._rsi = self.rsi(self.symbol, 14, Resolution.DAILY)
+        self._entry_bar = 0
+        self._bar_count = 0
+        self._max_hold = 5
 
-        self.expected_contract = Symbol.create_option(self.es19m20, Market.CME, OptionStyle.AMERICAN, OptionRight.CALL, 3100.0, datetime(2020, 6, 19))
-        if self.es_option != self.expected_contract:
-            raise AssertionError(f"Contract {self.expected_contract} was not found in the chain")
-
-        self.schedule.on(self.date_rules.tomorrow, self.time_rules.after_market_open(self.es19m20, 1), self.scheduled_market_order)
-
-    def scheduled_market_order(self):
-        self.market_order(self.es_option, -1)
-
-    def on_data(self, data: Slice):
-        # Assert delistings, so that we can make sure that we receive the delisting warnings at
-        # the expected time. These assertions detect bug #4872
-        for delisting in data.delistings.values():
-            if delisting.type == DelistingType.WARNING:
-                if delisting.time != datetime(2020, 6, 19):
-                    raise AssertionError(f"Delisting warning issued at unexpected date: {delisting.time}")
-
-            if delisting.type == DelistingType.DELISTED:
-                if delisting.time != datetime(2020, 6, 20):
-                    raise AssertionError(f"Delisting happened at unexpected date: {delisting.time}")
-
-    def on_order_event(self, order_event: OrderEvent):
-        if order_event.status != OrderStatus.FILLED:
-            # There's lots of noise with OnOrderEvent, but we're only interested in fills.
+    def on_data(self, data):
+        if not self._rsi.is_ready:
+            return
+        if self.symbol not in data:
             return
 
-        if not self.securities.contains_key(order_event.symbol):
-            raise AssertionError(f"Order event Symbol not found in Securities collection: {order_event.symbol}")
+        self._bar_count += 1
+        rsi_val = self._rsi.current.value
 
-        security = self.securities[order_event.symbol]
-        if security.symbol == self.es19m20:
-            self.assert_future_option_order_exercise(order_event, security, self.securities[self.expected_contract])
-
-        elif security.symbol == self.expected_contract:
-            self.assert_future_option_contract_order(order_event, security)
-
+        if not self.portfolio.invested:
+            if rsi_val < 35:
+                self.set_holdings(self.symbol, 1)
+                self._entry_bar = self._bar_count
         else:
-            raise AssertionError(f"Received order event for unknown Symbol: {order_event.symbol}")
-
-        self.log(f"{order_event}")
-
-    def assert_future_option_order_exercise(self, order_event: OrderEvent, future: Security, option_contract: Security):
-        if "Assignment" in order_event.message:
-            if order_event.fill_price != 3100.0:
-                raise AssertionError("Option was not assigned at expected strike price (3100)")
-
-            if order_event.direction != OrderDirection.SELL or future.holdings.quantity != -1:
-                raise AssertionError(f"Expected Qty: -1 futures holdings for assigned future {future.symbol}, found {future.holdings.quantity}")
-
-            return
-
-        if order_event.direction == OrderDirection.BUY and future.holdings.quantity != 0:
-            # We buy back the underlying at expiration, so we expect a neutral position then
-            raise AssertionError(f"Expected no holdings when liquidating future contract {future.symbol}")
-
-    def assert_future_option_contract_order(self, order_event: OrderEvent, option: Security):
-        if order_event.direction == OrderDirection.SELL and option.holdings.quantity != -1:
-            raise AssertionError(f"No holdings were created for option contract {option.symbol}")
-
-        if order_event.is_assignment and option.holdings.quantity != 0:
-            raise AssertionError(f"Holdings were found after option contract was assigned: {option.symbol}")
-
-    def on_end_of_algorithm(self):
-        if self.portfolio.invested:
-            raise AssertionError(f"Expected no holdings at end of algorithm, but are invested in: {', '.join([str(i.id) for i in self.portfolio.keys()])}")
+            bars_held = self._bar_count - self._entry_bar
+            if rsi_val > 65 or bars_held >= self._max_hold:
+                self.liquidate()

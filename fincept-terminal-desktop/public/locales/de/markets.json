@@ -13,5 +13,8 @@
   "refresh": "AKTUALISIEREN",
   "auto": "AUTO",
   "on": "AN",
-  "off": "AUS"
+  "off": "AUS",
+  "loading": {
+    "title": "[DE] Initializing..."
+  }
 }

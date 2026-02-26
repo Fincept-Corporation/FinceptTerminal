@@ -115,5 +115,10 @@
     "database": "Database: SQLite",
     "storage": "Storage: File-based",
     "secureStorage": "All data stored securely in fincept_terminal.db"
+  },
+  "language": {
+    "title": "LANGUAGE SETTINGS",
+    "selectLanguage": "Select your preferred language for the terminal interface",
+    "currentLanguage": "CURRENT LANGUAGE"
   }
 }

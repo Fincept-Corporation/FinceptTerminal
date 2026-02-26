@@ -20,7 +20,7 @@ class EncryptionService {
     if (!enabled) return;
 
     // PURE SQLite - Get or generate encryption key
-    let keyData = await getSetting(EncryptionService.STORAGE_KEY);
+    const keyData = await getSetting(EncryptionService.STORAGE_KEY);
 
     if (!keyData) {
       // Generate new key

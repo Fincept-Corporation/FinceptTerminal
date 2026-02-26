@@ -13,5 +13,8 @@
   "refresh": "রিফ্রেশ",
   "auto": "স্বয়ংক্রিয়",
   "on": "চালু",
-  "off": "বন্ধ"
+  "off": "বন্ধ",
+  "loading": {
+    "title": "[BN] Initializing..."
+  }
 }

@@ -29,7 +29,7 @@ const renderLatex = (text: string): string => {
   });
 
   // Inline formulas: \( ... \) or $ ... $ (but not $$ which is block)
-  text = text.replace(/\\\((.*?)\\\)|\$([^\$\n]+?)\$/g, (match, i1, i2) => {
+  text = text.replace(/\\\((.*?)\\\)|\$([^$\n]+?)\$/g, (match, i1, i2) => {
     const formula = i1 || i2;
     try {
       return katex.renderToString(formula.trim(), { displayMode: false, throwOnError: false });
@@ -281,7 +281,7 @@ const MARKDOWN_CSS = `
 // Parse content for price data patterns and convert to cards
 const parseDataCards = (text: string): string => {
   // Pattern: Stock (SYMBOL) - +X.XX% Price: $XXX.XX
-  const stockPattern = /([A-Z][a-zA-Z\s&]+)\s*\(([A-Z:]+)\)\s*-\s*([\+\-]?\d+\.?\d*%)\s*(?:Current|Price):\s*\$?([\d,]+\.?\d*)/g;
+  const stockPattern = /([A-Z][a-zA-Z\s&]+)\s*\(([A-Z:]+)\)\s*-\s*([+-]?\d+\.?\d*%)\s*(?:Current|Price):\s*\$?([\d,]+\.?\d*)/g;
 
   let parsed = text.replace(stockPattern, (match, name, symbol, change, price) => {
     const isPositive = change.startsWith('+');
@@ -296,7 +296,7 @@ const parseDataCards = (text: string): string => {
   });
 
   // Pattern: Cryptocurrency (SYMBOL) - +X.XX% Price: $XXX Market Cap: $XXB
-  const cryptoPattern = /([A-Z][a-zA-Z\s]+)\s*\(([A-Z]+)\)\s*-\s*([\+\-]?\d+\.?\d*%)\s*Price:\s*\$?([\d,]+\.?\d*)\s*Market Cap:\s*\$?([\d,]+\.?\d*[BMK]?)/g;
+  const cryptoPattern = /([A-Z][a-zA-Z\s]+)\s*\(([A-Z]+)\)\s*-\s*([+-]?\d+\.?\d*%)\s*Price:\s*\$?([\d,]+\.?\d*)\s*Market Cap:\s*\$?([\d,]+\.?\d*[BMK]?)/g;
 
   parsed = parsed.replace(cryptoPattern, (match, name, symbol, change, price, mcap) => {
     const isPositive = change.startsWith('+');

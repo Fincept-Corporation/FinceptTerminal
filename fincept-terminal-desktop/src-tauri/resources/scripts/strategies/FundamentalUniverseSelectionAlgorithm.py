@@ -6,72 +6,55 @@
 #
 # Strategy ID: FCT-0A8C8781
 # Category: Universe Selection
-# Description: Demonstration of how to define a universe using the fundamental data
+# Description: Sector rotation strategy inspired by fundamental universe selection.
+#   Rotates between SPY and AAPL based on relative momentum. Holds the stronger
+#   performer over the past 20 days. Rebalances weekly.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
-### <summary>
-### Demonstration of how to define a universe using the fundamental data
-### </summary>
-### <meta name="tag" content="using data" />
-### <meta name="tag" content="universes" />
-### <meta name="tag" content="coarse universes" />
-### <meta name="tag" content="regression test" />
 class FundamentalUniverseSelectionAlgorithm(QCAlgorithm):
+    """Relative momentum rotation: holds the stronger of SPY vs AAPL."""
 
     def initialize(self):
-        self.set_start_date(2014, 3, 25)
-        self.set_end_date(2014, 4, 7)
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-        self.universe_settings.resolution = Resolution.DAILY
+        self.sym_a = "SPY"
+        self.sym_b = "AAPL"
 
-        self.add_equity("SPY")
-        self.add_equity("AAPL")
+        self.add_equity(self.sym_a, Resolution.DAILY)
+        self.add_equity(self.sym_b, Resolution.DAILY)
 
-        self.set_universe_selection(FundamentalUniverseSelectionModel(self.select))
+        self._sma_a = self.sma(self.sym_a, 20, Resolution.DAILY)
+        self._sma_b = self.sma(self.sym_b, 20, Resolution.DAILY)
 
-        self.changes = None
-
-    # return a list of three fixed symbol objects
-    def selection_function(self, fundamental):
-        # sort descending by daily dollar volume
-        sorted_by_dollar_volume = sorted([x for x in fundamental if x.price > 1],
-            key=lambda x: x.dollar_volume, reverse=True)
-
-        # sort descending by P/E ratio
-        sorted_by_pe_ratio = sorted(sorted_by_dollar_volume, key=lambda x: x.valuation_ratios.pe_ratio, reverse=True)
-
-        # take the top entries from our sorted collection
-        return [ x.symbol for x in sorted_by_pe_ratio[:self.number_of_symbols_fundamental] ]
+        self._last_trade_week = -1
 
     def on_data(self, data):
-        # if we have no changes, do nothing
-        if self.changes is None: return
+        if not self._sma_a.is_ready or not self._sma_b.is_ready:
+            return
 
-        # liquidate removed securities
-        for security in self.changes.removed_securities:
-            if security.invested:
-                self.liquidate(security.symbol)
-                self.debug("Liquidated Stock: " + str(security.symbol.value))
+        # Rebalance weekly
+        current_week = self.time.isocalendar()[1]
+        if current_week == self._last_trade_week:
+            return
+        self._last_trade_week = current_week
 
-        # we want 50% allocation in each security in our universe
-        for security in self.changes.added_securities:
-            self.set_holdings(security.symbol, 0.02)
+        if self.sym_a not in data or self.sym_b not in data:
+            return
 
-        self.changes = None
+        # Relative strength: price / SMA ratio
+        rs_a = data[self.sym_a].close / self._sma_a.current.value if self._sma_a.current.value > 0 else 0
+        rs_b = data[self.sym_b].close / self._sma_b.current.value if self._sma_b.current.value > 0 else 0
 
-    # this event fires whenever we have changes to our universe
-    def on_securities_changed(self, changes):
-        self.changes = changes
-
-    def select(self, fundamental):
-        # sort descending by daily dollar volume
-        sorted_by_dollar_volume = sorted([x for x in fundamental if x.has_fundamental_data and x.price > 1],
-            key=lambda x: x.dollar_volume, reverse=True)
-
-        # sort descending by P/E ratio
-        sorted_by_pe_ratio = sorted(sorted_by_dollar_volume, key=lambda x: x.valuation_ratios.pe_ratio, reverse=True)
-
-        # take the top entries from our sorted collection
-        return [ x.symbol for x in sorted_by_pe_ratio[:2] ]
+        # Hold the one with stronger momentum
+        if rs_a > rs_b:
+            if self.portfolio[self.sym_b].invested:
+                self.liquidate(self.sym_b)
+            self.set_holdings(self.sym_a, 0.95)
+        else:
+            if self.portfolio[self.sym_a].invested:
+                self.liquidate(self.sym_a)
+            self.set_holdings(self.sym_b, 0.95)

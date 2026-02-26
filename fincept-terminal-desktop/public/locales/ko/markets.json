@@ -13,5 +13,8 @@
   "refresh": "새로고침",
   "auto": "자동",
   "on": "켜기",
-  "off": "끄기"
+  "off": "끄기",
+  "loading": {
+    "title": "[KO] Initializing..."
+  }
 }

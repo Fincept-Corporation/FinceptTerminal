@@ -422,10 +422,11 @@ class CustomIndexService {
     const n = allConstituents.length;
 
     switch (method) {
-      case 'price_weighted':
+      case 'price_weighted': {
         const totalPrices = allConstituents.reduce((sum, c) => sum + c.current_price, 0);
         weight = totalPrices > 0 ? (constituent.current_price / totalPrices) * 100 : 0;
         break;
+      }
 
       case 'market_cap_weighted':
       case 'float_adjusted':
@@ -442,10 +443,11 @@ class CustomIndexService {
         }
         break;
 
-      case 'fundamental_weighted':
+      case 'fundamental_weighted': {
         const totalScore = allConstituents.reduce((sum, c) => sum + (c.fundamentalScore || 0), 0);
         weight = totalScore > 0 ? ((constituent.fundamentalScore || 0) / totalScore) * 100 : 100 / n;
         break;
+      }
 
       case 'capped_weighted':
         // First calculate market cap weight
@@ -456,7 +458,7 @@ class CustomIndexService {
         }
         break;
 
-      case 'risk_parity':
+      case 'risk_parity': {
         // Using day change volatility as proxy for volatility
         const volatilities = allConstituents.map(c => Math.abs(c.day_change_percent) || 1);
         const inverseVols = volatilities.map(v => 1 / v);
@@ -464,6 +466,7 @@ class CustomIndexService {
         const myInverseVol = 1 / (Math.abs(constituent.day_change_percent) || 1);
         weight = totalInverseVol > 0 ? (myInverseVol / totalInverseVol) * 100 : 100 / n;
         break;
+      }
 
       case 'factor_weighted':
         // Use custom weight if provided, else equal weight
@@ -597,7 +600,7 @@ class CustomIndexService {
         break;
       }
 
-      default:
+      default: {
         // Default to price-weighted
         const sumPrices = constituents.reduce((sum, c) => sum + c.current_price, 0);
         if (divisor === 1 && sumPrices > 0) {
@@ -605,6 +608,7 @@ class CustomIndexService {
         }
         indexValue = sumPrices / divisor;
         totalMarketValue = constituents.reduce((sum, c) => sum + c.market_value, 0);
+      }
     }
 
     return { indexValue, totalMarketValue, divisor };

@@ -13,5 +13,8 @@
   "refresh": "รีเฟรช",
   "auto": "อัตโนมัติ",
   "on": "เปิด",
-  "off": "ปิด"
+  "off": "ปิด",
+  "loading": {
+    "title": "[TH] Initializing..."
+  }
 }

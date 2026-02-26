@@ -609,7 +609,7 @@ export class BrokerMCPBridge {
       // Get orders
       getOrders: async (filters?: any) => {
         try {
-          let orders: any[] = [];
+          const orders: any[] = [];
 
           if (!filters?.status || filters.status === 'open' || filters.status === 'all') {
             const openOrders = await activeAdapter.fetchOpenOrders(filters?.symbol);

@@ -87,7 +87,7 @@ function loadManualMappings(): void {
         sectorCache[sym.toUpperCase()] = { ...info, _manual: true } as SectorInfo & { _manual?: boolean };
       });
     }
-  } catch {}
+  } catch { /* localStorage not available */ }
 }
 
 function saveManualMappings(): void {
@@ -97,7 +97,7 @@ function saveManualMappings(): void {
       if ((info as any)._manual) manual[sym] = info;
     });
     localStorage.setItem(MANUAL_MAPPINGS_KEY, JSON.stringify(manual));
-  } catch {}
+  } catch { /* localStorage not available */ }
 }
 
 // Init: load ETF fallbacks then manual overrides

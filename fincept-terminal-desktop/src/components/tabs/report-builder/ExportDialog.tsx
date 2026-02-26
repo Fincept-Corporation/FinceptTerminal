@@ -17,12 +17,17 @@ import { ReportTemplate } from '@/services/core/reportService';
 import { BrandKit } from '@/services/core/brandKitService';
 import { reportExportService, ExportFormat } from '@/services/core/reportExportService';
 import { toast } from '@/components/ui/terminal-toast';
+import { ReportBuilderMode, DocxDocumentMetadata } from './types';
 
 interface ExportDialogProps {
   open: boolean;
   onClose: () => void;
   template: ReportTemplate;
   brandKit: BrandKit | null;
+  // DOCX mode props
+  builderMode?: ReportBuilderMode;
+  docxHtmlContent?: string;
+  docxMetadata?: DocxDocumentMetadata;
 }
 
 const EXPORT_OPTIONS: { format: ExportFormat; label: string; icon: React.ReactNode; desc: string }[] = [
@@ -32,11 +37,13 @@ const EXPORT_OPTIONS: { format: ExportFormat; label: string; icon: React.ReactNo
   { format: 'markdown', label: 'Markdown', icon: <FileText size={20} />, desc: 'For documentation' },
 ];
 
-export const ExportDialog: React.FC<ExportDialogProps> = ({ open, onClose, template, brandKit }) => {
+export const ExportDialog: React.FC<ExportDialogProps> = ({ open, onClose, template, brandKit, builderMode, docxHtmlContent, docxMetadata }) => {
   const [selectedFormats, setSelectedFormats] = useState<ExportFormat[]>(['pdf']);
   const [isExporting, setIsExporting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
+
+  const isDocxMode = builderMode === 'docx';
 
   const toggleFormat = (format: ExportFormat) => {
     setSelectedFormats(prev =>
@@ -52,13 +59,31 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ open, onClose, templ
 
     setIsExporting(true);
     try {
-      if (selectedFormats.length === 1) {
-        const path = await reportExportService.exportToFile(template, selectedFormats[0], brandKit);
-        if (path) toast.success(`Exported to ${path}`);
+      if (isDocxMode && docxHtmlContent) {
+        // DOCX mode: export from TipTap HTML content
+        if (selectedFormats.length === 1) {
+          const path = await reportExportService.exportDocxModeToFile(docxHtmlContent, selectedFormats[0], docxMetadata);
+          if (path) toast.success(`Exported to ${path}`);
+        } else {
+          for (const format of selectedFormats) {
+            try {
+              const path = await reportExportService.exportDocxModeToFile(docxHtmlContent, format, docxMetadata);
+              if (path) toast.success(`Exported ${format.toUpperCase()} to ${path}`);
+            } catch (error) {
+              console.error(`Failed to export ${format}:`, error);
+            }
+          }
+        }
       } else {
-        const results = await reportExportService.batchExport(template, selectedFormats, brandKit);
-        const success = Object.values(results).filter(Boolean).length;
-        toast.success(`Exported ${success}/${selectedFormats.length} formats`);
+        // Builder mode: existing export logic
+        if (selectedFormats.length === 1) {
+          const path = await reportExportService.exportToFile(template, selectedFormats[0], brandKit);
+          if (path) toast.success(`Exported to ${path}`);
+        } else {
+          const results = await reportExportService.batchExport(template, selectedFormats, brandKit);
+          const success = Object.values(results).filter(Boolean).length;
+          toast.success(`Exported ${success}/${selectedFormats.length} formats`);
+        }
       }
       onClose();
     } catch (error) {
@@ -69,13 +94,32 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ open, onClose, templ
   };
 
   const handlePreview = () => {
-    const html = reportExportService.getPrintPreviewHTML(template, brandKit);
+    let html: string;
+    if (isDocxMode && docxHtmlContent) {
+      // Wrap DOCX HTML content in a basic printable page
+      html = `<!DOCTYPE html><html><head><style>
+        body { font-family: Arial, sans-serif; max-width: 210mm; margin: 0 auto; padding: 20mm; }
+        table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #ccc; padding: 8px; }
+        img { max-width: 100%; } h1,h2,h3,h4,h5,h6 { margin: 0.5em 0; }
+      </style></head><body>${docxHtmlContent}</body></html>`;
+    } else {
+      html = reportExportService.getPrintPreviewHTML(template, brandKit);
+    }
     setPreviewHtml(html);
     setShowPreview(true);
   };
 
   const handlePrint = () => {
-    const html = reportExportService.getPrintPreviewHTML(template, brandKit);
+    let html: string;
+    if (isDocxMode && docxHtmlContent) {
+      html = `<!DOCTYPE html><html><head><style>
+        body { font-family: Arial, sans-serif; max-width: 210mm; margin: 0 auto; padding: 20mm; }
+        table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #ccc; padding: 8px; }
+        img { max-width: 100%; } h1,h2,h3,h4,h5,h6 { margin: 0.5em 0; }
+      </style></head><body>${docxHtmlContent}</body></html>`;
+    } else {
+      html = reportExportService.getPrintPreviewHTML(template, brandKit);
+    }
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(html);

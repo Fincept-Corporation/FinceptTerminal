@@ -156,7 +156,7 @@ const AnalyticsSectorsPanel: React.FC<AnalyticsSectorsPanelProps> = ({ portfolio
     };
     restore();
     return () => { cancelled = true; };
-  }, [cachePrefix]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cachePrefix]);  
 
   // Fetch analytics data
   const fetchAnalytics = useCallback(async () => {

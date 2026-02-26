@@ -26,7 +26,7 @@ async function finceptFetch(path: string): Promise<any> {
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     let msg = `${res.status} ${res.statusText}`;
-    try { msg = JSON.parse(body).message || msg; } catch {}
+    try { msg = JSON.parse(body).message || msg; } catch { /* ignore JSON parse error */ }
     throw new Error(msg);
   }
   const json = await res.json();

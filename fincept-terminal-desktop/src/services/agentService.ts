@@ -126,12 +126,12 @@ export interface AgentPayload {
   params?: Record<string, any>;
 }
 
-export interface AgentResponse<T = any> {
+export interface AgentResponse<T = unknown> {
   success: boolean;
   error?: string;
   response?: string;
   data?: T;
-  result?: any;
+  result?: string | T;
 }
 
 export interface SystemInfo {

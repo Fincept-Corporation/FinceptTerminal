@@ -13,5 +13,8 @@
   "refresh": "REFRESH",
   "auto": "AUTO",
   "on": "ON",
-  "off": "OFF"
+  "off": "OFF",
+  "loading": {
+    "title": "Initializing..."
+  }
 }

@@ -258,7 +258,7 @@ export abstract class BaseFinanceNode implements INodeType {
   } {
     // Handle crypto symbols
     if (symbol.includes('-') || symbol.includes('/')) {
-      const parts = symbol.split(/[-\/]/);
+      const parts = symbol.split(/[-/]/);
       return {
         symbol: parts[0],
         exchange: exchange || 'crypto',

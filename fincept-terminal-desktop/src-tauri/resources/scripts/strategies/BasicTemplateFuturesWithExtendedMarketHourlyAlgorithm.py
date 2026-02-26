@@ -6,32 +6,36 @@
 #
 # Strategy ID: FCT-006DF51F
 # Category: Futures
-# Description: This example demonstrates how to add futures with hourly resolution and extended market hours
+# Description: Momentum-based strategy adapted from futures template. Buys when
+#   price crosses above 20-day SMA, sells when crossing below. Originally designed
+#   for futures contracts, adapted for equity backtesting.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
-# QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
-# Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from AlgorithmImports import *
-from BasicTemplateFuturesHourlyAlgorithm import BasicTemplateFuturesHourlyAlgorithm
 
-### <summary>
-### This example demonstrates how to add futures with hourly resolution and extended market hours.
-### </summary>
-### <meta name="tag" content="using data" />
-### <meta name="tag" content="benchmarks" />
-### <meta name="tag" content="futures" />
-class BasicTemplateFuturesWithExtendedMarketHourlyAlgorithm(BasicTemplateFuturesHourlyAlgorithm):
+class BasicTemplateFuturesWithExtendedMarketHourlyAlgorithm(QCAlgorithm):
+    """SMA trend-following strategy (adapted from futures template)."""
 
-    def get_extended_market_hours(self):
-        return True
+    def initialize(self):
+        self.set_start_date(2013, 10, 8)
+        self.set_end_date(2013, 10, 11)
+        self.set_cash(100000)
+
+        self.symbol = 'SPY'
+        self.add_equity(self.symbol, Resolution.DAILY)
+
+        self._sma = self.sma(self.symbol, 20, Resolution.DAILY)
+        self._previous_invested = False
+
+    def on_data(self, data):
+        if not self._sma.is_ready:
+            return
+        if self.symbol not in data:
+            return
+
+        price = data[self.symbol].close
+
+        if not self.portfolio.invested and price > self._sma.current.value:
+            self.set_holdings(self.symbol, 0.9)
+        elif self.portfolio.invested and price < self._sma.current.value:
+            self.liquidate()

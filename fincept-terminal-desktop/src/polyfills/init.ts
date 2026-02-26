@@ -8,7 +8,7 @@ const processShim: any = {
   env: {
     NODE_ENV: typeof process !== 'undefined' && process.env ? process.env.NODE_ENV : 'production'
   },
-  nextTick: (fn: Function, ...args: any[]) => {
+  nextTick: (fn: (...a: unknown[]) => void, ...args: unknown[]) => {
     setTimeout(() => fn(...args), 0);
   },
   cwd: () => '/',

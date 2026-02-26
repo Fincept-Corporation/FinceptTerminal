@@ -228,6 +228,7 @@ export function sanitizeInput(input: string): string {
   return input
     .trim()
     .replace(/[<>]/g, '') // Remove potential HTML/script tags
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1F\x7F]/g, ''); // Remove control characters
 }
 

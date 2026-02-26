@@ -12,9 +12,111 @@
     "quantity": "数量",
     "price": "価格",
     "add": "追加",
-    "sell": "売却"
+    "sell": "売却",
+    "confirmDelete": "[JA] CONFIRM DELETE",
+    "deleteTransactionWarning": "[JA] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[JA] DELETE",
+    "editTransaction": "[JA] EDIT TRANSACTION",
+    "transactionDate": "[JA] TRANSACTION DATE",
+    "notes": "[JA] NOTES",
+    "notesPlaceholder": "[JA] Optional notes...",
+    "totalValue": "[JA] TOTAL VALUE",
+    "save": "[JA] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[JA] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[JA] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[JA] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[JA] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[JA] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[JA] FINCEPT",
+    "portfolioTerminal": "[JA] PORTFOLIO TERMINAL",
+    "live": "[JA] LIVE",
+    "pos": "[JA] POS",
+    "ins": "[JA] INS",
+    "nav": "[JA] NAV",
+    "pnl": "[JA] P&L",
+    "day": "[JA] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[JA] TOTAL VALUE",
+    "unrealizedPnl": "[JA] UNREALIZED P&L",
+    "dayChange": "[JA] DAY CHANGE",
+    "costBasis": "[JA] COST BASIS",
+    "fifo": "[JA] FIFO",
+    "positions": "[JA] POSITIONS",
+    "concTop3": "[JA] CONC. TOP3",
+    "weight": "[JA] WEIGHT",
+    "sharpe": "[JA] SHARPE",
+    "annualized": "[JA] ANNUALIZED",
+    "beta": "[JA] BETA",
+    "vsSpy": "[JA] VS SPY",
+    "volatility": "[JA] VOLATILITY",
+    "ann30d": "[JA] 30D ANN.",
+    "maxDrawdown": "[JA] MAX DRAWDOWN",
+    "sinceIncep": "[JA] SINCE INCEP.",
+    "riskScore": "[JA] RISK SCORE",
+    "composite": "[JA] COMPOSITE",
+    "var95": "[JA] VAR (95%)",
+    "oneDay": "[JA] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[JA] SECTOR ALLOCATION",
+    "sectors": "[JA] sectors",
+    "correlation": "[JA] CORRELATION",
+    "dayChangeProxy": "[JA] (day change proxy)",
+    "needTwoHoldings": "[JA] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[JA] POSITIONS BLOTTER",
+    "instruments": "[JA] instruments"
+  },
+  "chart": {
+    "performance": "[JA] PERFORMANCE",
+    "portfolio": "[JA] PORTFOLIO",
+    "totalReturn": "[JA] TOTAL RETURN",
+    "historyMessage": "[JA] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[JA] ORDER ENTRY",
+    "price": "[JA] PRICE",
+    "qtyHeld": "[JA] QTY HELD",
+    "mktVal": "[JA] MKT VAL",
+    "clickToBuyMore": "[JA] Click to buy more",
+    "clickToSell": "[JA] Click to sell",
+    "clickToBuy": "[JA] Click to buy an asset",
+    "clickToSellAsset": "[JA] Click to sell an asset",
+    "openBuyOrder": "[JA] OPEN BUY ORDER",
+    "openSellOrder": "[JA] OPEN SELL ORDER",
+    "ordersRecorded": "[JA] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[JA] HOLDINGS",
+    "noHoldings": "[JA] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[JA] RISK SCORE",
+    "low": "[JA] LOW",
+    "high": "[JA] HIGH",
+    "topMovers": "[JA] TOP MOVERS",
+    "quickStats": "[JA] QUICK STATS",
+    "concTop3": "[JA] CONC. TOP3",
+    "volatility": "[JA] VOLATILITY",
+    "newPortfolio": "[JA] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[JA] SELECT PORTFOLIO",
+    "searchPortfolios": "[JA] Search portfolios...",
+    "newPortfolio": "[JA] NEW PORTFOLIO",
+    "nav": "[JA] NAV",
+    "pnl": "[JA] P&L",
+    "day": "[JA] DAY",
+    "pos": "[JA] POS",
+    "wl": "[JA] W/L"
+  },
+  "actions": {
+    "buy": "[JA] BUY",
+    "sell": "[JA] SELL"
   }
 }

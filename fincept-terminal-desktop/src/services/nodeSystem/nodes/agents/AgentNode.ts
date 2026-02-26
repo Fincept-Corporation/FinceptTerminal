@@ -214,7 +214,7 @@ export class AgentNode implements INodeType {
       });
 
       // Format output based on preference
-      let formattedOutput: Record<string, any> = {
+      const formattedOutput: Record<string, any> = {
         success: true,
         agentId: agentId || category,
         agentName,

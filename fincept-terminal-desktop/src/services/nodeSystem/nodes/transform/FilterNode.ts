@@ -193,7 +193,7 @@ function applyPresetFilter(items: any[], preset: string): any[] {
         return !isNaN(close) && !isNaN(open) && close < open;
       });
 
-    case 'highVolume':
+    case 'highVolume': {
       // Volume > average volume
       const volumes = items.map((item) => Number(getFieldValue(item.json, 'volume'))).filter((v) => !isNaN(v));
       const avgVolume = volumes.length > 0 ? volumes.reduce((a, b) => a + b, 0) / volumes.length : 0;
@@ -201,9 +201,10 @@ function applyPresetFilter(items: any[], preset: string): any[] {
         const volume = Number(getFieldValue(item.json, 'volume'));
         return !isNaN(volume) && volume > avgVolume;
       });
+    }
 
     case 'priceUp':
-    case 'priceDown':
+    case 'priceDown': {
       // Compare with previous close - requires sorted data
       const sorted = [...items].sort((a, b) => {
         const dateA = new Date(getFieldValue(a.json, 'timestamp') || getFieldValue(a.json, 'date') || 0);
@@ -218,6 +219,7 @@ function applyPresetFilter(items: any[], preset: string): any[] {
         if (isNaN(currentClose) || isNaN(prevClose)) return false;
         return preset === 'priceUp' ? currentClose > prevClose : currentClose < prevClose;
       });
+    }
 
     default:
       return items;

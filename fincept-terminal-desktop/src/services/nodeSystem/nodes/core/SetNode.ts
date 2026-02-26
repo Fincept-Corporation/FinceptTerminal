@@ -195,9 +195,10 @@ function convertValue(value: any, type: string): any {
     case 'string':
       return String(value);
 
-    case 'number':
+    case 'number': {
       const num = Number(value);
       return isNaN(num) ? 0 : num;
+    }
 
     case 'boolean':
       if (typeof value === 'string') {

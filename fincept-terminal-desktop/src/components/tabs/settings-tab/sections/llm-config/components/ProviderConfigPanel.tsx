@@ -165,7 +165,7 @@ export function ProviderConfigPanel({
                 ) : (
                   <>
                     {providerModels.length === 0 && !providerModelsLoading && (
-                      <option value="">No models found - Click REFRESH</option>
+                      <option value="">Click "REFRESH MODELS" to load available models</option>
                     )}
                     {providerModelsLoading && <option value="">Loading models...</option>}
                     {providerModels.map((model) => (
@@ -204,24 +204,30 @@ export function ProviderConfigPanel({
                   {ollamaModels.length} model{ollamaModels.length !== 1 ? 's' : ''} available
                 </div>
               )}
-              {!isOllama && !isFincept && providerModels.length > 0 && (
-                <div style={{
-                  marginTop: '8px',
-                  fontSize: '11px',
-                  color: '#AAA',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px'
-                }}>
-                  <div style={styles.successMessage}>
-                    <Check size={14} />
-                    {providerModels.length} model{providerModels.length !== 1 ? 's' : ''} available
+              {!isOllama && !isFincept && (
+                providerModels.length > 0 ? (
+                  <div style={{
+                    marginTop: '8px',
+                    fontSize: '11px',
+                    color: '#AAA',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}>
+                    <div style={styles.successMessage}>
+                      <Check size={14} />
+                      {providerModels.length} model{providerModels.length !== 1 ? 's' : ''} available
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#666' }}>
+                      Models fetched from {currentConfig.provider.toUpperCase()} API
+                      {providerModelsLoading && ' (updating...)'}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '10px', color: '#666' }}>
-                    Models fetched from {currentConfig.provider.toUpperCase()} API
-                    {providerModelsLoading && ' (updating...)'}
+                ) : !providerModelsLoading && (
+                  <div style={{ marginTop: '8px', fontSize: '10px', color: '#888', fontStyle: 'italic' }}>
+                    💡 Tip: Click "REFRESH MODELS" to see available models from {currentConfig.provider.toUpperCase()}
                   </div>
-                </div>
+                )
               )}
             </div>
           ) : (

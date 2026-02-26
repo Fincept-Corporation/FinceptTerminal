@@ -11,6 +11,7 @@ import { cacheService, TTL } from '@/services/cache/cacheService';
 import agentService, {
   type SystemInfo,
   type ToolsInfo,
+  type AgentResponse,
 } from '@/services/agentService';
 import {
   getLLMConfigs,
@@ -90,7 +91,7 @@ export function useAgentConfig() {
     setTestQueryInternal(q);
     updateTabSession({ testQuery: q });
   }, [updateTabSession]);
-  const [testResult, setTestResult] = useState<any>(null);
+  const [testResult, setTestResult] = useState<AgentResponse | null>(null);
   const [selectedOutputModel, setSelectedOutputModelInternal] = useState(tabSession.selectedOutputModel);
   const setSelectedOutputModel = useCallback((m: string) => {
     setSelectedOutputModelInternal(m);
@@ -226,6 +227,18 @@ export function useAgentConfig() {
   const loadLLMConfigs = async () => {
     try {
       const configs = await getLLMConfigs();
+
+      // If the fincept entry has no api_key, fill it from the session key stored in settings.
+      // This prevents the "missing API key" warning for the fincept provider even when the
+      // user is logged in (the session key lives in settings, not in the llm_configs table).
+      const finceptEntry = configs.find(c => c.provider === 'fincept');
+      if (finceptEntry && !finceptEntry.api_key) {
+        const sessionKey = await getSetting('fincept_api_key');
+        if (sessionKey) {
+          finceptEntry.api_key = sessionKey;
+        }
+      }
+
       setConfiguredLLMs(configs);
 
       const finceptLLM = configs.find(c => c.provider === 'fincept');
@@ -331,7 +344,7 @@ export function useAgentConfig() {
         })
         .map(a => {
           let cfg: AgentConfigData = {};
-          try { cfg = JSON.parse(a.config_json); } catch {}
+          try { cfg = JSON.parse(a.config_json); } catch { /* invalid JSON, use empty config */ }
           return {
             id: a.id,
             name: a.name,
@@ -616,7 +629,8 @@ export function useAgentConfig() {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
-      setError(err.toString());
+      const msg = typeof err === 'string' ? err : (err?.message || JSON.stringify(err));
+      setError(msg);
     } finally {
       if (mountedRef.current && currentFetchId === fetchIdRef.current) {
         setExecuting(false);

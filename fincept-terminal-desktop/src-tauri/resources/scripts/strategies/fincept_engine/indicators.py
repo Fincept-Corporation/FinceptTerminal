@@ -55,6 +55,11 @@ class IndicatorDataPoint:
         self.time = time
         self.window = _IndicatorWindow(1)
 
+    @property
+    def current(self):
+        """Return self so that .current.value works on sub-band data points."""
+        return self
+
     def __float__(self):
         return self.value
 
@@ -65,8 +70,14 @@ class IndicatorDataPoint:
 class IndicatorBase:
     """Base class for all indicators."""
 
-    def __init__(self, name: str, period: int):
-        self.name = name
+    def __init__(self, name, period: int = None):
+        # QuantConnect compat: if name is an int, treat it as period
+        if isinstance(name, (int, float)) and period is None:
+            period = int(name)
+            name = type(self).__name__
+        elif period is None:
+            period = 14  # Default period
+        self.name = str(name)
         self.period = period
         self.current = IndicatorDataPoint(0.0)
         self.previous = IndicatorDataPoint(0.0)

@@ -164,7 +164,7 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
     // Use ref in interval so it always calls the latest version
     const interval = setInterval(() => fetchPositionsRef.current?.(), refreshInterval);
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [activeBrokerKey, autoRefresh, refreshInterval]);
 
   // Cleanup subscriptions on unmount

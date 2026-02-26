@@ -166,7 +166,7 @@ export class PriceAlertTriggerNode implements INodeType {
     const oneTime = this.getNodeParameter('oneTime', 0) as boolean;
 
     // Build trigger configuration
-    let triggerConfig: any = {
+    const triggerConfig: any = {
       symbol,
       condition,
       provider,

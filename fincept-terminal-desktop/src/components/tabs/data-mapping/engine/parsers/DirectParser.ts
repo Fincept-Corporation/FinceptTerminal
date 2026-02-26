@@ -20,7 +20,7 @@ export class DirectParser extends BaseParser {
     }
 
     // Simple validation - check for valid characters
-    if (!/^[a-zA-Z0-9_.\[\]]+$/.test(expression)) {
+    if (!/^[a-zA-Z0-9_.[\]]+$/.test(expression)) {
       return {
         valid: false,
         error: 'Expression can only contain alphanumeric characters, dots, and brackets'

@@ -1171,7 +1171,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({ state }) => {
                     canEdit={canEditSteps && step.status === 'pending'}
                     onToggle={() => setExpandedSteps(prev => {
                       const next = new Set(prev);
-                      next.has(step.id) ? next.delete(step.id) : next.add(step.id);
+                      if (next.has(step.id)) { next.delete(step.id); } else { next.add(step.id); }
                       return next;
                     })}
                     onJumpToResult={() => {

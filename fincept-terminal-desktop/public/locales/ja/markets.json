@@ -13,5 +13,8 @@
   "refresh": "更新",
   "auto": "自動",
   "on": "オン",
-  "off": "オフ"
+  "off": "オフ",
+  "loading": {
+    "title": "[JA] Initializing..."
+  }
 }

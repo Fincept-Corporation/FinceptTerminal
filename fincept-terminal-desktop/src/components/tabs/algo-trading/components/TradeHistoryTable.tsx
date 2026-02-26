@@ -2,16 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { AlgoTrade } from '../types';
 import { getAlgoTrades } from '../services/algoTradingService';
 import { F } from '../constants/theme';
-
-const thStyle: React.CSSProperties = {
-  padding: '6px 12px', fontSize: '8px', fontWeight: 700, color: F.GRAY,
-  letterSpacing: '0.5px',
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '5px 12px', fontSize: '9px',
-  fontFamily: '"IBM Plex Mono", monospace',
-};
+import { S } from '../constants/styles';
 
 interface TradeHistoryTableProps {
   deploymentId: string;
@@ -34,7 +25,7 @@ const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ deploymentId }) =
 
   if (loading) {
     return (
-      <div style={{ padding: '12px', fontSize: '9px', color: F.MUTED }}>
+      <div className="p-4 text-[11px]" style={{ color: F.MUTED }}>
         Loading trades...
       </div>
     );
@@ -42,53 +33,53 @@ const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ deploymentId }) =
 
   if (trades.length === 0) {
     return (
-      <div style={{ padding: '12px', fontSize: '9px', color: F.MUTED }}>
+      <div className="p-4 text-[11px]" style={{ color: F.MUTED }}>
         No trades yet
       </div>
     );
   }
 
   return (
-    <div style={{ overflow: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}>
+    <div className="overflow-auto">
+      <table className="w-full border-collapse font-mono">
         <thead>
           <tr style={{ borderBottom: `1px solid ${F.BORDER}` }}>
-            <th style={{ ...thStyle, textAlign: 'left' }}>TIME</th>
-            <th style={{ ...thStyle, textAlign: 'left' }}>SIDE</th>
-            <th style={{ ...thStyle, textAlign: 'right' }}>QTY</th>
-            <th style={{ ...thStyle, textAlign: 'right' }}>PRICE</th>
-            <th style={{ ...thStyle, textAlign: 'right' }}>P&L</th>
-            <th style={{ ...thStyle, textAlign: 'left' }}>REASON</th>
+            <th className={S.th} style={{ textAlign: 'left' }}>TIME</th>
+            <th className={S.th} style={{ textAlign: 'left' }}>SIDE</th>
+            <th className={S.th} style={{ textAlign: 'right' }}>QTY</th>
+            <th className={S.th} style={{ textAlign: 'right' }}>PRICE</th>
+            <th className={S.th} style={{ textAlign: 'right' }}>P&L</th>
+            <th className={S.th} style={{ textAlign: 'left' }}>REASON</th>
           </tr>
         </thead>
         <tbody>
           {trades.map(trade => (
             <tr key={trade.id} style={{ borderBottom: `1px solid ${F.BORDER}15` }}>
-              <td style={{ ...tdStyle, textAlign: 'left', color: F.MUTED }}>
+              <td className={S.td} style={{ textAlign: 'left', color: F.MUTED }}>
                 {new Date(trade.timestamp).toLocaleString()}
               </td>
-              <td style={{
-                ...tdStyle, textAlign: 'left', fontWeight: 700,
+              <td className={S.td + ' font-bold'} style={{
+                textAlign: 'left',
                 color: trade.side === 'BUY' ? F.GREEN : F.RED,
               }}>
                 {trade.side}
               </td>
-              <td style={{ ...tdStyle, textAlign: 'right', color: F.WHITE }}>
+              <td className={S.td} style={{ textAlign: 'right', color: F.WHITE }}>
                 {trade.quantity}
               </td>
-              <td style={{ ...tdStyle, textAlign: 'right', color: F.CYAN }}>
+              <td className={S.td} style={{ textAlign: 'right', color: F.CYAN }}>
                 {trade.price.toFixed(2)}
               </td>
-              <td style={{
-                ...tdStyle, textAlign: 'right', fontWeight: 700,
+              <td className={S.td + ' font-bold'} style={{
+                textAlign: 'right',
                 color: trade.pnl >= 0 ? F.GREEN : F.RED,
               }}>
                 {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toFixed(2)}
               </td>
-              <td style={{
-                ...tdStyle, textAlign: 'left', color: F.MUTED,
-                maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
+              <td
+                className={S.td + ' max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap'}
+                style={{ textAlign: 'left', color: F.MUTED }}
+              >
                 {trade.signal_reason}
               </td>
             </tr>

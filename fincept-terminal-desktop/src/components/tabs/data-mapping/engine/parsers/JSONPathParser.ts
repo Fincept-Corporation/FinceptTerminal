@@ -120,7 +120,7 @@ Multiple Selection:
    */
   pathToKeys(expression: string): string[] {
     // Remove leading $
-    let path = expression.replace(/^\$\.?/, '');
+    const path = expression.replace(/^\$\.?/, '');
 
     // Split by . but respect brackets
     const keys: string[] = [];

@@ -310,7 +310,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
           }
           break;
 
-        case 'adb':
+        case 'adb': {
           // Check if country has ADB code
           if (!country?.adb) {
             throw new Error(`${country?.name || selectedCountry} is not available in ADB database. ADB covers Asia-Pacific region only.`);
@@ -341,6 +341,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
             }) as string;
           }
           break;
+        }
 
         case 'fed':
           // Federal Reserve data - US only, no country selection needed
@@ -409,7 +410,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
           }) as string;
           break;
 
-        case 'unesco':
+        case 'unesco': {
           // UNESCO UIS uses 3-letter ISO country codes and year-based dates
           const unescoStartYear = startDate.substring(0, 4);
           const unescoEndYear = endDate.substring(0, 4);
@@ -419,6 +420,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
             env: {},
           }) as string;
           break;
+        }
 
         case 'fiscaldata':
           // FiscalData is US-only, uses full date range (YYYY-MM-DD)
@@ -486,7 +488,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
           if (!finceptResponse.ok) {
             const errBody = await finceptResponse.text().catch(() => '');
             let errMsg = `${finceptResponse.status} ${finceptResponse.statusText}`;
-            try { errMsg = JSON.parse(errBody).message || errMsg; } catch {}
+            try { errMsg = JSON.parse(errBody).message || errMsg; } catch { /* ignore parse error */ }
             throw new Error(errMsg);
           }
           result = await finceptResponse.text();

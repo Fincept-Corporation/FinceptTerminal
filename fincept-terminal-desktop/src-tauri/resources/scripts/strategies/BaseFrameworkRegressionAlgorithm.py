@@ -6,42 +6,54 @@
 #
 # Strategy ID: FCT-0A7F740C
 # Category: Regression Test
-# Description: Abstract regression framework algorithm for multiple framework regression tests
+# Description: Multi-stock equal-weight alpha strategy. Allocates equal weight
+#   across AAPL, MSFT, SPY, and GOOGL when any is above its 20-day EMA.
+#   Rebalances daily. Originally a framework regression test for alpha models.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
-### <summary>
-### Abstract regression framework algorithm for multiple framework regression tests
-### </summary>
 class BaseFrameworkRegressionAlgorithm(QCAlgorithm):
+    """Equal-weight multi-stock strategy with EMA trend filter."""
 
     def initialize(self):
-        self.set_start_date(2014, 6, 1)
-        self.set_end_date(2014, 6, 30)
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-        self.universe_settings.resolution = Resolution.HOUR
-        self.universe_settings.data_normalization_mode = DataNormalizationMode.RAW
+        self.symbols = ["AAPL", "MSFT", "SPY", "GOOGL"]
+        self._emas = {}
 
-        symbols = [Symbol.create(ticker, SecurityType.EQUITY, Market.USA)
-            for ticker in ["AAPL", "AIG", "BAC", "SPY"]]
+        for sym in self.symbols:
+            self.add_equity(sym, Resolution.DAILY)
+            self._emas[sym] = self.ema(sym, 20, Resolution.DAILY)
 
-        # Manually add AAPL and AIG when the algorithm starts
-        self.set_universe_selection(ManualUniverseSelectionModel(symbols[:2]))
+        self._last_rebalance_month = -1
 
-        # At midnight, add all securities every day except on the last data
-        # With this procedure, the Alpha Model will experience multiple universe changes
-        self.add_universe_selection(ScheduledUniverseSelectionModel(
-            self.date_rules.every_day(), self.time_rules.midnight,
-            lambda dt: symbols if dt < self.end_date - timedelta(1) else []))
+    def on_data(self, data):
+        # Rebalance monthly
+        if self.time.month == self._last_rebalance_month:
+            return
+        self._last_rebalance_month = self.time.month
 
-        self.set_alpha(ConstantAlphaModel(InsightType.PRICE, InsightDirection.UP, timedelta(31), 0.025, None))
-        self.set_portfolio_construction(EqualWeightingPortfolioConstructionModel())
-        self.set_execution(ImmediateExecutionModel())
-        self.set_risk_management(NullRiskManagementModel())
+        # Check which symbols are above their EMA (uptrend)
+        longs = []
+        for sym in self.symbols:
+            if sym not in data:
+                continue
+            ema = self._emas[sym]
+            if not ema.is_ready:
+                continue
+            if data[sym].close > ema.current.value:
+                longs.append(sym)
 
-    def on_end_of_algorithm(self):
-        # The base implementation checks for active insights
-        insights_count = len(self.insights.get_insights(lambda insight: insight.is_active(self.utc_time)))
-        if insights_count != 0:
-            raise Exception(f"The number of active insights should be 0. Actual: {insights_count}")
+        # Liquidate symbols not in longs
+        for sym in self.symbols:
+            if sym not in longs and self.portfolio[sym].invested:
+                self.liquidate(sym)
+
+        # Equal-weight allocation
+        if longs:
+            weight = 0.95 / len(longs)
+            for sym in longs:
+                self.set_holdings(sym, weight)

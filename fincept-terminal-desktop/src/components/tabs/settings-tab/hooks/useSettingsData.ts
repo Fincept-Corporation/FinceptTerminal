@@ -58,8 +58,15 @@ export function useSettingsData() {
 
   const loadLLMConfigs = async (sessionApiKey?: string) => {
     try {
-      let configs = await sqliteService.getLLMConfigs();
+      // Load all LLM data in parallel
+      const [configs, globalSettings, modelCfgs] = await Promise.all([
+        sqliteService.getLLMConfigs(),
+        sqliteService.getLLMGlobalSettings(),
+        sqliteService.getLLMModelConfigs(),
+      ]);
 
+      // Handle empty configs or update session key (only if needed)
+      let finalConfigs = configs;
       if (configs.length === 0) {
         const userApiKey = sessionApiKey || '';
         const now = new Date().toISOString();
@@ -73,26 +80,21 @@ export function useSettingsData() {
           updated_at: now,
         };
         await sqliteService.saveLLMConfig(finceptConfig);
-        configs = await sqliteService.getLLMConfigs();
+        finalConfigs = await sqliteService.getLLMConfigs();
       } else if (sessionApiKey) {
-        // Ensure the fincept config has the session API key populated
         const finceptConfig = configs.find(c => c.provider === 'fincept');
         if (finceptConfig && !finceptConfig.api_key) {
           finceptConfig.api_key = sessionApiKey;
           await sqliteService.saveLLMConfig(finceptConfig);
-          configs = await sqliteService.getLLMConfigs();
+          finalConfigs = await sqliteService.getLLMConfigs();
         }
       }
 
-      setLlmConfigs(configs);
-
-      const globalSettings = await sqliteService.getLLMGlobalSettings();
+      setLlmConfigs(finalConfigs);
       setLlmGlobalSettings(globalSettings);
-
-      const modelCfgs = await sqliteService.getLLMModelConfigs();
       setModelConfigs(modelCfgs);
 
-      return { configs, modelCfgs };
+      return { configs: finalConfigs, modelCfgs };
     } catch (error) {
       console.error('Failed to load LLM configs:', error);
       return { configs: [], modelCfgs: [] };
@@ -127,10 +129,13 @@ export function useSettingsData() {
 
       setDbInitialized(true);
 
-      await loadApiKeys();
-      await loadLLMConfigs(sessionApiKey);
-      await loadWSProviders();
-      await loadKeyMappings();
+      // Load all data in parallel for maximum speed
+      await Promise.all([
+        loadApiKeys(),
+        loadLLMConfigs(sessionApiKey),
+        loadWSProviders(),
+        loadKeyMappings(),
+      ]);
 
       console.log('[SettingsTab] Data loaded successfully');
     } catch (error) {

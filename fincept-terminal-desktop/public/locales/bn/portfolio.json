@@ -12,9 +12,111 @@
     "quantity": "পরিমাণ",
     "price": "মূল্য",
     "add": "যোগ করুন",
-    "sell": "বিক্রি করুন"
+    "sell": "বিক্রি করুন",
+    "confirmDelete": "[BN] CONFIRM DELETE",
+    "deleteTransactionWarning": "[BN] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[BN] DELETE",
+    "editTransaction": "[BN] EDIT TRANSACTION",
+    "transactionDate": "[BN] TRANSACTION DATE",
+    "notes": "[BN] NOTES",
+    "notesPlaceholder": "[BN] Optional notes...",
+    "totalValue": "[BN] TOTAL VALUE",
+    "save": "[BN] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[BN] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[BN] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[BN] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[BN] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[BN] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[BN] FINCEPT",
+    "portfolioTerminal": "[BN] PORTFOLIO TERMINAL",
+    "live": "[BN] LIVE",
+    "pos": "[BN] POS",
+    "ins": "[BN] INS",
+    "nav": "[BN] NAV",
+    "pnl": "[BN] P&L",
+    "day": "[BN] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[BN] TOTAL VALUE",
+    "unrealizedPnl": "[BN] UNREALIZED P&L",
+    "dayChange": "[BN] DAY CHANGE",
+    "costBasis": "[BN] COST BASIS",
+    "fifo": "[BN] FIFO",
+    "positions": "[BN] POSITIONS",
+    "concTop3": "[BN] CONC. TOP3",
+    "weight": "[BN] WEIGHT",
+    "sharpe": "[BN] SHARPE",
+    "annualized": "[BN] ANNUALIZED",
+    "beta": "[BN] BETA",
+    "vsSpy": "[BN] VS SPY",
+    "volatility": "[BN] VOLATILITY",
+    "ann30d": "[BN] 30D ANN.",
+    "maxDrawdown": "[BN] MAX DRAWDOWN",
+    "sinceIncep": "[BN] SINCE INCEP.",
+    "riskScore": "[BN] RISK SCORE",
+    "composite": "[BN] COMPOSITE",
+    "var95": "[BN] VAR (95%)",
+    "oneDay": "[BN] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[BN] SECTOR ALLOCATION",
+    "sectors": "[BN] sectors",
+    "correlation": "[BN] CORRELATION",
+    "dayChangeProxy": "[BN] (day change proxy)",
+    "needTwoHoldings": "[BN] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[BN] POSITIONS BLOTTER",
+    "instruments": "[BN] instruments"
+  },
+  "chart": {
+    "performance": "[BN] PERFORMANCE",
+    "portfolio": "[BN] PORTFOLIO",
+    "totalReturn": "[BN] TOTAL RETURN",
+    "historyMessage": "[BN] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[BN] ORDER ENTRY",
+    "price": "[BN] PRICE",
+    "qtyHeld": "[BN] QTY HELD",
+    "mktVal": "[BN] MKT VAL",
+    "clickToBuyMore": "[BN] Click to buy more",
+    "clickToSell": "[BN] Click to sell",
+    "clickToBuy": "[BN] Click to buy an asset",
+    "clickToSellAsset": "[BN] Click to sell an asset",
+    "openBuyOrder": "[BN] OPEN BUY ORDER",
+    "openSellOrder": "[BN] OPEN SELL ORDER",
+    "ordersRecorded": "[BN] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[BN] HOLDINGS",
+    "noHoldings": "[BN] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[BN] RISK SCORE",
+    "low": "[BN] LOW",
+    "high": "[BN] HIGH",
+    "topMovers": "[BN] TOP MOVERS",
+    "quickStats": "[BN] QUICK STATS",
+    "concTop3": "[BN] CONC. TOP3",
+    "volatility": "[BN] VOLATILITY",
+    "newPortfolio": "[BN] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[BN] SELECT PORTFOLIO",
+    "searchPortfolios": "[BN] Search portfolios...",
+    "newPortfolio": "[BN] NEW PORTFOLIO",
+    "nav": "[BN] NAV",
+    "pnl": "[BN] P&L",
+    "day": "[BN] DAY",
+    "pos": "[BN] POS",
+    "wl": "[BN] W/L"
+  },
+  "actions": {
+    "buy": "[BN] BUY",
+    "sell": "[BN] SELL"
   }
 }

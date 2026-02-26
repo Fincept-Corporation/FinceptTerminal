@@ -1,8 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { writeTextFile, writeFile } from '@tauri-apps/plugin-fs';
 import { ReportTemplate, ReportComponent } from './reportService';
 import { BrandKit } from './brandKitService';
+import { docxService } from './docxService';
 
 export type ExportFormat = 'pdf' | 'html' | 'docx' | 'markdown';
 
@@ -275,11 +276,20 @@ class ReportExportService {
         await writeTextFile(filePath, this.generateMarkdown(template));
         break;
       case 'docx':
-        // For DOCX, we'll generate HTML and let Rust handle conversion
-        await invoke('export_report_docx', {
-          htmlContent: this.generateHTML(template, brandKit),
-          outputPath: filePath
-        });
+        // Convert template HTML to DOCX using html-to-docx
+        try {
+          const htmlForDocx = this.generateHTML(template, brandKit);
+          const docxBuffer = await docxService.exportToDocx(htmlForDocx, {
+            title: template.metadata.title || 'Report',
+            author: template.metadata.author || '',
+            company: template.metadata.company || '',
+            date: template.metadata.date || new Date().toISOString().split('T')[0],
+          });
+          await docxService.writeDocxFile(filePath, docxBuffer);
+        } catch (error) {
+          console.error('[ReportExport] DOCX export failed:', error);
+          throw error;
+        }
         break;
       case 'pdf':
         await invoke('generate_report_pdf', {
@@ -308,6 +318,108 @@ class ReportExportService {
     }
 
     return results;
+  }
+
+  // Export from DOCX editor mode (TipTap HTML content) to various formats
+  async exportDocxModeToFile(
+    htmlContent: string,
+    format: ExportFormat,
+    metadata?: { title?: string; author?: string; company?: string; date?: string }
+  ): Promise<string | null> {
+    const extensions: Record<ExportFormat, string> = {
+      pdf: 'pdf', html: 'html', docx: 'docx', markdown: 'md'
+    };
+
+    const defaultName = metadata?.title || 'document';
+    const filePath = await save({
+      filters: [{ name: format.toUpperCase(), extensions: [extensions[format]] }],
+      defaultPath: `${defaultName}.${extensions[format]}`
+    });
+
+    if (!filePath) return null;
+
+    switch (format) {
+      case 'html': {
+        const fullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${metadata?.title || 'Document'}</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 210mm; margin: 0 auto; padding: 20mm; line-height: 1.6; color: #1a1a1a; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid #ccc; padding: 8px 12px; }
+    th { background: #f5f5f5; font-weight: bold; }
+    img { max-width: 100%; height: auto; }
+    blockquote { border-left: 3px solid #ccc; padding-left: 1em; color: #555; font-style: italic; }
+    pre { background: #1a1a1a; color: #00ff00; padding: 12px; border-radius: 4px; overflow-x: auto; }
+    code { background: #f0f0f0; padding: 2px 4px; border-radius: 2px; }
+  </style>
+</head>
+<body>${htmlContent}</body>
+</html>`;
+        await writeTextFile(filePath, fullHtml);
+        break;
+      }
+      case 'markdown': {
+        // Simple HTML → Markdown conversion
+        let md = htmlContent;
+        md = md.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n');
+        md = md.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n');
+        md = md.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n');
+        md = md.replace(/<h4[^>]*>(.*?)<\/h4>/gi, '#### $1\n\n');
+        md = md.replace(/<h5[^>]*>(.*?)<\/h5>/gi, '##### $1\n\n');
+        md = md.replace(/<h6[^>]*>(.*?)<\/h6>/gi, '###### $1\n\n');
+        md = md.replace(/<strong>(.*?)<\/strong>/gi, '**$1**');
+        md = md.replace(/<b>(.*?)<\/b>/gi, '**$1**');
+        md = md.replace(/<em>(.*?)<\/em>/gi, '*$1*');
+        md = md.replace(/<i>(.*?)<\/i>/gi, '*$1*');
+        md = md.replace(/<u>(.*?)<\/u>/gi, '$1');
+        md = md.replace(/<s>(.*?)<\/s>/gi, '~~$1~~');
+        md = md.replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)');
+        md = md.replace(/<img[^>]*src="([^"]*)"[^>]*\/?>/gi, '![]($1)');
+        md = md.replace(/<br\s*\/?>/gi, '\n');
+        md = md.replace(/<hr\s*\/?>/gi, '\n---\n\n');
+        md = md.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n');
+        md = md.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n');
+        md = md.replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gis, '> $1\n\n');
+        md = md.replace(/<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gis, '```\n$1\n```\n\n');
+        md = md.replace(/<code>(.*?)<\/code>/gi, '`$1`');
+        md = md.replace(/<[^>]*>/g, '');
+        md = md.replace(/\n{3,}/g, '\n\n');
+        await writeTextFile(filePath, md.trim());
+        break;
+      }
+      case 'docx': {
+        const docxBuffer = await docxService.exportToDocx(htmlContent, {
+          title: metadata?.title || '',
+          author: metadata?.author || '',
+          company: metadata?.company || '',
+          date: metadata?.date || '',
+        });
+        await docxService.writeDocxFile(filePath, docxBuffer);
+        break;
+      }
+      case 'pdf': {
+        // For PDF in DOCX mode, use print-based approach through HTML
+        await invoke('generate_report_pdf', {
+          templateJson: JSON.stringify({
+            metadata: {
+              title: metadata?.title || 'Document',
+              author: metadata?.author || '',
+              company: metadata?.company || '',
+              date: metadata?.date || '',
+            },
+            components: [{ type: 'text', content: htmlContent, config: {} }],
+          }),
+          outputPath: filePath,
+        });
+        break;
+      }
+    }
+
+    return filePath;
   }
 
   // Get print-ready HTML for preview

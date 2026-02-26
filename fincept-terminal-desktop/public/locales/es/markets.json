@@ -13,5 +13,8 @@
   "refresh": "ACTUALIZAR",
   "auto": "AUTO",
   "on": "ON",
-  "off": "OFF"
+  "off": "OFF",
+  "loading": {
+    "title": "[ES] Initializing..."
+  }
 }

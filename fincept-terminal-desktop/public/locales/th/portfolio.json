@@ -12,9 +12,111 @@
     "quantity": "จำนวน",
     "price": "ราคา",
     "add": "เพิ่ม",
-    "sell": "ขาย"
+    "sell": "ขาย",
+    "confirmDelete": "[TH] CONFIRM DELETE",
+    "deleteTransactionWarning": "[TH] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[TH] DELETE",
+    "editTransaction": "[TH] EDIT TRANSACTION",
+    "transactionDate": "[TH] TRANSACTION DATE",
+    "notes": "[TH] NOTES",
+    "notesPlaceholder": "[TH] Optional notes...",
+    "totalValue": "[TH] TOTAL VALUE",
+    "save": "[TH] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[TH] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[TH] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[TH] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[TH] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[TH] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[TH] FINCEPT",
+    "portfolioTerminal": "[TH] PORTFOLIO TERMINAL",
+    "live": "[TH] LIVE",
+    "pos": "[TH] POS",
+    "ins": "[TH] INS",
+    "nav": "[TH] NAV",
+    "pnl": "[TH] P&L",
+    "day": "[TH] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[TH] TOTAL VALUE",
+    "unrealizedPnl": "[TH] UNREALIZED P&L",
+    "dayChange": "[TH] DAY CHANGE",
+    "costBasis": "[TH] COST BASIS",
+    "fifo": "[TH] FIFO",
+    "positions": "[TH] POSITIONS",
+    "concTop3": "[TH] CONC. TOP3",
+    "weight": "[TH] WEIGHT",
+    "sharpe": "[TH] SHARPE",
+    "annualized": "[TH] ANNUALIZED",
+    "beta": "[TH] BETA",
+    "vsSpy": "[TH] VS SPY",
+    "volatility": "[TH] VOLATILITY",
+    "ann30d": "[TH] 30D ANN.",
+    "maxDrawdown": "[TH] MAX DRAWDOWN",
+    "sinceIncep": "[TH] SINCE INCEP.",
+    "riskScore": "[TH] RISK SCORE",
+    "composite": "[TH] COMPOSITE",
+    "var95": "[TH] VAR (95%)",
+    "oneDay": "[TH] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[TH] SECTOR ALLOCATION",
+    "sectors": "[TH] sectors",
+    "correlation": "[TH] CORRELATION",
+    "dayChangeProxy": "[TH] (day change proxy)",
+    "needTwoHoldings": "[TH] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[TH] POSITIONS BLOTTER",
+    "instruments": "[TH] instruments"
+  },
+  "chart": {
+    "performance": "[TH] PERFORMANCE",
+    "portfolio": "[TH] PORTFOLIO",
+    "totalReturn": "[TH] TOTAL RETURN",
+    "historyMessage": "[TH] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[TH] ORDER ENTRY",
+    "price": "[TH] PRICE",
+    "qtyHeld": "[TH] QTY HELD",
+    "mktVal": "[TH] MKT VAL",
+    "clickToBuyMore": "[TH] Click to buy more",
+    "clickToSell": "[TH] Click to sell",
+    "clickToBuy": "[TH] Click to buy an asset",
+    "clickToSellAsset": "[TH] Click to sell an asset",
+    "openBuyOrder": "[TH] OPEN BUY ORDER",
+    "openSellOrder": "[TH] OPEN SELL ORDER",
+    "ordersRecorded": "[TH] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[TH] HOLDINGS",
+    "noHoldings": "[TH] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[TH] RISK SCORE",
+    "low": "[TH] LOW",
+    "high": "[TH] HIGH",
+    "topMovers": "[TH] TOP MOVERS",
+    "quickStats": "[TH] QUICK STATS",
+    "concTop3": "[TH] CONC. TOP3",
+    "volatility": "[TH] VOLATILITY",
+    "newPortfolio": "[TH] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[TH] SELECT PORTFOLIO",
+    "searchPortfolios": "[TH] Search portfolios...",
+    "newPortfolio": "[TH] NEW PORTFOLIO",
+    "nav": "[TH] NAV",
+    "pnl": "[TH] P&L",
+    "day": "[TH] DAY",
+    "pos": "[TH] POS",
+    "wl": "[TH] W/L"
+  },
+  "actions": {
+    "buy": "[TH] BUY",
+    "sell": "[TH] SELL"
   }
 }

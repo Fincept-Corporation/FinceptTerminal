@@ -84,21 +84,24 @@ export const sortStocks = <T extends { symbol: string; quote: any }>(
       case 'TICKER':
         compareValue = a.symbol.localeCompare(b.symbol);
         break;
-      case 'CHANGE':
+      case 'CHANGE': {
         const changeA = a.quote?.change_percent || 0;
         const changeB = b.quote?.change_percent || 0;
         compareValue = changeB - changeA;
         break;
-      case 'VOLUME':
+      }
+      case 'VOLUME': {
         const volA = a.quote?.volume || 0;
         const volB = b.quote?.volume || 0;
         compareValue = volB - volA;
         break;
-      case 'PRICE':
+      }
+      case 'PRICE': {
         const priceA = a.quote?.price || 0;
         const priceB = b.quote?.price || 0;
         compareValue = priceB - priceA;
         break;
+      }
     }
 
     return ascending ? -compareValue : compareValue;

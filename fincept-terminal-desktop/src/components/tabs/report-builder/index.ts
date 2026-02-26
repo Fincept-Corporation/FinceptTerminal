@@ -19,6 +19,11 @@ export * from './AdditionalComponents';
 export * from './CollaborationFeatures';
 export * from './ProductivityFeatures';
 
+// DOCX Editor components
+export { DocxEditorToolbar } from './DocxEditorToolbar';
+export { DocxEditorCanvas } from './DocxEditorCanvas';
+export { DocxPropertiesPanel } from './DocxPropertiesPanel';
+
 // Hooks
 export {
   useReportTemplate,
@@ -27,6 +32,7 @@ export {
   useBrandKit,
   useImageUpload,
 } from './hooks';
+export { useDocxEditor } from './useDocxEditor';
 
 // Types
 export * from './types';

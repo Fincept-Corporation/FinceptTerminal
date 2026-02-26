@@ -13,5 +13,8 @@
   "refresh": "ATUALIZAR",
   "auto": "AUTO",
   "on": "ON",
-  "off": "OFF"
+  "off": "OFF",
+  "loading": {
+    "title": "[PT] Initializing..."
+  }
 }

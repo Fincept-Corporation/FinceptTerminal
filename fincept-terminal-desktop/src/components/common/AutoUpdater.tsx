@@ -110,11 +110,12 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
             console.log(`[AutoUpdater Component] Download started - Total size: ${totalBytes} bytes`);
             setDownloadProgress(0);
             break;
-          case 'Progress':
+          case 'Progress': {
             downloadedBytes += event.data.chunkLength;
             const progress = totalBytes > 0 ? (downloadedBytes / totalBytes) * 100 : 0;
             setDownloadProgress(progress);
             break;
+          }
           case 'Finished':
             console.log('[AutoUpdater Component] Download finished, installing...');
             setDownloadProgress(100);

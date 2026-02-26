@@ -463,7 +463,7 @@ export class GrowwAdapter extends BaseStockBrokerAdapter {
     }
 
     // Determine actual action based on position
-    let actualSide = params.side;
+    let actualSide = params.side; // eslint-disable-line prefer-const
     let actualQuantity = params.quantity;
 
     if (params.side === 'BUY') {

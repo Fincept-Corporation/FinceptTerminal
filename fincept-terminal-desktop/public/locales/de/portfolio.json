@@ -12,9 +12,111 @@
     "quantity": "MENGE",
     "price": "PREIS",
     "add": "HINZUFÜGEN",
-    "sell": "VERKAUFEN"
+    "sell": "VERKAUFEN",
+    "confirmDelete": "[DE] CONFIRM DELETE",
+    "deleteTransactionWarning": "[DE] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[DE] DELETE",
+    "editTransaction": "[DE] EDIT TRANSACTION",
+    "transactionDate": "[DE] TRANSACTION DATE",
+    "notes": "[DE] NOTES",
+    "notesPlaceholder": "[DE] Optional notes...",
+    "totalValue": "[DE] TOTAL VALUE",
+    "save": "[DE] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[DE] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[DE] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[DE] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[DE] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[DE] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[DE] FINCEPT",
+    "portfolioTerminal": "[DE] PORTFOLIO TERMINAL",
+    "live": "[DE] LIVE",
+    "pos": "[DE] POS",
+    "ins": "[DE] INS",
+    "nav": "[DE] NAV",
+    "pnl": "[DE] P&L",
+    "day": "[DE] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[DE] TOTAL VALUE",
+    "unrealizedPnl": "[DE] UNREALIZED P&L",
+    "dayChange": "[DE] DAY CHANGE",
+    "costBasis": "[DE] COST BASIS",
+    "fifo": "[DE] FIFO",
+    "positions": "[DE] POSITIONS",
+    "concTop3": "[DE] CONC. TOP3",
+    "weight": "[DE] WEIGHT",
+    "sharpe": "[DE] SHARPE",
+    "annualized": "[DE] ANNUALIZED",
+    "beta": "[DE] BETA",
+    "vsSpy": "[DE] VS SPY",
+    "volatility": "[DE] VOLATILITY",
+    "ann30d": "[DE] 30D ANN.",
+    "maxDrawdown": "[DE] MAX DRAWDOWN",
+    "sinceIncep": "[DE] SINCE INCEP.",
+    "riskScore": "[DE] RISK SCORE",
+    "composite": "[DE] COMPOSITE",
+    "var95": "[DE] VAR (95%)",
+    "oneDay": "[DE] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[DE] SECTOR ALLOCATION",
+    "sectors": "[DE] sectors",
+    "correlation": "[DE] CORRELATION",
+    "dayChangeProxy": "[DE] (day change proxy)",
+    "needTwoHoldings": "[DE] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[DE] POSITIONS BLOTTER",
+    "instruments": "[DE] instruments"
+  },
+  "chart": {
+    "performance": "[DE] PERFORMANCE",
+    "portfolio": "[DE] PORTFOLIO",
+    "totalReturn": "[DE] TOTAL RETURN",
+    "historyMessage": "[DE] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[DE] ORDER ENTRY",
+    "price": "[DE] PRICE",
+    "qtyHeld": "[DE] QTY HELD",
+    "mktVal": "[DE] MKT VAL",
+    "clickToBuyMore": "[DE] Click to buy more",
+    "clickToSell": "[DE] Click to sell",
+    "clickToBuy": "[DE] Click to buy an asset",
+    "clickToSellAsset": "[DE] Click to sell an asset",
+    "openBuyOrder": "[DE] OPEN BUY ORDER",
+    "openSellOrder": "[DE] OPEN SELL ORDER",
+    "ordersRecorded": "[DE] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[DE] HOLDINGS",
+    "noHoldings": "[DE] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[DE] RISK SCORE",
+    "low": "[DE] LOW",
+    "high": "[DE] HIGH",
+    "topMovers": "[DE] TOP MOVERS",
+    "quickStats": "[DE] QUICK STATS",
+    "concTop3": "[DE] CONC. TOP3",
+    "volatility": "[DE] VOLATILITY",
+    "newPortfolio": "[DE] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[DE] SELECT PORTFOLIO",
+    "searchPortfolios": "[DE] Search portfolios...",
+    "newPortfolio": "[DE] NEW PORTFOLIO",
+    "nav": "[DE] NAV",
+    "pnl": "[DE] P&L",
+    "day": "[DE] DAY",
+    "pos": "[DE] POS",
+    "wl": "[DE] W/L"
+  },
+  "actions": {
+    "buy": "[DE] BUY",
+    "sell": "[DE] SELL"
   }
 }

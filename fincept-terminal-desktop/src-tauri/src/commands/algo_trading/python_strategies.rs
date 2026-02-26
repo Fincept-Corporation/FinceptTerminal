@@ -4,7 +4,7 @@ use crate::database::pool::get_db;
 use serde_json::json;
 use std::path::PathBuf;
 
-use super::helpers::get_strategies_dir;
+use super::helpers::{get_strategies_dir, get_algo_scripts_dir};
 
 /// Parse the _registry.py file and extract strategy metadata
 fn parse_strategy_registry(registry_path: &PathBuf) -> Result<Vec<serde_json::Value>, String> {
@@ -408,7 +408,7 @@ pub async fn validate_python_syntax(code: String) -> Result<String, String> {
     }
 }
 
-/// Run a Python backtest for a strategy
+/// Run a Python backtest for a strategy using python_backtest_engine.py
 #[tauri::command]
 pub async fn run_python_backtest(
     app: tauri::AppHandle,
@@ -421,71 +421,67 @@ pub async fn run_python_backtest(
 ) -> Result<String, String> {
     use std::process::Command;
 
-    let strategies_dir = get_strategies_dir(&app)?;
-    let registry_path = strategies_dir.join("_registry.py");
+    // Find the backtest engine script in algo_trading dir
+    let algo_dir = get_algo_scripts_dir(&app)?;
+    let engine_path = algo_dir.join("python_backtest_engine.py");
 
-    if !registry_path.exists() {
+    if !engine_path.exists() {
         return Ok(json!({
             "success": false,
-            "error": "Strategy registry not found"
+            "error": format!("Backtest engine not found at: {}", engine_path.display())
         }).to_string());
     }
 
-    let strategies = parse_strategy_registry(&registry_path)?;
-    let strategy = strategies.iter().find(|s| {
-        s.get("id").and_then(|i| i.as_str()) == Some(&strategy_id)
-    });
+    // Run the backtest engine with proper CLI args
+    let mut cmd = Command::new("python");
+    cmd.arg(&engine_path)
+        .arg("--strategy-id").arg(&strategy_id)
+        .arg("--symbols").arg(&symbol)
+        .arg("--start-date").arg(&start_date)
+        .arg("--end-date").arg(&end_date)
+        .arg("--initial-cash").arg(initial_capital.to_string())
+        .arg("--parameters").arg(params.unwrap_or_else(|| "{}".to_string()));
 
-    match strategy {
-        Some(s) => {
-            let path = s.get("path").and_then(|p| p.as_str()).unwrap_or("");
-            let file_path = strategies_dir.join(path);
+    // Set working directory to the scripts dir for imports
+    if let Some(scripts_dir) = algo_dir.parent() {
+        cmd.current_dir(scripts_dir);
+    }
 
-            if !file_path.exists() {
-                return Ok(json!({
-                    "success": false,
-                    "error": "Strategy file not found"
-                }).to_string());
-            }
+    match cmd.output() {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
 
-            // Run the Python backtest script
-            let output = Command::new("python")
-                .arg(file_path)
-                .arg("--symbol")
-                .arg(&symbol)
-                .arg("--start")
-                .arg(&start_date)
-                .arg("--end")
-                .arg(&end_date)
-                .arg("--capital")
-                .arg(initial_capital.to_string())
-                .arg("--params")
-                .arg(params.unwrap_or_else(|| "{}".to_string()))
-                .output();
-
-            match output {
-                Ok(out) => {
-                    if out.status.success() {
-                        let stdout = String::from_utf8_lossy(&out.stdout);
-                        Ok(json!({
-                            "success": true,
-                            "output": stdout.to_string()
-                        }).to_string())
-                    } else {
-                        let stderr = String::from_utf8_lossy(&out.stderr);
+            // The engine outputs JSON to stdout; try to return it directly
+            if !stdout.trim().is_empty() {
+                // Validate it's proper JSON before returning
+                match serde_json::from_str::<serde_json::Value>(&stdout) {
+                    Ok(_) => Ok(stdout),
+                    Err(_) => {
+                        // stdout is not valid JSON
                         Ok(json!({
                             "success": false,
-                            "error": stderr.to_string()
+                            "error": format!("Backtest produced invalid JSON output"),
+                            "debug": [stdout.chars().take(2000).collect::<String>(), stderr]
                         }).to_string())
                     }
                 }
-                Err(e) => Ok(json!({
+            } else if !stderr.trim().is_empty() {
+                Ok(json!({
                     "success": false,
-                    "error": format!("Failed to run backtest: {}", e)
-                }).to_string()),
+                    "error": stderr
+                }).to_string())
+            } else {
+                Ok(json!({
+                    "success": false,
+                    "error": "Backtest produced no output"
+                }).to_string())
             }
         }
-        None => Ok(json!({ "success": false, "error": "Strategy not found" }).to_string()),
+        Err(e) => Ok(json!({
+            "success": false,
+            "error": format!("Failed to run backtest: {}", e)
+        }).to_string()),
     }
 }
 

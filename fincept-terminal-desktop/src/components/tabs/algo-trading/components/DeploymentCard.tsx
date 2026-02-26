@@ -8,6 +8,7 @@ import type { AlgoDeployment } from '../types';
 import { stopAlgoDeployment, deleteAlgoDeployment } from '../services/algoTradingService';
 import TradeHistoryTable from './TradeHistoryTable';
 import { F } from '../constants/theme';
+import { S } from '../constants/styles';
 
 const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
   running: { color: F.GREEN, bg: `${F.GREEN}15`, label: 'RUNNING' },
@@ -113,68 +114,66 @@ const DeploymentCard: React.FC<DeploymentCardProps> = ({ deployment, onStopped }
   const providerColor = isCryptoBroker ? F.CYAN : F.PURPLE;
 
   return (
-    <div style={{
-      backgroundColor: F.PANEL_BG,
-      border: `1px solid ${F.BORDER}`,
-      borderRadius: '2px',
-      overflow: 'hidden',
-      transition: 'border-color 0.2s',
-    }}>
+    <div
+      className="rounded overflow-hidden transition-colors duration-200"
+      style={{ backgroundColor: F.PANEL_BG, border: `1px solid ${F.BORDER}` }}
+    >
       {/* ─── TOP ROW: Symbol, Status, Name ─── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '10px',
-        padding: '10px 14px',
-        backgroundColor: F.HEADER_BG,
-        borderBottom: `1px solid ${F.BORDER}`,
-        borderLeft: `3px solid ${sc.color}`,
-      }}>
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{
+          backgroundColor: F.HEADER_BG,
+          borderBottom: `1px solid ${F.BORDER}`,
+          borderLeft: `3px solid ${sc.color}`,
+        }}
+      >
         {/* Status Badge */}
-        <span style={{
-          padding: '3px 8px', borderRadius: '2px',
-          fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px',
-          color: sc.color, backgroundColor: sc.bg,
-        }}>
+        <span
+          className={S.badge}
+          style={{ color: sc.color, backgroundColor: sc.bg }}
+        >
           {sc.label}
         </span>
 
         {/* Symbol */}
-        <span style={{ fontSize: '11px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
+        <span className="text-[13px] font-bold tracking-wide" style={{ color: F.WHITE }}>
           {deployment.symbol}
         </span>
 
         {/* Strategy name */}
-        <span style={{ fontSize: '9px', color: F.MUTED }}>
+        <span className="text-[10px]" style={{ color: F.MUTED }}>
           {deployment.strategy_name || deployment.strategy_id}
         </span>
 
         {/* Tags */}
-        <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+        <div className="flex gap-1.5 ml-auto">
           {/* Provider / Broker Badge */}
-          <span style={{
-            padding: '2px 6px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-            backgroundColor: `${providerColor}15`, color: providerColor,
-            display: 'flex', alignItems: 'center', gap: '3px',
-          }}>
-            <Wifi size={7} />
+          <span
+            className={S.badge}
+            style={{ backgroundColor: `${providerColor}15`, color: providerColor }}
+          >
+            <Wifi size={8} />
             {providerLabel}
           </span>
-          <span style={{
-            padding: '2px 6px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-            backgroundColor: deployment.mode === 'live' ? `${F.RED}15` : `${F.GREEN}15`,
-            color: deployment.mode === 'live' ? F.RED : F.GREEN,
-          }}>
+          <span
+            className={S.badge}
+            style={{
+              backgroundColor: deployment.mode === 'live' ? `${F.RED}15` : `${F.GREEN}15`,
+              color: deployment.mode === 'live' ? F.RED : F.GREEN,
+            }}
+          >
             {deployment.mode.toUpperCase()}
           </span>
-          <span style={{
-            padding: '2px 6px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-            backgroundColor: `${F.CYAN}15`, color: F.CYAN,
-          }}>
+          <span
+            className={S.badge}
+            style={{ backgroundColor: `${F.CYAN}15`, color: F.CYAN }}
+          >
             {deployment.timeframe}
           </span>
-          <span style={{
-            padding: '2px 6px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-            backgroundColor: `${F.BLUE}15`, color: F.BLUE,
-          }}>
+          <span
+            className={S.badge}
+            style={{ backgroundColor: `${F.BLUE}15`, color: F.BLUE }}
+          >
             QTY: {deployment.quantity}
           </span>
         </div>
@@ -182,51 +181,46 @@ const DeploymentCard: React.FC<DeploymentCardProps> = ({ deployment, onStopped }
 
       {/* ─── LIVE PRICE BAR ─── */}
       {deployment.status === 'running' && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '12px',
-          padding: '8px 14px',
-          borderBottom: `1px solid ${F.BORDER}`,
-          backgroundColor: livePrice
-            ? (priceFlash === 'up' ? `${F.GREEN}12` : priceFlash === 'down' ? `${F.RED}12` : `${F.DARK_BG}`)
-            : F.DARK_BG,
-          transition: 'background-color 0.3s',
-        }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '5px',
-            fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px',
-          }}>
-            <Zap size={8} color={livePrice ? F.GREEN : F.MUTED} />
+        <div
+          className="flex items-center gap-3 px-4 py-2.5 transition-colors duration-300"
+          style={{
+            borderBottom: `1px solid ${F.BORDER}`,
+            backgroundColor: livePrice
+              ? (priceFlash === 'up' ? `${F.GREEN}12` : priceFlash === 'down' ? `${F.RED}12` : F.DARK_BG)
+              : F.DARK_BG,
+          }}
+        >
+          <div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide" style={{ color: F.MUTED }}>
+            <Zap size={10} style={{ color: livePrice ? F.GREEN : F.MUTED }} />
             LIVE PRICE
           </div>
           {livePrice ? (
             <>
-              <span style={{
-                fontSize: '16px', fontWeight: 700,
-                color: priceFlash === 'up' ? F.GREEN : priceFlash === 'down' ? F.RED : F.WHITE,
-                transition: 'color 0.3s',
-                fontVariantNumeric: 'tabular-nums',
-              }}>
+              <span
+                className="text-[20px] font-bold transition-colors duration-300"
+                style={{
+                  color: priceFlash === 'up' ? F.GREEN : priceFlash === 'down' ? F.RED : F.WHITE,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
                 {livePrice.price.toFixed(2)}
               </span>
               {livePrice.changePct !== null && (
-                <span style={{
-                  fontSize: '10px', fontWeight: 700,
+                <span className="flex items-center gap-1 text-[11px] font-bold" style={{
                   color: (livePrice.changePct ?? 0) >= 0 ? F.GREEN : F.RED,
-                  display: 'flex', alignItems: 'center', gap: '2px',
                 }}>
-                  {(livePrice.changePct ?? 0) >= 0 ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+                  {(livePrice.changePct ?? 0) >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                   {(livePrice.changePct ?? 0) >= 0 ? '+' : ''}{(livePrice.changePct ?? 0).toFixed(2)}%
                 </span>
               )}
               {livePrice.change !== null && (
-                <span style={{
-                  fontSize: '9px', fontWeight: 700,
+                <span className="text-[10px] font-bold" style={{
                   color: (livePrice.change ?? 0) >= 0 ? F.GREEN : F.RED,
                 }}>
                   ({(livePrice.change ?? 0) >= 0 ? '+' : ''}{(livePrice.change ?? 0).toFixed(2)})
                 </span>
               )}
-              <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto', fontSize: '8px', color: F.MUTED }}>
+              <div className="flex gap-3 ml-auto text-[9px]" style={{ color: F.MUTED }}>
                 {livePrice.high !== null && (
                   <span>H: <span style={{ color: F.GREEN }}>{(livePrice.high ?? 0).toFixed(2)}</span></span>
                 )}
@@ -236,14 +230,14 @@ const DeploymentCard: React.FC<DeploymentCardProps> = ({ deployment, onStopped }
                 {livePrice.volume !== null && livePrice.volume > 0 && (
                   <span>V: <span style={{ color: F.CYAN }}>{formatVolume(livePrice.volume)}</span></span>
                 )}
-                <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                  <Clock size={7} />
+                <span className="flex items-center gap-1">
+                  <Clock size={8} />
                   {new Date(livePrice.ts).toLocaleTimeString()}
                 </span>
               </div>
             </>
           ) : (
-            <span style={{ fontSize: '10px', color: F.MUTED, fontStyle: 'italic' }}>
+            <span className="text-[11px] italic" style={{ color: F.MUTED }}>
               Waiting for ticks...
             </span>
           )}
@@ -251,33 +245,27 @@ const DeploymentCard: React.FC<DeploymentCardProps> = ({ deployment, onStopped }
       )}
 
       {/* ─── METRICS ROW ─── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(5, 1fr)',
-        borderBottom: `1px solid ${F.BORDER}`,
-      }}>
+      <div
+        className="grid grid-cols-5"
+        style={{ borderBottom: `1px solid ${F.BORDER}` }}
+      >
         {/* P&L */}
-        <div style={{
-          padding: '10px 14px',
-          borderRight: `1px solid ${F.BORDER}`,
-          backgroundColor: `${isPositive ? F.GREEN : F.RED}06`,
-        }}>
-          <div style={{
-            fontSize: '8px', fontWeight: 700, color: F.MUTED,
-            letterSpacing: '0.5px', marginBottom: '4px',
-            display: 'flex', alignItems: 'center', gap: '3px',
-          }}>
-            {isPositive ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
+        <div
+          className="p-4"
+          style={{
+            borderRight: `1px solid ${F.BORDER}`,
+            backgroundColor: `${isPositive ? F.GREEN : F.RED}06`,
+          }}
+        >
+          <div className={S.metricLabel}>
+            {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
             TOTAL P&L
           </div>
-          <div style={{
-            fontSize: '14px', fontWeight: 700,
-            color: isPositive ? F.GREEN : F.RED,
-          }}>
+          <div className={S.metricValue} style={{ color: isPositive ? F.GREEN : F.RED }}>
             {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)}
           </div>
           {m.unrealized_pnl !== 0 && (
-            <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>
+            <div className="text-[9px] mt-1" style={{ color: F.MUTED }}>
               Unrealized: <span style={{ color: m.unrealized_pnl >= 0 ? F.GREEN : F.RED }}>
                 {m.unrealized_pnl >= 0 ? '+' : ''}{m.unrealized_pnl.toFixed(2)}
               </span>
@@ -286,104 +274,89 @@ const DeploymentCard: React.FC<DeploymentCardProps> = ({ deployment, onStopped }
         </div>
 
         {/* Trades */}
-        <div style={{ padding: '10px 14px', borderRight: `1px solid ${F.BORDER}` }}>
-          <div style={{
-            fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px',
-            display: 'flex', alignItems: 'center', gap: '3px',
-          }}>
-            <Activity size={8} />
+        <div className="p-4" style={{ borderRight: `1px solid ${F.BORDER}` }}>
+          <div className={S.metricLabel}>
+            <Activity size={10} />
             TRADES
           </div>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: F.CYAN }}>
+          <div className={S.metricValue} style={{ color: F.CYAN }}>
             {m.total_trades}
           </div>
         </div>
 
         {/* Win Rate */}
-        <div style={{ padding: '10px 14px', borderRight: `1px solid ${F.BORDER}` }}>
-          <div style={{
-            fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px',
-            display: 'flex', alignItems: 'center', gap: '3px',
-          }}>
-            <Target size={8} />
+        <div className="p-4" style={{ borderRight: `1px solid ${F.BORDER}` }}>
+          <div className={S.metricLabel}>
+            <Target size={10} />
             WIN RATE
           </div>
-          <div style={{
-            fontSize: '14px', fontWeight: 700,
-            color: m.win_rate >= 50 ? F.GREEN : F.YELLOW,
-          }}>
+          <div className={S.metricValue} style={{ color: m.win_rate >= 50 ? F.GREEN : F.YELLOW }}>
             {m.win_rate.toFixed(1)}%
           </div>
         </div>
 
         {/* Max Drawdown */}
-        <div style={{ padding: '10px 14px', borderRight: `1px solid ${F.BORDER}` }}>
-          <div style={{
-            fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px',
-            display: 'flex', alignItems: 'center', gap: '3px',
-          }}>
-            <TrendingDown size={8} />
+        <div className="p-4" style={{ borderRight: `1px solid ${F.BORDER}` }}>
+          <div className={S.metricLabel}>
+            <TrendingDown size={10} />
             MAX DD
           </div>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: F.RED }}>
+          <div className={S.metricValue} style={{ color: F.RED }}>
             {m.max_drawdown.toFixed(2)}
           </div>
         </div>
 
         {/* Position */}
-        <div style={{ padding: '10px 14px' }}>
-          <div style={{
-            fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px',
-            display: 'flex', alignItems: 'center', gap: '3px',
-          }}>
-            <BarChart3 size={8} />
+        <div className="p-4">
+          <div className={S.metricLabel}>
+            <BarChart3 size={10} />
             POSITION
           </div>
           {m.current_position_qty > 0 ? (
-            <div style={{ fontSize: '10px', fontWeight: 700, color: F.BLUE }}>
-              {m.current_position_side} {m.current_position_qty}
-              <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '1px' }}>
+            <div>
+              <div className="text-[11px] font-bold" style={{ color: F.BLUE }}>
+                {m.current_position_side} {m.current_position_qty}
+              </div>
+              <div className="text-[9px] mt-0.5" style={{ color: F.MUTED }}>
                 @ {m.current_position_entry.toFixed(2)}
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: '10px', color: F.MUTED }}>FLAT</div>
+            <div className="text-[11px]" style={{ color: F.MUTED }}>FLAT</div>
           )}
         </div>
       </div>
 
       {/* ─── ACTIONS ROW ─── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 14px',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '8px', color: F.MUTED }}>
+      <div className="flex items-center justify-between px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[9px]" style={{ color: F.MUTED }}>
             ID: <span style={{ color: F.GRAY }}>{deployment.id.substring(0, 12)}</span>
           </span>
           {m.metrics_updated && (
-            <span style={{ fontSize: '8px', color: F.MUTED, display: 'flex', alignItems: 'center', gap: '3px' }}>
-              <Clock size={8} />
+            <span className="flex items-center gap-1 text-[9px]" style={{ color: F.MUTED }}>
+              <Clock size={9} />
               {new Date(m.metrics_updated).toLocaleTimeString()}
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '4px' }}>
+        <div className="flex gap-1.5">
           {deployment.status === 'running' && (
             <button
               onClick={handleStop}
               disabled={stopping}
+              className={S.btnDanger}
               style={{
-                padding: '5px 10px', backgroundColor: `${F.RED}15`, color: F.RED,
-                border: `1px solid ${F.RED}30`, borderRadius: '2px', fontSize: '8px', fontWeight: 700,
+                backgroundColor: `${F.RED}15`,
+                borderColor: `${F.RED}30`,
+                color: F.RED,
+                opacity: stopping ? 0.5 : 1,
                 cursor: stopping ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: '4px',
-                opacity: stopping ? 0.5 : 1, transition: 'all 0.2s', letterSpacing: '0.5px',
               }}
               onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${F.RED}25`; }}
               onMouseLeave={e => { e.currentTarget.style.backgroundColor = `${F.RED}15`; }}
             >
-              <Square size={9} />
+              <Square size={10} />
               {stopping ? 'STOPPING...' : 'STOP'}
             </button>
           )}
@@ -391,28 +364,23 @@ const DeploymentCard: React.FC<DeploymentCardProps> = ({ deployment, onStopped }
             <button
               onClick={handleDelete}
               disabled={deleting}
+              className={S.btnOutline}
               style={{
-                padding: '5px 10px', backgroundColor: 'transparent', color: F.MUTED,
-                border: `1px solid ${F.BORDER}`, borderRadius: '2px', fontSize: '8px', fontWeight: 700,
+                opacity: deleting ? 0.5 : 1,
                 cursor: deleting ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: '4px',
-                opacity: deleting ? 0.5 : 1, transition: 'all 0.2s', letterSpacing: '0.5px',
               }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = F.RED; e.currentTarget.style.color = F.RED; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = F.BORDER; e.currentTarget.style.color = F.MUTED; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = F.BORDER; e.currentTarget.style.color = F.GRAY; }}
             >
-              <Trash2 size={9} />
+              <Trash2 size={10} />
               {deleting ? 'DELETING...' : 'DELETE'}
             </button>
           )}
           <button
             onClick={() => setShowTrades(!showTrades)}
+            className={S.btnOutline}
             style={{
-              padding: '5px 10px', backgroundColor: 'transparent',
-              border: `1px solid ${F.BORDER}`, color: showTrades ? F.ORANGE : F.GRAY,
-              borderRadius: '2px', cursor: 'pointer', fontSize: '8px', fontWeight: 700,
-              display: 'flex', alignItems: 'center', gap: '4px',
-              transition: 'all 0.2s', letterSpacing: '0.5px',
+              color: showTrades ? F.ORANGE : F.GRAY,
               borderColor: showTrades ? F.ORANGE : F.BORDER,
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = F.ORANGE; e.currentTarget.style.color = F.WHITE; }}
@@ -421,7 +389,7 @@ const DeploymentCard: React.FC<DeploymentCardProps> = ({ deployment, onStopped }
               e.currentTarget.style.color = showTrades ? F.ORANGE : F.GRAY;
             }}
           >
-            {showTrades ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
+            {showTrades ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
             TRADES
           </button>
         </div>

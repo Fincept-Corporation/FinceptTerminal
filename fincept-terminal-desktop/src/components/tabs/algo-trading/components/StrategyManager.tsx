@@ -14,6 +14,7 @@ import {
 import DeployPanel from './DeployPanel';
 import PythonStrategyEditor from './PythonStrategyEditor';
 import { F } from '../constants/theme';
+import { S } from '../constants/styles';
 
 type StrategyType = 'all' | 'json' | 'python';
 
@@ -174,55 +175,48 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({
   const pythonCount = strategies.filter((s) => s.type === 'python').length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="flex flex-col h-full">
       {/* ─── HEADER TOOLBAR ─── */}
-      <div style={{
-        padding: '12px 16px',
-        backgroundColor: F.HEADER_BG,
-        borderBottom: `1px solid ${F.BORDER}`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Folder size={14} color={F.ORANGE} />
-          <span style={{ fontSize: '11px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
+      <div
+        className="flex items-center justify-between px-4 py-3 shrink-0"
+        style={{ backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}` }}
+      >
+        <div className="flex items-center gap-3">
+          <Folder size={16} style={{ color: F.ORANGE }} />
+          <span className="text-[12px] font-bold tracking-wide" style={{ color: F.WHITE }}>
             MY STRATEGIES
           </span>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            <span style={{
-              padding: '2px 8px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-              backgroundColor: `${F.CYAN}15`, color: F.CYAN,
-            }}>
+          <div className="flex gap-1.5">
+            <span
+              className={S.badge}
+              style={{ backgroundColor: `${F.CYAN}15`, color: F.CYAN }}
+            >
               {jsonCount} JSON
             </span>
-            <span style={{
-              padding: '2px 8px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-              backgroundColor: `${F.PURPLE}15`, color: F.PURPLE,
-            }}>
+            <span
+              className={S.badge}
+              style={{ backgroundColor: `${F.PURPLE}15`, color: F.PURPLE }}
+            >
               {pythonCount} PYTHON
             </span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        <div className="flex gap-2 items-center">
           {/* Filter Tabs */}
-          <div style={{
-            display: 'flex', gap: '0px',
-            border: `1px solid ${F.BORDER}`, borderRadius: '2px', overflow: 'hidden',
-          }}>
+          <div
+            className="flex overflow-hidden rounded"
+            style={{ border: `1px solid ${F.BORDER}` }}
+          >
             {(['all', 'json', 'python'] as StrategyType[]).map((type) => (
               <button
                 key={type}
                 onClick={() => setFilterType(type)}
+                className="px-3 py-1.5 text-[9px] font-bold tracking-wide cursor-pointer border-none transition-all duration-150"
                 style={{
-                  padding: '5px 10px',
                   backgroundColor: filterType === type ? `${F.ORANGE}20` : 'transparent',
-                  border: 'none',
                   borderRight: type !== 'python' ? `1px solid ${F.BORDER}` : 'none',
                   color: filterType === type ? F.ORANGE : F.GRAY,
-                  fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px',
-                  cursor: 'pointer', transition: 'all 0.15s',
                 }}
               >
                 {type === 'all' ? 'ALL' : type.toUpperCase()}
@@ -232,30 +226,22 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({
 
           <button
             onClick={loadStrategies}
-            style={{
-              padding: '6px', backgroundColor: 'transparent',
-              border: `1px solid ${F.BORDER}`, color: F.GRAY,
-              cursor: 'pointer', borderRadius: '2px', transition: 'all 0.2s',
-              display: 'flex', alignItems: 'center',
-            }}
+            className={S.btnGhost}
+            style={{ border: `1px solid ${F.BORDER}` }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = F.ORANGE; e.currentTarget.style.color = F.WHITE; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = F.BORDER; e.currentTarget.style.color = F.GRAY; }}
           >
-            <RefreshCw size={11} />
+            <RefreshCw size={12} />
           </button>
 
           <button
             onClick={onNew}
-            style={{
-              padding: '6px 14px', backgroundColor: F.ORANGE, color: F.DARK_BG,
-              border: 'none', borderRadius: '2px', fontSize: '9px', fontWeight: 700,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-              letterSpacing: '0.5px', transition: 'opacity 0.2s',
-            }}
+            className={S.btnPrimary}
+            style={{ backgroundColor: F.ORANGE, color: F.DARK_BG }}
             onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
             onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
           >
-            <Plus size={10} />
+            <Plus size={12} />
             NEW STRATEGY
           </button>
         </div>
@@ -288,32 +274,24 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({
       )}
 
       {/* ─── STRATEGY CARDS ─── */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+      <div className="flex-1 overflow-auto p-4">
         {loading ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', height: '200px', gap: '8px',
-          }}>
-            <RefreshCw size={18} color={F.ORANGE} style={{ animation: 'spin 1s linear infinite' }} />
-            <span style={{ fontSize: '10px', color: F.MUTED, fontWeight: 700 }}>LOADING STRATEGIES...</span>
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          <div className="flex flex-col items-center justify-center h-[200px] gap-2">
+            <RefreshCw size={20} className="animate-spin" style={{ color: F.ORANGE }} />
+            <span className="text-[11px] font-bold" style={{ color: F.MUTED }}>LOADING STRATEGIES...</span>
           </div>
         ) : filteredStrategies.length === 0 ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', height: '300px', gap: '12px',
-          }}>
-            <div style={{
-              width: '48px', height: '48px', borderRadius: '2px',
-              backgroundColor: `${F.ORANGE}10`, border: `1px solid ${F.ORANGE}20`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Rocket size={20} color={F.ORANGE} style={{ opacity: 0.6 }} />
+          <div className="flex flex-col items-center justify-center h-[300px] gap-3">
+            <div
+              className="w-12 h-12 rounded flex items-center justify-center"
+              style={{ backgroundColor: `${F.ORANGE}10`, border: `1px solid ${F.ORANGE}20` }}
+            >
+              <Rocket size={22} style={{ color: F.ORANGE, opacity: 0.6 }} />
             </div>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: F.GRAY }}>
+            <span className="text-[12px] font-bold" style={{ color: F.GRAY }}>
               {filterType === 'all' ? 'NO STRATEGIES YET' : `NO ${filterType.toUpperCase()} STRATEGIES`}
             </span>
-            <span style={{ fontSize: '9px', color: F.MUTED, maxWidth: '300px', textAlign: 'center', lineHeight: '1.5' }}>
+            <span className="text-[10px] max-w-[320px] text-center leading-relaxed" style={{ color: F.MUTED }}>
               {filterType === 'python'
                 ? 'Clone strategies from the LIBRARY tab to create Python strategies'
                 : 'Create your first strategy using the builder or write a Python strategy'}
@@ -321,27 +299,21 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({
             {filterType !== 'python' && (
               <button
                 onClick={onNew}
-                style={{
-                  marginTop: '4px', padding: '8px 16px',
-                  backgroundColor: 'transparent', border: `1px solid ${F.ORANGE}`,
-                  color: F.ORANGE, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px',
-                  borderRadius: '2px', cursor: 'pointer', transition: 'all 0.2s',
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                }}
+                className={S.btnOutline + ' mt-1'}
+                style={{ borderColor: F.ORANGE, color: F.ORANGE }}
                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${F.ORANGE}15`; }}
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
               >
-                <Plus size={10} />
+                <Plus size={11} />
                 CREATE STRATEGY
               </button>
             )}
           </div>
         ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: '10px',
-          }}>
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}
+          >
             {filteredStrategies.map((strategy) => (
               <StrategyCard
                 key={strategy.id}
@@ -363,7 +335,7 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({
       {/* Click outside to close menu */}
       {menuOpenId && (
         <div
-          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99 }}
+          className="fixed inset-0 z-[99]"
           onClick={() => setMenuOpenId(null)}
         />
       )}
@@ -391,91 +363,77 @@ const StrategyCard: React.FC<{
     <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      className="rounded overflow-hidden transition-colors duration-200"
       style={{
         backgroundColor: F.PANEL_BG,
         border: `1px solid ${isHovered ? `${F.ORANGE}40` : F.BORDER}`,
-        borderRadius: '2px',
-        overflow: 'hidden',
-        transition: 'border-color 0.2s',
       }}
     >
       {/* Card Header */}
-      <div style={{
-        padding: '10px 12px',
-        backgroundColor: F.HEADER_BG,
-        borderBottom: `1px solid ${F.BORDER}`,
-        borderLeft: `3px solid ${typeColor}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-      }}>
-        <TypeIcon size={12} color={typeColor} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: '10px', fontWeight: 700, color: F.WHITE,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
+      <div
+        className="flex items-center gap-2 px-4 py-3"
+        style={{
+          backgroundColor: F.HEADER_BG,
+          borderBottom: `1px solid ${F.BORDER}`,
+          borderLeft: `3px solid ${typeColor}`,
+        }}
+      >
+        <TypeIcon size={14} style={{ color: typeColor }} />
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-bold overflow-hidden text-ellipsis whitespace-nowrap" style={{ color: F.WHITE }}>
             {strategy.name}
           </div>
         </div>
-        <span style={{
-          padding: '2px 6px', borderRadius: '2px', fontSize: '7px', fontWeight: 700,
-          backgroundColor: `${typeColor}15`, color: typeColor, letterSpacing: '0.5px',
-        }}>
+        <span
+          className={S.badge}
+          style={{ backgroundColor: `${typeColor}15`, color: typeColor }}
+        >
           {strategy.type.toUpperCase()}
         </span>
         {/* Menu button */}
-        <div style={{ position: 'relative' }}>
+        <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); onMenuToggle(); }}
-            style={{
-              padding: '3px', backgroundColor: 'transparent', border: 'none',
-              color: F.MUTED, cursor: 'pointer', borderRadius: '2px',
-              display: 'flex', alignItems: 'center',
-            }}
+            className={S.btnGhost}
           >
-            <MoreHorizontal size={12} />
+            <MoreHorizontal size={14} />
           </button>
           {menuOpen && (
-            <div style={{
-              position: 'absolute', top: '100%', right: 0, marginTop: '4px',
-              backgroundColor: F.PANEL_BG, border: `1px solid ${F.BORDER}`,
-              borderRadius: '2px', zIndex: 100, minWidth: '120px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-            }}>
-              <button onClick={onEdit} style={{
-                width: '100%', padding: '8px 12px', backgroundColor: 'transparent',
-                border: 'none', color: F.WHITE, fontSize: '9px', fontWeight: 700,
-                textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                transition: 'background-color 0.15s',
+            <div
+              className="absolute top-full right-0 mt-1 rounded z-[100] min-w-[130px]"
+              style={{
+                backgroundColor: F.PANEL_BG,
+                border: `1px solid ${F.BORDER}`,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}
+            >
+              <button
+                onClick={onEdit}
+                className="w-full flex items-center gap-2 px-4 py-2.5 bg-transparent border-none text-[10px] font-bold text-left cursor-pointer transition-colors duration-150"
+                style={{ color: F.WHITE }}
                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = F.HOVER; }}
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
               >
-                <Edit size={10} /> EDIT
+                <Edit size={11} /> EDIT
               </button>
-              <button onClick={onDeploy} style={{
-                width: '100%', padding: '8px 12px', backgroundColor: 'transparent',
-                border: 'none', color: F.GREEN, fontSize: '9px', fontWeight: 700,
-                textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                transition: 'background-color 0.15s',
-              }}
+              <button
+                onClick={onDeploy}
+                className="w-full flex items-center gap-2 px-4 py-2.5 bg-transparent border-none text-[10px] font-bold text-left cursor-pointer transition-colors duration-150"
+                style={{ color: F.GREEN }}
                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = F.HOVER; }}
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
               >
-                <Rocket size={10} /> DEPLOY
+                <Rocket size={11} /> DEPLOY
               </button>
               <div style={{ borderTop: `1px solid ${F.BORDER}` }} />
-              <button onClick={onDelete} style={{
-                width: '100%', padding: '8px 12px', backgroundColor: 'transparent',
-                border: 'none', color: F.RED, fontSize: '9px', fontWeight: 700,
-                textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                transition: 'background-color 0.15s',
-              }}
+              <button
+                onClick={onDelete}
+                className="w-full flex items-center gap-2 px-4 py-2.5 bg-transparent border-none text-[10px] font-bold text-left cursor-pointer transition-colors duration-150"
+                style={{ color: F.RED }}
                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${F.RED}10`; }}
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
               >
-                <Trash2 size={10} /> DELETE
+                <Trash2 size={11} /> DELETE
               </button>
             </div>
           )}
@@ -483,65 +441,62 @@ const StrategyCard: React.FC<{
       </div>
 
       {/* Card Body */}
-      <div style={{ padding: '10px 12px' }}>
+      <div className={S.cardBody}>
         {/* Description */}
         {strategy.description && (
-          <div style={{
-            fontSize: '9px', color: F.MUTED, lineHeight: '1.5',
-            marginBottom: '8px', maxHeight: '28px', overflow: 'hidden',
-            textOverflow: 'ellipsis', display: '-webkit-box',
-            WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
-          }}>
+          <div
+            className="text-[10px] leading-relaxed mb-2 max-h-[32px] overflow-hidden"
+            style={{
+              color: F.MUTED,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical' as const,
+              textOverflow: 'ellipsis',
+            }}
+          >
             {strategy.description}
           </div>
         )}
 
         {/* Strategy Details */}
         {isJson ? (
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px',
-          }}>
-            <div style={{ backgroundColor: F.DARK_BG, padding: '6px 8px', borderRadius: '2px', border: `1px solid ${F.BORDER}` }}>
-              <div style={{ fontSize: '7px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '2px' }}>TIMEFRAME</div>
-              <div style={{ fontSize: '10px', fontWeight: 700, color: F.CYAN }}>{strategy.timeframe || '—'}</div>
+          <div className="grid grid-cols-4 gap-2">
+            <div className="rounded p-2" style={{ backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}` }}>
+              <div className="text-[8px] font-bold tracking-wide mb-0.5" style={{ color: F.MUTED }}>TIMEFRAME</div>
+              <div className="text-[11px] font-bold" style={{ color: F.CYAN }}>{strategy.timeframe || '—'}</div>
             </div>
-            <div style={{ backgroundColor: F.DARK_BG, padding: '6px 8px', borderRadius: '2px', border: `1px solid ${F.BORDER}` }}>
-              <div style={{ fontSize: '7px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '2px' }}>ENTRY</div>
-              <div style={{ fontSize: '10px', fontWeight: 700, color: F.GREEN, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <ArrowUpRight size={9} /> {strategy.entryConditionCount}
+            <div className="rounded p-2" style={{ backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}` }}>
+              <div className="text-[8px] font-bold tracking-wide mb-0.5" style={{ color: F.MUTED }}>ENTRY</div>
+              <div className="flex items-center gap-1 text-[11px] font-bold" style={{ color: F.GREEN }}>
+                <ArrowUpRight size={10} /> {strategy.entryConditionCount}
               </div>
             </div>
-            <div style={{ backgroundColor: F.DARK_BG, padding: '6px 8px', borderRadius: '2px', border: `1px solid ${F.BORDER}` }}>
-              <div style={{ fontSize: '7px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '2px' }}>EXIT</div>
-              <div style={{ fontSize: '10px', fontWeight: 700, color: F.RED, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <ArrowDownRight size={9} /> {strategy.exitConditionCount}
+            <div className="rounded p-2" style={{ backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}` }}>
+              <div className="text-[8px] font-bold tracking-wide mb-0.5" style={{ color: F.MUTED }}>EXIT</div>
+              <div className="flex items-center gap-1 text-[11px] font-bold" style={{ color: F.RED }}>
+                <ArrowDownRight size={10} /> {strategy.exitConditionCount}
               </div>
             </div>
-            <div style={{ backgroundColor: F.DARK_BG, padding: '6px 8px', borderRadius: '2px', border: `1px solid ${F.BORDER}` }}>
-              <div style={{ fontSize: '7px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '2px' }}>RISK</div>
-              <div style={{ fontSize: '9px', fontWeight: 700, color: F.YELLOW, display: 'flex', alignItems: 'center', gap: '2px' }}>
-                <Shield size={8} />
+            <div className="rounded p-2" style={{ backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}` }}>
+              <div className="text-[8px] font-bold tracking-wide mb-0.5" style={{ color: F.MUTED }}>RISK</div>
+              <div className="flex items-center gap-1 text-[10px] font-bold" style={{ color: F.YELLOW }}>
+                <Shield size={9} />
                 {strategy.stopLoss != null ? `${strategy.stopLoss}%` : '—'}
               </div>
             </div>
           </div>
         ) : (
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px',
-          }}>
+          <div className="grid grid-cols-2 gap-2">
             {strategy.category && (
-              <div style={{ backgroundColor: F.DARK_BG, padding: '6px 8px', borderRadius: '2px', border: `1px solid ${F.BORDER}` }}>
-                <div style={{ fontSize: '7px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '2px' }}>CATEGORY</div>
-                <div style={{ fontSize: '9px', fontWeight: 700, color: F.PURPLE }}>{strategy.category}</div>
+              <div className="rounded p-2" style={{ backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}` }}>
+                <div className="text-[8px] font-bold tracking-wide mb-0.5" style={{ color: F.MUTED }}>CATEGORY</div>
+                <div className="text-[10px] font-bold" style={{ color: F.PURPLE }}>{strategy.category}</div>
               </div>
             )}
             {strategy.baseStrategyId && (
-              <div style={{ backgroundColor: F.DARK_BG, padding: '6px 8px', borderRadius: '2px', border: `1px solid ${F.BORDER}` }}>
-                <div style={{ fontSize: '7px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '2px' }}>BASE</div>
-                <div style={{
-                  fontSize: '9px', color: F.GRAY, overflow: 'hidden',
-                  textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
+              <div className="rounded p-2" style={{ backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}` }}>
+                <div className="text-[8px] font-bold tracking-wide mb-0.5" style={{ color: F.MUTED }}>BASE</div>
+                <div className="text-[10px] overflow-hidden text-ellipsis whitespace-nowrap" style={{ color: F.GRAY }}>
                   {strategy.baseStrategyId}
                 </div>
               </div>
@@ -551,49 +506,39 @@ const StrategyCard: React.FC<{
       </div>
 
       {/* Card Footer — Action Buttons */}
-      <div style={{
-        padding: '8px 12px',
-        borderTop: `1px solid ${F.BORDER}`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div
+        className="flex items-center justify-between px-4 py-2.5"
+        style={{ borderTop: `1px solid ${F.BORDER}` }}
+      >
+        <div className="flex items-center gap-2">
           {strategy.updatedAt && (
-            <span style={{ fontSize: '8px', color: F.MUTED, display: 'flex', alignItems: 'center', gap: '3px' }}>
-              <Calendar size={8} />
+            <span className="flex items-center gap-1 text-[9px]" style={{ color: F.MUTED }}>
+              <Calendar size={9} />
               {new Date(strategy.updatedAt).toLocaleDateString()}
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '4px' }}>
+        <div className="flex gap-1.5">
           <button
             onClick={onEdit}
-            style={{
-              padding: '5px 10px', backgroundColor: 'transparent',
-              border: `1px solid ${F.BORDER}`, color: F.GRAY,
-              borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px',
-              transition: 'all 0.2s', letterSpacing: '0.5px',
-            }}
+            className={S.btnOutline}
             onMouseEnter={e => { e.currentTarget.style.borderColor = F.ORANGE; e.currentTarget.style.color = F.WHITE; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = F.BORDER; e.currentTarget.style.color = F.GRAY; }}
           >
-            <Edit size={9} /> EDIT
+            <Edit size={10} /> EDIT
           </button>
           <button
             onClick={onDeploy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-bold tracking-wide cursor-pointer transition-all duration-200"
             style={{
-              padding: '5px 10px', backgroundColor: `${F.GREEN}15`,
-              border: `1px solid ${F.GREEN}30`, color: F.GREEN,
-              borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px',
-              transition: 'all 0.2s', letterSpacing: '0.5px',
+              backgroundColor: `${F.GREEN}15`,
+              border: `1px solid ${F.GREEN}30`,
+              color: F.GREEN,
             }}
             onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${F.GREEN}25`; }}
             onMouseLeave={e => { e.currentTarget.style.backgroundColor = `${F.GREEN}15`; }}
           >
-            <Rocket size={9} /> DEPLOY
+            <Rocket size={10} /> DEPLOY
           </button>
         </div>
       </div>

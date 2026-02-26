@@ -13,5 +13,8 @@
   "refresh": "रीफ्रेश",
   "auto": "ऑटो",
   "on": "चालू",
-  "off": "बंद"
+  "off": "बंद",
+  "loading": {
+    "title": "[HI] Initializing..."
+  }
 }

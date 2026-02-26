@@ -6,43 +6,42 @@
 #
 # Strategy ID: FCT-161A4DE8
 # Category: Universe Selection
-# Description: Regression algorithm to test universe additions and removals with open positions
+# Description: Weekly rotation strategy inspired by universe selection. Buys
+#   at the start of each week if price is above 10-day SMA, exits at the end
+#   of the week. Captures weekly momentum trends.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
-### <summary>
-### Regression algorithm to test universe additions and removals with open positions
-### </summary>
-### <meta name="tag" content="regression test" />
 class WeeklyUniverseSelectionRegressionAlgorithm(QCAlgorithm):
+    """Weekly momentum rotation with SMA filter."""
 
     def initialize(self):
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
         self.set_cash(100000)
-        self.set_start_date(2013,10,1)
-        self.set_end_date(2013,10,31)
 
-        self.universe_settings.resolution = Resolution.HOUR
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-        # select IBM once a week, empty universe the other days
-        self.add_universe("my-custom-universe", lambda dt: ["IBM"] if dt.day % 7 == 0 else [])
+        self._sma = self.sma(self.symbol, 10, Resolution.DAILY)
+        self._last_week = -1
 
-    def on_data(self, slice):
-        if self.changes is None: return
+    def on_data(self, data):
+        if not self._sma.is_ready:
+            return
+        if self.symbol not in data:
+            return
 
-        # liquidate removed securities
-        for security in self.changes.removed_securities:
-            if security.invested:
-                self.log("{} Liquidate {}".format(self.time, security.symbol))
-                self.liquidate(security.symbol)
+        price = data[self.symbol].close
+        current_week = self.time.isocalendar()[1]
 
-        # we'll simply go long each security we added to the universe
-        for security in self.changes.added_securities:
-            if not security.invested:
-                self.log("{} Buy {}".format(self.time, security.symbol))
-                self.set_holdings(security.symbol, 1)
-
-        self.changes = None
-
-    def on_securities_changed(self, changes):
-        self.changes = changes
+        if current_week != self._last_week:
+            self._last_week = current_week
+            # Weekly decision: enter if price > SMA, exit otherwise
+            if price > self._sma.current.value:
+                if not self.portfolio.invested:
+                    self.set_holdings(self.symbol, 1)
+            else:
+                if self.portfolio.invested:
+                    self.liquidate()

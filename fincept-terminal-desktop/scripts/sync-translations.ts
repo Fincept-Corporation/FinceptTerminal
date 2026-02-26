@@ -17,12 +17,12 @@ const LANGUAGES = ['en', 'es', 'fr', 'de', 'zh', 'ja', 'hi', 'ar', 'pt', 'ru', '
 
 type NestedObject = { [key: string]: string | NestedObject };
 
-// Extract translation keys from code
-function extractTranslationKeysFromCode(): Map<string, Set<string>> {
+// Extract translation keys from code, including fallback values from t('key', 'fallback')
+function extractTranslationKeysFromCode(): Map<string, Map<string, string | null>> {
   const files = glob.sync(`${SRC_DIR}/**/*.{ts,tsx}`, { ignore: '**/node_modules/**' });
-  const keysMap = new Map<string, Set<string>>(); // namespace -> Set of keys
+  // namespace -> Map<key, fallback value | null>
+  const keysMap = new Map<string, Map<string, string | null>>();
 
-  // Patterns to match t() calls
   const nsPattern = /useTranslation\(['"]([\w]+)['"]\)/g;
 
   files.forEach(file => {
@@ -31,34 +31,58 @@ function extractTranslationKeysFromCode(): Map<string, Set<string>> {
     // Find default namespace from useTranslation('namespace')
     let defaultNs = 'common';
     let nsMatch: RegExpExecArray | null;
+    nsPattern.lastIndex = 0;
     while ((nsMatch = nsPattern.exec(content)) !== null) {
       defaultNs = nsMatch[1];
     }
 
-    // Extract keys with namespace prefix: t('namespace:key')
-    let match: RegExpExecArray | null;
-    const pattern2Regex = /\bt\(['"]([\w]+):([\w.]+)['"]\)/g;
-    while ((match = pattern2Regex.exec(content)) !== null) {
-      const namespace = match[1];
-      const key = match[2];
-
-      if (!keysMap.has(namespace)) {
-        keysMap.set(namespace, new Set());
+    const addKey = (ns: string, key: string, fallback: string | null) => {
+      if (!keysMap.has(ns)) keysMap.set(ns, new Map());
+      const nsMap = keysMap.get(ns)!;
+      // Only set fallback if we don't already have one for this key
+      if (!nsMap.has(key) || (nsMap.get(key) === null && fallback !== null)) {
+        nsMap.set(key, fallback);
       }
-      keysMap.get(namespace)!.add(key);
+    };
+
+    let match: RegExpExecArray | null;
+
+    // t('ns:key') or t('ns:key', 'fallback')
+    const nsKeyPattern = /\bt\(\s*['"`]([\w]+):([\w.]+)['"`](?:\s*,\s*['"`]([^'"`]*)['"`])?\s*\)/g;
+    while ((match = nsKeyPattern.exec(content)) !== null) {
+      addKey(match[1], match[2], match[3] ?? null);
     }
 
-    // Extract simple keys: t('key') - use default namespace
-    const pattern1Regex = /\bt\(['"]([\w.]+)['"]\)/g;
-    while ((match = pattern1Regex.exec(content)) !== null) {
+    // t('key') or t('key', 'fallback') — uses default namespace
+    const simpleKeyPattern = /\bt\(\s*['"`]([\w.]+)['"`](?:\s*,\s*['"`]([^'"`]*)['"`])?\s*\)/g;
+    while ((match = simpleKeyPattern.exec(content)) !== null) {
       const fullKey = match[1];
-
-      // Skip if it already has namespace (caught above)
       if (!fullKey.includes(':')) {
-        if (!keysMap.has(defaultNs)) {
-          keysMap.set(defaultNs, new Set());
+        addKey(defaultNs, fullKey, match[2] ?? null);
+      }
+    }
+
+    // Dynamic key maps: objects whose values are translation keys passed to t()
+    // e.g. const MAP: { [k: string]: string } = { 'SYM': 'widgets.indexSP500' }
+    //      then used as t(MAP[symbol])
+    // Strategy: find any string literal value matching `<declaredNs>.<word>` inside
+    // a const/variable block that also contains t( somewhere in the same file.
+    // Only scan files that actually call t() with a dynamic variable: t(VARNAME[...])
+    const dynamicTCallPattern = /\bt\(\s*\w+[\w.\[\]'"]+\s*\)/g;
+    if (dynamicTCallPattern.test(content)) {
+      // Extract all string literal values that look like `namespace.key`
+      const mapValuePattern = /:\s*['"`]((\w+)\.(\w+(?:\.\w+)*))['"`]/g;
+      while ((match = mapValuePattern.exec(content)) !== null) {
+        const fullKey = match[1];   // e.g. "widgets.indexSP500"
+        const ns = match[2];        // e.g. "widgets" -> but namespace is "dashboard"
+        // The value namespace (e.g. "widgets") is the key prefix, not the i18n namespace.
+        // The actual i18n namespace is defaultNs. Only add if the prefix matches
+        // what the file's t() calls use (i.e., keys in the defaultNs start with this prefix).
+        // We verify by checking existing t('prefix.something') calls exist in the file.
+        const prefixUsed = new RegExp(`\\bt\\(['"\`]${ns}\\.`).test(content);
+        if (prefixUsed) {
+          addKey(defaultNs, fullKey, null);
         }
-        keysMap.get(defaultNs)!.add(fullKey);
       }
     }
   });
@@ -155,42 +179,36 @@ function syncTranslations(): void {
   });
   console.log(`   Loaded ${sourceTranslations.size} namespaces\n`);
 
-  // Step 3: Sync English with code keys
+  // Step 3: Sync English with code keys (ADD only — never remove existing EN keys)
   console.log('\u{1F527} Step 3: Syncing English translations with code...');
   let enAdded = 0;
-  let enRemoved = 0;
 
   codeKeys.forEach((keys, namespace) => {
     const translation = sourceTranslations.get(namespace)!;
     const existingKeys = new Set(getAllKeys(translation));
 
-    // Add missing keys to English
-    keys.forEach(key => {
+    // Add missing keys to English using the fallback value from the t() call when available
+    keys.forEach((fallback, key) => {
       if (!existingKeys.has(key)) {
-        setNestedValue(translation, key, `[EN] ${key}`);
-        console.log(`   \u2705 Added to EN [${namespace}]: ${key}`);
+        // Use the fallback text from code if present, otherwise use a placeholder
+        const value = (fallback && fallback.trim()) ? fallback.trim() : `[MISSING] ${key}`;
+        setNestedValue(translation, key, value);
+        console.log(`   \u2705 Added to EN [${namespace}]: ${key} = "${value}"`);
         enAdded++;
       }
     });
 
-    // Remove unused keys from English
-    existingKeys.forEach(key => {
-      if (!keys.has(key)) {
-        deleteNestedKey(translation, key);
-        console.log(`   \u{1F5D1}\uFE0F  Removed from EN [${namespace}]: ${key}`);
-        enRemoved++;
-      }
-    });
-
-    // Clean empty objects
-    cleanEmptyObjects(translation);
+    // NOTE: We intentionally do NOT remove keys from EN that aren't found in
+    // the current code scan. They may be used via dynamic keys, in Python scripts,
+    // or in code paths not caught by the regex. Manual cleanup only.
 
     // Save English file
     const filePath = path.join(LOCALES_DIR, SOURCE_LANG, `${namespace}.json`);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(translation, null, 2) + '\n', 'utf-8');
   });
 
-  console.log(`   Added ${enAdded} keys, removed ${enRemoved} keys\n`);
+  console.log(`   Added ${enAdded} keys\n`);
 
   // Step 4: Sync all other languages
   console.log('\u{1F30D} Step 4: Syncing all other languages...');
@@ -262,7 +280,7 @@ function syncTranslations(): void {
   console.log('\u{1F4CB} SYNC SUMMARY');
   console.log('='.repeat(60));
   console.log(`\u2705 Code contains ${totalCodeKeys} translation keys`);
-  console.log(`\u{1F4DD} English: +${enAdded} added, -${enRemoved} removed`);
+  console.log(`\u{1F4DD} English: +${enAdded} added (existing keys never removed)`);
   console.log(`\u{1F30D} Other languages: ${totalSynced} keys synced`);
   console.log(`\n\u2728 Translation sync complete!\n`);
   console.log('\u26A0\uFE0F  NOTE: Placeholder text added for new keys.');

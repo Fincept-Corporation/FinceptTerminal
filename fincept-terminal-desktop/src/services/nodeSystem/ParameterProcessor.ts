@@ -307,13 +307,14 @@ export function validateParameterValue(
       }
       return { valid: true };
 
-    case 'dateTime':
+    case 'dateTime': {
       // Check if valid date
       const date = new Date(value as string | number);
       if (isNaN(date.getTime())) {
         return { valid: false, error: 'Expected valid date/time' };
       }
       return { valid: true };
+    }
 
     case 'url':
       // Basic URL validation
@@ -327,7 +328,7 @@ export function validateParameterValue(
         return { valid: false, error: 'Invalid URL format' };
       }
 
-    case 'email':
+    case 'email': {
       // Basic email validation
       if (typeof value !== 'string') {
         return { valid: false, error: 'Expected string email' };
@@ -337,6 +338,7 @@ export function validateParameterValue(
         return { valid: false, error: 'Invalid email format' };
       }
       return { valid: true };
+    }
 
     default:
       return { valid: true }; // Unknown types are considered valid

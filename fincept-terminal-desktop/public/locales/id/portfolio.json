@@ -12,9 +12,111 @@
     "quantity": "KUANTITAS",
     "price": "HARGA",
     "add": "TAMBAH",
-    "sell": "JUAL"
+    "sell": "JUAL",
+    "confirmDelete": "[ID] CONFIRM DELETE",
+    "deleteTransactionWarning": "[ID] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[ID] DELETE",
+    "editTransaction": "[ID] EDIT TRANSACTION",
+    "transactionDate": "[ID] TRANSACTION DATE",
+    "notes": "[ID] NOTES",
+    "notesPlaceholder": "[ID] Optional notes...",
+    "totalValue": "[ID] TOTAL VALUE",
+    "save": "[ID] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[ID] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[ID] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[ID] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[ID] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[ID] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[ID] FINCEPT",
+    "portfolioTerminal": "[ID] PORTFOLIO TERMINAL",
+    "live": "[ID] LIVE",
+    "pos": "[ID] POS",
+    "ins": "[ID] INS",
+    "nav": "[ID] NAV",
+    "pnl": "[ID] P&L",
+    "day": "[ID] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[ID] TOTAL VALUE",
+    "unrealizedPnl": "[ID] UNREALIZED P&L",
+    "dayChange": "[ID] DAY CHANGE",
+    "costBasis": "[ID] COST BASIS",
+    "fifo": "[ID] FIFO",
+    "positions": "[ID] POSITIONS",
+    "concTop3": "[ID] CONC. TOP3",
+    "weight": "[ID] WEIGHT",
+    "sharpe": "[ID] SHARPE",
+    "annualized": "[ID] ANNUALIZED",
+    "beta": "[ID] BETA",
+    "vsSpy": "[ID] VS SPY",
+    "volatility": "[ID] VOLATILITY",
+    "ann30d": "[ID] 30D ANN.",
+    "maxDrawdown": "[ID] MAX DRAWDOWN",
+    "sinceIncep": "[ID] SINCE INCEP.",
+    "riskScore": "[ID] RISK SCORE",
+    "composite": "[ID] COMPOSITE",
+    "var95": "[ID] VAR (95%)",
+    "oneDay": "[ID] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[ID] SECTOR ALLOCATION",
+    "sectors": "[ID] sectors",
+    "correlation": "[ID] CORRELATION",
+    "dayChangeProxy": "[ID] (day change proxy)",
+    "needTwoHoldings": "[ID] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[ID] POSITIONS BLOTTER",
+    "instruments": "[ID] instruments"
+  },
+  "chart": {
+    "performance": "[ID] PERFORMANCE",
+    "portfolio": "[ID] PORTFOLIO",
+    "totalReturn": "[ID] TOTAL RETURN",
+    "historyMessage": "[ID] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[ID] ORDER ENTRY",
+    "price": "[ID] PRICE",
+    "qtyHeld": "[ID] QTY HELD",
+    "mktVal": "[ID] MKT VAL",
+    "clickToBuyMore": "[ID] Click to buy more",
+    "clickToSell": "[ID] Click to sell",
+    "clickToBuy": "[ID] Click to buy an asset",
+    "clickToSellAsset": "[ID] Click to sell an asset",
+    "openBuyOrder": "[ID] OPEN BUY ORDER",
+    "openSellOrder": "[ID] OPEN SELL ORDER",
+    "ordersRecorded": "[ID] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[ID] HOLDINGS",
+    "noHoldings": "[ID] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[ID] RISK SCORE",
+    "low": "[ID] LOW",
+    "high": "[ID] HIGH",
+    "topMovers": "[ID] TOP MOVERS",
+    "quickStats": "[ID] QUICK STATS",
+    "concTop3": "[ID] CONC. TOP3",
+    "volatility": "[ID] VOLATILITY",
+    "newPortfolio": "[ID] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[ID] SELECT PORTFOLIO",
+    "searchPortfolios": "[ID] Search portfolios...",
+    "newPortfolio": "[ID] NEW PORTFOLIO",
+    "nav": "[ID] NAV",
+    "pnl": "[ID] P&L",
+    "day": "[ID] DAY",
+    "pos": "[ID] POS",
+    "wl": "[ID] W/L"
+  },
+  "actions": {
+    "buy": "[ID] BUY",
+    "sell": "[ID] SELL"
   }
 }

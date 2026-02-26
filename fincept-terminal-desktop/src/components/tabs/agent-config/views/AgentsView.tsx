@@ -297,7 +297,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({ state }) => {
             {testResult ? (
               <MarkdownRenderer
                 content={extractAgentResponseText(
-                  typeof testResult === 'string' ? testResult : (testResult.response || JSON.stringify(testResult, null, 2))
+                  typeof testResult === 'string'
+                    ? testResult
+                    : typeof testResult.response === 'string'
+                      ? testResult.response
+                      : JSON.stringify(testResult, null, 2)
                 )}
               />
             ) : (

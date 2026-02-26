@@ -117,11 +117,12 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
             setInstallProgress(0);
             console.log('[AutoUpdater] Download started, size:', totalBytes);
             break;
-          case 'Progress':
+          case 'Progress': {
             downloadedBytes += event.data.chunkLength;
             const progress = totalBytes > 0 ? (downloadedBytes / totalBytes) * 100 : 0;
             setInstallProgress(Math.min(progress, 100));
             break;
+          }
           case 'Finished':
             setInstallProgress(100);
             console.log('[AutoUpdater] Download finished');

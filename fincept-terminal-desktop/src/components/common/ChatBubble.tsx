@@ -419,7 +419,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ onNavigateToTab }) => {
     } else {
       voiceModeRef.current = false;
       if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch {}
+        try { recognitionRef.current.abort(); } catch { /* ignore abort errors */ }
       }
       ttsService.stop(); // Stop any ongoing TTS
       isListeningRef.current = false;
@@ -434,7 +434,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ onNavigateToTab }) => {
   const toggleMic = useCallback(() => {
     if (isListeningRef.current) {
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch {}
+        try { recognitionRef.current.stop(); } catch { /* ignore stop errors */ }
       }
     } else {
       startListening();

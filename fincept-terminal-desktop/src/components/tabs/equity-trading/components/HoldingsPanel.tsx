@@ -71,8 +71,8 @@ export function HoldingsPanel({ onSell }: HoldingsPanelProps) {
 
     // Sort
     result.sort((a, b) => {
-      let aVal = a[sortField];
-      let bVal = b[sortField];
+      const aVal = a[sortField];
+      const bVal = b[sortField];
 
       if (typeof aVal === 'string') {
         return sortDirection === 'asc'

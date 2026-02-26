@@ -111,7 +111,7 @@ class WorkflowExecutor {
           });
           break;
 
-        case 'input':
+        case 'input': {
           // Get data from previous node
           const inputEdges = node.data.inputEdges || [];
           if (inputEdges.length === 0) {
@@ -131,6 +131,7 @@ class WorkflowExecutor {
             categories: categoriesStr
           });
           break;
+        }
 
         default:
           throw new Error(`Unknown data source: ${dataSource}`);

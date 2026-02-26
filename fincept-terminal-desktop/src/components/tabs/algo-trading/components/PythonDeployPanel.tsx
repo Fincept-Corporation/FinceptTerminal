@@ -3,15 +3,15 @@ import {
   Rocket, X, AlertCircle, Settings, DollarSign, Shield, Clock,
   Activity, CheckCircle, ChevronDown, ChevronRight, Loader2
 } from 'lucide-react';
-import type { PythonStrategy, StrategyParameter } from '../types';
+import type { PythonStrategy } from '../types';
 import {
-  extractStrategyParameters,
   getPythonStrategyCode,
 } from '../services/algoTradingService';
 import { invoke } from '@tauri-apps/api/core';
 import { useStockBrokerContextOptional } from '@/contexts/StockBrokerContext';
 import ParameterEditor from './ParameterEditor';
 import { F } from '../constants/theme';
+import { S } from '../constants/styles';
 
 interface PythonDeployPanelProps {
   strategy: PythonStrategy;
@@ -66,7 +66,6 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
   onClose,
   onDeployed,
 }) => {
-  // Configuration state
   const [config, setConfig] = useState<DeployConfig>({
     symbol: '',
     mode: 'paper',
@@ -79,20 +78,17 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
     maxDailyLoss: 0,
   });
 
-  // Strategy parameters
   const [strategyCode, setStrategyCode] = useState<string | null>(null);
   const [strategyParams, setStrategyParams] = useState<Record<string, string>>({});
   const [showParams, setShowParams] = useState(true);
   const [showRisk, setShowRisk] = useState(true);
 
-  // Deployment state
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [isDuplicate, setIsDuplicate] = useState(false);
 
-  // Load strategy code for parameter extraction
   useEffect(() => {
     const loadCode = async () => {
       try {
@@ -107,7 +103,6 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
     loadCode();
   }, [strategy.id]);
 
-  // Check for duplicate deployment when symbol changes
   useEffect(() => {
     if (!config.symbol.trim()) {
       setIsDuplicate(false);
@@ -134,22 +129,12 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
     return () => clearTimeout(debounce);
   }, [config.symbol, strategy.id]);
 
-  // Handle deployment
   const handleDeploy = async () => {
     setError(null);
     setSuccess(null);
 
-    // Validation
-    if (!config.symbol.trim()) {
-      setError('Symbol is required');
-      return;
-    }
-
-    if (config.quantity <= 0) {
-      setError('Quantity must be greater than 0');
-      return;
-    }
-
+    if (!config.symbol.trim()) { setError('Symbol is required'); return; }
+    if (config.quantity <= 0) { setError('Quantity must be greater than 0'); return; }
     if (config.mode === 'live' && config.broker === 'simulator') {
       setError('Please select a broker for live trading');
       return;
@@ -158,7 +143,6 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
     setDeploying(true);
 
     try {
-      // Build params object
       const deployParams = {
         symbol: config.symbol.toUpperCase(),
         mode: config.mode,
@@ -173,7 +157,7 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
         strategy_type: 'python',
         python_strategy_id: strategy.id,
         strategy_name: strategy.name,
-        ...strategyParams, // Include strategy-specific parameters
+        ...strategyParams,
       };
 
       const result = await invoke<string>('deploy_algo_strategy', {
@@ -186,17 +170,13 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
       if (parsed.success) {
         setSuccess(`Strategy deployed successfully! Deployment ID: ${parsed.deploy_id}`);
         onDeployed?.(parsed.deploy_id);
-        // Ensure WebSocket subscription for stock brokers so ticks reach candle aggregator
         const sym = config.symbol.toUpperCase();
         if (config.broker !== 'kraken' && config.broker !== 'simulator') {
           invoke('angelone_ws_subscribe', {
             symbol: `NSE:${sym}`, mode: 'ltp', symbolName: sym,
           }).catch(() => {});
         }
-        // Auto-close after success
-        setTimeout(() => {
-          onClose();
-        }, 2000);
+        setTimeout(() => { onClose(); }, 2000);
       } else {
         setError(parsed.error || 'Deployment failed');
       }
@@ -207,7 +187,6 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
     }
   };
 
-  // Check if symbol is likely crypto
   const isLikelyCrypto = (symbol: string): boolean => {
     const s = symbol.toUpperCase();
     return s.includes('/') || s.includes('-') ||
@@ -222,109 +201,68 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.85)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      className={S.modalOverlay}
+      style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        className="flex flex-col rounded overflow-hidden"
         style={{
-          width: '600px',
+          width: '640px',
           maxHeight: '90vh',
           backgroundColor: F.PANEL_BG,
           border: `1px solid ${F.BORDER}`,
-          borderRadius: '2px',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
         }}
       >
         {/* Header */}
         <div
-          style={{
-            padding: '16px',
-            borderBottom: `2px solid ${F.ORANGE}`,
-            backgroundColor: F.HEADER_BG,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
+          className="flex items-center justify-between px-5 py-4 shrink-0"
+          style={{ borderBottom: `2px solid ${F.ORANGE}`, backgroundColor: F.HEADER_BG }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{
-              width: '28px', height: '28px', borderRadius: '2px',
-              backgroundColor: `${F.ORANGE}15`, display: 'flex',
-              alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Rocket size={14} color={F.ORANGE} />
+          <div className="flex items-center gap-3">
+            <div
+              className="w-8 h-8 rounded flex items-center justify-center"
+              style={{ backgroundColor: `${F.ORANGE}15` }}
+            >
+              <Rocket size={16} style={{ color: F.ORANGE }} />
             </div>
             <div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
+              <div className="text-[13px] font-bold tracking-wide" style={{ color: F.WHITE }}>
                 DEPLOY PYTHON STRATEGY
               </div>
-              <div style={{ fontSize: '9px', color: F.MUTED, marginTop: '2px' }}>
-                {strategy.name.toUpperCase()} • {strategy.id}
+              <div className="text-[10px] mt-0.5" style={{ color: F.MUTED }}>
+                {strategy.name.toUpperCase()} &middot; {strategy.id}
               </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              padding: '6px',
-              backgroundColor: 'transparent',
-              border: `1px solid ${F.BORDER}`,
-              borderRadius: '2px',
-              color: F.GRAY,
-              cursor: 'pointer',
-            }}
-          >
-            <X size={14} />
+          <button onClick={onClose} className={S.btnGhost} style={{ color: F.GRAY }}>
+            <X size={16} />
           </button>
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+        <div className="flex-1 overflow-auto p-5">
           {/* Mode Selection */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '8px', display: 'block' }}>
-              TRADING MODE
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {(['paper', 'live'] as DeployMode[]).map((mode) => (
+          <div className="mb-5">
+            <label className={S.label}>TRADING MODE</label>
+            <div className="flex gap-3">
+              {(['paper', 'live'] as DeployMode[]).map((m) => (
                 <button
-                  key={mode}
-                  onClick={() => updateConfig('mode', mode)}
+                  key={m}
+                  onClick={() => updateConfig('mode', m)}
+                  className="flex-1 flex flex-col items-center gap-1.5 rounded py-3 cursor-pointer transition-all duration-200 border"
                   style={{
-                    flex: 1,
-                    padding: '12px',
-                    backgroundColor: config.mode === mode ? (mode === 'live' ? `${F.RED}20` : `${F.GREEN}20`) : 'transparent',
-                    border: `1px solid ${config.mode === mode ? (mode === 'live' ? F.RED : F.GREEN) : F.BORDER}`,
-                    borderRadius: '2px',
-                    color: config.mode === mode ? (mode === 'live' ? F.RED : F.GREEN) : F.GRAY,
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '4px',
+                    backgroundColor: config.mode === m ? (m === 'live' ? `${F.RED}20` : `${F.GREEN}20`) : 'transparent',
+                    borderColor: config.mode === m ? (m === 'live' ? F.RED : F.GREEN) : F.BORDER,
+                    color: config.mode === m ? (m === 'live' ? F.RED : F.GREEN) : F.GRAY,
                   }}
                 >
-                  {mode === 'paper' ? <Activity size={16} /> : <DollarSign size={16} />}
-                  {mode === 'paper' ? 'PAPER TRADING' : 'LIVE TRADING'}
-                  <span style={{ fontSize: '9px', fontWeight: 400, color: F.MUTED }}>
-                    {mode === 'paper' ? 'Simulated with fake money' : 'Real money with broker'}
+                  {m === 'paper' ? <Activity size={18} /> : <DollarSign size={18} />}
+                  <span className="text-[11px] font-bold tracking-wide">
+                    {m === 'paper' ? 'PAPER TRADING' : 'LIVE TRADING'}
+                  </span>
+                  <span className="text-[10px]" style={{ color: F.MUTED }}>
+                    {m === 'paper' ? 'Simulated with fake money' : 'Real money with broker'}
                   </span>
                 </button>
               ))}
@@ -332,244 +270,133 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
           </div>
 
           {/* Basic Configuration */}
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {/* Symbol */}
-              <div>
-                <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px', display: 'block' }}>
-                  SYMBOL *
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="text"
-                    value={config.symbol}
-                    onChange={(e) => updateConfig('symbol', e.target.value.toUpperCase())}
-                    placeholder="e.g. AAPL, BTC/USD"
+          <div className="grid grid-cols-2 gap-4 mb-5">
+            {/* Symbol */}
+            <div>
+              <label className={S.label}>SYMBOL *</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={config.symbol}
+                  onChange={(e) => updateConfig('symbol', e.target.value.toUpperCase())}
+                  placeholder="e.g. AAPL, BTC/USD"
+                  className={S.input}
+                  style={{ borderColor: isDuplicate ? F.YELLOW : undefined }}
+                />
+                {checkingDuplicate && (
+                  <Loader2
+                    size={14}
+                    className="animate-spin"
                     style={{
-                      width: '100%',
-                      padding: '10px',
-                      backgroundColor: F.DARK_BG,
-                      border: `1px solid ${isDuplicate ? F.YELLOW : F.BORDER}`,
-                      borderRadius: '2px',
-                      color: F.WHITE,
-                      fontSize: '11px',
+                      position: 'absolute', right: '10px', top: '50%',
+                      transform: 'translateY(-50%)', color: F.GRAY,
                     }}
                   />
-                  {checkingDuplicate && (
-                    <Loader2
-                      size={12}
-                      style={{
-                        position: 'absolute',
-                        right: '10px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        color: F.GRAY,
-                        animation: 'spin 1s linear infinite',
-                      }}
-                    />
-                  )}
-                </div>
-                {isDuplicate && (
-                  <div style={{ fontSize: '9px', color: F.YELLOW, marginTop: '4px' }}>
-                    Warning: This strategy is already deployed for this symbol
-                  </div>
                 )}
               </div>
+              {isDuplicate && (
+                <div className="text-[10px] mt-1" style={{ color: F.YELLOW }}>
+                  Warning: This strategy is already deployed for this symbol
+                </div>
+              )}
+            </div>
 
-              {/* Broker */}
-              <div>
-                <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px', display: 'block' }}>
-                  BROKER
-                </label>
-                <select
-                  value={config.broker}
-                  onChange={(e) => updateConfig('broker', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    backgroundColor: F.DARK_BG,
-                    border: `1px solid ${F.BORDER}`,
-                    borderRadius: '2px',
-                    color: F.WHITE,
-                    fontSize: '11px',
-                  }}
-                >
-                  {BROKERS.filter((b) => config.mode === 'paper' || b.live).map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Broker */}
+            <div>
+              <label className={S.label}>BROKER</label>
+              <select
+                value={config.broker}
+                onChange={(e) => updateConfig('broker', e.target.value)}
+                className={S.select}
+              >
+                {BROKERS.filter((b) => config.mode === 'paper' || b.live).map((b) => (
+                  <option key={b.id} value={b.id}>{b.label}</option>
+                ))}
+              </select>
+            </div>
 
-              {/* Quantity */}
-              <div>
-                <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px', display: 'block' }}>
-                  QUANTITY
-                </label>
-                <input
-                  type="number"
-                  value={config.quantity}
-                  onChange={(e) => updateConfig('quantity', parseFloat(e.target.value) || 0)}
-                  min={0.0001}
-                  step={0.01}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    backgroundColor: F.DARK_BG,
-                    border: `1px solid ${F.BORDER}`,
-                    borderRadius: '2px',
-                    color: F.WHITE,
-                    fontSize: '11px',
-                  }}
-                />
-              </div>
+            {/* Quantity */}
+            <div>
+              <label className={S.label}>QUANTITY</label>
+              <input
+                type="number"
+                value={config.quantity}
+                onChange={(e) => updateConfig('quantity', parseFloat(e.target.value) || 0)}
+                min={0.0001} step={0.01}
+                className={S.input}
+              />
+            </div>
 
-              {/* Timeframe */}
-              <div>
-                <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px', display: 'block' }}>
-                  TIMEFRAME
-                </label>
-                <select
-                  value={config.timeframe}
-                  onChange={(e) => updateConfig('timeframe', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    backgroundColor: F.DARK_BG,
-                    border: `1px solid ${F.BORDER}`,
-                    borderRadius: '2px',
-                    color: F.WHITE,
-                    fontSize: '11px',
-                  }}
-                >
-                  {TIMEFRAMES.map((tf) => (
-                    <option key={tf.value} value={tf.value}>
-                      {tf.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Timeframe */}
+            <div>
+              <label className={S.label}>TIMEFRAME</label>
+              <select
+                value={config.timeframe}
+                onChange={(e) => updateConfig('timeframe', e.target.value)}
+                className={S.select}
+              >
+                {TIMEFRAMES.map((tf) => (
+                  <option key={tf.value} value={tf.value}>{tf.label}</option>
+                ))}
+              </select>
+            </div>
 
-              {/* Initial Cash */}
-              <div>
-                <label style={{ fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '4px', display: 'block' }}>
-                  INITIAL CASH
-                </label>
-                <input
-                  type="number"
-                  value={config.initialCash}
-                  onChange={(e) => updateConfig('initialCash', parseFloat(e.target.value) || 0)}
-                  min={100}
-                  step={1000}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    backgroundColor: F.DARK_BG,
-                    border: `1px solid ${F.BORDER}`,
-                    borderRadius: '2px',
-                    color: F.WHITE,
-                    fontSize: '11px',
-                  }}
-                />
-              </div>
+            {/* Initial Cash */}
+            <div>
+              <label className={S.label}>INITIAL CASH</label>
+              <input
+                type="number"
+                value={config.initialCash}
+                onChange={(e) => updateConfig('initialCash', parseFloat(e.target.value) || 0)}
+                min={100} step={1000}
+                className={S.input}
+              />
             </div>
           </div>
 
           {/* Risk Management Section */}
-          <div
-            style={{
-              marginBottom: '16px',
-              border: `1px solid ${F.BORDER}`,
-              borderRadius: '2px',
-              overflow: 'hidden',
-            }}
-          >
-            <div
+          <div className={`${S.section} mb-5`}>
+            <button
               onClick={() => setShowRisk(!showRisk)}
-              style={{
-                padding: '10px 12px',
-                backgroundColor: F.HEADER_BG,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-              }}
+              className="w-full flex items-center gap-2 px-4 py-3 border-none cursor-pointer"
+              style={{ backgroundColor: F.HEADER_BG, color: F.WHITE }}
             >
-              {showRisk ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              <Shield size={12} style={{ color: F.CYAN }} />
-              <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
-                RISK MANAGEMENT
-              </span>
-              <span style={{ fontSize: '9px', color: F.MUTED }}>(Optional)</span>
-            </div>
+              {showRisk ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <Shield size={14} style={{ color: F.CYAN }} />
+              <span className="text-[11px] font-bold tracking-wide">RISK MANAGEMENT</span>
+              <span className="text-[10px]" style={{ color: F.MUTED }}>(Optional)</span>
+            </button>
             {showRisk && (
-              <div style={{ padding: '12px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+              <div className="p-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label style={{ fontSize: '9px', color: F.GRAY, marginBottom: '4px', display: 'block' }}>
-                      STOP LOSS ($)
-                    </label>
+                    <label className={S.label}>STOP LOSS ($)</label>
                     <input
                       type="number"
                       value={config.stopLoss}
                       onChange={(e) => updateConfig('stopLoss', parseFloat(e.target.value) || 0)}
-                      min={0}
-                      step={100}
-                      placeholder="0 = disabled"
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        backgroundColor: F.DARK_BG,
-                        border: `1px solid ${F.BORDER}`,
-                        borderRadius: '2px',
-                        color: F.WHITE,
-                        fontSize: '10px',
-                      }}
+                      min={0} step={100} placeholder="0 = disabled"
+                      className={S.input}
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: '9px', color: F.GRAY, marginBottom: '4px', display: 'block' }}>
-                      TAKE PROFIT ($)
-                    </label>
+                    <label className={S.label}>TAKE PROFIT ($)</label>
                     <input
                       type="number"
                       value={config.takeProfit}
                       onChange={(e) => updateConfig('takeProfit', parseFloat(e.target.value) || 0)}
-                      min={0}
-                      step={100}
-                      placeholder="0 = disabled"
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        backgroundColor: F.DARK_BG,
-                        border: `1px solid ${F.BORDER}`,
-                        borderRadius: '2px',
-                        color: F.WHITE,
-                        fontSize: '10px',
-                      }}
+                      min={0} step={100} placeholder="0 = disabled"
+                      className={S.input}
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: '9px', color: F.GRAY, marginBottom: '4px', display: 'block' }}>
-                      MAX DAILY LOSS ($)
-                    </label>
+                    <label className={S.label}>MAX DAILY LOSS ($)</label>
                     <input
                       type="number"
                       value={config.maxDailyLoss}
                       onChange={(e) => updateConfig('maxDailyLoss', parseFloat(e.target.value) || 0)}
-                      min={0}
-                      step={100}
-                      placeholder="0 = disabled"
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        backgroundColor: F.DARK_BG,
-                        border: `1px solid ${F.BORDER}`,
-                        borderRadius: '2px',
-                        color: F.WHITE,
-                        fontSize: '10px',
-                      }}
+                      min={0} step={100} placeholder="0 = disabled"
+                      className={S.input}
                     />
                   </div>
                 </div>
@@ -579,33 +406,18 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
 
           {/* Strategy Parameters Section */}
           {strategyCode && (
-            <div
-              style={{
-                marginBottom: '16px',
-                border: `1px solid ${F.BORDER}`,
-                borderRadius: '2px',
-                overflow: 'hidden',
-              }}
-            >
-              <div
+            <div className={`${S.section} mb-5`}>
+              <button
                 onClick={() => setShowParams(!showParams)}
-                style={{
-                  padding: '10px 12px',
-                  backgroundColor: F.HEADER_BG,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  cursor: 'pointer',
-                }}
+                className="w-full flex items-center gap-2 px-4 py-3 border-none cursor-pointer"
+                style={{ backgroundColor: F.HEADER_BG, color: F.WHITE }}
               >
-                {showParams ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                <Settings size={12} style={{ color: F.PURPLE }} />
-                <span style={{ fontSize: '10px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
-                  STRATEGY PARAMETERS
-                </span>
-              </div>
+                {showParams ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <Settings size={14} style={{ color: F.PURPLE }} />
+                <span className="text-[11px] font-bold tracking-wide">STRATEGY PARAMETERS</span>
+              </button>
               {showParams && (
-                <div style={{ padding: '12px' }}>
+                <div className="p-4">
                   <ParameterEditor
                     code={strategyCode}
                     values={strategyParams}
@@ -619,40 +431,20 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
           {/* Error/Success Messages */}
           {error && (
             <div
-              style={{
-                padding: '10px 12px',
-                backgroundColor: `${F.RED}20`,
-                border: `1px solid ${F.RED}`,
-                borderRadius: '2px',
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                color: F.RED,
-                fontSize: '11px',
-              }}
+              className="flex items-center gap-2 rounded px-4 py-3 mb-4 text-[11px]"
+              style={{ backgroundColor: `${F.RED}20`, border: `1px solid ${F.RED}`, color: F.RED }}
             >
-              <AlertCircle size={14} />
+              <AlertCircle size={16} />
               {error}
             </div>
           )}
 
           {success && (
             <div
-              style={{
-                padding: '10px 12px',
-                backgroundColor: `${F.GREEN}20`,
-                border: `1px solid ${F.GREEN}`,
-                borderRadius: '2px',
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                color: F.GREEN,
-                fontSize: '11px',
-              }}
+              className="flex items-center gap-2 rounded px-4 py-3 mb-4 text-[11px]"
+              style={{ backgroundColor: `${F.GREEN}20`, border: `1px solid ${F.GREEN}`, color: F.GREEN }}
             >
-              <CheckCircle size={14} />
+              <CheckCircle size={16} />
               {success}
             </div>
           )}
@@ -660,20 +452,10 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
           {/* Live Trading Warning */}
           {config.mode === 'live' && (
             <div
-              style={{
-                padding: '10px 12px',
-                backgroundColor: `${F.YELLOW}10`,
-                border: `1px solid ${F.YELLOW}`,
-                borderRadius: '2px',
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '8px',
-                color: F.YELLOW,
-                fontSize: '10px',
-              }}
+              className="flex items-start gap-2 rounded px-4 py-3 mb-4 text-[11px]"
+              style={{ backgroundColor: `${F.YELLOW}10`, border: `1px solid ${F.YELLOW}`, color: F.YELLOW }}
             >
-              <AlertCircle size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
               <div>
                 <strong>Live Trading Warning:</strong> This will execute real trades with real
                 money. Ensure your broker is connected and you understand the risks. Always test
@@ -685,69 +467,36 @@ const PythonDeployPanel: React.FC<PythonDeployPanelProps> = ({
 
         {/* Footer */}
         <div
-          style={{
-            padding: '16px',
-            borderTop: `1px solid ${F.BORDER}`,
-            backgroundColor: F.HEADER_BG,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
+          className="flex items-center justify-between px-5 py-4 shrink-0"
+          style={{ borderTop: `1px solid ${F.BORDER}`, backgroundColor: F.HEADER_BG }}
         >
-          <button
-            onClick={onClose}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: 'transparent',
-              border: `1px solid ${F.BORDER}`,
-              borderRadius: '2px',
-              color: F.GRAY,
-              fontSize: '9px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              letterSpacing: '0.5px',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = F.ORANGE; e.currentTarget.style.color = F.WHITE; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = F.BORDER; e.currentTarget.style.color = F.GRAY; }}
-          >
-            CANCEL
-          </button>
+          <button onClick={onClose} className={S.btnOutline}>CANCEL</button>
           <button
             onClick={handleDeploy}
             disabled={deploying || !config.symbol.trim()}
+            className={`${S.btnPrimary} border-none`}
             style={{
               padding: '10px 24px',
               backgroundColor: config.mode === 'live' ? F.RED : F.GREEN,
-              border: 'none',
-              borderRadius: '2px',
               color: F.WHITE,
-              fontSize: '9px',
-              fontWeight: 700,
-              letterSpacing: '0.5px',
               cursor: deploying || !config.symbol.trim() ? 'not-allowed' : 'pointer',
               opacity: deploying || !config.symbol.trim() ? 0.5 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
             }}
           >
             {deploying ? (
               <>
-                <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                <Loader2 size={14} className="animate-spin" />
                 DEPLOYING...
               </>
             ) : (
               <>
-                <Rocket size={12} />
+                <Rocket size={14} />
                 {config.mode === 'live' ? 'DEPLOY LIVE' : 'DEPLOY PAPER'}
               </>
             )}
           </button>
         </div>
       </div>
-
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };

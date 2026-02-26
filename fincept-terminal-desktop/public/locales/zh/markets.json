@@ -13,5 +13,8 @@
   "refresh": "刷新",
   "auto": "自动",
   "on": "开",
-  "off": "关"
+  "off": "关",
+  "loading": {
+    "title": "[ZH] Initializing..."
+  }
 }

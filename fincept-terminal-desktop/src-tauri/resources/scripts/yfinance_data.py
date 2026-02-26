@@ -249,14 +249,11 @@ def get_batch_quotes(symbols):
         # that would corrupt the JSON output parsed by Rust
         _buf = io.StringIO()
         with contextlib.redirect_stdout(_buf):
-            data = yf.download(symbols, period="2d", group_by='ticker', progress=False, threads=True, auto_adjust=True)
+            # Use 5d period to guarantee at least 2 trading days for futures/commodities
+            data = yf.download(symbols, period="5d", group_by='ticker', progress=False, threads=True, auto_adjust=True)
 
         if data is None or data.empty:
             return []
-
-        # Flatten MultiIndex columns if present (newer yfinance versions)
-        if isinstance(data.columns, pd.MultiIndex):
-            pass  # keep as-is, handled per symbol below
 
         results = []
         for symbol in symbols:
@@ -265,14 +262,19 @@ def get_batch_quotes(symbols):
                     # Single symbol: data columns are flat (Open, High, Low, Close, Volume)
                     hist = data
                 else:
-                    # Multiple symbols: data columns are multi-level (symbol, OHLCV)
-                    level0 = data.columns.get_level_values(0)
-                    level1 = data.columns.get_level_values(1) if data.columns.nlevels > 1 else level0
-                    # Support both (OHLCV, symbol) and (symbol, OHLCV) orderings
-                    if symbol in level0:
-                        hist = data[symbol]
-                    elif symbol in level1:
-                        hist = data.xs(symbol, axis=1, level=1)
+                    # Multiple symbols: newer yfinance uses (Price, Ticker) MultiIndex
+                    # older versions use (Ticker, Price) — handle both orderings
+                    if isinstance(data.columns, pd.MultiIndex):
+                        level0 = data.columns.get_level_values(0).unique().tolist()
+                        level1 = data.columns.get_level_values(1).unique().tolist()
+                        if symbol in level1:
+                            # New yfinance: (Price, Ticker) — use xs on level 1
+                            hist = data.xs(symbol, axis=1, level=1)
+                        elif symbol in level0:
+                            # Old yfinance: (Ticker, Price)
+                            hist = data[symbol]
+                        else:
+                            continue
                     else:
                         continue
 
@@ -281,7 +283,8 @@ def get_batch_quotes(symbols):
 
                 hist = hist.dropna(how='all')
                 current_price = float(hist['Close'].iloc[-1])
-                # Use previous trading day close (iloc[-2]) for accurate daily change
+                # Use previous trading day close for accurate daily change.
+                # With period="5d" we always have >= 2 rows for normally-traded instruments.
                 previous_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else current_price
                 change = current_price - previous_close
                 change_percent = (change / previous_close) * 100 if previous_close else 0

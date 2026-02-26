@@ -42,7 +42,7 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({
   return (
     <div
       style={{
-        width: '280px',
+        width: '200px',
         borderRight: `1px solid ${colors.textMuted}`,
         display: 'flex',
         flexDirection: 'column',
@@ -53,7 +53,7 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({
     >
       {/* Header */}
       <div style={{
-        padding: '12px',
+        padding: '6px 10px',
         backgroundColor: colors.panel,
         borderBottom: `1px solid ${colors.textMuted}`,
       }}>
@@ -67,10 +67,10 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({
         </span>
         {symbol && (
           <div style={{
-            fontSize: fontSize.body,
+            fontSize: fontSize.small,
             fontWeight: 700,
             color: accentColor,
-            marginTop: '4px',
+            marginTop: '2px',
           }}>
             {symbol}
           </div>
@@ -83,7 +83,7 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({
           <div
             key={idx}
             style={{
-              padding: '10px 12px',
+              padding: '6px 10px',
               borderBottom: `1px solid ${colors.textMuted}`,
             }}
           >
@@ -136,17 +136,17 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({
         ))}
 
         {/* Data Info Section */}
-        <div style={{ padding: '12px', marginTop: '8px' }}>
+        <div style={{ padding: '6px 10px', marginTop: '4px' }}>
           <div style={{
             fontSize: fontSize.tiny,
             fontWeight: 700,
             color: colors.textMuted,
             letterSpacing: '0.5px',
-            marginBottom: '8px',
+            marginBottom: '4px',
           }}>
             {t('metricsPanel.dataInfo')}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: fontSize.small }}>
               <span style={{ color: colors.textMuted }}>{t('metricsPanel.source')}:</span>
               <span style={{ color: colors.info }}>{dataSource}</span>
@@ -164,17 +164,17 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({
 
         {/* Legend for correlation */}
         {chartType === 'correlation' && (
-          <div style={{ padding: '12px', marginTop: '8px' }}>
+          <div style={{ padding: '6px 10px', marginTop: '4px' }}>
             <div style={{
               fontSize: fontSize.tiny,
               fontWeight: 700,
               color: colors.textMuted,
               letterSpacing: '0.5px',
-              marginBottom: '8px',
+              marginBottom: '4px',
             }}>
               {t('metricsPanel.correlationScale')}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: fontSize.small }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: fontSize.small }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ width: '12px', height: '12px', backgroundColor: colors.success, borderRadius: 'var(--ft-border-radius)' }} />
                 <span style={{ color: colors.textMuted }}>{t('metricsPanel.strongPositive')}</span>
@@ -193,17 +193,17 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({
 
         {/* Greeks legend for volatility */}
         {chartType === 'volatility' && (
-          <div style={{ padding: '12px', marginTop: '8px' }}>
+          <div style={{ padding: '6px 10px', marginTop: '4px' }}>
             <div style={{
               fontSize: fontSize.tiny,
               fontWeight: 700,
               color: colors.textMuted,
               letterSpacing: '0.5px',
-              marginBottom: '8px',
+              marginBottom: '4px',
             }}>
               {t('metricsPanel.ivInterpretation')}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: fontSize.small, color: colors.textMuted }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: fontSize.small, color: colors.textMuted }}>
               <div>{t('metricsPanel.highIv')}</div>
               <div>{t('metricsPanel.lowIv')}</div>
               <div>{t('metricsPanel.skew')}</div>
@@ -214,17 +214,17 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({
 
         {/* PCA legend */}
         {chartType === 'pca' && (
-          <div style={{ padding: '12px', marginTop: '8px' }}>
+          <div style={{ padding: '6px 10px', marginTop: '4px' }}>
             <div style={{
               fontSize: fontSize.tiny,
               fontWeight: 700,
               color: colors.textMuted,
               letterSpacing: '0.5px',
-              marginBottom: '8px',
+              marginBottom: '4px',
             }}>
               {t('metricsPanel.pcaInterpretation')}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: fontSize.small, color: colors.textMuted }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: fontSize.small, color: colors.textMuted }}>
               <div>{t('metricsPanel.pc1')}</div>
               <div>{t('metricsPanel.pc2')}</div>
               <div>{t('metricsPanel.pc3')}</div>

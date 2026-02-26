@@ -13,5 +13,8 @@
   "refresh": "LÀM MỚI",
   "auto": "TỰ ĐỘNG",
   "on": "BẬT",
-  "off": "TẮT"
+  "off": "TẮT",
+  "loading": {
+    "title": "[VI] Initializing..."
+  }
 }

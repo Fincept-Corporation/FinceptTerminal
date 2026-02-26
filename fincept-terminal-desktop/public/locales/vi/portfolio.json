@@ -12,9 +12,111 @@
     "quantity": "SỐ LƯỢNG",
     "price": "GIÁ",
     "add": "THÊM",
-    "sell": "BÁN"
+    "sell": "BÁN",
+    "confirmDelete": "[VI] CONFIRM DELETE",
+    "deleteTransactionWarning": "[VI] Are you sure you want to delete this transaction? This action cannot be undone.",
+    "delete": "[VI] DELETE",
+    "editTransaction": "[VI] EDIT TRANSACTION",
+    "transactionDate": "[VI] TRANSACTION DATE",
+    "notes": "[VI] NOTES",
+    "notesPlaceholder": "[VI] Optional notes...",
+    "totalValue": "[VI] TOTAL VALUE",
+    "save": "[VI] SAVE"
   },
   "extracted": {
-    "areYouSureYou": "[VI] Are you sure you want to delete this portfolio? This action cannot be undone."
+    "areYouSureYou": "[VI] Are you sure you want to delete this portfolio? This action cannot be undone.",
+    "noPortfolioSelected": "[VI] NO PORTFOLIO SELECTED",
+    "loadingPortfolioData": "[VI] Loading portfolio data..."
+  },
+  "content": {
+    "selectOrCreate": "[VI] Select a portfolio or create a new one"
+  },
+  "statusBar": {
+    "fincept": "[VI] FINCEPT",
+    "portfolioTerminal": "[VI] PORTFOLIO TERMINAL",
+    "live": "[VI] LIVE",
+    "pos": "[VI] POS",
+    "ins": "[VI] INS",
+    "nav": "[VI] NAV",
+    "pnl": "[VI] P&L",
+    "day": "[VI] DAY"
+  },
+  "ribbon": {
+    "totalValue": "[VI] TOTAL VALUE",
+    "unrealizedPnl": "[VI] UNREALIZED P&L",
+    "dayChange": "[VI] DAY CHANGE",
+    "costBasis": "[VI] COST BASIS",
+    "fifo": "[VI] FIFO",
+    "positions": "[VI] POSITIONS",
+    "concTop3": "[VI] CONC. TOP3",
+    "weight": "[VI] WEIGHT",
+    "sharpe": "[VI] SHARPE",
+    "annualized": "[VI] ANNUALIZED",
+    "beta": "[VI] BETA",
+    "vsSpy": "[VI] VS SPY",
+    "volatility": "[VI] VOLATILITY",
+    "ann30d": "[VI] 30D ANN.",
+    "maxDrawdown": "[VI] MAX DRAWDOWN",
+    "sinceIncep": "[VI] SINCE INCEP.",
+    "riskScore": "[VI] RISK SCORE",
+    "composite": "[VI] COMPOSITE",
+    "var95": "[VI] VAR (95%)",
+    "oneDay": "[VI] 1-DAY"
+  },
+  "allocation": {
+    "sectorAllocation": "[VI] SECTOR ALLOCATION",
+    "sectors": "[VI] sectors",
+    "correlation": "[VI] CORRELATION",
+    "dayChangeProxy": "[VI] (day change proxy)",
+    "needTwoHoldings": "[VI] Need at least 2 holdings for correlation"
+  },
+  "blotter": {
+    "positionsBlotter": "[VI] POSITIONS BLOTTER",
+    "instruments": "[VI] instruments"
+  },
+  "chart": {
+    "performance": "[VI] PERFORMANCE",
+    "portfolio": "[VI] PORTFOLIO",
+    "totalReturn": "[VI] TOTAL RETURN",
+    "historyMessage": "[VI] Add holdings to see portfolio performance over time"
+  },
+  "order": {
+    "orderEntry": "[VI] ORDER ENTRY",
+    "price": "[VI] PRICE",
+    "qtyHeld": "[VI] QTY HELD",
+    "mktVal": "[VI] MKT VAL",
+    "clickToBuyMore": "[VI] Click to buy more",
+    "clickToSell": "[VI] Click to sell",
+    "clickToBuy": "[VI] Click to buy an asset",
+    "clickToSellAsset": "[VI] Click to sell an asset",
+    "openBuyOrder": "[VI] OPEN BUY ORDER",
+    "openSellOrder": "[VI] OPEN SELL ORDER",
+    "ordersRecorded": "[VI] Orders are recorded in your portfolio"
+  },
+  "heatmap": {
+    "holdings": "[VI] HOLDINGS",
+    "noHoldings": "[VI] No holdings yet. Click BUY to add positions.",
+    "riskScore": "[VI] RISK SCORE",
+    "low": "[VI] LOW",
+    "high": "[VI] HIGH",
+    "topMovers": "[VI] TOP MOVERS",
+    "quickStats": "[VI] QUICK STATS",
+    "concTop3": "[VI] CONC. TOP3",
+    "volatility": "[VI] VOLATILITY",
+    "newPortfolio": "[VI] NEW PORTFOLIO"
+  },
+  "commandBar": {
+    "selectPortfolio": "[VI] SELECT PORTFOLIO",
+    "searchPortfolios": "[VI] Search portfolios...",
+    "newPortfolio": "[VI] NEW PORTFOLIO",
+    "nav": "[VI] NAV",
+    "pnl": "[VI] P&L",
+    "day": "[VI] DAY",
+    "pos": "[VI] POS",
+    "wl": "[VI] W/L"
+  },
+  "actions": {
+    "buy": "[VI] BUY",
+    "sell": "[VI] SELL"
   }
 }

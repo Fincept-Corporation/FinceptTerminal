@@ -13,5 +13,8 @@
   "refresh": "ACTUALISER",
   "auto": "AUTO",
   "on": "ON",
-  "off": "OFF"
+  "off": "OFF",
+  "loading": {
+    "title": "[FR] Initializing..."
+  }
 }

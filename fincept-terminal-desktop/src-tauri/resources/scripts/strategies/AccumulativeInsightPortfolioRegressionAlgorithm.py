@@ -6,36 +6,54 @@
 #
 # Strategy ID: FCT-19E8A564
 # Category: Portfolio Management
-# Description: Test algorithm using 'AccumulativeInsightPortfolioConstructionModel.py' and 'ConstantAlphaModel' generating a constan...
+# Description: Accumulative position building strategy. Starts with 25%
+#   allocation on initial EMA crossover. Adds 25% on each pullback to EMA
+#   that bounces. Maximum 100% allocation. Exits on bearish EMA cross.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
-### <summary>
-### Test algorithm using 'AccumulativeInsightPortfolioConstructionModel.py' and 'ConstantAlphaModel'
-### generating a constant 'Insight'
-### </summary>
 class AccumulativeInsightPortfolioRegressionAlgorithm(QCAlgorithm):
+    """Accumulative position building with EMA trend."""
+
     def initialize(self):
-        ''' Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.'''
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-        # Set requested data resolution
-        self.universe_settings.resolution = Resolution.MINUTE
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-        self.set_start_date(2013,10,7)   #Set Start Date
-        self.set_end_date(2013,10,11)    #Set End Date
-        self.set_cash(100000)           #Set Strategy Cash
+        self._fast_ema = self.ema(self.symbol, 10, Resolution.DAILY)
+        self._slow_ema = self.ema(self.symbol, 30, Resolution.DAILY)
+        self._current_weight = 0
+        self._touched_ema = False
 
-        symbols = [ Symbol.create("SPY", SecurityType.EQUITY, Market.USA) ]
+    def on_data(self, data):
+        if not self._slow_ema.is_ready:
+            return
+        if self.symbol not in data:
+            return
 
-        # set algorithm framework models
-        self.set_universe_selection(ManualUniverseSelectionModel(symbols))
-        self.set_alpha(ConstantAlphaModel(InsightType.PRICE, InsightDirection.UP, timedelta(minutes = 20), 0.025, 0.25))
-        self.set_portfolio_construction(AccumulativeInsightPortfolioConstructionModel())
-        self.set_execution(ImmediateExecutionModel())
+        price = data[self.symbol].close
+        fast = self._fast_ema.current.value
+        slow = self._slow_ema.current.value
 
-    def on_end_of_algorithm(self):
-        # holdings value should be 0.03 - to avoid price fluctuation issue we compare with 0.06 and 0.01
-        if (self.portfolio.total_holdings_value > self.portfolio.total_portfolio_value * 0.06
-            or self.portfolio.total_holdings_value < self.portfolio.total_portfolio_value * 0.01):
-            raise ValueError("Unexpected Total Holdings Value: " + str(self.portfolio.total_holdings_value))
+        if fast > slow:
+            # Uptrend
+            if self._current_weight == 0:
+                self._current_weight = 0.5
+                self.set_holdings(self.symbol, self._current_weight)
+                self._touched_ema = False
+            elif price <= fast * 1.002:
+                self._touched_ema = True
+            elif self._touched_ema and price > fast and self._current_weight < 1.0:
+                self._current_weight = min(1.0, self._current_weight + 0.25)
+                self.set_holdings(self.symbol, self._current_weight)
+                self._touched_ema = False
+        else:
+            # Downtrend - exit all
+            if self._current_weight > 0:
+                self.liquidate()
+                self._current_weight = 0
+                self._touched_ema = False

@@ -147,6 +147,13 @@ export interface ReportHeaderProps {
   isAutoSaving: boolean;
   lastSaved: Date | null;
   hasComponents: boolean;
+  // DOCX mode props
+  builderMode: ReportBuilderMode;
+  onModeChange: (mode: ReportBuilderMode) => void;
+  onImportDocx: () => void;
+  onExportDocx?: () => void;
+  docxFileName?: string;
+  isDocxDirty?: boolean;
 }
 
 // Theme background style result
@@ -157,4 +164,108 @@ export interface ThemeBackgroundStyle {
   backgroundPosition?: string;
   backgroundImage?: string;
   color: string;
+}
+
+// ---- DOCX Editor Types ----
+
+// Editor mode for the Report Builder
+export type ReportBuilderMode = 'builder' | 'docx';
+
+// DOCX editor view states
+export type DocxViewMode = 'edit' | 'preview' | 'split';
+
+// DOCX editor state
+export interface DocxEditorState {
+  viewMode: DocxViewMode;
+  filePath: string | null;
+  fileName: string;
+  originalArrayBuffer: ArrayBuffer | null;
+  htmlContent: string;
+  isDirty: boolean;
+  fileId: string | null;
+  metadata: DocxDocumentMetadata;
+}
+
+// DOCX document metadata
+export interface DocxDocumentMetadata {
+  title: string;
+  author: string;
+  company: string;
+  date: string;
+}
+
+// DOCX Editor Toolbar props
+export interface DocxEditorToolbarProps {
+  editor: any; // TipTap Editor instance
+  viewMode: DocxViewMode;
+  onViewModeChange: (mode: DocxViewMode) => void;
+  onInsertImage: () => void;
+  // Watermark
+  onToggleWatermark?: () => void;
+  watermarkEnabled?: boolean;
+  // Header / Footer
+  onToggleHeader?: () => void;
+  onToggleFooter?: () => void;
+  headerEnabled?: boolean;
+  footerEnabled?: boolean;
+  // Line spacing
+  lineSpacing?: string;
+  onLineSpacingChange?: (spacing: string) => void;
+  // Zoom
+  zoom: number;
+  onZoomChange: (zoom: number) => void;
+}
+
+// DOCX Editor Canvas props
+export interface DocxEditorCanvasProps {
+  editor: any; // TipTap Editor instance
+  viewMode: DocxViewMode;
+  originalArrayBuffer: ArrayBuffer | null;
+  // Watermark
+  watermarkText?: string;
+  watermarkEnabled?: boolean;
+  // Header / Footer
+  headerText?: string;
+  footerText?: string;
+  headerEnabled?: boolean;
+  footerEnabled?: boolean;
+  onToggleHeader?: () => void;
+  onToggleFooter?: () => void;
+  onHeaderTextChange?: (text: string) => void;
+  onFooterTextChange?: (text: string) => void;
+  // Line spacing
+  lineSpacing?: string;
+  // Page margins
+  margins?: { top: number; right: number; bottom: number; left: number };
+  // Zoom
+  zoom?: number;
+}
+
+// DOCX page layout settings
+export interface DocxPageSettings {
+  watermarkEnabled: boolean;
+  watermarkText: string;
+  headerEnabled: boolean;
+  footerEnabled: boolean;
+  headerText: string;
+  footerText: string;
+  lineSpacing: string;
+  margins: { top: number; right: number; bottom: number; left: number };
+}
+
+// DOCX Properties Panel props
+export interface DocxPropertiesPanelProps {
+  metadata: DocxDocumentMetadata;
+  onMetadataChange: (updates: Partial<DocxDocumentMetadata>) => void;
+  htmlContent: string;
+  filePath: string | null;
+  fileId: string | null;
+  isDirty: boolean;
+  onCreateSnapshot: () => void;
+  onRestoreSnapshot: (snapshotId: string) => void;
+  snapshots: Array<{ id: string; snapshot_name: string; created_at: string }>;
+  onDeleteSnapshot: (snapshotId: string) => void;
+  // Page settings
+  pageSettings: DocxPageSettings;
+  onPageSettingsChange: (updates: Partial<DocxPageSettings>) => void;
 }

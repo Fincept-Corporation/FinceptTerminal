@@ -115,5 +115,10 @@
     "testSuccess": "[AR] Test notification sent successfully!",
     "testFailed": "[AR] Failed to send test notification. Check your configuration.",
     "saved": "[AR] Configuration saved"
+  },
+  "language": {
+    "title": "[AR] LANGUAGE SETTINGS",
+    "selectLanguage": "[AR] Select your preferred language for the terminal interface",
+    "currentLanguage": "[AR] CURRENT LANGUAGE"
   }
 }

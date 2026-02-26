@@ -8,6 +8,7 @@ import type { AlgoDeployment } from '../types';
 import { listAlgoDeployments, stopAllAlgoDeployments } from '../services/algoTradingService';
 import DeploymentCard from './DeploymentCard';
 import { F } from '../constants/theme';
+import { S } from '../constants/styles';
 
 const MonitorDashboard: React.FC = () => {
   const [deployments, setDeployments] = useState<AlgoDeployment[]>([]);
@@ -80,84 +81,71 @@ const MonitorDashboard: React.FC = () => {
   };
 
   const eventIcon = (type: string) => {
-    if (type === 'trade') return <TrendingUp size={8} />;
-    if (type === 'error') return <StopCircle size={8} />;
-    if (type === 'signal') return <Radio size={8} />;
-    return <Activity size={8} />;
+    if (type === 'trade') return <TrendingUp size={10} />;
+    if (type === 'error') return <StopCircle size={10} />;
+    if (type === 'signal') return <Radio size={10} />;
+    return <Activity size={10} />;
   };
 
   return (
-    <div style={{
-      height: '100%', display: 'flex', flexDirection: 'column',
-      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-    }}>
+    <div
+      className="h-full flex flex-col"
+      style={{ fontFamily: '"IBM Plex Mono", "Consolas", monospace' }}
+    >
       {/* ─── SUMMARY CARDS ─── */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
-        borderBottom: `1px solid ${F.BORDER}`, flexShrink: 0,
-      }}>
+      <div
+        className="grid grid-cols-5 shrink-0"
+        style={{ borderBottom: `1px solid ${F.BORDER}` }}
+      >
         {/* Active Deployments */}
-        <div style={{ padding: '14px 16px', borderRight: `1px solid ${F.BORDER}` }}>
-          <div style={{
-            fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '6px',
-            display: 'flex', alignItems: 'center', gap: '4px',
-          }}>
-            <Server size={8} />
+        <div className="p-4" style={{ borderRight: `1px solid ${F.BORDER}` }}>
+          <div className={S.metricLabel}>
+            <Server size={10} />
             ACTIVE
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: running.length > 0 ? F.GREEN : F.MUTED }}>
+          <div className="text-[22px] font-bold" style={{ color: running.length > 0 ? F.GREEN : F.MUTED }}>
             {running.length}
           </div>
-          <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>
+          <div className={S.muted + ' mt-1'}>
             of {deployments.length} total
           </div>
         </div>
 
         {/* Total P&L */}
-        <div style={{
-          padding: '14px 16px', borderRight: `1px solid ${F.BORDER}`,
-          backgroundColor: `${totalPnl >= 0 ? F.GREEN : F.RED}04`,
-        }}>
-          <div style={{
-            fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '6px',
-            display: 'flex', alignItems: 'center', gap: '4px',
-          }}>
-            {totalPnl >= 0 ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
+        <div
+          className="p-4"
+          style={{
+            borderRight: `1px solid ${F.BORDER}`,
+            backgroundColor: `${totalPnl >= 0 ? F.GREEN : F.RED}04`,
+          }}
+        >
+          <div className={S.metricLabel}>
+            {totalPnl >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
             TOTAL P&L
           </div>
-          <div style={{
-            fontSize: '20px', fontWeight: 700,
-            color: totalPnl >= 0 ? F.GREEN : F.RED,
-          }}>
+          <div className="text-[22px] font-bold" style={{ color: totalPnl >= 0 ? F.GREEN : F.RED }}>
             {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)}
           </div>
         </div>
 
         {/* Total Trades */}
-        <div style={{ padding: '14px 16px', borderRight: `1px solid ${F.BORDER}` }}>
-          <div style={{
-            fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '6px',
-            display: 'flex', alignItems: 'center', gap: '4px',
-          }}>
-            <Activity size={8} />
+        <div className="p-4" style={{ borderRight: `1px solid ${F.BORDER}` }}>
+          <div className={S.metricLabel}>
+            <Activity size={10} />
             TOTAL TRADES
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: F.CYAN }}>
+          <div className="text-[22px] font-bold" style={{ color: F.CYAN }}>
             {totalTrades}
           </div>
         </div>
 
         {/* Avg Win Rate */}
-        <div style={{ padding: '14px 16px', borderRight: `1px solid ${F.BORDER}` }}>
-          <div style={{
-            fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '6px',
-            display: 'flex', alignItems: 'center', gap: '4px',
-          }}>
-            <Target size={8} />
+        <div className="p-4" style={{ borderRight: `1px solid ${F.BORDER}` }}>
+          <div className={S.metricLabel}>
+            <Target size={10} />
             AVG WIN RATE
           </div>
-          <div style={{
-            fontSize: '20px', fontWeight: 700,
+          <div className="text-[22px] font-bold" style={{
             color: avgWinRate >= 50 ? F.GREEN : avgWinRate > 0 ? F.YELLOW : F.MUTED,
           }}>
             {avgWinRate > 0 ? `${avgWinRate.toFixed(1)}%` : '—'}
@@ -165,73 +153,57 @@ const MonitorDashboard: React.FC = () => {
         </div>
 
         {/* Events */}
-        <div style={{ padding: '14px 16px' }}>
-          <div style={{
-            fontSize: '8px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px', marginBottom: '6px',
-            display: 'flex', alignItems: 'center', gap: '4px',
-          }}>
-            <Radio size={8} />
+        <div className="p-4">
+          <div className={S.metricLabel}>
+            <Radio size={10} />
             EVENTS
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: F.YELLOW }}>
+          <div className="text-[22px] font-bold" style={{ color: F.YELLOW }}>
             {recentEvents.length}
           </div>
-          <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>
+          <div className={S.muted + ' mt-1'}>
             recent signals
           </div>
         </div>
       </div>
 
       {/* ─── MAIN AREA: Two-panel split ─── */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* LEFT: Deployment Cards */}
-        <div style={{
-          flex: 1, overflowY: 'auto', minWidth: 0,
-          borderRight: `1px solid ${F.BORDER}`,
-        }}>
+        <div
+          className="flex-1 overflow-y-auto min-w-0"
+          style={{ borderRight: `1px solid ${F.BORDER}` }}
+        >
           {/* Toolbar */}
-          <div style={{
-            padding: '10px 16px', backgroundColor: F.HEADER_BG,
-            borderBottom: `1px solid ${F.BORDER}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            position: 'sticky', top: 0, zIndex: 1,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <BarChart3 size={10} color={F.ORANGE} />
-              <span style={{ fontSize: '9px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
+          <div
+            className="flex items-center justify-between px-4 py-2.5 sticky top-0 z-[1]"
+            style={{ backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}` }}
+          >
+            <div className="flex items-center gap-2">
+              <BarChart3 size={12} style={{ color: F.ORANGE }} />
+              <span className="text-[10px] font-bold tracking-wide" style={{ color: F.WHITE }}>
                 DEPLOYMENTS
               </span>
             </div>
-            <div style={{ display: 'flex', gap: '4px' }}>
+            <div className="flex gap-1.5">
               <button
                 onClick={loadDeployments}
-                style={{
-                  padding: '4px 8px', backgroundColor: 'transparent',
-                  border: `1px solid ${F.BORDER}`, color: F.GRAY,
-                  cursor: 'pointer', borderRadius: '2px', transition: 'all 0.2s',
-                  display: 'flex', alignItems: 'center', gap: '4px',
-                  fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px',
-                }}
+                className={S.btnOutline}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = F.ORANGE; e.currentTarget.style.color = F.WHITE; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = F.BORDER; e.currentTarget.style.color = F.GRAY; }}
               >
-                <RefreshCw size={9} />
+                <RefreshCw size={10} />
                 REFRESH
               </button>
               {running.length > 0 && (
                 <button
                   onClick={handleStopAll}
-                  style={{
-                    padding: '4px 10px', backgroundColor: `${F.RED}15`,
-                    border: `1px solid ${F.RED}30`, color: F.RED,
-                    borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-                    transition: 'all 0.2s', letterSpacing: '0.5px',
-                  }}
+                  className={S.btnDanger}
+                  style={{ backgroundColor: `${F.RED}15`, borderColor: `${F.RED}30`, color: F.RED }}
                   onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${F.RED}25`; }}
                   onMouseLeave={e => { e.currentTarget.style.backgroundColor = `${F.RED}15`; }}
                 >
-                  <StopCircle size={9} />
+                  <StopCircle size={10} />
                   STOP ALL
                 </button>
               )}
@@ -239,37 +211,24 @@ const MonitorDashboard: React.FC = () => {
           </div>
 
           {/* Deployment List */}
-          <div style={{ padding: '12px 16px' }}>
+          <div className="p-4">
             {loading ? (
-              <div style={{
-                textAlign: 'center', padding: '48px', fontSize: '10px', color: F.MUTED,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-              }}>
-                <RefreshCw size={16} className="animate-spin" color={F.ORANGE} />
-                <span style={{ fontWeight: 700, letterSpacing: '0.5px' }}>LOADING DEPLOYMENTS...</span>
+              <div className="flex flex-col items-center gap-2 py-12 text-center">
+                <RefreshCw size={18} className="animate-spin" style={{ color: F.ORANGE }} />
+                <span className="text-[11px] font-bold tracking-wide" style={{ color: F.MUTED }}>LOADING DEPLOYMENTS...</span>
               </div>
             ) : deployments.length === 0 ? (
-              <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                padding: '48px', color: F.MUTED, textAlign: 'center',
-              }}>
-                <Server size={24} style={{ opacity: 0.3, marginBottom: '8px' }} />
-                <span style={{ fontSize: '10px', fontWeight: 700 }}>NO DEPLOYMENTS</span>
-                <span style={{ fontSize: '9px', marginTop: '4px' }}>
-                  Create a strategy and deploy it to see it here
-                </span>
+              <div className="flex flex-col items-center justify-center py-12 text-center" style={{ color: F.MUTED }}>
+                <Server size={28} className="opacity-30 mb-2" />
+                <span className="text-[11px] font-bold">NO DEPLOYMENTS</span>
+                <span className="text-[10px] mt-1">Create a strategy and deploy it to see it here</span>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="flex flex-col gap-3">
                 {running.length > 0 && (
                   <>
-                    <div style={{
-                      fontSize: '8px', fontWeight: 700, color: F.GREEN,
-                      letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '4px',
-                    }}>
-                      <div style={{
-                        width: '6px', height: '6px', borderRadius: '50%', backgroundColor: F.GREEN,
-                      }} />
+                    <div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide" style={{ color: F.GREEN }}>
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: F.GREEN }} />
                       RUNNING ({running.length})
                     </div>
                     {running.map(d => (
@@ -279,12 +238,15 @@ const MonitorDashboard: React.FC = () => {
                 )}
                 {stopped.length > 0 && (
                   <>
-                    <div style={{
-                      fontSize: '8px', fontWeight: 700, color: F.MUTED,
-                      letterSpacing: '0.5px', paddingTop: running.length > 0 ? '8px' : '0',
-                      borderTop: running.length > 0 ? `1px solid ${F.BORDER}` : 'none',
-                      marginTop: running.length > 0 ? '4px' : '0',
-                    }}>
+                    <div
+                      className="text-[9px] font-bold tracking-wide"
+                      style={{
+                        color: F.MUTED,
+                        paddingTop: running.length > 0 ? '8px' : '0',
+                        borderTop: running.length > 0 ? `1px solid ${F.BORDER}` : 'none',
+                        marginTop: running.length > 0 ? '4px' : '0',
+                      }}
+                    >
                       HISTORY ({stopped.length})
                     </div>
                     {stopped.map(d => (
@@ -298,27 +260,25 @@ const MonitorDashboard: React.FC = () => {
         </div>
 
         {/* RIGHT: Event Log Panel */}
-        <div style={{
-          width: '320px', flexShrink: 0,
-          display: 'flex', flexDirection: 'column',
-          backgroundColor: F.PANEL_BG,
-        }}>
+        <div
+          className="flex flex-col shrink-0"
+          style={{ width: '340px', backgroundColor: F.PANEL_BG }}
+        >
           {/* Event Log Header */}
-          <div style={{
-            padding: '10px 12px', backgroundColor: F.HEADER_BG,
-            borderBottom: `1px solid ${F.BORDER}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Radio size={10} color={F.YELLOW} />
-              <span style={{ fontSize: '9px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>
+          <div
+            className="flex items-center justify-between px-4 py-2.5"
+            style={{ backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}` }}
+          >
+            <div className="flex items-center gap-2">
+              <Radio size={12} style={{ color: F.YELLOW }} />
+              <span className="text-[10px] font-bold tracking-wide" style={{ color: F.WHITE }}>
                 EVENT LOG
               </span>
               {recentEvents.length > 0 && (
-                <span style={{
-                  padding: '1px 5px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-                  backgroundColor: `${F.YELLOW}20`, color: F.YELLOW,
-                }}>
+                <span
+                  className={S.badge}
+                  style={{ backgroundColor: `${F.YELLOW}20`, color: F.YELLOW }}
+                >
                   {recentEvents.length}
                 </span>
               )}
@@ -326,12 +286,7 @@ const MonitorDashboard: React.FC = () => {
             {recentEvents.length > 0 && (
               <button
                 onClick={() => setRecentEvents([])}
-                style={{
-                  padding: '2px 8px', backgroundColor: 'transparent',
-                  border: `1px solid ${F.BORDER}`, color: F.MUTED,
-                  borderRadius: '2px', cursor: 'pointer', fontSize: '8px', fontWeight: 700,
-                  letterSpacing: '0.5px',
-                }}
+                className={S.btnOutline}
                 onMouseEnter={e => { e.currentTarget.style.color = F.WHITE; e.currentTarget.style.borderColor = F.ORANGE; }}
                 onMouseLeave={e => { e.currentTarget.style.color = F.MUTED; e.currentTarget.style.borderColor = F.BORDER; }}
               >
@@ -341,17 +296,14 @@ const MonitorDashboard: React.FC = () => {
           </div>
 
           {/* Event Entries */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+          <div className="flex-1 overflow-y-auto py-1">
             {recentEvents.length === 0 ? (
-              <div style={{
-                padding: '32px 16px', textAlign: 'center',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-              }}>
-                <Radio size={16} color={F.MUTED} style={{ opacity: 0.3 }} />
-                <span style={{ fontSize: '9px', color: F.MUTED, fontWeight: 700 }}>
+              <div className="flex flex-col items-center gap-2 py-8 px-4 text-center">
+                <Radio size={20} style={{ color: F.MUTED, opacity: 0.3 }} />
+                <span className="text-[10px] font-bold" style={{ color: F.MUTED }}>
                   NO EVENTS YET
                 </span>
-                <span style={{ fontSize: '8px', color: F.MUTED }}>
+                <span className={S.muted}>
                   Events will appear here when strategies are running
                 </span>
               </div>
@@ -359,29 +311,23 @@ const MonitorDashboard: React.FC = () => {
               recentEvents.map((evt, i) => (
                 <div
                   key={i}
-                  style={{
-                    display: 'flex', gap: '8px', padding: '6px 12px',
-                    borderBottom: `1px solid ${F.BORDER}15`,
-                    transition: 'background-color 0.15s',
-                  }}
+                  className="flex gap-2 px-4 py-2 transition-colors duration-150"
+                  style={{ borderBottom: `1px solid ${F.BORDER}15` }}
                   onMouseEnter={e => { e.currentTarget.style.backgroundColor = F.HOVER; }}
                   onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                 >
-                  <div style={{ color: eventColor(evt.type), flexShrink: 0, paddingTop: '1px' }}>
+                  <div className="shrink-0 pt-0.5" style={{ color: eventColor(evt.type) }}>
                     {eventIcon(evt.type)}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: '9px', color: eventColor(evt.type),
-                      lineHeight: '1.4', wordBreak: 'break-word',
-                    }}>
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className="text-[10px] leading-relaxed break-words"
+                      style={{ color: eventColor(evt.type) }}
+                    >
                       {evt.message}
                     </div>
-                    <div style={{
-                      fontSize: '8px', color: F.MUTED, marginTop: '1px',
-                      display: 'flex', alignItems: 'center', gap: '3px',
-                    }}>
-                      <Clock size={7} />
+                    <div className="flex items-center gap-1 mt-0.5 text-[9px]" style={{ color: F.MUTED }}>
+                      <Clock size={8} />
                       {new Date(evt.ts).toLocaleTimeString()}
                     </div>
                   </div>

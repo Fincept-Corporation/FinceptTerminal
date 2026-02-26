@@ -756,7 +756,7 @@ export class ZerodhaAdapter extends BaseStockBrokerAdapter {
 
     // Zerodha API has 60-day limit for historical data, so we chunk the request
     const CHUNK_DAYS = 60;
-    let currentStart = new Date(from);
+    let currentStart = new Date(from); // eslint-disable-line prefer-const
     const endDate = new Date(to);
 
     while (currentStart <= endDate) {

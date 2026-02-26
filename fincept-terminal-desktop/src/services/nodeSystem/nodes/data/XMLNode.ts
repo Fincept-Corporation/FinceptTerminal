@@ -148,7 +148,7 @@ export class XMLNode implements INodeType {
   private objToXml(obj: any): string {
     let xml = '';
     for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
         if (Array.isArray(obj[key])) {
           for (const item of obj[key]) {
             xml += `<${key}>${typeof item === 'object' ? this.objToXml(item) : item}</${key}>`;

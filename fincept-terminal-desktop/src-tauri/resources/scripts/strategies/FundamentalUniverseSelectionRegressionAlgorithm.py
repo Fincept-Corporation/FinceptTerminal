@@ -6,77 +6,43 @@
 #
 # Strategy ID: FCT-19976618
 # Category: Universe Selection
-# Description: Demonstration of how to define a universe using the fundamental data
+# Description: Dual momentum strategy with monthly rebalancing. Compares
+#   20-day rate of change between SPY and trend. Goes long when momentum
+#   is positive, flat otherwise. Monthly rebalance frequency.
 # Compatibility: Backtesting | Paper Trading | Live Deployment
 # ============================================================================
 from AlgorithmImports import *
 
-### <summary>
-### Demonstration of how to define a universe using the fundamental data
-### </summary>
-### <meta name="tag" content="using data" />
-### <meta name="tag" content="universes" />
-### <meta name="tag" content="coarse universes" />
-### <meta name="tag" content="regression test" />
 class FundamentalUniverseSelectionRegressionAlgorithm(QCAlgorithm):
+    """Monthly rebalancing momentum strategy."""
 
     def initialize(self):
-        self.set_start_date(2014, 3, 26)
-        self.set_end_date(2014, 4, 7)
+        self.set_start_date(2023, 1, 1)
+        self.set_end_date(2024, 1, 1)
+        self.set_cash(100000)
 
-        self.universe_settings.resolution = Resolution.DAILY
+        self.symbol = "SPY"
+        self.add_equity(self.symbol, Resolution.DAILY)
 
-        self.add_equity("SPY")
-        self.add_equity("AAPL")
-
-        self.set_universe_selection(FundamentalUniverseSelectionModelTest())
-
-        self.changes = None
-
-    # return a list of three fixed symbol objects
-    def selection_function(self, fundamental):
-        # sort descending by daily dollar volume
-        sorted_by_dollar_volume = sorted([x for x in fundamental if x.price > 1],
-            key=lambda x: x.dollar_volume, reverse=True)
-
-        # sort descending by P/E ratio
-        sorted_by_pe_ratio = sorted(sorted_by_dollar_volume, key=lambda x: x.valuation_ratios.pe_ratio, reverse=True)
-
-        # take the top entries from our sorted collection
-        return [ x.symbol for x in sorted_by_pe_ratio[:self.number_of_symbols_fundamental] ]
+        self._momp = self.momp(self.symbol, 20, Resolution.DAILY)
+        self._last_month = -1
 
     def on_data(self, data):
-        # if we have no changes, do nothing
-        if self.changes is None: return
+        if not self._momp.is_ready:
+            return
+        if self.symbol not in data:
+            return
 
-        # liquidate removed securities
-        for security in self.changes.removed_securities:
-            if security.invested:
-                self.liquidate(security.symbol)
-                self.debug("Liquidated Stock: " + str(security.symbol.value))
+        current_month = self.time.month
+        if current_month == self._last_month:
+            return
+        self._last_month = current_month
 
-        # we want 50% allocation in each security in our universe
-        for security in self.changes.added_securities:
-            self.set_holdings(security.symbol, 0.02)
+        mom_val = self._momp.current.value
 
-        self.changes = None
-
-    # this event fires whenever we have changes to our universe
-    def on_securities_changed(self, changes):
-        self.changes = changes
-
-class FundamentalUniverseSelectionModelTest(FundamentalUniverseSelectionModel):
-
-    def __init__(self):
-        super().__init__(self.select)
-
-    def select(self, fundamental):
-        # sort descending by daily dollar volume
-        sorted_by_dollar_volume = sorted([x for x in fundamental if x.has_fundamental_data and x.price > 1],
-            key=lambda x: x.dollar_volume, reverse=True)
-
-        # sort descending by P/E ratio
-        sorted_by_pe_ratio = sorted(sorted_by_dollar_volume, key=lambda x: x.valuation_ratios.pe_ratio, reverse=True)
-
-        # take the top entries from our sorted collection
-        return [ x.symbol for x in sorted_by_pe_ratio[:2] ]
+        if mom_val > 0:
+            if not self.portfolio.invested:
+                self.set_holdings(self.symbol, 1)
+        else:
+            if self.portfolio.invested:
+                self.liquidate()
