@@ -163,6 +163,20 @@ export class WebSocketBridge {
     await withTimeout(invoke('ws_unsubscribe', { provider, symbol, channel }), INVOKE_TIMEOUT_MS, 'unsubscribe');
   }
 
+  /**
+   * Unsubscribe from ALL tracked subscriptions for a provider + channel in one call.
+   * Preferred over calling unsubscribe() in a loop because the backend uses its own
+   * subscription registry — nothing gets missed even if the caller's list is stale.
+   * Returns the list of symbols that were unsubscribed.
+   */
+  async unsubscribeAll(provider: string, channel: string): Promise<string[]> {
+    return await withTimeout(
+      invoke<string[]>('ws_unsubscribe_all', { provider, channel }),
+      INVOKE_TIMEOUT_MS,
+      'unsubscribeAll'
+    );
+  }
+
   // ========================================================================
   // EVENT LISTENERS
   // ========================================================================
@@ -286,7 +300,7 @@ export async function subscribeToSymbol(
 }
 
 /**
- * Quick unsubscribe helper
+ * Quick unsubscribe helper for a single symbol
  */
 export async function unsubscribeFromSymbol(
   provider: string,
@@ -295,6 +309,20 @@ export async function unsubscribeFromSymbol(
 ): Promise<void> {
   for (const channel of channels) {
     await websocketBridge.unsubscribe(provider, symbol, channel);
+  }
+}
+
+/**
+ * Bulk unsubscribe all tracked subscriptions for a provider + channel.
+ * More reliable than unsubscribeFromSymbol in a loop because the backend
+ * uses its own registry — nothing gets missed if the caller's list is stale.
+ */
+export async function unsubscribeAllFromProvider(
+  provider: string,
+  channels: string[] = ['ticker', 'book', 'trade']
+): Promise<void> {
+  for (const channel of channels) {
+    await websocketBridge.unsubscribeAll(provider, channel);
   }
 }
 

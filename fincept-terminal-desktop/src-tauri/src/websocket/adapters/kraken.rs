@@ -194,14 +194,6 @@ impl KrakenAdapter {
 
     /// Handle incoming text message
     fn handle_text_message(text: &str, callback: &Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>) {
-        // Debug: log first few raw messages
-        static RAW_MSG_COUNT: AtomicU64 = AtomicU64::new(0);
-        let count = RAW_MSG_COUNT.fetch_add(1, Ordering::Relaxed);
-        if count < 10 {
-            let preview = &text[..std::cmp::min(300, text.len())];
-            eprintln!("[Kraken] Raw msg #{}: {}", count, preview);
-        }
-
         let cb = callback.clone();
         let text_clone = text.to_string();
 
@@ -225,12 +217,6 @@ impl KrakenAdapter {
         match channel {
             "ticker" => {
                 if let Some(ticker) = Self::parse_ticker(data) {
-                    // Debug log
-                    static TICKER_COUNT: AtomicU64 = AtomicU64::new(0);
-                    let count = TICKER_COUNT.fetch_add(1, Ordering::Relaxed);
-                    if count < 5 || count % 50 == 0 {
-                        eprintln!("[Kraken] Ticker #{}: {} @ {:.2}", count, ticker.symbol, ticker.price);
-                    }
                     callback(MarketMessage::Ticker(ticker));
                 }
             }
@@ -575,15 +561,11 @@ impl WebSocketAdapter for KrakenAdapter {
         }
 
         let msg_str = serde_json::to_string(&sub_msg)?;
-        eprintln!("[Kraken] Subscribing: {}", msg_str);
 
         match sink.lock().await.send(Message::Text(msg_str)).await {
-            Ok(_) => {
-                eprintln!("[Kraken] Subscription sent for {} {}", kraken_symbol, channel);
-                Ok(())
-            }
+            Ok(_) => Ok(()),
             Err(e) => {
-                eprintln!("[Kraken] Subscription failed: {}", e);
+                eprintln!("[Kraken] Subscribe failed for {} {}: {}", kraken_symbol, channel, e);
                 self.connected.store(false, Ordering::SeqCst);
                 Err(anyhow::anyhow!("Failed to subscribe: {}", e))
             }
@@ -605,8 +587,6 @@ impl WebSocketAdapter for KrakenAdapter {
         });
 
         let msg_str = serde_json::to_string(&unsub_msg)?;
-        eprintln!("[Kraken] Unsubscribing: {}", msg_str);
-
         sink.lock().await.send(Message::Text(msg_str)).await?;
         Ok(())
     }

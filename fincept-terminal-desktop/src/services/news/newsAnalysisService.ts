@@ -4,7 +4,6 @@
  */
 
 const API_BASE_URL = 'https://api.fincept.in';
-const API_KEY = 'fk_user_uhwLowYhfwEg6H3WCtXK4hqG0DhZfNhK2UmtNpHuLuB';
 
 export interface NewsAnalysisRequest {
   url: string;
@@ -93,14 +92,18 @@ export interface NewsAnalysisError {
  * @returns Analysis results or error
  */
 export async function analyzeNewsArticle(
-  url: string
+  url: string,
+  apiKey: string
 ): Promise<NewsAnalysisResponse | NewsAnalysisError> {
+  if (!apiKey) {
+    return { success: false, error: 'No API key available. Please log in.', status_code: 401 };
+  }
   try {
     const response = await fetch(`${API_BASE_URL}/news/analyze`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': API_KEY,
+        'X-API-Key': apiKey,
       },
       body: JSON.stringify({ url }),
     });

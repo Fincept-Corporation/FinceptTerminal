@@ -7,6 +7,7 @@ import RecordingControlPanel from '@/components/common/RecordingControlPanel';
 import { useCurrentTime } from '@/contexts/TimezoneContext';
 import { useTranslation } from 'react-i18next';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { analyzeNewsArticle, type NewsAnalysisData, getSentimentColor, getUrgencyColor, getRiskColor } from '@/services/news/newsAnalysisService';
 import { createNewsTabTour } from '@/components/tabs/tours/newsTabTour';
 import RSSFeedSettingsModal from './RSSFeedSettingsModal';
@@ -184,6 +185,7 @@ const NewsTab: React.FC = () => {
   const { t } = useTranslation('news');
   const { colors, fontSize, fontFamily } = useTerminalTheme();
   const { formattedTime, timezone } = useCurrentTime();
+  const { session } = useAuth();
 
   // Helper functions for priority/sentiment colors
   const priColor = (p: string) => ({
@@ -285,7 +287,7 @@ const NewsTab: React.FC = () => {
     setCurrentAnalyzedArticle(article);
     setAnalysisPanelOpen(true); // Auto-open the panel
     try {
-      const result = await analyzeNewsArticle(article.link);
+      const result = await analyzeNewsArticle(article.link, session?.api_key ?? '');
       if (result.success && 'data' in result) {
         setAnalysisData(result.data);
         setShowAnalysis(true);

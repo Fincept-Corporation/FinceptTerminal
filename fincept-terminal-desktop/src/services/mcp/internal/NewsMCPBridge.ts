@@ -34,6 +34,14 @@ import type { NewsArticleInfo, NewsSentimentStats } from './types';
 export class NewsMCPBridge {
   private connected: boolean = false;
   private cachedArticles: NewsArticleInfo[] = [];
+  private apiKey: string = '';
+
+  /**
+   * Set the user API key (call this when auth state changes)
+   */
+  setApiKey(key: string): void {
+    this.apiKey = key;
+  }
 
   /**
    * Connect news services to MCP contexts
@@ -183,7 +191,7 @@ export class NewsMCPBridge {
       // ==================== ANALYSIS ====================
 
       analyzeNewsArticle: async (url: string) => {
-        const result = await analyzeNewsArticle(url);
+        const result = await analyzeNewsArticle(url, this.apiKey);
         if ('error' in result) {
           return {
             success: false,

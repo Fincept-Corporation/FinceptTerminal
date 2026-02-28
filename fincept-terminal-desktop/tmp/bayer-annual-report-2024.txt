@@ -1,0 +1,129 @@
+
+============================================================
+PAGE 1
+============================================================
+
+[Title] RESTRICTED
+
+[Title] Annual Report
+
+
+============================================================
+PAGE 2
+============================================================
+
+[Title] Bayer Annual Report 2024 Five Year Summary
+
+[Title] Five Year Summary
+
+[Table] € million 2020 2021 2022 2023 2024
+
+[Title] Bayer Group financial KPIs
+
+[Table] Sales 41,400 44,081 50,739 47,637 46,606
+
+[Table] EBITDA 1 (2,910) 6,409 13,515 10,632 8,712
+
+[Table] EBITDA before special items 1 11,461 11,179 13,513 11,706 10,123
+
+[Table] EBITDA margin before special items 1 27.7% 25.4% 26.6% 24.6% 21.7%
+
+[Table] EBIT1 (16,169) 3,353 7,012 612 (71)
+
+[Table] EBIT before special items 1 7,095 7,295 9,257 7,589 5,436
+
+[Table] Net income (from continuingand discontinued operations) (10,495) 1,000 4,150 (2,941) (2,552)
+
+[Table] Earningsper share (from continuingand discontinued operations) (€) 1 (10.68) 1.02 4.22 (2.99) (2.60)
+
+[Table] Core earningsper share (from continuing operations) (€) 1 6.39 6.51 7.94 6.39 5.05
+
+[Table] Free cash flow 1,343 1,415 3,111 1,311 3,107
+
+[Table] Net financial debt 30,045 33,137 31,809 34,498 32,626
+
+[Table] Returnon capital employed (ROCE) (%) –16.5 3.8 7.7 0.7 –0.1
+
+[Table] Researchand development expe nses 7,126 5,412 6,572 5,371 6,209
+
+[Table] Dividendper share (€) 2.00 2.00 2.40 0.11 0.11
+
+[Title] Bayer Group nonfinancial KPIs 2
+
+[Title] Numberof smallholder farmersinlow  and middle income countries supportedby
+
+[Table] products, servicesand partnerships (million) 45 49 52 53 52
+
+[Title] Numberof womeninlow  and middle income countrieswho have their needfor
+
+[Table] modern contraception satisfieddueto interventions supportedby Bayer (million) 40 41 44 46 51
+
+[Title] Numberof peoplein underserved 3 communities whose self careis supportedby
+
+[Table] interventions from Bayer (million) 43 46 49 51 53
+
+[Table] Scope 1 and 2 greenhousegas emissions (million metric tons) 3.58 3.17 3.03 3.00 2.96
+
+[Table] Scope 3 greenhousegas emissions from relevant categories (million metric tons) 4 7.93 7.97 8.98 8.44 7.70
+
+[Table] Offsettingof remaining Scope 1 and 2 greenhousegas emissions (million metric tons ) 0.20 0.30 0.45 0.60 0.71
+
+[Title] Employees
+
+[Table] Numberof employees 5 (Dec. 31) 99,538 99,637 101,369 99,723 92,815
+
+[Table] Personnel expenses (including pension expensesand restru cturing measures) (€ million) 9,769 11,798 12,619 10,691 12,451
+
+[Table] 1 For definitionsee A 2.3 “Alternative Performance Measures Usedbythe Bayer Group.”
+
+[Table] 2 For more informationsee A 4 Sustainability Statement.
+
+[Title] 3 Economicallyor medically
+
+[Table] 4 Valuesfor 2020, 2021 and 2022 were updatedduetonew findingsin category 3.1.
+
+[Title] 5 Employees calculatedas full time equivalents (FTEs)
+
+
+============================================================
+PAGE 3
+============================================================
+
+[Title] Bayer Annual Report 2024 Ata Glance
+
+[Title] Fiscal 2024
+
+[ListItem] // Group salesat €46.6 billion (Fx & padj. +0.7%, reported
+
+[ListItem] 2.2%), negative currency effectsof around €1.3 billion
+
+[ListItem] // EBITDA before special itemsat €10.1 billion ( 13.5%)
+
+[ListItem] // Crop Science reports slightd ecreasein sales, significant
+
+[Title] declinein earnings yearon year
+
+[ListItem] // Pharmaceuticals posts sales growth (Fx & padj.),
+
+[Title] earnings mainly impactedby currency headwinds
+
+[ListItem] // Consumer Health records slightly higher sales
+
+[Title] (Fx & padj.), earnings down marginally
+
+[ListItem] // Core earningspershareat €5.05 ( 21.0%)
+
+[ListItem] // Net incomeat minus €2.6 billion, impairment losses
+
+[Title] at Crop Science
+
+[ListItem] // Free cash flow increasesto €3 .1 billion, net financial debt
+
+[Title] reducedto €32.6 billion
+
+[ListItem] // Proposed dividendof €0.11 per share
+
+[ListItem] // Outlookfor 2025: Sales roughlyat prior year level,
+
+[Title] EBITDA before special itemsand core EPS to decline
+

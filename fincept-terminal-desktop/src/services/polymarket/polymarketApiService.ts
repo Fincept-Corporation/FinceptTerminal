@@ -1,5 +1,4 @@
-// File: src/services/polymarketServiceEnhanced.ts
-// Complete Polymarket API service with all endpoints
+// Polymarket API service — single source of truth for all Polymarket endpoints
 
 const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
 const CLOB_API_BASE = 'https://clob.polymarket.com';
@@ -184,42 +183,118 @@ export interface PolymarketComment {
   likes?: number;
 }
 
-// Data API Types
+// Data API Types — schemas match https://data-api.polymarket.com responses exactly
+
+// GET /positions?user=
 export interface UserPosition {
-  id: string;
-  market_id: string;
-  asset_id: string;
-  user_address: string;
+  proxyWallet: string;
+  asset: string;
+  conditionId: string;
+  size: number;
+  avgPrice: number;
+  initialValue: number;
+  currentValue: number;
+  cashPnl: number;
+  percentPnl: number;
+  totalBought: number;
+  realizedPnl: number;
+  percentRealizedPnl: number;
+  curPrice: number;
+  redeemable: boolean;
+  mergeable: boolean;
+  negativeRisk: boolean;
+  title: string;
+  slug: string;
+  icon?: string;
+  eventSlug?: string;
   outcome: string;
-  size: string;
-  entry_price: string;
-  current_price?: string;
-  unrealized_pnl?: string;
-  timestamp: number;
+  oppositeOutcome?: string;
+  oppositeAsset?: string;
+  outcomeIndex: number;
+  endDate?: string;
 }
 
+// GET /value?user=
+export interface UserPortfolioValue {
+  user: string;
+  value: number;
+}
+
+// GET /activity?user= — real Data API wire format
 export interface UserActivity {
-  id: string;
-  user_address: string;
-  type: 'trade' | 'deposit' | 'withdrawal' | 'claim';
-  market_id?: string;
-  amount: string;
-  timestamp: number;
-  transaction_hash: string;
-  status: 'pending' | 'confirmed' | 'failed';
+  proxyWallet: string;
+  timestamp: number;        // unix seconds
+  conditionId: string;
+  type: 'BUY' | 'SELL' | 'REDEEM' | 'REWARD' | 'DEPOSIT' | 'WITHDRAWAL' | string;
+  size: number;             // token size
+  usdcSize: number;         // USDC value
+  transactionHash: string;
+  price: number;
+  asset: string;
+  side: string;
+  outcomeIndex: number;
+  title: string;
+  slug: string;
+  icon: string;
+  eventSlug: string;
+  outcome: string;
+  name: string;
+  pseudonym: string;
+  bio: string;
+  profileImage: string;
+  profileImageOptimized: string;
 }
 
-export interface UserTradeHistory {
-  id: string;
-  market_id: string;
-  user_address: string;
-  side: 'BUY' | 'SELL';
+// Derived user profile — assembled from first activity/position record
+export interface UserProfile {
+  proxyWallet: string;
+  name: string;
+  pseudonym: string;
+  bio: string;
+  profileImage: string;
+  profileImageOptimized: string;
+}
+
+// GET /closed-positions?user= — resolved positions with realized P&L
+export interface ClosedPosition {
+  proxyWallet: string;
+  asset: string;
+  conditionId: string;
+  avgPrice: number;
+  totalBought: number;
+  realizedPnl: number;
+  curPrice: number;
+  timestamp: number;       // unix seconds
+  title: string;
+  slug?: string;
+  icon?: string;
+  eventSlug?: string;
   outcome: string;
-  size: string;
-  price: string;
-  fee: string;
-  timestamp: number;
-  realized_pnl?: string;
+  outcomeIndex: number;
+  oppositeOutcome?: string;
+  oppositeAsset?: string;
+  endDate?: string;
+}
+
+// GET /trades?user= — Data API user trade history
+export interface UserTradeHistory {
+  proxyWallet: string;
+  side: 'BUY' | 'SELL';
+  asset: string;
+  conditionId: string;
+  size: number;
+  price: number;
+  timestamp: number;       // unix seconds (number from API)
+  title: string;
+  slug?: string;
+  icon?: string;
+  eventSlug?: string;
+  outcome: string;
+  outcomeIndex: number;
+  name?: string;
+  pseudonym?: string;
+  profileImage?: string;
+  transactionHash?: string;
 }
 
 // Pricing Types
@@ -321,11 +396,61 @@ export interface WSMarketUpdate {
   data?: any;
 }
 
-export interface WSUserUpdate {
-  type: 'order' | 'trade' | 'position';
-  data: Order | PolymarketTrade | UserPosition;
-  timestamp: number;
+// User WebSocket — flat message format per asyncapi-user.json
+// Discriminant is event_type: "order" | "trade" (NOT a { type, data } wrapper)
+export interface WSUserOrderEvent {
+  event_type: 'order';
+  id: string;
+  owner: string;
+  market: string;         // conditionId
+  asset_id: string;       // tokenId
+  side: 'BUY' | 'SELL';
+  original_size: string;
+  size_matched: string;
+  price: string;
+  outcome: string;
+  type: 'PLACEMENT' | 'UPDATE' | 'CANCELLATION';
+  status: string;         // "LIVE", "CANCELED", "MATCHED", etc.
+  order_type: 'GTC' | 'GTD' | 'FOK';
+  created_at: string;
+  expiration?: string;
+  maker_address?: string;
+  associate_trades?: string[];
+  timestamp: string;      // milliseconds as string
 }
+
+export interface WSUserTradeEvent {
+  event_type: 'trade';
+  id: string;
+  taker_order_id: string;
+  market: string;         // conditionId
+  asset_id: string;       // tokenId
+  side: 'BUY' | 'SELL';
+  size: string;
+  price: string;
+  fee_rate_bps: string;
+  status: 'MATCHED' | 'MINED' | 'CONFIRMED' | 'RETRYING' | 'FAILED';
+  matchtime: string;
+  last_update: string;
+  outcome: string;
+  owner: string;
+  trader_side: 'TAKER' | 'MAKER';
+  transaction_hash?: string;
+  maker_orders?: Array<{
+    order_id: string;
+    owner: string;
+    maker_address: string;
+    matched_amount: string;
+    price: string;
+    fee_rate_bps: string;
+    asset_id: string;
+    outcome: string;
+    side: 'BUY' | 'SELL';
+  }>;
+  timestamp: string;      // milliseconds as string
+}
+
+export type WSUserUpdate = WSUserOrderEvent | WSUserTradeEvent;
 
 // Query Parameters
 export interface MarketQueryParams {
@@ -407,22 +532,32 @@ class PolymarketServiceEnhanced {
     this.credentials = undefined;
   }
 
+  get hasCredentials(): boolean {
+    return !!this.credentials;
+  }
+
+  getWalletAddress(): string | undefined {
+    return this.credentials?.walletAddress;
+  }
+
   private async generateAuthHeaders(timestamp: number, method: string, path: string, body?: string): Promise<HeadersInit> {
     if (!this.credentials) {
       throw new Error('API credentials not set');
     }
 
     // Build the message to sign: timestamp + method + path + body
+    // timestamp is in MILLISECONDS per Polymarket HMAC spec
     const message = timestamp.toString() + method.toUpperCase() + path + (body ?? '');
 
     // HMAC-SHA256 signature using Web Crypto API
+    // The API secret is base64-encoded — decode it to raw bytes before importing as key
     const encoder = new TextEncoder();
-    const keyData = encoder.encode(this.credentials.apiSecret);
+    const secretBytes = Uint8Array.from(atob(this.credentials.apiSecret), c => c.charCodeAt(0));
     const msgData = encoder.encode(message);
 
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      keyData,
+      secretBytes,
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['sign']
@@ -430,8 +565,10 @@ class PolymarketServiceEnhanced {
 
     const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, msgData);
     const signatureBytes = new Uint8Array(signatureBuffer);
-    // Base64 encode the signature
-    const signature = btoa(String.fromCharCode(...signatureBytes));
+    // URL-safe base64: replace + with - and / with _ (Polymarket spec)
+    const signature = btoa(String.fromCharCode(...signatureBytes))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
 
     return {
       'Content-Type': 'application/json',
@@ -543,12 +680,41 @@ class PolymarketServiceEnhanced {
     }
   }
 
-  async search(query: string, type: 'markets' | 'events' | 'all' = 'all'): Promise<any> {
+  async search(query: string, type: 'markets' | 'events' | 'all' = 'all'): Promise<{ markets: PolymarketMarket[]; events: PolymarketEvent[] }> {
     try {
-      const url = `${this.gammaApiBase}/search?q=${encodeURIComponent(query)}&type=${type}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Gamma API error: ${response.status}`);
-      return await response.json();
+      // Official public search endpoint — no auth required
+      // events_status=open filters to only active/open events
+      // keep_closed_markets=0 excludes resolved markets from nested market lists
+      const params = new URLSearchParams({
+        q: query,
+        limit_per_type: '50',
+        events_status: 'open',
+        keep_closed_markets: '0',
+        search_tags: 'false',
+        search_profiles: 'false',
+        sort: 'volume24hr',
+        ascending: 'false',
+      });
+      const url = `${this.gammaApiBase}/public-search?${params.toString()}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Gamma search error: ${res.status}`);
+      const data = await res.json();
+
+      // /public-search returns events containing nested markets
+      const allEvents: PolymarketEvent[] = Array.isArray(data.events) ? data.events : [];
+
+      // Keep only active, non-closed, non-archived events — sorted by volume
+      const events = allEvents
+        .filter(e => e.active && !e.closed && !e.archived)
+        .sort((a, b) => parseFloat(String(b.volume ?? '0')) - parseFloat(String(a.volume ?? '0')));
+
+      // Flatten markets, keep only active non-closed ones, sort by volumeNum desc
+      const markets: PolymarketMarket[] = events
+        .flatMap(e => Array.isArray(e.markets) ? e.markets : [])
+        .filter(m => m.active && !m.closed && !m.archived)
+        .sort((a, b) => (b.volumeNum ?? 0) - (a.volumeNum ?? 0));
+
+      return { markets, events };
     } catch (error) {
       console.error('Error searching:', error);
       throw error;
@@ -650,18 +816,11 @@ class PolymarketServiceEnhanced {
       queryParams.append('fidelity', (params.fidelity ?? 1).toString());
 
       const url = `${this.clobApiBase}/prices-history?${queryParams.toString()}`;
-      console.log('Price history URL:', url);
-
       const response = await fetch(url);
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Price history error:', errorText);
         throw new Error(`CLOB API error: ${response.status}`);
       }
-
       const data = await response.json();
-      console.log('Price history response:', data);
-      console.log('First history item:', data.history?.[0]);
 
       // API returns { history: [{ p: number, t: number }, ...] }
       // p = price (0–1 float), t = unix timestamp in seconds
@@ -743,10 +902,28 @@ class PolymarketServiceEnhanced {
 
   // ==================== DATA API - User Data ====================
 
-  async getUserPositions(userAddress: string): Promise<UserPosition[]> {
+  async getUserPositions(
+    userAddress: string,
+    params?: {
+      limit?: number;
+      offset?: number;
+      sortBy?: 'CURRENT' | 'INITIAL' | 'TOKENS' | 'CASHPNL' | 'PERCENTPNL' | 'TITLE' | 'RESOLVING' | 'PRICE' | 'AVGPRICE';
+      sortDirection?: 'ASC' | 'DESC';
+      redeemable?: boolean;
+      mergeable?: boolean;
+      sizeThreshold?: number;
+    }
+  ): Promise<UserPosition[]> {
     try {
-      const url = `${this.dataApiBase}/positions?user=${userAddress}`;
-      const response = await fetch(url);
+      const q = new URLSearchParams({ user: userAddress });
+      if (params?.limit)         q.set('limit', String(params.limit));
+      if (params?.offset)        q.set('offset', String(params.offset));
+      if (params?.sortBy)        q.set('sortBy', params.sortBy);
+      if (params?.sortDirection) q.set('sortDirection', params.sortDirection);
+      if (params?.redeemable != null) q.set('redeemable', String(params.redeemable));
+      if (params?.mergeable  != null) q.set('mergeable',  String(params.mergeable));
+      if (params?.sizeThreshold != null) q.set('sizeThreshold', String(params.sizeThreshold));
+      const response = await fetch(`${this.dataApiBase}/positions?${q}`);
       if (!response.ok) throw new Error(`Data API error: ${response.status}`);
       return await response.json();
     } catch (error) {
@@ -755,10 +932,27 @@ class PolymarketServiceEnhanced {
     }
   }
 
-  async getUserActivity(userAddress: string, limit?: number): Promise<UserActivity[]> {
+  async getPortfolioValue(userAddress: string): Promise<UserPortfolioValue[]> {
     try {
-      const url = `${this.dataApiBase}/activity?user=${userAddress}${limit ? `&limit=${limit}` : ''}`;
-      const response = await fetch(url);
+      const response = await fetch(`${this.dataApiBase}/value?user=${userAddress}`);
+      if (!response.ok) throw new Error(`Data API error: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching portfolio value:', error);
+      throw error;
+    }
+  }
+
+  async getUserActivity(
+    userAddress: string,
+    params?: { limit?: number; offset?: number; type?: string }
+  ): Promise<UserActivity[]> {
+    try {
+      const q = new URLSearchParams({ user: userAddress });
+      if (params?.limit)  q.set('limit',  String(params.limit));
+      if (params?.offset) q.set('offset', String(params.offset));
+      if (params?.type)   q.set('type',   params.type);
+      const response = await fetch(`${this.dataApiBase}/activity?${q}`);
       if (!response.ok) throw new Error(`Data API error: ${response.status}`);
       return await response.json();
     } catch (error) {
@@ -767,14 +961,73 @@ class PolymarketServiceEnhanced {
     }
   }
 
-  async getUserTrades(userAddress: string, limit?: number): Promise<UserTradeHistory[]> {
+  // Derives a UserProfile from activity/position records (profile fields are embedded in API responses)
+  async getUserProfile(userAddress: string): Promise<UserProfile> {
+    // Fetch a small slice of activity — profile fields (name, pseudonym, bio, profileImage) are on each record
+    const activity = await this.getUserActivity(userAddress, { limit: 5 }).catch(() => [] as UserActivity[]);
+    const first = activity[0];
+    return {
+      proxyWallet: userAddress,
+      name:                  first?.name                  ?? '',
+      pseudonym:             first?.pseudonym             ?? '',
+      bio:                   first?.bio                   ?? '',
+      profileImage:          first?.profileImage          ?? '',
+      profileImageOptimized: first?.profileImageOptimized ?? '',
+    };
+  }
+
+  async getUserTrades(
+    userAddress: string,
+    params?: { limit?: number; offset?: number; side?: 'BUY' | 'SELL' }
+  ): Promise<UserTradeHistory[]> {
     try {
-      const url = `${this.dataApiBase}/trades?user=${userAddress}${limit ? `&limit=${limit}` : ''}`;
-      const response = await fetch(url);
+      const q = new URLSearchParams({ user: userAddress });
+      if (params?.limit)  q.set('limit',  String(params.limit));
+      if (params?.offset) q.set('offset', String(params.offset));
+      if (params?.side)   q.set('side',   params.side);
+      const response = await fetch(`${this.dataApiBase}/trades?${q}`);
       if (!response.ok) throw new Error(`Data API error: ${response.status}`);
       return await response.json();
     } catch (error) {
       console.error('Error fetching user trades:', error);
+      throw error;
+    }
+  }
+
+  // GET /balanceAllowance — USDC collateral balance (requires L2 auth)
+  // Use asset_type=COLLATERAL to get the USDC.e cash balance available for trading.
+  async getBalanceAllowance(assetType: 'COLLATERAL' | 'CONDITIONAL' = 'COLLATERAL', tokenId?: string): Promise<{ balance: string; allowance: string }> {
+    if (!this.credentials) throw new Error('Authentication required');
+    const timestamp = Date.now();
+    const q = new URLSearchParams({ asset_type: assetType });
+    if (tokenId) q.set('token_id', tokenId);
+    const path = `/balance-allowance?${q}`;
+    const headers = await this.generateAuthHeaders(timestamp, 'GET', path);
+    const response = await fetch(`${this.clobApiBase}${path}`, { headers });
+    if (!response.ok) throw new Error(`CLOB API error: ${response.status}`);
+    return await response.json();
+  }
+
+  async getClosedPositions(
+    userAddress: string,
+    params?: {
+      limit?: number;
+      offset?: number;
+      sortBy?: 'REALIZEDPNL' | 'TITLE' | 'PRICE' | 'AVGPRICE' | 'TIMESTAMP';
+      sortDirection?: 'ASC' | 'DESC';
+    }
+  ): Promise<ClosedPosition[]> {
+    try {
+      const q = new URLSearchParams({ user: userAddress });
+      if (params?.limit)         q.set('limit',         String(params.limit));
+      if (params?.offset)        q.set('offset',        String(params.offset));
+      if (params?.sortBy)        q.set('sortBy',        params.sortBy);
+      if (params?.sortDirection) q.set('sortDirection', params.sortDirection);
+      const response = await fetch(`${this.dataApiBase}/closed-positions?${q}`);
+      if (!response.ok) throw new Error(`Data API error: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching closed positions:', error);
       throw error;
     }
   }
@@ -849,7 +1102,7 @@ class PolymarketServiceEnhanced {
     }
 
     try {
-      const timestamp = Math.floor(Date.now() / 1000);
+      const timestamp = Date.now();
       const url = `${this.clobApiBase}/order`;
       const body = JSON.stringify(orderRequest);
       const headers = await this.generateAuthHeaders(timestamp, 'POST', '/order', body);
@@ -874,7 +1127,7 @@ class PolymarketServiceEnhanced {
     }
 
     try {
-      const timestamp = Math.floor(Date.now() / 1000);
+      const timestamp = Date.now();
       const path = userAddress ? `/orders?user=${userAddress}` : '/orders';
       const url = `${this.clobApiBase}${path}`;
       const headers = await this.generateAuthHeaders(timestamp, 'GET', path);
@@ -894,7 +1147,7 @@ class PolymarketServiceEnhanced {
     }
 
     try {
-      const timestamp = Math.floor(Date.now() / 1000);
+      const timestamp = Date.now();
       const path = `/order/${orderId}`;
       const url = `${this.clobApiBase}${path}`;
       const headers = await this.generateAuthHeaders(timestamp, 'DELETE', path);
@@ -918,7 +1171,7 @@ class PolymarketServiceEnhanced {
     }
 
     try {
-      const timestamp = Math.floor(Date.now() / 1000);
+      const timestamp = Date.now();
       // Official endpoint: DELETE /cancel-all (optionally with body { market })
       const path = '/cancel-all';
       const body = marketId ? JSON.stringify({ market: marketId }) : undefined;
@@ -1135,14 +1388,12 @@ class PolymarketServiceEnhanced {
   }
 
   calculateUnrealizedPnL(position: UserPosition): number {
-    if (!position.current_price) return 0;
-    const entryPrice = parseFloat(position.entry_price);
-    const currentPrice = parseFloat(position.current_price);
-    const size = parseFloat(position.size);
-    return (currentPrice - entryPrice) * size;
+    // cashPnl already provided by the API; compute fallback from price delta if zero
+    if (position.cashPnl !== 0) return position.cashPnl;
+    return (position.curPrice - position.avgPrice) * position.size;
   }
 }
 
 // Export singleton instance
-export const polymarketServiceEnhanced = new PolymarketServiceEnhanced();
-export default polymarketServiceEnhanced;
+export const polymarketApiService = new PolymarketServiceEnhanced();
+export default polymarketApiService;

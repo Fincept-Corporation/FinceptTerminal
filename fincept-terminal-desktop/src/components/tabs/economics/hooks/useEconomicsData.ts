@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { sqliteService } from '@/services/core/sqliteService';
+import { useAuth } from '@/contexts/AuthContext';
 import { getDateFromPreset } from '@/components/common/charts';
 import type { DateRangePreset } from '@/components/common/charts';
 import {
@@ -68,6 +69,8 @@ interface UseEconomicsDataReturn {
 }
 
 export function useEconomicsData(): UseEconomicsDataReturn {
+  const { session } = useAuth();
+  const finceptApiKey = session?.api_key ?? '';
   const [dataSource, setDataSourceState] = useState<DataSource>('worldbank');
   const [selectedCountry, setSelectedCountry] = useState('USA');
   const [selectedIndicator, setSelectedIndicator] = useState('NY.GDP.MKTP.CD');
@@ -164,7 +167,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
     try {
       const res = await fetch(
         `https://api.fincept.in/macro/ceic/series/indicators?country=${encodeURIComponent(countrySlug)}`,
-        { headers: { 'X-API-Key': 'fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo' } }
+        { headers: { 'X-API-Key': finceptApiKey } }
       );
       const parsed = await res.json();
       const list = parsed?.data?.indicators || [];
@@ -174,7 +177,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
     } finally {
       setFinceptCeicIndicatorsLoading(false);
     }
-  }, []);
+  }, [finceptApiKey]);
 
   // Fetch data
   const fetchData = useCallback(async () => {
@@ -442,7 +445,6 @@ export function useEconomicsData(): UseEconomicsDataReturn {
 
         case 'fincept': {
           const BASE_URL = 'https://api.fincept.in';
-          const FINCEPT_API_KEY = 'fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo';
           let url = '';
           switch (selectedIndicator) {
             case 'ceic_series_countries':
@@ -483,7 +485,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
               url = `${BASE_URL}/macro/wgb/central-bank-rates`;
           }
           const finceptResponse = await fetch(url, {
-            headers: { 'X-API-Key': FINCEPT_API_KEY, 'Accept': 'application/json' },
+            headers: { 'X-API-Key': finceptApiKey, 'Accept': 'application/json' },
           });
           if (!finceptResponse.ok) {
             const errBody = await finceptResponse.text().catch(() => '');
@@ -813,7 +815,7 @@ export function useEconomicsData(): UseEconomicsDataReturn {
     } finally {
       setLoading(false);
     }
-  }, [dataSource, selectedCountry, selectedIndicator, wtoApiKey, eiaApiKey, blsApiKey, beaApiKey, startDate, endDate, finceptCeicCountry, finceptCeicIndicator]);
+  }, [dataSource, selectedCountry, selectedIndicator, wtoApiKey, eiaApiKey, blsApiKey, beaApiKey, startDate, endDate, finceptCeicCountry, finceptCeicIndicator, finceptApiKey]);
 
   // Calculate stats
   const stats: ChartStats | null = data && data.data.length > 0 ? (() => {

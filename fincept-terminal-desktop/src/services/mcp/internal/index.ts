@@ -34,6 +34,8 @@ import { portfolioMCPBridge } from './PortfolioMCPBridge';
 import { newsMCPBridge } from './NewsMCPBridge';
 import { allQuantLibTools, QUANTLIB_TOOL_COUNTS } from './tools/quantlib';
 import { quantLibMCPBridge } from './QuantLibMCPBridge';
+import { polymarketTools } from './tools/polymarket';
+import { polymarketMCPBridge } from './PolymarketMCPBridge';
 
 // Flag to ensure initialization only runs once
 let isInitialized = false;
@@ -75,6 +77,9 @@ export function initializeInternalMCP(): void {
     // Register QuantLib tools (Phase 1: 120 tools)
     terminalMCPProvider.registerTools(allQuantLibTools);
 
+    // Register Polymarket prediction market tools
+    terminalMCPProvider.registerTools(polymarketTools);
+
     // Initialize global bridge contexts
     reportBuilderMCPBridge.initializeGlobalContexts();
 
@@ -98,6 +103,9 @@ export function initializeInternalMCP(): void {
 
     // Initialize QuantLib bridge contexts
     quantLibMCPBridge.connect();
+
+    // Initialize Polymarket bridge contexts
+    polymarketMCPBridge.connect();
 
     // Mark as initialized
     isInitialized = true;
@@ -127,6 +135,7 @@ export { customIndexMCPBridge } from './CustomIndexMCPBridge';
 export { economicsMCPBridge } from './EconomicsMCPBridge';
 export { quantLibMCPBridge } from './QuantLibMCPBridge';
 export { allQuantLibTools, QUANTLIB_TOOL_COUNTS } from './tools/quantlib';
+export { polymarketMCPBridge } from './PolymarketMCPBridge';
 export { INTERNAL_SERVER_ID, INTERNAL_SERVER_NAME } from './types';
 export type { TerminalContexts, InternalTool, InternalToolResult } from './types';
 export type {

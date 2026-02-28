@@ -1,0 +1,195 @@
+
+============================================================
+ PAGE 1
+============================================================
+
+[Title]
+RESTRICTED
+
+[Title]
+Annual Report
+
+[Title]
+2024
+
+
+============================================================
+ PAGE 2
+============================================================
+
+[Title]
+Bayer Annual Report 2024 Five-Year Summary
+
+[Title]
+2
+
+[Title]
+Five-Year Summary
+
+[Title]
+€ million 2020 2021 2022 2023 2024
+
+[Title]
+Bayer Group financial KPIs
+
+[Title]
+Sales 41,400 44,081 50,739 47,637 46,606
+
+[Title]
+EBITDA 1 (2,910) 6,409 13,515 10,632 8,712
+
+[Title]
+EBITDA before special items 1 11,461 11,179 13,513 11,706 10,123
+
+[Title]
+EBITDA margin before special items 1 27.7% 25.4% 26.6% 24.6% 21.7%
+
+[Title]
+EBIT1 (16,169) 3,353 7,012 612 (71)
+
+[Title]
+EBIT before special items 1 7,095 7,295 9,257 7,589 5,436
+
+[NarrativeText]
+Net income (from continuing and discontinued operations) (10,495) 1,000 4,150 (2,941) (2,552)
+
+[NarrativeText]
+Earnings per share (from continuing and discontinued operations) (€) 1 (10.68) 1.02 4.22 (2.99) (2.60)
+
+[NarrativeText]
+Core earnings per share (from continuing operations) (€) 1 6.39 6.51 7.94 6.39 5.05
+
+[Title]
+Free cash flow 1,343 1,415 3,111 1,311 3,107
+
+[Title]
+Net financial debt 30,045 33,137 31,809 34,498 32,626
+
+[Title]
+Return on capital employed (ROCE) (%) –16.5 3.8 7.7 0.7 –0.1
+
+[Title]
+Research and development expe nses 7,126 5,412 6,572 5,371 6,209
+
+[Title]
+Dividend per share (€) 2.00 2.00 2.40 0.11 0.11
+
+[Title]
+Bayer Group nonfinancial KPIs 2
+
+[Title]
+Number of smallholder farmers in low- an d middle-income countries supported by
+
+[Title]
+products, services and partnerships (million) 45 49 52 53 52
+
+[Title]
+Number of women in low- and middle-income countries who have their need for
+
+[NarrativeText]
+modern contraception satisfied due to interventi ons supported by Bayer (million) 40 41 44 46 51
+
+[Title]
+Number of people in underserved 3 communities whose self-care is supported by
+
+[Title]
+interventions from Bayer (million) 43 46 49 51 53
+
+[NarrativeText]
+Scope 1 and 2 greenhouse gas emissions (million metric tons) 3.58 3.17 3.03 3.00 2.96
+
+[NarrativeText]
+Scope 3 greenhouse gas emissions from relevant categories (million metric tons) 4 7.93 7.97 8.98 8.44 7.70
+
+[NarrativeText]
+Offsetting of remaining Scope 1 and 2 greenhouse gas emissions (million metric tons ) 0.20 0.30 0.45 0.60 0.71
+
+[Title]
+Employees
+
+[Title]
+Number of employees 5 (Dec. 31) 99,538 99,637 101,369 99,723 92,815
+
+[NarrativeText]
+Personnel expenses (including pension expenses and restru cturing measures) (€ millio n) 9,769 11,798 12,619 10,691 12,451
+
+[NarrativeText]
+1 For definition see A 2.3 “Alternative Performance Measures Used by the Bayer Group.”
+
+[NarrativeText]
+2 For more information see A 4 Sustainability Statement.
+
+[Title]
+3 Economically or medically
+
+[NarrativeText]
+4 Values for 2020, 2021 and 2022 were updated due to new findings in category 3.1.
+
+[Title]
+5 Employees calculated as full-time equivalents (FTEs)
+
+
+============================================================
+ PAGE 3
+============================================================
+
+[Title]
+Bayer Annual Report 2024 At a Glance
+
+[Title]
+3
+
+[Title]
+Fiscal 2024
+
+[Title]
+// Group sales at €46.6 billion (Fx & p adj. +0.7%, reported
+
+[Title]
+–2.2%), negative currency effects of around €1.3 billion
+
+[Title]
+// EBITDA before special items at €10.1 billion (–13.5%)
+
+[Title]
+// Crop Science reports slight d ecrease in sales, significant
+
+[Title]
+decline in earnings year on year
+
+[Title]
+// Pharmaceuticals posts sale s growth (Fx & p adj.),
+
+[Title]
+earnings mainly impacted by currency headwinds
+
+[Title]
+// Consumer Health records slightly higher sales
+
+[Title]
+(Fx & p adj.), earnings down marginally
+
+[Title]
+// Core earnings per sh are at €5.05 (–21.0%)
+
+[Title]
+// Net income at minus €2.6 billion, impairment losses
+
+[Title]
+at Crop Science
+
+[Title]
+// Free cash flow increases to €3 .1 billion, net financial debt
+
+[Title]
+reduced to €32.6 billion
+
+[Title]
+// Proposed dividend of €0.11 per share
+
+[Title]
+// Outlook for 2025: Sales roughly at prior-year level,
+
+[Title]
+EBITDA before special items and core EPS to decline
+

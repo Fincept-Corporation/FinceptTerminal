@@ -295,6 +295,33 @@ export interface TerminalContexts {
   getFinceptInvertedYields?: () => Promise<Record<string, any>[]>;
 
   // ============================================================================
+  // Polymarket - Prediction Markets
+  // ============================================================================
+
+  polymarketGetMarkets?: (params: {
+    limit?: number;
+    active?: boolean;
+    closed?: boolean;
+    order?: string;
+    ascending?: boolean;
+  }) => Promise<any[]>;
+  polymarketSearch?: (query: string, type?: 'markets' | 'events' | 'all') => Promise<any>;
+  polymarketGetMarketDetail?: (marketId: string) => Promise<any>;
+  polymarketGetOrderBook?: (tokenId: string) => Promise<any>;
+  polymarketGetPriceHistory?: (params: {
+    token_id: string;
+    interval?: string;
+    fidelity?: number;
+  }) => Promise<any>;
+  polymarketGetEvents?: (params: {
+    limit?: number;
+    active?: boolean;
+    closed?: boolean;
+  }) => Promise<any[]>;
+  polymarketGetOpenOrders?: () => Promise<any[]>;
+  polymarketGetTrades?: (tokenId: string, limit?: number) => Promise<any[]>;
+
+  // ============================================================================
   // Data Mapping
   // ============================================================================
 

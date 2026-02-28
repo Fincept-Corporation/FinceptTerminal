@@ -21,7 +21,7 @@ import {
   Shield,
   Link as LinkIcon
 } from 'lucide-react';
-import polymarketServiceEnhanced from '@/services/polymarket/polymarketServiceEnhanced';
+import polymarketApiService from '@/services/polymarket/polymarketApiService';
 import { saveCredential, getCredentialByService, deleteCredential } from '@/services/core/sqliteService';
 import { showConfirm } from '@/utils/notifications';
 
@@ -94,7 +94,7 @@ export const PolymarketCredentialsPanel: React.FC = () => {
           method: additional.method ?? 'manual',
         };
         setCredentials(parsed);
-        polymarketServiceEnhanced.setCredentials({
+        polymarketApiService.setCredentials({
           apiKey: parsed.apiKey,
           apiSecret: parsed.apiSecret,
           apiPassphrase: parsed.apiPassphrase,
@@ -121,7 +121,7 @@ export const PolymarketCredentialsPanel: React.FC = () => {
         additional_data: JSON.stringify({ method: creds.method, createdAt: creds.createdAt ?? Date.now() }),
       });
       setCredentials(creds);
-      polymarketServiceEnhanced.setCredentials({
+      polymarketApiService.setCredentials({
         apiKey: creds.apiKey,
         apiSecret: creds.apiSecret,
         apiPassphrase: creds.apiPassphrase,
@@ -263,7 +263,7 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
     try {
       // Test against an authenticated endpoint — getOpenOrders requires valid L2 auth headers
-      const orders = await polymarketServiceEnhanced.getOpenOrders();
+      const orders = await polymarketApiService.getOpenOrders();
       setTestResult({ success: true, message: `Connection successful! Credentials valid. (${orders.length} open orders)` });
     } catch (error: any) {
       // Distinguish auth failure from network error
@@ -299,7 +299,7 @@ export const PolymarketCredentialsPanel: React.FC = () => {
     setCredentials(null);
     setWalletConnected(false);
     setWalletAddress('');
-    polymarketServiceEnhanced.clearCredentials();
+    polymarketApiService.clearCredentials();
     setTestResult({ success: true, message: 'Credentials deleted' });
   };
 

@@ -1,0 +1,26 @@
+{
+  "source": "bayer-annual-report-2024",
+  "total_elements": 57,
+  "total_chunks": 8,
+  "element_type_breakdown": {
+    "Title": 20,
+    "Table": 26,
+    "ListItem": 11
+  },
+  "pages_processed": [
+    1,
+    2,
+    3
+  ],
+  "avg_chunk_chars": 392,
+  "entities_found": 15,
+  "outputs": {
+    "json_elements": "bayer-annual-report-2024_elements.json",
+    "json_chunks": "bayer-annual-report-2024_chunks.json",
+    "csv_elements": "bayer-annual-report-2024_elements.csv",
+    "csv_chunks": "bayer-annual-report-2024_chunks.csv",
+    "markdown": "bayer-annual-report-2024.md",
+    "txt": "bayer-annual-report-2024.txt",
+    "entities": "bayer-annual-report-2024_entities.json"
+  }
+}

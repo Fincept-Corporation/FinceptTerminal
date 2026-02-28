@@ -1,10 +1,12 @@
 // Database Schema - All table definitions and migrations
 
+mod migrations;
+
 use anyhow::Result;
 use rusqlite::Connection;
 
 pub fn create_schema(conn: &Connection) -> Result<()> {
-    // Execute all schema statements
+    // Execute all table creation statements
     conn.execute_batch(
         "
         -- Credentials table
@@ -363,8 +365,6 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- OLD: market_data_cache table REMOVED - Use unified cache (fincept_cache.db)
-
         -- Data source connections table
         CREATE TABLE IF NOT EXISTS data_source_connections (
             id TEXT PRIMARY KEY,
@@ -378,8 +378,6 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
             last_tested TEXT,
             error_message TEXT
         );
-
-        -- OLD: forum_*_cache tables REMOVED - Use unified cache (fincept_cache.db)
 
         -- Context Recording tables
         CREATE TABLE IF NOT EXISTS recorded_contexts (
@@ -1027,119 +1025,83 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         );
 
         CREATE INDEX IF NOT EXISTS idx_custom_python_strategies_base ON custom_python_strategies(base_strategy_id);
-        CREATE INDEX IF NOT EXISTS idx_custom_python_strategies_category ON custom_python_strategies(category)
+        CREATE INDEX IF NOT EXISTS idx_custom_python_strategies_category ON custom_python_strategies(category);
+
+        -- ============================================================================
+        -- POLYMARKET BOT TABLES
+        -- ============================================================================
+
+        -- Polymarket bots table (bot config + stats)
+        CREATE TABLE IF NOT EXISTS polymarket_bots (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'idle',
+            strategy_json TEXT NOT NULL,
+            risk_config_json TEXT NOT NULL,
+            llm_config_json TEXT NOT NULL,
+            stats_json TEXT NOT NULL,
+            last_error TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_polymarket_bots_status ON polymarket_bots(status);
+
+        -- Polymarket bot decisions table (queryable decision log)
+        CREATE TABLE IF NOT EXISTS polymarket_bot_decisions (
+            id TEXT PRIMARY KEY,
+            bot_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            market_id TEXT NOT NULL,
+            market_question TEXT NOT NULL,
+            action TEXT NOT NULL,
+            outcome TEXT,
+            token_id TEXT,
+            confidence REAL NOT NULL DEFAULT 0,
+            reasoning TEXT,
+            risk_factors TEXT,
+            price_at_decision REAL DEFAULT 0,
+            assessed_probability REAL DEFAULT 0,
+            recommended_size_usdc REAL DEFAULT 0,
+            executed INTEGER NOT NULL DEFAULT 0,
+            pending_approval INTEGER NOT NULL DEFAULT 0,
+            approved INTEGER,
+            order_id TEXT,
+            FOREIGN KEY (bot_id) REFERENCES polymarket_bots(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pm_decisions_bot ON polymarket_bot_decisions(bot_id);
+        CREATE INDEX IF NOT EXISTS idx_pm_decisions_timestamp ON polymarket_bot_decisions(timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_pm_decisions_action ON polymarket_bot_decisions(action);
+        CREATE INDEX IF NOT EXISTS idx_pm_decisions_pending ON polymarket_bot_decisions(pending_approval);
+
+        -- Polymarket bot positions table
+        CREATE TABLE IF NOT EXISTS polymarket_bot_positions (
+            id TEXT PRIMARY KEY,
+            bot_id TEXT NOT NULL,
+            market_id TEXT NOT NULL,
+            market_question TEXT NOT NULL,
+            outcome TEXT NOT NULL,
+            token_id TEXT NOT NULL,
+            entry_price REAL NOT NULL,
+            current_price REAL NOT NULL,
+            size_usdc REAL NOT NULL,
+            order_id TEXT,
+            opened_at TEXT NOT NULL,
+            closed_at TEXT,
+            close_reason TEXT,
+            realized_pnl_usdc REAL,
+            unrealized_pnl_pct REAL DEFAULT 0,
+            FOREIGN KEY (bot_id) REFERENCES polymarket_bots(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pm_positions_bot ON polymarket_bot_positions(bot_id);
+        CREATE INDEX IF NOT EXISTS idx_pm_positions_open ON polymarket_bot_positions(bot_id, closed_at)
         ",
     )?;
 
-    // Migrations: Add missing columns to existing tables
-    // Check if custom_price column exists, if not add it
-    let column_check: Result<i64, _> = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('index_constituents') WHERE name='custom_price'",
-        [],
-        |row| row.get(0)
-    );
-
-    if let Ok(count) = column_check {
-        if count == 0 {
-            // Add custom_price column
-            conn.execute(
-                "ALTER TABLE index_constituents ADD COLUMN custom_price REAL",
-                [],
-            )?;
-            println!("[Migration] Added custom_price column to index_constituents");
-        }
-    }
-
-    // Check if price_date column exists, if not add it
-    let column_check: Result<i64, _> = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('index_constituents') WHERE name='price_date'",
-        [],
-        |row| row.get(0)
-    );
-
-    if let Ok(count) = column_check {
-        if count == 0 {
-            // Add price_date column
-            conn.execute(
-                "ALTER TABLE index_constituents ADD COLUMN price_date TEXT",
-                [],
-            )?;
-            println!("[Migration] Added price_date column to index_constituents");
-        }
-    }
-
-    // Check if historical_start_date column exists in custom_indices, if not add it
-    let column_check: Result<i64, _> = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('custom_indices') WHERE name='historical_start_date'",
-        [],
-        |row| row.get(0)
-    );
-
-    if let Ok(count) = column_check {
-        if count == 0 {
-            // Add historical_start_date column
-            conn.execute(
-                "ALTER TABLE custom_indices ADD COLUMN historical_start_date TEXT",
-                [],
-            )?;
-            println!("[Migration] Added historical_start_date column to custom_indices");
-        }
-    }
-
-    // ============================================================================
-    // PYTHON STRATEGY LIBRARY MIGRATIONS
-    // ============================================================================
-
-    // Add strategy_type column to algo_deployments (json | python)
-    let column_check: Result<i64, _> = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('algo_deployments') WHERE name='strategy_type'",
-        [],
-        |row| row.get(0)
-    );
-
-    if let Ok(count) = column_check {
-        if count == 0 {
-            conn.execute(
-                "ALTER TABLE algo_deployments ADD COLUMN strategy_type TEXT DEFAULT 'json'",
-                [],
-            )?;
-            println!("[Migration] Added strategy_type column to algo_deployments");
-        }
-    }
-
-    // Add python_strategy_id column to algo_deployments
-    let column_check: Result<i64, _> = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('algo_deployments') WHERE name='python_strategy_id'",
-        [],
-        |row| row.get(0)
-    );
-
-    if let Ok(count) = column_check {
-        if count == 0 {
-            conn.execute(
-                "ALTER TABLE algo_deployments ADD COLUMN python_strategy_id TEXT",
-                [],
-            )?;
-            println!("[Migration] Added python_strategy_id column to algo_deployments");
-        }
-    }
-
-    // Add parameter_overrides column to algo_deployments
-    let column_check: Result<i64, _> = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('algo_deployments') WHERE name='parameter_overrides'",
-        [],
-        |row| row.get(0)
-    );
-
-    if let Ok(count) = column_check {
-        if count == 0 {
-            conn.execute(
-                "ALTER TABLE algo_deployments ADD COLUMN parameter_overrides TEXT DEFAULT '{}'",
-                [],
-            )?;
-            println!("[Migration] Added parameter_overrides column to algo_deployments");
-        }
-    }
+    // Run schema migrations (ALTER TABLE additions)
+    migrations::run_migrations(conn)?;
 
     Ok(())
 }

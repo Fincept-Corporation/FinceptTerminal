@@ -4,7 +4,6 @@
 import { terminalMCPProvider } from './TerminalMCPProvider';
 
 const BASE_URL = 'https://api.fincept.in';
-const FINCEPT_API_KEY = 'fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo';
 
 const CONTEXT_KEYS = [
   'getFinceptCeicCountries',
@@ -19,9 +18,9 @@ const CONTEXT_KEYS = [
   'getFinceptInvertedYields',
 ] as const;
 
-async function finceptFetch(path: string): Promise<any> {
+async function finceptFetch(path: string, apiKey: string): Promise<any> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'X-API-Key': FINCEPT_API_KEY, 'Accept': 'application/json' },
+    headers: { 'X-API-Key': apiKey, 'Accept': 'application/json' },
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -56,6 +55,11 @@ function extractRows(json: any): Record<string, any>[] {
 
 export class EconomicsMCPBridge {
   private connected = false;
+  private apiKey: string = '';
+
+  setApiKey(key: string): void {
+    this.apiKey = key;
+  }
 
   connect(): void {
     if (this.connected) return;
@@ -65,13 +69,14 @@ export class EconomicsMCPBridge {
       // ── CEIC ─────────────────────────────────────────────────────────────────
 
       getFinceptCeicCountries: async () => {
-        const json = await finceptFetch('/macro/ceic/series/countries');
+        const json = await finceptFetch('/macro/ceic/series/countries', this.apiKey);
         return extractRows(json);
       },
 
       getFinceptCeicIndicators: async (countrySlug: string) => {
         const json = await finceptFetch(
-          `/macro/ceic/series/indicators?country=${encodeURIComponent(countrySlug)}`
+          `/macro/ceic/series/indicators?country=${encodeURIComponent(countrySlug)}`,
+          this.apiKey
         );
         return json?.data?.indicators || extractRows(json);
       },
@@ -89,7 +94,7 @@ export class EconomicsMCPBridge {
         const to = yearTo ?? now;
         let path = `/macro/ceic/series?country=${encodeURIComponent(country)}&year_from=${from}&year_to=${to}&limit=${limit}`;
         if (indicator) path += `&indicator=${encodeURIComponent(indicator)}`;
-        const json = await finceptFetch(path);
+        const json = await finceptFetch(path, this.apiKey);
         const rows = extractRows(json);
         // Replace fractional period encoding with the plain integer year field
         return rows.map(({ period: _period, ...rest }) => rest);
@@ -107,40 +112,41 @@ export class EconomicsMCPBridge {
         const from = startDate ?? now.toISOString().split('T')[0];
         const to = endDate ?? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const json = await finceptFetch(
-          `/macro/economic-calendar?start_date=${from}&end_date=${to}&limit=${limit}`
+          `/macro/economic-calendar?start_date=${from}&end_date=${to}&limit=${limit}`,
+          this.apiKey
         );
         return extractRows(json);
       },
 
       getFinceptUpcomingEvents: async (limit?: number) => {
-        const json = await finceptFetch(`/macro/upcoming-events?limit=${limit ?? 200}`);
+        const json = await finceptFetch(`/macro/upcoming-events?limit=${limit ?? 200}`, this.apiKey);
         return extractRows(json);
       },
 
       // ── World Government Bonds ────────────────────────────────────────────────
 
       getFinceptCentralBankRates: async () => {
-        const json = await finceptFetch('/macro/wgb/central-bank-rates');
+        const json = await finceptFetch('/macro/wgb/central-bank-rates', this.apiKey);
         return extractRows(json);
       },
 
       getFinceptCreditRatings: async () => {
-        const json = await finceptFetch('/macro/wgb/credit-ratings');
+        const json = await finceptFetch('/macro/wgb/credit-ratings', this.apiKey);
         return extractRows(json);
       },
 
       getFinceptSovereignCds: async () => {
-        const json = await finceptFetch('/macro/wgb/sovereign-cds');
+        const json = await finceptFetch('/macro/wgb/sovereign-cds', this.apiKey);
         return extractRows(json);
       },
 
       getFinceptBondSpreads: async () => {
-        const json = await finceptFetch('/macro/wgb/bond-spreads');
+        const json = await finceptFetch('/macro/wgb/bond-spreads', this.apiKey);
         return extractRows(json);
       },
 
       getFinceptInvertedYields: async () => {
-        const json = await finceptFetch('/macro/wgb/inverted-yields');
+        const json = await finceptFetch('/macro/wgb/inverted-yields', this.apiKey);
         return extractRows(json);
       },
     });

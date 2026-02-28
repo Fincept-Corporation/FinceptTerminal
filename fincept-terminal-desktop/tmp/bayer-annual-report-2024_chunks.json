@@ -1,0 +1,92 @@
+[
+  {
+    "chunk_id": 0,
+    "chunk_type": "CompositeElement",
+    "text": "RESTRICTED\n\nAnnual Report\n\nBayer Annual Report 2024 Five Year Summary\n\nFive Year Summary\n\n€ million 2020 2021 2022 2023 2024\n\nBayer Group financial KPIs\n\nSales 41,400 44,081 50,739 47,637 46,606\n\nEBITDA 1 (2,910) 6,409 13,515 10,632 8,712\n\nEBITDA before special items 1 11,461 11,179 13,513 11,706 10,123\n\nEBITDA margin before special items 1 27.7% 25.4% 26.6% 24.6% 21.7%\n\nEBIT1 (16,169) 3,353 7,012 612 (71)\n\nEBIT before special items 1 7,095 7,295 9,257 7,589 5,436\n\nNet income (from continuingand discontinued operations) (10,495) 1,000 4,150 (2,941) (2,552)\n\nEarningsper share (from continuingand discontinued operations) (€) 1 (10.68) 1.02 4.22 (2.99) (2.60)\n\nCore earningsper share (from continuing operations) (€) 1 6.39 6.51 7.94 6.39 5.05\n\nFree cash flow 1,343 1,415 3,111 1,311 3,107\n\nNet financial debt 30,045 33,137 31,809 34,498 32,626\n\nReturnon capital employed (ROCE) (%) –16.5 3.8 7.7 0.7 –0.1\n\nResearchand development expe nses 7,126 5,412 6,572 5,371 6,209\n\nDividendper share (€) 2.00 2.00 2.40 0.11 0.11",
+    "char_count": 1023,
+    "pages": [
+      1,
+      2
+    ],
+    "source_element_count": 20,
+    "entities": {}
+  },
+  {
+    "chunk_id": 1,
+    "chunk_type": "CompositeElement",
+    "text": "Bayer Group nonfinancial KPIs 2\n\nNumberof smallholder farmersinlow and middle income countries supportedby\n\nproducts, servicesand partnerships (million) 45 49 52 53 52\n\nNumberof womeninlow and middle income countrieswho have their needfor\n\nmodern contraception satisfieddueto interventions supportedby Bayer (million) 40 41 44 46 51",
+    "char_count": 332,
+    "pages": [
+      2
+    ],
+    "source_element_count": 5,
+    "entities": {}
+  },
+  {
+    "chunk_id": 2,
+    "chunk_type": "CompositeElement",
+    "text": "Numberof peoplein underserved 3 communities whose self careis supportedby\n\ninterventions from Bayer (million) 43 46 49 51 53\n\nScope 1 and 2 greenhousegas emissions (million metric tons) 3.58 3.17 3.03 3.00 2.96\n\nScope 3 greenhousegas emissions from relevant categories (million metric tons) 4 7.93 7.97 8.98 8.44 7.70\n\nOffsettingof remaining Scope 1 and 2 greenhousegas emissions (million metric tons ) 0.20 0.30 0.45 0.60 0.71",
+    "char_count": 427,
+    "pages": [
+      2
+    ],
+    "source_element_count": 5,
+    "entities": {}
+  },
+  {
+    "chunk_id": 3,
+    "chunk_type": "CompositeElement",
+    "text": "Employees\n\nNumberof employees 5 (Dec. 31) 99,538 99,637 101,369 99,723 92,815\n\nPersonnel expenses (including pension expensesand restru cturing measures) (€ million) 9,769 11,798 12,619 10,691 12,451\n\n1 For definitionsee A 2.3 “Alternative Performance Measures Usedbythe Bayer Group.”\n\n2 For more informationsee A 4 Sustainability Statement.",
+    "char_count": 341,
+    "pages": [
+      2
+    ],
+    "source_element_count": 5,
+    "entities": {}
+  },
+  {
+    "chunk_id": 4,
+    "chunk_type": "CompositeElement",
+    "text": "3 Economicallyor medically\n\n4 Valuesfor 2020, 2021 and 2022 were updatedduetonew findingsin category 3.1.\n\n5 Employees calculatedas full time equivalents (FTEs)\n\nBayer Annual Report 2024 Ata Glance\n\nFiscal 2024\n\n// Group salesat €46.6 billion (Fx & padj. +0.7%, reported\n\n2.2%), negative currency effectsof around €1.3 billion\n\n// EBITDA before special itemsat €10.1 billion ( 13.5%)\n\n// Crop Science reports slightd ecreasein sales, significant",
+    "char_count": 445,
+    "pages": [
+      2,
+      3
+    ],
+    "source_element_count": 9,
+    "entities": {}
+  },
+  {
+    "chunk_id": 5,
+    "chunk_type": "CompositeElement",
+    "text": "declinein earnings yearon year\n\n// Pharmaceuticals posts sales growth (Fx & padj.),\n\nearnings mainly impactedby currency headwinds\n\n// Consumer Health records slightly higher sales\n\n(Fx & padj.), earnings down marginally\n\n// Core earningspershareat €5.05 ( 21.0%)\n\n// Net incomeat minus €2.6 billion, impairment losses",
+    "char_count": 318,
+    "pages": [
+      3
+    ],
+    "source_element_count": 7,
+    "entities": {}
+  },
+  {
+    "chunk_id": 6,
+    "chunk_type": "CompositeElement",
+    "text": "at Crop Science\n\n// Free cash flow increasesto €3 .1 billion, net financial debt\n\nreducedto €32.6 billion\n\n// Proposed dividendof €0.11 per share\n\n// Outlookfor 2025: Sales roughlyat prior year level,",
+    "char_count": 200,
+    "pages": [
+      3
+    ],
+    "source_element_count": 5,
+    "entities": {}
+  },
+  {
+    "chunk_id": 7,
+    "chunk_type": "CompositeElement",
+    "text": "EBITDA before special itemsand core EPS to decline",
+    "char_count": 50,
+    "pages": [
+      3
+    ],
+    "source_element_count": 1,
+    "entities": {}
+  }
+]

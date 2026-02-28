@@ -10,7 +10,7 @@ import {
 import { contextRecorderService } from '@/services/data-sources/contextRecorderService';
 import { useWatchlistStocks, useMarketMovers, useVolumeLeaders } from '@/hooks/useWatchlist';
 import { withTimeout } from '@/services/core/apiUtils';
-import { validateSymbol } from '@/services/core/validators';
+import { validateSymbol, sanitizeSymbol } from '@/services/core/validators';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import WatchlistSidebar from './WatchlistSidebar';
 import StockListView from './StockListView';
@@ -297,7 +297,7 @@ const WatchlistTabInner: React.FC = () => {
     const validation = validateSymbol(symbol);
     if (!validation.valid) throw new Error(validation.error);
     await withTimeout(
-      watchlistService.addStock(selectedWatchlist.id, validation.sanitized!, notes),
+      watchlistService.addStock(selectedWatchlist.id, sanitizeSymbol(symbol), notes),
       INVOKE_TIMEOUT, 'Add stock timeout'
     );
     await invalidateStocks();
@@ -368,7 +368,7 @@ const WatchlistTabInner: React.FC = () => {
         errors.push(`${entry.symbol}: ${validation.error}`);
         continue;
       }
-      const sym = validation.sanitized!;
+      const sym = sanitizeSymbol(entry.symbol);
       if (existingSymbols.has(sym)) { skipped.push(sym); continue; }
       try {
         await withTimeout(

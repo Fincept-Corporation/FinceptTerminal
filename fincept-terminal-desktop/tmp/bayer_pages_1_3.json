@@ -1,0 +1,302 @@
+[
+  {
+    "type": "Title",
+    "text": "RESTRICTED",
+    "page": 1
+  },
+  {
+    "type": "Title",
+    "text": "Annual Report",
+    "page": 1
+  },
+  {
+    "type": "Title",
+    "text": "2024",
+    "page": 1
+  },
+  {
+    "type": "Title",
+    "text": "Bayer Annual Report 2024 Five-Year Summary",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "2",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Five-Year Summary",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "€ million 2020 2021 2022 2023 2024",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Bayer Group financial KPIs",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Sales 41,400 44,081 50,739 47,637 46,606",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "EBITDA 1 (2,910) 6,409 13,515 10,632 8,712",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "EBITDA before special items 1 11,461 11,179 13,513 11,706 10,123",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "EBITDA margin before special items 1 27.7% 25.4% 26.6% 24.6% 21.7%",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "EBIT1 (16,169) 3,353 7,012 612 (71)",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "EBIT before special items 1 7,095 7,295 9,257 7,589 5,436",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "Net income (from continuing and discontinued operations) (10,495) 1,000 4,150 (2,941) (2,552)",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "Earnings per share (from continuing and discontinued operations) (€) 1 (10.68) 1.02 4.22 (2.99) (2.60)",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "Core earnings per share (from continuing operations) (€) 1 6.39 6.51 7.94 6.39 5.05",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Free cash flow 1,343 1,415 3,111 1,311 3,107",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Net financial debt 30,045 33,137 31,809 34,498 32,626",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Return on capital employed (ROCE) (%) –16.5 3.8 7.7 0.7 –0.1",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Research and development expe nses 7,126 5,412 6,572 5,371 6,209",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Dividend per share (€) 2.00 2.00 2.40 0.11 0.11",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Bayer Group nonfinancial KPIs 2",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Number of smallholder farmers in low- an d middle-income countries supported by",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "products, services and partnerships (million) 45 49 52 53 52",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Number of women in low- and middle-income countries who have their need for",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "modern contraception satisfied due to interventi ons supported by Bayer (million) 40 41 44 46 51",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Number of people in underserved 3 communities whose self-care is supported by",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "interventions from Bayer (million) 43 46 49 51 53",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "Scope 1 and 2 greenhouse gas emissions (million metric tons) 3.58 3.17 3.03 3.00 2.96",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "Scope 3 greenhouse gas emissions from relevant categories (million metric tons) 4 7.93 7.97 8.98 8.44 7.70",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "Offsetting of remaining Scope 1 and 2 greenhouse gas emissions (million metric tons ) 0.20 0.30 0.45 0.60 0.71",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Employees",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Number of employees 5 (Dec. 31) 99,538 99,637 101,369 99,723 92,815",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "Personnel expenses (including pension expenses and restru cturing measures) (€ millio n) 9,769 11,798 12,619 10,691 12,451",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "1 For definition see A 2.3 “Alternative Performance Measures Used by the Bayer Group.”",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "2 For more information see A 4 Sustainability Statement.",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "3 Economically or medically",
+    "page": 2
+  },
+  {
+    "type": "NarrativeText",
+    "text": "4 Values for 2020, 2021 and 2022 were updated due to new findings in category 3.1.",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "5 Employees calculated as full-time equivalents (FTEs)",
+    "page": 2
+  },
+  {
+    "type": "Title",
+    "text": "Bayer Annual Report 2024 At a Glance",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "3",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "Fiscal 2024",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "// Group sales at €46.6 billion (Fx & p adj. +0.7%, reported",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "–2.2%), negative currency effects of around €1.3 billion",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "// EBITDA before special items at €10.1 billion (–13.5%)",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "// Crop Science reports slight d ecrease in sales, significant",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "decline in earnings year on year",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "// Pharmaceuticals posts sale s growth (Fx & p adj.),",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "earnings mainly impacted by currency headwinds",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "// Consumer Health records slightly higher sales",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "(Fx & p adj.), earnings down marginally",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "// Core earnings per sh are at €5.05 (–21.0%)",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "// Net income at minus €2.6 billion, impairment losses",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "at Crop Science",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "// Free cash flow increases to €3 .1 billion, net financial debt",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "reduced to €32.6 billion",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "// Proposed dividend of €0.11 per share",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "// Outlook for 2025: Sales roughly at prior-year level,",
+    "page": 3
+  },
+  {
+    "type": "Title",
+    "text": "EBITDA before special items and core EPS to decline",
+    "page": 3
+  }
+]

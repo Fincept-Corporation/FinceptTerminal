@@ -256,7 +256,26 @@ impl WebSocketManager {
     // SUBSCRIPTION MANAGEMENT
     // ========================================================================
 
-    /// Subscribe to a channel
+    /// Normalize a symbol to a canonical form for deduplication.
+    /// Maps exchange-specific aliases (XBT→BTC, XDG→DOGE) and strips
+    /// all punctuation, so "BTC/USD", "XBT/USD", and "BTCUSD" all become "BTCUSD".
+    fn normalize_symbol(symbol: &str) -> String {
+        symbol
+            .replace("XBT", "BTC")
+            .replace("XDG", "DOGE")
+            .replace('/', "")
+            .replace('-', "")
+            .replace('_', "")
+            .to_uppercase()
+    }
+
+    /// Subscribe to a channel.
+    ///
+    /// Uses an insert-first strategy to prevent TOCTOU races: we insert
+    /// the normalized key into the tracking HashSet *before* calling the
+    /// adapter.  If the insert returns `false` the slot was already taken
+    /// (by us or a concurrent task) and we return early.  On adapter
+    /// failure we roll back the insert so the slot is freed.
     pub async fn subscribe(
         &self,
         provider: &str,
@@ -264,31 +283,51 @@ impl WebSocketManager {
         channel: &str,
         params: Option<serde_json::Value>,
     ) -> Result<()> {
-        // Check if already subscribed (prevent duplicates)
-        if self.is_subscribed(provider, symbol, channel) {
-            return Ok(()); // Already subscribed, no-op
+        let norm_symbol = Self::normalize_symbol(symbol);
+
+        // Insert-first: atomically claim the subscription slot.
+        // DashMap's entry RefMut holds a shard-level lock until dropped,
+        // so concurrent tasks serialise here and only one proceeds.
+        let inserted = {
+            let provider_subs = self.subscriptions
+                .entry(provider.to_string())
+                .or_insert_with(DashMap::new);
+            let mut channels = provider_subs
+                .entry(norm_symbol.clone())
+                .or_insert_with(HashSet::new);
+            channels.insert(channel.to_string())
+        };
+
+        if !inserted {
+            // Already subscribed (or another task won the race) — no-op.
+            return Ok(());
         }
 
         // Ensure connected
         if !self.is_connected(provider) {
-            self.connect(provider).await?;
+            if let Err(e) = self.connect(provider).await {
+                // Roll back the insert so the slot is free to retry.
+                self.remove_subscription_key(provider, &norm_symbol, channel);
+                return Err(e);
+            }
         }
 
         // Get adapter
-        let adapter = self.connections.get(provider)
-            .ok_or_else(|| WebSocketError::NotConnected(provider.to_string()))?;
+        let adapter = match self.connections.get(provider) {
+            Some(a) => a,
+            None => {
+                self.remove_subscription_key(provider, &norm_symbol, channel);
+                return Err(WebSocketError::NotConnected(provider.to_string()));
+            }
+        };
 
-        // Subscribe via adapter
-        adapter.write().await.subscribe(symbol, channel, params).await
-            .map_err(|e| WebSocketError::SubscriptionError(e.to_string()))?;
-
-        // Track subscription using HashSet (prevents duplicates)
-        self.subscriptions
-            .entry(provider.to_string())
-            .or_insert_with(DashMap::new)
-            .entry(symbol.to_string())
-            .or_insert_with(HashSet::new)
-            .insert(channel.to_string());
+        // Subscribe via adapter (pass the original symbol — the adapter
+        // applies its own exchange-specific conversion).
+        if let Err(e) = adapter.write().await.subscribe(symbol, channel, params).await {
+            // Roll back so the caller can retry.
+            self.remove_subscription_key(provider, &norm_symbol, channel);
+            return Err(WebSocketError::SubscriptionError(e.to_string()));
+        }
 
         // Update metrics
         if let Some(mut metrics) = self.metrics.get_mut(provider) {
@@ -298,11 +337,17 @@ impl WebSocketManager {
         Ok(())
     }
 
-    /// Check if already subscribed to a channel
-    fn is_subscribed(&self, provider: &str, symbol: &str, channel: &str) -> bool {
-        self.subscriptions.get(provider)
-            .and_then(|subs| subs.get(symbol).map(|channels| channels.contains(channel)))
-            .unwrap_or(false)
+    /// Remove a single channel from the normalized subscription tracking (rollback helper).
+    fn remove_subscription_key(&self, provider: &str, norm_symbol: &str, channel: &str) {
+        if let Some(provider_subs) = self.subscriptions.get(provider) {
+            if let Some(mut channels) = provider_subs.get_mut(norm_symbol) {
+                channels.remove(channel);
+                if channels.is_empty() {
+                    drop(channels);
+                    provider_subs.remove(norm_symbol);
+                }
+            }
+        }
     }
 
     /// Unsubscribe from a channel
@@ -312,24 +357,18 @@ impl WebSocketManager {
         symbol: &str,
         channel: &str,
     ) -> Result<()> {
+        let norm_symbol = Self::normalize_symbol(symbol);
+
         // Get adapter
         let adapter = self.connections.get(provider)
             .ok_or_else(|| WebSocketError::NotConnected(provider.to_string()))?;
 
-        // Unsubscribe via adapter
+        // Unsubscribe via adapter (pass original symbol for exchange formatting)
         adapter.write().await.unsubscribe(symbol, channel).await
             .map_err(|e| WebSocketError::SubscriptionError(e.to_string()))?;
 
-        // Remove from tracking (HashSet automatically handles non-existent keys)
-        if let Some(provider_subs) = self.subscriptions.get(provider) {
-            if let Some(mut symbol_channels) = provider_subs.get_mut(symbol) {
-                symbol_channels.remove(channel);
-                if symbol_channels.is_empty() {
-                    drop(symbol_channels); // Release the lock before removing
-                    provider_subs.remove(symbol);
-                }
-            }
-        }
+        // Remove normalized key from tracking
+        self.remove_subscription_key(provider, &norm_symbol, channel);
 
         // Update metrics
         if let Some(mut metrics) = self.metrics.get_mut(provider) {
@@ -339,12 +378,54 @@ impl WebSocketManager {
         Ok(())
     }
 
+    /// Unsubscribe from all tracked subscriptions for a provider on a given channel.
+    /// Returns the list of raw symbols that were unsubscribed (for logging).
+    pub async fn unsubscribe_all(&self, provider: &str, channel: &str) -> Vec<String> {
+        let Some(provider_subs) = self.subscriptions.get(provider) else {
+            return vec![];
+        };
+
+        // Collect norm_symbols that have this channel subscribed
+        let to_unsub: Vec<String> = provider_subs
+            .iter()
+            .filter(|entry| entry.value().contains(channel))
+            .map(|entry| entry.key().clone())
+            .collect();
+
+        drop(provider_subs); // release DashMap read lock before async work
+
+        let mut unsubscribed = Vec::new();
+        for norm_sym in &to_unsub {
+            // For unsubscribe, normalized form is a valid Kraken-parseable symbol
+            // because the adapter's to_kraken_symbol handles "BTCUSD" → "BTC/USD".
+            if let Err(e) = self.unsubscribe(provider, norm_sym, channel).await {
+                eprintln!("[Manager] unsubscribe_all: failed to unsub {} {}: {}", norm_sym, channel, e);
+            } else {
+                unsubscribed.push(norm_sym.clone());
+            }
+        }
+
+        unsubscribed
+    }
+
     /// Get all subscriptions for a provider (converts HashSet to Vec for iteration)
     fn get_provider_subscriptions(&self, provider: &str) -> Vec<(String, Vec<String>)> {
         self.subscriptions.get(provider)
             .map(|subs| {
                 subs.iter()
                     .map(|entry| (entry.key().clone(), entry.value().iter().cloned().collect()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get all subscribed symbols for a provider+channel pair.
+    pub fn get_subscribed_symbols(&self, provider: &str, channel: &str) -> Vec<String> {
+        self.subscriptions.get(provider)
+            .map(|subs| {
+                subs.iter()
+                    .filter(|entry| entry.value().contains(channel))
+                    .map(|entry| entry.key().clone())
                     .collect()
             })
             .unwrap_or_default()

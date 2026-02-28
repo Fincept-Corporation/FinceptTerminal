@@ -1,4 +1,10 @@
 // Tauri commands module
+
+// Core infrastructure commands (extracted from lib.rs)
+pub mod websocket;
+pub mod monitoring;
+pub mod mcp;
+
 pub mod news;
 pub mod market_data;
 pub mod alpha_arena_bridge;

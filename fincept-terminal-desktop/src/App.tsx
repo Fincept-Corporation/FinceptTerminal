@@ -13,6 +13,7 @@ import { initializeStockBrokers } from './brokers/stocks';
 import { notificationService } from './services/notifications';
 import { fileStorageService } from './services/fileStorageService';
 import { initMCPBridge, destroyMCPBridge } from './services/mcp/mcpBridge';
+import { newsMCPBridge, economicsMCPBridge } from './services/mcp/internal';
 
 // Import screens
 import LoginScreen from './components/auth/LoginScreen';
@@ -58,6 +59,13 @@ const App: React.FC = () => {
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [syncingPackages, setSyncingPackages] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  // Keep MCP bridges in sync with the current user's API key
+  useEffect(() => {
+    const key = session?.api_key ?? '';
+    newsMCPBridge.setApiKey(key);
+    economicsMCPBridge.setApiKey(key);
+  }, [session?.api_key]);
 
   // Check setup status on app initialization and initialize node system
   useEffect(() => {
