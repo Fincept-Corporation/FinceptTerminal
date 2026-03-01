@@ -41,7 +41,6 @@ import type {
   Trade,
 } from '../brokers/stocks/types';
 
-import { saveSetting, getSetting } from '@/services/core/sqliteService';
 import {
   initTradingSession,
   switchTradingMode as switchUnifiedTradingMode,
@@ -54,69 +53,12 @@ import {
   type PaperOrder,
 } from '@/services/unifiedTradingService';
 import * as symbolMaster from '@/services/symbolMasterService';
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-const CONNECTION_TIMEOUT = 15000; // 15 seconds for stock brokers (may need OAuth)
-const CONNECTION_RETRY_ATTEMPTS = 2;
-const CONNECTION_RETRY_DELAY = 3000;
-
-// Storage keys
-const STORAGE_KEYS = {
-  ACTIVE_STOCK_BROKER: 'active_stock_broker',
-  STOCK_TRADING_MODE: 'stock_trading_mode',
-  LAST_CONNECTED_BROKERS: 'last_connected_stock_brokers',
-} as const;
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-function validateTradingMode(value: string | null): 'live' | 'paper' | null {
-  if (value === 'live' || value === 'paper') return value;
-  return null;
-}
-
-async function safeStorageGet(key: string): Promise<string | null> {
-  try {
-    return await getSetting(key);
-  } catch (error) {
-    console.error(`[StockBrokerContext] Failed to get storage key "${key}":`, error);
-    return null;
-  }
-}
-
-async function safeStorageSet(key: string, value: string): Promise<void> {
-  try {
-    await saveSetting(key, value, 'stock_broker');
-  } catch (error) {
-    console.error(`[StockBrokerContext] Failed to set storage key "${key}":`, error);
-  }
-}
-
-function createTimeout(ms: number): Promise<never> {
-  return new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`Connection timeout after ${ms}ms`)), ms)
-  );
-}
-
-async function retryConnect(
-  connectFn: () => Promise<void>,
-  attempts: number = CONNECTION_RETRY_ATTEMPTS,
-  delay: number = CONNECTION_RETRY_DELAY
-): Promise<void> {
-  for (let i = 0; i < attempts; i++) {
-    try {
-      await Promise.race([connectFn(), createTimeout(CONNECTION_TIMEOUT)]);
-      return;
-    } catch (error) {
-      if (i === attempts - 1) throw error;
-      await new Promise((resolve) => setTimeout(resolve, delay * (i + 1)));
-    }
-  }
-}
+import {
+  STORAGE_KEYS,
+  validateTradingMode,
+  safeStorageGet,
+  safeStorageSet,
+} from './stockBrokerUtils';
 
 // ============================================================================
 // CONTEXT TYPES
@@ -1524,133 +1466,11 @@ export function useStockBrokerContextOptional(): StockBrokerContextType | null {
   return context;
 }
 
-/**
- * Hook for broker selection
- */
-export function useStockBrokerSelection() {
-  const {
-    activeBroker,
-    activeBrokerMetadata,
-    availableBrokers,
-    setActiveBroker,
-    getBrokersByRegion,
-    isLoading,
-  } = useStockBrokerContext();
-
-  return {
-    broker: activeBroker,
-    metadata: activeBrokerMetadata,
-    brokers: availableBrokers,
-    setBroker: setActiveBroker,
-    getBrokersByRegion,
-    isLoading,
-  };
-}
-
-/**
- * Hook for authentication
- */
-export function useStockBrokerAuth() {
-  const {
-    isAuthenticated,
-    authenticate,
-    connect,
-    logout,
-    getAuthUrl,
-    isConnecting,
-    error,
-    clearError,
-    adapter,
-  } = useStockBrokerContext();
-
-  return {
-    isAuthenticated,
-    authenticate,
-    connect, // Explicit connect using stored credentials
-    logout,
-    getAuthUrl,
-    isConnecting,
-    error,
-    clearError,
-    adapter,
-  };
-}
-
-/**
- * Hook for trading data
- */
-export function useStockTradingData() {
-  const {
-    adapter,
-    positions,
-    holdings,
-    orders,
-    trades,
-    funds,
-    refreshPositions,
-    refreshHoldings,
-    refreshOrders,
-    refreshTrades,
-    refreshFunds,
-    refreshAll,
-    isRefreshing,
-    isAuthenticated,
-  } = useStockBrokerContext();
-
-  return {
-    adapter,
-    positions,
-    holdings,
-    orders,
-    trades,
-    funds,
-    refreshPositions,
-    refreshHoldings,
-    refreshOrders,
-    refreshTrades,
-    refreshFunds,
-    refreshAll,
-    isRefreshing,
-    isReady: isAuthenticated && adapter !== null,
-  };
-}
-
-/**
- * Hook for broker capabilities
- */
-export function useStockBrokerCapabilities() {
-  const {
-    activeBrokerMetadata,
-    supportsFeature,
-    supportsTradingFeature,
-    defaultSymbols,
-  } = useStockBrokerContext();
-
-  return {
-    metadata: activeBrokerMetadata,
-    supportsFeature,
-    supportsTradingFeature,
-    defaultSymbols,
-    // Quick access to common features
-    hasWebSocket: supportsFeature('webSocket'),
-    hasAMO: supportsFeature('amo'),
-    hasGTT: supportsFeature('gtt'),
-    hasBracketOrder: supportsFeature('bracketOrder'),
-    hasCoverOrder: supportsFeature('coverOrder'),
-    hasOptionsChain: supportsFeature('optionsChain'),
-  };
-}
-
-/**
- * Hook for trading mode
- */
-export function useStockTradingMode() {
-  const { tradingMode, setTradingMode } = useStockBrokerContext();
-
-  return {
-    mode: tradingMode,
-    setMode: setTradingMode,
-    isLive: tradingMode === 'live',
-    isPaper: tradingMode === 'paper',
-  };
-}
+// Convenience hooks extracted to useStockBroker.ts
+export {
+  useStockBrokerSelection,
+  useStockBrokerAuth,
+  useStockTradingData,
+  useStockBrokerCapabilities,
+  useStockTradingMode,
+} from './useStockBroker';

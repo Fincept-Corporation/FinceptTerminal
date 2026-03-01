@@ -6,6 +6,7 @@ pub mod monitoring;
 pub mod mcp;
 
 pub mod news;
+pub mod news_monitors;
 pub mod market_data;
 pub mod alpha_arena_bridge;
 pub mod yfinance;

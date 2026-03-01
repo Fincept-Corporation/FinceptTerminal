@@ -44,32 +44,8 @@ import { ChatOllama } from '@langchain/ollama';
 import Groq from 'groq-sdk';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 
-export interface LLMConfig {
-  provider: string;
-  apiKey?: string;
-  baseUrl?: string;
-  model: string;
-  temperature: number;
-  maxTokens: number;
-  systemPrompt: string;
-}
-
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-export interface LLMResponse {
-  content: string;
-  error?: string;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
-}
-
-export type StreamCallback = (chunk: string, done: boolean) => void;
+export type { LLMConfig, ChatMessage, LLMResponse, StreamCallback } from './llmApiTypes';
+import type { LLMConfig, ChatMessage, LLMResponse, StreamCallback } from './llmApiTypes';
 
 class LLMApiService {
   // Execute MCP tool (internal or external)

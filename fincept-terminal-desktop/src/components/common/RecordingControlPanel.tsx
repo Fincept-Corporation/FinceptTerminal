@@ -109,15 +109,15 @@ export const RecordingControlPanel: React.FC<RecordingControlPanelProps> = ({
         </span>
       )}
 
-      {/* Start/Stop Button - Fincept Style */}
+      {/* Start/Stop Button */}
       <button
         onClick={isRecording ? handleStopRecording : handleStartRecording}
         style={{
-          backgroundColor: isRecording ? colors.alert : colors.primary,
-          color: 'black',
+          backgroundColor: isRecording ? colors.alert : 'transparent',
+          color: isRecording ? '#fff' : '#d4d4d4',
           border: 'none',
-          padding: '4px 12px',
-          fontSize: '11px',
+          padding: '3px 8px',
+          fontSize: '10px',
           fontWeight: 'bold',
           cursor: 'pointer',
           display: 'flex',
@@ -125,10 +125,16 @@ export const RecordingControlPanel: React.FC<RecordingControlPanelProps> = ({
           gap: '4px'
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.opacity = '0.8';
+          if (!isRecording) {
+            e.currentTarget.style.backgroundColor = '#404040';
+            e.currentTarget.style.color = '#fff';
+          }
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.opacity = '1';
+          if (!isRecording) {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = '#d4d4d4';
+          }
         }}
       >
         {isRecording ? (
@@ -144,25 +150,27 @@ export const RecordingControlPanel: React.FC<RecordingControlPanelProps> = ({
         )}
       </button>
 
-      {/* Settings Button - Fincept Style with orange background */}
+      {/* Settings Button */}
       <button
         onClick={() => setIsSettingsOpen(!isSettingsOpen)}
         style={{
-          backgroundColor: colors.primary,
-          color: 'black',
+          backgroundColor: 'transparent',
+          color: '#d4d4d4',
           border: 'none',
-          padding: '4px 8px',
-          fontSize: '11px',
+          padding: '3px 8px',
+          fontSize: '10px',
           fontWeight: 'bold',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center'
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.opacity = '0.8';
+          e.currentTarget.style.backgroundColor = '#404040';
+          e.currentTarget.style.color = '#fff';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.opacity = '1';
+          e.currentTarget.style.backgroundColor = 'transparent';
+          e.currentTarget.style.color = '#d4d4d4';
         }}
         title="Recording Settings"
       >

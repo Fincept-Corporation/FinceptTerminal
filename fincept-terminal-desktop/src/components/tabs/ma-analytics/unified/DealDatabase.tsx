@@ -8,55 +8,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Database, Search, FileText, TrendingUp, RefreshCw, Scan, AlertCircle, ExternalLink, BarChart3, Clock, ChevronRight, Activity } from 'lucide-react';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
-import { MA_COLORS, CHART_STYLE, CHART_PALETTE } from '../constants';
+import { CHART_STYLE, CHART_PALETTE } from '../constants';
 import { MAMetricCard, MAChartPanel, MASectionHeader, MAEmptyState, MADataTable, MAExportButton } from '../components';
 import { MAAnalyticsService, type MADeal } from '@/services/maAnalyticsService';
 import {
   PieChart, Pie, Cell, Legend, Tooltip,
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, ZAxis,
 } from 'recharts';
-
-interface SECFiling {
-  accession_number: string;
-  filing_type: string;
-  filing_date: string;
-  company_name: string;
-  cik: string;
-  filing_url: string;
-  confidence_score: number;
-  deal_indicators?: string;
-}
-
-type PanelView = 'deal' | 'filing' | 'summary' | 'empty';
-type LeftTab = 'deals' | 'filings';
-
-const ACCENT = MA_COLORS.dealDb;
-
-const STATUS_COLORS: Record<string, string> = {
-  'Completed': FINCEPT.GREEN,
-  'completed': FINCEPT.GREEN,
-  'pending': '#FFC400',
-  'Pending': '#FFC400',
-  'announced': FINCEPT.CYAN,
-  'Announced': FINCEPT.CYAN,
-  'withdrawn': FINCEPT.RED,
-  'Withdrawn': FINCEPT.RED,
-  'unknown': FINCEPT.GRAY,
-};
-
-const CONFIDENCE_COLOR = (score: number) =>
-  score >= 0.9 ? FINCEPT.GREEN : score >= 0.75 ? '#FFC400' : score >= 0.5 ? ACCENT : FINCEPT.GRAY;
-
-const FORM_TYPE_LABELS: Record<string, string> = {
-  'DEFM14A': 'Definitive Merger Proxy',
-  'PREM14A': 'Preliminary Merger Proxy',
-  'S-4': 'Registration (Merger)',
-  'SC TO-T': 'Tender Offer (3rd Party)',
-  'SC TO-I': 'Tender Offer (Issuer)',
-  'SC 13E-3': 'Going Private',
-  '8-K': 'Material Event',
-  '425': 'Merger Communication',
-};
+import {
+  SECFiling, PanelView, LeftTab,
+  ACCENT, STATUS_COLORS, CONFIDENCE_COLOR, FORM_TYPE_LABELS,
+} from './DealDatabaseTypes';
 
 export const DealDatabase: React.FC = () => {
   const [deals, setDeals] = useState<MADeal[]>([]);

@@ -701,6 +701,19 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- News Monitors (custom keyword alert watches, SQLite-backed)
+        CREATE TABLE IF NOT EXISTS news_monitors (
+            id          TEXT PRIMARY KEY,
+            label       TEXT NOT NULL,
+            keywords    TEXT NOT NULL,
+            color       TEXT NOT NULL,
+            enabled     INTEGER DEFAULT 1,
+            created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at  TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_news_monitors_enabled ON news_monitors(enabled);
+
         -- =============================================================================
         -- Alpha Arena Tables (Competition Paper Trading)
         -- =============================================================================

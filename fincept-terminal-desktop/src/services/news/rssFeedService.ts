@@ -18,6 +18,7 @@ export interface RSSFeed {
   source: string;
   enabled: boolean;
   is_default: boolean;
+  tier?: number;
 }
 
 export interface UserRSSFeed {

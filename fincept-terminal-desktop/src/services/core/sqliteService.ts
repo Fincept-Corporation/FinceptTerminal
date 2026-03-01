@@ -23,109 +23,46 @@ export type { Note, NoteTemplate } from './notesService';
 export { excelService } from './excelService';
 export type { ExcelFile, ExcelSnapshot } from './excelService';
 
-// ==================== API KEYS ====================
+// Re-export constants
+export { PREDEFINED_API_KEYS, LLM_PROVIDERS } from './sqliteConstants';
+export type { ApiKeys } from './sqliteConstants';
 
-export interface ApiKeys {
-  FRED_API_KEY?: string;
-  ALPHA_VANTAGE_API_KEY?: string;
-  OPENAI_API_KEY?: string;
-  ANTHROPIC_API_KEY?: string;
-  COINGECKO_API_KEY?: string;
-  NASDAQ_API_KEY?: string;
-  FINANCIAL_MODELING_PREP_API_KEY?: string;
-  OPENROUTER_API_KEY?: string;
-  DATABENTO_API_KEY?: string;
-  WTO_API_KEY?: string;
-  EIA_API_KEY?: string;
-  BLS_API_KEY?: string;
-  BEA_API_KEY?: string;
-  [key: string]: string | undefined;
-}
+// Re-export paper trading db operations
+export {
+  createPortfolio, getPortfolio, listPortfolios, updatePortfolioBalance, deletePortfolio,
+  createPosition, getPosition, getPositionBySymbol, getPositionBySymbolAndSide,
+  getPortfolioPositions, updatePosition, deletePosition,
+  createOrder, getOrder, getPendingOrders, getPortfolioOrders, updateOrder, deleteOrder,
+  createTrade, getTrade, getOrderTrades, getPortfolioTrades, deleteTrade,
+  createMarginBlock, getMarginBlocks, getMarginBlockByOrder, deleteMarginBlock,
+  getTotalBlockedMargin, getAvailableMargin,
+  createHolding, getHoldings, getHoldingBySymbol, updateHolding, deleteHolding, processT1Settlement,
+  fillOrder, getPortfolioStats, resetPortfolio,
+} from './paperTradingDb';
+export type {
+  PaperTradingPortfolio, PaperTradingPosition, PaperTradingOrder, PaperTradingTrade,
+  MarginBlock, PaperTradingHolding, PortfolioStats,
+} from './paperTradingDb';
 
-// Data API Keys (non-LLM providers)
-export const PREDEFINED_API_KEYS = [
-  { key: 'FRED_API_KEY', label: 'FRED API Key', description: 'Federal Reserve Economic Data' },
-  { key: 'ALPHA_VANTAGE_API_KEY', label: 'Alpha Vantage API Key', description: 'Stock & crypto data' },
-  { key: 'COINGECKO_API_KEY', label: 'CoinGecko API Key', description: 'Cryptocurrency data' },
-  { key: 'NASDAQ_API_KEY', label: 'NASDAQ API Key', description: 'NASDAQ market data' },
-  { key: 'FINANCIAL_MODELING_PREP_API_KEY', label: 'Financial Modeling Prep', description: 'Financial statements & ratios' },
-  { key: 'DATABENTO_API_KEY', label: 'Databento API Key', description: 'Institutional-grade market data (Options, Equities, Futures)' },
-  { key: 'OPENROUTER_API_KEY', label: 'OpenRouter API Key', description: 'Access 400+ AI models from all providers (Model Library)' },
-  { key: 'WTO_API_KEY', label: 'WTO API Key', description: 'World Trade Organization - Trade statistics, restrictions & notifications' },
-  { key: 'EIA_API_KEY', label: 'EIA API Key', description: 'U.S. Energy Information Administration - Petroleum, natural gas & energy data' },
-  { key: 'BLS_API_KEY', label: 'BLS API Key', description: 'Bureau of Labor Statistics - Employment, wages, CPI & productivity data' },
-  { key: 'BEA_API_KEY', label: 'BEA API Key', description: 'Bureau of Economic Analysis - GDP, income, spending & national accounts (NIPA)' },
-] as const;
-
-// LLM Provider configurations
-export const LLM_PROVIDERS = [
-  {
-    id: 'fincept',
-    name: 'Fincept LLM',
-    description: 'Fincept Research API (Default - 5 credits/response)',
-    endpoint: 'https://api.fincept.in/research/llm',
-    requiresApiKey: true,
-    isDefault: true,
-    models: ['fincept-llm']
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    description: 'GPT models',
-    endpoint: 'https://api.openai.com/v1',
-    requiresApiKey: true,
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o1-mini']
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    description: 'Claude models',
-    endpoint: 'https://api.anthropic.com/v1',
-    requiresApiKey: true,
-    models: ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229']
-  },
-  {
-    id: 'google',
-    name: 'Google Gemini',
-    description: 'Gemini models',
-    endpoint: 'https://generativelanguage.googleapis.com/v1beta',
-    requiresApiKey: true,
-    models: ['gemini-2.5-flash-preview-05-20', 'gemini-2.5-pro-preview-05-06', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash']
-  },
-  {
-    id: 'ollama',
-    name: 'Ollama (Local)',
-    description: 'Local LLM models',
-    endpoint: 'http://localhost:11434',
-    requiresApiKey: false,
-    models: [] // Dynamically loaded
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    description: 'Access to multiple LLM providers',
-    endpoint: 'https://openrouter.ai/api/v1',
-    requiresApiKey: true,
-    supportsCustomModels: true,
-    models: []
-  },
-  {
-    id: 'groq',
-    name: 'Groq',
-    description: 'Fast inference for open models',
-    endpoint: 'https://api.groq.com/openai/v1',
-    requiresApiKey: true,
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it']
-  },
-  {
-    id: 'deepseek',
-    name: 'DeepSeek',
-    description: 'Advanced reasoning models',
-    endpoint: 'https://api.deepseek.com',
-    requiresApiKey: true,
-    models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner']
-  },
-] as const;
+import {
+  PREDEFINED_API_KEYS,
+} from './sqliteConstants';
+import type { ApiKeys } from './sqliteConstants';
+import {
+  createPortfolio, getPortfolio, listPortfolios, updatePortfolioBalance, deletePortfolio,
+  createPosition, getPosition, getPositionBySymbol, getPositionBySymbolAndSide,
+  getPortfolioPositions, updatePosition, deletePosition,
+  createOrder, getOrder, getPendingOrders, getPortfolioOrders, updateOrder, deleteOrder,
+  createTrade, getTrade, getOrderTrades, getPortfolioTrades, deleteTrade,
+  createMarginBlock, getMarginBlocks, getMarginBlockByOrder, deleteMarginBlock,
+  getTotalBlockedMargin, getAvailableMargin,
+  createHolding, getHoldings, getHoldingBySymbol, updateHolding, deleteHolding, processT1Settlement,
+  fillOrder, getPortfolioStats, resetPortfolio,
+} from './paperTradingDb';
+import type {
+  PaperTradingPortfolio, PaperTradingPosition, PaperTradingOrder, PaperTradingTrade,
+  MarginBlock, PaperTradingHolding, PortfolioStats,
+} from './paperTradingDb';
 
 // ==================== SETTINGS ====================
 
@@ -884,341 +821,6 @@ export const getCachedForumStats = async (_maxAgeMinutes: number): Promise<any |
 export const cacheForumStats = async (stats: any): Promise<void> => {
   const { cacheService } = await import('../cache/cacheService');
   await cacheService.set(forumCacheKey('stats'), stats, 'forum', '5m');
-};
-
-// ==================== PAPER TRADING ====================
-
-// Portfolio Types
-export interface PaperTradingPortfolio {
-  id: string;
-  name: string;
-  provider: string;
-  initial_balance: number;
-  current_balance: number;
-  currency: string;
-  margin_mode: string;
-  leverage: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PaperTradingPosition {
-  id: string;
-  portfolio_id: string;
-  symbol: string;
-  side: 'long' | 'short';
-  entry_price: number;
-  quantity: number;
-  position_value?: number;
-  current_price?: number;
-  unrealized_pnl?: number;
-  realized_pnl: number;
-  leverage: number;
-  margin_mode: string;
-  liquidation_price?: number;
-  opened_at: string;
-  closed_at?: string;
-  status: 'open' | 'closed';
-}
-
-export interface PaperTradingOrder {
-  id: string;
-  portfolio_id: string;
-  symbol: string;
-  side: 'buy' | 'sell';
-  order_type: 'market' | 'limit' | 'stop_market' | 'stop_limit';
-  quantity: number;
-  price?: number;
-  stop_price?: number;
-  filled_quantity: number;
-  avg_fill_price?: number;
-  status: 'pending' | 'filled' | 'partial' | 'cancelled' | 'rejected' | 'triggered';
-  time_in_force: string;
-  post_only: boolean;
-  reduce_only: boolean;
-  created_at: string;
-  filled_at?: string;
-  updated_at: string;
-}
-
-export interface PaperTradingTrade {
-  id: string;
-  portfolio_id: string;
-  order_id: string;
-  symbol: string;
-  side: string;
-  price: number;
-  quantity: number;
-  fee: number;
-  fee_rate: number;
-  is_maker: boolean;
-  timestamp: string;
-}
-
-export interface MarginBlock {
-  id: string;
-  portfolio_id: string;
-  order_id: string;
-  symbol: string;
-  blocked_amount: number;
-  created_at: string;
-}
-
-export interface PaperTradingHolding {
-  id: string;
-  portfolio_id: string;
-  symbol: string;
-  quantity: number;
-  average_price: number;
-  invested_value: number;
-  current_price: number;
-  current_value: number;
-  pnl: number;
-  pnl_percent: number;
-  t1_quantity: number;
-  available_quantity: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PortfolioStats {
-  total_value: number;
-  available_margin: number;
-  blocked_margin: number;
-  realized_pnl: number;
-  unrealized_pnl: number;
-  total_pnl: number;
-  open_positions: number;
-  total_trades: number;
-}
-
-// Portfolio Operations
-export const createPortfolio = async (id: string, name: string, provider: string, initialBalance: number, currency: string, marginMode: string, leverage: number): Promise<PaperTradingPortfolio> => {
-  return await invoke('db_create_portfolio', { id, name, provider, initialBalance, currency, marginMode, leverage });
-};
-
-export const getPortfolio = async (id: string): Promise<PaperTradingPortfolio> => {
-  return await invoke('db_get_portfolio', { id });
-};
-
-export const listPortfolios = async (): Promise<PaperTradingPortfolio[]> => {
-  return await invoke<PaperTradingPortfolio[]>('db_list_portfolios');
-};
-
-export const updatePortfolioBalance = async (id: string, newBalance: number): Promise<void> => {
-  await invoke('db_update_portfolio_balance', { id, newBalance });
-};
-
-export const deletePortfolio = async (id: string): Promise<void> => {
-  await invoke('db_delete_portfolio', { id });
-};
-
-// Position Operations
-export const createPosition = async (
-  id: string,
-  portfolioId: string,
-  symbol: string,
-  side: string,
-  entryPrice: number,
-  quantity: number,
-  leverage: number,
-  marginMode: string
-): Promise<void> => {
-  await invoke('db_create_position', { id, portfolioId, symbol, side, entryPrice, quantity, leverage, marginMode });
-};
-
-export const getPosition = async (id: string): Promise<PaperTradingPosition> => {
-  return await invoke('db_get_position', { id });
-};
-
-export const getPositionBySymbol = async (portfolioId: string, symbol: string, status: string): Promise<PaperTradingPosition | null> => {
-  return await invoke('db_get_position_by_symbol', { portfolioId, symbol, status });
-};
-
-export const getPositionBySymbolAndSide = async (portfolioId: string, symbol: string, side: string, status: string): Promise<PaperTradingPosition | null> => {
-  return await invoke('db_get_position_by_symbol_and_side', { portfolioId, symbol, side, status });
-};
-
-export const getPortfolioPositions = async (portfolioId: string, status?: string): Promise<PaperTradingPosition[]> => {
-  return await invoke<PaperTradingPosition[]>('db_get_portfolio_positions', { portfolioId, status });
-};
-
-export const updatePosition = async (
-  id: string,
-  quantity?: number,
-  entryPrice?: number,
-  currentPrice?: number,
-  unrealizedPnl?: number,
-  realizedPnl?: number,
-  liquidationPrice?: number,
-  status?: string,
-  closedAt?: string
-): Promise<void> => {
-  await invoke('db_update_position', { id, quantity, entryPrice, currentPrice, unrealizedPnl, realizedPnl, liquidationPrice, status, closedAt });
-};
-
-export const deletePosition = async (id: string): Promise<void> => {
-  await invoke('db_delete_position', { id });
-};
-
-// Order Operations
-export const createOrder = async (
-  id: string,
-  portfolioId: string,
-  symbol: string,
-  side: string,
-  orderType: string,
-  quantity: number,
-  price: number | null,
-  timeInForce: string
-): Promise<void> => {
-  await invoke('db_create_order', { id, portfolioId, symbol, side, orderType, quantity, price, timeInForce });
-};
-
-export const getOrder = async (id: string): Promise<PaperTradingOrder> => {
-  return await invoke('db_get_order', { id });
-};
-
-export const getPendingOrders = async (portfolioId?: string): Promise<PaperTradingOrder[]> => {
-  return await invoke<PaperTradingOrder[]>('db_get_pending_orders', { portfolioId });
-};
-
-export const getPortfolioOrders = async (portfolioId: string, status?: string): Promise<PaperTradingOrder[]> => {
-  return await invoke<PaperTradingOrder[]>('db_get_portfolio_orders', { portfolioId, status });
-};
-
-export const updateOrder = async (
-  id: string,
-  filledQuantity?: number,
-  avgFillPrice?: number,
-  status?: string,
-  filledAt?: string
-): Promise<void> => {
-  await invoke('db_update_order', { id, filledQuantity, avgFillPrice, status, filledAt });
-};
-
-export const deleteOrder = async (id: string): Promise<void> => {
-  await invoke('db_delete_order', { id });
-};
-
-// Trade Operations
-export const createTrade = async (
-  id: string,
-  portfolioId: string,
-  orderId: string,
-  symbol: string,
-  side: string,
-  price: number,
-  quantity: number,
-  fee: number,
-  feeRate: number,
-  isMaker: boolean
-): Promise<void> => {
-  await invoke('db_create_trade', { id, portfolioId, orderId, symbol, side, price, quantity, fee, feeRate, isMaker });
-};
-
-export const getTrade = async (id: string): Promise<PaperTradingTrade> => {
-  return await invoke('db_get_trade', { id });
-};
-
-export const getOrderTrades = async (orderId: string): Promise<PaperTradingTrade[]> => {
-  return await invoke<PaperTradingTrade[]>('db_get_order_trades', { orderId });
-};
-
-export const getPortfolioTrades = async (portfolioId: string, limit?: number): Promise<PaperTradingTrade[]> => {
-  return await invoke<PaperTradingTrade[]>('db_get_portfolio_trades', { portfolioId, limit });
-};
-
-export const deleteTrade = async (id: string): Promise<void> => {
-  await invoke('db_delete_trade', { id });
-};
-
-// Margin Block Operations
-export const createMarginBlock = async (
-  id: string,
-  portfolioId: string,
-  orderId: string,
-  symbol: string,
-  blockedAmount: number
-): Promise<void> => {
-  await invoke('db_create_margin_block', { id, portfolioId, orderId, symbol, blockedAmount });
-};
-
-export const getMarginBlocks = async (portfolioId: string): Promise<MarginBlock[]> => {
-  return await invoke<MarginBlock[]>('db_get_margin_blocks', { portfolioId });
-};
-
-export const getMarginBlockByOrder = async (orderId: string): Promise<MarginBlock | null> => {
-  return await invoke('db_get_margin_block_by_order', { orderId });
-};
-
-export const deleteMarginBlock = async (orderId: string): Promise<number> => {
-  return await invoke<number>('db_delete_margin_block', { orderId });
-};
-
-export const getTotalBlockedMargin = async (portfolioId: string): Promise<number> => {
-  return await invoke<number>('db_get_total_blocked_margin', { portfolioId });
-};
-
-export const getAvailableMargin = async (portfolioId: string): Promise<number> => {
-  return await invoke<number>('db_get_available_margin', { portfolioId });
-};
-
-// Holdings Operations (T+1 Settlement)
-export const createHolding = async (
-  id: string,
-  portfolioId: string,
-  symbol: string,
-  quantity: number,
-  averagePrice: number
-): Promise<void> => {
-  await invoke('db_create_holding', { id, portfolioId, symbol, quantity, averagePrice });
-};
-
-export const getHoldings = async (portfolioId: string): Promise<PaperTradingHolding[]> => {
-  return await invoke<PaperTradingHolding[]>('db_get_holdings', { portfolioId });
-};
-
-export const getHoldingBySymbol = async (portfolioId: string, symbol: string): Promise<PaperTradingHolding | null> => {
-  return await invoke('db_get_holding_by_symbol', { portfolioId, symbol });
-};
-
-export const updateHolding = async (
-  id: string,
-  quantity?: number,
-  averagePrice?: number,
-  currentPrice?: number,
-  t1Quantity?: number,
-  availableQuantity?: number
-): Promise<void> => {
-  await invoke('db_update_holding', { id, quantity, averagePrice, currentPrice, t1Quantity, availableQuantity });
-};
-
-export const deleteHolding = async (id: string): Promise<void> => {
-  await invoke('db_delete_holding', { id });
-};
-
-export const processT1Settlement = async (portfolioId: string): Promise<number> => {
-  return await invoke<number>('db_process_t1_settlement', { portfolioId });
-};
-
-// Execution Engine Operations
-export const fillOrder = async (
-  orderId: string,
-  fillPrice: number,
-  fillQuantity: number,
-  fee: number,
-  feeRate: number
-): Promise<string> => {
-  return await invoke<string>('db_fill_order', { orderId, fillPrice, fillQuantity, fee, feeRate });
-};
-
-export const getPortfolioStats = async (portfolioId: string): Promise<PortfolioStats> => {
-  return await invoke<PortfolioStats>('db_get_portfolio_stats', { portfolioId });
-};
-
-export const resetPortfolio = async (portfolioId: string, initialBalance: number): Promise<void> => {
-  await invoke('db_reset_portfolio', { portfolioId, initialBalance });
 };
 
 // Legacy service class for compatibility

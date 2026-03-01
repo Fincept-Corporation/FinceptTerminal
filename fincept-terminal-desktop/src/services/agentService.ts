@@ -14,332 +14,43 @@
 import { invoke } from '@tauri-apps/api/core';
 import { mcpToolService } from '@/services/mcp/mcpToolService';
 import { INTERNAL_SERVER_ID } from '@/services/mcp/internal';
-
-// =============================================================================
-// Types
-// =============================================================================
-
-export interface AgentConfig {
-  model: {
-    provider: string;
-    model_id: string;
-    temperature?: number;
-    max_tokens?: number;
-  };
-  instructions?: string;
-  tools?: string[];
-  name?: string;
-  // Memory: basic toggle or detailed config
-  memory?: boolean | {
-    enabled: boolean;
-    db_path?: string;
-    table_name?: string;
-    create_user_memories?: boolean;
-    create_session_summary?: boolean;
-  };
-  // Knowledge Base (RAG)
-  knowledge?: {
-    enabled: boolean;
-    type?: 'url' | 'pdf' | 'text' | 'combined';
-    urls?: string[];
-    vector_db?: string;
-    embedder?: string;
-  };
-  // Reasoning: basic toggle or detailed config
-  reasoning?: boolean | {
-    enabled: boolean;
-    strategy?: string;
-    min_steps?: number;
-    max_steps?: number;
-    model?: { provider: string; model_id: string };
-  };
-  // Guardrails
-  guardrails?: boolean | {
-    enabled: boolean;
-    pii_detection?: boolean;
-    injection_check?: boolean;
-    financial_compliance?: boolean;
-  };
-  // Agentic Memory (separate from session memory)
-  agentic_memory?: boolean | {
-    enabled: boolean;
-    user_id?: string;
-  };
-  // Storage/Session persistence
-  storage?: {
-    enabled: boolean;
-    type?: 'sqlite' | 'postgres';
-    db_path?: string;
-    table_name?: string;
-  };
-  // Tracing for debugging
-  tracing?: boolean;
-  // Compression for token optimization
-  compression?: boolean;
-  // Hooks for pre/post processing
-  hooks?: boolean;
-  // Evaluation
-  evaluation?: boolean;
-  // Structured output model name
-  output_model?: string;
-  debug?: boolean;
-  // User-configured MCP servers (from the MCP tab in Settings)
-  // Each entry matches the MCPServer schema from the mcp_servers SQLite table
-  mcp_servers?: Array<{
-    id?: string;
-    name?: string;
-    command?: string;
-    args?: string[] | string;
-    env?: Record<string, string>;
-    transport?: 'stdio' | 'sse' | 'streamable-http';
-    url?: string;
-  }>;
-  // Internal TypeScript MCP tool definitions — injected automatically by agentService
-  // Python TerminalToolkit uses these to register callable tools that proxy back via HTTP bridge
-  terminal_tools?: Array<{
-    name: string;
-    description: string;
-    inputSchema: Record<string, any>;
-  }>;
-}
-
-export interface TeamConfig {
-  name: string;
-  mode: 'coordinate' | 'route' | 'collaborate';
-  model?: AgentConfig['model'];  // Coordinator model for team orchestration
-  members: Array<{
-    name: string;
-    role?: string;
-    model: AgentConfig['model'];
-    tools?: string[];
-    instructions?: string;
-  }>;
-  show_members_responses?: boolean;
-  leader_index?: number; // Index of the leader agent in members list
-}
-
-export interface AgentPayload {
-  action: string;
-  api_keys?: Record<string, string>;
-  user_id?: string;
-  config?: AgentConfig;
-  params?: Record<string, any>;
-}
-
-export interface AgentResponse<T = unknown> {
-  success: boolean;
-  error?: string;
-  response?: string;
-  data?: T;
-  result?: string | T;
-}
-
-export interface SystemInfo {
-  success: boolean;
-  version: string;
-  framework: string;
-  capabilities: {
-    model_providers: number;
-    tools: number;
-    tool_categories: string[];
-    vectordbs: string[];
-    embedders: string[];
-    output_models: string[];
-  };
-  features: string[];
-}
-
-export interface ToolsInfo {
-  success: boolean;
-  tools: Record<string, string[]>;
-  categories: string[];
-  total_count: number;
-}
-
-export interface ModelsInfo {
-  success: boolean;
-  providers: string[];
-  count: number;
-}
-
-// Streaming types
-
-// Parallel execution types
-export interface ParallelTask {
-  action: string;
-  config?: AgentConfig;
-  params?: Record<string, any>;
-}
-
-export interface ParallelResult {
-  task_id: string;
-  success: boolean;
-  result?: any;
-  error?: string;
-  execution_time_ms: number;
-}
-
-export interface BatchResponse {
-  batch_id: string;
-  results: ParallelResult[];
-  total_time_ms: number;
-  successful_count: number;
-  failed_count: number;
-}
-
-// Priority levels
-export enum AgentPriority {
-  HIGH = 0,
-  NORMAL = 1,
-  LOW = 2,
-}
-
-// =============================================================================
-// LRU Cache with Smart Invalidation
-// =============================================================================
-
-interface LRUEntry<T> {
-  data: T;
-  timestamp: number;
-  ttl: number;
-  accessCount: number;
-  lastAccess: number;
-}
-
-class LRUCache {
-  private cache = new Map<string, LRUEntry<any>>();
-  private maxSize: number;
-  private responseCache = new Map<string, LRUEntry<any>>(); // Separate cache for query responses
-
-  constructor(maxSize = 100) {
-    this.maxSize = maxSize;
-  }
-
-  set<T>(key: string, data: T, ttlMs: number = 5 * 60 * 1000): void {
-    // Evict if at capacity
-    if (this.cache.size >= this.maxSize) {
-      this.evictLRU();
-    }
-
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-      ttl: ttlMs,
-      accessCount: 1,
-      lastAccess: Date.now(),
-    });
-  }
-
-  get<T>(key: string): T | null {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-
-    // Check TTL
-    if (Date.now() - entry.timestamp > entry.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    // Update access stats
-    entry.accessCount++;
-    entry.lastAccess = Date.now();
-
-    return entry.data as T;
-  }
-
-  // Cache query responses with content-based key
-  setResponse<T>(query: string, config: AgentConfig, data: T, ttlMs: number = 2 * 60 * 1000): void {
-    const key = this.generateResponseKey(query, config);
-
-    if (this.responseCache.size >= this.maxSize) {
-      this.evictLRUResponse();
-    }
-
-    this.responseCache.set(key, {
-      data,
-      timestamp: Date.now(),
-      ttl: ttlMs,
-      accessCount: 1,
-      lastAccess: Date.now(),
-    });
-  }
-
-  getResponse<T>(query: string, config: AgentConfig): T | null {
-    const key = this.generateResponseKey(query, config);
-    const entry = this.responseCache.get(key);
-
-    if (!entry) return null;
-
-    if (Date.now() - entry.timestamp > entry.ttl) {
-      this.responseCache.delete(key);
-      return null;
-    }
-
-    entry.accessCount++;
-    entry.lastAccess = Date.now();
-
-    return entry.data as T;
-  }
-
-  private generateResponseKey(query: string, config: AgentConfig): string {
-    // Create deterministic key from query and relevant config
-    const configKey = `${config.model.provider}:${config.model.model_id}:${config.tools?.join(',') || ''}`;
-    return `${query.slice(0, 100)}|${configKey}`;
-  }
-
-  private evictLRU(): void {
-    let oldestKey: string | null = null;
-    let oldestAccess = Infinity;
-
-    for (const [key, entry] of this.cache) {
-      if (entry.lastAccess < oldestAccess) {
-        oldestAccess = entry.lastAccess;
-        oldestKey = key;
-      }
-    }
-
-    if (oldestKey) {
-      this.cache.delete(oldestKey);
-    }
-  }
-
-  private evictLRUResponse(): void {
-    let oldestKey: string | null = null;
-    let oldestAccess = Infinity;
-
-    for (const [key, entry] of this.responseCache) {
-      if (entry.lastAccess < oldestAccess) {
-        oldestAccess = entry.lastAccess;
-        oldestKey = key;
-      }
-    }
-
-    if (oldestKey) {
-      this.responseCache.delete(oldestKey);
-    }
-  }
-
-  clear(): void {
-    this.cache.clear();
-    this.responseCache.clear();
-  }
-
-  invalidate(key: string): void {
-    this.cache.delete(key);
-  }
-
-  invalidateResponses(): void {
-    this.responseCache.clear();
-  }
-
-  getStats(): { cacheSize: number; responseCacheSize: number; maxSize: number } {
-    return {
-      cacheSize: this.cache.size,
-      responseCacheSize: this.responseCache.size,
-      maxSize: this.maxSize,
-    };
-  }
-}
+import {
+  type AgentConfig,
+  type TeamConfig,
+  type AgentPayload,
+  type AgentResponse,
+  type SystemInfo,
+  type ToolsInfo,
+  type ModelsInfo,
+  type ParallelTask,
+  type ParallelResult,
+  type BatchResponse,
+  type RoutingResult,
+  type AgentCard,
+  type PlanStep,
+  type ExecutionPlan,
+  type TradeDecision,
+  AgentPriority,
+} from './agentServiceTypes';
+export type {
+  AgentConfig,
+  TeamConfig,
+  AgentPayload,
+  AgentResponse,
+  SystemInfo,
+  ToolsInfo,
+  ModelsInfo,
+  ParallelTask,
+  ParallelResult,
+  BatchResponse,
+  RoutingResult,
+  AgentCard,
+  PlanStep,
+  ExecutionPlan,
+  TradeDecision,
+};
+export { AgentPriority };
+import { LRUCache } from './agentServiceCache';
 
 const cache = new LRUCache(100);
 
@@ -1231,27 +942,6 @@ export function buildTeamConfig(
 // SuperAgent & Routing (v2.1)
 // =============================================================================
 
-export interface RoutingResult {
-  success: boolean;
-  intent: string;
-  agent_id: string;
-  confidence: number;
-  matched_keywords: string[];
-  matched_patterns: string[];
-  config: Record<string, any>;
-}
-
-export interface AgentCard {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  version: string;
-  provider: string;
-  capabilities: string[];
-  config: Record<string, any>;
-}
-
 /**
  * Route a query to the appropriate agent (SuperAgent)
  */
@@ -1334,28 +1024,6 @@ export async function discoverAgents(): Promise<AgentCard[]> {
 // Execution Planner (v2.1)
 // =============================================================================
 
-export interface PlanStep {
-  id: string;
-  name: string;
-  step_type: string;
-  config: Record<string, any>;
-  dependencies: string[];
-  status: string;
-  result?: any;
-  error?: string;
-}
-
-export interface ExecutionPlan {
-  id: string;
-  name: string;
-  description: string;
-  steps: PlanStep[];
-  context: Record<string, any>;
-  status: string;
-  is_complete: boolean;
-  has_failed: boolean;
-}
-
 /**
  * Create a stock analysis execution plan
  */
@@ -1407,19 +1075,6 @@ export async function executePlan(
 // =============================================================================
 // Trade Decision Repository (v2.1)
 // =============================================================================
-
-export interface TradeDecision {
-  id: string;
-  competition_id: string;
-  model_name: string;
-  cycle_number: number;
-  symbol: string;
-  action: string;
-  quantity: number;
-  price?: number;
-  reasoning: string;
-  confidence: number;
-}
 
 /**
  * Save a trade decision to the repository

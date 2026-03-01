@@ -13,9 +13,11 @@ export * from './constants';
 // Base Adapter
 export { BaseStockBrokerAdapter } from './BaseStockBrokerAdapter';
 
-// Registry
+// Registry data
+export { STOCK_BROKER_REGISTRY } from './registry';
+
+// Registry helpers & adapter registry
 export {
-  STOCK_BROKER_REGISTRY,
   registerBrokerAdapter,
   createStockBrokerAdapter,
   getAllStockBrokers,
@@ -28,7 +30,7 @@ export {
   stockBrokerSupportsTradingFeature,
   getAvailableRegions,
   getStockBrokersWithFeature,
-} from './registry';
+} from './registryHelpers';
 
 // Initialization
 export { initializeStockBrokers } from './init';

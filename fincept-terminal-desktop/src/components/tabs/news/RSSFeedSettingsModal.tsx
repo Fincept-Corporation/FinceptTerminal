@@ -958,6 +958,15 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                           <span style={{ padding: '2px 6px', backgroundColor: 'rgba(255, 215, 0, 0.15)', color: 'var(--ft-color-warning, #FFD700)', fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>
                             {getRegionLabel(feed.region)}
                           </span>
+                          {feed.tier != null && (
+                            <span style={{
+                              padding: '2px 6px', fontSize: '8px', fontWeight: 700, borderRadius: '2px',
+                              backgroundColor: feed.tier === 1 ? 'rgba(0,229,255,0.15)' : feed.tier === 2 ? 'rgba(0,255,136,0.15)' : feed.tier === 3 ? 'rgba(255,215,0,0.15)' : 'rgba(136,136,136,0.15)',
+                              color: feed.tier === 1 ? '#00E5FF' : feed.tier === 2 ? '#00FF88' : feed.tier === 3 ? '#FFD700' : '#888888',
+                            }}>
+                              T{feed.tier}
+                            </span>
+                          )}
                         </div>
                         <div
                           style={{

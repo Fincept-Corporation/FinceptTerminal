@@ -23,105 +23,20 @@ import {
   Clock,
 } from 'lucide-react';
 import { NodeParameterInput } from '../nodes/NodeParameterInput';
-import type { INodeProperties, NodeParameterValue } from '@/services/nodeSystem';
+import type { INodeProperties } from '@/services/nodeSystem';
 import { useDataSources } from '@/contexts/DataSourceContext';
+import { FINCEPT, SPACING, FONT_FAMILY, FONT_SIZE } from '../nodes/shared';
 import {
-  FINCEPT,
-  SPACING,
-  BORDER_RADIUS,
-  FONT_FAMILY,
-  FONT_SIZE,
-} from '../nodes/shared';
-
-interface NodeConfigPanelProps {
-  selectedNode: Node;
-  onLabelChange: (nodeId: string, newLabel: string) => void;
-  onParameterChange: (paramName: string, value: NodeParameterValue) => void;
-  onTimeoutChange: (nodeId: string, timeoutMs: number | undefined) => void;
-  onClose: () => void;
-  onDelete: () => void;
-  onDuplicate: () => void;
-}
-
-// Section header style helper
-const sectionHeaderStyle = (color: string): React.CSSProperties => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: SPACING.MD,
-  marginBottom: SPACING.LG,
-  paddingBottom: SPACING.MD,
-  borderBottom: `1px solid ${FINCEPT.BORDER}`,
-});
-
-const sectionHeaderTextStyle = (color: string): React.CSSProperties => ({
-  color,
-  fontSize: FONT_SIZE.LG,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-});
-
-const labelBlockStyle: React.CSSProperties = {
-  display: 'block',
-  color: FINCEPT.GRAY,
-  fontSize: FONT_SIZE.SM,
-  fontWeight: 700,
-  marginBottom: SPACING.SM,
-  textTransform: 'uppercase',
-};
-
-const selectInputStyle: React.CSSProperties = {
-  width: '100%',
-  backgroundColor: FINCEPT.DARK_BG,
-  border: `1px solid ${FINCEPT.BORDER}`,
-  color: FINCEPT.WHITE,
-  padding: SPACING.MD,
-  fontSize: FONT_SIZE.MD,
-  fontFamily: FONT_FAMILY,
-};
-
-const textInputStyle: React.CSSProperties = {
-  width: '100%',
-  backgroundColor: FINCEPT.DARK_BG,
-  border: `1px solid ${FINCEPT.BORDER}`,
-  color: FINCEPT.WHITE,
-  padding: SPACING.MD,
-  fontSize: FONT_SIZE.MD,
-  fontFamily: FONT_FAMILY,
-  boxSizing: 'border-box',
-};
-
-const textareaInputStyle: React.CSSProperties = {
-  ...textInputStyle,
-  height: '100px',
-  resize: 'vertical',
-};
-
-const executeButtonStyle = (color: string, disabled: boolean): React.CSSProperties => ({
-  width: '100%',
-  backgroundColor: disabled ? FINCEPT.BORDER : color,
-  color: FINCEPT.DARK_BG,
-  border: 'none',
-  padding: SPACING.MD,
-  fontSize: FONT_SIZE.SM,
-  fontWeight: 700,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-  opacity: disabled ? 0.5 : 1,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: SPACING.SM,
-  fontFamily: FONT_FAMILY,
-});
-
-const infoPanelStyle: React.CSSProperties = {
-  padding: SPACING.LG,
-  backgroundColor: FINCEPT.DARK_BG,
-  border: `1px solid ${FINCEPT.BORDER}`,
-  color: FINCEPT.GRAY,
-  fontSize: FONT_SIZE.MD,
-  textAlign: 'center',
-};
+  NodeConfigPanelProps,
+  sectionHeaderStyle,
+  sectionHeaderTextStyle,
+  labelBlockStyle,
+  selectInputStyle,
+  textInputStyle,
+  textareaInputStyle,
+  executeButtonStyle,
+  infoPanelStyle,
+} from './NodeConfigPanelStyles';
 
 const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   selectedNode,

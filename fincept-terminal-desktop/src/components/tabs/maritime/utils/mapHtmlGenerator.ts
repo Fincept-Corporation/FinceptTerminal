@@ -765,6 +765,105 @@ export function generateMapHTML(): string {
           }
         };
 
+        // ── News markers ────────────────────────────────────────────────────
+        var newsMarkersData = [];
+        var showNewsMarkersFlag = true;
+
+        // Priority → ring color
+        function newsMarkerColor(priority) {
+          if (priority === 'FLASH')   return 'rgba(255,50,50,0.95)';
+          if (priority === 'URGENT')  return 'rgba(255,140,0,0.9)';
+          if (priority === 'BREAKING') return 'rgba(255,220,0,0.85)';
+          return 'rgba(120,120,140,0.65)';
+        }
+
+        function buildNewsMarkerEl(marker) {
+          var el = document.createElement('div');
+          var isHot = marker.priority === 'FLASH' || marker.priority === 'URGENT';
+          var color = newsMarkerColor(marker.priority);
+          el.style.cssText = [
+            'position:relative',
+            'width:' + (isHot ? '14px' : '10px'),
+            'height:' + (isHot ? '14px' : '10px'),
+            'border-radius:50%',
+            'background:' + color,
+            'box-shadow:0 0 ' + (isHot ? '8px 3px ' : '4px 1px ') + color,
+            'cursor:pointer',
+            'transition:transform 0.15s',
+          ].join(';');
+          if (isHot) {
+            var ring = document.createElement('div');
+            ring.style.cssText = [
+              'position:absolute',
+              'top:-4px', 'left:-4px',
+              'width:22px', 'height:22px',
+              'border-radius:50%',
+              'border:2px solid ' + color,
+              'animation:news-pulse 1.4s infinite',
+            ].join(';');
+            el.appendChild(ring);
+          }
+          el.title = marker.headline ? marker.headline.substring(0, 80) : '';
+          el.addEventListener('mouseenter', function() { el.style.transform = 'scale(1.4)'; });
+          el.addEventListener('mouseleave', function() { el.style.transform = 'scale(1)'; });
+          el.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (typeof window.onNewsMarkerClick === 'function') {
+              window.onNewsMarkerClick(marker.clusterId);
+            }
+          });
+          return el;
+        }
+
+        function refreshNewsMarkers() {
+          if (!showNewsMarkersFlag || newsMarkersData.length === 0) {
+            world.htmlElementsData(allLabels);
+            return;
+          }
+          var combined = allLabels.concat(newsMarkersData.map(function(m) {
+            return { lat: m.lat, lng: m.lng, _newsMarker: m };
+          }));
+          world.htmlElementsData(combined)
+            .htmlElement(function(d) {
+              if (d._newsMarker) return buildNewsMarkerEl(d._newsMarker);
+              // delegate to existing htmlElement logic (labels)
+              return null;
+            });
+        }
+
+        /**
+         * Called from React (via iframe ref) after each article refresh.
+         * markers: Array<{ lat, lng, headline, category, priority, tier, clusterId }>
+         */
+        window.updateNewsMarkers = function(markers) {
+          newsMarkersData = markers || [];
+          refreshNewsMarkers();
+        };
+
+        /** Toggle news marker visibility */
+        window.toggleNewsMarkers = function() {
+          showNewsMarkersFlag = !showNewsMarkersFlag;
+          refreshNewsMarkers();
+        };
+
+        /** Zoom globe to a specific cluster's coordinates */
+        window.zoomToNewsMarker = function(clusterId) {
+          var m = newsMarkersData.find(function(x) { return x.clusterId === clusterId; });
+          if (!m) return;
+          world.pointOfView({ lat: m.lat, lng: m.lng, altitude: 1.5 }, 1000);
+        };
+
+        /** React sets this to handle marker click → highlight cluster card */
+        window.onNewsMarkerClick = null;
+
+        // Inject pulse keyframe once
+        if (!document.getElementById('news-pulse-style')) {
+          var styleEl = document.createElement('style');
+          styleEl.id = 'news-pulse-style';
+          styleEl.textContent = '@keyframes news-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.6)} }';
+          document.head.appendChild(styleEl);
+        }
+
         // Configure controls
         world.controls().autoRotate = true;
         world.controls().autoRotateSpeed = 0.2;

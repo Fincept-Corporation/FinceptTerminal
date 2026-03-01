@@ -21,6 +21,12 @@ export interface NewsArticle {
   classification: string;
   link?: string;
   pubDate?: Date;
+  /** Unix timestamp in seconds — used for time-range filtering and clustering */
+  sort_ts: number;
+  /** Source credibility tier: 1=wire service, 2=major outlet, 3=specialty, 4=blog */
+  tier: number;
+  /** Reserved for future velocity tracking */
+  velocity_hint: number;
 }
 
 // ============================================================================

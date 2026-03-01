@@ -66,6 +66,7 @@ tracing = "0.1"
 futures = "0.3"
 regex = "1.12.2"
 quick-xml = "0.37"  # Fast XML/RSS parsing
+axum = "0.7"        # Lightweight HTTP server for YouTube embed proxy
 rand = "0.8"  # Random number generation for paper trading
 aes-gcm = "0.10"  # AES-256-GCM encryption for secure credential storage
 base64 = "0.22"  # Base64 encoding/decoding for encrypted data

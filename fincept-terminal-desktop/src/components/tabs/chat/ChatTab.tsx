@@ -1,23 +1,26 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { flushSync } from 'react-dom';
-import { Settings, Trash2, Bot, User, Clock, Send, Plus, Search, Edit2, Check, X } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrokerContext } from '@/contexts/BrokerContext';
 import { useTranslation } from 'react-i18next';
 import { llmApiService, ChatMessage as APIMessage } from '@/services/chat/llmApi';
-import { sqliteService, ChatSession, ChatMessage, RecordedContext, LLMConfig, LLMGlobalSettings, ChatStatistics } from '@/services/core/sqliteService';
+import { sqliteService, ChatSession, ChatMessage, RecordedContext, LLMConfig, LLMGlobalSettings } from '@/services/core/sqliteService';
 import { contextRecorderService } from '@/services/data-sources/contextRecorderService';
 import { brokerMCPBridge } from '@/services/mcp/internal/BrokerMCPBridge';
 import { notesMCPBridge } from '@/services/mcp/internal/NotesMCPBridge';
-import MarkdownRenderer from '@/components/common/MarkdownRenderer';
-import ContextSelector from '@/components/common/ContextSelector';
-import FinancialSparklines from './FinancialSparklines';
 import { withTimeout } from '@/services/core/apiUtils';
 import { sanitizeInput } from '@/services/core/validators';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { showConfirm, showError } from '@/utils/notifications';
+
+import { QuickPrompt, DEFAULT_QUICK_PROMPTS, MCP_RETRY_INTERVAL_MS, MCP_MAX_RETRIES, CLOCK_UPDATE_INTERVAL_MS, MAX_MESSAGES_IN_MEMORY, DB_TIMEOUT_MS, MCP_SUPPORTED_PROVIDERS, STREAMING_SUPPORTED_PROVIDERS, NO_API_KEY_PROVIDERS } from './components/types';
+import { ChatNavbar } from './components/ChatNavbar';
+import { SessionsPanel } from './components/SessionsPanel';
+import { ChatPanel } from './components/ChatPanel';
+import { RightSidePanel } from './components/RightSidePanel';
+import { ChatStatusBar } from './components/ChatStatusBar';
 
 // NOTE: All colors should use theme context
 // No hardcoded colors - use colors.* from useTerminalTheme()
@@ -26,23 +29,6 @@ interface ChatTabProps {
   onNavigateToSettings?: () => void;
   onNavigateToTab?: (tabName: string) => void;
 }
-
-interface QuickPrompt {
-  cmd: string;
-  prompt: string;
-}
-
-// Constants
-const SESSION_CREATION_DELAY_MS = 100;
-const MAX_MESSAGES_IN_MEMORY = 200;
-const MCP_RETRY_INTERVAL_MS = 10000;
-const MCP_MAX_RETRIES = 5;
-const CLOCK_UPDATE_INTERVAL_MS = 1000;
-const MCP_SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'gemini', 'google', 'groq', 'deepseek', 'openrouter', 'fincept'];
-const STREAMING_SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'gemini', 'google', 'groq', 'deepseek', 'openrouter', 'ollama', 'fincept'];
-const NO_API_KEY_PROVIDERS = ['ollama', 'fincept']; // Providers that don't require API key
-const API_TIMEOUT_MS = 30000;
-const DB_TIMEOUT_MS = 10000;
 
 const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab }) => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
@@ -85,12 +71,6 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   const [showLLMSelector, setShowLLMSelector] = useState(false);
 
   // Quick Prompts state
-  const DEFAULT_QUICK_PROMPTS: QuickPrompt[] = [
-    { cmd: 'MARKET TRENDS', prompt: 'Analyze current market trends and key insights' },
-    { cmd: 'PORTFOLIO', prompt: 'Portfolio diversification recommendations' },
-    { cmd: 'RISK', prompt: 'Investment risk assessment strategies' },
-    { cmd: 'TECHNICAL', prompt: 'Key technical analysis indicators' }
-  ];
   const [quickPrompts, setQuickPrompts] = useState<QuickPrompt[]>(DEFAULT_QUICK_PROMPTS);
   const [isEditingPrompts, setIsEditingPrompts] = useState(false);
   const [editingPromptIndex, setEditingPromptIndex] = useState<number | null>(null);
@@ -135,16 +115,16 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   };
 
   // Check if a custom system prompt is configured
-  const hasCustomSystemPrompt = () => {
-    return llmGlobalSettings.system_prompt && llmGlobalSettings.system_prompt.trim().length > 0;
+  const hasCustomSystemPrompt = (): boolean => {
+    return !!(llmGlobalSettings.system_prompt && llmGlobalSettings.system_prompt.trim().length > 0);
   };
 
   // Check if base URL should be shown (for Ollama or custom endpoints)
-  const shouldShowBaseUrl = () => {
+  const shouldShowBaseUrl = (): boolean => {
     if (!activeLLMConfig) return false;
     const provider = activeLLMConfig.provider.toLowerCase();
     // Show for Ollama, or if a custom base_url is set
-    return provider === 'ollama' || (activeLLMConfig.base_url && activeLLMConfig.base_url.trim().length > 0);
+    return provider === 'ollama' || !!(activeLLMConfig.base_url && activeLLMConfig.base_url.trim().length > 0);
   };
 
   // Cleanup on unmount
@@ -966,337 +946,6 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     }
   };
 
-  const renderWelcomeScreen = () => (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100%',
-      backgroundColor: colors.background
-    }}>
-      <div style={{
-        textAlign: 'center',
-        padding: '24px',
-        maxWidth: '400px'
-      }}>
-        <Bot size={48} color={colors.primary} style={{ marginBottom: '16px', opacity: 0.8 }} />
-        <div style={{
-          color: colors.primary,
-          fontSize: fontSize.heading,
-          fontWeight: 700,
-          marginBottom: '8px',
-          letterSpacing: '0.5px'
-        }}>
-          {t('title').toUpperCase()}
-        </div>
-        <div style={{
-          color: colors.text,
-          fontSize: fontSize.body,
-          marginBottom: '16px',
-          lineHeight: '1.5'
-        }}>
-          {t('subtitle')}
-        </div>
-        <div style={{
-          padding: '6px 12px',
-          backgroundColor: `${colors.warning}20`,
-          color: colors.warning,
-          fontSize: fontSize.small,
-          fontWeight: 700,
-          borderRadius: '2px',
-          marginBottom: '16px',
-          display: 'inline-block',
-          letterSpacing: '0.5px'
-        }}>
-          PROVIDER: {activeLLMConfig?.provider.toUpperCase() || 'NONE'} | MODEL: {activeLLMConfig?.model || 'N/A'}
-        </div>
-        <br />
-        <button
-          onClick={createNewSession}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: colors.primary,
-            color: colors.background,
-            border: 'none',
-            fontSize: fontSize.small,
-            fontWeight: 700,
-            borderRadius: '2px',
-            cursor: 'pointer',
-            letterSpacing: '0.5px',
-            transition: 'all 0.2s'
-          }}
-        >
-          {t('header.newChat').toUpperCase()}
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderMessage = (message: ChatMessage) => {
-    try {
-      return (
-        <div key={message.id} style={{ marginBottom: '12px' }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
-            marginBottom: '4px'
-          }}>
-            <div style={{
-              maxWidth: '85%',
-              minWidth: '120px',
-              backgroundColor: colors.panel,
-              border: `1px solid ${message.role === 'user' ? colors.warning : colors.primary}`,
-              borderRadius: '2px',
-              padding: '10px'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                marginBottom: '8px',
-                paddingBottom: '6px',
-                borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
-              }}>
-                {message.role === 'user' ? (
-                  <User size={12} color={colors.warning} />
-                ) : (
-                  <Bot size={12} color={colors.primary} />
-                )}
-                <span style={{
-                  color: message.role === 'user' ? colors.warning : colors.primary,
-                  fontSize: fontSize.small,
-                  fontWeight: 700,
-                  letterSpacing: '0.5px'
-                }}>
-                  {message.role === 'user' ? 'YOU' : 'AI'}
-                </span>
-                <Clock size={10} color={colors.textMuted} />
-                <span style={{
-                  color: colors.textMuted,
-                  fontSize: fontSize.small,
-                  letterSpacing: '0.5px',
-                  fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                }}>
-                  {formatTime(message.timestamp)}
-                </span>
-                {message.provider && (
-                  <span style={{
-                    color: colors.textMuted,
-                    fontSize: fontSize.small,
-                    letterSpacing: '0.5px'
-                  }}>
-                    | {message.provider.toUpperCase()}
-                  </span>
-                )}
-              </div>
-              {/* Tool calls indicator - like Perplexity sources */}
-              {message.tool_calls && message.tool_calls.length > 0 && (
-                <div style={{
-                  marginBottom: '12px',
-                  padding: '8px 12px',
-                  background: colors.panel,
-                  border: `1px solid ${'rgba(255,255,255,0.1)'}`,
-                  borderRadius: '4px',
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '6px',
-                  alignItems: 'center'
-                }}>
-                  <span style={{
-                    color: colors.textMuted,
-                    fontSize: fontSize.small,
-                    letterSpacing: '0.5px',
-                    textTransform: 'uppercase'
-                  }}>
-                    Tools Used:
-                  </span>
-                  {message.tool_calls.map((tool, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: '4px 8px',
-                        background: tool.status === 'success' ? colors.success + '20' :
-                                   tool.status === 'error' ? colors.alert + '20' : colors.primary + '20',
-                        border: `1px solid ${tool.status === 'success' ? colors.success :
-                                             tool.status === 'error' ? colors.alert : colors.primary}`,
-                        borderRadius: '3px',
-                        fontSize: fontSize.small,
-                        color: tool.status === 'success' ? colors.success :
-                               tool.status === 'error' ? colors.alert : colors.primary,
-                        letterSpacing: '0.5px',
-                        fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <span style={{ fontSize: fontSize.tiny }}>
-                        {tool.status === 'success' ? '✓' : tool.status === 'error' ? '✗' : '⋯'}
-                      </span>
-                      {tool.name.replace('edgar_', '').replace(/_/g, ' ')}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {message.role === 'assistant' && message.content ? (
-                <>
-                  <MarkdownRenderer content={message.content} />
-                  {message.metadata?.chart_data && (
-                    <FinancialSparklines
-                      data={message.metadata.chart_data}
-                      ticker={message.metadata.ticker}
-                      company={message.metadata.company}
-                      responseText={message.content}
-                    />
-                  )}
-                </>
-              ) : (
-                <div style={{
-                  color: colors.text,
-                  fontSize: fontSize.body,
-                  lineHeight: '1.6',
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                }}>
-                  {message.content || '(Empty message)'}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    } catch (error) {
-      console.error('Error rendering message:', error, message);
-      return (
-        <div key={message.id} style={{
-          marginBottom: '12px',
-          color: colors.alert,
-          fontSize: fontSize.small,
-          letterSpacing: '0.5px'
-        }}>
-          ERROR RENDERING MESSAGE
-        </div>
-      );
-    }
-  };
-
-  const renderStreamingMessage = () => {
-    if (!streamingContent && activeToolCalls.length === 0) return null;
-
-    return (
-      <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'flex-start' }}>
-        <div style={{
-          maxWidth: '85%',
-          backgroundColor: colors.panel,
-          border: `2px solid ${colors.primary}`,
-          borderRadius: '2px',
-          padding: '10px'
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            marginBottom: '8px',
-            paddingBottom: '6px',
-            borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
-          }}>
-            <Bot
-              size={12}
-              color={colors.primary}
-              style={{ animation: 'spin 2s linear infinite' }}
-            />
-            <span style={{
-              color: colors.primary,
-              fontSize: fontSize.small,
-              fontWeight: 700,
-              letterSpacing: '0.5px',
-              animation: 'fadeInOut 1.5s ease-in-out infinite'
-            }}>
-              {t('messages.typing').toUpperCase()}
-            </span>
-            <span style={{
-              color: colors.primary,
-              fontSize: fontSize.small,
-              animation: 'dots 1.5s steps(4, end) infinite'
-            }}>
-              <span>.</span>
-              <span>.</span>
-              <span>.</span>
-            </span>
-          </div>
-
-          {/* Live tool calls - Perplexity-style */}
-          {activeToolCalls.length > 0 && (
-            <div style={{
-              marginBottom: streamingContent ? '12px' : '0',
-              padding: '8px 12px',
-              background: colors.background,
-              border: `1px solid ${'rgba(255,255,255,0.1)'}`,
-              borderRadius: '4px',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '6px',
-              alignItems: 'center'
-            }}>
-              <span style={{
-                color: colors.textMuted,
-                fontSize: fontSize.small,
-                letterSpacing: '0.5px',
-                textTransform: 'uppercase'
-              }}>
-                Calling:
-              </span>
-              {activeToolCalls.map((tool, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    padding: '4px 8px',
-                    background: tool.status === 'success' ? colors.success + '20' :
-                               tool.status === 'error' ? colors.alert + '20' : colors.primary + '20',
-                    border: `1px solid ${tool.status === 'success' ? colors.success :
-                                         tool.status === 'error' ? colors.alert : colors.primary}`,
-                    borderRadius: '3px',
-                    fontSize: fontSize.small,
-                    color: tool.status === 'success' ? colors.success :
-                           tool.status === 'error' ? colors.alert : colors.primary,
-                    letterSpacing: '0.5px',
-                    fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    animation: tool.status === 'calling' ? 'pulse 1.5s infinite' : 'none'
-                  }}
-                >
-                  <span style={{ fontSize: fontSize.tiny }}>
-                    {tool.status === 'success' ? '✓' : tool.status === 'error' ? '✗' : '⋯'}
-                  </span>
-                  {tool.name.replace('edgar_', '').replace('stock_', '').replace(/_/g, ' ')}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {streamingContent && (
-            <div style={{
-              color: colors.text,
-              fontSize: fontSize.body,
-              lineHeight: '1.6',
-              whiteSpace: 'pre-wrap',
-              fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-            }}>
-              {streamingContent}
-              <span style={{
-                color: colors.primary,
-                animation: 'blink 1s infinite'
-              }}>▊</span>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div style={{
       height: '100%',
@@ -1355,1056 +1004,113 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           60%, 100% { content: '...'; }
         }
       `}</style>
+
       {/* Top Navigation Bar */}
-      <div style={{
-        backgroundColor: colors.panel,
-        borderBottom: `2px solid ${colors.primary}`,
-        padding: '8px 16px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexShrink: 0,
-        boxShadow: `0 2px 8px ${colors.primary}20`
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{
-            color: colors.primary,
-            fontWeight: 700,
-            fontSize: fontSize.body,
-            letterSpacing: '0.5px'
-          }}>
-            {t('title').toUpperCase()}
-          </span>
-          <span style={{ color: colors.textMuted }}>|</span>
-
-          {/* LLM Provider Selector */}
-          <div ref={llmSelectorRef} style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowLLMSelector(!showLLMSelector)}
-              style={{
-                backgroundColor: `${colors.warning}20`,
-                border: `1px solid ${colors.warning}40`,
-                color: colors.warning,
-                padding: '4px 10px',
-                fontSize: fontSize.small,
-                fontWeight: 700,
-                borderRadius: '2px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                letterSpacing: '0.5px',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = `${colors.warning}30`;
-                e.currentTarget.style.borderColor = colors.warning;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = `${colors.warning}20`;
-                e.currentTarget.style.borderColor = `${colors.warning}40`;
-              }}
-              title="Switch LLM Provider"
-            >
-              <Bot size={10} />
-              {activeLLMConfig?.provider.toUpperCase() || 'NO PROVIDER'}
-              <span style={{ fontSize: fontSize.tiny }}>▼</span>
-            </button>
-
-            {/* Dropdown Menu */}
-            {showLLMSelector && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                marginTop: '4px',
-                backgroundColor: colors.panel,
-                border: `1px solid ${colors.primary}`,
-                borderRadius: '2px',
-                padding: '4px',
-                minWidth: '220px',
-                maxHeight: '400px',
-                overflowY: 'auto',
-                zIndex: 1000,
-                boxShadow: `0 4px 12px ${colors.background}80`
-              }}>
-                <div style={{
-                  padding: '6px 8px',
-                  fontSize: fontSize.tiny,
-                  fontWeight: 700,
-                  color: colors.textMuted,
-                  letterSpacing: '0.5px',
-                  borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`,
-                  marginBottom: '4px'
-                }}>
-                  SELECT LLM PROVIDER
-                </div>
-                {allLLMConfigs.length > 0 ? (
-                  allLLMConfigs.map((config) => (
-                    <button
-                      key={config.provider}
-                      onClick={() => switchLLMProvider(config.provider)}
-                      style={{
-                        width: '100%',
-                        backgroundColor: activeLLMConfig?.provider === config.provider ? `${colors.primary}20` : 'transparent',
-                        border: activeLLMConfig?.provider === config.provider ? `1px solid ${colors.primary}` : `1px solid ${'rgba(255,255,255,0.1)'}`,
-                        color: activeLLMConfig?.provider === config.provider ? colors.primary : colors.text,
-                        padding: '8px',
-                        fontSize: fontSize.small,
-                        fontWeight: 600,
-                        borderRadius: '2px',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        marginBottom: '2px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '4px',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (activeLLMConfig?.provider !== config.provider) {
-                          e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
-                          e.currentTarget.style.borderColor = colors.textMuted;
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (activeLLMConfig?.provider !== config.provider) {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                        }
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 700, letterSpacing: '0.3px' }}>
-                          {config.provider.toUpperCase()}
-                        </span>
-                        {activeLLMConfig?.provider === config.provider && (
-                          <span style={{ color: colors.success, fontSize: fontSize.tiny }}>● ACTIVE</span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
-                        Model: {config.model || 'N/A'}
-                      </div>
-                      {config.base_url && (
-                        <div style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
-                          {config.base_url}
-                        </div>
-                      )}
-                    </button>
-                  ))
-                ) : (
-                  <div style={{
-                    padding: '12px',
-                    textAlign: 'center',
-                    fontSize: fontSize.small,
-                    color: colors.textMuted
-                  }}>
-                    No LLM providers configured. Go to Settings to add one.
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <span style={{ color: colors.textMuted }}>|</span>
-          <span style={{
-            color: colors.text,
-            fontSize: fontSize.small,
-            letterSpacing: '0.5px'
-          }}>
-            {currentTime.toLocaleTimeString('en-US', { hour12: false })}
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => onNavigateToSettings?.()}
-            style={{
-              backgroundColor: 'transparent',
-              border: `1px solid ${'rgba(255,255,255,0.1)'}`,
-              color: colors.textMuted,
-              padding: '6px 10px',
-              fontSize: fontSize.small,
-              fontWeight: 700,
-              borderRadius: '2px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              letterSpacing: '0.5px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = colors.primary;
-              e.currentTarget.style.color = colors.text;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-              e.currentTarget.style.color = colors.textMuted;
-            }}
-            title="Go to Settings tab to configure LLM providers"
-          >
-            <Settings size={12} />
-            {t('header.settings').toUpperCase()}
-          </button>
-          <button
-            onClick={createNewSession}
-            style={{
-              backgroundColor: colors.primary,
-              border: 'none',
-              color: colors.background,
-              padding: '8px 16px',
-              fontSize: fontSize.small,
-              fontWeight: 700,
-              borderRadius: '2px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              letterSpacing: '0.5px',
-              transition: 'all 0.2s'
-            }}
-          >
-            <Plus size={12} />
-            {t('header.newChat').toUpperCase()}
-          </button>
-        </div>
-      </div>
+      <ChatNavbar
+        colors={colors}
+        fontSize={fontSize}
+        currentTime={currentTime}
+        activeLLMConfig={activeLLMConfig}
+        allLLMConfigs={allLLMConfigs}
+        showLLMSelector={showLLMSelector}
+        setShowLLMSelector={setShowLLMSelector}
+        llmSelectorRef={llmSelectorRef}
+        t={t}
+        onSwitchLLMProvider={switchLLMProvider}
+        onNavigateToSettings={onNavigateToSettings}
+        onCreateNewSession={createNewSession}
+      />
 
       {/* Main Content */}
       <ErrorBoundary name="ChatMainContent" variant="minimal">
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left Panel - Sessions */}
-        <div style={{
-          width: '280px',
-          backgroundColor: colors.panel,
-          borderRight: `1px solid ${'rgba(255,255,255,0.1)'}`,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
-        }}>
-          {/* Section Header */}
-          <div style={{
-            padding: '12px',
-            backgroundColor: colors.panel,
-            borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{
-                fontSize: fontSize.small,
-                fontWeight: 700,
-                color: colors.textMuted,
-                letterSpacing: '0.5px'
-              }}>
-                {t('history.sessions').toUpperCase()} ({statistics.totalSessions})
-              </span>
-              {sessions.length > 0 && (
-                <button
-                  onClick={deleteAllSessions}
-                  style={{
-                    padding: '2px 6px',
-                    backgroundColor: `${colors.alert}20`,
-                    color: colors.alert,
-                    border: 'none',
-                    fontSize: fontSize.tiny,
-                    fontWeight: 700,
-                    borderRadius: '2px',
-                    cursor: 'pointer',
-                    letterSpacing: '0.5px',
-                    transition: 'all 0.2s'
-                  }}
-                  title={t('history.deleteAll')}
-                >
-                  {t('history.clearAll').toUpperCase()}
-                </button>
-              )}
-            </div>
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* Left Panel - Sessions */}
+          <SessionsPanel
+            colors={colors}
+            fontSize={fontSize}
+            sessions={sessions}
+            filteredSessions={filteredSessions}
+            currentSessionUuid={currentSessionUuid}
+            renamingSessionId={renamingSessionId}
+            renameValue={renameValue}
+            searchQuery={searchQuery}
+            statistics={statistics}
+            sessionsListRef={sessionsListRef}
+            t={t}
+            onSelectSession={selectSession}
+            onDeleteSession={deleteSession}
+            onDeleteAllSessions={deleteAllSessions}
+            onStartRenaming={startRenaming}
+            onSaveRename={saveRename}
+            onCancelRename={cancelRename}
+            onRenameValueChange={setRenameValue}
+            onSearchChange={setSearchQuery}
+            formatSessionTime={formatSessionTime}
+          />
 
-            {/* Search */}
-            <div style={{ position: 'relative', marginBottom: '8px' }}>
-              <Search size={12} color={colors.textMuted} style={{ position: 'absolute', left: '8px', top: '9px' }} />
-              <input
-                id="session-search"
-                type="text"
-                placeholder={t('input.placeholder')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 10px 8px 32px',
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  border: `1px solid ${'rgba(255,255,255,0.1)'}`,
-                  borderRadius: '2px',
-                  fontSize: fontSize.small,
-                  fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                }}
-              />
-            </div>
+          {/* Center Panel - Chat */}
+          <ChatPanel
+            colors={colors}
+            fontSize={fontSize}
+            messages={messages}
+            streamingContent={streamingContent}
+            isTyping={isTyping}
+            messageInput={messageInput}
+            currentSessionUuid={currentSessionUuid}
+            sessions={sessions}
+            activeLLMConfig={activeLLMConfig}
+            systemStatus={systemStatus}
+            activeToolCalls={activeToolCalls}
+            messagesEndRef={messagesEndRef}
+            t={t}
+            formatTime={formatTime}
+            onMessageInputChange={setMessageInput}
+            onSendMessage={handleSendMessage}
+            onClearCurrentChat={clearCurrentChat}
+            onCreateNewSession={createNewSession}
+          />
 
-            {/* Stats */}
-            <div style={{
-              fontSize: fontSize.small,
-              color: colors.secondary,
-              letterSpacing: '0.5px',
-              fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-            }}>
-              MESSAGES: {statistics.totalMessages} | TOKENS: {statistics.totalTokens.toLocaleString()}
-            </div>
-          </div>
-
-          {/* Session List with scrollbar */}
-          <div
-            ref={sessionsListRef}
-            style={{
-              flex: 1,
-              overflow: 'auto',
-              padding: '8px'
-            }}
-          >
-            {filteredSessions.map(session => (
-              <div
-                key={session.session_uuid}
-                style={{
-                  padding: '10px 12px',
-                  backgroundColor: currentSessionUuid === session.session_uuid ? `${colors.primary}15` : 'transparent',
-                  borderLeft: currentSessionUuid === session.session_uuid ? `2px solid ${colors.primary}` : '2px solid transparent',
-                  cursor: renamingSessionId === session.session_uuid ? 'default' : 'pointer',
-                  transition: 'all 0.2s',
-                  marginBottom: '4px'
-                }}
-                onClick={() => renamingSessionId !== session.session_uuid && selectSession(session.session_uuid)}
-                onMouseEnter={(e) => {
-                  if (currentSessionUuid !== session.session_uuid && renamingSessionId !== session.session_uuid) {
-                    e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (currentSessionUuid !== session.session_uuid) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                {/* Title or Rename Input */}
-                {renamingSessionId === session.session_uuid ? (
-                  <div style={{ marginBottom: '6px', display: 'flex', gap: '4px', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveRename(session.session_uuid);
-                        if (e.key === 'Escape') cancelRename();
-                      }}
-                      autoFocus
-                      style={{
-                        flex: 1,
-                        padding: '4px 6px',
-                        backgroundColor: colors.background,
-                        border: `1px solid ${colors.primary}`,
-                        color: colors.text,
-                        fontSize: fontSize.small,
-                        borderRadius: '2px',
-                        fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                      }}
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        saveRename(session.session_uuid);
-                      }}
-                      style={{
-                        backgroundColor: 'transparent',
-                        color: colors.success,
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: '0',
-                        display: 'flex',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <Check size={12} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        cancelRename();
-                      }}
-                      style={{
-                        backgroundColor: 'transparent',
-                        color: colors.alert,
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: '0',
-                        display: 'flex',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{
-                    color: colors.text,
-                    fontSize: fontSize.small,
-                    marginBottom: '6px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    fontWeight: 700
-                  }}>
-                    {session.title}
-                  </div>
-                )}
-
-                {/* Actions Row */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{
-                    color: colors.textMuted,
-                    fontSize: fontSize.small,
-                    letterSpacing: '0.5px',
-                    fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                  }}>
-                    {session.message_count} MSGS • {formatSessionTime(session.updated_at)}
-                  </span>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startRenaming(session.session_uuid, session.title);
-                      }}
-                      style={{
-                        backgroundColor: 'transparent',
-                        color: colors.warning,
-                        border: 'none',
-                        fontSize: fontSize.small,
-                        cursor: 'pointer',
-                        padding: '0',
-                        display: 'flex',
-                        transition: 'all 0.2s'
-                      }}
-                      title="Rename session"
-                    >
-                      <Edit2 size={10} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteSession(session.session_uuid);
-                      }}
-                      style={{
-                        backgroundColor: 'transparent',
-                        color: colors.alert,
-                        border: 'none',
-                        fontSize: fontSize.small,
-                        cursor: 'pointer',
-                        padding: '0',
-                        display: 'flex',
-                        transition: 'all 0.2s'
-                      }}
-                      title="Delete session"
-                    >
-                      <Trash2 size={10} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          {/* Right Panel - Quick Actions & Context Selector */}
+          <RightSidePanel
+            colors={colors}
+            fontSize={fontSize}
+            activeLLMConfig={activeLLMConfig}
+            llmGlobalSettings={llmGlobalSettings}
+            mcpToolsCount={mcpToolsCount}
+            currentSessionUuid={currentSessionUuid}
+            quickPrompts={quickPrompts}
+            isEditingPrompts={isEditingPrompts}
+            editingPromptIndex={editingPromptIndex}
+            editPromptCmd={editPromptCmd}
+            editPromptText={editPromptText}
+            t={t}
+            providerSupportsMCP={providerSupportsMCP}
+            providerSupportsStreaming={providerSupportsStreaming}
+            getApiKeyStatus={getApiKeyStatus}
+            hasCustomSystemPrompt={hasCustomSystemPrompt}
+            shouldShowBaseUrl={shouldShowBaseUrl}
+            onContextsChange={handleContextsChange}
+            onSetMessageInput={setMessageInput}
+            onStartEditingPrompt={startEditingPrompt}
+            onSaveEditedPrompt={saveEditedPrompt}
+            onCancelEditingPrompt={cancelEditingPrompt}
+            onResetQuickPrompts={resetQuickPrompts}
+            onEditPromptCmdChange={setEditPromptCmd}
+            onEditPromptTextChange={setEditPromptText}
+            onNavigateToTab={onNavigateToTab}
+          />
         </div>
-
-        {/* Center Panel - Chat */}
-        <div style={{
-          flex: 1,
-          backgroundColor: colors.panel,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
-        }}>
-          {/* Chat Header */}
-          <div style={{
-            padding: '12px',
-            backgroundColor: colors.panel,
-            borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <span style={{
-              fontSize: fontSize.small,
-              fontWeight: 700,
-              color: colors.textMuted,
-              letterSpacing: '0.5px'
-            }}>
-              {currentSessionUuid ? (sessions.find(s => s.session_uuid === currentSessionUuid)?.title || 'CHAT').toUpperCase() : 'NO ACTIVE SESSION'}
-            </span>
-            {currentSessionUuid && (
-              <button
-                onClick={clearCurrentChat}
-                style={{
-                  padding: '2px 6px',
-                  backgroundColor: `${colors.alert}20`,
-                  color: colors.alert,
-                  border: 'none',
-                  fontSize: fontSize.tiny,
-                  fontWeight: 700,
-                  borderRadius: '2px',
-                  cursor: 'pointer',
-                  letterSpacing: '0.5px',
-                  transition: 'all 0.2s'
-                }}
-              >
-                CLEAR
-              </button>
-            )}
-          </div>
-
-          {/* Messages Area with scrollbar */}
-          <div style={{
-            flex: 1,
-            padding: '16px',
-            overflow: 'auto',
-            backgroundColor: colors.background
-          }}>
-            {messages.length === 0 && !streamingContent ? renderWelcomeScreen() : (
-              <div>
-                {messages.map(renderMessage)}
-                {streamingContent && renderStreamingMessage()}
-                {isTyping && !streamingContent && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    color: colors.textMuted,
-                    fontSize: fontSize.small,
-                    letterSpacing: '0.5px'
-                  }}>
-                    <Bot size={12} color={colors.textMuted} />
-                    <span>{t('messages.thinking').toUpperCase()}</span>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-          </div>
-
-          {/* Input Area */}
-          <div style={{
-            padding: '12px',
-            backgroundColor: colors.panel,
-            borderTop: `1px solid ${'rgba(255,255,255,0.1)'}`
-          }}>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <textarea
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                placeholder={t('input.placeholder')}
-                style={{
-                  flex: 1,
-                  padding: '8px 10px',
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  border: `1px solid ${'rgba(255,255,255,0.1)'}`,
-                  borderRadius: '2px',
-                  fontSize: fontSize.small,
-                  resize: 'none',
-                  height: '60px',
-                  fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                }}
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!messageInput.trim() || isTyping}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: messageInput.trim() && !isTyping ? colors.primary : colors.textMuted,
-                  color: colors.background,
-                  border: 'none',
-                  borderRadius: '2px',
-                  fontSize: fontSize.small,
-                  fontWeight: 700,
-                  cursor: messageInput.trim() && !isTyping ? 'pointer' : 'not-allowed',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  letterSpacing: '0.5px',
-                  transition: 'all 0.2s',
-                  opacity: messageInput.trim() && !isTyping ? 1 : 0.5
-                }}
-              >
-                <Send size={12} />
-                {t('input.send').toUpperCase()}
-              </button>
-            </div>
-            <div style={{
-              color: colors.textMuted,
-              fontSize: fontSize.small,
-              marginTop: '6px',
-              letterSpacing: '0.5px',
-              fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-            }}>
-              {messageInput.length > 0 ? `${messageInput.length} CHARS` : systemStatus}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Panel - Quick Actions & Context Selector */}
-        <div style={{
-          width: '300px',
-          backgroundColor: colors.panel,
-          borderLeft: `1px solid ${'rgba(255,255,255,0.1)'}`,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
-        }}>
-          {/* Context Selector Section */}
-          <div style={{
-            borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
-          }}>
-            <div style={{
-              padding: '12px',
-              backgroundColor: colors.panel,
-              borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
-            }}>
-              <span style={{
-                fontSize: fontSize.small,
-                fontWeight: 700,
-                color: colors.textMuted,
-                letterSpacing: '0.5px'
-              }}>
-                {t('panel.dataContexts').toUpperCase()}
-              </span>
-            </div>
-            <div style={{ padding: '12px' }}>
-              <ContextSelector
-                chatSessionUuid={currentSessionUuid}
-                onContextsChange={handleContextsChange}
-              />
-            </div>
-          </div>
-
-          {/* Quick Prompts Section */}
-          <div style={{
-            borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
-          }}>
-            <div style={{
-              padding: '12px',
-              backgroundColor: colors.panel,
-              borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <span style={{
-                fontSize: fontSize.small,
-                fontWeight: 700,
-                color: colors.textMuted,
-                letterSpacing: '0.5px'
-              }}>
-                {t('panel.quickPrompts').toUpperCase()}
-              </span>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                {isEditingPrompts ? (
-                  <>
-                    <button
-                      onClick={cancelEditingPrompt}
-                      style={{
-                        padding: '2px 6px',
-                        backgroundColor: 'transparent',
-                        border: `1px solid ${colors.alert}`,
-                        color: colors.alert,
-                        fontSize: fontSize.tiny,
-                        fontWeight: 700,
-                        borderRadius: '2px',
-                        cursor: 'pointer',
-                        letterSpacing: '0.5px'
-                      }}
-                    >
-                      <X size={10} />
-                    </button>
-                    <button
-                      onClick={saveEditedPrompt}
-                      style={{
-                        padding: '2px 6px',
-                        backgroundColor: 'transparent',
-                        border: `1px solid ${colors.success}`,
-                        color: colors.success,
-                        fontSize: fontSize.tiny,
-                        fontWeight: 700,
-                        borderRadius: '2px',
-                        cursor: 'pointer',
-                        letterSpacing: '0.5px'
-                      }}
-                    >
-                      <Check size={10} />
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={resetQuickPrompts}
-                    style={{
-                      padding: '2px 6px',
-                      backgroundColor: 'transparent',
-                      border: `1px solid ${colors.textMuted}`,
-                      color: colors.textMuted,
-                      fontSize: fontSize.tiny,
-                      fontWeight: 700,
-                      borderRadius: '2px',
-                      cursor: 'pointer',
-                      letterSpacing: '0.5px'
-                    }}
-                    title="Reset to default prompts"
-                  >
-                    RESET
-                  </button>
-                )}
-              </div>
-            </div>
-            <div style={{ padding: '12px' }}>
-              {/* Editing form */}
-              {isEditingPrompts && editingPromptIndex !== null && (
-                <div style={{
-                  marginBottom: '8px',
-                  padding: '8px',
-                  backgroundColor: colors.background,
-                  border: `1px solid ${colors.primary}`,
-                  borderRadius: '2px'
-                }}>
-                  <input
-                    type="text"
-                    value={editPromptCmd}
-                    onChange={(e) => setEditPromptCmd(e.target.value.toUpperCase())}
-                    placeholder="LABEL"
-                    style={{
-                      width: '100%',
-                      padding: '4px 6px',
-                      backgroundColor: colors.panel,
-                      border: `1px solid ${'rgba(255,255,255,0.1)'}`,
-                      color: colors.text,
-                      fontSize: fontSize.small,
-                      borderRadius: '2px',
-                      marginBottom: '4px',
-                      fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                    }}
-                  />
-                  <textarea
-                    value={editPromptText}
-                    onChange={(e) => setEditPromptText(e.target.value)}
-                    placeholder="Prompt text..."
-                    style={{
-                      width: '100%',
-                      padding: '4px 6px',
-                      backgroundColor: colors.panel,
-                      border: `1px solid ${'rgba(255,255,255,0.1)'}`,
-                      color: colors.text,
-                      fontSize: fontSize.small,
-                      borderRadius: '2px',
-                      resize: 'vertical',
-                      minHeight: '40px',
-                      fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                    }}
-                  />
-                </div>
-              )}
-              {/* Quick prompt buttons */}
-              {quickPrompts.map((item, index) => (
-                <div
-                  key={`${item.cmd}-${index}`}
-                  style={{
-                    display: 'flex',
-                    gap: '4px',
-                    marginBottom: '6px'
-                  }}
-                >
-                  <button
-                    onClick={() => !isEditingPrompts && setMessageInput(item.prompt)}
-                    disabled={isEditingPrompts}
-                    style={{
-                      flex: 1,
-                      padding: '6px 10px',
-                      backgroundColor: editingPromptIndex === index ? `${colors.primary}20` : 'transparent',
-                      border: `1px solid ${editingPromptIndex === index ? colors.primary : 'rgba(255,255,255,0.1)'}`,
-                      color: editingPromptIndex === index ? colors.primary : colors.textMuted,
-                      fontSize: fontSize.small,
-                      fontWeight: 700,
-                      borderRadius: '2px',
-                      textAlign: 'left',
-                      cursor: isEditingPrompts ? 'default' : 'pointer',
-                      letterSpacing: '0.5px',
-                      transition: 'all 0.2s',
-                      opacity: isEditingPrompts && editingPromptIndex !== index ? 0.5 : 1
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isEditingPrompts) {
-                        e.currentTarget.style.borderColor = colors.primary;
-                        e.currentTarget.style.color = colors.text;
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isEditingPrompts && editingPromptIndex !== index) {
-                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                        e.currentTarget.style.color = colors.textMuted;
-                      }
-                    }}
-                    title={item.prompt}
-                  >
-                    {item.cmd}
-                  </button>
-                  {!isEditingPrompts && (
-                    <button
-                      onClick={() => startEditingPrompt(index)}
-                      style={{
-                        padding: '4px 6px',
-                        backgroundColor: 'transparent',
-                        border: `1px solid ${'rgba(255,255,255,0.1)'}`,
-                        color: colors.textMuted,
-                        fontSize: fontSize.tiny,
-                        borderRadius: '2px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = colors.warning;
-                        e.currentTarget.style.color = colors.warning;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                        e.currentTarget.style.color = colors.textMuted;
-                      }}
-                      title="Edit this prompt"
-                    >
-                      <Edit2 size={10} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* System Info Section */}
-          <div style={{ flex: 1, overflow: 'auto' }}>
-            <div style={{
-              padding: '12px',
-              backgroundColor: colors.panel,
-              borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
-            }}>
-              <span style={{
-                fontSize: fontSize.small,
-                fontWeight: 700,
-                color: colors.textMuted,
-                letterSpacing: '0.5px'
-              }}>
-                {t('panel.systemInfo').toUpperCase()}
-              </span>
-            </div>
-            <div style={{ padding: '12px' }}>
-              {activeLLMConfig ? (
-                <>
-                  <div style={{
-                    color: colors.secondary,
-                    fontSize: fontSize.small,
-                    marginBottom: '4px',
-                    letterSpacing: '0.5px',
-                    fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                  }}>
-                    PROVIDER: {activeLLMConfig.provider.toUpperCase()}
-                  </div>
-                  <div style={{
-                    color: colors.secondary,
-                    fontSize: fontSize.small,
-                    marginBottom: '4px',
-                    letterSpacing: '0.5px',
-                    fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                  }}>
-                    MODEL: {activeLLMConfig.model}
-                  </div>
-                  {/* Base URL - shown for Ollama or custom endpoints */}
-                  {shouldShowBaseUrl() && activeLLMConfig.base_url && (
-                    <div style={{
-                      color: colors.textMuted,
-                      fontSize: fontSize.tiny,
-                      marginBottom: '4px',
-                      letterSpacing: '0.5px',
-                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-                      wordBreak: 'break-all'
-                    }}>
-                      ENDPOINT: {activeLLMConfig.base_url}
-                    </div>
-                  )}
-                  <div style={{
-                    color: colors.secondary,
-                    fontSize: fontSize.small,
-                    marginBottom: '4px',
-                    letterSpacing: '0.5px',
-                    fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-                  }}>
-                    TEMP: {llmGlobalSettings.temperature} | MAX TOKENS: {llmGlobalSettings.max_tokens}
-                  </div>
-                  {/* Status badges row */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
-                    {/* Streaming status */}
-                    <div style={{
-                      padding: '2px 6px',
-                      backgroundColor: providerSupportsStreaming() ? `${colors.success}20` : `${colors.textMuted}20`,
-                      color: providerSupportsStreaming() ? colors.success : colors.textMuted,
-                      fontSize: fontSize.tiny,
-                      fontWeight: 700,
-                      borderRadius: '2px',
-                      letterSpacing: '0.5px'
-                    }}>
-                      STREAMING: {providerSupportsStreaming() ? 'ENABLED' : 'DISABLED'}
-                    </div>
-                    {/* API Key status */}
-                    {(() => {
-                      const apiKeyStatus = getApiKeyStatus();
-                      if (!apiKeyStatus.required) {
-                        return (
-                          <div style={{
-                            padding: '2px 6px',
-                            backgroundColor: `${colors.secondary}20`,
-                            color: colors.secondary,
-                            fontSize: fontSize.tiny,
-                            fontWeight: 700,
-                            borderRadius: '2px',
-                            letterSpacing: '0.5px'
-                          }}>
-                            API KEY: NOT REQUIRED
-                          </div>
-                        );
-                      }
-                      return (
-                        <div style={{
-                          padding: '2px 6px',
-                          backgroundColor: apiKeyStatus.configured ? `${colors.success}20` : `${colors.alert}20`,
-                          color: apiKeyStatus.configured ? colors.success : colors.alert,
-                          fontSize: fontSize.tiny,
-                          fontWeight: 700,
-                          borderRadius: '2px',
-                          letterSpacing: '0.5px'
-                        }}>
-                          API KEY: {apiKeyStatus.configured ? 'CONFIGURED' : 'MISSING'}
-                        </div>
-                      );
-                    })()}
-                    {/* Custom system prompt indicator */}
-                    {hasCustomSystemPrompt() && (
-                      <div style={{
-                        padding: '2px 6px',
-                        backgroundColor: `${colors.primary}20`,
-                        color: colors.primary,
-                        fontSize: fontSize.tiny,
-                        fontWeight: 700,
-                        borderRadius: '2px',
-                        letterSpacing: '0.5px'
-                      }}>
-                        CUSTOM PROMPT: YES
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div style={{
-                  padding: '2px 6px',
-                  backgroundColor: `${colors.alert}20`,
-                  color: colors.alert,
-                  fontSize: fontSize.tiny,
-                  fontWeight: 700,
-                  borderRadius: '2px',
-                  letterSpacing: '0.5px'
-                }}>
-                  NO LLM PROVIDER CONFIGURED
-                </div>
-              )}
-              <div style={{
-                marginTop: '12px',
-                paddingTop: '12px',
-                borderTop: `1px solid ${'rgba(255,255,255,0.1)'}`
-              }}>
-                <div style={{
-                  padding: '2px 6px',
-                  backgroundColor: mcpToolsCount > 0 ? `${colors.secondary}20` : `${colors.textMuted}20`,
-                  color: mcpToolsCount > 0 ? colors.secondary : colors.textMuted,
-                  fontSize: fontSize.tiny,
-                  fontWeight: 700,
-                  borderRadius: '2px',
-                  marginBottom: '8px',
-                  letterSpacing: '0.5px',
-                  display: 'inline-block'
-                }}>
-                  MCP TOOLS: {mcpToolsCount > 0 ? `${mcpToolsCount} AVAILABLE [OK]` : 'NONE'}
-                </div>
-                <button
-                  onClick={() => onNavigateToTab?.('mcp')}
-                  style={{
-                    width: '100%',
-                    padding: '8px 16px',
-                    backgroundColor: colors.primary,
-                    color: colors.background,
-                    border: 'none',
-                    fontSize: fontSize.small,
-                    fontWeight: 700,
-                    borderRadius: '2px',
-                    cursor: 'pointer',
-                    marginBottom: '8px',
-                    letterSpacing: '0.5px',
-                    transition: 'all 0.2s'
-                  }}
-                  title="Configure MCP servers and tools"
-                >
-                  🔧 MCP INTEGRATION
-                </button>
-                {mcpToolsCount > 0 && !providerSupportsMCP() && activeLLMConfig && (
-                  <div style={{
-                    padding: '6px',
-                    backgroundColor: colors.panel,
-                    border: `1px solid ${colors.alert}`,
-                    borderRadius: '2px',
-                    color: colors.alert,
-                    fontSize: fontSize.tiny,
-                    fontWeight: 700,
-                    letterSpacing: '0.5px'
-                  }}>
-                    [WARN] {activeLLMConfig.provider.toUpperCase()} DOESN'T SUPPORT MCP TOOLS
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
       </ErrorBoundary>
 
       {/* Status Bar (Bottom) */}
-      <div style={{
-        backgroundColor: colors.panel,
-        borderTop: `1px solid ${'rgba(255,255,255,0.1)'}`,
-        padding: '4px 16px',
-        fontSize: fontSize.small,
-        color: colors.textMuted,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        letterSpacing: '0.5px',
-        fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-      }}>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <span>TAB: AI CHAT</span>
-          <span>|</span>
-          <span>PROVIDER: {activeLLMConfig?.provider.toUpperCase() || 'NONE'}</span>
-          <span>|</span>
-          <span>SESSION: {currentSessionUuid ? 'ACTIVE' : 'NONE'}</span>
-        </div>
-        <div>
-          MESSAGES: {messages.length} | STATUS: {streamingContent ? 'STREAMING...' : 'READY'}
-        </div>
-      </div>
+      <ChatStatusBar
+        colors={colors}
+        fontSize={fontSize}
+        activeLLMConfig={activeLLMConfig}
+        currentSessionUuid={currentSessionUuid}
+        messagesCount={messages.length}
+        streamingContent={streamingContent}
+      />
     </div>
   );
 };

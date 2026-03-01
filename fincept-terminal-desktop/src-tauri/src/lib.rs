@@ -3,6 +3,107 @@
 use std::sync::Arc;
 use sha2::{Sha256, Digest};
 use tauri::{Manager, Listener};
+use once_cell::sync::OnceCell;
+
+// ── YouTube embed proxy ────────────────────────────────────────────────────────
+// Tauri WebViews run at tauri://localhost which YouTube blocks for IFrame embeds
+// (error 153). We spin up a tiny axum HTTP server on a random local port so the
+// embed page is served from http://127.0.0.1:{port}, which YouTube accepts.
+
+static EMBED_PORT: OnceCell<u16> = OnceCell::new();
+
+/// Start the YouTube embed proxy server. Binds to a random OS-assigned port.
+async fn start_embed_proxy() {
+    use axum::{routing::get, Router};
+
+    let listener = match tokio::net::TcpListener::bind("127.0.0.1:0").await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("[EmbedProxy] Failed to bind: {}", e);
+            return;
+        }
+    };
+    let port = listener.local_addr().map(|a| a.port()).unwrap_or(0);
+    let _ = EMBED_PORT.set(port);
+
+    let app = Router::new().route("/yt-embed", get(yt_embed_handler));
+
+    if let Err(e) = axum::serve(listener, app).await {
+        eprintln!("[EmbedProxy] Server error: {}", e);
+    }
+}
+
+async fn yt_embed_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> axum::response::Response<String> {
+    let video_id = params.get("videoId").cloned().unwrap_or_default();
+    // Validate: YouTube video IDs are 11 chars, alphanumeric + _ -
+    let valid = video_id.len() == 11
+        && video_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+
+    if !valid {
+        return axum::response::Response::builder()
+            .status(400)
+            .header("Content-Type", "text/plain")
+            .body("Invalid videoId".to_string())
+            .unwrap();
+    }
+
+    let port = EMBED_PORT.get().copied().unwrap_or(0);
+    let origin = format!("http://127.0.0.1:{}", port);
+    let origin_json = serde_json::to_string(&origin).unwrap_or_else(|_| "\"\"".to_string());
+    let autoplay_raw = params.get("autoplay").map(|v| v.as_str()).unwrap_or("1");
+    let mute_raw = params.get("mute").map(|v| v.as_str()).unwrap_or("1");
+    let autoplay = if autoplay_raw == "0" { "0" } else { "1" };
+    let mute = if mute_raw == "0" { "0" } else { "1" };
+
+    // Build HTML via string concatenation to avoid raw-string / format! conflicts with SVG paths
+    let mut html = String::with_capacity(4096);
+    html.push_str("<!doctype html><html lang=\"en\"><head>");
+    html.push_str("<meta charset=\"utf-8\"/>");
+    html.push_str("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>");
+    html.push_str("<style>");
+    html.push_str("html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}");
+    html.push_str("#player{width:100%;height:100%}");
+    html.push_str("#overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.45)}");
+    html.push_str("#overlay svg{width:68px;height:48px;opacity:0.9}");
+    html.push_str("#overlay.hidden{display:none}");
+    html.push_str("</style></head><body>");
+    html.push_str("<div id=\"player\"></div>");
+    html.push_str("<div id=\"overlay\">");
+    // YouTube play button SVG — kept as a plain push_str to avoid format! escaping issues
+    html.push_str("<svg viewBox=\"0 0 68 48\">");
+    html.push_str("<path d=\"M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55C3.97 2.33 2.27 4.81 1.48 7.74.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z\" fill=\"red\"/>");
+    html.push_str("<path d=\"M45 24L27 14v20\" fill=\"#fff\"/>");
+    html.push_str("</svg></div>");
+    html.push_str("<script>");
+    html.push_str(&format!("var PARENT_ORIGIN={};", origin_json));
+    html.push_str("var player,overlay=document.getElementById('overlay'),started=false;");
+    html.push_str("var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);");
+    html.push_str(&format!(
+        "function onYouTubeIframeAPIReady(){{player=new YT.Player('player',{{videoId:'{}',host:'https://www.youtube.com',playerVars:{{autoplay:{},mute:{},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:{},widget_referrer:{}}},events:{{onReady:function(){{window.parent.postMessage({{type:'yt-ready'}},PARENT_ORIGIN);if({}===1)player.playVideo();startMuteSync();}},onError:function(e){{window.parent.postMessage({{type:'yt-error',code:e.data}},PARENT_ORIGIN);}},onStateChange:function(e){{window.parent.postMessage({{type:'yt-state',state:e.data}},PARENT_ORIGIN);if(e.data===1||e.data===3){{overlay.classList.add('hidden');started=true;}}}}}}}}));}}",
+        video_id, autoplay, mute, origin_json, origin_json, autoplay
+    ));
+    html.push_str("function readMuted(){if(!player)return null;if(typeof player.isMuted==='function')return player.isMuted();if(typeof player.getVolume==='function')return player.getVolume()===0;return null;}");
+    html.push_str("var muteInterval=null;");
+    html.push_str("function startMuteSync(){if(muteInterval)return;var last=readMuted();if(last!==null)window.parent.postMessage({type:'yt-mute-state',muted:last},PARENT_ORIGIN);muteInterval=setInterval(function(){var m=readMuted();if(m!==null&&m!==last){last=m;window.parent.postMessage({type:'yt-mute-state',muted:m},PARENT_ORIGIN);}},500);}");
+    html.push_str("overlay.addEventListener('click',function(){if(player&&player.playVideo){player.playVideo();player.unMute();overlay.classList.add('hidden');}});");
+    html.push_str("setTimeout(function(){if(!started)overlay.classList.remove('hidden');},3000);");
+    html.push_str("window.addEventListener('message',function(e){if(e.origin!==PARENT_ORIGIN)return;if(!player)return;var m=e.data;if(!m||!m.type)return;switch(m.type){case 'play':player.playVideo();break;case 'pause':player.pauseVideo();break;case 'mute':player.mute();break;case 'unmute':player.unMute();break;case 'loadVideo':if(m.videoId)player.loadVideoById(m.videoId);break;}});");
+    html.push_str("</script></body></html>");
+
+    axum::response::Response::builder()
+        .status(200)
+        .header("Content-Type", "text/html; charset=utf-8")
+        .header("Cache-Control", "no-store")
+        .body(html)
+        .unwrap()
+}
+
+#[tauri::command]
+fn get_embed_port() -> u16 {
+    EMBED_PORT.get().copied().unwrap_or(0)
+}
 
 // Data sources and commands modules
 mod data_sources;
@@ -118,6 +219,9 @@ pub fn run() {
         })
         .manage(ws_state)
         .setup(move |app| {
+            // Start YouTube embed proxy server (random local port)
+            tauri::async_runtime::spawn(start_embed_proxy());
+
             // CRITICAL: Set app handle for router to emit WebSocket events to frontend
             let app_handle = app.handle().clone();
             let router_clone = router.clone();
@@ -202,6 +306,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            get_embed_port,
             cleanup_running_workflows,
             setup::check_setup_status,
             setup::run_setup,
@@ -244,6 +349,11 @@ pub fn run() {
             commands::news::restore_default_rss_feed,
             commands::news::get_deleted_default_feeds,
             commands::news::restore_all_default_feeds,
+            commands::news_monitors::get_news_monitors,
+            commands::news_monitors::add_news_monitor,
+            commands::news_monitors::update_news_monitor,
+            commands::news_monitors::delete_news_monitor,
+            commands::news_monitors::toggle_news_monitor,
             commands::market_data::get_market_quote,
             commands::market_data::get_market_quotes,
             commands::market_data::get_period_returns,

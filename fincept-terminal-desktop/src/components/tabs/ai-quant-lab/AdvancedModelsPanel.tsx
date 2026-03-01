@@ -11,42 +11,8 @@ import {
   AlertCircle, TrendingUp, Brain, CheckCircle2, BarChart3
 } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-
-interface ModelInfo {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  features: string[];
-  use_cases: string[];
-  available: boolean;
-}
-
-interface ModelConfig {
-  input_size?: number;
-  hidden_size?: number;
-  num_layers?: number;
-  dropout?: number;
-  nhead?: number;
-}
-
-interface CreatedModel {
-  model_id: string;
-  type: string;
-  created_at: string;
-  trained: boolean;
-  epochs_trained: number;
-}
-
-interface TrainingResult {
-  success: boolean;
-  model_id?: string;
-  epochs_trained?: number;
-  total_epochs?: number;
-  final_loss?: number;
-  loss_history?: number[];
-  error?: string;
-}
+import { ModelInfo, ModelConfig, CreatedModel, TrainingResult } from './AdvancedModelsPanelTypes';
+import { HelpSection } from './AdvancedModelsPanelHelpers';
 
 export function AdvancedModelsPanel() {
   const { colors } = useTerminalTheme();
@@ -1223,31 +1189,6 @@ REALISTIC EXPECTATIONS:
             colors={colors}
           />
         </div>
-      </div>
-    </div>
-  );
-}
-
-// Help Section Component
-function HelpSection({ title, content, colors }: { title: string; content: string; colors: any }) {
-  return (
-    <div style={{ marginBottom: '20px' }}>
-      <div style={{
-        fontSize: '11px',
-        fontWeight: 700,
-        color: colors.purple,
-        marginBottom: '8px',
-        letterSpacing: '0.5px'
-      }}>
-        {title}
-      </div>
-      <div style={{
-        fontSize: '10px',
-        color: colors.text,
-        opacity: 0.8,
-        whiteSpace: 'pre-wrap'
-      }}>
-        {content}
       </div>
     </div>
   );
