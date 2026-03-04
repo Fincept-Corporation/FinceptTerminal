@@ -68,12 +68,17 @@ const BLOCKED_TERMINAL_TOOLS = new Set([
 /**
  * Fetch internal TypeScript MCP tool definitions, filter to safe read-only tools,
  * and return them ready for injection into an agent payload.
+ * If `requestedToolNames` is provided, only return tools matching those names.
  */
-async function getTerminalToolDefinitions(): Promise<AgentConfig['terminal_tools']> {
+async function getTerminalToolDefinitions(requestedToolNames?: string[]): Promise<AgentConfig['terminal_tools']> {
   try {
     const allTools = await mcpToolService.getAllTools();
     return allTools
-      .filter(t => t.serverId === INTERNAL_SERVER_ID && !BLOCKED_TERMINAL_TOOLS.has(t.name))
+      .filter(t =>
+        t.serverId === INTERNAL_SERVER_ID &&
+        !BLOCKED_TERMINAL_TOOLS.has(t.name) &&
+        (!requestedToolNames || requestedToolNames.includes(t.name))
+      )
       .map(t => ({
         name: t.name,
         description: t.description || `Terminal tool: ${t.name}`,
@@ -87,17 +92,34 @@ async function getTerminalToolDefinitions(): Promise<AgentConfig['terminal_tools
 /**
  * Execute a CoreAgent action with the given payload.
  * Automatically injects internal TypeScript MCP tool definitions if the action is 'run'.
+ *
+ * For Fincept provider (which has a ~50KB payload limit) we skip the full tool list,
+ * but still inject tools when the agent explicitly requests specific ones — those are
+ * small enough to stay well under the limit.
  */
 async function execute<T = any>(payload: AgentPayload): Promise<AgentResponse<T>> {
   try {
-    // Inject terminal tool schemas for 'run' actions so Python can use TypeScript tools.
-    // Skip for Fincept provider — its endpoint has a ~50KB payload limit and terminal tools
-    // are not needed there (the Portfolio Analyst agent uses its own built-in MCP tools).
     if (payload.action === 'run' && payload.config) {
       const provider = payload.config.model?.provider?.toLowerCase() ?? '';
       const isFincept = provider === 'fincept' || provider === 'fincept-llm';
+      // Requested tool names from the agent config (e.g. polymarket bot tools)
+      const requestedTools: string[] | undefined =
+        Array.isArray(payload.config.tools) && payload.config.tools.length > 0
+          ? payload.config.tools
+          : undefined;
+
       if (!isFincept) {
+        // Non-Fincept: inject the full terminal tool set
         const terminalTools = await getTerminalToolDefinitions();
+        if (terminalTools && terminalTools.length > 0) {
+          payload = {
+            ...payload,
+            config: { ...payload.config, terminal_tools: terminalTools },
+          };
+        }
+      } else if (requestedTools) {
+        // Fincept with specific tool requests: inject only those tools to stay under payload limit
+        const terminalTools = await getTerminalToolDefinitions(requestedTools);
         if (terminalTools && terminalTools.length > 0) {
           payload = {
             ...payload,

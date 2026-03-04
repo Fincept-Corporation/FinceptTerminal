@@ -304,6 +304,7 @@ export interface TerminalContexts {
     closed?: boolean;
     order?: string;
     ascending?: boolean;
+    tag_id?: string;
   }) => Promise<any[]>;
   polymarketSearch?: (query: string, type?: 'markets' | 'events' | 'all') => Promise<any>;
   polymarketGetMarketDetail?: (marketId: string) => Promise<any>;
@@ -317,9 +318,19 @@ export interface TerminalContexts {
     limit?: number;
     active?: boolean;
     closed?: boolean;
+    tag_id?: string;
   }) => Promise<any[]>;
   polymarketGetOpenOrders?: () => Promise<any[]>;
   polymarketGetTrades?: (tokenId: string, limit?: number) => Promise<any[]>;
+  // Extended tools
+  polymarketGetEventBySlug?: (slug: string) => Promise<any>;
+  polymarketGetMarketBySlug?: (slug: string) => Promise<any>;
+  polymarketGetTopHolders?: (conditionId: string, limit?: number) => Promise<any>;
+  polymarketGetOpenInterest?: (conditionIds: string[]) => Promise<any>;
+  polymarketGetEnrichedOrderBook?: (tokenId: string) => Promise<any>;
+  polymarketGetMidpoint?: (tokenId: string) => Promise<any>;
+  polymarketGetTags?: () => Promise<any[]>;
+  polymarketGetBalance?: () => Promise<any>;
 
   // ============================================================================
   // Data Mapping

@@ -9,9 +9,9 @@ import {
   polymarketBotService,
   BotStrategy, RiskConfig, BotLLMConfig,
   DEFAULT_STRATEGY, DEFAULT_RISK_CONFIG, DEFAULT_LLM_CONFIG,
-  StrategyType,
+  StrategyType, EventMode,
 } from '@/services/polymarket/polymarketBotService';
-import { getLLMConfigs } from '@/services/core/sqliteService';
+import { getLLMConfigs, type LLMConfig } from '@/services/core/sqliteService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -90,22 +90,35 @@ const BotDeployView: React.FC<Props> = ({ onDeployed }) => {
   const [strategy, setStrategy] = useState<BotStrategy>({ ...DEFAULT_STRATEGY });
   const [riskConfig, setRiskConfig] = useState<RiskConfig>({ ...DEFAULT_RISK_CONFIG });
   const [llmConfig, setLlmConfig] = useState<BotLLMConfig>({ ...DEFAULT_LLM_CONFIG });
-  const [llmProviders, setLlmProviders] = useState<Array<{ provider: string; model: string }>>([]);
+  // Each entry = one configured provider with its default model
+  const [llmProviders, setLlmProviders] = useState<LLMConfig[]>([]);
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getLLMConfigs().then((configs) => {
-      const providers = configs
-        .filter((c) => c.api_key || c.provider === 'ollama' || c.provider === 'fincept')
-        .map((c) => ({ provider: c.provider, model: c.model }));
-      setLlmProviders(providers);
-      if (providers.length > 0) {
-        const active = configs.find((c) => c.is_active);
-        if (active) setLlmConfig((prev) => ({ ...prev, provider: active.provider, modelId: active.model }));
+      // Include providers that have an API key, or special providers that don't need one
+      const usable = configs.filter(
+        (c) => c.api_key || c.provider === 'ollama' || c.provider === 'fincept',
+      );
+      setLlmProviders(usable);
+      // Pre-select the active provider if one is configured
+      const active = usable.find((c) => c.is_active) ?? usable[0];
+      if (active) {
+        setLlmConfig((prev) => ({ ...prev, provider: active.provider, modelId: active.model }));
       }
     }).catch(() => {});
   }, []);
+
+  // When the user picks a different provider, auto-populate the model with that provider's default
+  const handleProviderChange = (provider: string) => {
+    const cfg = llmProviders.find((c) => c.provider === provider);
+    setLlmConfig((prev) => ({
+      ...prev,
+      provider,
+      modelId: cfg?.model ?? prev.modelId,
+    }));
+  };
 
   const handleDeploy = async () => {
     if (!botName.trim()) { setError('Bot name is required'); return; }
@@ -267,6 +280,77 @@ const BotDeployView: React.FC<Props> = ({ onDeployed }) => {
               />
             </div>
           </div>
+
+          {/* ── Event Targeting ─────────────────────────────────────────────── */}
+          <SectionHeader label="EVENT TARGETING" />
+          <div style={{ padding: '8px 10px' }}>
+            {/* Mode selector */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '3px', marginBottom: '8px' }}>
+              {([
+                { mode: 'all'      as EventMode, label: 'ALL MKTS',  desc: 'Flat top-N scan' },
+                { mode: 'specific' as EventMode, label: 'SPECIFIC',  desc: 'Pick event slugs' },
+                { mode: 'dynamic'  as EventMode, label: 'DYNAMIC',   desc: 'Keyword discovery' },
+              ]).map(({ mode, label, desc }) => {
+                const active = strategy.eventMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => patchStrategy({ eventMode: mode })}
+                    title={desc}
+                    style={{
+                      padding: '5px 2px', border: `1px solid ${active ? C.cyan : C.dim}`,
+                      backgroundColor: active ? `${C.cyan}18` : C.panel,
+                      color: active ? C.cyan : C.muted,
+                      fontSize: '7px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'inherit',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {strategy.eventMode === 'all' && (
+              <div style={{ fontSize: '9px', color: C.muted, padding: '4px 6px', border: `1px solid ${C.dim}` }}>
+                Bot scans top {strategy.marketsPerScan} active markets each cycle — no event filter.
+              </div>
+            )}
+
+            {strategy.eventMode === 'specific' && (
+              <div>
+                <label style={S.label}>EVENT SLUGS (one per line)</label>
+                <textarea
+                  style={{ ...S.input, height: '56px', resize: 'none' }}
+                  placeholder={'e.g.\nwill-trump-win-2024\nbtc-100k-2025'}
+                  value={strategy.eventSlugs.join('\n')}
+                  onChange={(e) =>
+                    patchStrategy({ eventSlugs: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })
+                  }
+                />
+                <div style={{ fontSize: '8px', color: C.muted, marginTop: '3px' }}>
+                  Bot fetches markets from these events only. Find slugs on polymarket.com event URLs.
+                </div>
+              </div>
+            )}
+
+            {strategy.eventMode === 'dynamic' && (
+              <div>
+                <label style={S.label}>DISCOVERY KEYWORDS (comma-sep)</label>
+                <input
+                  style={S.input}
+                  placeholder="e.g. election, bitcoin, AI, fed rate"
+                  value={strategy.eventKeywords.join(', ')}
+                  onChange={(e) =>
+                    patchStrategy({ eventKeywords: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })
+                  }
+                />
+                <div style={{ fontSize: '8px', color: C.muted, marginTop: '3px' }}>
+                  Agent searches events matching these keywords each cycle and analyses their markets.
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Col 2: AI Model ──────────────────────────────────────────────── */}
@@ -276,24 +360,46 @@ const BotDeployView: React.FC<Props> = ({ onDeployed }) => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
               <div>
                 <label style={S.label}>PROVIDER</label>
-                <select style={S.select} value={llmConfig.provider} onChange={(e) => patchLLM({ provider: e.target.value })}>
+                <select
+                  style={S.select}
+                  value={llmConfig.provider}
+                  onChange={(e) => handleProviderChange(e.target.value)}
+                >
                   {llmProviders.length > 0 ? (
-                    llmProviders.map((p) => (
-                      <option key={`${p.provider}:${p.model}`} value={p.provider}>{p.provider.toUpperCase()}</option>
+                    llmProviders.map((c) => (
+                      <option key={c.provider} value={c.provider}>
+                        {c.provider.toUpperCase()}
+                      </option>
                     ))
                   ) : (
-                    <option value="fincept">FINCEPT</option>
+                    <option value="fincept">FINCEPT (default)</option>
                   )}
                 </select>
               </div>
               <div>
                 <label style={S.label}>MODEL ID</label>
-                <input
-                  style={S.input}
-                  placeholder="e.g. gpt-4o"
-                  value={llmConfig.modelId}
-                  onChange={(e) => patchLLM({ modelId: e.target.value })}
-                />
+                {/* Show a dropdown of models for the selected provider if multiple are configured,
+                    otherwise allow manual entry */}
+                {llmProviders.filter((c) => c.provider === llmConfig.provider).length > 1 ? (
+                  <select
+                    style={S.select}
+                    value={llmConfig.modelId}
+                    onChange={(e) => patchLLM({ modelId: e.target.value })}
+                  >
+                    {llmProviders
+                      .filter((c) => c.provider === llmConfig.provider)
+                      .map((c) => (
+                        <option key={c.model} value={c.model}>{c.model}</option>
+                      ))}
+                  </select>
+                ) : (
+                  <input
+                    style={S.input}
+                    placeholder="e.g. gpt-4o"
+                    value={llmConfig.modelId}
+                    onChange={(e) => patchLLM({ modelId: e.target.value })}
+                  />
+                )}
               </div>
             </div>
 
@@ -391,9 +497,9 @@ const BotDeployView: React.FC<Props> = ({ onDeployed }) => {
           }}>
             {[
               { label: 'STRATEGY', value: STRATEGY_INFO[strategy.type].label, color: STRATEGY_INFO[strategy.type].color },
-              { label: 'MODEL',    value: llmConfig.provider.toUpperCase(),     color: C.cyan },
+              { label: 'MODEL',    value: `${llmConfig.provider.toUpperCase()} / ${llmConfig.modelId}`, color: C.cyan },
               { label: 'EXPOSURE', value: `${riskConfig.maxExposureUsdc} USDC`, color: C.white },
-              { label: 'INTERVAL', value: `${strategy.scanIntervalMs / 60000}m`, color: C.white },
+              { label: 'EVENTS',   value: strategy.eventMode === 'specific' ? `${strategy.eventSlugs.length} SLUG${strategy.eventSlugs.length !== 1 ? 'S' : ''}` : strategy.eventMode === 'dynamic' ? `${strategy.eventKeywords.length} KWD${strategy.eventKeywords.length !== 1 ? 'S' : ''}` : 'ALL', color: C.cyan },
             ].map((item) => (
               <div key={item.label} style={{ padding: '6px 8px', borderRight: `1px solid ${C.border}` }}>
                 <div style={{ fontSize: '7px', color: C.muted, letterSpacing: '0.06em', marginBottom: '2px' }}>{item.label}</div>

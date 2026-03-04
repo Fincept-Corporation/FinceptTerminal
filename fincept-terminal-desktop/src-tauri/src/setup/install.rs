@@ -618,6 +618,11 @@ pub(super) async fn install_packages_in_venv(
         cmd
     };
 
+    // Set environment variables to prevent C extension build failures
+    // on embedded Python which lacks development headers (sqlite3.h, etc.)
+    cmd.env("PEEWEE_NO_SQLITE_EXTENSIONS", "1");
+    cmd.env("PEEWEE_NO_C_EXTENSION", "1");
+
     let venv_python_str = venv_python.to_str().ok_or_else(|| format!("Invalid venv python path encoding: {:?}", venv_python))?;
     let requirements_path_str = requirements_path.to_str().ok_or_else(|| format!("Invalid requirements path encoding: {:?}", requirements_path))?;
     cmd.args(&[

@@ -510,12 +510,21 @@ class CoreAgent:
         # =================================================================
         model_config = config.get("model", {})
         provider = model_config.get("provider") or self._resolve_model_config()["provider"]
+
+        # Pass any extra model-level kwargs (e.g. max_tool_rounds for FinceptChat)
+        extra_model_kwargs = {
+            k: v for k, v in model_config.items()
+            if k not in {"provider", "model_id", "temperature", "max_tokens"}
+            and v is not None
+        }
+
         model = ModelsRegistry.create_model(
             provider=provider,
             model_id=model_config.get("model_id"),
             api_keys=self.api_keys,
             temperature=model_config.get("temperature"),
             max_tokens=model_config.get("max_tokens"),
+            **extra_model_kwargs,
         )
 
         agent_kwargs = {"model": model}

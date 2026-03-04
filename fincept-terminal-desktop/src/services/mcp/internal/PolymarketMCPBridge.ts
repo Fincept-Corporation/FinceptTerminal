@@ -22,6 +22,7 @@ export class PolymarketMCPBridge {
           closed: params.closed ?? false,
           order: params.order,
           ascending: params.ascending ?? false,
+          tag_id: params.tag_id,
         });
       },
 
@@ -30,13 +31,32 @@ export class PolymarketMCPBridge {
       },
 
       polymarketGetMarketDetail: async (marketId) => {
-        // Fetch the market and its order book (if CLOB token IDs are available)
-        const market = await polymarketApiService.getMarkets({
-          limit: 1,
-          // Use market_ids filter when available; fallback to full list search
-        }).then((markets) =>
-          markets.find((m: any) => m.id === marketId || m.conditionId === marketId)
-        );
+        // Try fetching by ID query param (Gamma API supports ?id=...)
+        // Fall back to conditionId search if the first attempt returns nothing
+        let market: any = null;
+
+        const byId = await polymarketApiService.getMarkets({ limit: 1 } as any).catch(() => null);
+        // Build the URL manually since getMarkets doesn't accept arbitrary params
+        const directUrl = `https://gamma-api.polymarket.com/markets?id=${encodeURIComponent(marketId)}&limit=1`;
+        try {
+          const resp = await fetch(directUrl);
+          if (resp.ok) {
+            const data = await resp.json();
+            market = Array.isArray(data) ? data[0] : data;
+          }
+        } catch { /* fall through */ }
+
+        // Also try by conditionId if no result yet
+        if (!market) {
+          const condUrl = `https://gamma-api.polymarket.com/markets?condition_id=${encodeURIComponent(marketId)}&limit=1`;
+          try {
+            const resp = await fetch(condUrl);
+            if (resp.ok) {
+              const data = await resp.json();
+              market = Array.isArray(data) ? data[0] : data;
+            }
+          } catch { /* fall through */ }
+        }
 
         if (!market) {
           throw new Error(`Market ${marketId} not found`);
@@ -73,6 +93,7 @@ export class PolymarketMCPBridge {
           limit: params.limit ?? 10,
           active: params.active ?? true,
           closed: params.closed ?? false,
+          tag_id: params.tag_id,
         });
       },
 
@@ -85,6 +106,40 @@ export class PolymarketMCPBridge {
           token_id: tokenId,
           limit,
         });
+      },
+
+      // ── Extended tools ──────────────────────────────────────────────────────
+
+      polymarketGetEventBySlug: async (slug) => {
+        return polymarketApiService.getEventBySlug(slug);
+      },
+
+      polymarketGetMarketBySlug: async (slug) => {
+        return polymarketApiService.getMarketBySlug(slug);
+      },
+
+      polymarketGetTopHolders: async (conditionId, limit = 20) => {
+        return polymarketApiService.getTopHolders(conditionId, limit);
+      },
+
+      polymarketGetOpenInterest: async (conditionIds) => {
+        return polymarketApiService.getOpenInterest(conditionIds);
+      },
+
+      polymarketGetEnrichedOrderBook: async (tokenId) => {
+        return polymarketApiService.getOrderBookEnriched(tokenId);
+      },
+
+      polymarketGetMidpoint: async (tokenId) => {
+        return polymarketApiService.getMidpoint(tokenId);
+      },
+
+      polymarketGetTags: async () => {
+        return polymarketApiService.getTags();
+      },
+
+      polymarketGetBalance: async () => {
+        return polymarketApiService.getBalanceAllowance('COLLATERAL');
       },
     });
 

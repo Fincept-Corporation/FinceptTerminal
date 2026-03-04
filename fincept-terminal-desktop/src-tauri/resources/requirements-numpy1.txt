@@ -13,6 +13,12 @@ exchange-calendars>=4.0
 bt>=1.1.2
 ffn>=1.1.2
 
+# peewee is a transitive dependency of zipline-reloaded (via empyrical-reloaded)
+# Pin it explicitly so UV can resolve it early; the PEEWEE_NO_SQLITE_EXTENSIONS=1
+# env var set during install prevents the C extension build that fails on
+# embedded Python (missing sqlite3.h header).
+peewee>=3.17.0
+
 # Time series and forecasting (NumPy 1.x dependent)
 gluonts[torch]==0.16.2
 functime==0.1.10

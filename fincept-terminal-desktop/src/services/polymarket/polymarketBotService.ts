@@ -29,6 +29,8 @@ export type BotStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'error';
 
 export type StrategyType = 'analyst' | 'contrarian' | 'momentum' | 'arbitrage' | 'custom';
 
+export type EventMode = 'all' | 'specific' | 'dynamic';
+
 export interface BotStrategy {
   /** Broad strategy archetype */
   type: StrategyType;
@@ -44,6 +46,17 @@ export interface BotStrategy {
   minConfidence: number;
   /** Maximum markets to scan per cycle */
   marketsPerScan: number;
+  /**
+   * Event targeting mode:
+   *  'all'      — scan flat list of top markets (original behaviour)
+   *  'specific' — only analyse markets belonging to the listed event slugs
+   *  'dynamic'  — discover events matching eventKeywords each cycle
+   */
+  eventMode: EventMode;
+  /** Option 1 — specific Polymarket event slugs (used when eventMode='specific') */
+  eventSlugs: string[];
+  /** Option 2 — keywords for dynamic event discovery (used when eventMode='dynamic') */
+  eventKeywords: string[];
 }
 
 export interface RiskConfig {
@@ -154,6 +167,9 @@ export const DEFAULT_STRATEGY: BotStrategy = {
   maxOpenPositions: 3,
   minConfidence: 70,
   marketsPerScan: 20,
+  eventMode: 'all',
+  eventSlugs: [],
+  eventKeywords: [],
 };
 
 export const DEFAULT_RISK_CONFIG: RiskConfig = {
@@ -190,18 +206,34 @@ function buildAgentInstructions(bot: PolymarketBot): string {
     ? `Focus on these market categories: ${bot.strategy.focusCategories.join(', ')}.`
     : 'Scan all available market categories.';
 
+  const { eventMode, eventSlugs, eventKeywords } = bot.strategy;
+  let eventNote = '';
+  if (eventMode === 'specific' && eventSlugs.length > 0) {
+    eventNote = `\nEVENT TARGETING (specific): You are ONLY authorised to trade markets that belong to these Polymarket events: ${eventSlugs.map((s) => `"${s}"`).join(', ')}. Call polymarket_get_event_by_slug for each slug — the response includes yes_token_id and no_token_id for every nested market so you can call order book and price history tools directly.`;
+  } else if (eventMode === 'dynamic' && eventKeywords.length > 0) {
+    eventNote = `\nEVENT TARGETING (dynamic): At the start of each cycle, use polymarket_search_markets or polymarket_get_events to discover active events matching these topics: ${eventKeywords.map((k) => `"${k}"`).join(', ')}. Then call polymarket_get_event_by_slug for the top events to retrieve their nested markets with token IDs.`;
+  }
+
   return `You are a Polymarket trading agent running in autonomous mode.
 
 ${strategyBlocks[bot.strategy.type]}
-${focusNote}
+${focusNote}${eventNote}
 
 Your task each cycle:
-1. Use polymarket_get_markets to fetch active markets (limit ${bot.strategy.marketsPerScan}, order by volume, active: true)
-2. Recall your previous trade decisions and outcomes using recall_memories
+${eventMode === 'specific' && eventSlugs.length > 0
+  ? `1. Use polymarket_get_events or polymarket_search_markets to fetch markets for the target event slugs
+2. Recall your previous trade decisions and outcomes using recall_memories`
+  : eventMode === 'dynamic' && eventKeywords.length > 0
+  ? `1. Use polymarket_search_markets or polymarket_get_events to discover events matching the keywords
+2. Recall your previous trade decisions and outcomes using recall_memories`
+  : `1. Use polymarket_get_markets to fetch active markets (limit ${bot.strategy.marketsPerScan}, order by volume, active: true)
+2. Recall your previous trade decisions and outcomes using recall_memories`}
 3. Identify markets where current price deviates from your assessed true probability by at least 5%
-4. For top 3–5 candidates: use polymarket_get_order_book to check liquidity
-5. Use polymarket_get_price_history (interval: 1w) for trend context
-6. Only recommend if confidence >= ${bot.strategy.minConfidence}
+4. For top 3–5 candidates: use polymarket_get_enriched_order_book (preferred) or polymarket_get_order_book to check liquidity, tick_size, and last_trade_price
+5. Use polymarket_get_price_history (interval: 1w) for trend context; use polymarket_get_midpoint for current fair value
+6. Optionally use polymarket_get_top_holders to check whale concentration (contrarian signal)
+7. Only recommend if confidence >= ${bot.strategy.minConfidence}
+8. Use polymarket_get_balance to verify available USDC before recommending size
 
 Output ONLY a JSON array of trade recommendations. Each item:
 {
@@ -393,11 +425,17 @@ async function syncPositionToDb(position: BotPosition): Promise<void> {
   }).catch((e) => console.warn('[BotService] Position DB sync failed:', e));
 }
 
+// ─── Global timer registry ─────────────────────────────────────────────────────
+// Stored at module scope so HMR re-instantiation of the class can still clear
+// timers that were started by a previous instance of PolymarketBotService.
+const _globalTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
+
 // ─── Service Class ────────────────────────────────────────────────────────────
 
 class PolymarketBotService {
   private bots: Map<string, PolymarketBot> = new Map();
-  private timers: Map<string, ReturnType<typeof setInterval>> = new Map();
+  // Proxy timer access through the module-level map so HMR never orphans timers
+  private get timers() { return _globalTimers; }
   private listeners: Set<() => void> = new Set();
   private loaded = false;
 
@@ -516,6 +554,13 @@ class PolymarketBotService {
       throw new Error('Scan interval must be at least 30 seconds');
     }
 
+    // Clear any orphaned timer for this bot (e.g. from HMR or a previous run)
+    const existing = this.timers.get(id);
+    if (existing) {
+      clearInterval(existing);
+      this.timers.delete(id);
+    }
+
     this.updateBotStatus(id, 'running');
 
     // Run immediately, then on interval
@@ -557,9 +602,19 @@ class PolymarketBotService {
   }
 
   async deleteBot(id: string): Promise<void> {
-    await this.stopBot(id);
+    // Stop timer without triggering a save (skipSave=true) to avoid the race where
+    // updateBotStatus fire-and-forgets a save that writes the bot back after we delete it.
+    const timer = this.timers.get(id);
+    if (timer) {
+      clearInterval(timer);
+      this.timers.delete(id);
+    }
+    this.updateBotStatus(id, 'stopped', true /* skipSave */);
+
+    // Now remove from memory and persist the deletion
     this.bots.delete(id);
     await this.save();
+
     // Clean up decisions from key-value storage
     await storageService.remove(`${STORAGE_KEY_DECISIONS_PREFIX}${id}`);
     // Delete from SQLite (CASCADE removes decisions + positions)
@@ -576,6 +631,30 @@ class PolymarketBotService {
 
     decision.approved = true;
     decision.pendingApproval = false;
+
+    // If token ID was missing when the decision was created, try to resolve it now
+    // by fetching the market detail directly from the Gamma API.
+    if (!decision.tokenId && decision.marketId) {
+      try {
+        const url = `https://gamma-api.polymarket.com/markets?id=${encodeURIComponent(decision.marketId)}&limit=1`;
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const data = await resp.json();
+          const market = Array.isArray(data) ? data[0] : data;
+          const tokenIds: string[] = market?.clobTokenIds ?? [];
+          // YES token is index 0, NO token is index 1
+          if (decision.action === 'buy_no' || decision.action === 'sell_no') {
+            decision.tokenId = tokenIds[1] ?? tokenIds[0] ?? null;
+          } else {
+            decision.tokenId = tokenIds[0] ?? null;
+          }
+          // Strip the "[Token ID unavailable]" prefix from reasoning now that we have it
+          decision.reasoning = decision.reasoning.replace(/^\[Token ID unavailable[^\]]*\]\s*/i, '');
+        }
+      } catch {
+        // Non-fatal — executeDecision will handle null tokenId gracefully
+      }
+    }
 
     await this.executeDecision(botId, decision);
     await this.saveDecisions(botId, decisions);
@@ -616,6 +695,13 @@ class PolymarketBotService {
 
     console.log(`[BotService] Running cycle for bot "${bot.name}" (${botId})`);
 
+    // Reset daily P&L at the start of a new calendar day
+    const lastCycle = bot.stats.lastCycleAt ? new Date(bot.stats.lastCycleAt) : null;
+    if (lastCycle && lastCycle.toDateString() !== new Date().toDateString()) {
+      bot.stats.dailyPnlUsdc = 0;
+      this.bots.set(botId, bot);
+    }
+
     try {
       // 1. Build agent config from bot's LLM config
       const agentConfig = this.buildBotAgentConfig(bot);
@@ -628,6 +714,12 @@ class PolymarketBotService {
 
       // 4. Run the agent
       const response = await runAgent(query, agentConfig, apiKeys, `bot_session_${botId}`);
+
+      // ── Mid-flight abort check ─────────────────────────────────────────────
+      // Stop/pause may have been called while the agent was running.
+      // If so, silently discard the result — do not write error state or stats.
+      const botAfterAgent = this.bots.get(botId);
+      if (!botAfterAgent || botAfterAgent.status !== 'running') return;
 
       if (!response.success) {
         this.setBotError(botId, response.error ?? 'Agent returned failure');
@@ -649,11 +741,30 @@ class PolymarketBotService {
       const decisions = await this.loadDecisions(botId);
       let newDecisionCount = 0;
 
+      // Build fast-lookup sets for deduplication
+      // Key: `${marketId}:${action}` — prevents queuing the same trade twice
+      const pendingKeys = new Set(
+        decisions
+          .filter((d) => d.pendingApproval)
+          .map((d) => `${d.marketId}:${d.action}`),
+      );
+      // Markets with an existing open position — don't re-enter
+      const openMarketIds = new Set(
+        bot.positions.filter((p) => !p.closedAt).map((p) => p.marketId),
+      );
+
       for (const raw of rawDecisions) {
         const action = (raw.action ?? 'skip') as DecisionAction;
         if (action === 'hold' || action === 'skip') continue;
         if ((raw.confidence ?? 0) < bot.strategy.minConfidence) continue;
-        if (!raw.token_id || !raw.market_id) continue;
+        if (!raw.market_id) continue; // market_id is required; token_id may be filled later
+
+        // Skip if this exact market+action is already awaiting user approval
+        if (pendingKeys.has(`${raw.market_id}:${action}`)) continue;
+
+        // Skip buy recommendations when bot already holds a position in this market
+        const isBuy = action === 'buy_yes' || action === 'buy_no';
+        if (isBuy && openMarketIds.has(raw.market_id)) continue;
 
         const sizeUsdc = Math.min(
           raw.recommended_size_usdc ?? 10,
@@ -689,9 +800,12 @@ class PolymarketBotService {
           continue;
         }
 
-        if (bot.riskConfig.requireApproval) {
-          // Queue for user approval
+        if (bot.riskConfig.requireApproval || !decision.tokenId) {
+          // Queue for user approval (also required when token_id missing — can't execute without it)
           decision.pendingApproval = true;
+          if (!decision.tokenId) {
+            decision.reasoning = `[Token ID unavailable — manual review required] ${decision.reasoning}`;
+          }
           decisions.push(decision);
         } else {
           // Auto-execute
@@ -721,19 +835,21 @@ class PolymarketBotService {
         ).catch(() => {/* non-fatal */});
       }
 
-      // 8. Update stats
+      // 8. Update stats — only if still running (stop/pause may have fired mid-cycle)
       const updatedBot = this.bots.get(botId);
-      if (updatedBot) {
+      if (updatedBot && updatedBot.status === 'running') {
         updatedBot.stats.totalCycles += 1;
         updatedBot.stats.totalDecisions += newDecisionCount;
         updatedBot.stats.lastCycleAt = new Date().toISOString();
         updatedBot.lastError = undefined;
         this.bots.set(botId, updatedBot);
+        await this.saveDecisions(botId, decisions);
+        await this.save();
+        this.notify();
+      } else {
+        // Bot was stopped/paused during the agent run — persist decisions only, don't touch status
+        await this.saveDecisions(botId, decisions);
       }
-
-      await this.saveDecisions(botId, decisions);
-      await this.save();
-      this.notify();
     } catch (error: any) {
       console.error(`[BotService] Cycle error for ${botId}:`, error);
       this.setBotError(botId, error?.message ?? 'Unknown error during cycle');
@@ -743,13 +859,17 @@ class PolymarketBotService {
   // ── Execution ────────────────────────────────────────────────────────────────
 
   private async executeDecision(botId: string, decision: BotDecision): Promise<void> {
-    const bot = this.bots.get(botId);
-    if (!bot || !decision.tokenId) return;
+    if (!decision.tokenId) return;
 
     const isBuy = decision.action === 'buy_yes' || decision.action === 'buy_no';
+    const isSell = decision.action === 'sell_yes' || decision.action === 'sell_no';
 
     try {
       if (isBuy) {
+        // Re-fetch bot at point of mutation to avoid stale-reference race with concurrent cycles
+        const bot = this.bots.get(botId);
+        if (!bot) return;
+
         // Place limit order slightly above best ask for faster fill
         const orderBook = await polymarketApiService.getOrderBook(decision.tokenId).catch(() => null);
         const bestAsk = orderBook?.asks?.[0]?.price ?? String(decision.priceAtDecision + 0.01);
@@ -766,7 +886,10 @@ class PolymarketBotService {
         decision.orderId = orderResp.order_id;
         decision.executed = true;
 
-        // Track position
+        // Re-fetch again after the async order call (another cycle may have mutated bot)
+        const freshBot = this.bots.get(botId);
+        if (!freshBot) return;
+
         const position: BotPosition = {
           id: `pos_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           botId,
@@ -782,15 +905,52 @@ class PolymarketBotService {
           unrealizedPnlPct: 0,
         };
 
-        bot.positions.push(position);
-        bot.stats.tradesExecuted += 1;
-        this.bots.set(botId, bot);
+        freshBot.positions.push(position);
+        freshBot.stats.tradesExecuted += 1;
+        this.bots.set(botId, freshBot);
 
-        // Sync new position to SQLite
         await syncPositionToDb(position);
-        console.log(`[BotService] Order placed for bot ${botId}: ${orderResp.order_id}`);
+        console.log(`[BotService] BUY order placed for bot ${botId}: ${orderResp.order_id}`);
+
+      } else if (isSell) {
+        // Find the matching open position to close
+        const bot = this.bots.get(botId);
+        if (!bot) return;
+
+        const openPosition = bot.positions.find(
+          (p) => !p.closedAt && p.tokenId === decision.tokenId,
+        );
+        if (!openPosition) {
+          console.warn(`[BotService] Sell decision for ${decision.tokenId} but no open position found — skipping`);
+          decision.executed = false;
+          return;
+        }
+
+        // Cancel existing open order first (non-fatal if already filled)
+        if (openPosition.orderId) {
+          await polymarketApiService.cancelOrder(openPosition.orderId).catch(() => {});
+        }
+
+        // Place a market sell (price at best bid)
+        const orderBook = await polymarketApiService.getOrderBook(decision.tokenId).catch(() => null);
+        const bestBid = orderBook?.bids?.[0]?.price ?? String(decision.priceAtDecision - 0.01);
+        const price = Math.max(parseFloat(bestBid) - 0.005, 0.001).toFixed(3);
+        const size = (openPosition.sizeUsdc / parseFloat(price)).toFixed(2);
+
+        const orderResp = await polymarketApiService.createOrder({
+          token_id: decision.tokenId,
+          price,
+          size,
+          side: 'SELL',
+        });
+
+        decision.orderId = orderResp.order_id;
+        decision.executed = true;
+
+        // Close the position
+        await this.closePosition(botId, openPosition, 'manual', parseFloat(price));
+        console.log(`[BotService] SELL order placed for bot ${botId}: ${orderResp.order_id}`);
       }
-      // Sell actions would follow a similar pattern with the existing cancelOrder / createOrder(SELL)
     } catch (error: any) {
       console.error(`[BotService] Execution error for ${botId}:`, error);
       decision.executed = false;
@@ -897,7 +1057,7 @@ class PolymarketBotService {
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   private buildBotAgentConfig(bot: PolymarketBot): AgentConfig {
-    return buildAgentConfig(
+    const config = buildAgentConfig(
       bot.llmConfig.provider,
       bot.llmConfig.modelId,
       buildAgentInstructions(bot),
@@ -907,9 +1067,17 @@ class PolymarketBotService {
           'polymarket_search_markets',
           'polymarket_get_market_detail',
           'polymarket_get_order_book',
+          'polymarket_get_enriched_order_book',
           'polymarket_get_price_history',
+          'polymarket_get_midpoint',
           'polymarket_get_events',
+          'polymarket_get_event_by_slug',
+          'polymarket_get_market_by_slug',
           'polymarket_get_trades',
+          'polymarket_get_top_holders',
+          'polymarket_get_open_interest',
+          'polymarket_get_tags',
+          'polymarket_get_balance',
           'calculator',
         ],
         temperature: bot.llmConfig.temperature,
@@ -927,10 +1095,19 @@ class PolymarketBotService {
           ? { enabled: true, pii_detection: false, injection_check: true, financial_compliance: true }
           : undefined,
         agentic_memory: bot.llmConfig.enableMemory
-          ? { enabled: true, user_id: `bot_${bot.id}` }
+          ? { enabled: true, user_id: `polymarket_bot_${bot.id}` }
           : undefined,
       },
     );
+
+    // Polymarket analysis needs many tool rounds (fetch markets → details → order books → history).
+    // Raise the FinceptChat round limit so the agent isn't cut off mid-analysis.
+    // For other providers this field is ignored (they use Agno's native tool loop).
+    if (config.model) {
+      (config.model as any).max_tool_rounds = 15;
+    }
+
+    return config;
   }
 
   private async buildCycleQuery(bot: PolymarketBot): Promise<string> {
@@ -977,21 +1154,47 @@ class PolymarketBotService {
             .join('\n')}`
         : '';
 
-    return `Run your Polymarket market analysis cycle now. Scan for trading opportunities and return your structured recommendations as a JSON array.${memoryContext}${perfContext}${positionContext}`;
+    // ── Pending decisions (already queued, awaiting approval) ─────────────────
+    const allDecisions = await this.loadDecisions(bot.id);
+    const pendingDecisions = allDecisions.filter((d) => d.pendingApproval);
+    const pendingContext =
+      pendingDecisions.length > 0
+        ? `\n\nAlready queued (PENDING approval — do NOT recommend these again):\n${pendingDecisions
+            .map((d) => `- ${d.action.toUpperCase()} "${d.marketQuestion}" [market: ${d.marketId}]`)
+            .join('\n')}`
+        : '';
+
+    // ── Event targeting directive ─────────────────────────────────────────────
+    const { eventMode, eventSlugs, eventKeywords } = bot.strategy;
+    let eventDirective = '';
+    if (eventMode === 'specific' && eventSlugs.length > 0) {
+      eventDirective = `\n\nTARGET EVENTS this cycle (fetch markets from these slugs only): ${eventSlugs.join(', ')}`;
+    } else if (eventMode === 'dynamic' && eventKeywords.length > 0) {
+      eventDirective = `\n\nDYNAMIC EVENT DISCOVERY: Search for active events/markets matching: ${eventKeywords.join(', ')}`;
+    }
+
+    return `Run your Polymarket market analysis cycle now. Scan for trading opportunities and return your structured recommendations as a JSON array.${eventDirective}${memoryContext}${perfContext}${positionContext}${pendingContext}`;
   }
 
-  private updateBotStatus(id: string, status: BotStatus): void {
+  private updateBotStatus(id: string, status: BotStatus, skipSave = false): void {
     const bot = this.bots.get(id);
     if (!bot) return;
     bot.status = status;
     this.bots.set(id, bot);
-    this.save().catch(() => {});
+    if (!skipSave) this.save().catch(() => {});
     this.notify();
   }
 
   private setBotError(id: string, message: string): void {
     const bot = this.bots.get(id);
     if (!bot) return;
+    // Never overwrite an intentional stop/pause with error status.
+    // This prevents an in-flight cycle from clobbering the user's stop action.
+    if (bot.status === 'stopped' || bot.status === 'paused') {
+      bot.lastError = message; // record the error text but keep the user's status
+      this.bots.set(id, bot);
+      return; // skip save/notify — status didn't change
+    }
     bot.status = 'error';
     bot.lastError = message;
     this.bots.set(id, bot);

@@ -467,14 +467,20 @@ const BotMonitorView: React.FC<Props> = ({ onCreateNew }) => {
   const loadBots = useCallback(async () => {
     const list = await polymarketBotService.getBots();
     setBots(list);
-    if (!selectedId && list.length > 0) setSelectedId(list[0].id);
-  }, [selectedId]);
+    setSelectedId((prev) => {
+      // If nothing selected yet, pick the first bot
+      if (!prev && list.length > 0) return list[0].id;
+      // If the currently selected bot no longer exists, clear selection
+      if (prev && !list.find((b) => b.id === prev)) return list[0]?.id ?? null;
+      return prev;
+    });
+  }, []);
 
   useEffect(() => {
     loadBots();
     const unsub = polymarketBotService.subscribe(() => loadBots());
     return unsub;
-  }, []);
+  }, [loadBots]);
 
   useEffect(() => {
     if (!selectedId) { setDecisions([]); return; }
@@ -547,7 +553,18 @@ const BotMonitorView: React.FC<Props> = ({ onCreateNew }) => {
               onStart={() => polymarketBotService.startBot(b.id)}
               onPause={() => polymarketBotService.pauseBot(b.id)}
               onStop={() => polymarketBotService.stopBot(b.id)}
-              onDelete={async () => { await polymarketBotService.deleteBot(b.id); if (selectedId === b.id) setSelectedId(null); }}
+              onDelete={async () => {
+                // Optimistically remove from UI immediately so the bot disappears on click
+                setBots((prev) => {
+                  const next = prev.filter((x) => x.id !== b.id);
+                  // If the deleted bot was selected, move selection to the next available bot
+                  if (selectedId === b.id) {
+                    setSelectedId(next[0]?.id ?? null);
+                  }
+                  return next;
+                });
+                await polymarketBotService.deleteBot(b.id);
+              }}
             />
           ))}
         </div>

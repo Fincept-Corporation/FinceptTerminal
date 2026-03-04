@@ -34,6 +34,10 @@ export const polymarketTools: InternalTool[] = [
           type: 'boolean',
           description: 'Sort ascending (default: false = descending)',
         },
+        tag_id: {
+          type: 'string',
+          description: 'Filter by Polymarket category tag ID (use polymarket_get_tags to discover valid IDs)',
+        },
       },
       required: [],
     },
@@ -48,6 +52,7 @@ export const polymarketTools: InternalTool[] = [
           closed: args.closed ?? false,
           order: args.order,
           ascending: args.ascending ?? false,
+          tag_id: args.tag_id,
         });
         // Return simplified view for LLM consumption
         const simplified = markets.slice(0, args.limit ?? 20).map((m: any) => ({
@@ -258,6 +263,10 @@ export const polymarketTools: InternalTool[] = [
           type: 'boolean',
           description: 'Filter to active events only (default: true)',
         },
+        tag_id: {
+          type: 'string',
+          description: 'Filter events by category tag ID (use polymarket_get_tags to discover valid IDs)',
+        },
       },
       required: [],
     },
@@ -270,6 +279,7 @@ export const polymarketTools: InternalTool[] = [
           limit: args.limit ?? 10,
           active: args.active ?? true,
           closed: false,
+          tag_id: args.tag_id,
         });
         const simplified = events.slice(0, args.limit ?? 10).map((e: any) => ({
           id: e.id,
@@ -337,6 +347,312 @@ export const polymarketTools: InternalTool[] = [
         return { success: true, data: trades, count: trades?.length ?? 0 };
       } catch (error: any) {
         return { success: false, error: error?.message ?? 'Failed to fetch trades' };
+      }
+    },
+  },
+
+  // ── Extended tools ───────────────────────────────────────────────────────────
+
+  {
+    name: 'polymarket_get_event_by_slug',
+    description:
+      'Fetch a Polymarket event and ALL its nested markets by event slug. Returns each market\'s clobTokenIds (YES=index 0, NO=index 1) so you can immediately call order book and price history tools. Use this for event-targeted bots instead of a flat market scan.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: {
+          type: 'string',
+          description: 'Event slug from the Polymarket URL, e.g. "will-trump-win-2024"',
+        },
+      },
+      required: ['slug'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.polymarketGetEventBySlug) {
+        return { success: false, error: 'Polymarket context not available' };
+      }
+      try {
+        const event = await contexts.polymarketGetEventBySlug(args.slug);
+        return {
+          success: true,
+          data: {
+            id: event.id,
+            slug: event.slug,
+            title: event.title,
+            description: event.description?.slice(0, 300),
+            startDate: event.startDate,
+            endDate: event.endDate,
+            volume: event.volume,
+            liquidity: event.liquidity,
+            markets: (event.markets ?? []).map((m: any) => ({
+              id: m.id,
+              question: m.question,
+              outcomes: m.outcomes,
+              prices: m.outcomePrices,
+              volume: m.volume,
+              liquidity: m.liquidity,
+              endDate: m.endDate,
+              acceptingOrders: m.acceptingOrders,
+              // YES token = index 0, NO token = index 1
+              yes_token_id: m.clobTokenIds?.[0] ?? null,
+              no_token_id: m.clobTokenIds?.[1] ?? null,
+            })),
+            market_count: event.markets?.length ?? 0,
+          },
+        };
+      } catch (error: any) {
+        return { success: false, error: error?.message ?? 'Failed to fetch event by slug' };
+      }
+    },
+  },
+
+  {
+    name: 'polymarket_get_market_by_slug',
+    description:
+      'Fetch a single Polymarket market by its URL slug. Returns clobTokenIds for direct order book access.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: {
+          type: 'string',
+          description: 'Market slug from the Polymarket URL',
+        },
+      },
+      required: ['slug'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.polymarketGetMarketBySlug) {
+        return { success: false, error: 'Polymarket context not available' };
+      }
+      try {
+        const m = await contexts.polymarketGetMarketBySlug(args.slug);
+        return {
+          success: true,
+          data: {
+            id: m.id,
+            slug: m.slug,
+            question: m.question,
+            outcomes: m.outcomes,
+            prices: m.outcomePrices,
+            volume: m.volume,
+            liquidity: m.liquidity,
+            endDate: m.endDate,
+            acceptingOrders: m.acceptingOrders,
+            yes_token_id: m.clobTokenIds?.[0] ?? null,
+            no_token_id: m.clobTokenIds?.[1] ?? null,
+          },
+        };
+      } catch (error: any) {
+        return { success: false, error: error?.message ?? 'Failed to fetch market by slug' };
+      }
+    },
+  },
+
+  {
+    name: 'polymarket_get_tags',
+    description:
+      'Get all Polymarket category tags with their IDs. Use the returned tag_id values to filter polymarket_get_markets and polymarket_get_events by category (e.g. politics, crypto, sports).',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+    handler: async (_args, contexts) => {
+      if (!contexts.polymarketGetTags) {
+        return { success: false, error: 'Polymarket context not available' };
+      }
+      try {
+        const tags = await contexts.polymarketGetTags();
+        const simplified = tags.map((t: any) => ({
+          id: t.id,
+          label: t.label ?? t.slug ?? t.name,
+          slug: t.slug,
+        }));
+        return { success: true, data: simplified, count: simplified.length };
+      } catch (error: any) {
+        return { success: false, error: error?.message ?? 'Failed to fetch tags' };
+      }
+    },
+  },
+
+  {
+    name: 'polymarket_get_top_holders',
+    description:
+      'Get the top token holders for a Polymarket market. Shows whale concentration — useful as a contrarian signal (high concentration = crowded trade).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        condition_id: {
+          type: 'string',
+          description: 'The market condition ID (from polymarket_get_markets or polymarket_get_market_detail)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Number of top holders to return (default: 20)',
+        },
+      },
+      required: ['condition_id'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.polymarketGetTopHolders) {
+        return { success: false, error: 'Polymarket context not available' };
+      }
+      try {
+        const result = await contexts.polymarketGetTopHolders(args.condition_id, args.limit ?? 20);
+        const holders: any[] = result.holders ?? result ?? [];
+        // Compute concentration: top-5 share of total
+        const total = holders.reduce((s: number, h: any) => s + (parseFloat(h.size ?? h.amount ?? '0')), 0);
+        const top5 = holders.slice(0, 5).reduce((s: number, h: any) => s + (parseFloat(h.size ?? h.amount ?? '0')), 0);
+        const concentration = total > 0 ? ((top5 / total) * 100).toFixed(1) : null;
+        return {
+          success: true,
+          data: {
+            top5_concentration_pct: concentration,
+            total_holders: holders.length,
+            holders: holders.slice(0, args.limit ?? 20).map((h: any) => ({
+              address: h.proxyWallet ?? h.address,
+              size: h.size ?? h.amount,
+              outcome_index: h.outcomeIndex,
+            })),
+          },
+        };
+      } catch (error: any) {
+        return { success: false, error: error?.message ?? 'Failed to fetch top holders' };
+      }
+    },
+  },
+
+  {
+    name: 'polymarket_get_enriched_order_book',
+    description:
+      'Get an enriched order book for a Polymarket token including tick_size, min_order_size, and last_trade_price. More useful than the basic order book for sizing orders correctly.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        token_id: {
+          type: 'string',
+          description: 'The CLOB token ID (YES or NO token)',
+        },
+      },
+      required: ['token_id'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.polymarketGetEnrichedOrderBook) {
+        return { success: false, error: 'Polymarket context not available' };
+      }
+      try {
+        const book = await contexts.polymarketGetEnrichedOrderBook(args.token_id);
+        const bestBid = book.bids?.[0]?.price ?? null;
+        const bestAsk = book.asks?.[0]?.price ?? null;
+        const spread = bestBid && bestAsk
+          ? (parseFloat(bestAsk) - parseFloat(bestBid)).toFixed(4)
+          : null;
+        return {
+          success: true,
+          data: {
+            token_id: book.asset_id,
+            best_bid: bestBid,
+            best_ask: bestAsk,
+            spread,
+            last_trade_price: book.last_trade_price ?? null,
+            tick_size: book.tick_size ?? null,
+            min_order_size: book.min_order_size ?? null,
+            neg_risk: book.neg_risk ?? null,
+            top_bids: book.bids?.slice(0, 5),
+            top_asks: book.asks?.slice(0, 5),
+          },
+        };
+      } catch (error: any) {
+        return { success: false, error: error?.message ?? 'Failed to fetch enriched order book' };
+      }
+    },
+  },
+
+  {
+    name: 'polymarket_get_midpoint',
+    description:
+      'Get the midpoint price for a Polymarket token — the fair value between best bid and best ask. Faster than computing it manually from the order book.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        token_id: {
+          type: 'string',
+          description: 'The CLOB token ID (YES or NO token)',
+        },
+      },
+      required: ['token_id'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.polymarketGetMidpoint) {
+        return { success: false, error: 'Polymarket context not available' };
+      }
+      try {
+        const result = await contexts.polymarketGetMidpoint(args.token_id);
+        return {
+          success: true,
+          data: {
+            token_id: args.token_id,
+            mid: result.mid ?? result.price ?? result,
+          },
+        };
+      } catch (error: any) {
+        return { success: false, error: error?.message ?? 'Failed to fetch midpoint' };
+      }
+    },
+  },
+
+  {
+    name: 'polymarket_get_balance',
+    description:
+      'Get the available USDC collateral balance for trading on Polymarket. Requires credentials to be configured. Use this before recommending a trade size to ensure sufficient funds.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+    handler: async (_args, contexts) => {
+      if (!contexts.polymarketGetBalance) {
+        return { success: false, error: 'Polymarket context not available or credentials not set' };
+      }
+      try {
+        const result = await contexts.polymarketGetBalance();
+        return {
+          success: true,
+          data: {
+            available_usdc: result.balance,
+            allowance: result.allowance,
+          },
+        };
+      } catch (error: any) {
+        return { success: false, error: error?.message ?? 'Failed to fetch balance (credentials required)' };
+      }
+    },
+  },
+
+  {
+    name: 'polymarket_get_open_interest',
+    description:
+      'Get open interest (total outstanding token value) for one or more Polymarket markets. High OI relative to volume indicates held positions — useful for liquidity assessment.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        condition_ids: {
+          type: 'string',
+          description: 'Comma-separated list of market condition IDs',
+        },
+      },
+      required: ['condition_ids'],
+    },
+    handler: async (args, contexts) => {
+      if (!contexts.polymarketGetOpenInterest) {
+        return { success: false, error: 'Polymarket context not available' };
+      }
+      try {
+        const ids = String(args.condition_ids).split(',').map((s: string) => s.trim()).filter(Boolean);
+        const result = await contexts.polymarketGetOpenInterest(ids);
+        return { success: true, data: result, count: result?.length ?? 0 };
+      } catch (error: any) {
+        return { success: false, error: error?.message ?? 'Failed to fetch open interest' };
       }
     },
   },
