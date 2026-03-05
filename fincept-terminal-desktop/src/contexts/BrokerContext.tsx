@@ -56,11 +56,13 @@ async function safeStorageSet(key: string, value: string): Promise<void> {
   }
 }
 
-// Helper to create timeout promise
-function createTimeout(ms: number): Promise<never> {
-  return new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`Connection timeout after ${ms}ms`)), ms)
-  );
+// Helper to create timeout promise with cleanup
+function createTimeout(ms: number): { promise: Promise<never>; clear: () => void } {
+  let timerId: ReturnType<typeof setTimeout>;
+  const promise = new Promise<never>((_, reject) => {
+    timerId = setTimeout(() => reject(new Error(`Connection timeout after ${ms}ms`)), ms);
+  });
+  return { promise, clear: () => clearTimeout(timerId) };
 }
 
 // Helper to retry connection with exponential backoff
@@ -70,10 +72,13 @@ async function retryConnect(
   delay: number = CONNECTION_RETRY_DELAY
 ): Promise<void> {
   for (let i = 0; i < attempts; i++) {
+    const timeout = createTimeout(CONNECTION_TIMEOUT);
     try {
-      await Promise.race([connectFn(), createTimeout(CONNECTION_TIMEOUT)]);
+      await Promise.race([connectFn(), timeout.promise]);
+      timeout.clear();
       return;
     } catch (error) {
+      timeout.clear();
       if (i === attempts - 1) throw error;
       await new Promise(resolve => setTimeout(resolve, delay * (i + 1))); // Exponential backoff
     }

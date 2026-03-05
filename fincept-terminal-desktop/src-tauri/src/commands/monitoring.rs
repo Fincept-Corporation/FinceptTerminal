@@ -76,12 +76,18 @@ pub async fn monitor_get_conditions(
 
     let conditions = stmt
         .query_map([], |row| {
+            let field_str = row.get::<_, String>(3)?;
+            let operator_str = row.get::<_, String>(4)?;
+            let field = MonitorField::from_str(&field_str)
+                .ok_or_else(|| rusqlite::Error::InvalidParameterName(format!("Unknown monitor field: {}", field_str)))?;
+            let operator = MonitorOperator::from_str(&operator_str)
+                .ok_or_else(|| rusqlite::Error::InvalidParameterName(format!("Unknown monitor operator: {}", operator_str)))?;
             Ok(MonitorCondition {
                 id: Some(row.get(0)?),
                 provider: row.get(1)?,
                 symbol: row.get(2)?,
-                field: MonitorField::from_str(&row.get::<_, String>(3)?).unwrap(),
-                operator: MonitorOperator::from_str(&row.get::<_, String>(4)?).unwrap(),
+                field,
+                operator,
                 value: row.get(5)?,
                 value2: row.get(6)?,
                 enabled: row.get::<_, i32>(7)? == 1,
@@ -137,12 +143,15 @@ pub async fn monitor_get_alerts(
 
     let alerts = stmt
         .query_map(params![limit], |row| {
+            let field_str = row.get::<_, String>(4)?;
+            let field = MonitorField::from_str(&field_str)
+                .ok_or_else(|| rusqlite::Error::InvalidParameterName(format!("Unknown monitor field: {}", field_str)))?;
             Ok(MonitorAlert {
                 id: Some(row.get(0)?),
                 condition_id: row.get(1)?,
                 provider: row.get(2)?,
                 symbol: row.get(3)?,
-                field: MonitorField::from_str(&row.get::<_, String>(4)?).unwrap(),
+                field,
                 triggered_value: row.get(5)?,
                 triggered_at: row.get::<_, i64>(6)? as u64,
             })

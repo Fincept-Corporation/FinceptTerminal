@@ -3,7 +3,7 @@ import { InternalTool } from '../types';
 const AVAILABLE_TABS = [
   'dashboard', 'markets', 'news', 'watchlist', 'portfolio', 'research',
   'economics', 'dbnomics', 'geopolitics', 'maritime', 'screener',
-  'chat', 'docs', 'nodes', 'code', 'forum', 'marketplace',
+  'chat', 'docs', 'nodes', 'code', 'forum',
   'profile', 'support', 'settings', 'backtesting', 'mcp', 'trading',
   'reportbuilder', 'equity-trading', 'datasources', 'ai-quant-lab',
   'notes', 'agents', 'monitoring', 'polymarket', 'derivatives', 'asia-markets', 'akshare'
@@ -350,21 +350,6 @@ export const navigationTools: InternalTool[] = [
       }
       contexts.setActiveTab('forum');
       return { success: true, message: 'Navigated to Forum tab' };
-    },
-  },
-  {
-    name: 'open_marketplace_tab',
-    description: 'Navigate to the Marketplace tab to browse and install extensions, indicators, strategies, and premium features',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-    },
-    handler: async (_args, contexts) => {
-      if (!contexts.setActiveTab) {
-        return { success: false, error: 'Navigation context not available' };
-      }
-      contexts.setActiveTab('marketplace');
-      return { success: true, message: 'Navigated to Marketplace tab' };
     },
   },
   {

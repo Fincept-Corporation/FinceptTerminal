@@ -74,7 +74,7 @@ i18next
       'profile', 'screener', 'trading', 'watchlist', 'dataMapping',
       'dataSources', 'docs', 'notes', 'support', 'nodeEditor',
       'reportBuilder', 'alphaArena', 'codeEditor', 'agentConfig',
-      'dbnomics', 'excel', 'marketplace', 'backtesting', 'akshare'
+      'dbnomics', 'excel', 'backtesting', 'akshare'
     ],
 
     react: {

@@ -14,7 +14,7 @@ static EXCEL_CONN: Lazy<Mutex<Option<Connection>>> = Lazy::new(|| Mutex::new(Non
 // Notes Database Initialization
 // ============================================================================
 
-fn get_notes_conn() -> Result<()> {
+fn get_notes_conn_guard() -> Result<parking_lot::MutexGuard<'static, Option<Connection>>> {
     let mut conn_lock = NOTES_CONN.lock();
     if conn_lock.is_none() {
         let path = get_notes_db_path()?;
@@ -58,7 +58,7 @@ fn get_notes_conn() -> Result<()> {
 
         *conn_lock = Some(conn);
     }
-    Ok(())
+    Ok(conn_lock)
 }
 
 // ============================================================================
@@ -66,9 +66,8 @@ fn get_notes_conn() -> Result<()> {
 // ============================================================================
 
 pub fn create_note(note: &Note) -> Result<i64> {
-    get_notes_conn()?;
-    let conn_lock = NOTES_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_notes_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Notes database connection not initialized")?;
 
     conn.execute(
         "INSERT INTO financial_notes
@@ -98,9 +97,8 @@ pub fn create_note(note: &Note) -> Result<i64> {
 }
 
 pub fn get_all_notes(include_archived: bool) -> Result<Vec<Note>> {
-    get_notes_conn()?;
-    let conn_lock = NOTES_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_notes_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Notes database connection not initialized")?;
 
     let query = if include_archived {
         "SELECT * FROM financial_notes ORDER BY updated_at DESC"
@@ -136,9 +134,8 @@ pub fn get_all_notes(include_archived: bool) -> Result<Vec<Note>> {
 }
 
 pub fn update_note(id: i64, updates: &Note) -> Result<()> {
-    get_notes_conn()?;
-    let conn_lock = NOTES_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_notes_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Notes database connection not initialized")?;
 
     conn.execute(
         "UPDATE financial_notes SET
@@ -169,9 +166,8 @@ pub fn update_note(id: i64, updates: &Note) -> Result<()> {
 }
 
 pub fn delete_note(id: i64) -> Result<()> {
-    get_notes_conn()?;
-    let conn_lock = NOTES_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_notes_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Notes database connection not initialized")?;
 
     conn.execute("DELETE FROM financial_notes WHERE id = ?1", params![id])?;
 
@@ -179,9 +175,8 @@ pub fn delete_note(id: i64) -> Result<()> {
 }
 
 pub fn search_notes(query: &str) -> Result<Vec<Note>> {
-    get_notes_conn()?;
-    let conn_lock = NOTES_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_notes_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Notes database connection not initialized")?;
 
     let search_pattern = format!("%{}%", query);
 
@@ -219,9 +214,8 @@ pub fn search_notes(query: &str) -> Result<Vec<Note>> {
 }
 
 pub fn get_note_templates() -> Result<Vec<NoteTemplate>> {
-    get_notes_conn()?;
-    let conn_lock = NOTES_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_notes_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Notes database connection not initialized")?;
 
     let mut stmt = conn.prepare("SELECT * FROM note_templates ORDER BY name ASC")?;
     let templates = stmt
@@ -244,7 +238,7 @@ pub fn get_note_templates() -> Result<Vec<NoteTemplate>> {
 // Excel Database Initialization
 // ============================================================================
 
-fn get_excel_conn() -> Result<()> {
+fn get_excel_conn_guard() -> Result<parking_lot::MutexGuard<'static, Option<Connection>>> {
     let mut conn_lock = EXCEL_CONN.lock();
     if conn_lock.is_none() {
         let path = get_excel_db_path()?;
@@ -277,7 +271,7 @@ fn get_excel_conn() -> Result<()> {
 
         *conn_lock = Some(conn);
     }
-    Ok(())
+    Ok(conn_lock)
 }
 
 // ============================================================================
@@ -285,9 +279,8 @@ fn get_excel_conn() -> Result<()> {
 // ============================================================================
 
 pub fn add_or_update_excel_file(file: &ExcelFile) -> Result<i64> {
-    get_excel_conn()?;
-    let conn_lock = EXCEL_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_excel_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Excel database connection not initialized")?;
 
     // Check if exists
     let existing: Option<i64> = conn
@@ -318,9 +311,8 @@ pub fn add_or_update_excel_file(file: &ExcelFile) -> Result<i64> {
 }
 
 pub fn get_recent_excel_files(limit: i64) -> Result<Vec<ExcelFile>> {
-    get_excel_conn()?;
-    let conn_lock = EXCEL_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_excel_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Excel database connection not initialized")?;
 
     let mut stmt = conn.prepare(
         "SELECT * FROM excel_files ORDER BY last_opened DESC LIMIT ?1"
@@ -344,9 +336,8 @@ pub fn get_recent_excel_files(limit: i64) -> Result<Vec<ExcelFile>> {
 }
 
 pub fn create_excel_snapshot(file_id: i64, snapshot_name: &str, sheet_data: &str, created_at: &str) -> Result<i64> {
-    get_excel_conn()?;
-    let conn_lock = EXCEL_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_excel_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Excel database connection not initialized")?;
 
     conn.execute(
         "INSERT INTO excel_snapshots (file_id, snapshot_name, sheet_data, created_at)
@@ -358,9 +349,8 @@ pub fn create_excel_snapshot(file_id: i64, snapshot_name: &str, sheet_data: &str
 }
 
 pub fn get_excel_snapshots(file_id: i64) -> Result<Vec<ExcelSnapshot>> {
-    get_excel_conn()?;
-    let conn_lock = EXCEL_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_excel_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Excel database connection not initialized")?;
 
     let mut stmt = conn.prepare(
         "SELECT * FROM excel_snapshots WHERE file_id = ?1 ORDER BY created_at DESC"
@@ -382,9 +372,8 @@ pub fn get_excel_snapshots(file_id: i64) -> Result<Vec<ExcelSnapshot>> {
 }
 
 pub fn delete_excel_snapshot(id: i64) -> Result<()> {
-    get_excel_conn()?;
-    let conn_lock = EXCEL_CONN.lock();
-    let conn = conn_lock.as_ref().unwrap();
+    let conn_lock = get_excel_conn_guard()?;
+    let conn = conn_lock.as_ref().context("Excel database connection not initialized")?;
 
     conn.execute("DELETE FROM excel_snapshots WHERE id = ?1", params![id])?;
 

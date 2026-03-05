@@ -4,6 +4,9 @@ use crate::database::*;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use sha2::Sha256;
+use hmac::{Hmac, Mac};
+use rand::Rng;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DatabaseInfo {
@@ -87,28 +90,79 @@ pub async fn db_admin_clear_session() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn db_admin_set_password(password: String) -> Result<String, String> {
-    use sha2::{Sha256, Digest};
-    let mut hasher = Sha256::new();
-    hasher.update(password.as_bytes());
-    let hashed = format!("{:x}", hasher.finalize());
+    // Generate a random 32-byte salt
+    let mut salt = [0u8; 32];
+    rand::thread_rng().fill(&mut salt);
+    let salt_hex = hex::encode(salt);
 
-    operations::save_setting("db_admin_password", &hashed, Some("security"))
+    // Hash password with HMAC-SHA256 using the salt as key
+    let hash_hex = hmac_sha256_hash(&password, &salt);
+
+    // Store as "salt$hash"
+    let stored = format!("{}${}", salt_hex, hash_hex);
+
+    operations::save_setting("db_admin_password", &stored, Some("security"))
         .map_err(|e| e.to_string())?;
     Ok("Password set successfully".to_string())
 }
 
 #[tauri::command]
 pub async fn db_admin_verify_password(password: String) -> Result<bool, String> {
-    use sha2::{Sha256, Digest};
-    let mut hasher = Sha256::new();
-    hasher.update(password.as_bytes());
-    let hashed = format!("{:x}", hasher.finalize());
-
     match operations::get_setting("db_admin_password") {
-        Ok(Some(stored_hash)) => Ok(stored_hash == hashed),
+        Ok(Some(stored)) => {
+            // Handle both new "salt$hash" format and legacy bare-hash format
+            if let Some((salt_hex, stored_hash)) = stored.split_once('$') {
+                // New salted format: verify with HMAC-SHA256
+                if let Ok(salt) = hex::decode(salt_hex) {
+                    let computed_hash = hmac_sha256_hash(&password, &salt);
+                    // Constant-time comparison to prevent timing attacks
+                    Ok(constant_time_eq(computed_hash.as_bytes(), stored_hash.as_bytes()))
+                } else {
+                    Ok(false)
+                }
+            } else {
+                // Legacy unsalted SHA-256 format: verify then migrate
+                use sha2::Digest;
+                let mut hasher = Sha256::new();
+                hasher.update(password.as_bytes());
+                let legacy_hash = format!("{:x}", hasher.finalize());
+                let matches = constant_time_eq(legacy_hash.as_bytes(), stored.as_bytes());
+                if matches {
+                    // Auto-migrate to salted format on successful login
+                    let mut salt = [0u8; 32];
+                    rand::thread_rng().fill(&mut salt);
+                    let salt_hex = hex::encode(salt);
+                    let hash_hex = hmac_sha256_hash(&password, &salt);
+                    let new_stored = format!("{}${}", salt_hex, hash_hex);
+                    let _ = operations::save_setting("db_admin_password", &new_stored, Some("security"));
+                }
+                Ok(matches)
+            }
+        }
         Ok(None) => Ok(true), // No password set, allow access
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// Compute HMAC-SHA256(key=salt, message=password) and return hex string
+fn hmac_sha256_hash(password: &str, salt: &[u8]) -> String {
+    type HmacSha256 = Hmac<Sha256>;
+    let mut mac = HmacSha256::new_from_slice(salt)
+        .expect("HMAC can take key of any size");
+    mac.update(password.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
+
+/// Constant-time comparison of two byte slices to prevent timing attacks
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut result = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        result |= x ^ y;
+    }
+    result == 0
 }
 
 // Get all databases
@@ -200,6 +254,11 @@ pub async fn db_admin_get_tables(db_path: String) -> Result<Vec<TableInfo>, Stri
     let mut tables = Vec::new();
 
     for table_name in table_names {
+        // Validate table name to prevent SQL injection via crafted sqlite_master entries
+        if let Err(_) = validate_sql_identifier(&table_name, "Table name") {
+            continue; // Skip tables with suspicious names
+        }
+
         // Get row count
         let row_count: i64 = conn
             .query_row(&format!("SELECT COUNT(*) FROM \"{}\"", table_name), [], |row| {

@@ -833,7 +833,6 @@ export function TerminalAppearanceSection({
                 <option value="profile">Profile</option>
                 <option value="settings">Settings</option>
                 <option value="forum">Forum</option>
-                <option value="marketplace">Marketplace</option>
               </select>
             </div>
           ))}

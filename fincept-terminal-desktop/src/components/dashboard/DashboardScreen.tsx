@@ -20,7 +20,7 @@ import WatchlistTab from '@/components/tabs/watchlist';
 import ChatTab from '@/components/tabs/chat';
 import ProfileTab from '@/components/tabs/profile';
 import AboutTab from '@/components/tabs/about';
-import MarketplaceTab from '@/components/tabs/marketplace';
+
 import PortfolioTab from '@/components/tabs/portfolio-tab';
 import DocsTab from '@/components/tabs/docs';
 import SettingsTab from '@/components/tabs/settings-tab';
@@ -433,7 +433,6 @@ function FinxeptTerminalContent() {
     // Community & Support
     { label: 'Community & Support', header: true },
     { label: 'Forum', action: () => setActiveTab('forum') },
-    { label: 'Marketplace', action: () => setActiveTab('marketplace') },
     { label: 'Documentation', action: () => setActiveTab('docs') },
     { label: 'Support Tickets', action: () => setActiveTab('support') },
   ];
@@ -876,9 +875,6 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="about" className="h-full m-0 p-0">
               <AboutTab />
-            </TabsContent>
-            <TabsContent value="marketplace" className="h-full m-0 p-0">
-              <MarketplaceTab />
             </TabsContent>
             <TabsContent value="portfolio" className="h-full m-0 p-0">
               <PortfolioTab />

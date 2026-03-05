@@ -70,8 +70,11 @@ pub(super) async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Re
 
         emit_progress(app, "python", 40, "Downloading Python...", false);
 
+        let tar_path_str = tar_path.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", tar_path))?;
+        let python_dir_str = python_dir.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", python_dir))?;
+
         let mut cmd = Command::new("curl");
-        cmd.args(&["-L", "-o", tar_path.to_str().unwrap(), &download_url]);
+        cmd.args(&["-L", "-o", tar_path_str, &download_url]);
         let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
@@ -83,7 +86,7 @@ pub(super) async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Re
         emit_progress(app, "python", 60, "Extracting Python...", false);
 
         let mut cmd = Command::new("tar");
-        cmd.args(&["-xzf", tar_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=1"]);
+        cmd.args(&["-xzf", tar_path_str, "-C", python_dir_str, "--strip-components=1"]);
         let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
@@ -108,8 +111,11 @@ pub(super) async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Re
 
         emit_progress(app, "python", 40, "Downloading Python...", false);
 
+        let tar_path_str = tar_path.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", tar_path))?;
+        let python_dir_str = python_dir.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", python_dir))?;
+
         let mut cmd = Command::new("curl");
-        cmd.args(&["-L", "-o", tar_path.to_str().unwrap(), &download_url]);
+        cmd.args(&["-L", "-o", tar_path_str, &download_url]);
         let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
@@ -122,7 +128,7 @@ pub(super) async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Re
 
         // Use gunzip separately for better BSD tar compatibility
         let mut gunzip_cmd = Command::new("gunzip");
-        gunzip_cmd.arg(tar_path.to_str().unwrap());
+        gunzip_cmd.arg(tar_path_str);
         let output = gunzip_cmd.output().map_err(|e| format!("Gunzip failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Gunzip failed: {}", String::from_utf8_lossy(&output.stderr)));
@@ -132,8 +138,9 @@ pub(super) async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Re
 
         // Extract the uncompressed tar file
         let tar_uncompressed = python_dir.join("python.tar");
+        let tar_uncompressed_str = tar_uncompressed.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", tar_uncompressed))?;
         let mut cmd = Command::new("tar");
-        cmd.args(&["-xf", tar_uncompressed.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=1"]);
+        cmd.args(&["-xf", tar_uncompressed_str, "-C", python_dir_str, "--strip-components=1"]);
         let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
@@ -222,8 +229,9 @@ pub(super) async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Re
 
     #[cfg(not(target_os = "windows"))]
     {
+        let get_pip_path_str = get_pip_path.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", get_pip_path))?;
         let mut cmd = Command::new("curl");
-        cmd.args(&["-L", "-o", get_pip_path.to_str().unwrap(), get_pip_url]);
+        cmd.args(&["-L", "-o", get_pip_path_str, get_pip_url]);
         let output = cmd.output().map_err(|e| format!("Failed to download get-pip.py: {}", e))?;
 
         if !output.status.success() {
@@ -260,7 +268,8 @@ pub(super) async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Re
     eprintln!("[SETUP] Running: {:?} {:?}", python_exe, get_pip_path);
 
     let mut cmd = Command::new(&python_exe);
-    cmd.arg(get_pip_path.to_str().unwrap());
+    let get_pip_str = get_pip_path.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", get_pip_path))?;
+    cmd.arg(get_pip_str);
     // Add --no-warn-script-location to suppress warnings
     cmd.arg("--no-warn-script-location");
 
@@ -359,8 +368,11 @@ pub(super) async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Resul
         let download_url = format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64.zip", BUN_VERSION);
         let zip_path = bun_dir.join("bun.zip");
 
+        let zip_path_str = zip_path.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", zip_path))?;
+        let bun_dir_str = bun_dir.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", bun_dir))?;
+
         let mut cmd = Command::new("curl");
-        cmd.args(&["-L", "-o", zip_path.to_str().unwrap(), &download_url]);
+        cmd.args(&["-L", "-o", zip_path_str, &download_url]);
         let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
@@ -369,7 +381,7 @@ pub(super) async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Resul
         emit_progress(app, "bun", 70, "Extracting Bun...", false);
 
         let mut cmd = Command::new("unzip");
-        cmd.args(&["-o", zip_path.to_str().unwrap(), "-d", bun_dir.to_str().unwrap()]);
+        cmd.args(&["-o", zip_path_str, "-d", bun_dir_str]);
         let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
@@ -414,8 +426,11 @@ pub(super) async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Resul
         let download_url = format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-{}.zip", BUN_VERSION, bun_arch);
         let zip_path = bun_dir.join("bun.zip");
 
+        let zip_path_str = zip_path.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", zip_path))?;
+        let bun_dir_str = bun_dir.to_str().ok_or_else(|| format!("Invalid path encoding: {:?}", bun_dir))?;
+
         let mut cmd = Command::new("curl");
-        cmd.args(&["-L", "-o", zip_path.to_str().unwrap(), &download_url]);
+        cmd.args(&["-L", "-o", zip_path_str, &download_url]);
         let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
@@ -424,7 +439,7 @@ pub(super) async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Resul
         emit_progress(app, "bun", 70, "Extracting Bun...", false);
 
         let mut cmd = Command::new("unzip");
-        cmd.args(&["-o", zip_path.to_str().unwrap(), "-d", bun_dir.to_str().unwrap()]);
+        cmd.args(&["-o", zip_path_str, "-d", bun_dir_str]);
         let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));

@@ -347,15 +347,6 @@ export const COMMANDS: Command[] = [
     keywords: ['forum', 'community', 'discussion', 'posts']
   },
   {
-    id: 'market',
-    name: 'Marketplace',
-    description: 'Extension marketplace',
-    aliases: ['market', 'marketplace', 'store'],
-    category: 'navigation',
-    action: 'marketplace',
-    keywords: ['marketplace', 'store', 'extensions', 'plugins']
-  },
-  {
     id: 'docs',
     name: 'Documentation',
     description: 'User documentation',

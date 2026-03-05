@@ -102,7 +102,9 @@ export const LiveNewsPanel: React.FC<Props> = () => {
   }, []);
 
   const postEmbed = useCallback((msg: Record<string, unknown>) => {
-    iframeRef.current?.contentWindow?.postMessage(msg, embedOriginRef.current);
+    if (embedOriginRef.current) {
+      iframeRef.current?.contentWindow?.postMessage(msg, embedOriginRef.current);
+    }
   }, []);
 
   const toggleMute = () => {
@@ -118,7 +120,7 @@ export const LiveNewsPanel: React.FC<Props> = () => {
 
   const embedSrc = (ch: LiveChannel): string => {
     if (!embedPort) return '';
-    return `http://127.0.0.1:${embedPort}/yt-embed?videoId=${ch.fallbackVideoId}&autoplay=1&mute=${muted ? '1' : '0'}`;
+    return `http://127.0.0.1:${embedPort}/yt-embed?videoId=${encodeURIComponent(ch.fallbackVideoId)}&autoplay=1&mute=${muted ? '1' : '0'}`;
   };
 
   const btn = (active = false): React.CSSProperties => ({

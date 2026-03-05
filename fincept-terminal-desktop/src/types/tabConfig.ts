@@ -45,7 +45,6 @@ export const DEFAULT_TABS: TabDefinition[] = [
   { id: 'reportbuilder', label: 'Report Builder', value: 'reportbuilder', component: 'ReportBuilderTab' },
   { id: 'contexts', label: 'Contexts', value: 'contexts', component: 'RecordedContextsManager' },
   { id: 'forum', label: 'Forum', value: 'forum', component: 'ForumTab' },
-  { id: 'marketplace', label: 'Marketplace', value: 'marketplace', component: 'MarketplaceTab' },
   { id: 'docs', label: 'Documentation', value: 'docs', component: 'DocsTab' },
   { id: 'support', label: 'Support', value: 'support', component: 'SupportTicketTab' },
   { id: 'agents', label: 'Agents', value: 'agents', component: 'AgentConfigTab' },
@@ -60,7 +59,7 @@ export const DEFAULT_TAB_CONFIG: TabConfiguration = {
     { id: 'research-menu', label: 'Research', tabs: ['geopolitics', 'maritime'] },
     { id: 'trading-menu', label: 'Trading', tabs: ['fyers', 'alpha-arena', 'ai-quant-lab'] },
     { id: 'tools-menu', label: 'Tools', tabs: ['mcp', 'nodes', 'code', 'datasources', 'reportbuilder', 'contexts'] },
-    { id: 'community-menu', label: 'Community', tabs: ['forum', 'marketplace', 'docs'] },
+    { id: 'community-menu', label: 'Community', tabs: ['forum', 'docs'] },
     { id: 'help-menu', label: 'Help', tabs: ['support'] }
   ]
 };
