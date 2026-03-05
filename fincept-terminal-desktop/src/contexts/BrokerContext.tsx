@@ -147,14 +147,16 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
   const [paperAdapter, setPaperAdapter] = useState<PaperTradingAdapter | null>(null);
   const [paperPortfolio, setPaperPortfolio] = useState<Portfolio | null>(null);
 
-  // Keep ref in sync with state so initializeAdapters can read latest without being in deps
+  // Keep refs in sync with state so initializeAdapters can read latest without being in deps
   useEffect(() => { realAdapterRef.current = realAdapter; }, [realAdapter]);
+  useEffect(() => { paperAdapterRef.current = paperAdapter; }, [paperAdapter]);
 
   // Refs for cleanup and abort control
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasInitializedRef = useRef(false); // Prevent duplicate initialization
   const marketDataInitializedRef = useRef(false); // Track market data service init
   const realAdapterRef = useRef<IExchangeAdapter | null>(null); // Ref to avoid dep loop in initializeAdapters
+  const paperAdapterRef = useRef<PaperTradingAdapter | null>(null); // Ref to avoid stale closure in initializeAdapters
 
   // Get available brokers (memoized once, doesn't change)
   const availableBrokers = useMemo(() => {
@@ -316,8 +318,8 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
     try {
       // Clean up old adapters
       await cleanupAdapters(realAdapterRef.current);
-      if (paperAdapter) {
-        try { await paperAdapter.disconnect(); } catch (err) {
+      if (paperAdapterRef.current) {
+        try { await paperAdapterRef.current.disconnect(); } catch (err) {
           console.error('[BrokerContext] Paper adapter disconnect error:', err);
         }
       }

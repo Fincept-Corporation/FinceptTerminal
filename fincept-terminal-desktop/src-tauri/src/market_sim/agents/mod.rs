@@ -17,8 +17,10 @@ pub use hft::HFTAgent;
 pub use stat_arb::StatArbAgent;
 pub use momentum::MomentumAgent;
 pub use noise::NoiseTraderAgent;
+#[allow(unused_imports)]
 pub use informed::InformedTraderAgent;
 pub use institutional::{InstitutionalAgent, ExecutionAlgo};
+#[allow(unused_imports)]
 pub use spoofing::SpoofingAgent;
 pub use sniper::SniperAgent;
 

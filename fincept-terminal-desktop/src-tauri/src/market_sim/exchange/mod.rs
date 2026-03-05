@@ -1,6 +1,6 @@
 use crate::market_sim::types::*;
 use crate::market_sim::matching_engine::MatchingEngine;
-use crate::market_sim::risk_engine::{RiskEngine, RiskLimits};
+use crate::market_sim::risk_engine::RiskEngine;
 use crate::market_sim::clearing::ClearingHouse;
 use crate::market_sim::market_data::MarketDataFeed;
 use crate::market_sim::latency::{LatencySimulator, PriceGenerator};

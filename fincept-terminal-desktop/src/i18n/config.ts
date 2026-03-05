@@ -7,44 +7,6 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import Backend from 'i18next-http-backend';
 import { invoke } from '@tauri-apps/api/core';
 
-// Custom storage backend using SQLite
-const sqliteStorage = {
-  name: 'sqliteStorage',
-  async: true,
-
-  // Async read
-  read: async (language: string, namespace: string, callback: (error: any, data: any) => void) => {
-    // Not used by i18next-browser-languagedetector
-    callback(null, null);
-  },
-
-  // Async write
-  save: async (language: string, namespace: string, data: any) => {
-    // Not used by i18next-browser-languagedetector
-  }
-};
-
-// Custom language detector using SQLite
-const sqliteLanguageDetector = {
-  name: 'sqliteDetector',
-  lookup: async (): Promise<string | undefined> => {
-    try {
-      const lang = await invoke<string>('storage_get_optional', { key: 'i18nextLng' });
-      return lang || undefined;
-    } catch (error) {
-      console.error('[i18n] Failed to get language from SQLite:', error);
-      return undefined;
-    }
-  },
-  cacheUserLanguage: async (lng: string) => {
-    try {
-      await invoke('storage_set', { key: 'i18nextLng', value: lng });
-    } catch (error) {
-      console.error('[i18n] Failed to save language to SQLite:', error);
-    }
-  }
-};
-
 i18next
   .use(Backend) // Load translations from public folder
   .use(LanguageDetector) // Auto-detect user language

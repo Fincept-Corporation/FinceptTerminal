@@ -67,9 +67,7 @@ function getChannels(): LiveChannel[] {
 
 type PlayerState = 'idle' | 'loading' | 'playing' | 'error';
 
-interface Props { colors: Record<string, string>; }
-
-export const LiveNewsPanel: React.FC<Props> = () => {
+export const LiveNewsPanel: React.FC = () => {
   const [channels] = useState<LiveChannel[]>(getChannels);
   const [activeId, setActiveId] = useState<string>(channels[0]?.id ?? '');
   const [muted, setMuted] = useState(true);

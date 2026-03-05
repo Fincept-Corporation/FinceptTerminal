@@ -1,7 +1,7 @@
 // Motilal Oswal Authentication Commands
 
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::json;
 use sha2::{Sha256, Digest};
 use tauri::command;
 use super::{ApiResponse, get_timestamp, get_motilal_headers, motilal_request};

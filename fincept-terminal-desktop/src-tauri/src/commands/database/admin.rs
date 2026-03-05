@@ -153,16 +153,22 @@ fn hmac_sha256_hash(password: &str, salt: &[u8]) -> String {
     hex::encode(mac.finalize().into_bytes())
 }
 
-/// Constant-time comparison of two byte slices to prevent timing attacks
+/// Constant-time comparison of two byte slices to prevent timing attacks.
+/// Does not short-circuit on length mismatch to avoid leaking length information.
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
+    let len_matches = a.len() == b.len();
+    // Always iterate over both slices fully to avoid timing leaks.
+    // If lengths differ, XOR against 0xFF to guarantee mismatch without early return.
     let mut result = 0u8;
-    for (x, y) in a.iter().zip(b.iter()) {
-        result |= x ^ y;
+    for i in 0..a.len() {
+        let b_byte = if i < b.len() { b[i] } else { !a[i] };
+        result |= a[i] ^ b_byte;
     }
-    result == 0
+    // Also iterate any remaining bytes in b (if b is longer)
+    for i in a.len()..b.len() {
+        result |= b[i] ^ 0xFF;
+    }
+    len_matches && result == 0
 }
 
 // Get all databases
@@ -375,10 +381,15 @@ pub async fn db_admin_execute_query(
         return Err("Multiple SQL statements are not allowed".to_string());
     }
     // Check for dangerous keywords in the rest of the query (skip the leading SELECT)
+    // Split on non-alphanumeric/underscore boundaries to catch keywords inside parentheses,
+    // e.g. "SELECT * FROM (DELETE FROM ...)" where "(DELETE" wouldn't match with whitespace split
     let rest_upper = query_upper.get(6..).unwrap_or("");
+    let tokens: Vec<&str> = rest_upper
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|s| !s.is_empty())
+        .collect();
     for kw in &dangerous_keywords {
-        // Match whole word boundaries to avoid false positives (e.g. column named "updated")
-        if rest_upper.split_whitespace().any(|word| word == *kw) {
+        if tokens.iter().any(|word| word == kw) {
             return Err(format!("Query contains disallowed keyword: {}", kw));
         }
     }

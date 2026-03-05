@@ -18,7 +18,7 @@ pub use market_data::*;
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use crate::database::pool::get_db;
 use rusqlite::params;
 

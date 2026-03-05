@@ -741,7 +741,7 @@ const NewsTab: React.FC = () => {
           backgroundSize: '20px 20px',
         }}>
           {/* Live TV (optional) */}
-          {!liveCollapsed && <LiveNewsPanel colors={{}} />}
+          {!liveCollapsed && <LiveNewsPanel />}
           {/* Map (optional) */}
           {!mapCollapsed && <NewsMapPanel markers={newsMarkers} onMarkerClick={scrollToCluster} colors={{}} />}
 
