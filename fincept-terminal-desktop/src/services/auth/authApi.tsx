@@ -26,6 +26,7 @@ interface ApiResponse<T = any> {
 interface LoginRequest {
   email: string;
   password: string;
+  force_login?: boolean;
 }
 
 interface RegisterRequest {
@@ -34,7 +35,7 @@ interface RegisterRequest {
   password: string;
   phone?: string | null;
   country?: string | null;
-  country_code?: string | null;
+  country_code: string;
   preferred_currency?: string | null;
 }
 
@@ -244,6 +245,13 @@ export class AuthApiService {
     }
   }
 
+  // Validate API key
+  static async validateApiKey(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('GET', '/auth/validate', undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
   // Login user
   static async login(request: LoginRequest): Promise<ApiResponse<LoginResponse>> {
     return makeApiRequest<LoginResponse>('POST', '/user/login', request);
@@ -309,8 +317,21 @@ export class AuthApiService {
   }
 
   // Get user usage statistics
-  static async getUserUsage(apiKey: string): Promise<ApiResponse<any>> {
-    return makeApiRequest('GET', '/user/usage', undefined, {
+  static async getUserUsage(apiKey: string, options?: {
+    days?: number;
+    page?: number;
+    page_size?: number;
+    endpoint_filter?: string;
+    method_filter?: string;
+  }): Promise<ApiResponse<any>> {
+    const params = new URLSearchParams();
+    if (options?.days) params.append('days', String(options.days));
+    if (options?.page) params.append('page', String(options.page));
+    if (options?.page_size) params.append('page_size', String(options.page_size));
+    if (options?.endpoint_filter) params.append('endpoint_filter', options.endpoint_filter);
+    if (options?.method_filter) params.append('method_filter', options.method_filter);
+    const query = params.toString();
+    return makeApiRequest('GET', `/user/usage${query ? `?${query}` : ''}`, undefined, {
       'X-API-Key': apiKey
     });
   }
@@ -334,6 +355,95 @@ export class AuthApiService {
     return makeApiRequest('GET', '/user/transactions', undefined, {
       'X-API-Key': apiKey
     });
+  }
+
+  // Logout user
+  static async logout(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('POST', '/user/logout', undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Validate session (server-side session check)
+  static async validateSessionServer(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('POST', '/user/validate-session', undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Get login history
+  static async getLoginHistory(apiKey: string, limit: number = 20, offset: number = 0): Promise<ApiResponse<any>> {
+    return makeApiRequest('GET', `/user/login-history?limit=${limit}&offset=${offset}`, undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Get notifications
+  static async getNotifications(apiKey: string, limit: number = 20, offset: number = 0, unreadOnly: boolean = false): Promise<ApiResponse<any>> {
+    return makeApiRequest('GET', `/user/notifications?limit=${limit}&offset=${offset}&unread_only=${unreadOnly}`, undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Mark notification as read
+  static async markNotificationRead(apiKey: string, notificationId: number): Promise<ApiResponse> {
+    return makeApiRequest('PUT', `/user/notifications/${notificationId}/read`, undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Mark all notifications as read
+  static async markAllNotificationsRead(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('PUT', '/user/notifications/read-all', undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Delete notification
+  static async deleteNotification(apiKey: string, notificationId: number): Promise<ApiResponse> {
+    return makeApiRequest('DELETE', `/user/notifications/${notificationId}`, undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Get notification preferences
+  static async getNotificationPreferences(apiKey: string): Promise<ApiResponse<any>> {
+    return makeApiRequest('GET', '/user/notifications/preferences', undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Update notification preferences
+  static async updateNotificationPreferences(apiKey: string, preferences: Record<string, any>): Promise<ApiResponse> {
+    return makeApiRequest('PUT', '/user/notifications/preferences', preferences, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Test Telegram notification
+  static async testTelegramNotification(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('POST', '/user/notifications/telegram/test', undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Enable MFA
+  static async enableMFA(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('POST', '/user/mfa/enable', undefined, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Disable MFA
+  static async disableMFA(apiKey: string, password: string): Promise<ApiResponse> {
+    return makeApiRequest('POST', '/user/mfa/disable', { password }, {
+      'X-API-Key': apiKey
+    });
+  }
+
+  // Verify MFA login
+  static async verifyMFA(email: string, otp: string): Promise<ApiResponse<LoginResponse>> {
+    return makeApiRequest<LoginResponse>('POST', '/user/verify-mfa', { email, otp });
   }
 
   // Delete user account

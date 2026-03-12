@@ -91,8 +91,21 @@ export class UserApiService {
     return makeApiRequest('/user/regenerate-api-key', 'POST', apiKey);
   }
 
-  static async getUserUsage(apiKey: string): Promise<ApiResponse> {
-    return makeApiRequest('/user/usage', 'GET', apiKey);
+  static async getUserUsage(apiKey: string, options?: {
+    days?: number;
+    page?: number;
+    page_size?: number;
+    endpoint_filter?: string;
+    method_filter?: string;
+  }): Promise<ApiResponse> {
+    const params = new URLSearchParams();
+    if (options?.days) params.append('days', String(options.days));
+    if (options?.page) params.append('page', String(options.page));
+    if (options?.page_size) params.append('page_size', String(options.page_size));
+    if (options?.endpoint_filter) params.append('endpoint_filter', options.endpoint_filter);
+    if (options?.method_filter) params.append('method_filter', options.method_filter);
+    const query = params.toString();
+    return makeApiRequest(`/user/usage${query ? `?${query}` : ''}`, 'GET', apiKey);
   }
 
   static async getUserCredits(apiKey: string): Promise<ApiResponse> {
@@ -101,6 +114,58 @@ export class UserApiService {
 
   static async deleteUserAccount(apiKey: string, confirmationData: any): Promise<ApiResponse> {
     return makeApiRequest('/user/account', 'DELETE', apiKey, confirmationData);
+  }
+
+  // ========================
+  // SESSION MANAGEMENT
+  // ========================
+
+  static async logout(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('/user/logout', 'POST', apiKey);
+  }
+
+  static async validateSession(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('/user/validate-session', 'POST', apiKey);
+  }
+
+  // ========================
+  // LOGIN HISTORY
+  // ========================
+
+  static async getLoginHistory(apiKey: string, limit: number = 20, offset: number = 0): Promise<ApiResponse> {
+    return makeApiRequest(`/user/login-history?limit=${limit}&offset=${offset}`, 'GET', apiKey);
+  }
+
+  // ========================
+  // NOTIFICATIONS
+  // ========================
+
+  static async getNotifications(apiKey: string, limit: number = 20, offset: number = 0, unreadOnly: boolean = false): Promise<ApiResponse> {
+    return makeApiRequest(`/user/notifications?limit=${limit}&offset=${offset}&unread_only=${unreadOnly}`, 'GET', apiKey);
+  }
+
+  static async markNotificationRead(apiKey: string, notificationId: number): Promise<ApiResponse> {
+    return makeApiRequest(`/user/notifications/${notificationId}/read`, 'PUT', apiKey);
+  }
+
+  static async markAllNotificationsRead(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('/user/notifications/read-all', 'PUT', apiKey);
+  }
+
+  static async deleteNotification(apiKey: string, notificationId: number): Promise<ApiResponse> {
+    return makeApiRequest(`/user/notifications/${notificationId}`, 'DELETE', apiKey);
+  }
+
+  static async getNotificationPreferences(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('/user/notifications/preferences', 'GET', apiKey);
+  }
+
+  static async updateNotificationPreferences(apiKey: string, preferences: Record<string, any>): Promise<ApiResponse> {
+    return makeApiRequest('/user/notifications/preferences', 'PUT', apiKey, preferences);
+  }
+
+  static async testTelegramNotification(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('/user/notifications/telegram/test', 'POST', apiKey);
   }
 
   // ========================
@@ -255,5 +320,36 @@ export class UserApiService {
         status_code: 500,
       };
     }
+  }
+
+  // ========================
+  // ADMIN USER MANAGEMENT
+  // ========================
+
+  static async adminListUsers(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('/user/admin/users', 'GET', apiKey);
+  }
+
+  static async adminGetUserDetails(apiKey: string, userId: number): Promise<ApiResponse> {
+    return makeApiRequest(`/user/admin/user/${userId}`, 'GET', apiKey);
+  }
+
+  static async adminManageUserCredits(apiKey: string, userId: number, creditData: {
+    amount: number;
+    reason?: string;
+  }): Promise<ApiResponse> {
+    return makeApiRequest(`/user/admin/user/${userId}/credits`, 'POST', apiKey, creditData);
+  }
+
+  static async adminGetStats(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('/user/admin/stats', 'GET', apiKey);
+  }
+
+  static async adminBroadcastNotification(apiKey: string, notification: {
+    title: string;
+    message: string;
+    type?: string;
+  }): Promise<ApiResponse> {
+    return makeApiRequest('/user/admin/notifications/broadcast', 'POST', apiKey, notification);
   }
 }

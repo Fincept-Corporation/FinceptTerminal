@@ -12,16 +12,12 @@ import { BUILTIN_NODE_CONFIGS, CATEGORY_CONFIG } from '../constants';
 import type { NodePaletteProps, PaletteNodeItem } from '../types';
 
 // Non-functional nodes to hide from the palette.
-// These nodes have stub implementations (credentials not wired, binary pipeline missing,
-// trigger infrastructure absent, or call non-existent helpers).
-// The code is kept for future implementation — we just hide them from the UI.
-const HIDDEN_NODES = new Set([
-  // Notifications — credential retrieval not implemented
-  'Discord', 'Email', 'Slack', 'SMS', 'Telegram', 'Webhook',
-  // Files — no binary pipeline in the executor
-  'BinaryFile', 'Compress', 'ConvertToFile', 'FileOperations', 'SpreadsheetFile',
-  // Control flow — calls non-existent ExecuteWorkflow helper
-  'ExecuteWorkflow',
+// Nodes that were previously hidden have been reviewed and most are functional:
+// - Notifications (Discord, Slack, Telegram, Webhook, SMS, Email): use direct fetch()/provider APIs
+// - Files (BinaryFile, Compress, ConvertToFile, FileOperations, SpreadsheetFile): use Tauri fs plugin
+// - ExecuteWorkflow: wired to workflowService + nodeExecutionManager
+const HIDDEN_NODES = new Set<string>([
+  // All previously hidden nodes have been verified as functional and un-hidden.
 ]);
 
 const NodePalette: React.FC<NodePaletteProps> = ({

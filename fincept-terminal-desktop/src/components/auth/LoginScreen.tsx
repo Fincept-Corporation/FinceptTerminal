@@ -24,7 +24,7 @@ const AUTH_TIMEOUT_MS = 30000;
 // State Machine
 // ============================================================================
 
-type AuthStatus = 'idle' | 'loading' | 'guest_loading' | 'mfa_required' | 'success' | 'error';
+type AuthStatus = 'idle' | 'loading' | 'guest_loading' | 'mfa_required' | 'active_session' | 'success' | 'error';
 
 interface State {
   status: AuthStatus;
@@ -43,6 +43,7 @@ type Action =
   | { type: 'START_LOGIN' }
   | { type: 'START_GUEST' }
   | { type: 'MFA_REQUIRED' }
+  | { type: 'ACTIVE_SESSION'; payload: string }
   | { type: 'SUCCESS' }
   | { type: 'ERROR'; payload: string }
   | { type: 'CLEAR_ERROR' }
@@ -73,6 +74,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, status: 'guest_loading', error: null };
     case 'MFA_REQUIRED':
       return { ...state, status: 'mfa_required', error: null };
+    case 'ACTIVE_SESSION':
+      return { ...state, status: 'active_session', error: action.payload };
     case 'SUCCESS':
       return { ...state, status: 'success', error: null };
     case 'ERROR':
@@ -174,10 +177,43 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
 
       if (result.success) {
         dispatch({ type: 'SUCCESS' });
+      } else if (result.active_session) {
+        dispatch({ type: 'ACTIVE_SESSION', payload: result.error || 'You are already logged in on another device.' });
       } else if (result.mfa_required) {
         dispatch({ type: 'MFA_REQUIRED' });
       } else {
         const errorMessage = mapErrorMessage(result.error || 'Login failed. Please check your credentials.');
+        dispatch({ type: 'ERROR', payload: errorMessage });
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      const message = err instanceof Error ? err.message : t('login.errors.unexpectedError');
+      dispatch({ type: 'ERROR', payload: mapErrorMessage(message) });
+    }
+  }, [state.status, state.email, state.password, login, t, mapErrorMessage]);
+
+  const handleForceLogin = useCallback(async () => {
+    if (state.status === 'loading') return;
+
+    dispatch({ type: 'START_LOGIN' });
+
+    try {
+      const sanitizedEmail = sanitizeInput(state.email.trim().toLowerCase());
+
+      const result = await withTimeout(
+        login(sanitizedEmail, state.password, true),
+        AUTH_TIMEOUT_MS,
+        'Login request timed out'
+      );
+
+      if (!mountedRef.current) return;
+
+      if (result.success) {
+        dispatch({ type: 'SUCCESS' });
+      } else if (result.mfa_required) {
+        dispatch({ type: 'MFA_REQUIRED' });
+      } else {
+        const errorMessage = mapErrorMessage(result.error || 'Force login failed.');
         dispatch({ type: 'ERROR', payload: errorMessage });
       }
     } catch (err) {
@@ -256,6 +292,38 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
       dispatch({ type: 'ERROR', payload: t('login.errors.guestSetupFailed') });
     }
   }, [state.status, setupGuestAccess, t]);
+
+  // Active Session Conflict Screen
+  if (state.status === 'active_session') {
+    return (
+      <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
+        <div className="mb-4">
+          <CompactLanguageSelector />
+        </div>
+        <div className="text-center mb-4">
+          <h2 className="text-lg font-bold text-white">{t('login.activeSession', 'Active Session Detected')}</h2>
+          <p className="text-zinc-400 text-xs mt-1">
+            {state.error || t('login.activeSessionMessage', 'You are already logged in on another device. Would you like to log out the other session and continue here?')}
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <button
+            onClick={handleForceLogin}
+            className="w-full h-9 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
+          >
+            {t('login.forceLogin', 'Log Out Other Session & Continue')}
+          </button>
+          <button
+            onClick={() => dispatch({ type: 'BACK_TO_LOGIN' })}
+            className="w-full h-9 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded transition-colors border border-zinc-600"
+          >
+            {t('login.cancel', 'Cancel')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // MFA Verification Screen
   if (state.status === 'mfa_required' || (state.status === 'loading' && state.mfaCode)) {

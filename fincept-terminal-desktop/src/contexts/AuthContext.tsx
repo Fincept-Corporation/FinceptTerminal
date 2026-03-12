@@ -143,7 +143,7 @@ interface AuthContextType {
   isFirstTimeUser: boolean;
   availablePlans: SubscriptionPlan[];
   isLoadingPlans: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; mfa_required?: boolean }>;
+  login: (email: string, password: string, forceLogin?: boolean) => Promise<{ success: boolean; error?: string; mfa_required?: boolean; active_session?: boolean }>;
   signup: (
     username: string,
     email: string,
@@ -539,9 +539,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
 
 
   // Login function
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string; mfa_required?: boolean }> => {
+  const login = async (email: string, password: string, forceLogin?: boolean): Promise<{ success: boolean; error?: string; mfa_required?: boolean; active_session?: boolean }> => {
     try {
-      const result = await AuthApiService.login({ email, password }) as ApiResponse;
+      const result = await AuthApiService.login({ email, password, force_login: forceLogin }) as ApiResponse;
 
       console.log('=== LOGIN RESPONSE DEBUG ===');
       console.log('Full result:', JSON.stringify(result, null, 2));
@@ -552,6 +552,15 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
       // Backend returns: { success: true, data: { api_key: "..." } }
       // But makeApiRequest wraps it again, so we need to check result.data.data
       const apiData = (result.data as any)?.data || result.data;
+
+      // Check if there's an active session on another device
+      if (!result.success && apiData && apiData.active_session) {
+        return {
+          success: false,
+          active_session: true,
+          error: apiData.message || 'You are already logged in on another device. Use force login to continue.'
+        };
+      }
 
       // Check if MFA is required
       if (result.success && apiData && apiData.mfa_required) {
@@ -633,7 +642,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
         password,
         phone: phone || null,
         country: country || null,
-        country_code: country_code || null,
+        country_code: country_code || '',
         preferred_currency: 'USD'
       }) as ApiResponse;
 
@@ -880,6 +889,15 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     try {
       setIsLoggingOut(true);
       console.log('[AuthContext] Starting logout process...');
+
+      // Notify server of logout (best-effort, don't block on failure)
+      if (session?.api_key) {
+        try {
+          await AuthApiService.logout(session.api_key);
+        } catch (e) {
+          console.warn('[AuthContext] Server-side logout failed (non-blocking):', e);
+        }
+      }
 
       // Clear session data first (async operations)
       await clearSession();

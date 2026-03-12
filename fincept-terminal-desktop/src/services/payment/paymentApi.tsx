@@ -187,6 +187,11 @@ const makePaymentApiRequest = async <T = any>(
 
 // Payment API Service Class with enhanced debugging
 export class PaymentApiService {
+  // Get payment gateway configuration
+  static async getPaymentConfig(): Promise<PaymentApiResponse<any>> {
+    return makePaymentApiRequest('GET', '/cashfree/config');
+  }
+
   // Get all subscription plans from API
   static async getSubscriptionPlans(): Promise<PaymentApiResponse<SubscriptionPlan[]>> {
     const response = await makePaymentApiRequest<PlansResponse>('GET', '/cashfree/plans');

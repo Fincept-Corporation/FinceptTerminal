@@ -540,6 +540,42 @@ class ChatModeApiService {
   }
 
   /**
+   * Optimize a prompt using AI
+   */
+  async optimizePrompt(prompt: string): Promise<ChatModeResponse> {
+    try {
+      await this.initialize();
+
+      const response = await fetch(`${this.baseUrl}/chat/optimize-prompt`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+        },
+        body: JSON.stringify({ prompt })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to optimize prompt: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        return { success: true, data: result.data };
+      }
+
+      throw new Error(result.message || 'Unknown error');
+    } catch (error) {
+      console.error('Optimize prompt error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to optimize prompt'
+      };
+    }
+  }
+
+  /**
    * Start session from template
    */
   async startFromTemplate(templateId: string): Promise<ChatModeResponse> {

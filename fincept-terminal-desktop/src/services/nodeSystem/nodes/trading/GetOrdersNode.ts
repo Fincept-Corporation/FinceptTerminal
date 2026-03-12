@@ -134,13 +134,25 @@ export class GetOrdersNode implements INodeType {
     const isPaper = broker === 'paper';
 
     try {
-      // Mock order data - would come from actual broker API
-      let orders: any[] = GetOrdersNode.getMockOrders(broker, isPaper);
-
-      // Filter by status
-      if (orderStatus !== 'all') {
-        orders = orders.filter((o: any) => o.status.toLowerCase() === orderStatus.toLowerCase());
-      }
+      // Fetch real orders from TradingBridge
+      const statusFilter = orderStatus !== 'all' ? orderStatus.toUpperCase() : undefined;
+      let orders: any[] = (await TradingBridge.getOrders(broker as any, statusFilter as any)).map(o => ({
+        orderId: o.orderId,
+        symbol: o.symbol,
+        exchange: o.exchange,
+        side: o.side,
+        orderType: o.type,
+        quantity: o.quantity,
+        filledQuantity: o.filledQuantity,
+        price: o.price,
+        averagePrice: o.filledPrice,
+        triggerPrice: o.triggerPrice,
+        status: o.status?.toLowerCase() || 'unknown',
+        product: o.product,
+        validity: o.validity,
+        tag: o.tag,
+        timestamp: o.timestamp,
+      }));
 
       // Filter by symbol
       if (filterSymbol) {
@@ -224,72 +236,4 @@ export class GetOrdersNode implements INodeType {
     }
   }
 
-  private static getMockOrders(broker: string, isPaper: boolean): any[] {
-    const now = new Date();
-
-    return [
-      {
-        orderId: 'ORD001',
-        symbol: 'AAPL',
-        side: 'BUY',
-        orderType: 'MARKET',
-        quantity: 10,
-        filledQuantity: 10,
-        price: 175.50,
-        averagePrice: 175.45,
-        status: 'filled',
-        timestamp: new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString(),
-        filledAt: new Date(now.getTime() - 1 * 60 * 60 * 1000 + 500).toISOString(),
-      },
-      {
-        orderId: 'ORD002',
-        symbol: 'MSFT',
-        side: 'BUY',
-        orderType: 'LIMIT',
-        quantity: 5,
-        filledQuantity: 0,
-        price: 400.00,
-        status: 'open',
-        timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        orderId: 'ORD003',
-        symbol: 'GOOGL',
-        side: 'SELL',
-        orderType: 'MARKET',
-        quantity: 3,
-        filledQuantity: 3,
-        price: 140.25,
-        averagePrice: 140.30,
-        status: 'filled',
-        timestamp: new Date(now.getTime() - 5 * 60 * 60 * 1000).toISOString(),
-        filledAt: new Date(now.getTime() - 5 * 60 * 60 * 1000 + 300).toISOString(),
-      },
-      {
-        orderId: 'ORD004',
-        symbol: 'TSLA',
-        side: 'BUY',
-        orderType: 'LIMIT',
-        quantity: 2,
-        filledQuantity: 0,
-        price: 200.00,
-        status: 'cancelled',
-        timestamp: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
-        cancelledAt: new Date(now.getTime() - 20 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        orderId: 'ORD005',
-        symbol: 'AMZN',
-        side: 'BUY',
-        orderType: 'MARKET',
-        quantity: 4,
-        filledQuantity: 4,
-        price: 185.00,
-        averagePrice: 185.12,
-        status: 'filled',
-        timestamp: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-        filledAt: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000 + 800).toISOString(),
-      },
-    ];
-  }
 }

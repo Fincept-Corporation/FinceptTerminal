@@ -180,17 +180,75 @@ export class GetFundamentalsNode implements INodeType {
     }
   }
 
+  /**
+   * Compare company metrics against sector peers using real data.
+   * Fetches fundamentals for well-known sector peers and computes
+   * the company's percentile rank for key ratios.
+   */
   private static async getIndustryComparison(symbol: string, data: any): Promise<Record<string, any>> {
-    // Mock industry comparison - would call actual API in production
+    // Select a set of sector peers to build a comparison baseline
+    const sectorPeers: Record<string, string[]> = {
+      'Technology': ['AAPL', 'MSFT', 'GOOGL', 'META', 'NVDA', 'CRM', 'ADBE', 'INTC', 'ORCL'],
+      'Healthcare': ['JNJ', 'UNH', 'PFE', 'ABBV', 'MRK', 'TMO', 'ABT', 'LLY'],
+      'Financial Services': ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW'],
+      'Consumer Cyclical': ['AMZN', 'TSLA', 'HD', 'NKE', 'MCD', 'SBUX', 'TGT', 'LOW'],
+      'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'OXY', 'PSX', 'VLO'],
+    };
+
+    const sector = data.sector || 'Technology';
+    const peers = (sectorPeers[sector] || sectorPeers['Technology']).filter(s => s !== symbol.toUpperCase());
+
+    // Fetch peer fundamentals in parallel (best-effort)
+    const peerResults = await Promise.allSettled(
+      peers.slice(0, 6).map(p => MarketDataBridge.getFundamentals(p))
+    );
+
+    const peerData = peerResults
+      .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+      .map(r => r.value);
+
+    // Helper: compute percentile rank of value in an array
+    const percentile = (value: number | undefined, arr: (number | undefined)[]): number | null => {
+      if (value == null) return null;
+      const valid = arr.filter((v): v is number => v != null);
+      if (valid.length === 0) return null;
+      const below = valid.filter(v => v < value).length;
+      return Math.round((below / valid.length) * 100);
+    };
+
+    const peerPEs = peerData.map(p => p.peRatio);
+    const peerDivYields = peerData.map(p => p.dividendYield);
+    const peerBetas = peerData.map(p => p.beta);
+
+    const avg = (arr: (number | undefined)[]): number | null => {
+      const valid = arr.filter((v): v is number => v != null);
+      return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
+    };
+
     return {
-      industry: data.industry || 'Technology',
-      sector: data.sector || 'Technology',
+      industry: data.industry || 'Unknown',
+      sector,
+      peerCount: peerData.length,
+      peers: peerData.map(p => p.symbol),
       metrics: {
-        peRatio: { company: data.peRatio || 25, industry: 22.5, percentile: 65 },
-        pbRatio: { company: data.pbRatio || 8, industry: 5.2, percentile: 78 },
-        roe: { company: data.roe || 0.35, industry: 0.18, percentile: 85 },
-        debtToEquity: { company: data.debtToEquity || 1.2, industry: 0.8, percentile: 40 },
-        profitMargin: { company: data.profitMargin || 0.25, industry: 0.15, percentile: 80 },
+        peRatio: {
+          company: data.peRatio ?? null,
+          sectorAvg: avg(peerPEs),
+          percentile: percentile(data.peRatio, peerPEs),
+        },
+        dividendYield: {
+          company: data.dividendYield ?? null,
+          sectorAvg: avg(peerDivYields),
+          percentile: percentile(data.dividendYield, peerDivYields),
+        },
+        beta: {
+          company: data.beta ?? null,
+          sectorAvg: avg(peerBetas),
+          percentile: percentile(data.beta, peerBetas),
+        },
+        marketCap: {
+          company: data.marketCap ?? null,
+        },
       },
     };
   }

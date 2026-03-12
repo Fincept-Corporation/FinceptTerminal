@@ -12,6 +12,7 @@ import {
   NodePropertyType,
 } from '../../types';
 import { TradingBridge, OrderSide, OrderType, ProductType, OrderValidity } from '../../adapters/TradingBridge';
+import { MarketDataBridge } from '../../adapters/MarketDataBridge';
 import { RiskManager } from '../../safety/RiskManager';
 import { AuditLogger } from '../../safety/AuditLogger';
 import { ConfirmationService } from '../../safety/ConfirmationService';
@@ -268,19 +269,71 @@ export class PlaceOrderNode implements INodeType {
       }]];
     }
 
+    // Get prices for limit/stop orders
+    let limitPrice: number | undefined;
+    let stopPrice: number | undefined;
+
+    if (orderType === 'LIMIT') {
+      limitPrice = this.getNodeParameter('limitPrice', 0) as number;
+    }
+    if (orderType === 'STOP_LOSS' || orderType === 'STOP_LOSS_MARKET') {
+      stopPrice = this.getNodeParameter('stopPrice', 0) as number;
+    }
+
+    // Fetch current market price for accurate sizing and estimation
+    let currentPrice: number = limitPrice || 0;
+    if (!currentPrice) {
+      try {
+        const quote = await MarketDataBridge.getQuote(symbol);
+        currentPrice = quote.price;
+      } catch {
+        // Fallback: check input data for a price field
+        const inputData = this.getInputData();
+        currentPrice = Number(inputData[0]?.json?.price) || 0;
+      }
+    }
+
+    if (!currentPrice && (quantityType === 'dollars' || quantityType === 'percent')) {
+      return [[{
+        json: {
+          success: false,
+          error: `Cannot calculate quantity: unable to fetch current price for ${symbol}`,
+          timestamp: new Date().toISOString(),
+        },
+      }]];
+    }
+
     // Calculate quantity
     let quantity: number;
     switch (quantityType) {
       case 'dollars': {
         const dollarAmount = this.getNodeParameter('dollarAmount', 0) as number;
-        // Would need current price to calculate shares
-        quantity = Math.floor(dollarAmount / 100); // Placeholder
+        quantity = Math.floor(dollarAmount / currentPrice);
+        if (quantity <= 0) {
+          return [[{
+            json: {
+              success: false,
+              error: `Dollar amount $${dollarAmount} is insufficient for ${symbol} at $${currentPrice.toFixed(2)}`,
+              timestamp: new Date().toISOString(),
+            },
+          }]];
+        }
         break;
       }
       case 'percent': {
         const percentage = this.getNodeParameter('percentage', 0) as number;
-        // Would need balance to calculate
-        quantity = 10; // Placeholder
+        const balance = await TradingBridge.getBalance(broker as any);
+        const dollarAmount = balance.available * (percentage / 100);
+        quantity = Math.floor(dollarAmount / currentPrice);
+        if (quantity <= 0) {
+          return [[{
+            json: {
+              success: false,
+              error: `${percentage}% of available balance ($${balance.available.toFixed(2)}) is insufficient for ${symbol} at $${currentPrice.toFixed(2)}`,
+              timestamp: new Date().toISOString(),
+            },
+          }]];
+        }
         break;
       }
       case 'input': {
@@ -294,19 +347,7 @@ export class PlaceOrderNode implements INodeType {
         quantity = this.getNodeParameter('quantity', 0) as number;
     }
 
-    // Get prices for limit/stop orders
-    let limitPrice: number | undefined;
-    let stopPrice: number | undefined;
-
-    if (orderType === 'LIMIT') {
-      limitPrice = this.getNodeParameter('limitPrice', 0) as number;
-    }
-    if (orderType === 'STOP_LOSS' || orderType === 'STOP_LOSS_MARKET') {
-      stopPrice = this.getNodeParameter('stopPrice', 0) as number;
-    }
-
-    // Estimate order value (would use real price in production)
-    const estimatedPrice = limitPrice || 100; // Placeholder
+    const estimatedPrice = currentPrice || limitPrice || 0;
     const estimatedValue = estimatedPrice * quantity;
 
     // Build order request
@@ -327,10 +368,15 @@ export class PlaceOrderNode implements INodeType {
     // Validate against risk limits if enabled
     if (validateRisk) {
 
+      const [currentBalance, currentPositions] = await Promise.all([
+        TradingBridge.getBalance(broker as any),
+        TradingBridge.getPositions(broker as any),
+      ]);
+
       const validation = await RiskManager.validateOrder(
         orderRequest as any,
-        [],
-        { currency: 'USD', available: 100000, used: 0, total: 100000 },
+        currentPositions,
+        currentBalance,
         estimatedPrice
       );
 

@@ -12,6 +12,7 @@ import {
   NodePropertyType,
 } from '../../types';
 import { TradingBridge } from '../../adapters/TradingBridge';
+import { MarketDataBridge } from '../../adapters/MarketDataBridge';
 
 export class GetHoldingsNode implements INodeType {
   description: INodeTypeDescription = {
@@ -133,31 +134,38 @@ export class GetHoldingsNode implements INodeType {
         }
       }
 
-      // Add mock sector data if requested
-      if (includeSector) {
-        const sectorMap: Record<string, { sector: string; industry: string }> = {
-          AAPL: { sector: 'Technology', industry: 'Consumer Electronics' },
-          MSFT: { sector: 'Technology', industry: 'Software' },
-          GOOGL: { sector: 'Technology', industry: 'Internet Content' },
-          AMZN: { sector: 'Consumer Cyclical', industry: 'E-Commerce' },
-          TSLA: { sector: 'Consumer Cyclical', industry: 'Auto Manufacturers' },
-          JPM: { sector: 'Financial Services', industry: 'Banks' },
-          JNJ: { sector: 'Healthcare', industry: 'Drug Manufacturers' },
-        };
+      // Fetch real sector and dividend data from MarketDataBridge if requested
+      if (includeSector || includeDividends) {
+        const fundamentalsResults = await Promise.allSettled(
+          holdings.map(h => MarketDataBridge.getFundamentals(h.symbol))
+        );
 
-        for (const holding of holdings) {
-          const sectorInfo = sectorMap[holding.symbol] || { sector: 'Unknown', industry: 'Unknown' };
-          (holding as any).sector = sectorInfo.sector;
-          (holding as any).industry = sectorInfo.industry;
-        }
-      }
-
-      // Add mock dividend data if requested
-      if (includeDividends) {
-        for (const holding of holdings) {
-          (holding as any).annualDividend = ((holding.currentPrice || holding.averagePrice) * 0.02).toFixed(2); // Mock 2% yield
-          (holding as any).dividendYield = '2.00%';
-          (holding as any).exDividendDate = null;
+        for (let i = 0; i < holdings.length; i++) {
+          const result = fundamentalsResults[i];
+          if (result.status === 'fulfilled') {
+            const data = result.value;
+            if (includeSector) {
+              (holdings[i] as any).sector = data.sector || 'Unknown';
+              (holdings[i] as any).industry = data.industry || 'Unknown';
+            }
+            if (includeDividends) {
+              (holdings[i] as any).dividendYield = data.dividendYield != null
+                ? (data.dividendYield * 100).toFixed(2) + '%'
+                : 'N/A';
+              (holdings[i] as any).annualDividend = data.dividendYield != null
+                ? ((holdings[i].currentPrice || holdings[i].averagePrice) * data.dividendYield).toFixed(2)
+                : 'N/A';
+            }
+          } else {
+            if (includeSector) {
+              (holdings[i] as any).sector = 'Unknown';
+              (holdings[i] as any).industry = 'Unknown';
+            }
+            if (includeDividends) {
+              (holdings[i] as any).dividendYield = 'N/A';
+              (holdings[i] as any).annualDividend = 'N/A';
+            }
+          }
         }
       }
 
