@@ -13,51 +13,50 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ---- Windows ----
-          - os: windows-latest
+          # ---- Windows x64 ----
+          - os: windows-2022
             triplet: x64-windows
+            host_triplet: x64-windows
             arch: x64
             platform: Windows
             artifact: FinceptTerminal-Windows-x64
             exe: FinceptTerminal.exe
             cmake_extra: ""
 
-          - os: windows-latest
+          # ---- Windows ARM64 (cross-compile from x64) ----
+          - os: windows-2022
             triplet: arm64-windows
+            host_triplet: x64-windows
             arch: arm64
             platform: Windows
             artifact: FinceptTerminal-Windows-arm64
             exe: FinceptTerminal.exe
             cmake_extra: "-A ARM64"
 
-          # ---- Linux ----
-          - os: ubuntu-24.04
+          # ---- Linux x64 ----
+          - os: ubuntu-22.04
             triplet: x64-linux
+            host_triplet: x64-linux
             arch: x64
             platform: Linux
             artifact: FinceptTerminal-Linux-x64
             exe: FinceptTerminal
             cmake_extra: ""
 
-          - os: ubuntu-24.04
-            triplet: arm64-linux
-            arch: arm64
-            platform: Linux
-            artifact: FinceptTerminal-Linux-arm64
-            exe: FinceptTerminal
-            cmake_extra: "-DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64"
-
-          # ---- macOS ----
+          # ---- macOS ARM64 (Apple Silicon) ----
           - os: macos-14
             triplet: arm64-osx
+            host_triplet: arm64-osx
             arch: arm64
             platform: macOS
             artifact: FinceptTerminal-macOS-arm64
             exe: FinceptTerminal
             cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=arm64"
 
-          - os: macos-13
+          # ---- macOS x64 (Intel) ----
+          - os: macos-15-intel
             triplet: x64-osx
+            host_triplet: x64-osx
             arch: x64
             platform: macOS
             artifact: FinceptTerminal-macOS-x64
@@ -73,6 +72,19 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Debug — environment info
+        shell: bash
+        run: |
+          echo "::group::Environment"
+          echo "OS: ${{ matrix.os }}"
+          echo "Platform: ${{ matrix.platform }}"
+          echo "Arch: ${{ matrix.arch }}"
+          echo "Triplet: ${{ matrix.triplet }}"
+          echo "Host Triplet: ${{ matrix.host_triplet }}"
+          echo "Workspace: ${{ github.workspace }}"
+          cmake --version || echo "CMake not found"
+          echo "::endgroup::"
+
       - name: Setup vcpkg caching
         uses: actions/github-script@v7
         with:
@@ -81,8 +93,8 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       # ---- System dependencies ----
-      - name: Install system dependencies (Linux x64)
-        if: runner.os == 'Linux' && matrix.arch == 'x64'
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -91,23 +103,6 @@ jobs:
             libwayland-dev libxkbcommon-dev \
             pkg-config autoconf automake libtool \
             python3 python3-pip
-
-      - name: Install system dependencies (Linux arm64 cross-compile)
-        if: runner.os == 'Linux' && matrix.arch == 'arm64'
-        run: |
-          sudo dpkg --add-architecture arm64
-          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list.d/*.list 2>/dev/null || true
-          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs) main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
-          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            pkg-config autoconf automake libtool \
-            python3 python3-pip \
-            libxinerama-dev:arm64 libxcursor-dev:arm64 libxrandr-dev:arm64 \
-            libxi-dev:arm64 libxext-dev:arm64 libxfixes-dev:arm64 \
-            libwayland-dev:arm64 libxkbcommon-dev:arm64 \
-            libglu1-mesa-dev:arm64 libgl-dev:arm64
 
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
@@ -119,41 +114,91 @@ jobs:
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-          vcpkgGitCommitId: '962e5e39f8a25f42522f51fffc574e05a3efd26b'
+          vcpkgGitCommitId: '23dc124705fcac41cf35c33dd9541f5094a9c19f'
 
-      # ---- Configure & Build ----
+      # ---- Configure ----
       - name: Configure CMake
+        shell: bash
         working-directory: fincept-cpp
         run: |
+          # Normalize workspace path for cross-platform compatibility
+          WORKSPACE_DIR="${{ github.workspace }}"
+          WORKSPACE_DIR="${WORKSPACE_DIR//\\//}"
+
+          echo "::group::CMake Configure"
+          echo "Toolchain: ${WORKSPACE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          echo "Triplet: ${{ matrix.triplet }}"
+          echo "Host Triplet: ${{ matrix.host_triplet }}"
+          echo "Extra args: ${{ matrix.cmake_extra }}"
+
           cmake -B build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE="${WORKSPACE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DVCPKG_HOST_TRIPLET=${{ matrix.host_triplet }} \
             ${{ matrix.cmake_extra }}
 
+          echo "::endgroup::"
+
+          # Verify configure succeeded
+          if [ ! -f build/CMakeCache.txt ]; then
+            echo "::error::CMake configure failed — CMakeCache.txt not found"
+            exit 1
+          fi
+          echo "CMake configure succeeded"
+
+      # ---- Build ----
       - name: Build
+        shell: bash
         working-directory: fincept-cpp
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+        run: |
+          echo "::group::CMake Build"
+          cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+          echo "::endgroup::"
+
+      # ---- Verify build output exists ----
+      - name: Verify build output
+        shell: bash
+        working-directory: fincept-cpp
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            BINARY="build/Release/${{ matrix.exe }}"
+          else
+            BINARY="build/${{ matrix.exe }}"
+          fi
+          if [ ! -f "$BINARY" ]; then
+            echo "::error::Build output not found at $BINARY"
+            ls -la build/ 2>/dev/null || true
+            ls -la build/Release/ 2>/dev/null || true
+            exit 1
+          fi
+          echo "Build output verified: $BINARY"
+          ls -lh "$BINARY"
 
       # ---- Collect artifacts ----
       - name: Collect artifacts (Windows)
         if: runner.os == 'Windows'
-        working-directory: fincept-cpp
         shell: bash
+        working-directory: fincept-cpp
         run: |
           mkdir -p dist
           cp build/Release/${{ matrix.exe }} dist/
           cp build/Release/*.dll dist/ 2>/dev/null || true
           cp -r fonts dist/fonts 2>/dev/null || true
+          echo "=== Collected artifacts ==="
+          ls -lh dist/
 
       - name: Collect artifacts (Linux/macOS)
         if: runner.os != 'Windows'
+        shell: bash
         working-directory: fincept-cpp
         run: |
           mkdir -p dist
           cp build/${{ matrix.exe }} dist/
           chmod +x dist/${{ matrix.exe }}
           cp -r fonts dist/fonts 2>/dev/null || true
+          echo "=== Collected artifacts ==="
+          ls -lh dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -167,6 +212,10 @@ jobs:
     needs: build
     runs-on: macos-14
     name: macOS Universal
+    # Only run if both macOS builds succeeded
+    if: |
+      !cancelled() &&
+      needs.build.result == 'success'
 
     steps:
       - name: Download macOS arm64
@@ -181,13 +230,24 @@ jobs:
           name: FinceptTerminal-macOS-x64
           path: x64
 
+      - name: Verify downloads
+        run: |
+          echo "=== arm64 ==="
+          ls -lh arm64/
+          file arm64/FinceptTerminal || { echo "::error::arm64 binary missing"; exit 1; }
+          echo "=== x64 ==="
+          ls -lh x64/
+          file x64/FinceptTerminal || { echo "::error::x64 binary missing"; exit 1; }
+
       - name: Create Universal Binary
         run: |
           mkdir -p dist
           lipo -create arm64/FinceptTerminal x64/FinceptTerminal -output dist/FinceptTerminal
           chmod +x dist/FinceptTerminal
           cp -r arm64/fonts dist/fonts 2>/dev/null || true
+          echo "=== Universal Binary ==="
           file dist/FinceptTerminal
+          ls -lh dist/FinceptTerminal
 
       - name: Upload Universal artifact
         uses: actions/upload-artifact@v4
@@ -200,7 +260,9 @@ jobs:
   release:
     needs: [build, macos-universal]
     runs-on: ubuntu-latest
-    if: always() && !cancelled() && !contains(needs.*.result, 'failure')
+    if: |
+      !cancelled() &&
+      needs.build.result == 'success'
     permissions:
       contents: write
 
@@ -210,7 +272,15 @@ jobs:
         with:
           path: artifacts
 
+      - name: Debug — list artifacts
+        run: |
+          echo "=== Downloaded artifacts ==="
+          find artifacts -type f | sort
+          echo "=== Disk usage ==="
+          du -sh artifacts/*/
+
       - name: Package releases
+        shell: bash
         run: |
           cd artifacts
           for dir in */; do
@@ -218,19 +288,25 @@ jobs:
             cd "$name"
             if [[ "$name" == *"Windows"* ]]; then
               zip -r "../../${name}.zip" .
+              echo "Packaged: ${name}.zip"
             else
               tar -czf "../../${name}.tar.gz" .
+              echo "Packaged: ${name}.tar.gz"
             fi
             cd ..
           done
+          cd ..
+          echo "=== Release packages ==="
+          ls -lh FinceptTerminal-*.{zip,tar.gz} 2>/dev/null || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: cpp-v${{ github.run_number }}
           name: "Fincept Terminal C++ Build #${{ github.run_number }}"
+          make_latest: false
           body: |
-            Automated build from commit ${{ github.sha }}
+            Automated C++ build from commit ${{ github.sha }}
 
             ## Downloads
 
@@ -240,7 +316,6 @@ jobs:
 
             ### Linux
             - `FinceptTerminal-Linux-x64.tar.gz` — Linux x86_64
-            - `FinceptTerminal-Linux-arm64.tar.gz` — Linux ARM64 (aarch64)
 
             ### macOS
             - `FinceptTerminal-macOS-arm64.tar.gz` — macOS Apple Silicon (M1/M2/M3/M4)
@@ -250,9 +325,9 @@ jobs:
             FinceptTerminal-Windows-x64.zip
             FinceptTerminal-Windows-arm64.zip
             FinceptTerminal-Linux-x64.tar.gz
-            FinceptTerminal-Linux-arm64.tar.gz
             FinceptTerminal-macOS-arm64.tar.gz
             FinceptTerminal-macOS-x64.tar.gz
             FinceptTerminal-macOS-universal.tar.gz
+          fail_on_unmatched_files: false
           draft: false
           prerelease: true
