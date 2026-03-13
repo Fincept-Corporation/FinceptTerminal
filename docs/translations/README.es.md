@@ -1,5 +1,7 @@
 # Terminal Fincept
 
+> **Migrar a C/C++**— La versión 4 será una aplicación nativa pura de C++. La versión actual de Tauri (React/Rust) ya no se distribuye como una versión independiente. Para ejecutar la versión Tauri, clona el repositorio y usa`bun run tauri:dev`desde`fincept-terminal-desktop/`directorio.
+
 <div align="center">
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
@@ -24,15 +26,15 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 ## Descargar la última versión
 
-**Versión:**`v3.3.0`
+**Versión:**`v3.3.3`
 
 | Plataforma   | Arquitectura               | Descargar                                                                                                                              |
 | ------------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **macos**    | Silicio de manzana         | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-arm64.dmg)    |
-| **macos**    | Intel                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-x64.dmg)      |
-| **linux**    | x64 (Imagen de aplicación) | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.AppImage) |
-| **linux**    | x64 (Debian)               | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.deb)      |
-| **ventanas** | hshch                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Windows-x64.msi)    |
+| **macos**    | Silicio de manzana         | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-macOS-arm64.dmg)    |
+| **macos**    | Intel                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-macOS-x64.dmg)      |
+| **linux**    | x64 (Imagen de aplicación) | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Linux-x64.AppImage) |
+| **linux**    | x64 (Debian)               | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Linux-x64.deb)      |
+| **ventanas** | hshch                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Windows-x64.msi)    |
 
 [Ver todos los lanzamientos](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -170,7 +172,7 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 ## 📥 Descargar
 
-**vz. 0,11**| Windows • Mac OS • Linux
+**vz. 0,11**| Windows • MacOS • Linux
 
 [![Download](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge)](https://github.com/Fincept-Corporation/FinceptTerminal/releases)[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20App-blue?style=for-the-badge&logo=microsoft)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
 
@@ -210,7 +212,7 @@ Comunicados oficiales de la[Página de lanzamientos](https://github.com/Fincept-
 
 ## 🛣️ ¿Qué sigue?
 
-**Primer trimestre de 2026:**Transmisión en tiempo real mejorada • Backtesting avanzado • Creador de estrategias de opciones • Más de 50 agentes de IA**2026:**Negociación en papel • Gestión de carteras múltiples • Aplicación móvil • Negociación social**Futuro:**Características institucionales • API programática • UI de capacitación de ML • Soluciones de marca blanca
+**Primer trimestre de 2026:**Transmisión en tiempo real mejorada • Backtesting avanzado • Creador de estrategias de opciones • Más de 50 agentes de IA**Mayo de 2026:**Negociación en papel • Gestión de carteras múltiples • Aplicación móvil • Negociación social**Futuro:**Características institucionales • API programática • UI de capacitación de ML • Soluciones de marca blanca
 
 * * *
 

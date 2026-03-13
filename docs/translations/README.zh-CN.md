@@ -1,5 +1,7 @@
 # 金融终端
 
+> **迁移到 C/C++**— 版本 4 将是纯 C++ 本机应用程序。当前的 Tauri (React/Rust) 版本不再作为独立版本分发。 To run the Tauri version, clone the repo and use`bun run tauri:dev`从`fincept-terminal-desktop/`目录。
+
 <div align="center">
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
@@ -24,15 +26,15 @@
 
 ## 下载最新版本
 
-**版本：**`v3.3.0`
+**版本：**`v3.3.3`
 
 | 平台        | 建筑学         | 下载                                                                                                                              |
 | --------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS** | 苹果硅         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-arm64.dmg)    |
-| **macOS** | 英特尔         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-x64.dmg)      |
-| **Linux** | x64（应用程序图像） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.AppImage) |
-| **Linux** | x64（Debian） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.deb)      |
-| **视窗**    | 哈什奇         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Windows-x64.msi)    |
+| **macOS** | 苹果硅         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-macOS-arm64.dmg)    |
+| **macOS** | 英特尔         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-macOS-x64.dmg)      |
+| **Linux** | x64（应用程序图像） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Linux-x64.AppImage) |
+| **Linux** | x64（Debian） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Linux-x64.deb)      |
+| **视窗**    | 哈什奇         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Windows-x64.msi)    |
 
 [查看所有版本](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -105,7 +107,7 @@
 
 **工作流程生成器**
 
--   ReactFlow visual editor
+-   ReactFlow 可视化编辑器
 -   100+ MCP 工具集成
 -   Python 代理编排
 
@@ -210,7 +212,7 @@ xattr -cr /Applications/FinceptTerminal.app
 
 ## 🛣️ 接下来是什么
 
-**2026 年第一季度：**增强的实时流 • 高级回溯测试 • 期权策略构建器 • 50 多个人工智能代理**2026：**模拟交易 • 多投资组合管理 • 移动应用程序 • 社交交易**未来：**机构功能 • 编程 API • ML 培训 UI • 白标解决方案
+**2026 年第一季度：**增强的实时流 • 高级回溯测试 • 期权策略构建器 • 50 多个人工智能代理**2026 年 5 月：**模拟交易 • 多投资组合管理 • 移动应用程序 • 社交交易**未来：**机构功能 • 编程 API • ML 培训 UI • 白标解决方案
 
 * * *
 
