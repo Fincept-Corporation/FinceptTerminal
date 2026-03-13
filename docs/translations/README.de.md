@@ -1,5 +1,7 @@
 # Fincept-Terminal
 
+> **Migration zu C/C++**— Version 4 wird eine reine C++-native Anwendung sein. Der aktuelle Tauri-Build (React/Rust) wird nicht mehr als eigenständige Version vertrieben. Um die Tauri-Version auszuführen, klonen Sie das Repo und verwenden Sie es`bun run tauri:dev`aus dem`fincept-terminal-desktop/`Verzeichnis.
+
 <div align="center">
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
@@ -8,7 +10,7 @@
 
 [Englisch](README.md)\|[Spanisch](docs/translations/README.es.md)\|[chinesisch](docs/translations/README.zh-CN.md)\|[japanisch](docs/translations/README.ja.md)\|[Französisch](docs/translations/README.fr.md)\|[Deutsch](docs/translations/README.de.md)\|[Koreanisch](docs/translations/README.ko.md)\|[Hindi](docs/translations/README.hi.md)
 
-### **Ihr Denken ist die einzige Grenze. Die Daten sind es nicht.**
+### **Your Thinking is the Only Limit. The Data Isn't.**
 
 Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Automatisierung und unbegrenzter Datenkonnektivität.
 
@@ -24,15 +26,15 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 ## Laden Sie die neueste Version herunter
 
-**Version:**`v3.3.0`
+**Version:**`v3.3.3`
 
 | Plattform   | Architektur    | Herunterladen                                                                                                                              |
 | ----------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **macOS**   | Apple Silicon  | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-arm64.dmg)    |
-| **macOS**   | Intel          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-x64.dmg)      |
-| **Linux**   | x64 (AppImage) | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.AppImage) |
-| **Linux**   | x64 (Debian)   | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.deb)      |
-| **Windows** | hshch          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Windows-x64.msi)    |
+| **macOS**   | Apple Silicon  | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-macOS-arm64.dmg)    |
+| **macOS**   | Intel          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-macOS-x64.dmg)      |
+| **Linux**   | x64 (AppImage) | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Linux-x64.AppImage) |
+| **Linux**   | x64 (Debian)   | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Linux-x64.deb)      |
+| **Windows** | hshch          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Windows-x64.msi)    |
 
 [Alle Veröffentlichungen anzeigen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -210,7 +212,7 @@ Offizielle Veröffentlichungen von der[Seite „Veröffentlichungen“.](https:/
 
 ## 🛣️ Was kommt als nächstes?
 
-**Q1 2026:**Verbessertes Echtzeit-Streaming • Erweitertes Backtesting • Optionsstrategie-Builder • Über 50 KI-Agenten**2026:**Papierhandel • Multi-Portfolio-Management • Mobile App • Social Trading**Zukunft:**Institutionelle Funktionen • Programmatische API • Benutzeroberfläche für ML-Training • White-Label-Lösungen
+**Q1 2026:**Verbessertes Echtzeit-Streaming • Erweitertes Backtesting • Optionsstrategie-Builder • Über 50 KI-Agenten**Mai 2026:**Papierhandel • Multi-Portfolio-Management • Mobile App • Social Trading**Zukunft:**Institutionelle Funktionen • Programmatische API • Benutzeroberfläche für ML-Training • White-Label-Lösungen
 
 * * *
 

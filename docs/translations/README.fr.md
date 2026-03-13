@@ -1,5 +1,7 @@
 # Terminal Fincept
 
+> **Migration vers C/C++**— La version 4 sera une application purement native C++. La version actuelle de Tauri (React/Rust) n'est plus distribuée en tant que version autonome. Pour exécuter la version Tauri, clonez le dépôt et utilisez`bun run tauri:dev`de la`fincept-terminal-desktop/`annuaire.
+
 <div align="center">
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
@@ -24,15 +26,15 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 ## Télécharger la dernière version
 
-**Version:**`v3.3.0`
+**Version:**`v3.3.3`
 
 | Plate-forme  | Architecture   | Télécharger                                                                                                                              |
 | ------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS**    | Pomme Silicium | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-arm64.dmg)    |
-| **macOS**    | Intel          | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-x64.dmg)      |
-| **Linux**    | x64 (AppImage) | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.AppImage) |
-| **Linux**    | x64 (Debian)   | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.deb)      |
-| **Fenêtres** | hshch          | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Windows-x64.msi)    |
+| **macOS**    | Pomme Silicium | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-macOS-arm64.dmg)    |
+| **macOS**    | Intel          | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-macOS-x64.dmg)      |
+| **Linux**    | x64 (AppImage) | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Linux-x64.AppImage) |
+| **Linux**    | x64 (Debian)   | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Linux-x64.deb)      |
+| **Fenêtres** | hshch          | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Windows-x64.msi)    |
 
 [Voir toutes les versions](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -78,7 +80,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 -   Modèles de remise de dividendes
 -   Multiples et revenus résiduels
 
-**Produits dérivés et risque**
+**Produits dérivés et risques**
 
 -   Prix ​​des options et Grecs
 -   Stratégies de couverture
@@ -210,7 +212,7 @@ Les communiqués officiels du[Page des versions](https://github.com/Fincept-Corp
 
 ## 🛣️ Quelle est la prochaine étape
 
-**T1 2026 :**Streaming en temps réel amélioré • Backtesting avancé • Générateur de stratégies d'options • Plus de 50 agents IA**2026 :**Trading papier • Gestion multi-portefeuilles • Application mobile • Trading social**Avenir:**Fonctionnalités institutionnelles • API programmatique • Interface utilisateur de formation ML • Solutions en marque blanche
+**T1 2026 :**Streaming en temps réel amélioré • Backtesting avancé • Générateur de stratégies d'options • Plus de 50 agents IA**Mai 2026 :**Trading papier • Gestion multi-portefeuilles • Application mobile • Trading social**Avenir:**Fonctionnalités institutionnelles • API programmatique • Interface utilisateur de formation ML • Solutions en marque blanche
 
 * * *
 

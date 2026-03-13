@@ -1,5 +1,7 @@
 # फिनसेप्ट टर्मिनल
 
+> **C/C++ में माइग्रेट किया जा रहा है**— संस्करण 4 एक शुद्ध C++ मूल एप्लिकेशन होगा। वर्तमान टौरी (रिएक्ट/रस्ट) बिल्ड अब स्टैंडअलोन रिलीज़ के रूप में वितरित नहीं किया गया है। टौरी संस्करण को चलाने के लिए, रेपो को क्लोन करें और उपयोग करें`bun run tauri:dev`से`fincept-terminal-desktop/`निर्देशिका.
+
 <div align="center">
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
@@ -24,15 +26,15 @@
 
 ## नवीनतम रिलीज़ डाउनलोड करें
 
-**संस्करण:**`v3.3.0`
+**संस्करण:**`v3.3.3`
 
 | प्लैटफ़ॉर्म   | वास्तुकला     | Download                                                                                                                              |
 | ------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **मैक ओएस**   | एप्पल सिलिकॉन | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-arm64.dmg)    |
-| **मैक ओएस**   | इंटेल         | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-x64.dmg)      |
-| **लिनक्स**    | x64 (ऐपइमेज)  | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.AppImage) |
-| **लिनक्स**    | x64 (डेबियन)  | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.deb)      |
-| **खिड़कियाँ** | hshch         | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Windows-x64.msi)    |
+| **मैक ओएस**   | एप्पल सिलिकॉन | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-macOS-arm64.dmg)    |
+| **मैक ओएस**   | इंटेल         | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-macOS-x64.dmg)      |
+| **लिनक्स**    | x64 (ऐपइमेज)  | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Linux-x64.AppImage) |
+| **लिनक्स**    | x64 (डेबियन)  | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Linux-x64.deb)      |
+| **खिड़कियाँ** | hshch         | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.3/FinceptTerminal-v3.3.3-Windows-x64.msi)    |
 
 [सभी रिलीज़ देखें](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -210,7 +212,7 @@ xattr -cr /Applications/FinceptTerminal.app
 
 ## 🛣️ आगे क्या है
 
-**Q1 2026:**उन्नत वास्तविक समय स्ट्रीमिंग • उन्नत बैकटेस्टिंग • विकल्प रणनीति बिल्डर • 50+ एआई एजेंट**2026:**पेपर ट्रेडिंग • मल्टी-पोर्टफोलियो प्रबंधन • मोबाइल ऐप • सोशल ट्रेडिंग**भविष्य:**संस्थागत विशेषताएं • प्रोग्रामेटिक एपीआई • एमएल प्रशिक्षण यूआई • व्हाइट-लेबल समाधान
+**Q1 2026:**उन्नत वास्तविक समय स्ट्रीमिंग • उन्नत बैकटेस्टिंग • विकल्प रणनीति बिल्डर • 50+ एआई एजेंट**मई 2026:**पेपर ट्रेडिंग • मल्टी-पोर्टफोलियो प्रबंधन • मोबाइल ऐप • सोशल ट्रेडिंग**भविष्य:**संस्थागत विशेषताएं • प्रोग्रामेटिक एपीआई • एमएल प्रशिक्षण यूआई • व्हाइट-लेबल समाधान
 
 * * *
 
