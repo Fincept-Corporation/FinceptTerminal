@@ -2,6 +2,7 @@
 // Excel Marketplace API service for handling Excel file marketplace endpoints
 
 import { fetch } from '@tauri-apps/plugin-http';
+import { getSessionToken } from '@/services/auth/authApi';
 
 // API Configuration
 const API_CONFIG = {
@@ -101,6 +102,10 @@ const makeApiRequest = async <T = any>(
       'Content-Type': 'application/json',
       ...headers
     };
+    const sessionToken = getSessionToken();
+    if (sessionToken && !defaultHeaders['X-Session-Token']) {
+      defaultHeaders['X-Session-Token'] = sessionToken;
+    }
 
     const url = getApiEndpoint(endpoint);
 
@@ -298,7 +303,8 @@ export class ExcelMarketplaceService {
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'X-API-Key': apiKey
+          'X-API-Key': apiKey,
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {}),
         },
         mode: 'cors',
       });

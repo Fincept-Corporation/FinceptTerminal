@@ -192,10 +192,8 @@ function FinxeptTerminalContent() {
       const username = session.user_info?.username || session.user_info?.email || 'User';
       const accountType = session.user_info?.account_type || 'free';
       const creditBalance = session.user_info?.credit_balance ?? 0;
-      const hasSubscription = (session.subscription as any)?.data?.has_subscription || session.subscription?.has_subscription;
-      const planName = hasSubscription
-        ? ((session.subscription as any)?.data?.subscription?.plan?.name || session.subscription?.subscription?.plan?.name || accountType)
-        : (accountType === 'free' ? 'Free Plan' : accountType.charAt(0).toUpperCase() + accountType.slice(1));
+      const hasPaidPlan = ['basic', 'standard', 'pro', 'enterprise'].includes(accountType.toLowerCase());
+      const planName = accountType === 'free' ? 'Free Plan' : accountType.charAt(0).toUpperCase() + accountType.slice(1) + ' Plan';
 
       return (
         <span style={{ color: '#fbbf24', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -218,11 +216,11 @@ function FinxeptTerminalContent() {
           <span
             onClick={() => navigation.navigateToPricing()}
             style={{ cursor: 'pointer', textDecoration: 'underline' }}
-            title={hasSubscription ? 'Change Plan' : 'View Plans'}
+            title={hasPaidPlan ? 'Change Plan' : 'View Plans'}
           >
             📦 {planName}
           </span>
-          {hasSubscription && (
+          {hasPaidPlan && (
             <>
               <span style={{ color: '#787878' }}>|</span>
               <span>[OK] Active</span>

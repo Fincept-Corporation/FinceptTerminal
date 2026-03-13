@@ -2,6 +2,7 @@
 // Support Ticket API Service
 
 import { fetch } from '@tauri-apps/plugin-http';
+import { getSessionToken } from '@/services/auth/authApi';
 
 // API Configuration
 const API_CONFIG = {
@@ -30,6 +31,7 @@ async function makeApiRequest<T = any>(
       headers: {
         'Content-Type': 'application/json',
         ...(apiKey && { 'X-API-Key': apiKey }),
+        ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {}),
       },
     };
 

@@ -3,6 +3,7 @@
 // Complements marketDataService.ts (which uses Tauri invoke/Rust bridge)
 
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import { getSessionToken } from '@/services/auth/authApi';
 
 const API_CONFIG = {
   BASE_URL: import.meta.env.DEV ? '/api' : 'https://api.fincept.in',
@@ -27,6 +28,8 @@ async function makeApiRequest<T = any>(
       'Content-Type': 'application/json',
     };
     if (apiKey) headers['X-API-Key'] = apiKey;
+    const sessionToken = getSessionToken();
+    if (sessionToken) headers['X-Session-Token'] = sessionToken;
 
     const response = await safeFetch(getApiEndpoint(endpoint), { method: 'GET', headers });
     const data = await response.json();

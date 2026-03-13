@@ -3,6 +3,7 @@
 
 // import { loggerService } from './loggerService';
 import { getSetting } from '../core/sqliteService';
+import { getSessionToken } from '@/services/auth/authApi';
 
 const API_BASE = 'https://api.fincept.in';
 
@@ -123,6 +124,7 @@ class TradeService {
         headers: {
           'X-API-Key': apiKey,
           'Content-Type': 'application/json',
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {}),
         },
       });
 

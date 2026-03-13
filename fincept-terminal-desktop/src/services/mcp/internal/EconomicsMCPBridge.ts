@@ -2,6 +2,7 @@
 // Provides AI access to: CEIC economic series, economic calendar, WGB sovereign data
 
 import { terminalMCPProvider } from './TerminalMCPProvider';
+import { getSessionToken } from '@/services/auth/authApi';
 
 const BASE_URL = 'https://api.fincept.in';
 
@@ -20,7 +21,7 @@ const CONTEXT_KEYS = [
 
 async function finceptFetch(path: string, apiKey: string): Promise<any> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'X-API-Key': apiKey, 'Accept': 'application/json' },
+    headers: { 'X-API-Key': apiKey, 'Accept': 'application/json', ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {}) },
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');

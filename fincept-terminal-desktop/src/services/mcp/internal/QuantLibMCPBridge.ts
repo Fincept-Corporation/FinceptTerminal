@@ -1,6 +1,7 @@
 // QuantLib MCP Bridge - Manages API key and provides shared utilities for QuantLib tools
 
 import { terminalMCPProvider } from './TerminalMCPProvider';
+import { getSessionToken } from '@/services/auth/authApi';
 
 const QUANTLIB_BASE_URL = 'https://api.fincept.in';
 
@@ -17,6 +18,8 @@ export async function quantlibApiCall<T = any>(
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (apiKey) headers['X-API-Key'] = apiKey;
+  const sessionToken = getSessionToken();
+  if (sessionToken) headers['X-Session-Token'] = sessionToken;
 
   const opts: RequestInit = { method, headers };
 

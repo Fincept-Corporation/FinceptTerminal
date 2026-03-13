@@ -3,6 +3,8 @@
  * AI-powered news article analysis via Fincept Backend API
  */
 
+import { getSessionToken } from '@/services/auth/authApi';
+
 const API_BASE_URL = 'https://api.fincept.in';
 
 export interface NewsAnalysisRequest {
@@ -104,6 +106,7 @@ export async function analyzeNewsArticle(
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': apiKey,
+        ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {}),
       },
       body: JSON.stringify({ url }),
     });

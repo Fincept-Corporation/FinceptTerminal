@@ -2,6 +2,7 @@
 // API service for Chat Mode - integrates with Fincept API
 
 import { getSetting } from '../core/sqliteService';
+import { getSessionToken } from '@/services/auth/authApi';
 
 export interface ChatModeMessage {
   id: string;
@@ -67,7 +68,8 @@ class ChatModeApiService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         },
         body: JSON.stringify({ content: message })
       });
@@ -110,7 +112,8 @@ class ChatModeApiService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         },
         body: JSON.stringify({ title: title || 'New Conversation' })
       });
@@ -149,7 +152,8 @@ class ChatModeApiService {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         }
       });
 
@@ -187,7 +191,8 @@ class ChatModeApiService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         },
         body: JSON.stringify({ content: message })
       });
@@ -229,7 +234,8 @@ class ChatModeApiService {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         }
       });
 
@@ -267,7 +273,8 @@ class ChatModeApiService {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         }
       });
 
@@ -302,7 +309,8 @@ class ChatModeApiService {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         },
         body: JSON.stringify({ title })
       });
@@ -338,7 +346,8 @@ class ChatModeApiService {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         },
         body: JSON.stringify({ session_uuids: sessionUuids })
       });
@@ -374,7 +383,8 @@ class ChatModeApiService {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         }
       });
 
@@ -409,7 +419,8 @@ class ChatModeApiService {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         }
       });
 
@@ -444,7 +455,8 @@ class ChatModeApiService {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         }
       });
 
@@ -479,7 +491,8 @@ class ChatModeApiService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         },
         body: JSON.stringify({ session_uuids: sessionUuids || [] })
       });
@@ -515,7 +528,8 @@ class ChatModeApiService {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         }
       });
 
@@ -550,7 +564,8 @@ class ChatModeApiService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         },
         body: JSON.stringify({ prompt })
       });
@@ -586,7 +601,8 @@ class ChatModeApiService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+          ...(this.apiKey && { 'X-API-Key': this.apiKey }),
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {})
         }
       });
 

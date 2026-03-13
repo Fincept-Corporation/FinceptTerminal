@@ -2,6 +2,7 @@
 // Marine Vessel Tracking API service for handling all marine-related API calls
 
 import { fetch } from '@tauri-apps/plugin-http';
+import { getSessionToken } from '@/services/auth/authApi';
 
 // API Configuration
 const API_CONFIG = {
@@ -147,6 +148,10 @@ async function makeApiRequest<T>(
     // Add API key if provided
     if (apiKey) {
       headers['X-API-Key'] = apiKey;
+    }
+    const sessionToken = getSessionToken();
+    if (sessionToken) {
+      headers['X-Session-Token'] = sessionToken;
     }
 
     const response = await fetch(endpoint, {

@@ -1,6 +1,7 @@
 // Support API Service - Feedback, Contact, Newsletter endpoints
 
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import { getSessionToken } from '@/services/auth/authApi';
 
 const API_BASE_URL = 'https://api.fincept.in';
 
@@ -82,6 +83,7 @@ export async function submitFeedback(data: FeedbackFormData, apiKey: string): Pr
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': apiKey,
+        ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {}),
       },
       body: JSON.stringify({
         rating: data.rating,

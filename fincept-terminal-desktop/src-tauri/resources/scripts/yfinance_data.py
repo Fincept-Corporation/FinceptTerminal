@@ -472,6 +472,76 @@ def search_symbols(query, limit=20):
     except Exception as e:
         return {"error": str(e), "query": query, "results": []}
 
+def get_news(symbol, count=20):
+    """Fetch news articles for a symbol using yfinance"""
+    try:
+        import re
+        ticker = yf.Ticker(symbol)
+        raw_news = ticker.news
+        if not raw_news:
+            return {"articles": [], "symbol": symbol}
+
+        articles = []
+        for item in raw_news[:count]:
+            content = item.get("content", {})
+            title = content.get("title", "")
+            if not title:
+                continue
+            # Clean HTML from summary
+            summary = content.get("summary", "")
+            summary = re.sub(r'<[^>]+>', '', summary)
+            pub_date = content.get("pubDate", "")
+            provider = content.get("provider", {})
+            publisher = provider.get("displayName", "")
+            # Get URL
+            url = ""
+            click_url = content.get("clickThroughUrl", {})
+            if click_url:
+                url = click_url.get("url", "")
+            if not url:
+                canonical = content.get("canonicalUrl", {})
+                if canonical:
+                    url = canonical.get("url", "")
+
+            articles.append({
+                "title": title,
+                "description": summary,
+                "url": url,
+                "publisher": publisher,
+                "published_date": pub_date
+            })
+
+        return {"articles": articles, "symbol": symbol}
+    except Exception as e:
+        return {"error": str(e), "symbol": symbol, "articles": []}
+
+def get_historical_period(symbol, period='6mo', interval='1d'):
+    """Fetch historical data using a period string (e.g., '1mo', '6mo', '1y', '5y')"""
+    try:
+        import io, contextlib
+        ticker = yf.Ticker(symbol)
+        _buf = io.StringIO()
+        with contextlib.redirect_stdout(_buf):
+            hist = ticker.history(period=period, interval=interval)
+
+        if hist.empty:
+            return []
+
+        historical_data = []
+        for index, row in hist.iterrows():
+            historical_data.append({
+                "timestamp": int(index.timestamp()),
+                "open": round(float(row['Open']), 2),
+                "high": round(float(row['High']), 2),
+                "low": round(float(row['Low']), 2),
+                "close": round(float(row['Close']), 2),
+                "volume": int(row['Volume'])
+            })
+
+        return historical_data
+    except Exception as e:
+        return {"error": str(e), "symbol": symbol}
+
 def resolve_symbol(symbol):
     """
     Resolve a bare stock symbol to its correct yfinance-compatible form.
@@ -610,6 +680,23 @@ def main(args=None):
             query = args[1]
             limit = int(args[2]) if len(args) > 2 else 50
             result = search_symbols(query, limit)
+
+    elif command == "news":
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py news <symbol> [count]"}
+        else:
+            symbol = args[1]
+            count = int(args[2]) if len(args) > 2 else 20
+            result = get_news(symbol, count)
+
+    elif command == "historical_period":
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py historical_period <symbol> [period] [interval]"}
+        else:
+            symbol = args[1]
+            period = args[2] if len(args) > 2 else '6mo'
+            interval = args[3] if len(args) > 3 else '1d'
+            result = get_historical_period(symbol, period, interval)
 
     elif command == "resolve_symbol":
         if len(args) < 2:

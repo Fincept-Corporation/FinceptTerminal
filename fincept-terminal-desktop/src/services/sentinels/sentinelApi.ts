@@ -2,6 +2,7 @@
 // Endpoints: /sentinels/*
 
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import { getSessionToken } from '@/services/auth/authApi';
 
 const API_CONFIG = {
   BASE_URL: import.meta.env.DEV ? '/api' : 'https://api.fincept.in',
@@ -24,12 +25,16 @@ async function makeApiRequest<T = any>(
   body?: any
 ): Promise<ApiResponse<T>> {
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-API-Key': apiKey,
+    };
+    const sessionToken = getSessionToken();
+    if (sessionToken) headers['X-Session-Token'] = sessionToken;
+
     const options: RequestInit = {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': apiKey,
-      },
+      headers,
     };
 
     if (body && (method === 'POST' || method === 'PUT')) {

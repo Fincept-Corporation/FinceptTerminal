@@ -154,8 +154,10 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
     if (session?.authenticated && session?.user_type === 'registered' && state.isVerificationComplete) {
       console.log('Registration complete, navigating based on account type:', session.user_info?.account_type);
 
-      if (session.subscription?.has_subscription) {
-        console.log('User has subscription, redirecting to dashboard');
+      const accountType = (session.user_info?.account_type || 'free').toLowerCase();
+      const hasPaidPlan = ['basic', 'standard', 'pro', 'enterprise'].includes(accountType);
+      if (hasPaidPlan) {
+        console.log('User has paid plan, redirecting to dashboard');
         onNavigate('dashboard' as Screen);
       } else {
         console.log('User is free tier, showing pricing screen');

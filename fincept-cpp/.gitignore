@@ -1,0 +1,24 @@
+# Build
+build/
+cmake-build-*/
+out/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.sln
+*.vcxproj*
+compile_commands.json
+
+# ImGui layout state
+fincept_imgui.ini
+
+# OS
+.DS_Store
+Thumbs.db
+
+# vcpkg installed packages (managed by vcpkg)
+vcpkg_installed/

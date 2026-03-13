@@ -1,3 +1,5 @@
+import { getSessionToken } from '@/services/auth/authApi';
+
 const API_BASE = 'https://api.fincept.in';
 
 export interface NewsEvent {
@@ -61,6 +63,7 @@ export class NewsEventsService {
         method: 'GET',
         headers: {
           'X-API-Key': apiKey,
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {}),
           'accept': 'application/json'
         }
       });
@@ -90,6 +93,7 @@ export class NewsEventsService {
         method: 'GET',
         headers: {
           'X-API-Key': apiKey,
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {}),
           'accept': 'application/json'
         }
       });
@@ -119,6 +123,7 @@ export class NewsEventsService {
         method: 'GET',
         headers: {
           'X-API-Key': apiKey,
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {}),
           'accept': 'application/json'
         }
       });
@@ -162,6 +167,7 @@ export class NewsEventsService {
         method: 'GET',
         headers: {
           'X-API-Key': apiKey,
+          ...(getSessionToken() ? { 'X-Session-Token': getSessionToken()! } : {}),
           'accept': 'application/json'
         }
       });

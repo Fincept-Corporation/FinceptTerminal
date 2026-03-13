@@ -2,6 +2,7 @@
 // Forum API service for handling all forum-related API calls
 
 import { fetch } from '@tauri-apps/plugin-http';
+import { getSessionToken } from '@/services/auth/authApi';
 
 // API Configuration - matches your existing auth setup
 const API_CONFIG = {
@@ -120,6 +121,10 @@ const makeForumRequest = async <T = any>(
     // Add authentication headers if available
     if (apiKey) {
       headers['X-API-Key'] = apiKey;
+    }
+    const sessionToken = getSessionToken();
+    if (sessionToken) {
+      headers['X-Session-Token'] = sessionToken;
     }
     if (deviceId) {
       headers['X-Device-ID'] = deviceId;

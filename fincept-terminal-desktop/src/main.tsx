@@ -24,6 +24,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { LanguageProvider } from './contexts/LanguageContext'
 import { BrokerProvider } from './contexts/BrokerContext'
 import { TimezoneProvider } from './contexts/TimezoneContext'
+import { SessionGuard } from './components/auth/SessionGuard'
 import './i18n/config' // Initialize i18n
 import './App.css' // Make sure this line exists
 import './tauri-cors-config' // Initialize Tauri CORS plugin
@@ -98,6 +99,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <AuthProvider>
+        <SessionGuard />
         <LanguageProvider>
           <BrokerProvider>
             <TimezoneProvider>

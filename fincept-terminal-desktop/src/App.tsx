@@ -185,15 +185,16 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isLoading) {
       if (session?.authenticated) {
-        const isFreePlan = session.user_info?.account_type === 'free';
-        const hasPaidPlan = session.user_info?.account_type &&
-                           ['basic', 'standard', 'pro', 'enterprise'].includes(session.user_info.account_type);
+        const accountType = session.user_info?.account_type?.toLowerCase() || 'free';
+        const isFreePlan = accountType === 'free';
+        const hasPaidPlan = ['basic', 'standard', 'pro', 'enterprise'].includes(accountType);
+
+        console.log('[App] Navigation check — account_type:', session.user_info?.account_type, 'hasPaidPlan:', hasPaidPlan, 'isFreePlan:', isFreePlan, 'currentScreen:', currentScreen);
 
         // If user has a paid plan (basic, standard, pro, enterprise), go to dashboard
         if (session.user_type === 'registered' && hasPaidPlan) {
           if (currentScreen !== 'paymentProcessing' &&
               currentScreen !== 'paymentSuccess' &&
-              currentScreen !== 'pricing' &&
               currentScreen !== 'dashboard') {
             setCurrentScreen('dashboard');
           }

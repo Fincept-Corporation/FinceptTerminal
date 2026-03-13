@@ -2,7 +2,7 @@
 // Authentication context for managing user state and backend API integration with payment support
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AuthApiService } from '@/services/auth/authApi';
+import { AuthApiService, setSessionToken } from '@/services/auth/authApi';
 import { PaymentApiService } from '@/services/payment/paymentApi';
 import { UserApiService } from '@/services/auth/userApi';
 import { saveSetting, getSetting } from '@/services/core/sqliteService';
@@ -29,7 +29,15 @@ export interface UserProfileResponse {
     account_type: string;
     credit_balance: number;
     is_verified: boolean;
+    is_admin?: boolean;
     mfa_enabled: boolean;
+    phone?: string | null;
+    country_code?: string | null;
+    country?: string | null;
+    notify_email?: boolean;
+    notify_telegram?: boolean;
+    notify_in_app?: boolean;
+    telegram_connected?: boolean;
     created_at: string;
     last_login_at: string;
   };
@@ -92,25 +100,13 @@ export interface PaymentSession {
 }
 
 export interface UserSubscription {
-  has_subscription: boolean;
-  subscription?: {
-    subscription_uuid: string;
-    plan: {
-      name: string;
-      plan_id: string;
-      price: number;
-    };
-    status: string;
-    current_period_start: string;
-    current_period_end: string;
-    days_remaining: number;
-    cancel_at_period_end: boolean;
-    usage: {
-      api_calls_used: number;
-      api_calls_limit: number | string;
-      usage_percentage: number;
-    };
-  };
+  user_id: number;
+  account_type: string;
+  credit_balance: number;
+  credits_expire_at: string | null;
+  support_type: string;
+  last_credit_purchase_at: string | null;
+  created_at: string;
 }
 
 // Types based on your Python API client
@@ -118,6 +114,7 @@ export interface SessionData {
   authenticated: boolean;
   user_type: 'guest' | 'registered' | null;
   api_key: string | null;
+  session_token?: string | null;
   device_id: string;
   user_info?: {
     username?: string;
@@ -267,29 +264,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
 
   // Fetch user profile after login
-  // Find this function in AuthContext.tsx and update it:
-const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['data'] | null> => {
-  try {
-    const result = await AuthApiService.getUserProfile(apiKey);
+  // API returns: { success, message, data: { id, username, email, account_type, ... } }
+  // makeApiRequest wraps it: { success, data: { success, message, data: { ... } } }
+  const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['data'] | null> => {
+    try {
+      const result = await AuthApiService.getUserProfile(apiKey);
 
-    if (result.success && result.data) {
-      const profileData = (result.data as any).data || result.data;
-      return profileData;
+      if (result.success && result.data) {
+        // Unwrap double-wrapped response
+        const profileData = (result.data as any).data || result.data;
+        console.log('[AuthContext] Profile data:', JSON.stringify(profileData));
+        return profileData;
+      }
+      console.warn('[AuthContext] Profile fetch failed:', result.error);
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+      return null;
     }
-    return null;
-  } catch (error) {
-    console.error('Failed to fetch user profile:', error);
-    return null;
-  }
-};
+  };
 
   // Fetch user subscription data
+  // API returns: { success, message, data: { user_id, account_type, credit_balance, ... } }
   const fetchUserSubscription = async (apiKey: string): Promise<UserSubscription | null> => {
     try {
       const result = await PaymentApiService.getUserSubscription(apiKey);
       if (result.success && result.data) {
+        console.log('[AuthContext] Subscription data:', JSON.stringify(result.data));
         return result.data;
       }
+      console.warn('[AuthContext] Subscription fetch failed:', result.error);
       return null;
     } catch (error) {
       console.error('Failed to fetch user subscription:', error);
@@ -317,9 +321,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
             credit_balance: userProfile.credit_balance,
             is_verified: userProfile.is_verified,
             mfa_enabled: userProfile.mfa_enabled,
-            phone: (userProfile as any).phone ?? null,
-            country: (userProfile as any).country ?? null,
-            country_code: (userProfile as any).country_code ?? null,
+            phone: userProfile.phone ?? null,
+            country: userProfile.country ?? null,
+            country_code: userProfile.country_code ?? null,
           },
           subscription: userSubscription || undefined
         };
@@ -338,39 +342,54 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
       return null;
     }
 
-    const result = await AuthApiService.getAuthStatus(sessionData.api_key, sessionData.device_id);
+    // Restore session token for API calls
+    if (sessionData.session_token) {
+      setSessionToken(sessionData.session_token);
+    }
 
+    // First try validate-session (requires session_token)
+    if (sessionData.session_token) {
+      const valResult = await AuthApiService.validateSessionServer(sessionData.api_key);
+      const valData = (valResult.data as any)?.data || valResult.data;
+      if (!valResult.success || !valData?.valid) {
+        console.warn('[AuthContext] Session token invalid, session expired');
+        setSessionToken(null);
+        return null;
+      }
+    }
+
+    // Fetch fresh profile and subscription data
+    const result = await AuthApiService.getAuthStatus(sessionData.api_key, sessionData.device_id);
     const authData = (result.data as any)?.data || result.data;
 
     if (result.success && authData?.authenticated) {
-      const apiData = authData;
-
       let userProfile = null;
       let userSubscription = null;
 
-      if (apiData.user_type === 'registered') {
+      if (authData.user_type === 'registered') {
         userProfile = await fetchUserProfile(sessionData.api_key);
         userSubscription = await fetchUserSubscription(sessionData.api_key);
       }
 
-      const validatedSession = {
+      const validatedSession: SessionData = {
         authenticated: true,
-        user_type: apiData.user_type,
+        user_type: authData.user_type,
         api_key: sessionData.api_key,
+        session_token: sessionData.session_token,
         device_id: sessionData.device_id,
-        user_info: apiData.user_type === 'registered' && userProfile ? {
+        user_info: authData.user_type === 'registered' && userProfile ? {
           username: userProfile.username,
           email: userProfile.email,
           account_type: userProfile.account_type,
           credit_balance: userProfile.credit_balance,
           is_verified: userProfile.is_verified,
           mfa_enabled: userProfile.mfa_enabled,
-          phone: (userProfile as any).phone ?? null,
-          country: (userProfile as any).country ?? null,
-          country_code: (userProfile as any).country_code ?? null,
-        } : apiData.user,
-        expires_at: apiData.user_type === 'guest' ? apiData.guest?.expires_at : undefined,
-        requests_today: apiData.user_type === 'guest' ? apiData.guest?.requests_today : undefined,
+          phone: userProfile.phone ?? null,
+          country: userProfile.country ?? null,
+          country_code: userProfile.country_code ?? null,
+        } : authData.user,
+        expires_at: authData.user_type === 'guest' ? authData.guest?.expires_at : undefined,
+        requests_today: authData.user_type === 'guest' ? authData.guest?.requests_today : undefined,
         subscription: userSubscription || undefined
       };
 
@@ -554,7 +573,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
       const apiData = (result.data as any)?.data || result.data;
 
       // Check if there's an active session on another device
-      if (!result.success && apiData && apiData.active_session) {
+      if (apiData && apiData.active_session) {
         return {
           success: false,
           active_session: true,
@@ -573,6 +592,10 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
 
       if (result.success && apiData && apiData.api_key) {
         const apiKey = apiData.api_key;
+        const sessionToken = apiData.session_token || null;
+
+        // Set session token globally for all subsequent API calls
+        setSessionToken(sessionToken);
 
         const [userProfile, userSubscription] = await Promise.all([
           fetchUserProfile(apiKey),
@@ -583,6 +606,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
           authenticated: true,
           user_type: 'registered',
           api_key: apiKey,
+          session_token: sessionToken,
           device_id: generateDeviceId(),
           user_info: userProfile ? {
             username: userProfile.username,
@@ -591,9 +615,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
             credit_balance: userProfile.credit_balance,
             is_verified: userProfile.is_verified,
             mfa_enabled: userProfile.mfa_enabled,
-            phone: (userProfile as any).phone ?? null,
-            country: (userProfile as any).country ?? null,
-            country_code: (userProfile as any).country_code ?? null,
+            phone: userProfile.phone ?? null,
+            country: userProfile.country ?? null,
+            country_code: userProfile.country_code ?? null,
           } : {
             email: email,
             account_type: 'free',
@@ -601,6 +625,8 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
           },
           subscription: userSubscription || undefined
         };
+
+        console.log('[AuthContext] Login success — account_type:', newSession.user_info?.account_type, 'session_token:', !!sessionToken);
 
         setSession(newSession);
         await saveSession(newSession);
@@ -673,6 +699,8 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
 
       if (result.success && apiData && apiData.api_key) {
         const apiKey = apiData.api_key;
+        const sessionToken = apiData.session_token || null;
+        setSessionToken(sessionToken);
 
         const userProfile = await fetchUserProfile(apiKey);
 
@@ -680,6 +708,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
           authenticated: true,
           user_type: 'registered',
           api_key: apiKey,
+          session_token: sessionToken,
           device_id: generateDeviceId(),
           user_info: userProfile ? {
             username: userProfile.username,
@@ -688,9 +717,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
             credit_balance: userProfile.credit_balance,
             is_verified: userProfile.is_verified,
             mfa_enabled: userProfile.mfa_enabled,
-            phone: (userProfile as any).phone ?? null,
-            country: (userProfile as any).country ?? null,
-            country_code: (userProfile as any).country_code ?? null,
+            phone: userProfile.phone ?? null,
+            country: userProfile.country ?? null,
+            country_code: userProfile.country_code ?? null,
           } : {
             email: email,
             account_type: 'free',
@@ -729,6 +758,8 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
 
       if (result.success && apiData && apiData.api_key) {
         const apiKey = apiData.api_key;
+        const sessionToken = apiData.session_token || null;
+        setSessionToken(sessionToken);
 
         const [userProfile, userSubscription] = await Promise.all([
           fetchUserProfile(apiKey),
@@ -739,6 +770,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
           authenticated: true,
           user_type: 'registered',
           api_key: apiKey,
+          session_token: sessionToken,
           device_id: generateDeviceId(),
           user_info: userProfile ? {
             username: userProfile.username,
@@ -747,9 +779,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
             credit_balance: userProfile.credit_balance,
             is_verified: userProfile.is_verified,
             mfa_enabled: userProfile.mfa_enabled,
-            phone: (userProfile as any).phone ?? null,
-            country: (userProfile as any).country ?? null,
-            country_code: (userProfile as any).country_code ?? null,
+            phone: userProfile.phone ?? null,
+            country: userProfile.country ?? null,
+            country_code: userProfile.country_code ?? null,
           } : {
             email: email,
             account_type: 'free',
@@ -898,6 +930,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
           console.warn('[AuthContext] Server-side logout failed (non-blocking):', e);
         }
       }
+
+      // Clear session token globally
+      setSessionToken(null);
 
       // Clear session data first (async operations)
       await clearSession();

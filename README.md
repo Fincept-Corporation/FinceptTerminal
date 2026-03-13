@@ -1,5 +1,7 @@
 # Fincept Terminal
 
+> **Migrating to C/C++** — Version 4 will be a pure C++ native application. The current Tauri (React/Rust) build is no longer distributed as a standalone release. To run the Tauri version, clone the repo and use `bun run tauri:dev` from the `fincept-terminal-desktop/` directory.
+
 <div align="center">
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)

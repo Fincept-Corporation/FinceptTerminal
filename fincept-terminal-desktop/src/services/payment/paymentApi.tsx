@@ -2,6 +2,7 @@
 // Payment API service for handling all payment-related API calls with in-app payment window support
 
 import { fetch } from '@tauri-apps/plugin-http';
+import { getSessionToken } from '@/services/auth/authApi';
 
 // API Configuration
 const PAYMENT_API_CONFIG = {
@@ -69,25 +70,13 @@ interface CheckoutResponse {
 }
 
 interface UserSubscriptionResponse {
-  has_subscription: boolean;
-  subscription?: {
-    subscription_uuid: string;
-    plan: {
-      name: string;
-      plan_id: string;
-      price: number;
-    };
-    status: string;
-    current_period_start: string;
-    current_period_end: string;
-    days_remaining: number;
-    cancel_at_period_end: boolean;
-    usage: {
-      api_calls_used: number;
-      api_calls_limit: number | string;
-      usage_percentage: number;
-    };
-  };
+  user_id: number;
+  account_type: string;
+  credit_balance: number;
+  credits_expire_at: string | null;
+  support_type: string;
+  last_credit_purchase_at: string | null;
+  created_at: string;
 }
 
 interface PaymentSuccessResponse {
@@ -126,10 +115,16 @@ const makePaymentApiRequest = async <T = any>(
   headers?: Record<string, string>
 ): Promise<PaymentApiResponse<T>> => {
   try {
-    const defaultHeaders = {
+    const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       ...headers
     };
+
+    // Auto-inject session token for authenticated requests
+    const sessionToken = getSessionToken();
+    if (sessionToken && !defaultHeaders['X-Session-Token']) {
+      defaultHeaders['X-Session-Token'] = sessionToken;
+    }
 
     const url = getPaymentApiEndpoint(endpoint);
 
@@ -299,9 +294,22 @@ export class PaymentApiService {
 
   // Get user's current subscription - Updated to use new endpoint
   static async getUserSubscription(apiKey: string): Promise<PaymentApiResponse<UserSubscriptionResponse>> {
-    return makePaymentApiRequest<UserSubscriptionResponse>('GET', '/cashfree/subscription', undefined, {
+    const response = await makePaymentApiRequest<any>('GET', '/cashfree/subscription', undefined, {
       'X-API-Key': apiKey
     });
+
+    if (response.success && response.data) {
+      // Backend returns: { success, message, data: { user_id, account_type, ... } }
+      // makePaymentApiRequest puts raw JSON in data, so actual data is at response.data.data
+      const subData = response.data.data || response.data;
+      return {
+        success: true,
+        data: subData,
+        status_code: response.status_code
+      };
+    }
+
+    return response as PaymentApiResponse<UserSubscriptionResponse>;
   }
 
   // Get user's usage details

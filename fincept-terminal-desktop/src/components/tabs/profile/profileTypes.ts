@@ -30,13 +30,49 @@ export interface PaymentHistoryItem {
   completed_at: string | null;
 }
 
-// GET /user/usage → { success, data: { period, total_requests, total_credits_used, current_balance, endpoint_usage } }
+// GET /user/usage → { success, data: { account, period_days, summary, daily_usage, endpoint_breakdown, recent_requests, ... } }
 export interface UsageData {
-  period?: string;
-  total_requests?: number;
-  total_credits_used?: number;
-  current_balance?: number;
-  endpoint_usage?: Record<string, { count: number; credits: number }>;
+  account?: {
+    credit_balance: number;
+    account_type: string;
+    credits_expire_at: string | null;
+    rate_limit_per_hour: number;
+    support_type: string;
+  };
+  period_days?: number;
+  summary?: {
+    total_requests: number;
+    total_credits_used: number;
+    avg_credits_per_request: number;
+    avg_response_time_ms: number;
+    first_request_at: string;
+    last_request_at: string;
+  };
+  daily_usage?: Array<{
+    date: string;
+    request_count: number;
+    credits_used: number;
+  }>;
+  endpoint_breakdown?: Array<{
+    endpoint: string;
+    request_count: number;
+    credits_used: number;
+    avg_response_time_ms: number;
+  }>;
+  recent_requests?: Array<{
+    timestamp: string;
+    endpoint: string;
+    method: string;
+    status_code: number;
+    credits_used: number;
+    response_time_ms: number;
+  }>;
+  pagination?: {
+    page: number;
+    page_size: number;
+    total_records: number;
+    total_pages: number;
+  };
 }
 
 export type Section = 'overview' | 'usage' | 'security' | 'billing' | 'support';

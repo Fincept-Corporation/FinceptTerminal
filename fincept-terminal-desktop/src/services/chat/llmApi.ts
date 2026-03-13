@@ -4,6 +4,7 @@
 import { fetch } from '@tauri-apps/plugin-http';
 import { invoke } from '@tauri-apps/api/core';
 import { llmLogger } from '../core/loggerService';
+import { getSessionToken } from '@/services/auth/authApi';
 
 // ── Fincept rate limiter + auth helper (TypeScript side) ─────────────────────
 // The Python subprocess has its own file-based rate limiter, but the Chat tab
@@ -33,6 +34,8 @@ async function _finceptHeaders(apiKey?: string): Promise<Record<string, string>>
   }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (key) headers['X-API-Key'] = key;
+  const sessionToken = getSessionToken();
+  if (sessionToken) headers['X-Session-Token'] = sessionToken;
   return headers;
 }
 

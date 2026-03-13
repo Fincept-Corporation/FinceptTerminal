@@ -13,6 +13,29 @@ const API_CONFIG = {
 
 const getApiEndpoint = (path: string) => `${API_CONFIG.BASE_URL}${path}`;
 
+// Session token management — the API requires X-Session-Token for authenticated endpoints
+let _sessionToken: string | null = null;
+
+export const setSessionToken = (token: string | null) => {
+  _sessionToken = token;
+};
+
+export const getSessionToken = (): string | null => _sessionToken;
+
+/**
+ * Returns auth headers (X-API-Key + X-Session-Token) for use in any service.
+ * Pass apiKey explicitly; session token is auto-injected from global state.
+ */
+export const getAuthHeaders = (apiKey: string): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'X-API-Key': apiKey,
+  };
+  if (_sessionToken) {
+    headers['X-Session-Token'] = _sessionToken;
+  }
+  return headers;
+};
+
 // API Response Types
 interface ApiResponse<T = any> {
   success: boolean;
@@ -64,16 +87,11 @@ interface DeviceRegisterRequest {
 // Response Types
 interface LoginResponse {
   api_key: string;
+  session_token: string;
+  message?: string;
   username?: string;
   email?: string;
   credit_balance?: number;
-  user?: {
-    id: number;
-    username: string;
-    email: string;
-    account_type: string;
-    credit_balance: number;
-  };
 }
 
 interface UserProfileResponse {
@@ -85,6 +103,13 @@ interface UserProfileResponse {
   is_verified: boolean;
   is_admin: boolean;
   mfa_enabled: boolean;
+  phone?: string;
+  country_code?: string;
+  country?: string;
+  notify_email?: boolean;
+  notify_telegram?: boolean;
+  notify_in_app?: boolean;
+  telegram_connected?: boolean;
   created_at: string;
   last_login_at: string;
 }
@@ -125,10 +150,15 @@ const makeApiRequest = async <T = any>(
   headers?: Record<string, string>
 ): Promise<ApiResponse<T>> => {
   try {
-    const defaultHeaders = {
+    const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       ...headers
     };
+
+    // Auto-inject session token for authenticated requests
+    if (_sessionToken && !defaultHeaders['X-Session-Token']) {
+      defaultHeaders['X-Session-Token'] = _sessionToken;
+    }
 
     const url = getApiEndpoint(endpoint);
 
@@ -370,6 +400,7 @@ export class AuthApiService {
       'X-API-Key': apiKey
     });
   }
+
 
   // Get login history
   static async getLoginHistory(apiKey: string, limit: number = 20, offset: number = 0): Promise<ApiResponse<any>> {
@@ -619,9 +650,10 @@ export class AuthUtils {
     return session?.user_info?.account_type === 'free';
   }
 
-  // Check if user has active subscription
+  // Check if user has active subscription (non-free account_type)
   static hasActiveSubscription(session: any): boolean {
-    return session?.subscription?.has_subscription === true;
+    const accountType = (session?.subscription?.account_type || session?.user_info?.account_type || 'free').toLowerCase();
+    return ['basic', 'standard', 'pro', 'enterprise'].includes(accountType);
   }
 
   // Get user display name

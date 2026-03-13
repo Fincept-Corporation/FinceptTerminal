@@ -71,13 +71,17 @@ const ProfileTab: React.FC = () => {
       if (state.activeSection === 'usage') {
         const result = session.user_type === 'guest'
           ? { success: true, data: { requests_today: session.requests_today || 0, credit_balance: session.credit_balance || 0, expires_at: session.expires_at }, error: undefined, status_code: 200 }
-          : await withTimeout(UserApiService.getUserUsage(session.api_key), API_TIMEOUT_MS, 'Usage fetch timeout');
+          : await withTimeout(UserApiService.getUserUsage(session.api_key, { days: 30 }), API_TIMEOUT_MS, 'Usage fetch timeout');
 
         if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
 
+        console.log('[Profile] Usage API result:', { success: result.success, status: result.status_code, hasData: !!result.data, error: result.error });
+
         if (result.success && result.data) {
           const raw = result.data as any;
-          dispatch({ type: 'SET_USAGE_DATA', data: raw?.data || raw });
+          const usagePayload = raw?.data || raw;
+          console.log('[Profile] Usage data keys:', Object.keys(usagePayload || {}));
+          dispatch({ type: 'SET_USAGE_DATA', data: usagePayload });
         } else {
           dispatch({ type: 'SET_ERROR', error: result.error || 'Failed to load usage data' });
         }
@@ -524,18 +528,25 @@ const OverviewSection: React.FC<{ session: any; onLogout: () => void; isLoggingO
 const UsageSection: React.FC<{ usageData: UsageData | null; loading: boolean; session: any }> = ({ usageData, loading, session }) => {
   const credits = session?.user_type === 'guest'
     ? (session?.credit_balance || 0)
-    : (session?.user_info?.credit_balance || 0);
+    : (usageData?.account?.credit_balance ?? session?.user_info?.credit_balance ?? 0);
   const requestsToday = session?.requests_today || 0;
+  const accountType = usageData?.account?.account_type || session?.user_info?.account_type || 'free';
+  const rateLimit = usageData?.account?.rate_limit_per_hour || 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <Panel title="CREDIT BALANCE" icon={<Zap size={14} />}>
-        <div style={{ padding: '20px 0', textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', color: F.CYAN, fontWeight: 700, marginBottom: '8px', fontFamily: FONT }}>
-            {credits.toLocaleString()}
-          </div>
-          <div style={{ fontSize: '9px', color: F.GRAY, letterSpacing: '0.5px', fontWeight: 700 }}>AVAILABLE CREDITS</div>
+      {/* Account & Credit Balance */}
+      <Panel title="ACCOUNT & CREDITS" icon={<Zap size={14} />}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', padding: '12px 0' }}>
+          <StatBox label="CREDIT BALANCE" value={credits} color={F.CYAN} />
+          <StatBox label="ACCOUNT TYPE" value={accountType.toUpperCase()} />
+          <StatBox label="RATE LIMIT / HR" value={rateLimit} />
         </div>
+        {usageData?.account?.credits_expire_at && (
+          <div style={{ fontSize: '9px', color: F.MUTED, textAlign: 'center', marginTop: '4px' }}>
+            Credits expire: {new Date(usageData.account.credits_expire_at).toLocaleDateString()}
+          </div>
+        )}
       </Panel>
 
       {session?.user_type === 'guest' && (
@@ -553,48 +564,134 @@ const UsageSection: React.FC<{ usageData: UsageData | null; loading: boolean; se
         <LoadingState message="Loading usage data..." />
       ) : usageData ? (
         <>
-          <Panel title="USAGE STATISTICS" icon={<BarChart size={14} />}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', padding: '12px 0' }}>
-              <StatBox label="TOTAL REQUESTS" value={usageData.total_requests || 0} />
-              <StatBox label="CREDITS USED" value={usageData.total_credits_used || 0} color={F.YELLOW} />
-              <StatBox label="BALANCE" value={usageData.current_balance || 0} />
+          {/* Summary Statistics */}
+          <Panel title={`USAGE SUMMARY — LAST ${usageData.period_days || 7} DAYS`} icon={<BarChart size={14} />}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', padding: '12px 0' }}>
+              <StatBox label="TOTAL REQUESTS" value={usageData.summary?.total_requests || 0} />
+              <StatBox label="CREDITS USED" value={usageData.summary?.total_credits_used || 0} color={F.YELLOW} />
+              <StatBox label="AVG CREDITS/REQ" value={usageData.summary?.avg_credits_per_request?.toFixed(2) || '0'} />
+              <StatBox label="AVG RESPONSE (ms)" value={usageData.summary?.avg_response_time_ms?.toFixed(0) || '0'} />
             </div>
-            {usageData.period && (
-              <div style={{ fontSize: '9px', color: F.MUTED, textAlign: 'center', marginTop: '8px' }}>
-                Period: {usageData.period.replace(/_/g, ' ').toUpperCase()}
+            {usageData.summary?.first_request_at && usageData.summary?.last_request_at && (
+              <div style={{ fontSize: '9px', color: F.MUTED, textAlign: 'center', marginTop: '4px' }}>
+                {new Date(usageData.summary.first_request_at).toLocaleDateString()} — {new Date(usageData.summary.last_request_at).toLocaleDateString()}
               </div>
             )}
           </Panel>
 
-          {/* Top Endpoints Breakdown */}
-          {usageData.endpoint_usage && Object.keys(usageData.endpoint_usage).length > 0 && (
-            <Panel title="ENDPOINT USAGE" icon={<Activity size={14} />}>
-              <table style={{ width: '100%', fontSize: '10px', fontFamily: FONT, borderCollapse: 'collapse' }}>
+          {/* Daily Usage Chart */}
+          {usageData.daily_usage && usageData.daily_usage.length > 0 && (
+            <Panel title="DAILY USAGE" icon={<Activity size={14} />}>
+              <div style={{ padding: '8px 0' }}>
+                {/* Simple bar chart */}
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '80px', padding: '0 4px' }}>
+                  {(() => {
+                    const maxReqs = Math.max(...usageData.daily_usage!.map(d => d.request_count), 1);
+                    return usageData.daily_usage!.map((day) => (
+                      <div key={day.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                        <div
+                          title={`${day.date}: ${day.request_count} requests, ${day.credits_used} credits`}
+                          style={{
+                            width: '100%',
+                            height: `${Math.max((day.request_count / maxReqs) * 70, 2)}px`,
+                            backgroundColor: day.credits_used > 0 ? F.CYAN : F.MUTED,
+                            borderRadius: '1px 1px 0 0',
+                            opacity: 0.8,
+                          }}
+                        />
+                      </div>
+                    ));
+                  })()}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 4px 0', fontSize: '8px', color: F.MUTED }}>
+                  <span>{usageData.daily_usage[0]?.date?.slice(5)}</span>
+                  <span>{usageData.daily_usage[usageData.daily_usage.length - 1]?.date?.slice(5)}</span>
+                </div>
+              </div>
+              {/* Daily totals table */}
+              <table style={{ width: '100%', fontSize: '10px', fontFamily: FONT, borderCollapse: 'collapse', marginTop: '8px' }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${F.BORDER}` }}>
-                    {['ENDPOINT', 'REQUESTS', 'CREDITS'].map(h => (
+                    {['DATE', 'REQUESTS', 'CREDITS'].map(h => (
                       <th key={h} style={{
                         padding: '6px 8px',
-                        textAlign: h === 'ENDPOINT' ? 'left' : 'right',
-                        color: F.GRAY,
-                        fontSize: '9px',
-                        fontWeight: 700,
-                        letterSpacing: '0.5px',
+                        textAlign: h === 'DATE' ? 'left' : 'right',
+                        color: F.GRAY, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px',
                       }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(usageData.endpoint_usage)
-                    .sort(([, a], [, b]) => b.count - a.count)
+                  {usageData.daily_usage.slice().reverse().slice(0, 10).map((day) => (
+                    <tr key={day.date} style={{ borderBottom: `1px solid ${F.BORDER}` }}>
+                      <td style={{ padding: '6px 8px', color: F.WHITE, fontSize: '9px' }}>{day.date}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', color: F.CYAN, fontWeight: 700 }}>{day.request_count.toLocaleString()}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', color: day.credits_used > 0 ? F.YELLOW : F.MUTED, fontWeight: 700 }}>{day.credits_used.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Panel>
+          )}
+
+          {/* Top Endpoints Breakdown */}
+          {usageData.endpoint_breakdown && usageData.endpoint_breakdown.length > 0 && (
+            <Panel title="TOP ENDPOINTS" icon={<Activity size={14} />}>
+              <table style={{ width: '100%', fontSize: '10px', fontFamily: FONT, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${F.BORDER}` }}>
+                    {['ENDPOINT', 'REQUESTS', 'CREDITS', 'AVG MS'].map(h => (
+                      <th key={h} style={{
+                        padding: '6px 8px',
+                        textAlign: h === 'ENDPOINT' ? 'left' : 'right',
+                        color: F.GRAY, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {usageData.endpoint_breakdown
                     .slice(0, 15)
-                    .map(([endpoint, stats]) => (
-                      <tr key={endpoint} style={{ borderBottom: `1px solid ${F.BORDER}` }}>
-                        <td style={{ padding: '6px 8px', color: F.WHITE, fontSize: '9px' }}>{endpoint}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right', color: F.CYAN, fontWeight: 700 }}>{stats.count}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right', color: stats.credits > 0 ? F.YELLOW : F.MUTED, fontWeight: 700 }}>{stats.credits}</td>
+                    .map((ep) => (
+                      <tr key={ep.endpoint} style={{ borderBottom: `1px solid ${F.BORDER}` }}>
+                        <td style={{ padding: '6px 8px', color: F.WHITE, fontSize: '9px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.endpoint}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', color: F.CYAN, fontWeight: 700 }}>{ep.request_count.toLocaleString()}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', color: ep.credits_used > 0 ? F.YELLOW : F.MUTED, fontWeight: 700 }}>{ep.credits_used.toLocaleString()}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', color: F.MUTED, fontWeight: 700 }}>{ep.avg_response_time_ms.toFixed(0)}</td>
                       </tr>
                     ))}
+                </tbody>
+              </table>
+            </Panel>
+          )}
+
+          {/* Recent Requests */}
+          {usageData.recent_requests && usageData.recent_requests.length > 0 && (
+            <Panel title="RECENT REQUESTS" icon={<FileText size={14} />}>
+              <table style={{ width: '100%', fontSize: '10px', fontFamily: FONT, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${F.BORDER}` }}>
+                    {['TIME', 'ENDPOINT', 'METHOD', 'STATUS', 'MS'].map(h => (
+                      <th key={h} style={{
+                        padding: '6px 8px',
+                        textAlign: h === 'ENDPOINT' ? 'left' : 'center',
+                        color: F.GRAY, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {usageData.recent_requests.slice(0, 20).map((req, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${F.BORDER}` }}>
+                      <td style={{ padding: '6px 8px', color: F.MUTED, fontSize: '9px', whiteSpace: 'nowrap' }}>
+                        {new Date(req.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </td>
+                      <td style={{ padding: '6px 8px', color: F.WHITE, fontSize: '9px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.endpoint}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: req.method === 'GET' ? F.CYAN : F.ORANGE, fontWeight: 700, fontSize: '9px' }}>{req.method}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: req.status_code < 400 ? F.GREEN : F.RED, fontWeight: 700, fontSize: '9px' }}>{req.status_code}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: F.MUTED, fontSize: '9px' }}>{req.response_time_ms}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </Panel>

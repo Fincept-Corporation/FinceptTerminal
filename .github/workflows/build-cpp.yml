@@ -1,0 +1,258 @@
+name: Build C++ Terminal — All Platforms
+
+on:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---- Windows ----
+          - os: windows-latest
+            triplet: x64-windows
+            arch: x64
+            platform: Windows
+            artifact: FinceptTerminal-Windows-x64
+            exe: FinceptTerminal.exe
+            cmake_extra: ""
+
+          - os: windows-latest
+            triplet: arm64-windows
+            arch: arm64
+            platform: Windows
+            artifact: FinceptTerminal-Windows-arm64
+            exe: FinceptTerminal.exe
+            cmake_extra: "-A ARM64"
+
+          # ---- Linux ----
+          - os: ubuntu-24.04
+            triplet: x64-linux
+            arch: x64
+            platform: Linux
+            artifact: FinceptTerminal-Linux-x64
+            exe: FinceptTerminal
+            cmake_extra: ""
+
+          - os: ubuntu-24.04
+            triplet: arm64-linux
+            arch: arm64
+            platform: Linux
+            artifact: FinceptTerminal-Linux-arm64
+            exe: FinceptTerminal
+            cmake_extra: "-DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64"
+
+          # ---- macOS ----
+          - os: macos-14
+            triplet: arm64-osx
+            arch: arm64
+            platform: macOS
+            artifact: FinceptTerminal-macOS-arm64
+            exe: FinceptTerminal
+            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=arm64"
+
+          - os: macos-13
+            triplet: x64-osx
+            arch: x64
+            platform: macOS
+            artifact: FinceptTerminal-macOS-x64
+            exe: FinceptTerminal
+            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }} ${{ matrix.arch }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup vcpkg caching
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      # ---- System dependencies ----
+      - name: Install system dependencies (Linux x64)
+        if: runner.os == 'Linux' && matrix.arch == 'x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
+            libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
+            libwayland-dev libxkbcommon-dev \
+            pkg-config autoconf automake libtool \
+            python3 python3-pip
+
+      - name: Install system dependencies (Linux arm64 cross-compile)
+        if: runner.os == 'Linux' && matrix.arch == 'arm64'
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list.d/*.list 2>/dev/null || true
+          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs) main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
+          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            pkg-config autoconf automake libtool \
+            python3 python3-pip \
+            libxinerama-dev:arm64 libxcursor-dev:arm64 libxrandr-dev:arm64 \
+            libxi-dev:arm64 libxext-dev:arm64 libxfixes-dev:arm64 \
+            libwayland-dev:arm64 libxkbcommon-dev:arm64 \
+            libglu1-mesa-dev:arm64 libgl-dev:arm64
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install pkg-config autoconf automake libtool
+
+      # ---- vcpkg ----
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+          vcpkgGitCommitId: '962e5e39f8a25f42522f51fffc574e05a3efd26b'
+
+      # ---- Configure & Build ----
+      - name: Configure CMake
+        working-directory: fincept-cpp
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            ${{ matrix.cmake_extra }}
+
+      - name: Build
+        working-directory: fincept-cpp
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      # ---- Collect artifacts ----
+      - name: Collect artifacts (Windows)
+        if: runner.os == 'Windows'
+        working-directory: fincept-cpp
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp build/Release/${{ matrix.exe }} dist/
+          cp build/Release/*.dll dist/ 2>/dev/null || true
+          cp -r fonts dist/fonts 2>/dev/null || true
+
+      - name: Collect artifacts (Linux/macOS)
+        if: runner.os != 'Windows'
+        working-directory: fincept-cpp
+        run: |
+          mkdir -p dist
+          cp build/${{ matrix.exe }} dist/
+          chmod +x dist/${{ matrix.exe }}
+          cp -r fonts dist/fonts 2>/dev/null || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: fincept-cpp/dist/
+          retention-days: 30
+
+  # ---- macOS Universal Binary ----
+  macos-universal:
+    needs: build
+    runs-on: macos-14
+    name: macOS Universal
+
+    steps:
+      - name: Download macOS arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: FinceptTerminal-macOS-arm64
+          path: arm64
+
+      - name: Download macOS x64
+        uses: actions/download-artifact@v4
+        with:
+          name: FinceptTerminal-macOS-x64
+          path: x64
+
+      - name: Create Universal Binary
+        run: |
+          mkdir -p dist
+          lipo -create arm64/FinceptTerminal x64/FinceptTerminal -output dist/FinceptTerminal
+          chmod +x dist/FinceptTerminal
+          cp -r arm64/fonts dist/fonts 2>/dev/null || true
+          file dist/FinceptTerminal
+
+      - name: Upload Universal artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinceptTerminal-macOS-universal
+          path: dist/
+          retention-days: 30
+
+  # ---- Release ----
+  release:
+    needs: [build, macos-universal]
+    runs-on: ubuntu-latest
+    if: always() && !cancelled() && !contains(needs.*.result, 'failure')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package releases
+        run: |
+          cd artifacts
+          for dir in */; do
+            name="${dir%/}"
+            cd "$name"
+            if [[ "$name" == *"Windows"* ]]; then
+              zip -r "../../${name}.zip" .
+            else
+              tar -czf "../../${name}.tar.gz" .
+            fi
+            cd ..
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: cpp-v${{ github.run_number }}
+          name: "Fincept Terminal C++ Build #${{ github.run_number }}"
+          body: |
+            Automated build from commit ${{ github.sha }}
+
+            ## Downloads
+
+            ### Windows
+            - `FinceptTerminal-Windows-x64.zip` — Windows x86_64
+            - `FinceptTerminal-Windows-arm64.zip` — Windows ARM64
+
+            ### Linux
+            - `FinceptTerminal-Linux-x64.tar.gz` — Linux x86_64
+            - `FinceptTerminal-Linux-arm64.tar.gz` — Linux ARM64 (aarch64)
+
+            ### macOS
+            - `FinceptTerminal-macOS-arm64.tar.gz` — macOS Apple Silicon (M1/M2/M3/M4)
+            - `FinceptTerminal-macOS-x64.tar.gz` — macOS Intel
+            - `FinceptTerminal-macOS-universal.tar.gz` — macOS Universal (both architectures)
+          files: |
+            FinceptTerminal-Windows-x64.zip
+            FinceptTerminal-Windows-arm64.zip
+            FinceptTerminal-Linux-x64.tar.gz
+            FinceptTerminal-Linux-arm64.tar.gz
+            FinceptTerminal-macOS-arm64.tar.gz
+            FinceptTerminal-macOS-x64.tar.gz
+            FinceptTerminal-macOS-universal.tar.gz
+          draft: false
+          prerelease: true

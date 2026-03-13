@@ -2,10 +2,11 @@
 // User and Profile API Service
 
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import { getSessionToken } from '@/services/auth/authApi';
 
-// API Configuration - always use full URL for Tauri fetch
+// API Configuration
 const API_CONFIG = {
-  BASE_URL: 'https://api.fincept.in',
+  BASE_URL: import.meta.env.DEV ? '/api' : 'https://api.fincept.in',
 };
 
 const getApiEndpoint = (path: string) => `${API_CONFIG.BASE_URL}${path}`;
@@ -33,12 +34,18 @@ async function makeApiRequest<T = any>(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-API-Key': apiKey,
+    };
+    const sessionToken = getSessionToken();
+    if (sessionToken) {
+      headers['X-Session-Token'] = sessionToken;
+    }
+
     const options: RequestInit = {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': apiKey,
-      },
+      headers,
       signal: controller.signal,
     };
 
@@ -46,18 +53,23 @@ async function makeApiRequest<T = any>(
       options.body = JSON.stringify(body);
     }
 
+    const url = getApiEndpoint(endpoint);
+    console.log(`[UserAPI] ${method} ${url}`);
+
     let response: Response;
     try {
-      response = await safeFetch(getApiEndpoint(endpoint), options);
+      response = await safeFetch(url, options);
     } finally {
       clearTimeout(timeoutId);
     }
     const data = await response.json();
 
+    console.log(`[UserAPI] ${method} ${endpoint} → ${response.status}`, data?.success);
+
     return {
       success: response.ok,
       data: data,
-      error: response.ok ? undefined : data.detail || data.error || 'Request failed',
+      error: response.ok ? undefined : data.detail || data.message || data.error || 'Request failed',
       status_code: response.status,
     };
   } catch (error) {
