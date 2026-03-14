@@ -1,7 +1,7 @@
 #include "pricing_screen.h"
 #include "auth_manager.h"
 #include "auth_api.h"
-#include "theme/bloomberg_theme.h"
+#include "ui/yoga_helpers.h"
 #include <imgui.h>
 #include <algorithm>
 #include <nlohmann/json.hpp>
@@ -22,10 +22,10 @@ static void open_url(const char* url) {
     ShellExecuteA(nullptr, "open", url, nullptr, nullptr, SW_SHOWNORMAL);
 #elif __APPLE__
     std::string cmd = std::string("open ") + url;
-    system(cmd.c_str());
+    (void)system(cmd.c_str());
 #else
     std::string cmd = std::string("xdg-open ") + url;
-    system(cmd.c_str());
+    (void)system(cmd.c_str());
 #endif
 }
 
@@ -305,23 +305,11 @@ void PricingScreen::render(AppScreen& next_screen) {
         fetch_plans_async();
     }
 
-    // Fullscreen window
-    ImGuiViewport* vp = ImGui::GetMainViewport();
-    float tab_h = ImGui::GetFrameHeight() + 4;
-    float footer_h = ImGui::GetFrameHeight();
+    // Responsive fullscreen frame
+    ui::ScreenFrame frame("##pricing_screen", ImVec2(0, 0), BG_DARK);
+    if (!frame.begin()) { frame.end(); return; }
 
-    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + tab_h));
-    ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x, vp->WorkSize.y - tab_h - footer_h));
-
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, BG_DARK);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-
-    ImGui::Begin("##pricing_screen", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking |
-        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus);
-
-    ImVec2 avail = ImGui::GetContentRegionAvail();
+    ImVec2 avail = frame.content_size();
 
     // ── Scrollable content ──
     ImGui::BeginChild("##pricing_scroll", ImVec2(0, 0), false);
@@ -504,9 +492,7 @@ void PricingScreen::render(AppScreen& next_screen) {
 
     ImGui::EndChild(); // pricing_scroll
 
-    ImGui::End();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
+    frame.end();
 }
 
 } // namespace fincept::auth

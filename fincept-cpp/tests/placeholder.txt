@@ -1,0 +1,2 @@
+Tests directory — add unit and integration tests here.
+See CONTRIBUTING.md for testing guidelines.

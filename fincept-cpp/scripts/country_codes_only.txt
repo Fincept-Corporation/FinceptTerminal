@@ -1,0 +1,266 @@
+    "999": "999",  # Not Applicable
+    "abw": "533",  # Aruba
+    "afg": "004",  # Afghanistan
+    "ago": "024",  # Angola
+    "aia": "660",  # Anguila
+    "alb": "008",  # Albania
+    "and": "020",  # Andorra
+    "ant": "530",  # Netherlands Antilles
+    "are": "784",  # United Arab Emirates
+    "arg": "032",  # Argentina
+    "arm": "051",  # Armenia
+    "asm": "016",  # American Samoa
+    "ata": "010",  # Antarctica
+    "atf": "260",  # Fr. So. Ant. Tr
+    "atg": "028",  # Antigua and Barbuda
+    "aus": "036",  # Australia
+    "aut": "040",  # Austria
+    "aze": "031",  # Azerbaijan
+    "bat": "080",  # Br. Antr. Terr
+    "bdi": "108",  # Burundi
+    "bel": "056",  # Belgium
+    "ben": "204",  # Benin
+    "bes": "535",  # Bonaire
+    "bfa": "854",  # Burkina Faso
+    "bgd": "050",  # Bangladesh
+    "bgr": "100",  # Bulgaria
+    "bhr": "048",  # Bahrain
+    "bhs": "044",  # Bahamas, The
+    "bih": "070",  # Bosnia and Herzegovina
+    "blm": "652",  # Saint Barthélemy
+    "blr": "112",  # Belarus
+    "blx": "058",  # Belgium-Luxembourg
+    "blz": "084",  # Belize
+    "bmu": "060",  # Bermuda
+    "bol": "068",  # Bolivia
+    "bra": "076",  # Brazil
+    "brb": "052",  # Barbados
+    "brn": "096",  # Brunei
+    "btn": "064",  # Bhutan
+    "bun": "837",  # Bunkers
+    "bvt": "074",  # Bouvet Island
+    "bwa": "072",  # Botswana
+    "caf": "140",  # Central African Republic
+    "can": "124",  # Canada
+    "cck": "166",  # Cocos (Keeling) Islands
+    "che": "756",  # Switzerland
+    "chl": "152",  # Chile
+    "chn": "156",  # China
+    "civ": "384",  # Cote d'Ivoire
+    "cmr": "120",  # Cameroon
+    "cog": "178",  # Congo, Rep.
+    "cok": "184",  # Cook Islands
+    "col": "170",  # Colombia
+    "com": "174",  # Comoros
+    "cpv": "132",  # Cape Verde
+    "cri": "188",  # Costa Rica
+    "csk": "200",  # Czechoslovakia
+    "cub": "192",  # Cuba
+    "cuw": "531",  # Curaçao
+    "cxr": "162",  # Christmas Island
+    "cym": "136",  # Cayman Islands
+    "cyp": "196",  # Cyprus
+    "cze": "203",  # Czech Republic
+    "ddr": "278",  # German Democratic Republic
+    "deu": "276",  # Germany
+    "dji": "262",  # Djibouti
+    "dma": "212",  # Dominica
+    "dnk": "208",  # Denmark
+    "dom": "214",  # Dominican Republic
+    "dza": "012",  # Algeria
+    "eas": "EAS",  # East Asia & Pacific
+    "ecs": "ECS",  # Europe & Central Asia
+    "ecu": "218",  # Ecuador
+    "egy": "818",  # Egypt, Arab Rep.
+    "eri": "232",  # Eritrea
+    "esh": "732",  # Western Sahara
+    "esp": "724",  # Spain
+    "est": "233",  # Estonia
+    "etf": "230",  # Ethiopia(includes Eritrea)
+    "eth": "231",  # Ethiopia(excludes Eritrea)
+    "fin": "246",  # Finland
+    "fji": "242",  # Fiji
+    "flk": "238",  # Falkland Island
+    "fra": "250",  # France
+    "fre": "838",  # Free Zones
+    "fro": "234",  # Faeroe Islands
+    "fsm": "583",  # Micronesia, Fed. Sts.
+    "gab": "266",  # Gabon
+    "gbr": "826",  # United Kingdom
+    "geo": "268",  # Georgia
+    "gha": "288",  # Ghana
+    "gib": "292",  # Gibraltar
+    "gin": "324",  # Guinea
+    "glp": "312",  # Guadeloupe
+    "gmb": "270",  # Gambia, The
+    "gnb": "624",  # Guinea-Bissau
+    "gnq": "226",  # Equatorial Guinea
+    "grc": "300",  # Greece
+    "grd": "308",  # Grenada
+    "grl": "304",  # Greenland
+    "gtm": "320",  # Guatemala
+    "guf": "254",  # French Guiana
+    "gum": "316",  # Guam
+    "guy": "328",  # Guyana
+    "hkg": "344",  # Hong Kong, China
+    "hmd": "334",  # Heard Island and McDonald Isla
+    "hnd": "340",  # Honduras
+    "hrv": "191",  # Croatia
+    "hti": "332",  # Haiti
+    "hun": "348",  # Hungary
+    "idn": "360",  # Indonesia
+    "ind": "356",  # India
+    "iot": "086",  # British Indian Ocean Ter.
+    "irl": "372",  # Ireland
+    "irn": "364",  # Iran, Islamic Rep.
+    "irq": "368",  # Iraq
+    "isl": "352",  # Iceland
+    "isr": "376",  # Israel
+    "ita": "380",  # Italy
+    "jam": "388",  # Jamaica
+    "jor": "400",  # Jordan
+    "jpn": "392",  # Japan
+    "kaz": "398",  # Kazakhstan
+    "ken": "404",  # Kenya
+    "kgz": "417",  # Kyrgyz Republic
+    "khm": "116",  # Cambodia
+    "kir": "296",  # Kiribati
+    "kna": "659",  # St. Kitts and Nevis
+    "kor": "410",  # Korea, Rep.
+    "kwt": "414",  # Kuwait
+    "lao": "418",  # Lao PDR
+    "lbn": "422",  # Lebanon
+    "lbr": "430",  # Liberia
+    "lby": "434",  # Libya
+    "lca": "662",  # St. Lucia
+    "lcn": "LCN",  # Latin America & Caribbean
+    "lka": "144",  # Sri Lanka
+    "lso": "426",  # Lesotho
+    "ltu": "440",  # Lithuania
+    "lux": "442",  # Luxembourg
+    "lva": "428",  # Latvia
+    "mac": "446",  # Macao
+    "mar": "504",  # Morocco
+    "mco": "492",  # Monaco
+    "mda": "498",  # Moldova
+    "mdg": "450",  # Madagascar
+    "mdv": "462",  # Maldives
+    "mea": "MEA",  # Middle East, North Africa, Afghanistan & Pakistan
+    "mex": "484",  # Mexico
+    "mhl": "584",  # Marshall Islands
+    "mkd": "807",  # North Macedonia
+    "mli": "466",  # Mali
+    "mlt": "470",  # Malta
+    "mmr": "104",  # Myanmar
+    "mng": "496",  # Mongolia
+    "mnp": "580",  # Northern Mariana Islands
+    "mnt": "499",  # Montenegro
+    "moz": "508",  # Mozambique
+    "mrt": "478",  # Mauritania
+    "msr": "500",  # Montserrat
+    "mtq": "474",  # Martinique
+    "mus": "480",  # Mauritius
+    "mwi": "454",  # Malawi
+    "mys": "458",  # Malaysia
+    "myt": "175",  # Mayotte
+    "nac": "NAC",  # North America
+    "nam": "516",  # Namibia
+    "ncl": "540",  # New Caledonia
+    "ner": "562",  # Niger
+    "nfk": "574",  # Norfolk Island
+    "nga": "566",  # Nigeria
+    "nic": "558",  # Nicaragua
+    "niu": "570",  # Niue
+    "nld": "528",  # Netherlands
+    "nor": "578",  # Norway
+    "npl": "524",  # Nepal
+    "nru": "520",  # Nauru
+    "nze": "536",  # Neutral Zone
+    "nzl": "554",  # New Zealand
+    "oas": "490",  # Other Asia, nes
+    "omn": "512",  # Oman
+    "pak": "586",  # Pakistan
+    "pan": "591",  # Panama
+    "pce": "582",  # Pacific Islands
+    "pcn": "612",  # Pitcairn
+    "per": "604",  # Peru
+    "phl": "608",  # Philippines
+    "plw": "585",  # Palau
+    "png": "598",  # Papua New Guinea
+    "pol": "616",  # Poland
+    "prk": "408",  # Korea, Dem. Rep.
+    "prt": "620",  # Portugal
+    "pry": "600",  # Paraguay
+    "pse": "275",  # Occ.Pal.Terr
+    "pyf": "258",  # French Polynesia
+    "qat": "634",  # Qatar
+    "reu": "638",  # Reunion
+    "rom": "642",  # Romania
+    "rus": "643",  # Russian Federation
+    "rwa": "646",  # Rwanda
+    "sas": "SAS",  # South Asia
+    "sau": "682",  # Saudi Arabia
+    "sdn": "736",  # Fm Sudan
+    "sen": "686",  # Senegal
+    "ser": "891",  # Serbia, FR(Serbia/Montenegro)
+    "sgp": "702",  # Singapore
+    "sgs": "239",  # South Georgia and the South Sa
+    "shn": "654",  # Saint Helena
+    "slb": "090",  # Solomon Islands
+    "sle": "694",  # Sierra Leone
+    "slv": "222",  # El Salvador
+    "smr": "674",  # San Marino
+    "som": "706",  # Somalia
+    "spe": "839",  # Special Categories
+    "spm": "666",  # Saint Pierre and Miquelon
+    "ssd": "728",  # South Sudan
+    "ssf": "SSF",  # Sub-Saharan Africa
+    "stp": "678",  # Sao Tome and Principe
+    "sud": "729",  # Sudan
+    "sur": "740",  # Suriname
+    "svk": "703",  # Slovak Republic
+    "svn": "705",  # Slovenia
+    "svu": "810",  # Soviet Union
+    "swe": "752",  # Sweden
+    "swz": "748",  # Eswatini
+    "sxm": "534",  # Saint Maarten (Dutch part)
+    "syc": "690",  # Seychelles
+    "syr": "760",  # Syrian Arab Republic
+    "tca": "796",  # Turks and Caicos Isl.
+    "tcd": "148",  # Chad
+    "tgo": "768",  # Togo
+    "tha": "764",  # Thailand
+    "tjk": "762",  # Tajikistan
+    "tkl": "772",  # Tokelau
+    "tkm": "795",  # Turkmenistan
+    "tmp": "626",  # East Timor
+    "ton": "776",  # Tonga
+    "tto": "780",  # Trinidad and Tobago
+    "tun": "788",  # Tunisia
+    "tur": "792",  # Turkey
+    "tuv": "798",  # Tuvalu
+    "tza": "834",  # Tanzania
+    "uga": "800",  # Uganda
+    "ukr": "804",  # Ukraine
+    "umi": "581",  # United States Minor Outlying I
+    "uns": "898",  # Unspecified
+    "ury": "858",  # Uruguay
+    "usa": "840",  # United States
+    "usp": "849",  # Us Msc.Pac.I
+    "uzb": "860",  # Uzbekistan
+    "vat": "336",  # Holy See
+    "vct": "670",  # St. Vincent and the Grenadines
+    "ven": "862",  # Venezuela
+    "vgb": "092",  # British Virgin Islands
+    "vnm": "704",  # Vietnam
+    "vut": "548",  # Vanuatu
+    "wld": "000",  # World
+    "wlf": "876",  # Wallis and Futura Isl.
+    "wsm": "882",  # Samoa
+    "ydr": "720",  # Yemen Democratic
+    "yem": "887",  # Yemen
+    "yug": "890",  # Yugoslavia,FR(Serbia/Montenegr
+    "zaf": "710",  # South Africa
+    "zar": "180",  # Congo, Dem. Rep.
+    "zmb": "894",  # Zambia
+    "zwe": "716",  # Zimbabwe

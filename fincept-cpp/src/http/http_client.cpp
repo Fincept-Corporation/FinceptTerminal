@@ -2,6 +2,7 @@
 // Thread-safe with connection reuse and proper error handling
 
 #include "http_client.h"
+#include "core/logger.h"
 #include <curl/curl.h>
 #include <stdexcept>
 #include <cstring>
@@ -103,8 +104,10 @@ HttpResponse HttpClient::perform(const std::string& method, const std::string& u
     // Connection reuse
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
 
-    // User agent
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "FinceptTerminal/3.3.1");
+    // User agent — must look like a real browser or Cloudflare blocks with 1010
+    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) FinceptTerminal/4.0.0 Chrome/131.0.0.0 Safari/537.36");
 
     // Perform
     CURLcode res = curl_easy_perform(curl);
@@ -118,12 +121,18 @@ HttpResponse HttpClient::perform(const std::string& method, const std::string& u
         } else if (res == CURLE_COULDNT_RESOLVE_HOST) {
             response.error = "Could not resolve host";
         }
+        LOG_ERROR("HTTP", "%s %s failed: %s", method.c_str(), url.c_str(), response.error.c_str());
     } else {
         long http_code = 0;
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
         response.status_code = (int)http_code;
         response.body = std::move(response_body);
         response.success = (http_code >= 200 && http_code < 300);
+        if (!response.success) {
+            LOG_WARN("HTTP", "%s %s returned %d", method.c_str(), url.c_str(), (int)http_code);
+        } else {
+            LOG_DEBUG("HTTP", "%s %s -> %d", method.c_str(), url.c_str(), (int)http_code);
+        }
     }
 
     curl_slist_free_all(header_list);

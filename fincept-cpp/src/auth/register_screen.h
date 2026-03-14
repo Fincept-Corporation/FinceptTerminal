@@ -1,6 +1,6 @@
 #pragma once
-#include "app.h"
-#include "utils/validators.h"
+#include "core/app_screen.h"
+#include "core/validators.h"
 #include <string>
 
 namespace fincept::auth {

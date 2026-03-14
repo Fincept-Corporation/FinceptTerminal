@@ -1,0 +1,136 @@
+analytics/
+└── quant/
+    ├── __init__.py
+    ├── core/
+    │   ├── __init__.py
+    │   ├── base_calculator.py          # Base class for all calculators
+    │   ├── data_validator.py           # Input validation & data quality
+    │   └── exceptions.py               # Custom exception classes
+    │
+    ├── returns_analysis/
+    │   ├── __init__.py
+    │   ├── rate_calculations.py        # Interest rates, discount rates
+    │   ├── return_measures.py          # All return calculation methods
+    │   ├── performance_metrics.py      # Sharpe, Sortino, etc.
+    │   └── risk_metrics.py             # VaR, CVaR, volatility measures
+    │
+    ├── time_value_money/
+    │   ├── __init__.py
+    │   ├── present_value.py            # PV calculations for all instruments
+    │   ├── future_value.py             # FV calculations
+    │   ├── cash_flow_analysis.py       # NPV, IRR, cash flow additivity
+    │   ├── bond_valuation.py           # Fixed income valuation
+    │   ├── equity_valuation.py         # Equity instrument valuation
+    │   └── forward_rates.py            # Implied forward rates
+    │
+    ├── statistical_analysis/
+    │   ├── __init__.py
+    │   ├── descriptive_stats.py        # Central tendency, dispersion
+    │   ├── distribution_analysis.py    # Skewness, kurtosis, normality
+    │   ├── correlation_analysis.py     # Correlation, covariance matrices
+    │   └── outlier_detection.py        # Statistical outlier methods
+    │
+    ├── probability_simulation/
+    │   ├── __init__.py
+    │   ├── probability_trees.py        # Probability trees, conditional expectations
+    │   ├── bayes_theorem.py            # Bayesian updates
+    │   ├── monte_carlo.py              # Monte Carlo simulation engine
+    │   ├── bootstrap_methods.py        # Bootstrap & jackknife resampling
+    │   └── distribution_models.py      # Normal, lognormal, custom distributions
+    │
+    ├── portfolio_mathematics/
+    │   ├── __init__.py
+    │   ├── portfolio_returns.py        # Portfolio return calculations
+    │   ├── portfolio_risk.py           # Portfolio risk metrics
+    │   ├── efficient_frontier.py       # Modern portfolio theory
+    │   ├── safety_first.py             # Roy's safety-first criterion
+    │   └── optimization.py             # Portfolio optimization algorithms
+    │
+    ├── hypothesis_testing/
+    │   ├── __init__.py
+    │   ├── parametric_tests.py         # t-tests, z-tests, F-tests
+    │   ├── nonparametric_tests.py      # Chi-square, Mann-Whitney, etc.
+    │   ├── independence_tests.py       # Contingency tables, correlation tests
+    │   ├── power_analysis.py           # Statistical power calculations
+    │   └── multiple_testing.py         # Bonferroni, FDR corrections
+    │
+    ├── regression_analysis/
+    │   ├── __init__.py
+    │   ├── simple_regression.py        # Simple linear regression (Level I)
+    │   ├── multiple_regression.py      # Multiple regression (Level II)
+    │   ├── logistic_regression.py      # Logistic regression (Level II)
+    │   ├── model_diagnostics.py        # Residual analysis, assumption testing
+    │   ├── model_selection.py          # Variable selection, model comparison
+    │   ├── influence_analysis.py       # Outlier detection, leverage
+    │   └── heteroskedasticity.py       # Heteroskedasticity tests & corrections
+    │
+    ├── time_series_analysis/
+    │   ├── __init__.py
+    │   ├── trend_analysis.py           # Linear & log-linear trends
+    │   ├── stationarity.py             # Stationarity tests, unit root tests
+    │   ├── autoregressive_models.py    # AR, MA, ARMA models
+    │   ├── mean_reversion.py           # Mean reversion analysis
+    │   ├── forecasting.py              # In-sample vs out-of-sample forecasting
+    │   ├── seasonality.py              # Seasonal decomposition & modeling
+    │   ├── arch_garch.py               # ARCH/GARCH volatility modeling
+    │   ├── cointegration.py            # Cointegration analysis
+    │   └── model_evaluation.py         # RMSE, forecast accuracy metrics
+    │
+    ├── machine_learning/
+    │   ├── __init__.py
+    │   ├── supervised_learning/
+    │   │   ├── __init__.py
+    │   │   ├── penalized_regression.py # Ridge, Lasso, Elastic Net
+    │   │   ├── support_vector_machine.py
+    │   │   ├── k_nearest_neighbor.py
+    │   │   ├── decision_trees.py       # CART, Random Forest
+    │   │   └── ensemble_methods.py     # Bagging, Boosting
+    │   ├── unsupervised_learning/
+    │   │   ├── __init__.py
+    │   │   ├── pca_analysis.py         # Principal Component Analysis
+    │   │   ├── clustering_methods.py   # K-means, Hierarchical clustering
+    │   │   └── dimensionality_reduction.py
+    │   ├── model_evaluation/
+    │   │   ├── __init__.py
+    │   │   ├── cross_validation.py
+    │   │   ├── overfitting_detection.py
+    │   │   └── performance_metrics.py
+    │   └── feature_engineering/
+    │       ├── __init__.py
+    │       ├── text_processing.py      # NLP for financial text
+    │       ├── feature_selection.py
+    │       └── data_preprocessing.py
+    │
+    ├── big_data_projects/
+    │   ├── __init__.py
+    │   ├── data_pipeline/
+    │   │   ├── __init__.py
+    │   │   ├── data_extraction.py      # Data source connectors
+    │   │   ├── data_cleaning.py        # Data wrangling & preparation
+    │   │   ├── data_exploration.py     # EDA tools
+    │   │   └── data_validation.py      # Data quality checks
+    │   ├── text_analytics/
+    │   │   ├── __init__.py
+    │   │   ├── text_preprocessing.py   # Text cleaning, tokenization
+    │   │   ├── feature_extraction.py   # TF-IDF, word embeddings
+    │   │   └── sentiment_analysis.py   # Financial sentiment analysis
+    │   └── model_deployment/
+    │       ├── __init__.py
+    │       ├── model_training.py       # Training pipeline
+    │       ├── model_validation.py     # Model evaluation
+    │       └── production_pipeline.py  # Production deployment
+    │
+    ├── sampling_methods/
+    │   ├── __init__.py
+    │   ├── sampling_techniques.py      # Random, stratified, cluster sampling
+    │   ├── central_limit_theorem.py    # CLT demonstrations
+    │   ├── resampling_methods.py       # Bootstrap, jackknife
+    │   └── sampling_error_analysis.py  # Sampling error calculations
+    │
+    └── utils/
+        ├── __init__.py
+        ├── data_connectors.py          # Interface for different data sources
+        ├── visualization.py            # Plotting utilities
+        ├── export_functions.py         # Export to various formats
+        ├── configuration.py            # Configuration management
+        └── performance_monitoring.py   # Performance tracking

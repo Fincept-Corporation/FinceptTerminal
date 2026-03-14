@@ -6,6 +6,7 @@ on:
 env:
   BUILD_TYPE: Release
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -185,6 +186,9 @@ jobs:
           cp build/Release/${{ matrix.exe }} dist/
           cp build/Release/*.dll dist/ 2>/dev/null || true
           cp -r fonts dist/fonts 2>/dev/null || true
+          cp -r resources dist/resources 2>/dev/null || true
+          cp -r scripts dist/scripts 2>/dev/null || true
+          echo "Bundled $(find dist/scripts -name '*.py' 2>/dev/null | wc -l) Python scripts"
           echo "=== Collected artifacts ==="
           ls -lh dist/
 
@@ -197,6 +201,9 @@ jobs:
           cp build/${{ matrix.exe }} dist/
           chmod +x dist/${{ matrix.exe }}
           cp -r fonts dist/fonts 2>/dev/null || true
+          cp -r resources dist/resources 2>/dev/null || true
+          cp -r scripts dist/scripts 2>/dev/null || true
+          echo "Bundled $(find dist/scripts -name '*.py' 2>/dev/null | wc -l) Python scripts"
           echo "=== Collected artifacts ==="
           ls -lh dist/
 
@@ -245,6 +252,8 @@ jobs:
           lipo -create arm64/FinceptTerminal x64/FinceptTerminal -output dist/FinceptTerminal
           chmod +x dist/FinceptTerminal
           cp -r arm64/fonts dist/fonts 2>/dev/null || true
+          cp -r arm64/resources dist/resources 2>/dev/null || true
+          cp -r arm64/scripts dist/scripts 2>/dev/null || true
           echo "=== Universal Binary ==="
           file dist/FinceptTerminal
           ls -lh dist/FinceptTerminal

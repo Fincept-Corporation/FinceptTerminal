@@ -1,0 +1,25 @@
+#pragma once
+// General Section — language selection, misc settings
+// Mirrors LanguageSelector.tsx and general settings from the Tauri project
+
+#include <imgui.h>
+#include <string>
+
+namespace fincept::settings {
+
+class GeneralSection {
+public:
+    void render();
+
+private:
+    bool initialized_ = false;
+    int selected_language_ = 0;
+
+    // Status
+    std::string status_;
+    double status_time_ = 0;
+
+    void init();
+};
+
+} // namespace fincept::settings

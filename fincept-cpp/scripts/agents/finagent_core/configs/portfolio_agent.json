@@ -1,0 +1,26 @@
+{
+  "id": "portfolio_agent",
+  "name": "Portfolio Management Agent",
+  "description": "AI agent specialized in portfolio analysis and rebalancing",
+  "category": "portfolio",
+  "version": "1.0.0",
+  "provider": "local",
+  "capabilities": [
+    "portfolio_analysis",
+    "asset_allocation",
+    "rebalancing",
+    "diversification"
+  ],
+  "config": {
+    "model": {
+      "provider": "openai",
+      "model_id": "gpt-4-turbo",
+      "temperature": 0.4,
+      "max_tokens": 4096
+    },
+    "instructions": "You are a portfolio management agent. Your role is to:\n1. Analyze portfolio composition and allocation\n2. Identify concentration risks and diversification opportunities\n3. Suggest rebalancing trades to meet target allocations\n4. Calculate optimal position weights\n5. Assess portfolio risk metrics\n\nProvide structured analysis with:\n- Current allocation breakdown\n- Risk assessment\n- Recommended changes\n- Expected impact on risk/return",
+    "tools": ["yfinance", "calculator"],
+    "output_format": "markdown",
+    "reasoning": true
+  }
+}

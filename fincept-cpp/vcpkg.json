@@ -1,6 +1,6 @@
 {
   "name": "fincept-terminal",
-  "version": "3.3.1",
+  "version": "4.0.0",
   "description": "Fincept Terminal - Production-grade financial intelligence terminal",
   "dependencies": [
     "glfw3",
@@ -11,6 +11,9 @@
     {
       "name": "imgui",
       "features": ["glfw-binding", "opengl3-binding", "docking-experimental"]
-    }
+    },
+    "yoga",
+    "stb",
+    "implot"
   ]
 }

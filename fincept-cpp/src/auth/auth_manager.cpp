@@ -1,15 +1,15 @@
 #include "auth_manager.h"
 #include "auth_api.h"
-#include "storage/sqlite_store.h"
-#include "utils/device_id.h"
-#include "utils/validators.h"
-#include <iostream>
+#include "storage/database.h"
+#include "core/device_id.h"
+#include "core/validators.h"
+#include "core/logger.h"
+#include "core/event_bus.h"
 #include <thread>
 #include <cstdio>
 #include <ctime>
 
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
 
@@ -28,8 +28,7 @@ void AuthManager::initialize() {
     std::lock_guard<std::mutex> lock(mutex_);
     loading_ = true;
 
-    auto& store = storage::SqliteStore::instance();
-    store.initialize();
+    // Database is initialized in App::initialize() before this call
 
     if (load_session()) {
         if (session_.is_registered()) {
@@ -46,8 +45,16 @@ void AuthManager::initialize() {
     }
 
     loading_ = false;
-    std::cout << "[AuthManager] Initialized — authenticated: " << session_.authenticated
-              << ", type: " << session_.user_type << std::endl;
+    LOG_INFO("Auth", "Initialized — authenticated: %d, type: %s, api_key present: %d",
+             session_.authenticated, session_.user_type.c_str(), !session_.api_key.empty());
+
+    if (session_.authenticated) {
+        core::EventBus::instance().publish("auth.session_changed", {
+            {"authenticated", true},
+            {"user_type", session_.user_type},
+            {"has_api_key", !session_.api_key.empty()}
+        });
+    }
 }
 
 // =============================================================================
@@ -83,13 +90,11 @@ bool AuthManager::has_session() const {
 // =============================================================================
 
 void AuthManager::save_session() {
-    auto& store = storage::SqliteStore::instance();
-    store.save_setting(SESSION_KEY, session_.to_json().dump(), "auth");
+    db::ops::save_setting(SESSION_KEY, session_.to_json().dump(), "auth");
 }
 
 bool AuthManager::load_session() {
-    auto& store = storage::SqliteStore::instance();
-    auto stored = store.get_setting(SESSION_KEY);
+    auto stored = db::ops::get_setting(SESSION_KEY);
     if (!stored.has_value()) return false;
 
     try {
@@ -108,7 +113,7 @@ bool AuthManager::load_session() {
                 time_t expires_time = mktime(&expires_tm);
                 time_t now = time(nullptr);
                 if (now > expires_time) {
-                    std::cerr << "[AuthManager] Guest session expired, clearing" << std::endl;
+                    LOG_WARN("Auth", "Guest session expired, clearing");
                     clear_session();
                     return false;
                 }
@@ -117,7 +122,7 @@ bool AuthManager::load_session() {
 
         return session_.authenticated;
     } catch (const std::exception& e) {
-        std::cerr << "[AuthManager] Failed to load session: " << e.what() << std::endl;
+        LOG_ERROR("Auth", "Failed to load session: %s", e.what());
         clear_session();
         return false;
     }
@@ -125,10 +130,9 @@ bool AuthManager::load_session() {
 
 void AuthManager::clear_session() {
     session_ = api::SessionData{};
-    auto& store = storage::SqliteStore::instance();
-    store.save_setting(SESSION_KEY, "", "auth");
-    store.save_setting("fincept_api_key", "", "auth");
-    store.save_setting("fincept_device_id", "", "auth");
+    db::ops::save_setting(SESSION_KEY, "", "auth");
+    db::ops::save_setting("fincept_api_key", "", "auth");
+    db::ops::save_setting("fincept_device_id", "", "auth");
 }
 
 // =============================================================================
@@ -312,12 +316,20 @@ AuthResult AuthManager::login(const std::string& email, const std::string& passw
         save_session();
 
         // Legacy keys
-        auto& store = storage::SqliteStore::instance();
-        store.save_setting("fincept_api_key", api_key, "auth");
-        store.save_setting("fincept_device_id", session_.device_id, "auth");
+        db::ops::save_setting("fincept_api_key", api_key, "auth");
+        db::ops::save_setting("fincept_device_id", session_.device_id, "auth");
 
         loading_ = false;
-        std::cout << "[AuthManager] Login success — account_type: " << session_.user_info.account_type << std::endl;
+        LOG_INFO("Auth", "Login success — account_type: %s, api_key present: %d",
+                 session_.user_info.account_type.c_str(), !session_.api_key.empty());
+
+        // Notify all screens that auth state changed
+        core::EventBus::instance().publish("auth.session_changed", {
+            {"authenticated", true},
+            {"user_type", session_.user_type},
+            {"has_api_key", !session_.api_key.empty()}
+        });
+
         return {true, ""};
     }
 
@@ -452,6 +464,13 @@ AuthResult AuthManager::setup_guest_access() {
 
         save_session();
         loading_ = false;
+
+        core::EventBus::instance().publish("auth.session_changed", {
+            {"authenticated", true},
+            {"user_type", "guest"},
+            {"has_api_key", !session_.api_key.empty()}
+        });
+
         return {true, ""};
     }
 
@@ -491,7 +510,13 @@ void AuthManager::logout() {
         logging_out_ = false;
     }
 
-    std::cout << "[AuthManager] Logout completed" << std::endl;
+    LOG_INFO("Auth", "Logout completed");
+
+    core::EventBus::instance().publish("auth.session_changed", {
+        {"authenticated", false},
+        {"user_type", ""},
+        {"has_api_key", false}
+    });
 }
 
 void AuthManager::refresh_user_data() {

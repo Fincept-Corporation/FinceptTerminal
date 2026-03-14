@@ -1,11 +1,13 @@
 #include "login_screen.h"
 #include "auth_manager.h"
-#include "theme/bloomberg_theme.h"
-#include "utils/validators.h"
+#include "auth_ui.h"
+#include "core/validators.h"
 #include <imgui.h>
 #include <cstring>
 
 namespace fincept::auth {
+
+using namespace ui_detail;
 
 void LoginScreen::reset() {
     std::memset(email_, 0, sizeof(email_));
@@ -49,41 +51,33 @@ void LoginScreen::render(AppScreen& next_screen) {
         }
     }
 
-    // Center the login panel
-    ImVec2 display = ImGui::GetIO().DisplaySize;
-    float panel_w = 420.0f;
-    float panel_h = show_mfa_ ? 320.0f : (show_force_login_ ? 340.0f : 400.0f);
-    ImGui::SetNextWindowPos(ImVec2((display.x - panel_w) / 2, (display.y - panel_h) / 2), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(panel_w, 0), ImGuiCond_Always);
+    // Geometric background
+    DrawAuthBackground();
 
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, theme::colors::BG_PANEL);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24, 24));
+    // Centered login panel
+    ::fincept::ui::CenteredFrame centered("##login_panel", 480.0f, theme::colors::BG_PANEL);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Border, theme::colors::BORDER);
+    centered.begin();
 
-    ImGui::Begin("##login_panel", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize);
+    DrawPanelGlow();
 
     // ========== MFA Verification ==========
     if (show_mfa_) {
-        ImGui::TextColored(theme::colors::TEXT_PRIMARY, "MFA Verification");
+        BrandHeader("Two-Factor Authentication");
         ImGui::Spacing();
+
         ImGui::TextColored(theme::colors::TEXT_SECONDARY, "Enter the code from your authenticator app");
         ImGui::Spacing(); ImGui::Spacing();
 
-        ImGui::PushItemWidth(-1);
-        ImGui::TextColored(theme::colors::TEXT_DIM, "VERIFICATION CODE");
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
-        bool enter_pressed = ImGui::InputText("##mfa_code", mfa_code_, sizeof(mfa_code_), ImGuiInputTextFlags_EnterReturnsTrue);
-        ImGui::PopStyleColor();
-        ImGui::PopItemWidth();
+        FieldLabel("VERIFICATION CODE");
+        bool enter_pressed = StyledInput("##mfa_code", mfa_code_, sizeof(mfa_code_), ImGuiInputTextFlags_EnterReturnsTrue);
 
         ImGui::Spacing(); ImGui::Spacing();
 
         theme::ErrorMessage(error_.c_str());
 
-        bool submit = enter_pressed || theme::AccentButton("VERIFY", ImVec2(-1, 32));
+        bool submit = enter_pressed || theme::AccentButton("VERIFY", ImVec2(-1, 36));
         if (submit && !loading_ && mfa_code_[0] != '\0') {
             loading_ = true;
             error_.clear();
@@ -96,26 +90,30 @@ void LoginScreen::render(AppScreen& next_screen) {
         }
 
         ImGui::Spacing();
-        if (theme::SecondaryButton("<  Back to Login", ImVec2(-1, 28))) {
+        AccentSeparator();
+        if (theme::SecondaryButton("<  Back to Login", ImVec2(-1, 30))) {
             show_mfa_ = false;
             std::memset(mfa_code_, 0, sizeof(mfa_code_));
             error_.clear();
         }
 
-        ImGui::End();
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(2);
+        VersionTag();
+
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        centered.end();
         return;
     }
 
     // ========== Force Login Prompt ==========
     if (show_force_login_) {
-        ImGui::TextColored(theme::colors::TEXT_PRIMARY, "Active Session Detected");
+        BrandHeader("Active Session Detected");
         ImGui::Spacing();
+
         ImGui::TextWrapped("%s", error_.c_str());
         ImGui::Spacing(); ImGui::Spacing();
 
-        if (theme::AccentButton("Force Login (End Other Session)", ImVec2(-1, 32)) && !loading_) {
+        if (theme::AccentButton("Force Login (End Other Session)", ImVec2(-1, 36)) && !loading_) {
             loading_ = true;
             error_.clear();
             show_force_login_ = false;
@@ -123,7 +121,7 @@ void LoginScreen::render(AppScreen& next_screen) {
         }
 
         ImGui::Spacing();
-        if (theme::SecondaryButton("Cancel", ImVec2(-1, 28))) {
+        if (theme::SecondaryButton("Cancel", ImVec2(-1, 30))) {
             show_force_login_ = false;
             error_.clear();
         }
@@ -133,40 +131,30 @@ void LoginScreen::render(AppScreen& next_screen) {
             theme::LoadingSpinner("Logging in...");
         }
 
-        ImGui::End();
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(2);
+        VersionTag();
+
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        centered.end();
         return;
     }
 
     // ========== Main Login Form ==========
 
-    // Header
-    ImGui::PushFont(nullptr); // Will use default (which should be JetBrains Mono)
-    ImGui::TextColored(theme::colors::ACCENT, "FINCEPT TERMINAL");
-    ImGui::PopFont();
-    ImGui::TextColored(theme::colors::TEXT_SECONDARY, "Sign in to your account");
-    ImGui::Spacing(); ImGui::Spacing();
+    BrandHeader("Sign in to your account");
 
-    ImGui::Separator();
     ImGui::Spacing();
 
     // Email field
-    ImGui::PushItemWidth(-1);
-    ImGui::TextColored(theme::colors::TEXT_DIM, "EMAIL");
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
-    ImGui::InputText("##email", email_, sizeof(email_));
-    ImGui::PopStyleColor();
+    FieldLabel("EMAIL");
+    StyledInput("##email", email_, sizeof(email_));
 
     ImGui::Spacing();
 
     // Password field
-    ImGui::TextColored(theme::colors::TEXT_DIM, "PASSWORD");
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
-    bool enter_pressed = ImGui::InputText("##password", password_, sizeof(password_),
+    FieldLabel("PASSWORD");
+    bool enter_pressed = StyledInput("##password", password_, sizeof(password_),
         ImGuiInputTextFlags_Password | ImGuiInputTextFlags_EnterReturnsTrue);
-    ImGui::PopStyleColor();
-    ImGui::PopItemWidth();
 
     ImGui::Spacing(); ImGui::Spacing();
 
@@ -174,7 +162,7 @@ void LoginScreen::render(AppScreen& next_screen) {
     theme::ErrorMessage(error_.c_str());
 
     // Login button
-    bool submit = enter_pressed || theme::AccentButton("SIGN IN", ImVec2(-1, 34));
+    bool submit = enter_pressed || theme::AccentButton("SIGN IN", ImVec2(-1, 38));
     if (submit && !loading_ && email_[0] != '\0' && password_[0] != '\0') {
         loading_ = true;
         error_.clear();
@@ -189,34 +177,53 @@ void LoginScreen::render(AppScreen& next_screen) {
     ImGui::Spacing(); ImGui::Spacing();
 
     // Forgot password link
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_Text, theme::colors::INFO);
-    if (ImGui::Button("Forgot Password?")) {
-        next_screen = AppScreen::ForgotPassword;
+    {
+        float content_w = ImGui::GetContentRegionAvail().x;
+        const char* label = "Forgot Password?";
+        float label_w = ImGui::CalcTextSize(label).x;
+        ImGui::SetCursorPosX((content_w - label_w) / 2.0f);
+        if (LinkButton(label)) {
+            next_screen = AppScreen::ForgotPassword;
+        }
     }
-    ImGui::PopStyleColor(4);
 
     ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    AccentSeparator();
 
     // Register link
-    ImGui::TextColored(theme::colors::TEXT_DIM, "Don't have an account?");
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_Text, theme::colors::INFO);
-    if (ImGui::Button("Sign Up")) {
-        next_screen = AppScreen::Register;
+    {
+        float content_w = ImGui::GetContentRegionAvail().x;
+        const char* prefix = "Don't have an account?  ";
+        const char* link = "Sign Up";
+        float total_w = ImGui::CalcTextSize(prefix).x + ImGui::CalcTextSize(link).x;
+        ImGui::SetCursorPosX((content_w - total_w) / 2.0f);
+        ImGui::TextColored(theme::colors::TEXT_DIM, "%s", prefix);
+        ImGui::SameLine(0, 0);
+        if (LinkButton(link)) {
+            next_screen = AppScreen::Register;
+        }
     }
-    ImGui::PopStyleColor(4);
 
-    ImGui::End();
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+    ImGui::Spacing();
+
+    // Guest access
+    {
+        float content_w = ImGui::GetContentRegionAvail().x;
+        const char* label = "Continue as Guest";
+        float label_w = ImGui::CalcTextSize(label).x;
+        ImGui::SetCursorPosX((content_w - label_w) / 2.0f);
+        if (LinkButton(label, theme::colors::TEXT_DIM)) {
+            auth.setup_guest_async();
+            loading_ = true;
+        }
+    }
+
+    ImGui::Spacing();
+    VersionTag();
+
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    centered.end();
 }
 
 } // namespace fincept::auth

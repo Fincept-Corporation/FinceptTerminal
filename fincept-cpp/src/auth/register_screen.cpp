@@ -1,11 +1,14 @@
 #include "register_screen.h"
 #include "auth_manager.h"
-#include "theme/bloomberg_theme.h"
+#include "auth_ui.h"
+#include "core/validators.h"
 #include <imgui.h>
 #include <cstring>
 #include <algorithm>
 
 namespace fincept::auth {
+
+using namespace ui_detail;
 
 void RegisterScreen::reset() {
     step_ = FORM;
@@ -37,7 +40,6 @@ void RegisterScreen::render(AppScreen& next_screen) {
                 error_.clear();
             } else if (step_ == OTP_VERIFICATION) {
                 step_ = COMPLETE;
-                // Navigate based on plan
                 if (auth.session().has_paid_plan()) {
                     next_screen = AppScreen::Dashboard;
                 } else {
@@ -51,49 +53,34 @@ void RegisterScreen::render(AppScreen& next_screen) {
         }
     }
 
-    // Center panel
-    ImVec2 display = ImGui::GetIO().DisplaySize;
-    float panel_w = 460.0f;
-    ImGui::SetNextWindowPos(ImVec2((display.x - panel_w) / 2, display.y * 0.1f), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(panel_w, 0), ImGuiCond_Always);
+    // Geometric background
+    DrawAuthBackground();
 
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, theme::colors::BG_PANEL);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24, 24));
+    // Responsive centered panel
+    ::fincept::ui::CenteredFrame centered("##register_panel", 520.0f, theme::colors::BG_PANEL);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Border, theme::colors::BORDER);
+    centered.begin();
 
-    ImGui::Begin("##register_panel", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
+    DrawPanelGlow();
 
     // ========== OTP Verification Step ==========
     if (step_ == OTP_VERIFICATION) {
-        // Back button
-        if (theme::SecondaryButton("<  Back")) {
-            step_ = FORM;
-            std::memset(otp_, 0, sizeof(otp_));
-            error_.clear();
-        }
-        ImGui::SameLine();
-        ImGui::TextColored(theme::colors::TEXT_PRIMARY, "Verify Your Email");
+        BrandHeader("Verify Your Email");
         ImGui::Spacing();
 
         ImGui::TextColored(theme::colors::TEXT_SECONDARY, "We sent a verification code to");
-        ImGui::TextColored(theme::colors::TEXT_PRIMARY, "%s", email_);
+        ImGui::TextColored(theme::colors::ACCENT, "%s", email_);
         ImGui::TextColored(theme::colors::TEXT_DIM, "Check your spam folder if you don't see it.");
         ImGui::Spacing(); ImGui::Spacing();
 
-        ImGui::PushItemWidth(-1);
-        ImGui::TextColored(theme::colors::TEXT_DIM, "VERIFICATION CODE");
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
-        bool enter_pressed = ImGui::InputText("##otp", otp_, sizeof(otp_), ImGuiInputTextFlags_EnterReturnsTrue);
-        ImGui::PopStyleColor();
-        ImGui::PopItemWidth();
+        FieldLabel("VERIFICATION CODE");
+        bool enter_pressed = StyledInput("##otp", otp_, sizeof(otp_), ImGuiInputTextFlags_EnterReturnsTrue);
 
         ImGui::Spacing();
         theme::ErrorMessage(error_.c_str());
 
-        bool submit = enter_pressed || theme::AccentButton("VERIFY", ImVec2(-1, 32));
+        bool submit = enter_pressed || theme::AccentButton("VERIFY", ImVec2(-1, 36));
         if (submit && !loading_ && otp_[0] != '\0') {
             loading_ = true;
             error_.clear();
@@ -108,41 +95,36 @@ void RegisterScreen::render(AppScreen& next_screen) {
         }
 
         ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
+        AccentSeparator();
 
-        // Resend OTP
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_Text, theme::colors::INFO);
-        if (ImGui::Button("Resend Code") && !loading_) {
+        // Back + Resend side by side
+        if (theme::SecondaryButton("<  Back", ImVec2(ImGui::GetContentRegionAvail().x * 0.45f, 30))) {
+            step_ = FORM;
+            std::memset(otp_, 0, sizeof(otp_));
+            error_.clear();
+        }
+        ImGui::SameLine(0, ImGui::GetContentRegionAvail().x * 0.1f);
+        if (LinkButton("Resend Code") && !loading_) {
             loading_ = true;
             error_.clear();
             std::string username = utils::to_lower(utils::sanitize_input(std::string(first_name_) + std::string(last_name_)));
             std::string sanitized_email = utils::to_lower(utils::sanitize_input(email_));
             auth.signup_async(username, sanitized_email, password_, phone_, "", country_code_);
         }
-        ImGui::PopStyleColor(4);
 
-        ImGui::End();
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(2);
+        ImGui::Spacing();
+        VersionTag();
+
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        centered.end();
         return;
     }
 
     // ========== Registration Form ==========
 
-    // Back button + Header
-    if (theme::SecondaryButton("<  Back")) {
-        next_screen = AppScreen::Login;
-    }
-    ImGui::SameLine();
-    ImGui::TextColored(theme::colors::TEXT_PRIMARY, "Create Account");
-    ImGui::Spacing();
-    ImGui::TextColored(theme::colors::TEXT_SECONDARY, "Join Fincept Terminal");
-    ImGui::Spacing();
-    ImGui::Separator();
+    BrandHeader("Create Your Account");
+
     ImGui::Spacing();
 
     float half_width = (ImGui::GetContentRegionAvail().x - 8) / 2;
@@ -150,9 +132,12 @@ void RegisterScreen::render(AppScreen& next_screen) {
     // First + Last name (side by side)
     ImGui::BeginGroup();
     ImGui::PushItemWidth(half_width);
-    ImGui::TextColored(theme::colors::TEXT_DIM, "FIRST NAME");
+    FieldLabel("FIRST NAME");
     ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
     ImGui::InputText("##first_name", first_name_, sizeof(first_name_));
+    ImGui::PopStyleVar(2);
     ImGui::PopStyleColor();
     ImGui::PopItemWidth();
     ImGui::EndGroup();
@@ -161,9 +146,12 @@ void RegisterScreen::render(AppScreen& next_screen) {
 
     ImGui::BeginGroup();
     ImGui::PushItemWidth(half_width);
-    ImGui::TextColored(theme::colors::TEXT_DIM, "LAST NAME");
+    FieldLabel("LAST NAME");
     ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
     ImGui::InputText("##last_name", last_name_, sizeof(last_name_));
+    ImGui::PopStyleVar(2);
     ImGui::PopStyleColor();
     ImGui::PopItemWidth();
     ImGui::EndGroup();
@@ -179,14 +167,9 @@ void RegisterScreen::render(AppScreen& next_screen) {
     ImGui::Spacing();
 
     // Email
-    ImGui::PushItemWidth(-1);
-    ImGui::TextColored(theme::colors::TEXT_DIM, "EMAIL");
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
-    ImGui::InputText("##reg_email", email_, sizeof(email_));
-    ImGui::PopStyleColor();
-    ImGui::PopItemWidth();
+    FieldLabel("EMAIL");
+    StyledInput("##reg_email", email_, sizeof(email_));
 
-    // Email validation
     if (email_[0] != '\0') {
         auto email_result = utils::validate_email(email_);
         if (!email_result.valid) {
@@ -199,9 +182,12 @@ void RegisterScreen::render(AppScreen& next_screen) {
     // Phone (country code + number side by side)
     ImGui::BeginGroup();
     ImGui::PushItemWidth(60);
-    ImGui::TextColored(theme::colors::TEXT_DIM, "CODE");
+    FieldLabel("CODE");
     ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
     ImGui::InputText("##country_code", country_code_, sizeof(country_code_));
+    ImGui::PopStyleVar(2);
     ImGui::PopStyleColor();
     ImGui::PopItemWidth();
     ImGui::EndGroup();
@@ -210,9 +196,12 @@ void RegisterScreen::render(AppScreen& next_screen) {
 
     ImGui::BeginGroup();
     ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
-    ImGui::TextColored(theme::colors::TEXT_DIM, "PHONE NUMBER");
+    FieldLabel("PHONE NUMBER");
     ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
     ImGui::InputText("##phone", phone_, sizeof(phone_));
+    ImGui::PopStyleVar(2);
     ImGui::PopStyleColor();
     ImGui::PopItemWidth();
     ImGui::EndGroup();
@@ -220,39 +209,46 @@ void RegisterScreen::render(AppScreen& next_screen) {
     ImGui::Spacing();
 
     // Password
-    ImGui::PushItemWidth(-1);
-    ImGui::TextColored(theme::colors::TEXT_DIM, "PASSWORD");
+    FieldLabel("PASSWORD");
     ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, theme::colors::BG_HOVER);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
+    ImGui::PushItemWidth(-1);
     if (ImGui::InputText("##reg_password", password_, sizeof(password_), ImGuiInputTextFlags_Password)) {
         pw_strength_ = utils::validate_password(password_);
     }
-    ImGui::PopStyleColor();
     ImGui::PopItemWidth();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
 
-    // Password strength indicators
     if (password_[0] != '\0') {
         auto indicator = [](bool ok, const char* label) {
             ImGui::TextColored(ok ? theme::colors::SUCCESS : theme::colors::TEXT_DISABLED,
                 "%s %s", ok ? "[OK]" : "[  ]", label);
         };
         indicator(pw_strength_.min_length, "8+ characters");
-        indicator(pw_strength_.has_upper, "Uppercase letter");
-        indicator(pw_strength_.has_lower, "Lowercase letter");
+        ImGui::SameLine(0, 16);
+        indicator(pw_strength_.has_upper, "Uppercase");
+        ImGui::SameLine(0, 16);
         indicator(pw_strength_.has_number, "Number");
-        indicator(pw_strength_.has_special, "Special character");
     }
 
     ImGui::Spacing();
 
     // Confirm password
-    ImGui::PushItemWidth(-1);
-    ImGui::TextColored(theme::colors::TEXT_DIM, "CONFIRM PASSWORD");
+    FieldLabel("CONFIRM PASSWORD");
     ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, theme::colors::BG_HOVER);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
+    ImGui::PushItemWidth(-1);
     if (ImGui::InputText("##confirm_password", confirm_password_, sizeof(confirm_password_), ImGuiInputTextFlags_Password)) {
         passwords_match_ = (std::strcmp(password_, confirm_password_) == 0);
     }
-    ImGui::PopStyleColor();
     ImGui::PopItemWidth();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
 
     if (confirm_password_[0] != '\0' && !passwords_match_) {
         ImGui::TextColored(theme::colors::ERROR_RED, "[X] Passwords do not match");
@@ -260,17 +256,15 @@ void RegisterScreen::render(AppScreen& next_screen) {
 
     ImGui::Spacing(); ImGui::Spacing();
 
-    // Error
     theme::ErrorMessage(error_.c_str());
 
-    // Submit
     bool can_submit = first_name_[0] != '\0' && last_name_[0] != '\0' &&
                       email_[0] != '\0' && password_[0] != '\0' &&
                       confirm_password_[0] != '\0' && passwords_match_ &&
                       pw_strength_.is_valid() && !loading_;
 
     if (!can_submit) ImGui::BeginDisabled();
-    bool submit = theme::AccentButton("CREATE ACCOUNT", ImVec2(-1, 34));
+    bool submit = theme::AccentButton("CREATE ACCOUNT", ImVec2(-1, 38));
     if (!can_submit) ImGui::EndDisabled();
 
     if (submit && can_submit) {
@@ -294,24 +288,28 @@ void RegisterScreen::render(AppScreen& next_screen) {
     }
 
     ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    AccentSeparator();
 
     // Login link
-    ImGui::TextColored(theme::colors::TEXT_DIM, "Already have an account?");
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_Text, theme::colors::INFO);
-    if (ImGui::Button("Sign In")) {
-        next_screen = AppScreen::Login;
+    {
+        float content_w = ImGui::GetContentRegionAvail().x;
+        const char* prefix = "Already have an account?  ";
+        const char* link = "Sign In";
+        float total_w = ImGui::CalcTextSize(prefix).x + ImGui::CalcTextSize(link).x;
+        ImGui::SetCursorPosX((content_w - total_w) / 2.0f);
+        ImGui::TextColored(theme::colors::TEXT_DIM, "%s", prefix);
+        ImGui::SameLine(0, 0);
+        if (LinkButton(link)) {
+            next_screen = AppScreen::Login;
+        }
     }
-    ImGui::PopStyleColor(4);
 
-    ImGui::End();
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+    ImGui::Spacing();
+    VersionTag();
+
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    centered.end();
 }
 
 } // namespace fincept::auth

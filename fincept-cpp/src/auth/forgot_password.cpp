@@ -1,11 +1,13 @@
 #include "forgot_password.h"
 #include "auth_manager.h"
-#include "theme/bloomberg_theme.h"
-#include "utils/validators.h"
+#include "auth_ui.h"
+#include "core/validators.h"
 #include <imgui.h>
 #include <cstring>
 
 namespace fincept::auth {
+
+using namespace ui_detail;
 
 void ForgotPasswordScreen::reset() {
     step_ = EMAIL;
@@ -39,70 +41,70 @@ void ForgotPasswordScreen::render(AppScreen& next_screen) {
         }
     }
 
-    ImVec2 display = ImGui::GetIO().DisplaySize;
-    float panel_w = 420.0f;
-    ImGui::SetNextWindowPos(ImVec2((display.x - panel_w) / 2, (display.y - 350) / 2), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(panel_w, 0), ImGuiCond_Always);
+    // Geometric background
+    DrawAuthBackground();
 
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, theme::colors::BG_PANEL);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24, 24));
+    // Responsive centered panel
+    ::fincept::ui::CenteredFrame centered("##forgot_password_panel", 480.0f, theme::colors::BG_PANEL);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Border, theme::colors::BORDER);
+    centered.begin();
 
-    ImGui::Begin("##forgot_password_panel", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
-
-    // Back button
-    if (theme::SecondaryButton("<  Back to Login")) {
-        next_screen = AppScreen::Login;
-        reset();
-    }
-    ImGui::Spacing();
+    DrawPanelGlow();
 
     // ========== Success ==========
     if (step_ == SUCCESS) {
-        ImGui::TextColored(theme::colors::SUCCESS, "Password Reset Complete");
+        BrandHeader("Password Reset Complete");
         ImGui::Spacing();
+
+        // Success icon (centered checkmark)
+        {
+            float content_w = ImGui::GetContentRegionAvail().x;
+            const char* check = "[OK]";
+            float check_w = ImGui::CalcTextSize(check).x;
+            ImGui::SetCursorPosX((content_w - check_w) / 2.0f);
+            ImGui::TextColored(theme::colors::SUCCESS, "%s", check);
+        }
+        ImGui::Spacing();
+
         ImGui::TextColored(theme::colors::TEXT_SECONDARY, "%s", success_msg_.c_str());
         ImGui::Spacing(); ImGui::Spacing();
-        if (theme::AccentButton("Go to Login", ImVec2(-1, 32))) {
+
+        if (theme::AccentButton("Go to Login", ImVec2(-1, 36))) {
             next_screen = AppScreen::Login;
             reset();
         }
-        ImGui::End();
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(2);
+
+        ImGui::Spacing();
+        VersionTag();
+
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        centered.end();
         return;
     }
 
     // ========== OTP + New Password ==========
     if (step_ == OTP_RESET) {
-        ImGui::TextColored(theme::colors::TEXT_PRIMARY, "Reset Password");
-        ImGui::Spacing();
-        ImGui::TextColored(theme::colors::TEXT_SECONDARY, "Enter the code sent to %s", email_);
+        BrandHeader("Reset Password");
         ImGui::Spacing();
 
-        ImGui::PushItemWidth(-1);
+        ImGui::TextColored(theme::colors::TEXT_SECONDARY, "Enter the code sent to");
+        ImGui::TextColored(theme::colors::ACCENT, "%s", email_);
+        ImGui::Spacing(); ImGui::Spacing();
 
-        ImGui::TextColored(theme::colors::TEXT_DIM, "VERIFICATION CODE");
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
-        ImGui::InputText("##reset_otp", otp_, sizeof(otp_));
-        ImGui::PopStyleColor();
-
-        ImGui::Spacing();
-        ImGui::TextColored(theme::colors::TEXT_DIM, "NEW PASSWORD");
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
-        ImGui::InputText("##new_password", new_password_, sizeof(new_password_), ImGuiInputTextFlags_Password);
-        ImGui::PopStyleColor();
+        FieldLabel("VERIFICATION CODE");
+        StyledInput("##reset_otp", otp_, sizeof(otp_));
 
         ImGui::Spacing();
-        ImGui::TextColored(theme::colors::TEXT_DIM, "CONFIRM NEW PASSWORD");
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
-        ImGui::InputText("##confirm_new_password", confirm_password_, sizeof(confirm_password_), ImGuiInputTextFlags_Password);
-        ImGui::PopStyleColor();
 
-        ImGui::PopItemWidth();
+        FieldLabel("NEW PASSWORD");
+        StyledInput("##new_password", new_password_, sizeof(new_password_), ImGuiInputTextFlags_Password);
+
+        ImGui::Spacing();
+
+        FieldLabel("CONFIRM NEW PASSWORD");
+        StyledInput("##confirm_new_password", confirm_password_, sizeof(confirm_password_), ImGuiInputTextFlags_Password);
 
         if (confirm_password_[0] != '\0' && std::strcmp(new_password_, confirm_password_) != 0) {
             ImGui::TextColored(theme::colors::ERROR_RED, "[X] Passwords do not match");
@@ -116,7 +118,7 @@ void ForgotPasswordScreen::render(AppScreen& next_screen) {
                           std::strlen(new_password_) >= 8 && !loading_;
 
         if (!can_submit) ImGui::BeginDisabled();
-        if (theme::AccentButton("RESET PASSWORD", ImVec2(-1, 32))) {
+        if (theme::AccentButton("RESET PASSWORD", ImVec2(-1, 36))) {
             loading_ = true;
             error_.clear();
             std::string sanitized_email = utils::to_lower(utils::sanitize_input(email_));
@@ -129,29 +131,37 @@ void ForgotPasswordScreen::render(AppScreen& next_screen) {
             theme::LoadingSpinner("Resetting password...");
         }
 
-        ImGui::End();
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(2);
+        ImGui::Spacing();
+        AccentSeparator();
+
+        if (theme::SecondaryButton("<  Back to Login", ImVec2(-1, 30))) {
+            next_screen = AppScreen::Login;
+            reset();
+        }
+
+        ImGui::Spacing();
+        VersionTag();
+
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        centered.end();
         return;
     }
 
     // ========== Email Step ==========
-    ImGui::TextColored(theme::colors::TEXT_PRIMARY, "Forgot Password");
+    BrandHeader("Forgot Password");
     ImGui::Spacing();
+
     ImGui::TextColored(theme::colors::TEXT_SECONDARY, "Enter your email to receive a reset code");
     ImGui::Spacing(); ImGui::Spacing();
 
-    ImGui::PushItemWidth(-1);
-    ImGui::TextColored(theme::colors::TEXT_DIM, "EMAIL");
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::colors::BG_INPUT);
-    bool enter_pressed = ImGui::InputText("##forgot_email", email_, sizeof(email_), ImGuiInputTextFlags_EnterReturnsTrue);
-    ImGui::PopStyleColor();
-    ImGui::PopItemWidth();
+    FieldLabel("EMAIL");
+    bool enter_pressed = StyledInput("##forgot_email", email_, sizeof(email_), ImGuiInputTextFlags_EnterReturnsTrue);
 
     ImGui::Spacing();
     theme::ErrorMessage(error_.c_str());
 
-    bool submit = enter_pressed || theme::AccentButton("SEND RESET CODE", ImVec2(-1, 32));
+    bool submit = enter_pressed || theme::AccentButton("SEND RESET CODE", ImVec2(-1, 36));
     if (submit && !loading_ && email_[0] != '\0') {
         auto email_result = utils::validate_email(email_);
         if (!email_result.valid) {
@@ -168,9 +178,27 @@ void ForgotPasswordScreen::render(AppScreen& next_screen) {
         theme::LoadingSpinner("Sending code...");
     }
 
-    ImGui::End();
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+    ImGui::Spacing();
+    AccentSeparator();
+
+    // Back to login
+    {
+        float content_w = ImGui::GetContentRegionAvail().x;
+        const char* label = "Back to Login";
+        float label_w = ImGui::CalcTextSize(label).x;
+        ImGui::SetCursorPosX((content_w - label_w) / 2.0f);
+        if (LinkButton(label)) {
+            next_screen = AppScreen::Login;
+            reset();
+        }
+    }
+
+    ImGui::Spacing();
+    VersionTag();
+
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    centered.end();
 }
 
 } // namespace fincept::auth
