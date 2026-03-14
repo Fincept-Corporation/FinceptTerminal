@@ -1,10 +1,12 @@
 #include "dashboard_data.h"
 #include "python/python_runner.h"
+#include "http/http_client.h"
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <sstream>
 #include <ctime>
 #include <cstdio>
+#include <algorithm>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -26,49 +28,42 @@ std::vector<std::string> DashboardData::symbols_for(DataCategory cat) {
     switch (cat) {
         case DataCategory::Indices:
             return {
-                "^GSPC", "^DJI", "^IXIC", "^RUT", "^FTSE",
-                "^GDAXI", "^FCHI", "^N225", "^HSI", "000001.SS",
-                "^BSESN", "^NSEI", "^STOXX50E", "^AXJO"
+                "^GSPC", "^DJI", "^IXIC", "^FTSE",
+                "^GDAXI", "^N225", "^HSI", "^NSEI"
             };
         case DataCategory::Forex:
             return {
+                // G10 Majors
                 "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCHF=X",
-                "USDCAD=X", "AUDUSD=X", "NZDUSD=X", "EURGBP=X",
-                "EURJPY=X", "GBPJPY=X", "USDCNY=X", "USDINR=X"
+                "USDCAD=X", "AUDUSD=X", "NZDUSD=X", "EURCHF=X",
+                // Key crosses
+                "EURGBP=X", "EURJPY=X", "GBPJPY=X",
+                // Key EM
+                "USDCNY=X", "USDINR=X"
             };
         case DataCategory::Commodities:
             return {
-                "GC=F", "SI=F", "PL=F", "HG=F",
-                "CL=F", "BZ=F", "NG=F",
-                "ZC=F", "ZW=F", "ZS=F"
+                "GC=F", "SI=F", "CL=F", "NG=F", "HG=F"
             };
         case DataCategory::Crypto:
             return {
-                "BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD",
-                "XRP-USD", "ADA-USD", "DOGE-USD", "LINK-USD",
-                "DOT-USD", "AVAX-USD", "UNI-USD", "ATOM-USD"
+                "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD",
+                "BNB-USD", "ADA-USD", "DOGE-USD"
             };
         case DataCategory::SectorETFs:
             return {
-                "XLK", "XLV", "XLF", "XLE", "XLI",
-                "XLB", "XLU", "XLRE", "XLC", "XLP", "XLY"
+                "XLK", "XLV", "XLF", "XLE", "XLI", "XLY",
+                "XLB", "XLU", "XLRE", "XLC"
             };
         case DataCategory::TopMovers:
             return {
-                "SMCI", "PLTR", "MSTR", "NVDA", "AMD", "TSLA",
-                "INTC", "PFE", "BA", "NKE", "DIS", "PYPL"
+                "NVDA", "TSLA", "AMD", "PLTR", "SMCI", "INTC"
             };
         case DataCategory::Ticker:
-            return {
-                "^GSPC", "^DJI", "^IXIC", "^RUT", "^FTSE", "^GDAXI", "^N225", "^HSI",
-                "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA",
-                "BTC-USD", "ETH-USD",
-                "GC=F", "CL=F",
-                "EURUSD=X", "GBPUSD=X", "USDJPY=X"
-            };
+            return {};  // reuses Indices + Crypto + Forex data, no separate fetch
         case DataCategory::MarketPulse:
             return {
-                "^VIX", "^TNX", "DX-Y.NYB", "GC=F", "CL=F", "BTC-USD"
+                "^VIX", "^TNX", "DX-Y.NYB"
             };
         default:
             return {};
@@ -80,57 +75,42 @@ std::map<std::string, std::string> DashboardData::labels_for(DataCategory cat) {
         case DataCategory::Indices:
             return {
                 {"^GSPC", "S&P 500"}, {"^DJI", "DOW JONES"}, {"^IXIC", "NASDAQ"},
-                {"^RUT", "RUSSELL 2000"}, {"^FTSE", "FTSE 100"}, {"^GDAXI", "DAX"},
-                {"^FCHI", "CAC 40"}, {"^N225", "NIKKEI 225"}, {"^HSI", "HANG SENG"},
-                {"000001.SS", "SHANGHAI"}, {"^BSESN", "SENSEX"}, {"^NSEI", "NIFTY 50"},
-                {"^STOXX50E", "EURO STOXX"}, {"^AXJO", "ASX 200"}
+                {"^FTSE", "FTSE 100"}, {"^GDAXI", "DAX"},
+                {"^N225", "NIKKEI 225"}, {"^HSI", "HANG SENG"}, {"^NSEI", "NIFTY 50"}
             };
         case DataCategory::Forex:
             return {
                 {"EURUSD=X", "EUR/USD"}, {"GBPUSD=X", "GBP/USD"}, {"USDJPY=X", "USD/JPY"},
                 {"USDCHF=X", "USD/CHF"}, {"USDCAD=X", "USD/CAD"}, {"AUDUSD=X", "AUD/USD"},
-                {"NZDUSD=X", "NZD/USD"}, {"EURGBP=X", "EUR/GBP"}, {"EURJPY=X", "EUR/JPY"},
-                {"GBPJPY=X", "GBP/JPY"}, {"USDCNY=X", "USD/CNY"}, {"USDINR=X", "USD/INR"}
+                {"NZDUSD=X", "NZD/USD"}, {"EURCHF=X", "EUR/CHF"},
+                {"EURGBP=X", "EUR/GBP"}, {"EURJPY=X", "EUR/JPY"}, {"GBPJPY=X", "GBP/JPY"},
+                {"USDCNY=X", "USD/CNY"}, {"USDINR=X", "USD/INR"}
             };
         case DataCategory::Commodities:
             return {
-                {"GC=F", "Gold"}, {"SI=F", "Silver"}, {"PL=F", "Platinum"}, {"HG=F", "Copper"},
-                {"CL=F", "WTI Crude"}, {"BZ=F", "Brent Crude"}, {"NG=F", "Natural Gas"},
-                {"ZC=F", "Corn"}, {"ZW=F", "Wheat"}, {"ZS=F", "Soybeans"}
+                {"GC=F", "Gold"}, {"SI=F", "Silver"},
+                {"CL=F", "WTI Crude"}, {"NG=F", "Natural Gas"}, {"HG=F", "Copper"}
             };
         case DataCategory::Crypto:
             return {
-                {"BTC-USD", "Bitcoin"}, {"ETH-USD", "Ethereum"}, {"BNB-USD", "BNB"},
-                {"SOL-USD", "Solana"}, {"XRP-USD", "XRP"}, {"ADA-USD", "Cardano"},
-                {"DOGE-USD", "Dogecoin"}, {"LINK-USD", "Chainlink"},
-                {"DOT-USD", "Polkadot"}, {"AVAX-USD", "Avalanche"},
-                {"UNI-USD", "Uniswap"}, {"ATOM-USD", "Cosmos"}
+                {"BTC-USD", "Bitcoin"}, {"ETH-USD", "Ethereum"}, {"SOL-USD", "Solana"},
+                {"XRP-USD", "XRP"}, {"BNB-USD", "BNB"}, {"ADA-USD", "Cardano"},
+                {"DOGE-USD", "Dogecoin"}
             };
         case DataCategory::SectorETFs:
             return {
                 {"XLK", "Technology"}, {"XLV", "Healthcare"}, {"XLF", "Financials"},
-                {"XLE", "Energy"}, {"XLI", "Industrials"}, {"XLB", "Materials"},
-                {"XLU", "Utilities"}, {"XLRE", "Real Estate"}, {"XLC", "Comm. Services"},
-                {"XLP", "Consumer Staples"}, {"XLY", "Consumer Disc."}
+                {"XLE", "Energy"}, {"XLI", "Industrials"}, {"XLY", "Consumer Disc."},
+                {"XLB", "Materials"}, {"XLU", "Utilities"}, {"XLRE", "Real Estate"},
+                {"XLC", "Comm. Services"}
             };
         case DataCategory::TopMovers:
             return {
-                {"SMCI", "Super Micro"}, {"PLTR", "Palantir"}, {"MSTR", "MicroStrategy"},
-                {"NVDA", "NVIDIA"}, {"AMD", "AMD"}, {"TSLA", "Tesla"},
-                {"INTC", "Intel"}, {"PFE", "Pfizer"}, {"BA", "Boeing"},
-                {"NKE", "Nike"}, {"DIS", "Disney"}, {"PYPL", "PayPal"}
+                {"NVDA", "NVIDIA"}, {"TSLA", "Tesla"}, {"AMD", "AMD"},
+                {"PLTR", "Palantir"}, {"SMCI", "Super Micro"}, {"INTC", "Intel"}
             };
         case DataCategory::Ticker:
-            return {
-                {"^GSPC", "S&P 500"}, {"^DJI", "DOW"}, {"^IXIC", "NASDAQ"},
-                {"^RUT", "RUSSELL"}, {"^FTSE", "FTSE"}, {"^GDAXI", "DAX"},
-                {"^N225", "NIKKEI"}, {"^HSI", "HANG SENG"},
-                {"AAPL", "AAPL"}, {"MSFT", "MSFT"}, {"GOOGL", "GOOGL"},
-                {"AMZN", "AMZN"}, {"NVDA", "NVDA"}, {"TSLA", "TSLA"},
-                {"BTC-USD", "BTC"}, {"ETH-USD", "ETH"},
-                {"GC=F", "GOLD"}, {"CL=F", "CRUDE"},
-                {"EURUSD=X", "EUR/USD"}, {"GBPUSD=X", "GBP/USD"}, {"USDJPY=X", "USD/JPY"}
-            };
+            return {};  // ticker bar assembles from other categories
         case DataCategory::MarketPulse:
             return {
                 {"^VIX", "VIX"}, {"^TNX", "US 10Y"}, {"DX-Y.NYB", "DXY"},
@@ -305,9 +285,16 @@ void DashboardData::fetch_category(DataCategory cat) {
     int idx = static_cast<int>(cat);
     auto& state = categories_[idx];
     if (state.loading.load()) return;
-    state.loading = true;
 
     auto syms = symbols_for(cat);
+    if (syms.empty()) {
+        // No symbols to fetch (e.g. Ticker assembles from other categories)
+        state.has_data = true;
+        state.last_fetch = std::chrono::steady_clock::now();
+        return;
+    }
+
+    state.loading = true;
     auto lbls = labels_for(cat);
 
     std::thread([this, idx, syms, lbls]() {
@@ -338,61 +325,152 @@ void DashboardData::fetch_news_feeds() {
     if (news_loading_.load()) return;
     news_loading_ = true;
 
-    // For now, news comes from hardcoded headlines with real timestamps
-    // In a future iteration, this will call RSS feeds like NewsScreen does
+    // Fetch real RSS feeds from top financial news sources
     std::thread([this]() {
-        // Placeholder: generate timestamped news items
-        // Real implementation would reuse NewsScreen::fetch_news() RSS parsing
+        struct FeedDef {
+            const char* url;
+            const char* source;
+            const char* category;
+            int priority;
+        };
+
+        // Tier 1-2 financial RSS feeds (same as NewsScreen)
+        FeedDef feeds[] = {
+            {"https://feeds.reuters.com/reuters/businessNews",   "Reuters",     "MARKETS",     1},
+            {"https://feeds.reuters.com/reuters/financialsNews", "Reuters",     "MARKETS",     1},
+            {"https://feeds.bloomberg.com/markets/news.rss",     "Bloomberg",   "MARKETS",     2},
+            {"https://feeds.a.dj.com/rss/RSSMarketsMain.xml",   "WSJ",         "MARKETS",     2},
+            {"https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "CNBC", "MARKETS", 2},
+            {"https://feeds.marketwatch.com/marketwatch/topstories/", "MarketWatch", "MARKETS", 2},
+            {"https://www.coindesk.com/arc/outboundfeeds/rss/",  "CoinDesk",    "CRYPTO",      2},
+            {"https://www.federalreserve.gov/feeds/press_all.xml","Fed Reserve", "ECONOMIC",    1},
+        };
+
+        auto& http = http::HttpClient::instance();
         std::vector<NewsItem> items;
 
-        // We'll use the news from the existing news screen infrastructure
-        // For the dashboard widget, we provide recent market headlines
-        // This will be connected to the real RSS system in the next iteration
-        time_t now = time(nullptr);
+        http::Headers hdrs;
+        hdrs["User-Agent"] = "FinceptTerminal/4.0.0";
+        hdrs["Accept"] = "application/rss+xml, application/xml, text/xml, */*";
 
-        const char* headlines[] = {
-            "Fed officials signal cautious approach to rate decisions amid mixed economic signals",
-            "Tech sector leads market rally as AI spending accelerates across enterprise",
-            "Oil prices stabilize following OPEC+ production agreement extension",
-            "Treasury yields edge higher on stronger-than-expected employment data",
-            "Consumer spending shows resilience despite elevated inflation readings",
-            "European Central Bank maintains rates, signals data-dependent approach",
-            "Semiconductor stocks surge on robust demand forecasts for AI chips",
-            "Cryptocurrency markets gain as institutional adoption continues to expand",
-            "Manufacturing PMI crosses expansion threshold for first time in months",
-            "Emerging market currencies strengthen as dollar index pulls back",
-            "Housing starts decline as mortgage rates remain elevated above 6.5%",
-            "Corporate earnings season shows mixed results across financial sector",
-        };
+        for (auto& feed : feeds) {
+            auto resp = http.get(feed.url, hdrs);
+            if (!resp.success || resp.body.empty()) continue;
 
-        const char* sources[] = {
-            "Reuters", "Bloomberg", "CNBC", "FT", "WSJ",
-            "MarketWatch", "Reuters", "CoinDesk", "ISM",
-            "Reuters", "NAR", "Bloomberg"
-        };
+            // Simple RSS XML parsing — extract <item> blocks
+            std::string& xml = resp.body;
+            size_t pos = 0;
+            int count = 0;
+            while (count < 5 && pos < xml.size()) {  // Max 5 items per feed
+                size_t item_start = xml.find("<item>", pos);
+                if (item_start == std::string::npos) item_start = xml.find("<entry>", pos);
+                if (item_start == std::string::npos) break;
 
-        const char* cats[] = {
-            "ECONOMIC", "MARKETS", "ENERGY", "MARKETS", "ECONOMIC",
-            "ECONOMIC", "MARKETS", "CRYPTO", "ECONOMIC",
-            "MARKETS", "ECONOMIC", "MARKETS"
-        };
+                size_t item_end = xml.find("</item>", item_start);
+                if (item_end == std::string::npos) item_end = xml.find("</entry>", item_start);
+                if (item_end == std::string::npos) break;
 
-        for (int i = 0; i < 12; i++) {
-            NewsItem item;
-            item.headline = headlines[i];
-            item.source = sources[i];
-            item.category = cats[i];
-            item.sort_ts = now - i * 900; // 15 min apart
-            item.priority = (i < 2) ? 1 : 3;
+                std::string item_xml = xml.substr(item_start, item_end - item_start + 7);
 
-            time_t ts = static_cast<time_t>(item.sort_ts);
-            struct tm* t = localtime(&ts);
-            char buf[32];
-            std::strftime(buf, sizeof(buf), "%H:%M", t);
-            item.time_str = buf;
+                // Extract title
+                auto extract_tag = [](const std::string& s, const std::string& tag) -> std::string {
+                    std::string open = "<" + tag + ">";
+                    std::string close = "</" + tag + ">";
+                    size_t a = s.find(open);
+                    if (a == std::string::npos) return "";
+                    a += open.size();
+                    // Handle CDATA
+                    if (s.compare(a, 9, "<![CDATA[") == 0) a += 9;
+                    size_t b = s.find(close, a);
+                    if (b == std::string::npos) return "";
+                    std::string val = s.substr(a, b - a);
+                    // Strip CDATA end
+                    if (val.size() >= 3 && val.substr(val.size() - 3) == "]]>")
+                        val = val.substr(0, val.size() - 3);
+                    return val;
+                };
 
-            items.push_back(item);
+                std::string title = extract_tag(item_xml, "title");
+                if (title.empty()) { pos = item_end + 7; continue; }
+
+                // Strip HTML entities
+                auto strip_entities = [](std::string& s) {
+                    size_t p2 = 0;
+                    while ((p2 = s.find("&amp;", p2)) != std::string::npos) s.replace(p2, 5, "&");
+                    p2 = 0;
+                    while ((p2 = s.find("&lt;", p2)) != std::string::npos) s.replace(p2, 4, "<");
+                    p2 = 0;
+                    while ((p2 = s.find("&gt;", p2)) != std::string::npos) s.replace(p2, 4, ">");
+                    p2 = 0;
+                    while ((p2 = s.find("&quot;", p2)) != std::string::npos) s.replace(p2, 6, "\"");
+                    p2 = 0;
+                    while ((p2 = s.find("&#39;", p2)) != std::string::npos) s.replace(p2, 5, "'");
+                    p2 = 0;
+                    while ((p2 = s.find("&apos;", p2)) != std::string::npos) s.replace(p2, 6, "'");
+                };
+                strip_entities(title);
+
+                // Extract pubDate
+                std::string date_str = extract_tag(item_xml, "pubDate");
+                if (date_str.empty()) date_str = extract_tag(item_xml, "published");
+                if (date_str.empty()) date_str = extract_tag(item_xml, "updated");
+
+                NewsItem ni;
+                ni.headline = title;
+                ni.source = feed.source;
+                ni.category = feed.category;
+                ni.priority = feed.priority;
+
+                // Parse date to timestamp (use current time if parse fails)
+                ni.sort_ts = std::time(nullptr) - count * 60;  // Default: stagger by 1 min
+                if (!date_str.empty()) {
+                    // Try RFC 2822: "Wed, 15 Mar 2026 14:30:00 GMT"
+                    struct tm t = {};
+                    const char* months[] = {"Jan","Feb","Mar","Apr","May","Jun",
+                                            "Jul","Aug","Sep","Oct","Nov","Dec"};
+                    int day = 0, year = 0, hour = 0, min2 = 0, sec = 0;
+                    char mon[8] = {};
+                    if (std::sscanf(date_str.c_str(), "%*[^,], %d %3s %d %d:%d:%d",
+                                    &day, mon, &year, &hour, &min2, &sec) >= 4) {
+                        t.tm_mday = day; t.tm_year = year - 1900;
+                        t.tm_hour = hour; t.tm_min = min2; t.tm_sec = sec;
+                        for (int m = 0; m < 12; m++) {
+                            if (std::strncmp(mon, months[m], 3) == 0) { t.tm_mon = m; break; }
+                        }
+                        time_t parsed = mktime(&t);
+                        if (parsed > 0) ni.sort_ts = parsed;
+                    } else if (std::sscanf(date_str.c_str(), "%d-%*d-%*dT%d:%d:%d",
+                                           &year, &hour, &min2, &sec) >= 1) {
+                        // ISO 8601 fallback — at least get the date
+                        int iy = 0, im = 0, id = 0;
+                        if (std::sscanf(date_str.c_str(), "%d-%d-%dT%d:%d:%d",
+                                        &iy, &im, &id, &hour, &min2, &sec) >= 3) {
+                            t.tm_year = iy - 1900; t.tm_mon = im - 1; t.tm_mday = id;
+                            t.tm_hour = hour; t.tm_min = min2; t.tm_sec = sec;
+                            time_t parsed = mktime(&t);
+                            if (parsed > 0) ni.sort_ts = parsed;
+                        }
+                    }
+                }
+
+                time_t ts = static_cast<time_t>(ni.sort_ts);
+                struct tm* lt = localtime(&ts);
+                char tbuf[32];
+                std::strftime(tbuf, sizeof(tbuf), "%H:%M", lt);
+                ni.time_str = tbuf;
+
+                items.push_back(ni);
+                count++;
+                pos = item_end + 7;
+            }
         }
+
+        // Sort newest first
+        std::sort(items.begin(), items.end(),
+            [](const NewsItem& a, const NewsItem& b) { return a.sort_ts > b.sort_ts; });
+
+        // Limit to 30 items for dashboard widget
+        if (items.size() > 30) items.resize(30);
 
         {
             std::lock_guard<std::mutex> lock(mutex_);

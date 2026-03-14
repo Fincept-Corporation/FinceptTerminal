@@ -36,6 +36,7 @@ set(SOURCES
     src/http/http_client.cpp
     src/storage/database.cpp
     src/storage/crypto.cpp
+    src/storage/cache_service.cpp
 
     # Auth
     src/auth/auth_api.cpp
@@ -130,6 +131,8 @@ set(SOURCES
     src/trading/paper_trading.cpp
     src/trading/order_matcher.cpp
     src/trading/exchange_service.cpp
+    src/trading/broker_registry.cpp
+    src/trading/brokers/fyers_broker.cpp
     src/screens/portfolio/portfolio_screen.cpp
     src/screens/portfolio/views/analytics_view.cpp
     src/screens/portfolio/views/performance_view.cpp
@@ -192,6 +195,17 @@ set(SOURCES
     src/screens/gov_data/providers/universal_ckan.cpp
     src/screens/gov_data/providers/data_gov_hk.cpp
 
+    # Screens — Backtesting
+    src/screens/backtesting/backtesting_data.cpp
+    src/screens/backtesting/backtesting_screen.cpp
+
+    # Screens — Algo Trading
+    src/screens/algo_trading/algo_trading_screen.cpp
+    src/screens/algo_trading/algo_service.cpp
+
+    # Trading — Unified Trading
+    src/trading/unified_trading.cpp
+
     # Screens — Code Editor
     src/screens/code_editor/notebook_io.cpp
     src/screens/code_editor/code_editor_screen.cpp
@@ -221,11 +235,17 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Compiler warnings (enable for code quality, CI enforcement)
 # =============================================================================
 if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /W3)
+    target_compile_options(${PROJECT_NAME} PRIVATE /W3 /FS)
     target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Enable 32-bit Unicode (emoji support) and FreeType color glyphs
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    IMGUI_USE_WCHAR32
+    IMGUI_ENABLE_FREETYPE
+)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     glfw

@@ -1,6 +1,6 @@
 #pragma once
-// Data Sources Screen — 83 connector gallery with connection management
-// Two views: Gallery (browse/configure) and Connections (manage saved)
+// Data Sources Screen — Bloomberg Terminal-inspired connector gallery
+// Dense table layout with category sidebar, command bar, status ticker
 
 #include "data_sources_types.h"
 #include "adapters/adapter_registry.h"
@@ -20,16 +20,15 @@ public:
 private:
     void init();
 
-    // Views
-    void render_header();
-    void render_filter_bar();
-    void render_gallery();
-    void render_connections();
+    // Bloomberg-style panels
+    void render_command_bar(float w, float h);
+    void render_sidebar(float w, float h);
+    void render_gallery_table(float w, float h);
+    void render_connections_table(float w, float h);
+    void render_status_bar(float w, float h);
     void render_config_modal();
 
     // Helpers
-    void render_source_card(const DataSourceDef& def);
-    void render_connection_row(const db::DataSource& conn);
     void render_field(const FieldDef& field, const std::string& ds_id);
 
     // Actions
@@ -47,7 +46,7 @@ private:
     // Config modal state
     bool show_modal_ = false;
     const DataSourceDef* modal_def_ = nullptr;
-    std::string editing_id_;  // empty = new, non-empty = editing
+    std::string editing_id_;
     std::map<std::string, std::string> form_data_;
     std::string save_error_;
 
@@ -56,7 +55,7 @@ private:
     std::future<adapters::TestResult> test_future_;
     std::optional<adapters::TestResult> test_result_;
 
-    // Per-connection test (from connections view)
+    // Per-connection test
     std::string testing_conn_id_;
     std::future<adapters::TestResult> conn_test_future_;
     std::map<std::string, adapters::TestResult> conn_test_results_;

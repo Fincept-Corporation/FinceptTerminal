@@ -1,5 +1,6 @@
 #include "storage_cache_section.h"
 #include "storage/database.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include <imgui.h>
 #include <cstring>
@@ -14,10 +15,15 @@ void StorageCacheSection::init() {
 }
 
 void StorageCacheSection::refresh_cache_stats() {
-    auto stats = db::ops::cache_stats();
+    auto& svc = fincept::CacheService::instance();
+    auto stats = svc.get_stats();
     cache_entries_ = stats.total_entries;
     cache_size_ = stats.total_size_bytes;
     cache_expired_ = stats.expired_entries;
+    category_stats_.clear();
+    for (auto& cat : stats.categories) {
+        category_stats_.push_back({cat.name, cat.entry_count, cat.total_size});
+    }
 }
 
 void StorageCacheSection::load_table_list() {
@@ -156,7 +162,7 @@ void StorageCacheSection::render_cache_panel() {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ERROR_RED);
     ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
     if (ImGui::Button("Clear All Cache")) {
-        db::ops::cache_clear_all();
+        fincept::CacheService::instance().clear_all();
         refresh_cache_stats();
         status_ = "Cache cleared";
         status_time_ = ImGui::GetTime();
@@ -165,12 +171,42 @@ void StorageCacheSection::render_cache_panel() {
 
     ImGui::SameLine();
     if (theme::SecondaryButton("Cleanup Expired")) {
-        int64_t removed = db::ops::cache_cleanup();
+        int64_t removed = fincept::CacheService::instance().cleanup();
         refresh_cache_stats();
         char buf[64];
         std::snprintf(buf, sizeof(buf), "Removed %lld expired entries", (long long)removed);
         status_ = buf;
         status_time_ = ImGui::GetTime();
+    }
+
+    // Per-category breakdown
+    if (!category_stats_.empty()) {
+        ImGui::Spacing();
+        theme::SectionHeader("CACHE CATEGORIES");
+
+        if (ImGui::BeginTable("##cache_categories", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("Category");
+            ImGui::TableSetupColumn("Entries");
+            ImGui::TableSetupColumn("Size");
+            ImGui::TableHeadersRow();
+
+            for (auto& cat : category_stats_) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextColored(ACCENT, "%s", cat.name.c_str());
+                ImGui::TableNextColumn();
+                ImGui::TextColored(TEXT_PRIMARY, "%lld", (long long)cat.count);
+                ImGui::TableNextColumn();
+                // Human readable size
+                if (cat.size > 1024 * 1024)
+                    ImGui::TextColored(TEXT_PRIMARY, "%.1f MB", (double)cat.size / (1024.0 * 1024.0));
+                else if (cat.size > 1024)
+                    ImGui::TextColored(TEXT_PRIMARY, "%.1f KB", (double)cat.size / 1024.0);
+                else
+                    ImGui::TextColored(TEXT_PRIMARY, "%lld B", (long long)cat.size);
+            }
+            ImGui::EndTable();
+        }
     }
 }
 

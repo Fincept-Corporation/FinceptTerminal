@@ -15,6 +15,18 @@
 #include <mutex>
 #include <cstdint>
 
+// Forward declarations for algo trading types
+namespace fincept::algo {
+    struct AlgoStrategy;
+    struct AlgoDeployment;
+    struct AlgoMetrics;
+    struct AlgoTrade;
+    struct AlgoOrderSignal;
+    struct CandleData;
+    struct CustomPythonStrategy;
+    struct PriceCacheEntry;
+}
+
 struct sqlite3;
 struct sqlite3_stmt;
 
@@ -251,14 +263,23 @@ struct CacheEntry {
     int64_t ttl_seconds;
     int64_t created_at;
     int64_t expires_at;
+    int64_t last_accessed_at;
     int64_t hit_count;
+    int64_t size_bytes;
     bool is_expired;
+};
+
+struct CategoryStats {
+    std::string category;
+    int64_t entry_count;
+    int64_t total_size;
 };
 
 struct CacheStats {
     int64_t total_entries;
     int64_t total_size_bytes;
     int64_t expired_entries;
+    std::vector<CategoryStats> categories;
 };
 
 struct TabSession {
@@ -388,10 +409,14 @@ void delete_ma_deal(const std::string& deal_id);
 
 // --- Cache (uses CacheDatabase) ---
 std::optional<CacheEntry> cache_get(const std::string& key);
+std::optional<CacheEntry> cache_get_with_stale(const std::string& key);
+std::vector<CacheEntry> cache_get_many(const std::vector<std::string>& keys);
 void cache_set(const std::string& key, const std::string& data,
                const std::string& category, int64_t ttl_seconds);
 bool cache_delete(const std::string& key);
 int64_t cache_invalidate_category(const std::string& category);
+int64_t cache_invalidate_pattern(const std::string& pattern);
+int64_t cache_evict_lru(int64_t count);
 int64_t cache_cleanup();
 CacheStats cache_stats();
 void cache_clear_all();
@@ -405,6 +430,7 @@ void tab_session_set(const std::string& tab_id, const std::string& tab_name,
                      const std::string& selected_items = "");
 void tab_session_delete(const std::string& tab_id);
 std::vector<TabSession> tab_session_get_all();
+int64_t tab_session_cleanup(int64_t max_age_days);
 
 // --- LLM Model Configs ---
 std::vector<LLMModelConfig> get_llm_model_configs();
@@ -431,6 +457,52 @@ void delete_note(int64_t id);
 std::vector<Note> search_notes(const std::string& query);
 void toggle_note_favorite(int64_t id);
 void archive_note(int64_t id);
+
+// --- Algo Trading: Strategies ---
+void save_algo_strategy(const algo::AlgoStrategy& s);
+std::vector<algo::AlgoStrategy> list_algo_strategies();
+std::optional<algo::AlgoStrategy> get_algo_strategy(const std::string& id);
+void delete_algo_strategy(const std::string& id);
+
+// --- Algo Trading: Deployments ---
+void save_algo_deployment(const algo::AlgoDeployment& d);
+std::vector<algo::AlgoDeployment> list_algo_deployments();
+std::optional<algo::AlgoDeployment> get_algo_deployment(const std::string& id);
+void update_algo_deployment_status(const std::string& id, const std::string& status,
+                                    const std::string& error = "");
+void delete_algo_deployment(const std::string& id);
+
+// --- Algo Trading: Metrics ---
+void save_algo_metrics(const algo::AlgoMetrics& m);
+std::optional<algo::AlgoMetrics> get_algo_metrics(const std::string& deployment_id);
+
+// --- Algo Trading: Trades ---
+void save_algo_trade(const algo::AlgoTrade& t);
+std::vector<algo::AlgoTrade> get_algo_trades(const std::string& deployment_id, int limit = 100);
+
+// --- Algo Trading: Order Signals ---
+void save_algo_signal(const algo::AlgoOrderSignal& s);
+std::vector<algo::AlgoOrderSignal> get_pending_signals();
+void update_signal_status(const std::string& id, const std::string& status,
+                           const std::string& error = "");
+
+// --- Algo Trading: Candle Cache ---
+void insert_candles(const std::vector<algo::CandleData>& candles);
+std::vector<algo::CandleData> get_candle_cache(const std::string& symbol,
+                                                 const std::string& timeframe,
+                                                 int limit = 500);
+int64_t count_candles(const std::string& symbol, const std::string& timeframe);
+
+// --- Algo Trading: Custom Python Strategies ---
+void save_custom_python_strategy(const algo::CustomPythonStrategy& s);
+std::vector<algo::CustomPythonStrategy> list_custom_python_strategies();
+std::optional<algo::CustomPythonStrategy> get_custom_python_strategy(const std::string& id);
+void delete_custom_python_strategy(const std::string& id);
+
+// --- Algo Trading: Price Cache ---
+void update_price_cache(const std::string& symbol, double price,
+                         double volume, double change_pct);
+std::vector<algo::PriceCacheEntry> get_price_cache_entries();
 
 } // namespace ops
 

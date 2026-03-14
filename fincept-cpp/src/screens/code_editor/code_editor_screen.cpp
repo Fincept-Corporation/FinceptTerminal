@@ -31,15 +31,112 @@ namespace fs = std::filesystem;
 NotebookTab& CodeEditorScreen::tab() { return tabs_[active_tab_idx_]; }
 Notebook& CodeEditorScreen::nb() { return tabs_[active_tab_idx_].notebook; }
 
+// Forward declaration (defined further below)
+static void file_log(const std::string& msg);
+
+// =============================================================================
+// Helper: Jupyter-like auto-display for last expression
+// In Jupyter notebooks, the last expression in a cell is auto-displayed.
+// In a Python script, bare expressions produce no output. This function
+// detects if the last non-empty, non-comment line is a bare expression
+// and wraps it in print() so users get Jupyter-like behavior.
+// =============================================================================
+static std::string jupyter_auto_display(const std::string& source) {
+    // Split into lines
+    std::vector<std::string> lines;
+    std::istringstream ss(source);
+    std::string line;
+    while (std::getline(ss, line)) lines.push_back(line);
+
+    // Find last non-empty, non-comment line
+    int last_idx = -1;
+    for (int i = static_cast<int>(lines.size()) - 1; i >= 0; i--) {
+        std::string trimmed = lines[i];
+        // Trim leading whitespace
+        size_t start = trimmed.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos) continue; // blank line
+        trimmed = trimmed.substr(start);
+        if (trimmed[0] == '#') continue; // comment
+        last_idx = i;
+        break;
+    }
+
+    if (last_idx < 0) return source;
+
+    std::string trimmed = lines[last_idx];
+    size_t start = trimmed.find_first_not_of(" \t");
+    if (start == std::string::npos) return source;
+    std::string content = trimmed.substr(start);
+    std::string indent = trimmed.substr(0, start);
+
+    // Skip if it's indented (inside a block) — only auto-display top-level expressions
+    if (!indent.empty()) return source;
+
+    // Skip if it's a statement keyword
+    static const std::set<std::string> STMT_PREFIXES = {
+        "import ", "from ", "def ", "class ", "if ", "elif ", "else:",
+        "for ", "while ", "try:", "except ", "except:", "finally:",
+        "with ", "return ", "raise ", "pass", "break", "continue",
+        "del ", "global ", "nonlocal ", "assert ", "yield ", "async ",
+        "await ", "print(", "print ("
+    };
+    for (auto& prefix : STMT_PREFIXES) {
+        if (content.substr(0, prefix.size()) == prefix) return source;
+        if (content == "pass" || content == "break" || content == "continue") return source;
+    }
+
+    // Skip if it contains '=' but not '==' (assignment)
+    // But allow lines like `df[df['col'] == 'val']`
+    bool has_assign = false;
+    for (size_t i = 0; i < content.size(); i++) {
+        if (content[i] == '=' && i + 1 < content.size() && content[i + 1] != '=' &&
+            (i == 0 || (content[i - 1] != '!' && content[i - 1] != '<' &&
+             content[i - 1] != '>' && content[i - 1] != '='))) {
+            // Could be assignment — check if left side looks like assignment target
+            // Simple heuristic: if '=' appears outside of brackets/parens at top level
+            int depth = 0;
+            for (size_t j = 0; j < i; j++) {
+                if (content[j] == '(' || content[j] == '[' || content[j] == '{') depth++;
+                if (content[j] == ')' || content[j] == ']' || content[j] == '}') depth--;
+            }
+            if (depth == 0) { has_assign = true; break; }
+        }
+    }
+    if (has_assign) return source;
+
+    // Skip if it ends with ':' (block start)
+    if (!content.empty() && content.back() == ':') return source;
+
+    // It's likely a bare expression — wrap in print()
+    lines[last_idx] = "print(" + content + ")";
+
+    std::string result;
+    for (size_t i = 0; i < lines.size(); i++) {
+        result += lines[i];
+        if (i + 1 < lines.size()) result += '\n';
+    }
+    return result;
+}
+
 // =============================================================================
 // Helper: write string to temp file, return path
 // =============================================================================
 static std::string write_temp_script(const std::string& source) {
-    fs::path tmp_dir = fs::temp_directory_path();
-    fs::path tmp_file = tmp_dir / "fincept_cell.py";
-    std::ofstream f(tmp_file);
-    if (f.is_open()) { f << source; f.close(); }
-    return tmp_file.string();
+    try {
+        // Apply Jupyter-like auto-display for bare expressions
+        std::string transformed = jupyter_auto_display(source);
+        file_log("write_temp_script: source_len=" + std::to_string(source.size()) +
+                  " transformed_len=" + std::to_string(transformed.size()));
+        fs::path tmp_dir = fs::temp_directory_path();
+        fs::path tmp_file = tmp_dir / "fincept_cell.py";
+        std::ofstream f(tmp_file);
+        if (f.is_open()) { f << transformed; f.close(); }
+        else { file_log("write_temp_script: FAILED to open file for writing!"); }
+        return tmp_file.string();
+    } catch (const std::exception& e) {
+        file_log("write_temp_script: EXCEPTION: " + std::string(e.what()));
+        return "";
+    }
 }
 
 // =============================================================================
@@ -392,50 +489,113 @@ void CodeEditorScreen::render_markdown(const std::string& source) {
 // =============================================================================
 // Subprocess execution helper
 // =============================================================================
+// Crash-safe file logger — writes directly to file, never throws
+static std::mutex s_file_log_mutex;
+static void file_log(const std::string& msg) {
+    try {
+        std::lock_guard<std::mutex> lock(s_file_log_mutex);
+        static std::ofstream log_file;
+        if (!log_file.is_open()) {
+            log_file.open("C:/windowsdisk/finceptTerminal/fincept-cpp/debug_code_editor.log",
+                          std::ios::trunc);
+        }
+        if (log_file.is_open()) {
+            auto now = std::chrono::system_clock::now();
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now.time_since_epoch()).count() % 100000;
+            log_file << "[" << ms << "] " << msg << "\n";
+            log_file.flush();
+        }
+    } catch (...) {}
+}
+
+// Debug log function accessible from static context via global pointer
+static CodeEditorScreen* g_debug_instance = nullptr;
+static void debug_log(const std::string& msg) {
+    file_log(msg);
+    try { if (g_debug_instance) g_debug_instance->add_debug(msg); } catch (...) {}
+}
+
 static python::PythonResult run_cell_subprocess(const std::string& tmp_path) {
     python::PythonResult result;
 
-    fs::path py = python::resolve_python_path("");
-    if (py.empty() || !fs::exists(py)) {
+    try {
+        file_log("subprocess: ENTER, tmp_path=" + tmp_path);
+
+        file_log("subprocess: calling resolve_python_path...");
+        fs::path py = python::resolve_python_path("");
+        file_log("subprocess: resolve_python_path('') = '" + py.string() + "'");
+
+        if (py.empty() || !fs::exists(py)) {
 #ifdef _WIN32
-        py = "python";
+            py = "python";
 #else
-        py = "python3";
+            py = "python3";
 #endif
-    }
+            file_log("subprocess: falling back to '" + py.string() + "'");
+        }
 
-    std::string cmd = "\"" + py.string() + "\" -u -B \"" + tmp_path + "\" 2>&1";
-
+        // On Windows, _popen uses cmd.exe /c which requires the entire command
+        // wrapped in an extra set of quotes when paths contain spaces.
 #ifdef _WIN32
-    FILE* pipe = _popen(cmd.c_str(), "r");
+        std::string cmd = "\"\"" + py.string() + "\" -u -B \"" + tmp_path + "\" 2>&1\"";
 #else
-    FILE* pipe = popen(cmd.c_str(), "r");
+        std::string cmd = "\"" + py.string() + "\" -u -B \"" + tmp_path + "\" 2>&1";
 #endif
-    if (!pipe) {
-        result.error = "Failed to start Python subprocess";
-        return result;
-    }
+        file_log("subprocess: CMD = " + cmd);
 
-    std::string output;
-    char buffer[4096];
-    while (std::fgets(buffer, sizeof(buffer), pipe)) {
-        output += buffer;
-    }
-
+        file_log("subprocess: calling _popen...");
 #ifdef _WIN32
-    int status = _pclose(pipe);
+        FILE* pipe = _popen(cmd.c_str(), "r");
 #else
-    int status = pclose(pipe);
-    status = WEXITSTATUS(status);
+        FILE* pipe = popen(cmd.c_str(), "r");
+#endif
+        if (!pipe) {
+            result.error = "Failed to start Python subprocess";
+            file_log("subprocess: FAIL - _popen returned NULL, errno=" + std::to_string(errno));
+            return result;
+        }
+        file_log("subprocess: pipe opened OK, reading output...");
+
+        std::string output;
+        char buffer[4096];
+        int read_count = 0;
+        while (std::fgets(buffer, sizeof(buffer), pipe)) {
+            output += buffer;
+            read_count++;
+        }
+        file_log("subprocess: read " + std::to_string(output.size()) + " bytes in " +
+                  std::to_string(read_count) + " chunks from pipe");
+
+        file_log("subprocess: calling _pclose...");
+#ifdef _WIN32
+        int status = _pclose(pipe);
+#else
+        int status = pclose(pipe);
+        status = WEXITSTATUS(status);
 #endif
 
-    result.exit_code = status;
-    if (status == 0) {
-        result.success = true;
-        result.output = output;
-    } else {
-        result.error = output.empty() ? "Python exited with code " + std::to_string(status) : output;
+        file_log("subprocess: _pclose returned status=" + std::to_string(status));
+
+        result.exit_code = status;
+        if (status == 0) {
+            result.success = true;
+            result.output = output;
+            file_log("subprocess: SUCCESS");
+        } else {
+            result.error = output.empty() ? "Python exited with code " + std::to_string(status) : output;
+            file_log("subprocess: FAIL - exit code " + std::to_string(status) +
+                      " output_len=" + std::to_string(output.size()));
+        }
+    } catch (const std::exception& e) {
+        file_log("subprocess: EXCEPTION: " + std::string(e.what()));
+        result.error = std::string("Subprocess exception: ") + e.what();
+    } catch (...) {
+        file_log("subprocess: UNKNOWN EXCEPTION");
+        result.error = "Subprocess unknown exception";
     }
+
+    file_log("subprocess: EXIT");
     return result;
 }
 
@@ -445,50 +605,79 @@ static python::PythonResult run_cell_subprocess(const std::string& tmp_path) {
 void CodeEditorScreen::render() {
     using namespace theme::colors;
 
+    g_debug_instance = this;
+
+    try {
+
     if (!initialized_) {
+        file_log("render() initializing...");
         new_tab();
         detect_python_version();
         last_autosave_time_ = ImGui::GetTime();
         initialized_ = true;
+        file_log("render() initialized OK");
     }
 
     if (tabs_.empty()) { new_tab(); }
 
-    // Check async execution result
-    if (exec_future_.valid() &&
-        exec_future_.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
-        exec_future_.get();
-        exec_pending_ = false;
-        running_cell_ = -1;
+    // Check async execution result — MUST catch exceptions from async thread
+    if (exec_future_.valid()) {
+        auto status = exec_future_.wait_for(std::chrono::milliseconds(0));
+        if (status == std::future_status::ready) {
+            file_log("render() exec_future_ ready, calling .get()...");
+            try {
+                exec_future_.get();
+                file_log("render() exec_future_.get() OK");
+            } catch (const std::exception& e) {
+                file_log("render() EXCEPTION from exec_future_.get(): " + std::string(e.what()));
+            } catch (...) {
+                file_log("render() UNKNOWN EXCEPTION from exec_future_.get()");
+            }
+            exec_pending_ = false;
+            running_cell_ = -1;
+        }
     }
 
     // Apply pending results from background thread (thread-safe)
     {
         std::lock_guard<std::mutex> lock(result_mutex_);
         for (auto& pr : pending_results_) {
-            if (pr.tab_idx >= 0 && pr.tab_idx < static_cast<int>(tabs_.size())) {
-                auto& t = tabs_[pr.tab_idx];
-                if (pr.cell_idx >= 0 && pr.cell_idx < static_cast<int>(t.notebook.cells.size())) {
-                    auto& c = t.notebook.cells[pr.cell_idx];
-                    c.outputs.clear();
-                    c.execution_count = pr.exec_num;
-                    c.exec_time_ms = pr.elapsed_ms;
-                    if (pr.success) {
-                        if (!pr.output.empty()) {
+            file_log("Applying result: tab=" + std::to_string(pr.tab_idx) +
+                      " cell=" + std::to_string(pr.cell_idx) +
+                      " success=" + (pr.success ? "true" : "false") +
+                      " elapsed=" + std::to_string(static_cast<int>(pr.elapsed_ms)) + "ms");
+            try {
+                if (pr.tab_idx >= 0 && pr.tab_idx < static_cast<int>(tabs_.size())) {
+                    auto& t = tabs_[pr.tab_idx];
+                    if (pr.cell_idx >= 0 && pr.cell_idx < static_cast<int>(t.notebook.cells.size())) {
+                        auto& c = t.notebook.cells[pr.cell_idx];
+                        c.outputs.clear();
+                        c.execution_count = pr.exec_num;
+                        c.exec_time_ms = pr.elapsed_ms;
+                        if (pr.success) {
+                            if (!pr.output.empty()) {
+                                CellOutput out;
+                                out.output_type = "stream";
+                                out.text = pr.output;
+                                c.outputs.push_back(std::move(out));
+                            }
+                        } else {
                             CellOutput out;
-                            out.output_type = "stream";
-                            out.text = pr.output;
+                            out.output_type = "error";
+                            out.ename = "ExecutionError";
+                            out.evalue = pr.error.empty() ? "Unknown error" : pr.error;
+                            out.traceback = pr.error;
                             c.outputs.push_back(std::move(out));
                         }
+                        file_log("Result applied OK for cell " + std::to_string(pr.cell_idx));
                     } else {
-                        CellOutput out;
-                        out.output_type = "error";
-                        out.ename = "ExecutionError";
-                        out.evalue = pr.error.empty() ? "Unknown error" : pr.error;
-                        out.traceback = pr.error;
-                        c.outputs.push_back(std::move(out));
+                        file_log("WARN: cell_idx out of range: " + std::to_string(pr.cell_idx));
                     }
+                } else {
+                    file_log("WARN: tab_idx out of range: " + std::to_string(pr.tab_idx));
                 }
+            } catch (const std::exception& e) {
+                file_log("EXCEPTION applying result: " + std::string(e.what()));
             }
         }
         pending_results_.clear();
@@ -535,6 +724,12 @@ void CodeEditorScreen::render() {
     ImGui::End();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
+
+    } catch (const std::exception& e) {
+        file_log("FATAL EXCEPTION in render(): " + std::string(e.what()));
+    } catch (...) {
+        file_log("FATAL UNKNOWN EXCEPTION in render()");
+    }
 }
 
 // =============================================================================
@@ -825,6 +1020,13 @@ void CodeEditorScreen::render_cells() {
 // =============================================================================
 void CodeEditorScreen::render_cell(int idx) {
     using namespace theme::colors;
+    try {
+
+    if (idx < 0 || idx >= static_cast<int>(nb().cells.size())) {
+        file_log("render_cell: idx " + std::to_string(idx) + " out of range, cells=" +
+                  std::to_string(nb().cells.size()));
+        return;
+    }
 
     auto& cell = nb().cells[idx];
     bool is_selected = (idx == tab().selected_cell);
@@ -918,6 +1120,12 @@ void CodeEditorScreen::render_cell(int idx) {
     ImGui::PopStyleColor(); // ChildBg
 
     ImGui::Spacing();
+
+    } catch (const std::exception& e) {
+        file_log("render_cell EXCEPTION idx=" + std::to_string(idx) + ": " + e.what());
+    } catch (...) {
+        file_log("render_cell UNKNOWN EXCEPTION idx=" + std::to_string(idx));
+    }
 }
 
 // =============================================================================
@@ -1187,6 +1395,7 @@ void CodeEditorScreen::render_cell_editor(int idx) {
 // =============================================================================
 void CodeEditorScreen::render_cell_output(int idx) {
     using namespace theme::colors;
+    try {
 
     auto& cell = nb().cells[idx];
     bool has_error = false;
@@ -1253,6 +1462,12 @@ void CodeEditorScreen::render_cell_output(int idx) {
     }
 
     ImGui::EndChild();
+
+    } catch (const std::exception& e) {
+        file_log("render_cell_output EXCEPTION idx=" + std::to_string(idx) + ": " + e.what());
+    } catch (...) {
+        file_log("render_cell_output UNKNOWN EXCEPTION idx=" + std::to_string(idx));
+    }
 }
 
 // =============================================================================
@@ -1615,11 +1830,25 @@ void CodeEditorScreen::redo() {
 // Execution (with timer — point 8, persistent feel via sequential cells — point 2)
 // =============================================================================
 void CodeEditorScreen::run_cell(int idx) {
+    file_log("run_cell() ENTER idx=" + std::to_string(idx));
+    try {
     auto& cells = nb().cells;
-    if (idx < 0 || idx >= static_cast<int>(cells.size())) return;
+    file_log("run_cell() cells.size()=" + std::to_string(cells.size()));
+
+    if (idx < 0 || idx >= static_cast<int>(cells.size())) {
+        add_debug("ERROR: idx out of range, cells.size()=" + std::to_string(cells.size()));
+        return;
+    }
     auto& cell = cells[idx];
-    if (cell.cell_type != "code" || cell.source.empty()) return;
-    if (exec_pending_) return;
+    if (cell.cell_type != "code" || cell.source.empty()) {
+        add_debug("ERROR: cell not code or source empty, type=" + cell.cell_type +
+                  " source_len=" + std::to_string(cell.source.size()));
+        return;
+    }
+    if (exec_pending_) {
+        add_debug("ERROR: exec_pending_ is true, another cell is still running");
+        return;
+    }
 
     flush_edit_buffer();
     running_cell_ = idx;
@@ -1629,41 +1858,110 @@ void CodeEditorScreen::run_cell(int idx) {
     int tab_idx = active_tab_idx_;
     std::string source = cell.source;
 
+    add_debug("Cell source (" + std::to_string(source.size()) + " chars): " +
+              source.substr(0, 80) + (source.size() > 80 ? "..." : ""));
+
     // Persistent session (point 2): gather all previously executed cells' source
     // and prepend to current cell so variables carry over
     std::string full_source;
+    int prepended = 0;
     for (int i = 0; i < idx; i++) {
         if (cells[i].cell_type == "code" && cells[i].execution_count >= 0 && !cells[i].source.empty()) {
             full_source += cells[i].source;
             if (!cells[i].source.empty() && cells[i].source.back() != '\n') full_source += '\n';
+            prepended++;
         }
     }
     full_source += source;
+    add_debug("Prepended " + std::to_string(prepended) + " prior cells, total source: " +
+              std::to_string(full_source.size()) + " chars");
 
     exec_future_ = std::async(std::launch::async, [this, idx, exec_num, tab_idx, full_source]() {
-        auto t_start = std::chrono::steady_clock::now();
-        std::string tmp_path = write_temp_script(full_source);
-        python::PythonResult result = run_cell_subprocess(tmp_path);
-        try { fs::remove(tmp_path); } catch (...) {}
-        auto t_end = std::chrono::steady_clock::now();
-        double elapsed_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+        try {
+            file_log("async: ENTER for cell " + std::to_string(idx));
 
-        // If we prepended previous cells, strip their output
-        // The combined script runs everything, but we only want output from the last cell
-        // This is imperfect but workable — the last cell's print statements will include
-        // earlier cells' outputs too. A true persistent session needs a live REPL process.
+            auto t_start = std::chrono::steady_clock::now();
 
-        std::lock_guard<std::mutex> lock(result_mutex_);
-        PendingResult pr;
-        pr.tab_idx = tab_idx;
-        pr.cell_idx = idx;
-        pr.exec_num = exec_num;
-        pr.success = result.success;
-        pr.output = result.output;
-        pr.error = result.error;
-        pr.elapsed_ms = elapsed_ms;
-        pending_results_.push_back(std::move(pr));
+            file_log("async: writing temp script...");
+            std::string tmp_path = write_temp_script(full_source);
+            file_log("async: temp script written: " + tmp_path);
+
+            // Log the resolved python path
+            file_log("async: resolving python path...");
+            fs::path py = python::resolve_python_path("");
+            file_log("async: resolve_python_path('') = '" + py.string() + "' exists=" +
+                      (py.empty() ? "empty" : (fs::exists(py) ? "YES" : "NO")));
+
+            file_log("async: calling run_cell_subprocess...");
+            python::PythonResult result = run_cell_subprocess(tmp_path);
+
+            file_log("async: subprocess returned, success=" + std::string(result.success ? "true" : "false") +
+                      " exit_code=" + std::to_string(result.exit_code));
+            if (!result.output.empty()) {
+                std::string preview = result.output.substr(0, 200);
+                file_log("async: output (" + std::to_string(result.output.size()) + " chars): " + preview);
+            }
+            if (!result.error.empty()) {
+                std::string preview = result.error.substr(0, 300);
+                file_log("async: ERROR output: " + preview);
+            }
+
+            try { fs::remove(tmp_path); } catch (...) {}
+            auto t_end = std::chrono::steady_clock::now();
+            double elapsed_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+            file_log("async: execution took " + std::to_string(static_cast<int>(elapsed_ms)) + "ms");
+
+            file_log("async: locking result_mutex_ to push result...");
+            std::lock_guard<std::mutex> lock(result_mutex_);
+            PendingResult pr;
+            pr.tab_idx = tab_idx;
+            pr.cell_idx = idx;
+            pr.exec_num = exec_num;
+            pr.success = result.success;
+            pr.output = result.output;
+            pr.error = result.error;
+            pr.elapsed_ms = elapsed_ms;
+            pending_results_.push_back(std::move(pr));
+            file_log("async: result pushed OK, EXIT");
+        } catch (const std::exception& e) {
+            file_log("async: EXCEPTION: " + std::string(e.what()));
+            // Still push an error result so UI doesn't hang
+            try {
+                std::lock_guard<std::mutex> lock(result_mutex_);
+                PendingResult pr;
+                pr.tab_idx = tab_idx;
+                pr.cell_idx = idx;
+                pr.exec_num = exec_num;
+                pr.success = false;
+                pr.error = std::string("Internal error: ") + e.what();
+                pr.elapsed_ms = 0;
+                pending_results_.push_back(std::move(pr));
+            } catch (...) {}
+        } catch (...) {
+            file_log("async: UNKNOWN EXCEPTION");
+            try {
+                std::lock_guard<std::mutex> lock(result_mutex_);
+                PendingResult pr;
+                pr.tab_idx = tab_idx;
+                pr.cell_idx = idx;
+                pr.exec_num = exec_num;
+                pr.success = false;
+                pr.error = "Internal unknown error";
+                pr.elapsed_ms = 0;
+                pending_results_.push_back(std::move(pr));
+            } catch (...) {}
+        }
     });
+    file_log("run_cell() async launched OK");
+    } catch (const std::exception& e) {
+        file_log("run_cell() EXCEPTION: " + std::string(e.what()));
+        exec_pending_ = false;
+        running_cell_ = -1;
+    } catch (...) {
+        file_log("run_cell() UNKNOWN EXCEPTION");
+        exec_pending_ = false;
+        running_cell_ = -1;
+    }
 }
 
 void CodeEditorScreen::run_all_cells() {
@@ -1947,7 +2245,11 @@ void CodeEditorScreen::pip_install(const std::string& package) {
 #endif
         }
 
+#ifdef _WIN32
+        std::string cmd = "\"\"" + py.string() + "\" -m pip install " + package + " 2>&1\"";
+#else
         std::string cmd = "\"" + py.string() + "\" -m pip install " + package + " 2>&1";
+#endif
 
 #ifdef _WIN32
         FILE* pipe = _popen(cmd.c_str(), "r");
@@ -2100,7 +2402,11 @@ void CodeEditorScreen::detect_python_version() {
 #endif
             }
 
+#ifdef _WIN32
+            std::string cmd = "\"\"" + py.string() + "\" -c \"import sys; print(f'Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')\" 2>&1\"";
+#else
             std::string cmd = "\"" + py.string() + "\" -c \"import sys; print(f'Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')\" 2>&1";
+#endif
 
 #ifdef _WIN32
             FILE* pipe = _popen(cmd.c_str(), "r");
@@ -2139,6 +2445,67 @@ void CodeEditorScreen::flush_edit_buffer() {
         active_edit_cell_ < static_cast<int>(nb().cells.size())) {
         nb().cells[active_edit_cell_].source = edit_buf_.data();
     }
+}
+
+void CodeEditorScreen::add_debug(const std::string& msg) {
+    // File logging is handled by file_log() — just keep in-memory log here
+    try {
+        auto now = std::chrono::system_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now.time_since_epoch()).count() % 100000;
+        char ts[16];
+        std::snprintf(ts, sizeof(ts), "%05d", static_cast<int>(ms));
+
+        std::lock_guard<std::mutex> lock(debug_mutex_);
+        debug_log_.push_back({std::string(ts), msg});
+        if (debug_log_.size() > 200)
+            debug_log_.erase(debug_log_.begin());
+    } catch (...) {}
+}
+
+void CodeEditorScreen::render_debug_panel() {
+    using namespace theme::colors;
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.05f, 0.08f, 1.0f));
+    ImGui::BeginChild("##ce_debug", ImVec2(0, 200), ImGuiChildFlags_Borders,
+        ImGuiWindowFlags_HorizontalScrollbar);
+
+    ImGui::TextColored(ACCENT, "DEBUG LOG");
+    ImGui::SameLine(0, 16);
+    if (ImGui::SmallButton("Clear##dbg_clear")) {
+        std::lock_guard<std::mutex> lock(debug_mutex_);
+        debug_log_.clear();
+    }
+    ImGui::SameLine(0, 8);
+    if (ImGui::SmallButton("Hide##dbg_hide")) {
+        show_debug_log_ = false;
+    }
+    ImGui::Separator();
+
+    {
+        std::lock_guard<std::mutex> lock(debug_mutex_);
+        for (auto& entry : debug_log_) {
+            ImGui::TextColored(TEXT_DIM, "[%s]", entry.timestamp.c_str());
+            ImGui::SameLine(0, 4);
+
+            // Color based on content
+            ImVec4 col = TEXT_PRIMARY;
+            if (entry.message.find("ERROR") != std::string::npos ||
+                entry.message.find("FAIL") != std::string::npos) col = ERROR_RED;
+            else if (entry.message.find("OK") != std::string::npos ||
+                     entry.message.find("SUCCESS") != std::string::npos) col = SUCCESS;
+            else if (entry.message.find(">>>") != std::string::npos) col = WARNING;
+
+            ImGui::TextColored(col, "%s", entry.message.c_str());
+        }
+    }
+
+    // Auto-scroll
+    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 20)
+        ImGui::SetScrollHereY(1.0f);
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
 }
 
 } // namespace fincept::code_editor

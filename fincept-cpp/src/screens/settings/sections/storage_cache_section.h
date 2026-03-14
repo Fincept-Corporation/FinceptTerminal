@@ -21,6 +21,10 @@ private:
     int64_t cache_size_ = 0;
     int64_t cache_expired_ = 0;
 
+    // Per-category stats
+    struct CatStat { std::string name; int64_t count; int64_t size; };
+    std::vector<CatStat> category_stats_;
+
     // Database browser
     bool db_authenticated_ = false;
     char db_password_[128] = {};

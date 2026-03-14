@@ -47,7 +47,13 @@ private:
     void render_positions_tab();
     void render_orders_tab();
     void render_history_tab();
+    void render_trades_tab();
+    void render_market_info_tab();
     void render_stats_tab();
+
+    // Async fetchers for new data
+    void async_fetch_market_info();
+    void async_fetch_trades();
 
     // Actions
     void submit_order();
@@ -103,11 +109,22 @@ private:
     std::atomic<bool> candles_loading_{false};
     std::atomic<bool> candles_fetching_{false};
 
+    // --- Trade feed (Time & Sales) ---
+    std::vector<TradeEntry> recent_trades_;
+    static constexpr int MAX_TRADES = 200;
+    std::atomic<bool> trades_fetching_{false};
+
+    // --- Market info (funding rate, OI) ---
+    MarketInfoData market_info_;
+    std::atomic<bool> market_info_fetching_{false};
+    float market_info_timer_ = 0;
+
     // --- WebSocket state ---
     bool ws_started_ = false;
     int ws_price_cb_id_ = -1;
     int ws_ob_cb_id_ = -1;
     int ws_candle_cb_id_ = -1;
+    int ws_trade_cb_id_ = -1;
 
     // --- Timers ---
     float ticker_timer_ = 0;

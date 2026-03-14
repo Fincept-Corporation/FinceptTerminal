@@ -472,14 +472,14 @@ ExecutionResult NodeExecutor::exec_results_display(const NodeInstance& node, con
 }
 
 // ============================================================================
-// Stub executors
+// Paper-mode executors (safe, no real orders — clearly labeled)
 // ============================================================================
 
 ExecutionResult NodeExecutor::exec_trigger_stub(const NodeInstance& node, const json& /*input*/) {
     ExecutionResult result;
     result.success = true;
-    result.data = json{{"trigger_type", node.type}, {"triggered", true}};
-    result.display_text = "Triggered: " + node.label;
+    result.data = json{{"trigger_type", node.type}, {"triggered", true}, {"mode", "paper"}};
+    result.display_text = "[PAPER] Trigger fired: " + node.label;
     return result;
 }
 
@@ -490,29 +490,29 @@ ExecutionResult NodeExecutor::exec_trading_stub(const NodeInstance& node, const 
     if (node.type == "signal-generator") {
         std::string strategy = get_param_str(node, "strategy", "crossover");
         result.data = json{
-            {"strategy", strategy}, {"signals", 47},
-            {"buy", 23}, {"sell", 24}, {"win_rate", 0.617}, {"mock", true}
+            {"strategy", strategy}, {"mode", "paper"},
+            {"note", "Signal generation requires live market data connection"}
         };
-        result.display_text = "Generated 47 signals: 23 BUY, 24 SELL (win rate 61.7%)";
+        result.display_text = "[PAPER] Signal generator configured: " + strategy + " (connect live data for real signals)";
     } else if (node.type == "order-executor") {
         std::string mode = get_param_str(node, "mode", "paper");
-        result.data = json{{"mode", mode}, {"orders_executed", 12}, {"avg_slippage", 0.0002}, {"mock", true}};
-        result.display_text = mode + ": 12 orders executed, avg fill 0.02% slippage";
+        result.data = json{{"mode", mode}, {"note", "Paper trading mode — no real orders placed"}};
+        result.display_text = "[PAPER] Order executor ready in " + mode + " mode";
     } else if (node.type == "place-order") {
         std::string symbol = get_param_str(node, "symbol", "AAPL");
         std::string side = get_param_str(node, "side", "buy");
         int qty = get_param_int(node, "qty", 100);
-        result.data = json{{"symbol", symbol}, {"side", side}, {"qty", qty}, {"status", "filled"}, {"mock", true}};
-        result.display_text = side + " " + std::to_string(qty) + " " + symbol + " (paper - filled)";
+        result.data = json{{"symbol", symbol}, {"side", side}, {"qty", qty}, {"status", "paper"}, {"mode", "paper"}};
+        result.display_text = "[PAPER] Would " + side + " " + std::to_string(qty) + " " + symbol + " (no real order placed)";
     } else if (node.type == "get-balance") {
-        result.data = json{{"balance", 100000.0}, {"buying_power", 200000.0}, {"mock", true}};
-        result.display_text = "Balance: $100,000 | Buying Power: $200,000";
+        result.data = json{{"note", "Connect broker API in Settings > Credentials for real balance"}, {"mode", "paper"}};
+        result.display_text = "[PAPER] Balance: connect broker for live data";
     } else if (node.type == "get-positions") {
-        result.data = json{{"positions", json::array()}, {"count", 0}, {"mock", true}};
-        result.display_text = "No open positions";
+        result.data = json{{"positions", json::array()}, {"note", "No broker connected"}, {"mode", "paper"}};
+        result.display_text = "[PAPER] Positions: connect broker for live data";
     } else {
-        result.data = json{{"action", node.type}, {"status", "simulated"}, {"mock", true}};
-        result.display_text = node.label + " (simulated)";
+        result.data = json{{"action", node.type}, {"mode", "paper"}};
+        result.display_text = "[PAPER] " + node.label + " (connect broker for live execution)";
     }
 
     result.data["input"] = input;
@@ -524,9 +524,9 @@ ExecutionResult NodeExecutor::exec_notification_stub(const NodeInstance& node, c
     result.success = true;
     std::string msg = get_param_str(node, "message_template", "{{result}}");
 
-    result.data = json{{"channel", node.type}, {"message", msg}, {"sent", false}, {"mock", true}};
-    result.display_text = "[" + node.label + "] Would send: " + msg;
-    LOG_INFO("NodeExecutor", "Notification stub (%s): %s", node.type.c_str(), msg.c_str());
+    result.data = json{{"channel", node.type}, {"message", msg}, {"sent", false}, {"mode", "paper"}};
+    result.display_text = "[PAPER] " + node.label + ": message queued (configure notification channel to send)";
+    LOG_INFO("NodeExecutor", "Notification paper-mode (%s): %s", node.type.c_str(), msg.c_str());
 
     (void)input;
     return result;
@@ -562,8 +562,8 @@ ExecutionResult NodeExecutor::exec_file_stub(const NodeInstance& node, const jso
     result.success = true;
     std::string op = get_param_str(node, "operation", "read");
     std::string path = get_param_str(node, "path", get_param_str(node, "filename", ""));
-    result.data = json{{"operation", op}, {"path", path}, {"mock", true}};
-    result.display_text = "File " + op + ": " + (path.empty() ? "(no path)" : path) + " (stub)";
+    result.data = json{{"operation", op}, {"path", path}, {"mode", "paper"}};
+    result.display_text = "[PAPER] File " + op + ": " + (path.empty() ? "(specify path)" : path);
     (void)input;
     return result;
 }
@@ -576,28 +576,28 @@ ExecutionResult NodeExecutor::exec_generic(const NodeInstance& node, const json&
 
     // Special handling for some node types
     if (node.type == "correlation") {
-        result.display_text = "Correlation matrix: avg corr 0.42, max 0.87";
+        result.display_text = "[PAPER] Correlation matrix configured (connect data source for real computation)";
     } else if (node.type == "monte-carlo") {
         int sims = get_param_int(node, "simulations", 10000);
-        result.display_text = "MC(" + std::to_string(sims) + " paths): E[return]=8.2%, P(loss)=18.3%";
+        result.display_text = "[PAPER] Monte Carlo configured: " + std::to_string(sims) + " paths (connect data for results)";
     } else if (node.type == "risk-metrics") {
         std::string metric = get_param_str(node, "metric", "VaR");
-        result.display_text = metric + "(95%): -2.3%, Sharpe: 1.45";
+        result.display_text = "[PAPER] " + metric + " configured (connect portfolio data for computation)";
     } else if (node.type == "stress-test") {
         std::string scenario = get_param_str(node, "scenario", "2008_gfc");
-        result.display_text = "Stress (" + scenario + "): portfolio -34.2%";
+        result.display_text = "[PAPER] Stress test scenario: " + scenario + " (connect portfolio for results)";
     } else if (node.type == "optimization") {
         std::string method = get_param_str(node, "method", "grid");
-        result.display_text = "Optimized via " + method + ": best params found";
+        result.display_text = "[PAPER] Optimization method: " + method + " (connect data source)";
     } else if (node.type == "portfolio-allocator") {
         std::string method = get_param_str(node, "method", "equal_weight");
-        result.display_text = "Allocated (" + method + "): AAPL 25%, MSFT 20%, GOOGL 18%";
+        result.display_text = "[PAPER] Allocation method: " + method + " (connect portfolio for weights)";
     } else if (node.type == "sentiment-analyzer") {
-        result.display_text = "Sentiment: 62% positive, 18% negative, 20% neutral";
+        result.display_text = "[PAPER] Sentiment analyzer configured (connect news feed for analysis)";
     } else if (node.type == "screener") {
-        result.display_text = "Screened: 127 stocks matched criteria";
+        result.display_text = "[PAPER] Screener configured (connect data source to run screen)";
     } else if (node.type == "news-feed") {
-        result.display_text = "Fetched 50 articles, latest: 2h ago";
+        result.display_text = "[PAPER] News feed configured (connect RSS source for articles)";
     } else if (node.type == "code") {
         std::string lang = get_param_str(node, "language", "expression");
         result.display_text = "Code executed (" + lang + ")";

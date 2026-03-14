@@ -4,6 +4,7 @@
 #include "notes_screen.h"
 #include "notes_types.h"
 #include "ui/theme.h"
+#include "ui/yoga_helpers.h"
 #include "imgui.h"
 #include <algorithm>
 #include <cstring>
@@ -29,14 +30,17 @@ void NotesScreen::render() {
         apply_filters();
     }
 
-    auto avail = ImGui::GetContentRegionAvail();
+    // Use ScreenFrame to render inline in the main content area (not a separate window)
+    ui::ScreenFrame frame("##notes_screen", ImVec2(8, 8), theme::colors::BG_DARKEST);
+    if (!frame.begin()) { frame.end(); return; }
 
     // Toolbar at top
     render_toolbar();
 
     float toolbar_h = ImGui::GetCursorPosY();
     float status_h = 28.0f;
-    float body_h = avail.y - toolbar_h - status_h;
+    float body_h = frame.height() - toolbar_h - status_h;
+    if (body_h < 100) body_h = 100;
 
     // Body: sidebar + list + editor/viewer
     ImGui::BeginChild("##notes_body", ImVec2(0, body_h), false);
@@ -79,7 +83,9 @@ void NotesScreen::render() {
     // Status bar
     render_status_bar();
 
-    // Delete confirmation popup
+    frame.end();
+
+    // Delete confirmation popup (rendered outside frame so it overlays properly)
     render_delete_confirm_popup();
 }
 

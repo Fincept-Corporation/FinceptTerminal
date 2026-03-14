@@ -88,6 +88,35 @@ struct ExchangeInfo {
     bool has_set_leverage = false;
 };
 
+// Public trade
+struct TradeData {
+    std::string id;
+    std::string symbol;
+    std::string side;  // "buy" | "sell"
+    double price = 0.0;
+    double amount = 0.0;
+    double cost = 0.0;
+    int64_t timestamp = 0;
+};
+
+// Funding rate info
+struct FundingRateData {
+    std::string symbol;
+    double funding_rate = 0.0;
+    double mark_price = 0.0;
+    double index_price = 0.0;
+    int64_t funding_timestamp = 0;
+    int64_t next_funding_timestamp = 0;
+};
+
+// Open interest
+struct OpenInterestData {
+    std::string symbol;
+    double open_interest = 0.0;
+    double open_interest_value = 0.0;
+    int64_t timestamp = 0;
+};
+
 // Credential set for authenticated operations
 struct ExchangeCredentials {
     std::string api_key;
@@ -103,6 +132,9 @@ using OrderBookCallback = std::function<void(const std::string& symbol, const Or
 
 // Callback for candle updates
 using CandleCallback = std::function<void(const std::string& symbol, const Candle& candle)>;
+
+// Callback for trade updates (Time & Sales)
+using TradeCallback = std::function<void(const std::string& symbol, const TradeData& trade)>;
 
 class ExchangeService {
 public:
@@ -127,6 +159,8 @@ public:
     void remove_orderbook_callback(int id);
     int on_candle_update(CandleCallback callback);
     void remove_candle_callback(int id);
+    int on_trade_update(TradeCallback callback);
+    void remove_trade_callback(int id);
 
     // --- WebSocket streaming (real-time via ws_stream.py subprocess) ---
     void start_ws_stream(const std::string& primary_symbol,
@@ -143,6 +177,9 @@ public:
                                      int limit = 100);
     std::vector<MarketInfo> fetch_markets(const std::string& type = "");
     std::vector<ExchangeInfo> list_exchanges();
+    std::vector<TradeData> fetch_trades(const std::string& symbol, int limit = 50);
+    FundingRateData fetch_funding_rate(const std::string& symbol);
+    OpenInterestData fetch_open_interest(const std::string& symbol);
 
     // --- Authenticated operations ---
     json fetch_balance();
@@ -150,6 +187,12 @@ public:
                      const std::string& type, double amount,
                      double price = 0.0);
     json cancel_order(const std::string& order_id, const std::string& symbol);
+    json set_leverage(const std::string& symbol, int leverage);
+    json set_margin_mode(const std::string& symbol, const std::string& mode);
+    json fetch_positions_live(const std::string& symbol = "");
+    json fetch_open_orders_live(const std::string& symbol = "");
+    json fetch_my_trades_live(const std::string& symbol, int limit = 50);
+    json fetch_trading_fees(const std::string& symbol = "");
 
     // --- Cache ---
     const std::unordered_map<std::string, TickerData>& get_price_cache() const;
@@ -190,6 +233,7 @@ private:
     std::unordered_map<int, PriceUpdateCallback> price_callbacks_;
     std::unordered_map<int, OrderBookCallback> orderbook_callbacks_;
     std::unordered_map<int, CandleCallback> candle_callbacks_;
+    std::unordered_map<int, TradeCallback> trade_callbacks_;
     int next_callback_id_ = 1;
 
     // Feed thread (polling fallback)
@@ -211,6 +255,13 @@ private:
     std::thread ws_thread_;
     std::atomic<bool> ws_running_{false};
     std::atomic<bool> ws_connected_{false};
+
+    // WS reconnection state
+    std::atomic<int> ws_reconnect_attempts_{0};
+    static constexpr int WS_MAX_RECONNECTS = 3;
+    std::string ws_primary_symbol_;
+    std::vector<std::string> ws_all_symbols_;
+    void ws_spawn_subprocess();  // internal helper to (re)spawn WS subprocess
 
     mutable std::mutex mutex_;
 };

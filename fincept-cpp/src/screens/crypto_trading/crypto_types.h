@@ -38,8 +38,30 @@ struct OrderFormState {
     float msg_timer = 0;
 };
 
+// Trade entry for Time & Sales feed
+struct TradeEntry {
+    std::string id;
+    std::string side;     // "buy" | "sell"
+    double price = 0.0;
+    double amount = 0.0;
+    int64_t timestamp = 0;
+};
+
+// Market info (funding rate, open interest, etc.)
+struct MarketInfoData {
+    double funding_rate = 0.0;
+    double mark_price = 0.0;
+    double index_price = 0.0;
+    double open_interest = 0.0;
+    double open_interest_value = 0.0;
+    double maker_fee = 0.0;
+    double taker_fee = 0.0;
+    int64_t next_funding_time = 0;
+    bool has_data = false;
+};
+
 // Bottom panel tab
-enum class BottomTab { Positions, Orders, History, Stats };
+enum class BottomTab { Positions, Orders, History, Trades, MarketInfo, Stats };
 
 // Trading mode
 enum class TradingMode { Paper, Live };

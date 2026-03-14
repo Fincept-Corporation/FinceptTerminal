@@ -1,6 +1,7 @@
 #include "app.h"
 #include "auth/auth_manager.h"
 #include "storage/database.h"
+#include "storage/cache_service.h"
 #include "core/config.h"
 #include "core/logger.h"
 #include "ui/theme.h"
@@ -14,6 +15,7 @@ void App::initialize() {
     // Initialize databases before anything else
     db::Database::instance().initialize();
     db::CacheDatabase::instance().initialize();
+    CacheService::instance().initialize();
 
     auth::AuthManager::instance().initialize();
     initialized_ = true;
@@ -28,6 +30,7 @@ void App::initialize() {
 
 void App::shutdown() {
     LOG_INFO("App", "Shutting down");
+    CacheService::instance().shutdown();
     db::CacheDatabase::instance().close();
     db::Database::instance().close();
 }
@@ -522,6 +525,7 @@ void App::render() {
         case AppScreen::Pricing:        pricing_screen_.render(next_screen_); break;
         case AppScreen::Dashboard:
             if (active_tab_ == 26)      gov_data_screen_.render();
+            else if (active_tab_ == 6)  backtesting_screen_.render();
             else if (active_tab_ == 25) about_screen_.render();
             else if (active_tab_ == 24) support_screen_.render();
             else if (active_tab_ == 23) docs_screen_.render();
@@ -544,6 +548,7 @@ void App::render() {
             else if (active_tab_ == 2)  crypto_trading_screen_.render();
             else if (active_tab_ == 11) quantlib_screen_.render();
             else if (active_tab_ == 1)  markets_screen_.render();
+            else if (active_tab_ == 7)  algo_trading_screen_.render();
             else                        dashboard_screen_.render();
             break;
         default:

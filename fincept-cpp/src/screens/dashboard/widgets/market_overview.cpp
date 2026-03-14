@@ -1,7 +1,8 @@
 #include "market_overview.h"
+#include "../dashboard_data.h"
+#include "../dashboard_helpers.h"
 #include "ui/theme.h"
 #include <imgui.h>
-#include <cmath>
 
 namespace fincept::dashboard::widgets {
 
@@ -10,7 +11,12 @@ void MarketOverview::render() {
         theme::SectionHeader("INDICES");
         ImGui::Spacing();
 
-        if (ImGui::BeginTable("##indices", 4,
+        auto indices = DashboardData::instance().get_quotes(DataCategory::Indices);
+        bool idx_loading = DashboardData::instance().is_loading(DataCategory::Indices);
+
+        if (indices.empty()) {
+            ImGui::TextColored(FC_MUTED, idx_loading ? "Loading indices..." : "No index data available");
+        } else if (ImGui::BeginTable("##indices", 4,
             ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchSame)) {
 
             ImGui::TableSetupColumn("Index", ImGuiTableColumnFlags_WidthStretch);
@@ -19,34 +25,22 @@ void MarketOverview::render() {
             ImGui::TableSetupColumn("%Chg", ImGuiTableColumnFlags_WidthFixed, 70);
             ImGui::TableHeadersRow();
 
-            struct IndexData { const char* name; float last; float change; };
-            IndexData indices[] = {
-                {"S&P 500",     5234.18f,  +28.72f},
-                {"DJIA",        39512.84f, +125.08f},
-                {"NASDAQ",      16384.47f, +85.32f},
-                {"Russell 2000", 2084.15f, -12.43f},
-                {"VIX",         13.42f,    -0.28f},
-                {"DXY",         104.28f,   +0.15f},
-            };
-
-            for (auto& idx : indices) {
+            for (auto& q : indices) {
                 ImGui::TableNextRow();
 
                 ImGui::TableNextColumn();
-                ImGui::TextColored(theme::colors::TEXT_PRIMARY, "%s", idx.name);
+                ImGui::TextColored(FC_WHITE, "%s", q.label.c_str());
 
                 ImGui::TableNextColumn();
-                ImGui::TextColored(theme::colors::TEXT_SECONDARY, "%.2f", idx.last);
+                ImGui::TextColored(theme::colors::TEXT_SECONDARY, "%s", fmt_price(q.price).c_str());
 
                 ImGui::TableNextColumn();
-                bool positive = idx.change >= 0;
-                ImGui::TextColored(positive ? theme::colors::MARKET_GREEN : theme::colors::MARKET_RED,
-                    "%s%.2f", positive ? "+" : "", idx.change);
+                ImGui::TextColored(chg_col(q.change), "%s%.2f",
+                    q.change >= 0 ? "+" : "", q.change);
 
                 ImGui::TableNextColumn();
-                float pct = (idx.change / idx.last) * 100.0f;
-                ImGui::TextColored(positive ? theme::colors::MARKET_GREEN : theme::colors::MARKET_RED,
-                    "%s%.2f%%", pct >= 0 ? "+" : "", pct);
+                ImGui::TextColored(chg_col(q.change_percent), "%s%.2f%%",
+                    q.change_percent >= 0 ? "+" : "", q.change_percent);
             }
 
             ImGui::EndTable();
@@ -57,7 +51,12 @@ void MarketOverview::render() {
         theme::SectionHeader("COMMODITIES");
         ImGui::Spacing();
 
-        if (ImGui::BeginTable("##commodities", 3,
+        auto commodities = DashboardData::instance().get_quotes(DataCategory::Commodities);
+        bool cmd_loading = DashboardData::instance().is_loading(DataCategory::Commodities);
+
+        if (commodities.empty()) {
+            ImGui::TextColored(FC_MUTED, cmd_loading ? "Loading commodities..." : "No commodity data available");
+        } else if (ImGui::BeginTable("##commodities", 3,
             ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchSame)) {
 
             ImGui::TableSetupColumn("Commodity");
@@ -65,31 +64,25 @@ void MarketOverview::render() {
             ImGui::TableSetupColumn("Change");
             ImGui::TableHeadersRow();
 
-            struct CommodityData { const char* name; const char* price; const char* change; bool pos; };
-            CommodityData commodities[] = {
-                {"Gold",   "$2,178.30", "+$12.40", true},
-                {"Silver", "$24.85",    "-$0.32",  false},
-                {"WTI Oil","$78.42",    "+$1.15",  true},
-                {"Nat Gas","$1.72",     "-$0.08",  false},
-                {"Copper", "$3.92",     "+$0.05",  true},
-            };
-
-            for (auto& c : commodities) {
+            for (auto& q : commodities) {
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
-                ImGui::TextColored(theme::colors::TEXT_PRIMARY, "%s", c.name);
+                ImGui::TextColored(FC_WHITE, "%s", q.label.c_str());
                 ImGui::TableNextColumn();
-                ImGui::TextColored(theme::colors::TEXT_SECONDARY, "%s", c.price);
+                ImGui::TextColored(theme::colors::TEXT_SECONDARY, "$%s", fmt_price(q.price).c_str());
                 ImGui::TableNextColumn();
-                ImGui::TextColored(c.pos ? theme::colors::MARKET_GREEN : theme::colors::MARKET_RED,
-                    "%s", c.change);
+                ImGui::TextColored(chg_col(q.change_percent), "%s%.2f%%",
+                    q.change_percent >= 0 ? "+" : "", q.change_percent);
             }
 
             ImGui::EndTable();
         }
 
         ImGui::Spacing();
-        ImGui::TextColored(theme::colors::TEXT_DIM, "Sample data - connect to live market feed");
+        auto last_idx = DashboardData::instance().last_refresh_str(DataCategory::Indices);
+        if (!last_idx.empty()) {
+            ImGui::TextColored(FC_MUTED, "Last updated: %s", last_idx.c_str());
+        }
     }
     ImGui::End();
 }

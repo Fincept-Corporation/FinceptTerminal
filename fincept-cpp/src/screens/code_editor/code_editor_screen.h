@@ -19,6 +19,7 @@ namespace fincept::code_editor {
 class CodeEditorScreen {
 public:
     void render();
+    void add_debug(const std::string& msg); // public so static helper can call it
 
 private:
     // === Multi-tab notebook state ===
@@ -82,7 +83,17 @@ private:
     // === Drag reorder (point 7) ===
     int drag_source_cell_ = -1;
 
+    // === Debug log ===
+    bool show_debug_log_ = false;
+    struct DebugEntry {
+        std::string timestamp;
+        std::string message;
+    };
+    std::mutex debug_mutex_;
+    std::vector<DebugEntry> debug_log_;
+
     // === Render methods ===
+    void render_debug_panel();
     void render_tab_bar();
     void render_toolbar();
     void render_cells();

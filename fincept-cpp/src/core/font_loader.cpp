@@ -1,8 +1,10 @@
-// Font loading implementation
+// Font loading implementation — primary font + color emoji merge
+// Requires IMGUI_USE_WCHAR32 and IMGUI_ENABLE_FREETYPE
 
 #include "core/font_loader.h"
 #include "core/logger.h"
 #include <filesystem>
+#include <imgui_freetype.h>
 
 namespace fincept::core {
 
@@ -55,6 +57,61 @@ void load_fonts(float dpi_scale) {
         fallback_config.SizePixels = font_size;
         io.FontDefault = io.Fonts->AddFontDefault(&fallback_config);
         LOG_WARN("Font", "Using ImGui default font at %.0fpx", font_size);
+    }
+
+    // ── Merge color emoji font ──
+    // With IMGUI_USE_WCHAR32, ImWchar is 32-bit so we can address emoji codepoints.
+    // With IMGUI_ENABLE_FREETYPE, we can use LoadColor for COLR/CBLC color fonts.
+    // Segoe UI Emoji (seguiemj.ttf) on Windows has excellent color emoji coverage.
+    const char* emoji_font_candidates[] = {
+#ifdef _WIN32
+        "C:/Windows/Fonts/seguiemj.ttf",    // Segoe UI Emoji — color emoji
+#elif defined(__APPLE__)
+        "/System/Library/Fonts/Apple Color Emoji.ttc",
+#else
+        "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+        "/usr/share/fonts/noto-cjk/NotoColorEmoji.ttf",
+#endif
+    };
+
+    // Emoji ranges we need (32-bit codepoints):
+    // Misc Symbols:           U+2600–U+26FF  (☀ ☁ ⚡ etc.)
+    // Dingbats:               U+2700–U+27BF  (❄ etc.)
+    // Misc Symbols & Arrows:  U+2B00–U+2BFF
+    // Supplemental Symbols:   U+1F300–U+1F5FF (🌍 🌊 🐘 🐬 🍃 📄 📊 etc.)
+    // Emoticons:              U+1F600–U+1F64F
+    // Transport/Map:          U+1F680–U+1F6FF (🔌 🔒 etc.)
+    // Supplemental:           U+1F900–U+1F9FF (🦂 🦎 🧠 🧱 🧼 🥑 🥬 etc.)
+    // Symbols Extended-A:     U+1FA00–U+1FA6F
+    // Symbols Extended-B:     U+1FA70–U+1FAFF (🪙 🪟 🪳 🪶 etc.)
+    // Currency Symbols:       U+20A0–U+20CF  (₿ etc.)
+    static const ImWchar emoji_ranges[] = {
+        0x2000, 0x2BFF,    // General Punctuation through Misc Symbols & Arrows
+        0x20A0, 0x20CF,    // Currency Symbols (₿)
+        0x1F300, 0x1F9FF,  // Misc Symbols & Pictographs, Emoticons, Transport, Supplemental
+        0x1FA00, 0x1FAFF,  // Symbols Extended-A & B (🪙 🪟 🪳 🪶 etc.)
+        0,
+    };
+
+    for (const char* emoji_path : emoji_font_candidates) {
+        if (std::filesystem::exists(emoji_path)) {
+            ImFontConfig merge_cfg;
+            merge_cfg.MergeMode = true;
+            merge_cfg.OversampleH = 1;
+            merge_cfg.OversampleV = 1;
+            merge_cfg.PixelSnapH = true;
+            merge_cfg.RasterizerDensity = dpi_scale;
+            merge_cfg.FontBuilderFlags |= ImGuiFreeTypeBuilderFlags_LoadColor;
+
+            ImFont* emoji = io.Fonts->AddFontFromFileTTF(
+                emoji_path, font_size, &merge_cfg, emoji_ranges);
+            if (emoji) {
+                LOG_INFO("Font", "Merged emoji font: %s (color)", emoji_path);
+            } else {
+                LOG_WARN("Font", "Failed to merge emoji font: %s", emoji_path);
+            }
+            break;
+        }
     }
 
     io.Fonts->Build();

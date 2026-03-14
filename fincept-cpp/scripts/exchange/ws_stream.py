@@ -131,6 +131,35 @@ async def watch_ohlcv(exchange, symbol, timeframe="1m"):
             await asyncio.sleep(min(errors * 2, 30))
 
 
+async def watch_trades_stream(exchange, symbol):
+    """Stream real-time public trades (Time & Sales)."""
+    errors = 0
+    while True:
+        try:
+            trades = await exchange.watch_trades(symbol)
+            errors = 0
+            for t in trades:
+                emit({
+                    "type": "trade",
+                    "symbol": symbol,
+                    "id": t.get("id"),
+                    "timestamp": t.get("timestamp"),
+                    "side": t.get("side"),
+                    "price": t.get("price"),
+                    "amount": t.get("amount"),
+                    "cost": t.get("cost"),
+                })
+        except Exception as e:
+            errors += 1
+            if errors <= 3:
+                emit({"type": "error", "source": "trades", "symbol": symbol, "message": str(e)})
+            if errors >= MAX_CONSECUTIVE_ERRORS:
+                emit({"type": "error", "source": "trades", "symbol": symbol,
+                      "message": f"Too many errors ({errors}), stopping trades watcher"})
+                return
+            await asyncio.sleep(min(errors * 2, 30))
+
+
 async def watch_tickers(exchange, symbols):
     """Stream ticker updates for multiple symbols (batch)."""
     errors = 0
@@ -193,21 +222,33 @@ async def main():
         "options": {"defaultType": "spot"},
     })
 
-    # Try to load markets first — if this fails, WS won't work
-    try:
+    # Try to load markets with retry — some exchanges may be temporarily unreachable
+    MAX_RETRIES = 5
+    markets_loaded = False
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            emit({"type": "status", "connected": False, "exchange": exchange_id,
+                  "symbols": all_symbols, "message": f"Loading markets (attempt {attempt}/{MAX_RETRIES})..."})
+            await exchange.load_markets()
+            emit({
+                "type": "status",
+                "connected": True,
+                "exchange": exchange_id,
+                "symbols": all_symbols,
+            })
+            markets_loaded = True
+            break
+        except Exception as e:
+            emit({"type": "error", "message": f"Failed to load markets (attempt {attempt}): {e}"})
+            if attempt < MAX_RETRIES:
+                delay = min(attempt * 5, 30)
+                emit({"type": "status", "connected": False, "exchange": exchange_id,
+                      "symbols": all_symbols, "message": f"Retrying in {delay}s..."})
+                await asyncio.sleep(delay)
+
+    if not markets_loaded:
         emit({"type": "status", "connected": False, "exchange": exchange_id,
-              "symbols": all_symbols, "message": "Loading markets..."})
-        await exchange.load_markets()
-        emit({
-            "type": "status",
-            "connected": True,
-            "exchange": exchange_id,
-            "symbols": all_symbols,
-        })
-    except Exception as e:
-        emit({"type": "error", "message": f"Failed to load markets: {e}"})
-        emit({"type": "status", "connected": False, "exchange": exchange_id,
-              "symbols": all_symbols, "message": "load_markets failed"})
+              "symbols": all_symbols, "message": "load_markets failed after all retries"})
         await exchange.close()
         sys.exit(1)
 
@@ -217,6 +258,7 @@ async def main():
             asyncio.create_task(watch_ticker(exchange, primary_symbol)),
             asyncio.create_task(watch_orderbook(exchange, primary_symbol, 15)),
             asyncio.create_task(watch_ohlcv(exchange, primary_symbol, "1m")),
+            asyncio.create_task(watch_trades_stream(exchange, primary_symbol)),
         ]
 
         # All symbols get batch ticker updates

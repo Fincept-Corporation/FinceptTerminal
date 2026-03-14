@@ -33,6 +33,8 @@
 #include "screens/about/about_screen.h"
 #include "screens/code_editor/code_editor_screen.h"
 #include "screens/gov_data/gov_data_screen.h"
+#include "screens/backtesting/backtesting_screen.h"
+#include "screens/algo_trading/algo_trading_screen.h"
 
 // Fullscreen toggle (implemented in main.cpp, delegates to Window)
 void toggle_fullscreen();
@@ -87,6 +89,8 @@ private:
     about::AboutScreen about_screen_;
     code_editor::CodeEditorScreen code_editor_screen_;
     gov_data::GovDataScreen gov_data_screen_;
+    backtesting::BacktestingScreen backtesting_screen_;
+    algo::AlgoTradingScreen algo_trading_screen_;
 
     // Rendering sections
     void render_top_bar();

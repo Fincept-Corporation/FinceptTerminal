@@ -28,20 +28,20 @@ private:
     bool first_run_ = true;
     int refresh_interval_idx_ = 2;  // 0=1m, 1=5m, 2=10m, 3=30m
 
-    // Economic indicator data (hardcoded for now — FRED integration later)
+    // Economic indicator data (live from MarketPulse yfinance quotes)
     struct EconEntry { std::string name; float value; float change; };
     std::vector<EconEntry> econ_data_;
 
-    // Geopolitics risk data (hardcoded for now — API integration later)
+    // Geopolitics risk data (derived from regional index volatility)
     struct GeoEntry { std::string region; float risk; float trend; };
     std::vector<GeoEntry> geo_data_;
 
-    // Performance data (hardcoded for now — portfolio integration later)
+    // Performance data (derived from major index returns)
     struct PerfEntry { std::string metric; float value; float change; };
     std::vector<PerfEntry> perf_data_;
 
     void init();
-    void init_static_data();  // econ, geo, perf (until APIs are connected)
+    void refresh_live_panels();  // econ, geo, perf from live market data
 
     // Top-level layout sections
     void render_header_bar(float width);

@@ -48,28 +48,72 @@ void DashboardScreen::init() {
     DashboardData::instance().initialize();
     load_layout();
     if (layout_.widgets.empty()) layout_ = default_layout();
-    init_static_data();
+    refresh_live_panels();
     initialized_ = true;
 }
 
-void DashboardScreen::init_static_data() {
-    econ_data_ = {
-        {"US 10Y Treasury", 4.35f, 0.05f}, {"US GDP Growth", 2.8f, 0.1f},
-        {"US Unemployment", 3.6f, -0.1f}, {"US CPI YoY", 3.2f, -0.1f},
-        {"Fed Funds Rate", 5.50f, 0.0f}, {"PMI Manufacturing", 50.3f, 0.5f},
-        {"Consumer Confidence", 104.7f, 2.3f}, {"Retail Sales MoM", 0.6f, 0.3f},
+void DashboardScreen::refresh_live_panels() {
+    // Economic indicators — derived from real MarketPulse quotes (^TNX, ^VIX, DXY, etc.)
+    auto pulse = DashboardData::instance().get_quotes(DataCategory::MarketPulse);
+    econ_data_.clear();
+    for (auto& q : pulse) {
+        econ_data_.push_back({q.label, (float)q.price, (float)q.change});
+    }
+    if (econ_data_.empty()) {
+        // Fallback: show loading state
+        econ_data_.push_back({"Waiting for market data...", 0, 0});
+    }
+
+    // Geopolitics risk — derived from real regional index volatility
+    // Uses actual index change% as a risk proxy (bigger move = higher risk)
+    auto indices = DashboardData::instance().get_quotes(DataCategory::Indices);
+    geo_data_.clear();
+    // Map regional indices to regions
+    struct RegionMap { const char* symbol; const char* region; };
+    RegionMap regions[] = {
+        {"^GSPC", "North America"}, {"^DJI", "US Large Cap"},
+        {"^FTSE", "UK / Europe"}, {"^GDAXI", "Germany"},
+        {"^FCHI", "France"}, {"^N225", "Japan"},
+        {"^HSI", "Hong Kong"}, {"000001.SS", "China"},
+        {"^BSESN", "India"}, {"^NSEI", "India (Nifty)"},
+        {"^STOXX50E", "Euro Zone"}, {"^AXJO", "Australia"},
     };
-    geo_data_ = {
-        {"Global Risk", 62.5f, 2.3f}, {"US-China", 78.3f, -1.5f},
-        {"Europe", 45.2f, 0.8f}, {"Middle East", 82.7f, 5.2f},
-        {"Asia-Pacific", 38.5f, -0.3f}, {"Latin America", 52.1f, 1.1f},
-        {"Africa", 58.4f, 0.6f}, {"Cyber Risk", 71.2f, 3.8f},
-    };
-    perf_data_ = {
-        {"Total Return", 0.0f, 8.67f}, {"Day P/L", 15243.56f, 1.23f},
-        {"Week P/L", 42567.89f, 3.45f}, {"Month P/L", 125678.90f, 8.12f},
-        {"Sharpe Ratio", 1.85f, 0.0f}, {"Max Drawdown", -5.23f, 0.0f},
-    };
+    for (auto& rm : regions) {
+        for (auto& q : indices) {
+            if (q.symbol == rm.symbol) {
+                // Risk = abs(change%) scaled: 0-1% = low (20-40), 1-3% = medium (40-70), >3% = high (70-100)
+                float abs_chg = std::abs((float)q.change_percent);
+                float risk = std::min(100.0f, 20.0f + abs_chg * 25.0f);
+                geo_data_.push_back({rm.region, risk, (float)q.change_percent});
+                break;
+            }
+        }
+    }
+    if (geo_data_.empty()) {
+        geo_data_.push_back({"Waiting for index data...", 0, 0});
+    }
+
+    // Performance — derived from real portfolio index returns
+    perf_data_.clear();
+    for (auto& q : indices) {
+        if (q.symbol == "^GSPC") {
+            perf_data_.push_back({"S&P 500 Return", (float)q.price, (float)q.change_percent});
+        } else if (q.symbol == "^IXIC") {
+            perf_data_.push_back({"NASDAQ Return", (float)q.price, (float)q.change_percent});
+        } else if (q.symbol == "^DJI") {
+            perf_data_.push_back({"DOW Return", (float)q.price, (float)q.change_percent});
+        }
+    }
+    for (auto& q : pulse) {
+        if (q.symbol == "^VIX") {
+            perf_data_.push_back({"Volatility (VIX)", (float)q.price, (float)q.change});
+        } else if (q.symbol == "^TNX") {
+            perf_data_.push_back({"10Y Yield", (float)q.price, (float)q.change});
+        }
+    }
+    if (perf_data_.empty()) {
+        perf_data_.push_back({"Waiting for data...", 0, 0});
+    }
 }
 
 // ============================================================================
@@ -230,7 +274,12 @@ void DashboardScreen::render_ticker_bar(float width) {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.02f, 0.02f, 0.02f, 1.0f));
     ImGui::BeginChild("##ticker_bar", ImVec2(width, 20), false);
 
-    auto ticker_quotes = DashboardData::instance().get_quotes(DataCategory::Ticker);
+    // Assemble ticker from existing categories (no separate fetch needed)
+    std::vector<QuoteEntry> ticker_quotes;
+    for (auto cat : {DataCategory::Indices, DataCategory::Crypto, DataCategory::Forex, DataCategory::MarketPulse}) {
+        auto q = DashboardData::instance().get_quotes(cat);
+        ticker_quotes.insert(ticker_quotes.end(), q.begin(), q.end());
+    }
 
     if (ticker_quotes.empty()) {
         ImGui::SetCursorPos(ImVec2(width / 2 - 60, 2));
@@ -331,6 +380,9 @@ void DashboardScreen::render() {
     init();
 
     DashboardData::instance().update(ImGui::GetIO().DeltaTime);
+
+    // Refresh econ/geo/perf panels from live data every frame (cheap — just copies)
+    refresh_live_panels();
 
     // ScreenFrame replaces all manual viewport math
     ui::ScreenFrame frame("##dash", ImVec2(0, 0), FC_DARK);

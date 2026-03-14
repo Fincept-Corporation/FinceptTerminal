@@ -27,6 +27,24 @@ namespace fincept::trading {
 
 static const char* TAG = "ExchangeService";
 
+// Null-safe JSON accessors (used throughout; must appear before first use)
+using json = nlohmann::json;
+static double jdouble(const json& j, const char* key, double def = 0.0) {
+    auto it = j.find(key);
+    if (it == j.end() || it->is_null()) return def;
+    return it->get<double>();
+}
+static int64_t jint64(const json& j, const char* key, int64_t def = 0) {
+    auto it = j.find(key);
+    if (it == j.end() || it->is_null()) return def;
+    return it->get<int64_t>();
+}
+static std::string jstr(const json& j, const char* key, const std::string& def = "") {
+    auto it = j.find(key);
+    if (it == j.end() || it->is_null()) return def;
+    return it->get<std::string>();
+}
+
 // ============================================================================
 // Singleton
 // ============================================================================
@@ -366,6 +384,102 @@ json ExchangeService::cancel_order(const std::string& order_id, const std::strin
 }
 
 // ============================================================================
+// New data fetches — trades, funding rate, open interest, etc.
+// ============================================================================
+
+std::vector<TradeData> ExchangeService::fetch_trades(const std::string& symbol, int limit) {
+    std::string exchange = get_exchange();
+    auto j = call_script("exchange/fetch_trades.py",
+                          {exchange, symbol, std::to_string(limit)});
+    std::vector<TradeData> result;
+    for (const auto& t : j["data"]["trades"]) {
+        TradeData td;
+        td.id = jstr(t, "id");
+        td.symbol = symbol;
+        td.side = jstr(t, "side");
+        td.price = jdouble(t, "price");
+        td.amount = jdouble(t, "amount");
+        td.cost = jdouble(t, "cost");
+        td.timestamp = jint64(t, "timestamp");
+        result.push_back(td);
+    }
+    return result;
+}
+
+FundingRateData ExchangeService::fetch_funding_rate(const std::string& symbol) {
+    std::string exchange = get_exchange();
+    FundingRateData fr;
+    try {
+        auto j = call_script("exchange/fetch_funding_rate.py", {exchange, symbol});
+        auto& d = j["data"];
+        fr.symbol = symbol;
+        fr.funding_rate = jdouble(d, "funding_rate");
+        fr.mark_price = jdouble(d, "mark_price");
+        fr.index_price = jdouble(d, "index_price");
+        fr.funding_timestamp = jint64(d, "funding_timestamp");
+        fr.next_funding_timestamp = jint64(d, "next_funding_timestamp");
+    } catch (const std::exception& e) {
+        LOG_DEBUG(TAG, "Funding rate not available for %s: %s", symbol.c_str(), e.what());
+    }
+    return fr;
+}
+
+OpenInterestData ExchangeService::fetch_open_interest(const std::string& symbol) {
+    std::string exchange = get_exchange();
+    OpenInterestData oi;
+    try {
+        auto j = call_script("exchange/fetch_open_interest.py", {exchange, symbol});
+        auto& d = j["data"];
+        oi.symbol = symbol;
+        oi.open_interest = jdouble(d, "open_interest");
+        oi.open_interest_value = jdouble(d, "open_interest_value");
+        oi.timestamp = jint64(d, "timestamp");
+    } catch (const std::exception& e) {
+        LOG_DEBUG(TAG, "Open interest not available for %s: %s", symbol.c_str(), e.what());
+    }
+    return oi;
+}
+
+json ExchangeService::set_leverage(const std::string& symbol, int leverage) {
+    std::string exchange = get_exchange();
+    return call_script_with_credentials("exchange/set_leverage.py",
+                                         {exchange, symbol, std::to_string(leverage)});
+}
+
+json ExchangeService::set_margin_mode(const std::string& symbol, const std::string& mode) {
+    std::string exchange = get_exchange();
+    return call_script_with_credentials("exchange/set_margin_mode.py",
+                                         {exchange, symbol, mode});
+}
+
+json ExchangeService::fetch_positions_live(const std::string& symbol) {
+    std::string exchange = get_exchange();
+    std::vector<std::string> args = {exchange};
+    if (!symbol.empty()) args.push_back(symbol);
+    return call_script_with_credentials("exchange/fetch_positions.py", args);
+}
+
+json ExchangeService::fetch_open_orders_live(const std::string& symbol) {
+    std::string exchange = get_exchange();
+    std::vector<std::string> args = {exchange};
+    if (!symbol.empty()) args.push_back(symbol);
+    return call_script_with_credentials("exchange/fetch_open_orders.py", args);
+}
+
+json ExchangeService::fetch_my_trades_live(const std::string& symbol, int limit) {
+    std::string exchange = get_exchange();
+    return call_script_with_credentials("exchange/fetch_my_trades.py",
+                                         {exchange, symbol, std::to_string(limit)});
+}
+
+json ExchangeService::fetch_trading_fees(const std::string& symbol) {
+    std::string exchange = get_exchange();
+    std::vector<std::string> args = {exchange};
+    if (!symbol.empty()) args.push_back(symbol);
+    return call_script("exchange/fetch_trading_fees.py", args);
+}
+
+// ============================================================================
 // Cache access
 // ============================================================================
 
@@ -381,25 +495,8 @@ TickerData ExchangeService::get_cached_price(const std::string& symbol) const {
 }
 
 // ============================================================================
-// JSON parsing
+// JSON parsing (helpers defined at top of file)
 // ============================================================================
-
-// Null-safe JSON accessors — j.value() throws on null, these return default instead
-static double jdouble(const json& j, const char* key, double def = 0.0) {
-    auto it = j.find(key);
-    if (it == j.end() || it->is_null()) return def;
-    return it->get<double>();
-}
-static int64_t jint64(const json& j, const char* key, int64_t def = 0) {
-    auto it = j.find(key);
-    if (it == j.end() || it->is_null()) return def;
-    return it->get<int64_t>();
-}
-static std::string jstr(const json& j, const char* key, const std::string& def = "") {
-    auto it = j.find(key);
-    if (it == j.end() || it->is_null()) return def;
-    return it->get<std::string>();
-}
 
 TickerData ExchangeService::parse_ticker(const json& j) {
     TickerData t;
@@ -559,6 +656,18 @@ void ExchangeService::remove_candle_callback(int id) {
     candle_callbacks_.erase(id);
 }
 
+int ExchangeService::on_trade_update(TradeCallback callback) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    int id = next_callback_id_++;
+    trade_callbacks_[id] = std::move(callback);
+    return id;
+}
+
+void ExchangeService::remove_trade_callback(int id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    trade_callbacks_.erase(id);
+}
+
 // ============================================================================
 // WebSocket streaming — spawns ws_stream.py subprocess
 // ============================================================================
@@ -570,6 +679,25 @@ void ExchangeService::start_ws_stream(const std::string& primary_symbol,
         stop_ws_stream();
     }
 
+    // Save symbols for reconnection
+    ws_primary_symbol_ = primary_symbol;
+    ws_all_symbols_ = all_symbols;
+    ws_reconnect_attempts_ = 0;
+
+    ws_running_ = true;
+    ws_connected_ = false;
+
+    ws_spawn_subprocess();
+
+    // Start reader thread
+    ws_thread_ = std::thread([this]() {
+        LOG_INFO(TAG, "WS reader thread started");
+        ws_reader_loop();
+        LOG_INFO(TAG, "WS reader thread exited");
+    });
+}
+
+void ExchangeService::ws_spawn_subprocess() {
     // Resolve Python and script paths
     auto python = python::resolve_python_path("exchange/ws_stream.py");
     if (python.empty()) {
@@ -583,7 +711,6 @@ void ExchangeService::start_ws_stream(const std::string& primary_symbol,
         return;
     }
 
-    // Build command line: python -u -B ws_stream.py <exchange> <primary> [symbols...]
     std::string exchange;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -591,13 +718,12 @@ void ExchangeService::start_ws_stream(const std::string& primary_symbol,
     }
 
     LOG_INFO(TAG, "Starting WS stream: exchange=%s primary=%s symbols=%zu",
-             exchange.c_str(), primary_symbol.c_str(), all_symbols.size());
+             exchange.c_str(), ws_primary_symbol_.c_str(), ws_all_symbols_.size());
 
 #ifdef _WIN32
-    // Build command string
-    std::string cmd = "\"" + python.string() + "\" -u -B \"" + script.string() + "\" " + exchange + " " + primary_symbol;
-    for (const auto& s : all_symbols) {
-        if (s != primary_symbol) {
+    std::string cmd = "\"" + python.string() + "\" -u -B \"" + script.string() + "\" " + exchange + " " + ws_primary_symbol_;
+    for (const auto& s : ws_all_symbols_) {
+        if (s != ws_primary_symbol_) {
             cmd += " " + s;
         }
     }
@@ -606,7 +732,6 @@ void ExchangeService::start_ws_stream(const std::string& primary_symbol,
     sa.nLength = sizeof(sa);
     sa.bInheritHandle = TRUE;
 
-    // Create stdout pipe
     HANDLE hStdoutRead = nullptr, hStdoutWrite = nullptr;
     if (!CreatePipe(&hStdoutRead, &hStdoutWrite, &sa, 0)) {
         LOG_ERROR(TAG, "Failed to create WS stdout pipe");
@@ -617,7 +742,7 @@ void ExchangeService::start_ws_stream(const std::string& primary_symbol,
     STARTUPINFOA si{};
     si.cb = sizeof(si);
     si.hStdOutput = hStdoutWrite;
-    si.hStdError = hStdoutWrite; // merge stderr into stdout for debugging
+    si.hStdError = hStdoutWrite;
     si.dwFlags |= STARTF_USESTDHANDLES;
 
     PROCESS_INFORMATION pi{};
@@ -627,7 +752,7 @@ void ExchangeService::start_ws_stream(const std::string& primary_symbol,
         CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi
     );
 
-    CloseHandle(hStdoutWrite); // close write end in parent
+    CloseHandle(hStdoutWrite);
 
     if (!ok) {
         LOG_ERROR(TAG, "Failed to spawn ws_stream.py subprocess");
@@ -635,15 +760,13 @@ void ExchangeService::start_ws_stream(const std::string& primary_symbol,
         return;
     }
 
-    // Store handles
     ws_process_ = pi.hProcess;
     ws_stdout_rd_ = hStdoutRead;
-    CloseHandle(pi.hThread); // don't need thread handle
+    CloseHandle(pi.hThread);
 
     LOG_INFO(TAG, "WS subprocess spawned (PID handle=%p)", ws_process_);
 
 #else
-    // Unix: fork + exec with pipe
     int pipefd[2];
     if (pipe(pipefd) < 0) {
         LOG_ERROR(TAG, "Failed to create WS pipe");
@@ -659,13 +782,11 @@ void ExchangeService::start_ws_stream(const std::string& primary_symbol,
     }
 
     if (pid == 0) {
-        // Child process
-        close(pipefd[0]); // close read end
+        close(pipefd[0]);
         dup2(pipefd[1], STDOUT_FILENO);
         dup2(pipefd[1], STDERR_FILENO);
         close(pipefd[1]);
 
-        // Build argv
         std::vector<const char*> argv;
         std::string py_str = python.string();
         std::string sc_str = script.string();
@@ -674,12 +795,11 @@ void ExchangeService::start_ws_stream(const std::string& primary_symbol,
         argv.push_back("-B");
         argv.push_back(sc_str.c_str());
         argv.push_back(exchange.c_str());
-        argv.push_back(primary_symbol.c_str());
+        argv.push_back(ws_primary_symbol_.c_str());
 
-        // Store non-primary symbols
         std::vector<std::string> extra;
-        for (const auto& s : all_symbols) {
-            if (s != primary_symbol) extra.push_back(s);
+        for (const auto& s : ws_all_symbols_) {
+            if (s != ws_primary_symbol_) extra.push_back(s);
         }
         for (const auto& s : extra) {
             argv.push_back(s.c_str());
@@ -690,23 +810,12 @@ void ExchangeService::start_ws_stream(const std::string& primary_symbol,
         _exit(1);
     }
 
-    // Parent
-    close(pipefd[1]); // close write end
+    close(pipefd[1]);
     ws_pid_ = pid;
     ws_stdout_fd_ = pipefd[0];
 
     LOG_INFO(TAG, "WS subprocess spawned (PID=%d)", ws_pid_);
 #endif
-
-    ws_running_ = true;
-    ws_connected_ = false;
-
-    // Start reader thread
-    ws_thread_ = std::thread([this]() {
-        LOG_INFO(TAG, "WS reader thread started");
-        ws_reader_loop();
-        LOG_INFO(TAG, "WS reader thread exited");
-    });
 }
 
 void ExchangeService::stop_ws_stream() {
@@ -817,6 +926,42 @@ void ExchangeService::ws_reader_loop() {
 #endif
 
     ws_connected_ = false;
+
+    // Auto-reconnect if WS is still supposed to be running
+    if (ws_running_ && ws_reconnect_attempts_ < WS_MAX_RECONNECTS) {
+        ws_reconnect_attempts_++;
+        LOG_INFO(TAG, "WS disconnected, reconnecting (attempt %d/%d)...",
+                 ws_reconnect_attempts_.load(), WS_MAX_RECONNECTS);
+
+        // Clean up old handles before respawning
+#ifdef _WIN32
+        if (ws_process_) {
+            CloseHandle((HANDLE)ws_process_);
+            ws_process_ = nullptr;
+        }
+        if (ws_stdout_rd_) {
+            CloseHandle((HANDLE)ws_stdout_rd_);
+            ws_stdout_rd_ = nullptr;
+        }
+#else
+        if (ws_pid_ > 0) {
+            int status;
+            waitpid(ws_pid_, &status, WNOHANG);
+            ws_pid_ = -1;
+        }
+        if (ws_stdout_fd_ >= 0) {
+            close(ws_stdout_fd_);
+            ws_stdout_fd_ = -1;
+        }
+#endif
+
+        std::this_thread::sleep_for(std::chrono::seconds(5 * ws_reconnect_attempts_.load()));
+        ws_spawn_subprocess();
+
+        // Continue reading from the new subprocess
+        ws_reader_loop();
+        return;
+    }
 }
 
 void ExchangeService::handle_ws_message(const json& msg) {
@@ -905,6 +1050,49 @@ void ExchangeService::handle_ws_message(const json& msg) {
             catch (const std::exception& e) {
                 LOG_ERROR(TAG, "WS orderbook callback error: %s", e.what());
             }
+        }
+        return;
+    }
+
+    if (type == "trade") {
+        TradeData td;
+        td.id = jstr(msg, "id");
+        td.symbol = jstr(msg, "symbol");
+        td.side = jstr(msg, "side");
+        td.price = jdouble(msg, "price");
+        td.amount = jdouble(msg, "amount");
+        td.cost = jdouble(msg, "cost");
+        td.timestamp = jint64(msg, "timestamp");
+        if (td.symbol.empty()) return;
+
+        // Notify trade callbacks
+        std::vector<TradeCallback> cbs;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (const auto& [_, cb] : trade_callbacks_) cbs.push_back(cb);
+        }
+        for (const auto& cb : cbs) {
+            try { cb(td.symbol, td); }
+            catch (const std::exception& e) {
+                LOG_ERROR(TAG, "WS trade callback error: %s", e.what());
+            }
+        }
+
+        // Feed trade to OrderMatcher for more accurate paper fills
+        PriceData pd;
+        pd.last = td.price;
+        pd.bid = (td.side == "sell") ? td.price : 0.0;
+        pd.ask = (td.side == "buy") ? td.price : 0.0;
+        pd.timestamp = td.timestamp;
+
+        std::unordered_set<std::string> portfolios;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto it = watched_.find(td.symbol);
+            if (it != watched_.end()) portfolios = it->second;
+        }
+        for (const auto& pid : portfolios) {
+            OrderMatcher::instance().check_orders(td.symbol, pd, pid);
         }
         return;
     }
