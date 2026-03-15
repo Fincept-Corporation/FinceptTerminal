@@ -6,6 +6,7 @@
 #include "trading/paper_trading.h"
 #include "trading/order_matcher.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "ui/yoga_helpers.h"
 #include "core/logger.h"
@@ -16,6 +17,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <fstream>
+#include <thread>
 
 namespace fincept::portfolio {
 
@@ -34,7 +36,9 @@ void PortfolioScreen::render() {
     }
 
     if (needs_refresh_ || pt_needs_refresh_) {
-        if (!paper_trading_mode_) refresh_data();
+        if (!paper_trading_mode_) {
+            if (!data_loading_.load()) refresh_data();
+        }
         else refresh_pt_data();
     }
 
@@ -116,113 +120,167 @@ void PortfolioScreen::render() {
 // ============================================================================
 
 void PortfolioScreen::refresh_data() {
+    needs_refresh_ = false;
+
     try {
         portfolios_ = get_all_portfolios();
         if (selected_portfolio_idx_ < 0 && !portfolios_.empty()) {
             selected_portfolio_idx_ = 0;
         }
-        if (selected_portfolio_idx_ >= 0 && selected_portfolio_idx_ < (int)portfolios_.size()) {
-            const auto& pf = portfolios_[selected_portfolio_idx_];
-            assets_ = get_assets(pf.id);
-            transactions_ = get_transactions(pf.id, 50);
-
-            // Fetch live prices via yfinance Python script
-            std::map<std::string, std::pair<double, double>> prices;
-
-            if (!assets_.empty()) {
-                nlohmann::json req;
-                std::vector<std::string> symbols;
-                for (const auto& a : assets_) symbols.push_back(a.symbol);
-                req["symbols"] = symbols;
-
-                auto result = python::execute_with_stdin(
-                    "Analytics/portfolioManagement/fetch_quotes.py", {}, req.dump());
-
-                if (result.success && !result.output.empty()) {
-                    auto j = nlohmann::json::parse(result.output, nullptr, false);
-                    if (!j.is_discarded() && j.is_object() && !j.contains("error")) {
-                        for (auto& [sym, data] : j.items()) {
-                            double cur = data.value("price", 0.0);
-                            double prev = data.value("prev_close", 0.0);
-                            if (cur > 0) prices[sym] = {cur, prev > 0 ? prev : cur};
-                        }
-                    }
-                }
-            }
-
-            // Fallback: use avg_buy_price for symbols without live data
-            for (const auto& a : assets_) {
-                if (prices.find(a.symbol) == prices.end()) {
-                    prices[a.symbol] = {a.avg_buy_price, a.avg_buy_price};
-                }
-            }
-
-            price_cache_ = prices;
-            summary_ = compute_summary(pf, assets_, prices);
-
-            // Compute risk metrics from historical data
-            if (!assets_.empty()) {
-                compute_portfolio_metrics();
-            }
-        }
     } catch (const std::exception& e) {
         LOG_ERROR("Portfolio", "Refresh failed: %s", e.what());
+        return;
     }
-    needs_refresh_ = false;
+
+    if (selected_portfolio_idx_ < 0 || selected_portfolio_idx_ >= (int)portfolios_.size()) {
+        return;
+    }
+
+    const auto& pf = portfolios_[selected_portfolio_idx_];
+    assets_ = get_assets(pf.id);
+    transactions_ = get_transactions(pf.id, 50);
+
+    // If no assets, skip Python calls entirely
+    if (assets_.empty()) {
+        std::map<std::string, std::pair<double, double>> empty_prices;
+        price_cache_ = empty_prices;
+        summary_ = compute_summary(pf, assets_, empty_prices);
+        metrics_loaded_ = false;
+        return;
+    }
+
+    // Build symbols list and use cached avg_buy_price as initial fallback
+    std::map<std::string, std::pair<double, double>> fallback_prices;
+    for (const auto& a : assets_) {
+        fallback_prices[a.symbol] = {a.avg_buy_price, a.avg_buy_price};
+    }
+
+    // If we have no live data yet, use fallback prices to render immediately
+    if (price_cache_.empty()) {
+        price_cache_ = fallback_prices;
+        summary_ = compute_summary(pf, assets_, fallback_prices);
+    }
+
+    // Launch background thread for Python-based price fetching
+    data_loading_ = true;
+
+    // Capture what the thread needs (copies, not references)
+    auto assets_copy = assets_;
+    auto pf_copy = pf;
+
+    std::thread([this, assets_copy, pf_copy, fallback_prices]() {
+        nlohmann::json req;
+        std::vector<std::string> symbols;
+        for (const auto& a : assets_copy) symbols.push_back(a.symbol);
+        req["symbols"] = symbols;
+
+        std::string sym_key;
+        for (const auto& s : symbols) sym_key += s + "_";
+        auto& cache = CacheService::instance();
+        std::string cache_key = CacheService::make_key("market-quotes", "portfolio-prices", sym_key);
+
+        std::string output;
+        auto cached = cache.get(cache_key);
+        if (cached && !cached->empty()) {
+            output = *cached;
+        } else {
+            auto result = python::execute_with_stdin(
+                "Analytics/portfolioManagement/fetch_quotes.py", {}, req.dump());
+            if (result.success && !result.output.empty()) {
+                output = result.output;
+                cache.set(cache_key, output, "market-quotes", CacheTTL::FIVE_MIN);
+            }
+        }
+
+        std::map<std::string, std::pair<double, double>> prices = fallback_prices;
+        if (!output.empty()) {
+            auto j = nlohmann::json::parse(output, nullptr, false);
+            if (!j.is_discarded() && j.is_object() && !j.contains("error")) {
+                for (auto& [sym, data] : j.items()) {
+                    double cur = data.value("price", 0.0);
+                    double prev = data.value("prev_close", 0.0);
+                    if (cur > 0) prices[sym] = {cur, prev > 0 ? prev : cur};
+                }
+            }
+        }
+
+        auto summary = compute_summary(pf_copy, assets_copy, prices);
+
+        // Compute risk metrics in the same background thread
+        ComputedMetrics metrics;
+        bool metrics_ok = false;
+        std::map<std::string, std::vector<std::pair<std::string, double>>> hist_cache;
+
+        try {
+            nlohmann::json hist_req;
+            std::vector<std::string> hist_symbols;
+            for (const auto& h : summary.holdings) hist_symbols.push_back(h.asset.symbol);
+            if (std::find(hist_symbols.begin(), hist_symbols.end(), "SPY") == hist_symbols.end())
+                hist_symbols.push_back("SPY");
+            hist_req["symbols"] = hist_symbols;
+            hist_req["period"] = "6mo";
+            hist_req["interval"] = "1d";
+
+            std::string hist_sym_key;
+            for (const auto& s : hist_symbols) hist_sym_key += s + "_";
+            std::string hist_cache_key = CacheService::make_key("market-quotes", "portfolio-hist", hist_sym_key);
+
+            std::string hist_output;
+            auto hist_cached = cache.get(hist_cache_key);
+            if (hist_cached && !hist_cached->empty()) {
+                hist_output = *hist_cached;
+            } else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/portfolioManagement/fetch_historical.py", {}, hist_req.dump());
+                if (result.success && !result.output.empty()) {
+                    hist_output = result.output;
+                    cache.set(hist_cache_key, hist_output, "market-quotes", CacheTTL::FIFTEEN_MIN);
+                }
+            }
+
+            if (!hist_output.empty()) {
+                auto j = nlohmann::json::parse(hist_output, nullptr, false);
+                if (!j.is_discarded() && j.is_object() && !j.contains("error")) {
+                    for (auto& [sym, data] : j.items()) {
+                        if (!data.is_array()) continue;
+                        std::vector<std::pair<std::string, double>> series;
+                        for (const auto& pt : data) {
+                            series.emplace_back(pt.value("date", ""), pt.value("close", 0.0));
+                        }
+                        hist_cache[sym] = std::move(series);
+                    }
+
+                    std::map<std::string, double> weights;
+                    for (const auto& h : summary.holdings) {
+                        weights[h.asset.symbol] = h.weight / 100.0;
+                    }
+
+                    metrics = compute_metrics(hist_cache, weights);
+                    metrics_ok = true;
+                }
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("Portfolio", "Metrics computation failed: %s", e.what());
+        }
+
+        // Update shared state atomically
+        {
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            price_cache_ = std::move(prices);
+            summary_ = std::move(summary);
+            historical_cache_ = std::move(hist_cache);
+            if (metrics_ok) {
+                metrics_ = metrics;
+                metrics_loaded_ = true;
+            }
+        }
+        data_loading_ = false;
+    }).detach();
 }
 
 void PortfolioScreen::compute_portfolio_metrics() {
-    try {
-        // Fetch 6mo historical data for all symbols + SPY
-        nlohmann::json req;
-        std::vector<std::string> symbols;
-        for (const auto& h : summary_.holdings) symbols.push_back(h.asset.symbol);
-        // Add SPY for beta calculation
-        if (std::find(symbols.begin(), symbols.end(), "SPY") == symbols.end())
-            symbols.push_back("SPY");
-        req["symbols"] = symbols;
-        req["period"] = "6mo";
-        req["interval"] = "1d";
-
-        auto result = python::execute_with_stdin(
-            "Analytics/portfolioManagement/fetch_historical.py", {}, req.dump());
-
-        if (!result.success || result.output.empty()) {
-            metrics_loaded_ = false;
-            return;
-        }
-
-        auto j = nlohmann::json::parse(result.output, nullptr, false);
-        if (j.is_discarded() || !j.is_object() || j.contains("error")) {
-            metrics_loaded_ = false;
-            return;
-        }
-
-        // Parse into historical_cache_
-        historical_cache_.clear();
-        for (auto& [sym, data] : j.items()) {
-            if (!data.is_array()) continue;
-            std::vector<std::pair<std::string, double>> series;
-            for (const auto& pt : data) {
-                series.emplace_back(
-                    pt.value("date", ""),
-                    pt.value("close", 0.0));
-            }
-            historical_cache_[sym] = std::move(series);
-        }
-
-        // Build weights map from summary
-        std::map<std::string, double> weights;
-        for (const auto& h : summary_.holdings) {
-            weights[h.asset.symbol] = h.weight / 100.0; // weight is 0-100, need 0-1
-        }
-
-        metrics_ = compute_metrics(historical_cache_, weights);
-        metrics_loaded_ = true;
-    } catch (const std::exception& e) {
-        LOG_ERROR("Portfolio", "Metrics computation failed: %s", e.what());
-        metrics_loaded_ = false;
-    }
+    // Now handled inside refresh_data's background thread — this is a no-op.
+    // Kept for API compatibility.
 }
 
 void PortfolioScreen::refresh_pt_data() {

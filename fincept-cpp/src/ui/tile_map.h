@@ -86,6 +86,7 @@ private:
     std::mutex tile_mutex_;
     std::unordered_map<TileKey, TileEntry, TileKeyHash> tile_cache_;
     std::atomic<int> pending_loads_{0};
+    static constexpr int MAX_CONCURRENT_LOADS = 6;
 
     // Pending texture uploads (background thread -> main GL thread)
     struct PendingUpload {

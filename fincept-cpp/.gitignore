@@ -22,3 +22,10 @@ Thumbs.db
 
 # vcpkg installed packages (managed by vcpkg)
 vcpkg_installed/
+
+# Third-party prebuilt binaries (too large for git — download separately)
+third_party/
+
+# Debug artifacts
+*.log
+stderr_out.txt

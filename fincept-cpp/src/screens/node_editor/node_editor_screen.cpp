@@ -756,20 +756,30 @@ void NodeEditorScreen::render_config_panel(float /*width*/, float /*height*/) {
 
     theme::SectionHeader("ACTIONS");
 
-    // Test Node button — execute this node in isolation
+    // Test Node button — execute this node in isolation (background thread)
     if (theme::AccentButton("Test Node", ImVec2(-1, 0))) {
         node->status = "running";
-        std::map<std::string, nlohmann::json> empty_inputs;
-        auto result = NodeExecutor::execute(*node, empty_inputs);
-        if (result.success) {
-            node->status = "completed";
-            node->result = result.display_text;
-            node->error.clear();
-        } else {
-            node->status = "error";
-            node->error = result.error;
-        }
-        execution_results_[node->id] = result;
+        auto node_copy = *node;  // copy for thread safety
+        int nid = node->id;
+        std::thread([this, node_copy, nid]() {
+            std::map<std::string, nlohmann::json> empty_inputs;
+            auto result = NodeExecutor::execute(node_copy, empty_inputs);
+            // Find the live node and update it
+            for (auto& n : state_.nodes()) {
+                if (n.id == nid) {
+                    if (result.success) {
+                        n.status = "completed";
+                        n.result = result.display_text;
+                        n.error.clear();
+                    } else {
+                        n.status = "error";
+                        n.error = result.error;
+                    }
+                    break;
+                }
+            }
+            execution_results_[nid] = result;
+        }).detach();
     }
 
     ImGui::Spacing();

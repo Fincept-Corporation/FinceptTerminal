@@ -5,6 +5,7 @@
 #include "node_executor.h"
 #include "http/http_client.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "screens/agent_studio/agent_service.h"
 #include "core/logger.h"
 #include <chrono>
@@ -141,18 +142,30 @@ ExecutionResult NodeExecutor::exec_data_source(const NodeInstance& node, const j
              source.c_str(), symbol.c_str(), timeframe.c_str());
 
     if (source == "yahoo") {
-        // Use Python yfinance via PythonRunner
-        auto py_result = python::execute("fetch_data.py",
-            {symbol, start_date, end_date, timeframe});
+        auto& cache = CacheService::instance();
+        std::string ck = CacheService::make_key("market-quotes", "node-data",
+            symbol + "_" + timeframe + "_" + start_date);
 
-        if (py_result.success && !py_result.output.empty()) {
+        std::string cached_out;
+        auto cv = cache.get(ck);
+        if (cv && !cv->empty()) { cached_out = *cv; }
+        else {
+            auto py_result = python::execute("fetch_data.py",
+                {symbol, start_date, end_date, timeframe});
+            if (py_result.success && !py_result.output.empty()) {
+                cached_out = py_result.output;
+                cache.set(ck, cached_out, "market-quotes", CacheTTL::FIVE_MIN);
+            }
+        }
+
+        if (!cached_out.empty()) {
             try {
-                result.data = json::parse(py_result.output);
+                result.data = json::parse(cached_out);
                 int rows = result.data.contains("rows") ? result.data["rows"].get<int>() : 0;
                 result.display_text = "Fetched " + std::to_string(rows) + " bars for " + symbol;
                 result.success = true;
             } catch (...) {
-                result.data = json{{"raw_output", py_result.output}, {"symbol", symbol}};
+                result.data = json{{"raw_output", cached_out}, {"symbol", symbol}};
                 result.display_text = "Fetched data for " + symbol + " (raw output)";
                 result.success = true;
             }
@@ -302,15 +315,28 @@ ExecutionResult NodeExecutor::exec_yfinance(const NodeInstance& node, const json
     std::string period = get_param_str(node, "period", "1y");
     std::string interval = get_param_str(node, "interval", "1d");
 
-    auto py_result = python::execute("fetch_data.py", {symbol, period, interval});
+    auto& yf_cache = CacheService::instance();
+    std::string yf_ck = CacheService::make_key("market-quotes", "node-yfinance",
+        symbol + "_" + period + "_" + interval);
 
-    if (py_result.success && !py_result.output.empty()) {
+    std::string yf_out;
+    auto yf_cv = yf_cache.get(yf_ck);
+    if (yf_cv && !yf_cv->empty()) { yf_out = *yf_cv; }
+    else {
+        auto py_result = python::execute("fetch_data.py", {symbol, period, interval});
+        if (py_result.success && !py_result.output.empty()) {
+            yf_out = py_result.output;
+            yf_cache.set(yf_ck, yf_out, "market-quotes", CacheTTL::FIVE_MIN);
+        }
+    }
+
+    if (!yf_out.empty()) {
         try {
-            result.data = json::parse(py_result.output);
+            result.data = json::parse(yf_out);
             result.success = true;
             result.display_text = "Fetched " + symbol + " data via yfinance";
         } catch (...) {
-            result.data = json{{"raw", py_result.output}, {"symbol", symbol}};
+            result.data = json{{"raw", yf_out}, {"symbol", symbol}};
             result.display_text = "Fetched " + symbol + " (raw)";
             result.success = true;
         }

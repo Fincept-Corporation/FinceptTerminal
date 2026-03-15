@@ -1,6 +1,7 @@
 #include "code_editor_screen.h"
 #include "notebook_io.h"
 #include "ui/theme.h"
+#include "ui/yoga_helpers.h"
 #include "core/config.h"
 #include "python/python_runner.h"
 #include <imgui.h>
@@ -698,20 +699,8 @@ void CodeEditorScreen::render() {
     // Handle keyboard navigation (point 17)
     handle_keyboard_navigation();
 
-    ImGuiViewport* vp = ImGui::GetMainViewport();
-    float tab_h = ImGui::GetFrameHeight() + 4;
-    float footer_h = ImGui::GetFrameHeight();
-
-    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + tab_h));
-    ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x, vp->WorkSize.y - tab_h - footer_h));
-
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, BG_DARK);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-
-    ImGui::Begin("##code_editor_screen", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
-        ImGuiWindowFlags_NoBringToFrontOnFocus);
+    ui::ScreenFrame frame("##code_editor_screen", ImVec2(0, 0), BG_DARK);
+    if (!frame.begin()) { frame.end(); return; }
 
     render_tab_bar();
     render_toolbar();
@@ -721,9 +710,7 @@ void CodeEditorScreen::render() {
     render_file_dialog();
     render_pip_dialog();
 
-    ImGui::End();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
+    frame.end();
 
     } catch (const std::exception& e) {
         file_log("FATAL EXCEPTION in render(): " + std::string(e.what()));
@@ -739,10 +726,10 @@ void CodeEditorScreen::render_tab_bar() {
     using namespace theme::colors;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARKEST);
-    ImGui::BeginChild("##ce_tabbar", ImVec2(0, 28), ImGuiChildFlags_Borders);
+    ImGui::BeginChild("##ce_tabbar", ImVec2(0, 26), ImGuiChildFlags_Borders);
 
-    ImGui::SetCursorPos(ImVec2(4, 3));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 3));
+    ImGui::SetCursorPos(ImVec2(4, 2));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 2));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
 
     int close_idx = -1;
@@ -804,8 +791,9 @@ void CodeEditorScreen::render_toolbar() {
     using namespace theme::colors;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARKEST);
-    ImGui::BeginChild("##ce_toolbar", ImVec2(0, 42), ImGuiChildFlags_Borders);
-    ImGui::SetCursorPos(ImVec2(12, 7));
+    ImGui::BeginChild("##ce_toolbar", ImVec2(0, 34), ImGuiChildFlags_Borders);
+    ImGui::SetCursorPos(ImVec2(8, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 3));
 
     // File actions
     if (theme::SecondaryButton("NEW")) { new_tab(); }
@@ -913,6 +901,7 @@ void CodeEditorScreen::render_toolbar() {
         }
     }
 
+    ImGui::PopStyleVar(); // FramePadding
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
@@ -924,8 +913,8 @@ void CodeEditorScreen::render_search_bar() {
     using namespace theme::colors;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
-    ImGui::BeginChild("##ce_search", ImVec2(0, 32), ImGuiChildFlags_Borders);
-    ImGui::SetCursorPos(ImVec2(12, 5));
+    ImGui::BeginChild("##ce_search", ImVec2(0, 28), ImGuiChildFlags_Borders);
+    ImGui::SetCursorPos(ImVec2(8, 4));
 
     ImGui::TextColored(TEXT_DIM, "Find:");
     ImGui::SameLine(0, 4);
@@ -985,13 +974,15 @@ void CodeEditorScreen::render_search_bar() {
 void CodeEditorScreen::render_cells() {
     using namespace theme::colors;
 
-    float status_h = 28.0f;
+    float status_h = 24.0f;
     float avail_h = ImGui::GetContentRegionAvail().y - status_h;
 
-    ImGui::BeginChild("##ce_cells_area", ImVec2(0, avail_h), ImGuiChildFlags_None);
+    ImGui::BeginChild("##ce_cells_area", ImVec2(0, avail_h), ImGuiChildFlags_None,
+        ImGuiWindowFlags_HorizontalScrollbar);
 
+    // Use full width with small padding — no artificial max-width centering
     float avail_w = ImGui::GetContentRegionAvail().x;
-    float pad_x = (avail_w > 900.0f) ? (avail_w - 860.0f) * 0.5f : 20.0f;
+    float pad_x = std::min(12.0f, avail_w * 0.01f);
 
     ImGui::SetCursorPosX(pad_x);
     ImGui::BeginChild("##ce_cells_inner", ImVec2(avail_w - pad_x * 2, 0), ImGuiChildFlags_None);
@@ -1089,8 +1080,6 @@ void CodeEditorScreen::render_cell(int idx) {
     // Cell header
     render_cell_header(idx);
 
-    ImGui::Spacing();
-
     // Cell editor / preview
     render_cell_editor(idx);
 
@@ -1111,7 +1100,7 @@ void CodeEditorScreen::render_cell(int idx) {
 
     // Execution order warning badge (point 15)
     if (order_warn) {
-        ImGui::SetCursorPosX(16);
+        ImGui::SetCursorPosX(10);
         ImGui::TextColored(WARNING, "[!] Cells executed out of order");
     }
 
@@ -1144,7 +1133,7 @@ void CodeEditorScreen::render_cell_header(int idx) {
     }
     bool has_success = has_output && !has_error;
 
-    ImGui::SetCursorPos(ImVec2(16, 6));
+    ImGui::SetCursorPos(ImVec2(10, 4));
 
     // Execution count badge with timer (point 8)
     if (cell.cell_type == "code") {
@@ -1296,7 +1285,7 @@ void CodeEditorScreen::render_cell_editor(int idx) {
     auto& cell = nb().cells[idx];
     bool is_selected = (idx == tab().selected_cell);
 
-    ImGui::SetCursorPosX(16);
+    ImGui::SetCursorPosX(10);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_DARKEST);
 
     char editor_id[32];
@@ -1305,7 +1294,7 @@ void CodeEditorScreen::render_cell_editor(int idx) {
     int line_count = 1;
     for (char c : cell.source) if (c == '\n') line_count++;
     float line_h = ImGui::GetTextLineHeight();
-    float editor_h = std::max(3, std::min(line_count + 1, 30)) * line_h + 12;
+    float editor_h = std::max(3, std::min(line_count + 1, 30)) * line_h + 8;
 
     if (is_selected || active_edit_cell_ == idx) {
         if (active_edit_cell_ != idx) {
@@ -1317,7 +1306,7 @@ void CodeEditorScreen::render_cell_editor(int idx) {
         // Line numbers (point 12)
         char gutter_id[32];
         std::snprintf(gutter_id, sizeof(gutter_id), "##gutter_%d", idx);
-        ImGui::BeginChild(gutter_id, ImVec2(35, editor_h), ImGuiChildFlags_None);
+        ImGui::BeginChild(gutter_id, ImVec2(32, editor_h), ImGuiChildFlags_None);
         ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
         for (int i = 1; i <= line_count; i++) {
             ImGui::Text("%3d", i);
@@ -1327,7 +1316,7 @@ void CodeEditorScreen::render_cell_editor(int idx) {
 
         ImGui::SameLine(0, 0);
 
-        float edit_w = ImGui::GetContentRegionAvail().x - 16;
+        float edit_w = ImGui::GetContentRegionAvail().x - 4;
         if (ImGui::InputTextMultiline(editor_id, edit_buf_.data(), edit_buf_.size(),
                 ImVec2(edit_w, editor_h),
                 ImGuiInputTextFlags_AllowTabInput)) {
@@ -1355,12 +1344,12 @@ void CodeEditorScreen::render_cell_editor(int idx) {
         }
     } else {
         // Read-only preview with syntax highlighting
-        ImGui::SetCursorPosX(16);
+        ImGui::SetCursorPosX(10);
 
         // Line numbers for preview too
         char gutter_id[32];
         std::snprintf(gutter_id, sizeof(gutter_id), "##gutter_p_%d", idx);
-        ImGui::BeginChild(gutter_id, ImVec2(35, editor_h), ImGuiChildFlags_None);
+        ImGui::BeginChild(gutter_id, ImVec2(32, editor_h), ImGuiChildFlags_None);
         ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
         for (int i = 1; i <= line_count; i++) {
             ImGui::Text("%3d", i);
@@ -1370,7 +1359,7 @@ void CodeEditorScreen::render_cell_editor(int idx) {
 
         ImGui::SameLine(0, 0);
 
-        float preview_w = ImGui::GetContentRegionAvail().x - 16;
+        float preview_w = ImGui::GetContentRegionAvail().x - 4;
         char prev_id[32];
         std::snprintf(prev_id, sizeof(prev_id), "##preview_%d", idx);
         ImGui::BeginChild(prev_id, ImVec2(preview_w, editor_h), ImGuiChildFlags_None);
@@ -1403,7 +1392,7 @@ void CodeEditorScreen::render_cell_output(int idx) {
         if (o.output_type == "error") { has_error = true; break; }
     }
 
-    ImGui::SetCursorPosX(16);
+    ImGui::SetCursorPosX(10);
     ImGui::TextColored(has_error ? ERROR_RED : SUCCESS,
         has_error ? "ERROR OUTPUT" : "OUTPUT");
     if (cell.execution_count >= 0) {
@@ -1429,8 +1418,8 @@ void CodeEditorScreen::render_cell_output(int idx) {
     char scroll_id[32];
     std::snprintf(scroll_id, sizeof(scroll_id), "##out_scroll_%d", idx);
 
-    ImGui::SetCursorPosX(16);
-    ImGui::BeginChild(scroll_id, ImVec2(ImGui::GetContentRegionAvail().x - 16, max_output_h),
+    ImGui::SetCursorPosX(10);
+    ImGui::BeginChild(scroll_id, ImVec2(ImGui::GetContentRegionAvail().x - 4, max_output_h),
         ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
 
     for (auto& out : cell.outputs) {
@@ -1512,8 +1501,8 @@ void CodeEditorScreen::render_status_bar() {
     using namespace theme::colors;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARKEST);
-    ImGui::BeginChild("##ce_status", ImVec2(0, 28), ImGuiChildFlags_Borders);
-    ImGui::SetCursorPos(ImVec2(12, 6));
+    ImGui::BeginChild("##ce_status", ImVec2(0, 24), ImGuiChildFlags_Borders);
+    ImGui::SetCursorPos(ImVec2(8, 4));
 
     // Python version badge
     if (!python_version_.empty()) {

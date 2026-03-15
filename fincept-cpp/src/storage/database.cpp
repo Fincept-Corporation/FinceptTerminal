@@ -619,7 +619,9 @@ void Database::create_schema() {
             FOREIGN KEY (deployment_id) REFERENCES algo_deployments(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_algo_signals_status ON algo_order_signals(status);
+    )");
 
+    exec(R"(
         -- Algo Trading: Candle Cache
         CREATE TABLE IF NOT EXISTS candle_cache (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1086,9 +1088,36 @@ std::vector<ChatMessage> get_chat_messages(const std::string& session_uuid) {
 void delete_chat_session(const std::string& session_uuid) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
-    auto stmt = db.prepare("DELETE FROM chat_sessions WHERE session_uuid = ?1");
+    // Delete messages first, then session
+    auto stmt1 = db.prepare("DELETE FROM chat_messages WHERE session_uuid = ?1");
+    stmt1.bind_text(1, session_uuid);
+    stmt1.execute();
+    auto stmt2 = db.prepare("DELETE FROM chat_sessions WHERE session_uuid = ?1");
+    stmt2.bind_text(1, session_uuid);
+    stmt2.execute();
+}
+
+void update_chat_session_title(const std::string& session_uuid, const std::string& title) {
+    auto& db = Database::instance();
+    std::lock_guard<std::recursive_mutex> lock(db.mutex());
+    auto stmt = db.prepare(
+        "UPDATE chat_sessions SET title = ?1, updated_at = datetime('now') WHERE session_uuid = ?2");
+    stmt.bind_text(1, title);
+    stmt.bind_text(2, session_uuid);
+    stmt.execute();
+}
+
+void clear_chat_session_messages(const std::string& session_uuid) {
+    auto& db = Database::instance();
+    std::lock_guard<std::recursive_mutex> lock(db.mutex());
+    auto stmt = db.prepare("DELETE FROM chat_messages WHERE session_uuid = ?1");
     stmt.bind_text(1, session_uuid);
     stmt.execute();
+    // Reset message count
+    auto stmt2 = db.prepare(
+        "UPDATE chat_sessions SET message_count = 0, updated_at = datetime('now') WHERE session_uuid = ?1");
+    stmt2.bind_text(1, session_uuid);
+    stmt2.execute();
 }
 
 // ============================================================================

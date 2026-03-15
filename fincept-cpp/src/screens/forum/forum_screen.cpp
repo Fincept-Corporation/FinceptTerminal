@@ -4,6 +4,7 @@
 #include "auth/auth_manager.h"
 #include "auth/auth_api.h"
 #include "http/http_client.h"
+#include "storage/cache_service.h"
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 #include <cstdio>
@@ -932,12 +933,25 @@ void ForumScreen::load_data() {
         try {
             auto headers = auth::AuthApi::instance().get_auth_headers(
                 auth::AuthManager::instance().session().api_key);
+            auto& cache = CacheService::instance();
 
             // Load categories
             {
-                std::string url = std::string(BASE_URL) + "/forum/categories";
-                auto resp = http::HttpClient::instance().get(url, headers);
-                auto j = resp.json_body();
+                std::string cache_key = CacheService::make_key("api-response", "forum", "categories");
+                std::string body;
+                auto cached = cache.get(cache_key);
+                if (cached && !cached->empty()) {
+                    body = *cached;
+                } else {
+                    std::string url = std::string(BASE_URL) + "/forum/categories";
+                    auto resp = http::HttpClient::instance().get(url, headers);
+                    body = resp.body;
+                    if (resp.success && !body.empty()) {
+                        cache.set(cache_key, body, "api-response", CacheTTL::FIVE_MIN);
+                    }
+                }
+                auto j = nlohmann::json::parse(body, nullptr, false);
+                if (j.is_discarded()) j = nlohmann::json::object();
 
                 if (j.contains("data")) {
                     auto& data = j["data"];
@@ -958,9 +972,21 @@ void ForumScreen::load_data() {
 
             // Load stats
             {
-                std::string url = std::string(BASE_URL) + "/forum/stats";
-                auto resp = http::HttpClient::instance().get(url, headers);
-                auto j = resp.json_body();
+                std::string stats_cache_key = CacheService::make_key("api-response", "forum", "stats");
+                std::string stats_body;
+                auto stats_cached = cache.get(stats_cache_key);
+                if (stats_cached && !stats_cached->empty()) {
+                    stats_body = *stats_cached;
+                } else {
+                    std::string url = std::string(BASE_URL) + "/forum/stats";
+                    auto resp = http::HttpClient::instance().get(url, headers);
+                    stats_body = resp.body;
+                    if (resp.success && !stats_body.empty()) {
+                        cache.set(stats_cache_key, stats_body, "api-response", CacheTTL::FIVE_MIN);
+                    }
+                }
+                auto j = nlohmann::json::parse(stats_body, nullptr, false);
+                if (j.is_discarded()) j = nlohmann::json::object();
 
                 if (j.contains("data")) {
                     auto& d = j["data"];
@@ -1013,8 +1039,25 @@ void ForumScreen::load_posts() {
             }
         }
 
-        auto resp = http::HttpClient::instance().get(url, headers);
-        auto j = resp.json_body();
+        auto& cache = CacheService::instance();
+        int cat_id = active_category_id_ > 0 ? active_category_id_ :
+            (!categories_.empty() ? categories_[0].id : 0);
+        std::string posts_ck = CacheService::make_key("api-response", "forum-posts",
+            std::to_string(cat_id) + "_" + sort);
+
+        std::string body;
+        auto cached_posts = cache.get(posts_ck);
+        if (cached_posts && !cached_posts->empty()) {
+            body = *cached_posts;
+        } else {
+            auto resp = http::HttpClient::instance().get(url, headers);
+            body = resp.body;
+            if (resp.success && !body.empty())
+                cache.set(posts_ck, body, "api-response", CacheTTL::FIVE_MIN);
+        }
+
+        auto j = nlohmann::json::parse(body, nullptr, false);
+        if (j.is_discarded()) return;
 
         if (j.contains("data")) {
             auto& data = j["data"];

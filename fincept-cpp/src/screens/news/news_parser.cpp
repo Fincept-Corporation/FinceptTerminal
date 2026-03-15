@@ -16,20 +16,20 @@ namespace fincept::news {
 std::vector<RSSFeed> NewsScreen::get_default_feeds() {
     return {
         // Tier 1 — Wire Services & Regulators
-        {"reuters-biz",    "Reuters Business",       "https://feeds.reuters.com/reuters/businessNews",                                    "MARKETS",     "GLOBAL", "REUTERS",         1},
-        {"reuters-mkts",   "Reuters Markets",        "https://feeds.reuters.com/reuters/financialsNews",                                  "MARKETS",     "GLOBAL", "REUTERS",         1},
-        {"reuters-world",  "Reuters World",          "https://feeds.reuters.com/Reuters/worldNews",                                       "GEOPOLITICS", "GLOBAL", "REUTERS",         1},
         {"sec-press",      "SEC Press Releases",     "https://www.sec.gov/news/pressreleases.rss",                                        "REGULATORY",  "US",     "SEC",             1},
         {"fed-press",      "Federal Reserve",        "https://www.federalreserve.gov/feeds/press_all.xml",                                "REGULATORY",  "US",     "FED RESERVE",     1},
 
         // Tier 2 — Major Financial Media
-        {"bloomberg-mkts", "Bloomberg Markets",      "https://feeds.bloomberg.com/markets/news.rss",                                      "MARKETS",     "GLOBAL", "BLOOMBERG",       2},
         {"wsj-markets",    "WSJ Markets",            "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",                                     "MARKETS",     "US",     "WSJ",             2},
         {"wsj-world",      "WSJ World",              "https://feeds.a.dj.com/rss/RSSWorldNews.xml",                                       "GEOPOLITICS", "GLOBAL", "WSJ",             2},
         {"cnbc-finance",   "CNBC Finance",           "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "MARKETS",  "US",     "CNBC",            2},
+        {"cnbc-world",     "CNBC World",             "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362", "GEOPOLITICS","GLOBAL","CNBC",            2},
         {"marketwatch",    "MarketWatch",            "https://feeds.marketwatch.com/marketwatch/topstories/",                              "MARKETS",     "US",     "MARKETWATCH",     2},
-        {"bbc-business",   "BBC Business",           "http://feeds.bbci.co.uk/news/business/rss.xml",                                     "MARKETS",     "GLOBAL", "BBC",             2},
-        {"bbc-world",      "BBC World",              "http://feeds.bbci.co.uk/news/world/rss.xml",                                        "GEOPOLITICS", "GLOBAL", "BBC",             2},
+        {"ft-home",        "Financial Times",        "https://www.ft.com/?format=rss",                                                     "MARKETS",     "GLOBAL", "FT",              2},
+        {"yahoo-finance",  "Yahoo Finance",          "https://finance.yahoo.com/news/rssindex",                                            "MARKETS",     "US",     "YAHOO FINANCE",   2},
+        {"investing-com",  "Investing.com",          "https://www.investing.com/rss/news.rss",                                             "MARKETS",     "GLOBAL", "INVESTING.COM",   2},
+        {"bbc-business",   "BBC Business",           "https://feeds.bbci.co.uk/news/business/rss.xml",                                     "MARKETS",     "GLOBAL", "BBC",             2},
+        {"bbc-world",      "BBC World",              "https://feeds.bbci.co.uk/news/world/rss.xml",                                        "GEOPOLITICS", "GLOBAL", "BBC",             2},
 
         // Tier 2 — Tech
         {"techcrunch",     "TechCrunch",             "https://techcrunch.com/feed/",                                                       "TECH",        "GLOBAL", "TECHCRUNCH",      2},
@@ -42,11 +42,16 @@ std::vector<RSSFeed> NewsScreen::get_default_feeds() {
         {"oilprice",       "OilPrice",               "https://oilprice.com/rss/main",                                                      "ENERGY",      "GLOBAL", "OILPRICE",        2},
 
         // Tier 2 — Economics
-        {"economist",      "The Economist",          "https://www.economist.com/sections/economics/rss.xml",                               "ECONOMIC",    "GLOBAL", "ECONOMIST",       2},
+        {"nakedcap",       "Naked Capitalism",       "https://www.nakedcapitalism.com/feed",                                               "ECONOMIC",    "GLOBAL", "NAKED CAPITALISM",2},
+        {"calcrisks",      "Calculated Risk",        "https://www.calculatedriskblog.com/feeds/posts/default?alt=rss",                     "ECONOMIC",    "US",     "CALCULATED RISK", 2},
+
+        // Tier 2 — India / Asia
+        {"et-markets",     "Economic Times Markets", "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",               "MARKETS",     "INDIA",  "ECONOMIC TIMES",  2},
+        {"moneycontrol",   "Moneycontrol",           "https://www.moneycontrol.com/rss/marketreports.xml",                                 "MARKETS",     "INDIA",  "MONEYCONTROL",    2},
 
         // Tier 2 — Geopolitics
-        {"foreignpolicy",  "Foreign Policy",         "https://foreignpolicy.com/feed/",                                                    "GEOPOLITICS", "GLOBAL", "FOREIGN POLICY",  2},
         {"aljazeera",      "Al Jazeera",             "https://www.aljazeera.com/xml/rss/all.xml",                                          "GEOPOLITICS", "GLOBAL", "AL JAZEERA",      2},
+        {"guardian-world",  "The Guardian World",     "https://www.theguardian.com/world/rss",                                             "GEOPOLITICS", "GLOBAL", "THE GUARDIAN",    2},
     };
 }
 

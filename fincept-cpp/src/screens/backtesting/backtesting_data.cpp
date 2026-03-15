@@ -1,5 +1,6 @@
 #include "backtesting_data.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "core/logger.h"
 #include <thread>
 #include <nlohmann/json.hpp>
@@ -11,7 +12,11 @@ using json = nlohmann::json;
 void BacktestData::run(const std::string& provider_dir,
                         const std::string& command,
                         const std::string& args_json) {
-    if (loading_.load()) return;
+    if (loading_.load()) {
+        LOG_WARN("BacktestData", "Already running, ignoring new request");
+        return;
+    }
+    LOG_INFO("BacktestData", "Starting: provider=%s command=%s", provider_dir.c_str(), command.c_str());
     loading_.store(true);
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -24,12 +29,29 @@ void BacktestData::run(const std::string& provider_dir,
     std::string script = "Analytics/backtesting/" + provider_dir + "/" + provider_dir + "_provider.py";
 
     std::thread([this, script, command, args_json]() {
+        auto& cache = CacheService::instance();
+        std::string cache_key = CacheService::make_key("reference", "backtest",
+            script + "_" + command + "_" + args_json.substr(0, std::min((size_t)64, args_json.size())));
+
+        auto cached = cache.get(cache_key);
+        if (cached && !cached->empty()) {
+            LOG_INFO("BacktestData", "Cache hit for: %s", cache_key.c_str());
+            std::lock_guard<std::mutex> lock(mutex_);
+            parse_result(*cached);
+            loading_.store(false);
+            return;
+        }
+
         std::vector<std::string> args = {command, args_json};
         auto py_result = python::execute(script, args);
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (py_result.success) {
+                LOG_INFO("BacktestData", "Script completed successfully, parsing result");
                 parse_result(py_result.output);
+                if (has_result_ && !py_result.output.empty()) {
+                    cache.set(cache_key, py_result.output, "reference", CacheTTL::FIFTEEN_MIN);
+                }
             } else {
                 error_ = py_result.error.empty()
                     ? "Script failed (exit " + std::to_string(py_result.exit_code) + ")"

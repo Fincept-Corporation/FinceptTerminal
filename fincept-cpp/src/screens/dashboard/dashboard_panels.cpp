@@ -493,10 +493,62 @@ void DashboardScreen::render_market_pulse(float width, float height) {
 }
 
 // ============================================================================
-// Widget Grid — positions widgets using absolute cursor positions
+// Widget Grid — scrollable, drag-to-rearrange, resizable widgets
 // ============================================================================
+
+// Check if placing a widget at (col, row) with (cs, rs) span would overlap
+// any other widget. skip_id is the widget being moved/resized (excluded).
+static bool would_overlap(const std::vector<WidgetInstance>& widgets,
+                          const std::string& skip_id,
+                          int col, int row, int cs, int rs) {
+    for (const auto& other : widgets) {
+        if (!other.visible || other.id == skip_id) continue;
+        // Axis-aligned rect overlap test
+        bool h_overlap = col < other.col + other.col_span && col + cs > other.col;
+        bool v_overlap = row < other.row + other.row_span && row + rs > other.row;
+        if (h_overlap && v_overlap) return true;
+    }
+    return false;
+}
+
+// Find the maximum col_span a widget can grow to without overlapping others
+// or exceeding grid bounds.
+static int max_col_span_for(const std::vector<WidgetInstance>& widgets,
+                            const std::string& wid, int col, int row,
+                            int row_span, int grid_cols) {
+    int max_cs = grid_cols - col;
+    for (const auto& other : widgets) {
+        if (!other.visible || other.id == wid) continue;
+        bool v_overlap = row < other.row + other.row_span && row + row_span > other.row;
+        if (v_overlap && other.col >= col) {
+            max_cs = std::min(max_cs, other.col - col);
+        }
+    }
+    return std::max(1, max_cs);
+}
+
+// Find the maximum row_span a widget can grow to without overlapping others
+// or exceeding grid bounds.
+static int max_row_span_for(const std::vector<WidgetInstance>& widgets,
+                            const std::string& wid, int col, int row,
+                            int col_span, int grid_rows) {
+    int max_rs = grid_rows - row;
+    for (const auto& other : widgets) {
+        if (!other.visible || other.id == wid) continue;
+        bool h_overlap = col < other.col + other.col_span && col + col_span > other.col;
+        if (h_overlap && other.row >= row) {
+            max_rs = std::min(max_rs, other.row - row);
+        }
+    }
+    return std::max(1, max_rs);
+}
+
 void DashboardScreen::render_widget_grid(float width, float height) {
     float gap = 4.0f;
+    grid_gap_ = gap;
+
+    const int grid_cols = layout_.grid_cols;
+    const int grid_rows = layout_.grid_rows;
 
     int max_col = 0, max_row = 0;
     for (auto& w : layout_.widgets) {
@@ -504,20 +556,155 @@ void DashboardScreen::render_widget_grid(float width, float height) {
         max_col = std::max(max_col, w.col + w.col_span);
         max_row = std::max(max_row, w.row + w.row_span);
     }
-    if (max_col == 0) max_col = layout_.grid_cols;
-    if (max_row == 0) max_row = layout_.grid_rows;
+    if (max_col == 0) max_col = grid_cols;
+    if (max_row == 0) max_row = grid_rows;
+    // Ensure computed max doesn't exceed configured grid
+    max_col = std::max(max_col, grid_cols);
+    max_row = std::max(max_row, grid_rows);
 
+    // Fixed cell height — widgets keep their size, scrollbar handles overflow.
+    // Use the viewport height divided by the *configured* grid rows (not max_row)
+    // so adding more widgets doesn't shrink existing ones.
+    float base_rows = (float)grid_rows;
     float cell_w = (width - (max_col + 1) * gap) / max_col;
-    float cell_h = (height - (max_row + 1) * gap) / max_row;
+    float cell_h = (height - (base_rows + 1) * gap) / base_rows;
 
+    // Enforce minimum sizes for usability
     cell_w = std::max(100.0f, cell_w);
-    cell_h = std::max(60.0f, cell_h);
+    cell_h = std::max(180.0f, cell_h);
 
-    bool needs_scroll = (max_row * (cell_h + gap) + gap) > height;
-    ImGuiWindowFlags flags = needs_scroll ? 0 : ImGuiWindowFlags_NoScrollbar;
+    grid_cell_w_ = cell_w;
+    grid_cell_h_ = cell_h;
 
+    // Total content height — always allow scroll if content exceeds view
+    float content_h = max_row * (cell_h + gap) + gap;
+    ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysVerticalScrollbar;
+
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0.03f, 0.03f, 0.03f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(1.0f, 0.533f, 0.0f, 0.35f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, ImVec4(1.0f, 0.533f, 0.0f, 0.55f));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, ImVec4(1.0f, 0.533f, 0.0f, 0.75f));
     ImGui::BeginChild("##grid", ImVec2(width, height), false, flags);
 
+    // Reserve content space so scroll range is correct
+    ImGui::Dummy(ImVec2(width - 16, content_h));
+    ImGui::SetCursorPos(ImVec2(0, 0));
+
+    ImVec2 grid_origin = ImGui::GetCursorScreenPos();
+    ImVec2 mouse_pos = ImGui::GetIO().MousePos;
+    bool mouse_down = ImGui::GetIO().MouseDown[0];
+    bool mouse_released = ImGui::IsMouseReleased(0);
+
+    // --- Handle drag/resize: snap to grid on release, smooth pixel offset while dragging ---
+    // Track pixel offsets for smooth visual feedback during drag/resize
+    float drag_pixel_dx = 0, drag_pixel_dy = 0;
+    float resize_pixel_dw = 0, resize_pixel_dh = 0;
+
+    if (mouse_released) {
+        if (!dragging_widget_id_.empty()) {
+            // Snap final position to grid on release
+            ImVec2 delta = ImVec2(mouse_pos.x - drag_start_mouse_.x,
+                                  mouse_pos.y - drag_start_mouse_.y);
+            int col_delta = (int)std::round(delta.x / (cell_w + gap));
+            int row_delta = (int)std::round(delta.y / (cell_h + gap));
+
+            // Find the widget being dragged
+            for (auto& w : layout_.widgets) {
+                if (w.id == dragging_widget_id_) {
+                    int new_col = drag_start_col_ + col_delta;
+                    int new_row = drag_start_row_ + row_delta;
+                    // Clamp to grid bounds
+                    new_col = std::clamp(new_col, 0, grid_cols - w.col_span);
+                    new_row = std::clamp(new_row, 0, grid_rows - w.row_span);
+                    // Only apply if no overlap at new position
+                    if (!would_overlap(layout_.widgets, w.id,
+                                       new_col, new_row, w.col_span, w.row_span)) {
+                        w.col = new_col;
+                        w.row = new_row;
+                    }
+                    break;
+                }
+            }
+            save_layout();
+            dragging_widget_id_.clear();
+        }
+        if (!resizing_widget_id_.empty()) {
+            // Snap final span to grid on release
+            ImVec2 delta = ImVec2(mouse_pos.x - drag_start_mouse_.x,
+                                  mouse_pos.y - drag_start_mouse_.y);
+            int cs_delta = (int)std::round(delta.x / (cell_w + gap));
+            int rs_delta = (int)std::round(delta.y / (cell_h + gap));
+
+            for (auto& w : layout_.widgets) {
+                if (w.id == resizing_widget_id_) {
+                    // Clamp col_span to grid boundary
+                    int new_cs = std::clamp(resize_start_col_span_ + cs_delta,
+                                            1, grid_cols - w.col);
+                    // Clamp row_span to grid boundary
+                    int new_rs = std::clamp(resize_start_row_span_ + rs_delta,
+                                            1, grid_rows - w.row);
+                    // Further clamp to prevent overlap with other widgets
+                    int limit_cs = max_col_span_for(layout_.widgets, w.id,
+                                                     w.col, w.row, new_rs, grid_cols);
+                    new_cs = std::min(new_cs, limit_cs);
+                    int limit_rs = max_row_span_for(layout_.widgets, w.id,
+                                                     w.col, w.row, new_cs, grid_rows);
+                    new_rs = std::min(new_rs, limit_rs);
+
+                    w.col_span = new_cs;
+                    w.row_span = new_rs;
+                    break;
+                }
+            }
+            save_layout();
+            resizing_widget_id_.clear();
+        }
+    }
+
+    // --- Compute smooth pixel offsets while dragging (don't modify grid pos yet) ---
+    if (!dragging_widget_id_.empty() && mouse_down) {
+        drag_pixel_dx = mouse_pos.x - drag_start_mouse_.x;
+        drag_pixel_dy = mouse_pos.y - drag_start_mouse_.y;
+    }
+
+    // --- Compute smooth pixel offsets while resizing (don't modify span yet) ---
+    // Clamp visual resize to grid boundaries and overlap limits
+    if (!resizing_widget_id_.empty() && mouse_down) {
+        resize_pixel_dw = mouse_pos.x - drag_start_mouse_.x;
+        resize_pixel_dh = mouse_pos.y - drag_start_mouse_.y;
+
+        // Find the widget being resized and compute clamped visual size
+        for (const auto& w : layout_.widgets) {
+            if (w.id == resizing_widget_id_) {
+                // Compute what the snapped span would be
+                int preview_cs = std::clamp(
+                    resize_start_col_span_ + (int)std::round(resize_pixel_dw / (cell_w + gap)),
+                    1, grid_cols - w.col);
+                int preview_rs = std::clamp(
+                    resize_start_row_span_ + (int)std::round(resize_pixel_dh / (cell_h + gap)),
+                    1, grid_rows - w.row);
+                // Clamp to overlap limits
+                int limit_cs = max_col_span_for(layout_.widgets, w.id,
+                                                 w.col, w.row, preview_rs, grid_cols);
+                preview_cs = std::min(preview_cs, limit_cs);
+                int limit_rs = max_row_span_for(layout_.widgets, w.id,
+                                                 w.col, w.row, preview_cs, grid_rows);
+                preview_rs = std::min(preview_rs, limit_rs);
+                // Convert clamped span back to pixel delta
+                float max_w = preview_cs * cell_w + (preview_cs - 1) * gap;
+                float max_h = preview_rs * cell_h + (preview_rs - 1) * gap;
+                float base_w = w.col_span * cell_w + (w.col_span - 1) * gap;
+                float base_h = w.row_span * cell_h + (w.row_span - 1) * gap;
+                resize_pixel_dw = std::clamp(resize_pixel_dw,
+                    cell_w - base_w, max_w - base_w);
+                resize_pixel_dh = std::clamp(resize_pixel_dh,
+                    cell_h - base_h, max_h - base_h);
+                break;
+            }
+        }
+    }
+
+    // --- Render widgets ---
     for (auto& w : layout_.widgets) {
         if (!w.visible) continue;
 
@@ -526,11 +713,59 @@ void DashboardScreen::render_widget_grid(float width, float height) {
         float ww = w.col_span * cell_w + (w.col_span - 1) * gap;
         float wh = w.row_span * cell_h + (w.row_span - 1) * gap;
 
+        bool is_dragging = (w.id == dragging_widget_id_);
+        bool is_resizing = (w.id == resizing_widget_id_);
+
+        // Apply smooth pixel offset during drag (visual only)
+        if (is_dragging) {
+            wx += drag_pixel_dx;
+            wy += drag_pixel_dy;
+        }
+
+        // Apply smooth pixel offset during resize (visual only, already clamped above)
+        if (is_resizing) {
+            ww = std::max(cell_w, ww + resize_pixel_dw);
+            wh = std::max(cell_h, wh + resize_pixel_dh);
+        }
+
         ImGui::SetCursorPos(ImVec2(wx, wy));
-        render_widget_frame(w.title.c_str(), accent_for(w.type), ww, wh, w.type);
+
+        // Draw drop-target ghost showing snapped position while dragging
+        if (is_dragging) {
+            int snap_col = drag_start_col_ + (int)std::round(drag_pixel_dx / (cell_w + gap));
+            int snap_row = drag_start_row_ + (int)std::round(drag_pixel_dy / (cell_h + gap));
+            // Clamp ghost to grid bounds
+            snap_col = std::clamp(snap_col, 0, grid_cols - w.col_span);
+            snap_row = std::clamp(snap_row, 0, grid_rows - w.row_span);
+
+            float ghost_x = gap + snap_col * (cell_w + gap);
+            float ghost_y = gap + snap_row * (cell_h + gap);
+            float ghost_w = w.col_span * cell_w + (w.col_span - 1) * gap;
+            float ghost_h = w.row_span * cell_h + (w.row_span - 1) * gap;
+            ImVec2 go = ImGui::GetWindowPos();
+            float scroll_y = ImGui::GetScrollY();
+
+            // Color ghost red if it would overlap, orange if valid
+            bool overlap = would_overlap(layout_.widgets, w.id,
+                                          snap_col, snap_row, w.col_span, w.row_span);
+            ImU32 fill_col = overlap ? IM_COL32(255, 50, 50, 30) : IM_COL32(255, 136, 0, 30);
+            ImU32 border_col = overlap ? IM_COL32(255, 50, 50, 120) : IM_COL32(255, 136, 0, 120);
+
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImVec2(go.x + ghost_x, go.y + ghost_y - scroll_y),
+                ImVec2(go.x + ghost_x + ghost_w, go.y + ghost_y + ghost_h - scroll_y),
+                fill_col, 3.0f);
+            ImGui::GetWindowDrawList()->AddRect(
+                ImVec2(go.x + ghost_x, go.y + ghost_y - scroll_y),
+                ImVec2(go.x + ghost_x + ghost_w, go.y + ghost_y + ghost_h - scroll_y),
+                border_col, 3.0f, 0, 1.5f);
+        }
+
+        render_widget_frame(w.title.c_str(), accent_for(w.type), ww, wh, w.type, w.id);
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleColor(4);
 }
 
 // ============================================================================

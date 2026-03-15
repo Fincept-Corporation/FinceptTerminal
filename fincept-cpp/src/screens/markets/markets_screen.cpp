@@ -177,8 +177,8 @@ void MarketsScreen::render_panels() {
 
     float avail_w = ImGui::GetContentRegionAvail().x;
 
-    // Responsive grid: auto-calculate columns based on available width
-    auto grid = ui::responsive_grid(avail_w, 280, 8);
+    // Responsive grid: 3 cards per row — min 380px per card
+    auto grid = ui::responsive_grid(avail_w, 380, 10);
 
     // --- Global Markets ---
     ImGui::Spacing();
@@ -194,9 +194,9 @@ void MarketsScreen::render_panels() {
 
     int col = 0;
     for (size_t i = 0; i < global_markets_.size(); i++) {
-        if (col > 0) ImGui::SameLine(0, 8);
+        if (col > 0) ImGui::SameLine(0, 10);
         ImGui::BeginChild(("##gp_" + std::to_string(i)).c_str(),
-            ImVec2(grid.panel_w, 280), true);
+            ImVec2(grid.panel_w, 360), true);
         render_panel(global_markets_[i]);
         ImGui::EndChild();
 
@@ -219,9 +219,9 @@ void MarketsScreen::render_panels() {
 
     col = 0;
     for (size_t i = 0; i < regional_markets_.size(); i++) {
-        if (col > 0) ImGui::SameLine(0, 8);
+        if (col > 0) ImGui::SameLine(0, 10);
         ImGui::BeginChild(("##rp_" + std::to_string(i)).c_str(),
-            ImVec2(grid.panel_w, 300), true);
+            ImVec2(grid.panel_w, 380), true);
         render_panel(regional_markets_[i]);
         ImGui::EndChild();
 

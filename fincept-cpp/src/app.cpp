@@ -4,6 +4,8 @@
 #include "storage/cache_service.h"
 #include "core/config.h"
 #include "core/logger.h"
+#include "core/event_bus.h"
+#include "mcp/mcp_init.h"
 #include "ui/theme.h"
 #include <imgui.h>
 #include <ctime>
@@ -18,6 +20,15 @@ void App::initialize() {
     CacheService::instance().initialize();
 
     auth::AuthManager::instance().initialize();
+
+    // Initialize MCP system (registers all internal tools, starts external servers)
+    mcp::initialize_all_tools();
+
+    // Subscribe to MCP navigation events
+    core::EventBus::instance().subscribe("nav.switch_tab", [this](const core::Event& e) {
+        active_tab_ = e.get<int>("tab_index");
+    });
+
     initialized_ = true;
 
     if (setup_screen_.needs_setup()) {
@@ -30,6 +41,7 @@ void App::initialize() {
 
 void App::shutdown() {
     LOG_INFO("App", "Shutting down");
+    mcp::shutdown_mcp();
     CacheService::instance().shutdown();
     db::CacheDatabase::instance().close();
     db::Database::instance().close();
@@ -52,7 +64,7 @@ void App::handle_keyboard_shortcuts() {
         {ImGuiKey_F5,  6},   // Backtesting
         {ImGuiKey_F6,  14},  // Surface Analytics
         {ImGuiKey_F9,  2},   // Crypto Trading
-        {ImGuiKey_F10, 5},   // AI Chat
+        {ImGuiKey_F10, 5},  // AI Chat
         {ImGuiKey_F7,  15},  // Geopolitics
         {ImGuiKey_F8,  16},  // Watchlist
         {ImGuiKey_F12, 13},  // Profile
@@ -91,31 +103,61 @@ void App::render_top_bar() {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Navigate")) {
-            if (ImGui::MenuItem("Dashboard", "F1")) { active_tab_ = 0; }
-            if (ImGui::MenuItem("Markets", "F2")) { active_tab_ = 1; }
-            if (ImGui::MenuItem("News", "F3")) { active_tab_ = 4; }
-            if (ImGui::MenuItem("Portfolio", "F4")) { active_tab_ = 3; }
+            // ── Markets & Data ──
+            ImGui::TextColored(ACCENT, "Markets & Data");
             ImGui::Separator();
-            if (ImGui::MenuItem("Crypto Trading", "F9")) { active_tab_ = 2; }
-            if (ImGui::MenuItem("Algo Trading")) { active_tab_ = 7; }
-            if (ImGui::MenuItem("Backtesting", "F5")) { active_tab_ = 6; }
+            if (ImGui::MenuItem("Markets", "F2"))           { active_tab_ = 1; }
+            if (ImGui::MenuItem("Watchlist", "F8"))         { active_tab_ = 16; }
+            if (ImGui::MenuItem("Economics"))               { active_tab_ = 17; }
+            if (ImGui::MenuItem("Govt Data"))               { active_tab_ = 26; }
+            if (ImGui::MenuItem("DBnomics"))                { active_tab_ = 18; }
+            if (ImGui::MenuItem("Data Sources"))            { active_tab_ = 20; }
+            if (ImGui::MenuItem("Data Mapping"))             { active_tab_ = 28; }
+
+            ImGui::Spacing();
+
+            // ── Trading & Portfolio ──
+            ImGui::TextColored(ACCENT, "Trading & Portfolio");
+            ImGui::Separator();
+            if (ImGui::MenuItem("Crypto Trading", "F9"))    { active_tab_ = 2; }
+            if (ImGui::MenuItem("Portfolio", "F4"))         { active_tab_ = 3; }
+            if (ImGui::MenuItem("Backtesting", "F5"))       { active_tab_ = 6; }
+            if (ImGui::MenuItem("Algo Trading"))            { active_tab_ = 7; }
             if (ImGui::MenuItem("Surface Analytics", "F6")) { active_tab_ = 14; }
+
+            ImGui::Spacing();
+
+            // ── Research & Intelligence ──
+            ImGui::TextColored(ACCENT, "Research & Intelligence");
             ImGui::Separator();
-            if (ImGui::MenuItem("Watchlist", "F8")) { active_tab_ = 16; }
-            if (ImGui::MenuItem("Economics")) { active_tab_ = 17; }
-            if (ImGui::MenuItem("DBnomics")) { active_tab_ = 18; }
-            if (ImGui::MenuItem("Code Editor")) { active_tab_ = 9; }
-            if (ImGui::MenuItem("Notes")) { active_tab_ = 19; }
-            if (ImGui::MenuItem("M&A Analytics")) { active_tab_ = 21; }
-            if (ImGui::MenuItem("Govt Data")) { active_tab_ = 26; }
+            if (ImGui::MenuItem("AI Chat", "F10"))          { active_tab_ = 5; }
+            if (ImGui::MenuItem("AI Quant Lab"))            { active_tab_ = 10; }
+            if (ImGui::MenuItem("M&A Analytics"))           { active_tab_ = 21; }
+            if (ImGui::MenuItem("Geopolitics", "F7"))       { active_tab_ = 15; }
+
+            ImGui::Spacing();
+
+            // ── Tools ──
+            ImGui::TextColored(ACCENT, "Tools");
             ImGui::Separator();
-            if (ImGui::MenuItem("Forum")) { active_tab_ = 22; }
-            if (ImGui::MenuItem("Documentation")) { active_tab_ = 23; }
-            if (ImGui::MenuItem("Support")) { active_tab_ = 24; }
-            if (ImGui::MenuItem("About")) { active_tab_ = 25; }
+            if (ImGui::MenuItem("QuantLib"))                { active_tab_ = 11; }
+            if (ImGui::MenuItem("Node Editor"))             { active_tab_ = 8; }
+            if (ImGui::MenuItem("Code Editor"))             { active_tab_ = 9; }
+            if (ImGui::MenuItem("Agent Studio"))            { active_tab_ = 27; }
+            if (ImGui::MenuItem("Notes"))                   { active_tab_ = 19; }
+            if (ImGui::MenuItem("Settings"))                { active_tab_ = 12; }
+            if (ImGui::MenuItem("Profile", "F12"))          { active_tab_ = 13; }
+
+            ImGui::Spacing();
+
+            // ── Community & Support ──
+            ImGui::TextColored(ACCENT, "Community & Support");
             ImGui::Separator();
-            if (ImGui::MenuItem("Settings")) { active_tab_ = 12; }
-            if (ImGui::MenuItem("Profile", "F12")) { active_tab_ = 13; }
+            if (ImGui::MenuItem("Forum"))                   { active_tab_ = 22; }
+            if (ImGui::MenuItem("Documentation"))           { active_tab_ = 23; }
+            if (ImGui::MenuItem("Support"))                 { active_tab_ = 24; }
+            if (ImGui::MenuItem("About"))                   { active_tab_ = 25; }
+
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {
@@ -285,31 +327,32 @@ void App::render_tab_bar() {
         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
     if (current_screen_ == AppScreen::Dashboard) {
-        struct TabDef { const char* label; const char* shortcut; };
-        static constexpr TabDef tabs[] = {
-            {"Dashboard", "F1"}, {"Markets", "F2"}, {"Crypto Trading", "F9"},
-            {"Portfolio", "F4"}, {"News", "F3"}, {"Agent Studio", "F10"},
-            {"Backtesting", "F5"}, {"Algo Trading", nullptr}, {"Node Editor", nullptr},
-            {"Code Editor", nullptr}, {"AI Quant Lab", nullptr}, {"QuantLib", nullptr},
-            {"Settings", nullptr}, {"Profile", "F12"}, {"Surface", "F6"},
-            {"Geopolitics", "F7"}, {"Watchlist", "F8"}, {"Economics", nullptr},
-            {"DBnomics", nullptr},
-            {"Notes", nullptr},
-            {"Data Sources", nullptr},
-            {"M&A Analytics", nullptr},
-            {"Forum", nullptr},
-            {"Docs", nullptr},
-            {"Support", nullptr},
-            {"About", nullptr},
-            {"Govt Data", nullptr},
+        // Primary tabs only — matches Tauri app's tab bar
+        // All other tabs are accessible via Navigate dropdown menu
+        struct TabDef { const char* label; const char* shortcut; int tab_idx; };
+        static constexpr TabDef primary_tabs[] = {
+            {"Dashboard",      "F1",  0},
+            {"Markets",        "F2",  1},
+            {"Crypto Trading", "F9",  2},
+            {"Portfolio",      "F4",  3},
+            {"News",           "F3",  4},
+            {"AI Chat",        "F10", 5},
+            {"Backtesting",    "F5",  6},
+            {"Algo Trading",   nullptr, 7},
+            {"Node Editor",    nullptr, 8},
+            {"Code Editor",    nullptr, 9},
+            {"AI Quant Lab",   nullptr, 10},
+            {"QuantLib",       nullptr, 11},
+            {"Settings",       nullptr, 12},
+            {"Profile",        "F12", 13},
         };
-        constexpr int n_tabs = sizeof(tabs) / sizeof(tabs[0]);
+        constexpr int n_tabs = sizeof(primary_tabs) / sizeof(primary_tabs[0]);
 
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 3));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
 
         for (int i = 0; i < n_tabs; i++) {
-            bool is_active = (i == active_tab_);
+            bool is_active = (primary_tabs[i].tab_idx == active_tab_);
 
             if (is_active) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ACCENT_BG);
@@ -325,12 +368,12 @@ void App::render_tab_bar() {
                 ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
             }
 
-            if (ImGui::Button(tabs[i].label)) {
-                active_tab_ = i;
+            if (ImGui::Button(primary_tabs[i].label)) {
+                active_tab_ = primary_tabs[i].tab_idx;
             }
 
-            if (tabs[i].shortcut && ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s (%s)", tabs[i].label, tabs[i].shortcut);
+            if (primary_tabs[i].shortcut && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s (%s)", primary_tabs[i].label, primary_tabs[i].shortcut);
             }
 
             ImGui::PopStyleVar();
@@ -544,11 +587,14 @@ void App::render() {
             else if (active_tab_ == 9)  code_editor_screen_.render();
             else if (active_tab_ == 8)  node_editor_screen_.render();
             else if (active_tab_ == 12) settings_screen_.render();
-            else if (active_tab_ == 5)  agent_studio_screen_.render();
+            else if (active_tab_ == 5)  ai_chat_screen_.render();
+            else if (active_tab_ == 27) agent_studio_screen_.render();
             else if (active_tab_ == 2)  crypto_trading_screen_.render();
+            else if (active_tab_ == 10) ai_quant_lab_screen_.render();
             else if (active_tab_ == 11) quantlib_screen_.render();
             else if (active_tab_ == 1)  markets_screen_.render();
             else if (active_tab_ == 7)  algo_trading_screen_.render();
+            else if (active_tab_ == 28) data_mapping_screen_.render();
             else                        dashboard_screen_.render();
             break;
         default:

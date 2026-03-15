@@ -1,8 +1,17 @@
 #include "dashboard_screen.h"
 #include "dashboard_helpers.h"
+#include "http/http_client.h"
+#include "storage/cache_service.h"
 #include <imgui.h>
 #include <cmath>
 #include <algorithm>
+#include <thread>
+#include <regex>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 namespace fincept::dashboard {
 
@@ -15,7 +24,8 @@ void DashboardScreen::render_quote_table(
     const char* col1, const char* col2, const char* col3,
     bool show_volume, int price_decimals)
 {
-    int num_cols = show_volume ? 4 : 3;
+    // Add a "Range" column for intraday high/low bar visualization
+    int num_cols = (show_volume ? 4 : 3) + 1; // +1 for range bar
     ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
                             ImGuiTableFlags_SizingStretchProp;
 
@@ -24,6 +34,7 @@ void DashboardScreen::render_quote_table(
         ImGui::TableSetupColumn(col1, 0, 2.0f);
         ImGui::TableSetupColumn(col2, 0, 1.5f);
         ImGui::TableSetupColumn(col3, 0, 1.0f);
+        ImGui::TableSetupColumn("Range", 0, 1.2f);
         if (show_volume) ImGui::TableSetupColumn("Vol", 0, 1.0f);
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
@@ -36,6 +47,75 @@ void DashboardScreen::render_quote_table(
             ImGui::Text("%s", fmt_price(q.price, price_decimals).c_str());
             ImGui::TableNextColumn();
             ImGui::TextColored(chg_col(q.change_percent), "%+.2f%%", q.change_percent);
+
+            // Range bar: shows intraday high-low range with current price marker
+            ImGui::TableNextColumn();
+            if (q.high > 0 && q.low > 0 && q.high >= q.low) {
+                ImVec2 p = ImGui::GetCursorScreenPos();
+                float bar_w = ImGui::GetContentRegionAvail().x - 4;
+                float bar_h = 6.0f;
+                float y_center = p.y + ImGui::GetTextLineHeight() * 0.5f - bar_h * 0.5f;
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+
+                // Background track
+                dl->AddRectFilled(
+                    ImVec2(p.x, y_center),
+                    ImVec2(p.x + bar_w, y_center + bar_h),
+                    IM_COL32(40, 40, 40, 200), 2.0f);
+
+                // Filled range from open to current
+                float range = q.high - q.low;
+                if (range > 0 && bar_w > 4) {
+                    float open_frac = (q.open > 0)
+                        ? (float)((q.open - q.low) / range) : 0.0f;
+                    float cur_frac = (float)((q.price - q.low) / range);
+                    open_frac = std::clamp(open_frac, 0.0f, 1.0f);
+                    cur_frac = std::clamp(cur_frac, 0.0f, 1.0f);
+
+                    float x1 = p.x + std::min(open_frac, cur_frac) * bar_w;
+                    float x2 = p.x + std::max(open_frac, cur_frac) * bar_w;
+                    bool up = q.price >= q.open;
+                    ImU32 fill_col = up ? IM_COL32(0, 180, 100, 200) : IM_COL32(220, 50, 50, 200);
+                    dl->AddRectFilled(ImVec2(x1, y_center), ImVec2(x2, y_center + bar_h),
+                        fill_col, 2.0f);
+
+                    // Current price marker (white triangle/line)
+                    float cx = p.x + cur_frac * bar_w;
+                    dl->AddRectFilled(
+                        ImVec2(cx - 1, y_center - 1),
+                        ImVec2(cx + 1, y_center + bar_h + 1),
+                        IM_COL32(255, 255, 255, 220));
+                }
+                ImGui::Dummy(ImVec2(bar_w, ImGui::GetTextLineHeight()));
+            } else {
+                // No high/low data — show a change-direction bar
+                float bar_w = ImGui::GetContentRegionAvail().x - 4;
+                ImVec2 p = ImGui::GetCursorScreenPos();
+                float bar_h = 6.0f;
+                float y_center = p.y + ImGui::GetTextLineHeight() * 0.5f - bar_h * 0.5f;
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+
+                dl->AddRectFilled(ImVec2(p.x, y_center), ImVec2(p.x + bar_w, y_center + bar_h),
+                    IM_COL32(40, 40, 40, 200), 2.0f);
+
+                // Change magnitude bar from center
+                float mid = p.x + bar_w * 0.5f;
+                float mag = std::clamp(std::abs((float)q.change_percent) / 5.0f, 0.0f, 1.0f);
+                float extent = mag * bar_w * 0.5f;
+                bool up = q.change_percent >= 0;
+                ImU32 col = up ? IM_COL32(0, 180, 100, 200) : IM_COL32(220, 50, 50, 200);
+                if (up)
+                    dl->AddRectFilled(ImVec2(mid, y_center), ImVec2(mid + extent, y_center + bar_h), col, 2.0f);
+                else
+                    dl->AddRectFilled(ImVec2(mid - extent, y_center), ImVec2(mid, y_center + bar_h), col, 2.0f);
+
+                // Center line
+                dl->AddLine(ImVec2(mid, y_center - 1), ImVec2(mid, y_center + bar_h + 1),
+                    IM_COL32(100, 100, 100, 180));
+
+                ImGui::Dummy(ImVec2(bar_w, ImGui::GetTextLineHeight()));
+            }
+
             if (show_volume) {
                 ImGui::TableNextColumn();
                 ImGui::TextColored(FC_MUTED, "%s", fmt_volume(q.volume).c_str());
@@ -245,11 +325,12 @@ void DashboardScreen::widget_news(float w, float h) {
 }
 
 void DashboardScreen::widget_economic(float w, float h) {
-    if (ImGui::BeginTable("##eco", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+    if (ImGui::BeginTable("##eco", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
         ImGuiTableFlags_SizingStretchProp, ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn("Indicator", 0, 2.5f);
         ImGui::TableSetupColumn("Value", 0, 1.0f);
         ImGui::TableSetupColumn("Chg", 0, 1.0f);
+        ImGui::TableSetupColumn("", 0, 1.2f);
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
         for (auto& e : econ_data_) {
@@ -257,17 +338,39 @@ void DashboardScreen::widget_economic(float w, float h) {
             ImGui::TableNextColumn(); ImGui::TextColored(FC_WHITE, "%s", e.name.c_str());
             ImGui::TableNextColumn(); ImGui::Text("%.2f", e.value);
             ImGui::TableNextColumn(); ImGui::TextColored(chg_col(e.change), "%+.2f", e.change);
+            // Change bar
+            ImGui::TableNextColumn();
+            float bar_w = ImGui::GetContentRegionAvail().x - 4;
+            if (bar_w > 8) {
+                ImVec2 p = ImGui::GetCursorScreenPos();
+                float bar_h = 6.0f;
+                float yc = p.y + ImGui::GetTextLineHeight() * 0.5f - bar_h * 0.5f;
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                dl->AddRectFilled(ImVec2(p.x, yc), ImVec2(p.x + bar_w, yc + bar_h),
+                    IM_COL32(40, 40, 40, 200), 2.0f);
+                float mid = p.x + bar_w * 0.5f;
+                float mag = std::clamp(std::abs(e.change) / 3.0f, 0.0f, 1.0f);
+                float ext = mag * bar_w * 0.5f;
+                ImU32 col = e.change >= 0 ? IM_COL32(0, 180, 100, 200) : IM_COL32(220, 50, 50, 200);
+                if (e.change >= 0)
+                    dl->AddRectFilled(ImVec2(mid, yc), ImVec2(mid + ext, yc + bar_h), col, 2.0f);
+                else
+                    dl->AddRectFilled(ImVec2(mid - ext, yc), ImVec2(mid, yc + bar_h), col, 2.0f);
+                dl->AddLine(ImVec2(mid, yc - 1), ImVec2(mid, yc + bar_h + 1), IM_COL32(100, 100, 100, 180));
+                ImGui::Dummy(ImVec2(bar_w, ImGui::GetTextLineHeight()));
+            }
         }
         ImGui::EndTable();
     }
 }
 
 void DashboardScreen::widget_geopolitics(float w, float h) {
-    if (ImGui::BeginTable("##geo", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+    if (ImGui::BeginTable("##geo", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
         ImGuiTableFlags_SizingStretchProp, ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn("Region", 0, 1.8f);
-        ImGui::TableSetupColumn("Risk", 0, 1.0f);
-        ImGui::TableSetupColumn("Trend", 0, 1.0f);
+        ImGui::TableSetupColumn("Risk", 0, 0.7f);
+        ImGui::TableSetupColumn("Level", 0, 1.4f);
+        ImGui::TableSetupColumn("Trend", 0, 0.8f);
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
         for (auto& g : geo_data_) {
@@ -275,7 +378,35 @@ void DashboardScreen::widget_geopolitics(float w, float h) {
             ImGui::TableNextColumn(); ImGui::TextColored(FC_WHITE, "%s", g.region.c_str());
             ImGui::TableNextColumn();
             ImVec4 rc = g.risk > 70 ? FC_RED : (g.risk > 50 ? FC_YELLOW : FC_GREEN);
-            ImGui::TextColored(rc, "%.1f", g.risk);
+            ImGui::TextColored(rc, "%.0f", g.risk);
+            // Risk level bar
+            ImGui::TableNextColumn();
+            {
+                float bar_w = ImGui::GetContentRegionAvail().x - 4;
+                if (bar_w > 8) {
+                    ImVec2 p = ImGui::GetCursorScreenPos();
+                    float bar_h = 8.0f;
+                    float yc = p.y + ImGui::GetTextLineHeight() * 0.5f - bar_h * 0.5f;
+                    ImDrawList* dl = ImGui::GetWindowDrawList();
+                    // Background
+                    dl->AddRectFilled(ImVec2(p.x, yc), ImVec2(p.x + bar_w, yc + bar_h),
+                        IM_COL32(30, 30, 30, 220), 3.0f);
+                    // Filled portion based on risk 0-100
+                    float frac = std::clamp(g.risk / 100.0f, 0.0f, 1.0f);
+                    // Color gradient: green -> yellow -> red
+                    int r_val, g_val;
+                    if (frac < 0.5f) {
+                        r_val = (int)(frac * 2 * 220);
+                        g_val = 180;
+                    } else {
+                        r_val = 220;
+                        g_val = (int)((1.0f - frac) * 2 * 180);
+                    }
+                    dl->AddRectFilled(ImVec2(p.x, yc), ImVec2(p.x + frac * bar_w, yc + bar_h),
+                        IM_COL32(r_val, g_val, 0, 220), 3.0f);
+                    ImGui::Dummy(ImVec2(bar_w, ImGui::GetTextLineHeight()));
+                }
+            }
             ImGui::TableNextColumn();
             ImGui::TextColored(chg_col(g.trend), "%+.1f", g.trend);
         }
@@ -284,10 +415,11 @@ void DashboardScreen::widget_geopolitics(float w, float h) {
 }
 
 void DashboardScreen::widget_performance(float w, float h) {
-    if (ImGui::BeginTable("##perf", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+    if (ImGui::BeginTable("##perf", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
         ImGuiTableFlags_SizingStretchProp, ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn("Metric", 0, 2.0f);
         ImGui::TableSetupColumn("Value", 0, 1.5f);
+        ImGui::TableSetupColumn("", 0, 1.0f);
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
         for (auto& p : perf_data_) {
@@ -298,6 +430,27 @@ void DashboardScreen::widget_performance(float w, float h) {
                 ImGui::TextColored(chg_col(p.change), "$%s (%+.2f%%)", fmt_price(p.value).c_str(), p.change);
             else
                 ImGui::TextColored(chg_col(p.change), "%+.2f%%", p.change);
+            // Change bar
+            ImGui::TableNextColumn();
+            float bar_w = ImGui::GetContentRegionAvail().x - 4;
+            if (bar_w > 8) {
+                ImVec2 bp = ImGui::GetCursorScreenPos();
+                float bar_h = 6.0f;
+                float yc = bp.y + ImGui::GetTextLineHeight() * 0.5f - bar_h * 0.5f;
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                dl->AddRectFilled(ImVec2(bp.x, yc), ImVec2(bp.x + bar_w, yc + bar_h),
+                    IM_COL32(40, 40, 40, 200), 2.0f);
+                float mid = bp.x + bar_w * 0.5f;
+                float mag = std::clamp(std::abs(p.change) / 5.0f, 0.0f, 1.0f);
+                float ext = mag * bar_w * 0.5f;
+                ImU32 col = p.change >= 0 ? IM_COL32(0, 180, 100, 200) : IM_COL32(220, 50, 50, 200);
+                if (p.change >= 0)
+                    dl->AddRectFilled(ImVec2(mid, yc), ImVec2(mid + ext, yc + bar_h), col, 2.0f);
+                else
+                    dl->AddRectFilled(ImVec2(mid - ext, yc), ImVec2(mid, yc + bar_h), col, 2.0f);
+                dl->AddLine(ImVec2(mid, yc - 1), ImVec2(mid, yc + bar_h + 1), IM_COL32(100, 100, 100, 180));
+                ImGui::Dummy(ImVec2(bar_w, ImGui::GetTextLineHeight()));
+            }
         }
         ImGui::EndTable();
     }
@@ -321,10 +474,332 @@ void DashboardScreen::widget_market_data(float w, float h) {
 }
 
 // ============================================================================
+// YouTube Stream Widget — link launcher with metadata fetch
+// ============================================================================
+static void yt_open_url(const char* url) {
+#ifdef _WIN32
+    ShellExecuteA(nullptr, "open", url, nullptr, nullptr, SW_SHOWNORMAL);
+#elif defined(__APPLE__)
+    std::string cmd = std::string("open ") + url;
+    system(cmd.c_str());
+#else
+    std::string cmd = std::string("xdg-open ") + url;
+    system(cmd.c_str());
+#endif
+}
+
+static std::string extract_video_id(const std::string& url) {
+    // Match youtube.com/watch?v=ID, youtu.be/ID, youtube.com/live/ID
+    std::regex patterns[] = {
+        std::regex(R"((?:youtube\.com/watch\?.*v=)([a-zA-Z0-9_-]{11}))"),
+        std::regex(R"((?:youtu\.be/)([a-zA-Z0-9_-]{11}))"),
+        std::regex(R"((?:youtube\.com/live/)([a-zA-Z0-9_-]{11}))"),
+    };
+    for (auto& pat : patterns) {
+        std::smatch m;
+        if (std::regex_search(url, m, pat) && m.size() > 1) return m[1].str();
+    }
+    return {};
+}
+
+void DashboardScreen::yt_fetch_metadata(int index) {
+    if (index < 0 || index >= (int)yt_entries_.size()) return;
+    auto& entry = yt_entries_[index];
+    if (entry.fetching || entry.fetched) return;
+    entry.fetching = true;
+
+    std::string url = entry.url;
+    std::thread([this, index, url]() {
+        // Use YouTube oEmbed API (no API key needed)
+        auto& cache = CacheService::instance();
+        std::string oembed_ck = CacheService::make_key("api-response", "yt-oembed", url);
+
+        std::string body;
+        auto cached_oembed = cache.get(oembed_ck);
+        if (cached_oembed && !cached_oembed->empty()) {
+            body = *cached_oembed;
+        } else {
+            std::string oembed_url = "https://www.youtube.com/oembed?url=" + url + "&format=json";
+            http::Headers headers;
+            headers["accept"] = "application/json";
+            auto resp = http::HttpClient::instance().get(oembed_url, headers);
+            if (resp.success && !resp.body.empty()) {
+                body = resp.body;
+                cache.set(oembed_ck, body, "api-response", CacheTTL::ONE_DAY);
+            }
+        }
+
+        if (index < (int)yt_entries_.size()) {
+            auto& e = yt_entries_[index];
+            if (!body.empty()) {
+                try {
+                    auto j = nlohmann::json::parse(body);
+                    e.title = j.value("title", "");
+                    e.author = j.value("author_name", "");
+                } catch (...) {
+                    e.title = "(Could not load metadata)";
+                }
+            } else {
+                e.title = "(Could not load metadata)";
+            }
+            e.fetched = true;
+            e.fetching = false;
+        }
+    }).detach();
+}
+
+void DashboardScreen::widget_youtube_stream(float w, float h) {
+    float avail_w = ImGui::GetContentRegionAvail().x;
+
+    // ---- Video player area (when playing) ----
+#ifdef FINCEPT_HAS_MPV
+    if (yt_active_player_ >= 0 && yt_active_player_ < (int)yt_entries_.size() && yt_player_) {
+        auto& active = yt_entries_[yt_active_player_];
+        auto state = yt_player_->state();
+
+        // Video display area — fill all available space minus controls
+        float controls_h = 54.0f;
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        float video_w = avail.x;
+        float video_h = avail.y - controls_h;
+        if (video_h < 60) video_h = 60;
+        if (video_w < 60) video_w = 60;
+
+        // Render mpv frame into texture
+        unsigned int tex = yt_player_->render_frame((int)video_w, (int)video_h);
+        if (tex) {
+            ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(video_w, video_h));
+        } else {
+            // Loading / error state
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+            ImGui::BeginChild("##yt_vid_placeholder", ImVec2(video_w, video_h), false);
+            float cy = video_h * 0.4f;
+            ImGui::Dummy(ImVec2(0, cy));
+            const char* status_text = "Loading video...";
+            if (state == media::PlayerState::Error)
+                status_text = yt_player_->error_msg().c_str();
+            else if (state == media::PlayerState::Stopped)
+                status_text = "Stopped";
+            float tw = ImGui::CalcTextSize(status_text).x;
+            ImGui::SetCursorPosX((video_w - tw) * 0.5f);
+            ImGui::TextColored(state == media::PlayerState::Error ? FC_RED : FC_YELLOW, "%s", status_text);
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+        }
+
+        // Controls bar
+        ImGui::Spacing();
+
+        // Title
+        ImGui::TextColored(FC_WHITE, "%s", active.title.empty() ? active.url.c_str() : active.title.c_str());
+        if (!active.author.empty()) {
+            ImGui::SameLine(0, 8);
+            ImGui::TextColored(FC_GRAY, "by %s", active.author.c_str());
+        }
+
+        // Playback controls
+        bool is_playing = (state == media::PlayerState::Playing);
+        bool is_paused = (state == media::PlayerState::Paused);
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));
+
+        if (ImGui::SmallButton(is_paused ? "[>] PLAY" : "[||] PAUSE")) {
+            yt_player_->toggle_pause();
+        }
+        ImGui::SameLine(0, 6);
+        if (ImGui::SmallButton("[x] STOP")) {
+            yt_player_->stop();
+            yt_active_player_ = -1;
+        }
+        ImGui::SameLine(0, 6);
+
+        // Volume slider
+        ImGui::PushItemWidth(60);
+        if (ImGui::SliderInt("##yt_vol", &yt_volume_, 0, 100, "Vol:%d")) {
+            yt_player_->set_volume(yt_volume_);
+        }
+        ImGui::PopItemWidth();
+
+        ImGui::SameLine(0, 6);
+        if (ImGui::SmallButton("[^] OPEN")) {
+            yt_open_url(active.url.c_str());
+        }
+
+        ImGui::PopStyleColor(2);
+
+        // Progress bar
+        double dur = yt_player_->duration();
+        double pos = yt_player_->position();
+        if (dur > 0) {
+            float frac = (float)(pos / dur);
+            char time_buf[32];
+            int pm = (int)pos / 60, ps = (int)pos % 60;
+            int dm = (int)dur / 60, ds = (int)dur % 60;
+            std::snprintf(time_buf, sizeof(time_buf), "%d:%02d / %d:%02d", pm, ps, dm, ds);
+            ImGui::ProgressBar(frac, ImVec2(-1, 14), time_buf);
+        }
+
+        return;
+    }
+#endif
+
+    // ---- URL input row ----
+    ImGui::TextColored(FC_RED, ">>"); ImGui::SameLine(0, 4);
+    ImGui::TextColored(FC_WHITE, "Add YouTube Link:");
+
+    ImGui::PushItemWidth(avail_w - 70);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, FC_WHITE);
+    bool entered = ImGui::InputText("##yt_url", yt_url_buf_, sizeof(yt_url_buf_),
+                                     ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::PopStyleColor(2);
+    ImGui::PopItemWidth();
+
+    ImGui::SameLine(0, 4);
+    bool add_clicked = false;
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.1f, 0.1f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, FC_WHITE);
+    add_clicked = ImGui::Button("ADD##yt", ImVec2(54, 0));
+    ImGui::PopStyleColor(3);
+
+    if ((entered || add_clicked) && yt_url_buf_[0] != '\0') {
+        std::string url_str(yt_url_buf_);
+        auto vid_id = extract_video_id(url_str);
+        if (!vid_id.empty()) {
+            YouTubeEntry entry;
+            entry.url = url_str;
+            entry.title = "Loading...";
+            yt_entries_.push_back(std::move(entry));
+            yt_fetch_metadata((int)yt_entries_.size() - 1);
+            yt_url_buf_[0] = '\0';
+        } else {
+            std::strncpy(yt_url_buf_, "Invalid YouTube URL!", sizeof(yt_url_buf_) - 1);
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ---- Stream list ----
+    if (yt_entries_.empty()) {
+        float center_y = ImGui::GetContentRegionAvail().y * 0.3f;
+        ImGui::Dummy(ImVec2(0, center_y));
+        float text_w = ImGui::CalcTextSize("Paste a YouTube link above to get started").x;
+        ImGui::SetCursorPosX((avail_w - text_w) * 0.5f);
+        ImGui::TextColored(FC_MUTED, "Paste a YouTube link above to get started");
+
+#ifdef FINCEPT_HAS_MPV
+        ImGui::Spacing();
+        float note_w = ImGui::CalcTextSize("Inline video playback enabled (mpv)").x;
+        ImGui::SetCursorPosX((avail_w - note_w) * 0.5f);
+        ImGui::TextColored(ImVec4(0.3f, 0.6f, 0.3f, 1.0f), "Inline video playback enabled (mpv)");
+#endif
+        return;
+    }
+
+    ImGui::BeginChild("##yt_list", ImVec2(0, 0), false);
+    int remove_idx = -1;
+    for (int i = 0; i < (int)yt_entries_.size(); i++) {
+        auto& e = yt_entries_[i];
+        ImGui::PushID(i);
+
+        // Card background
+        bool is_active = (i == yt_active_player_);
+        ImVec2 card_start = ImGui::GetCursorScreenPos();
+        float card_h = 52;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(card_start, ImVec2(card_start.x + avail_w - 4, card_start.y + card_h),
+            is_active ? IM_COL32(30, 15, 15, 255) : IM_COL32(20, 20, 20, 255), 3.0f);
+        dl->AddRect(card_start, ImVec2(card_start.x + avail_w - 4, card_start.y + card_h),
+            is_active ? IM_COL32(180, 40, 40, 200) : IM_COL32(60, 20, 20, 180), 3.0f);
+
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8);
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
+
+        // YouTube play icon
+        ImGui::TextColored(is_active ? FC_GREEN : FC_RED, is_active ? "[=]" : "[>]");
+        ImGui::SameLine(0, 6);
+
+        // Title + author
+        if (e.fetching) {
+            ImGui::TextColored(FC_YELLOW, "Loading metadata...");
+        } else {
+            ImGui::TextColored(FC_WHITE, "%s", e.title.empty() ? e.url.c_str() : e.title.c_str());
+        }
+        if (!e.author.empty()) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 32);
+            ImGui::TextColored(FC_GRAY, "by %s", e.author.c_str());
+        }
+
+        // Buttons row
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8);
+
+#ifdef FINCEPT_HAS_MPV
+        // PLAY button — inline playback
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, FC_WHITE);
+        if (ImGui::SmallButton("PLAY")) {
+            if (!yt_player_) {
+                yt_player_ = std::make_unique<media::MpvPlayer>();
+                yt_player_->init();
+                yt_player_->set_volume(yt_volume_);
+            }
+            yt_player_->play(e.url);
+            yt_active_player_ = i;
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::SameLine(0, 4);
+#endif
+
+        // WATCH button — open in browser
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.1f, 0.1f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, FC_WHITE);
+        if (ImGui::SmallButton("WATCH")) {
+            yt_open_url(e.url.c_str());
+        }
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine(0, 8);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.1f, 0.1f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, FC_MUTED);
+        if (ImGui::SmallButton("REMOVE")) {
+            remove_idx = i;
+        }
+        ImGui::PopStyleColor(3);
+
+        // Ensure card height
+        float cur_y = ImGui::GetCursorPosY();
+        float expected_end = card_start.y - ImGui::GetWindowPos().y + card_h + 4;
+        if (cur_y < expected_end) ImGui::SetCursorPosY(expected_end);
+
+        ImGui::PopID();
+        ImGui::Spacing();
+    }
+    if (remove_idx >= 0) {
+        if (remove_idx == yt_active_player_) {
+            if (yt_player_) yt_player_->stop();
+            yt_active_player_ = -1;
+        } else if (remove_idx < yt_active_player_) {
+            yt_active_player_--;
+        }
+        yt_entries_.erase(yt_entries_.begin() + remove_idx);
+    }
+    ImGui::EndChild();
+}
+
+// ============================================================================
 // Widget Frame — wraps any widget with header, accent, close button
+//               + drag handle (header) + resize grip (bottom-right corner)
 // ============================================================================
 void DashboardScreen::render_widget_frame(const char* title, const ImVec4& accent,
-                                           float w, float h, WidgetType type) {
+                                           float w, float h, WidgetType type,
+                                           const std::string& widget_id) {
     if (w < 20 || h < 20) return;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, FC_PANEL);
@@ -332,7 +807,7 @@ void DashboardScreen::render_widget_frame(const char* title, const ImVec4& accen
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 2.0f);
 
-    std::string id = std::string("##wf_") + title;
+    std::string id = std::string("##wf_") + widget_id;
     ImGui::BeginChild(id.c_str(), ImVec2(w, h), ImGuiChildFlags_Borders);
 
     float hdr_h = 22.0f;
@@ -346,10 +821,41 @@ void DashboardScreen::render_widget_frame(const char* title, const ImVec4& accen
     dl->AddRectFilled(hdr_start, ImVec2(hdr_start.x + w, hdr_start.y + 2),
         ImGui::ColorConvertFloat4ToU32(accent));
 
-    // Title
-    ImGui::SetCursorPosX(6);
+    // Drag handle icon (left side of header)
+    ImGui::SetCursorPosX(4);
     ImGui::SetCursorPosY(4);
+    ImGui::TextColored(FC_MUTED, "::"); // grip dots
+    ImGui::SameLine(0, 4);
+
+    // Title
     ImGui::TextColored(accent, "%s", title);
+
+    // --- Drag-to-rearrange: click header to drag ---
+    {
+        ImVec2 hdr_min = hdr_start;
+        ImVec2 hdr_max = ImVec2(hdr_start.x + w - 22, hdr_start.y + hdr_h);
+        ImVec2 mouse = ImGui::GetIO().MousePos;
+        bool hover_hdr = (mouse.x >= hdr_min.x && mouse.x <= hdr_max.x &&
+                          mouse.y >= hdr_min.y && mouse.y <= hdr_max.y);
+
+        if (hover_hdr && ImGui::IsMouseClicked(0) && dragging_widget_id_.empty()
+            && resizing_widget_id_.empty()) {
+            dragging_widget_id_ = widget_id;
+            drag_start_mouse_ = mouse;
+            for (auto& wi : layout_.widgets) {
+                if (wi.id == widget_id) {
+                    drag_start_col_ = wi.col;
+                    drag_start_row_ = wi.row;
+                    break;
+                }
+            }
+        }
+
+        // Cursor hint
+        if (hover_hdr || dragging_widget_id_ == widget_id) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+    }
 
     // Loading indicator
     DataCategory data_cat = DataCategory::Indices;
@@ -375,11 +881,9 @@ void DashboardScreen::render_widget_frame(const char* title, const ImVec4& accen
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 0, 0, 0.3f));
         ImGui::PushStyleColor(ImGuiCol_Text, FC_MUTED);
-        std::string close_id = std::string("x##c_") + title;
+        std::string close_id = std::string("x##c_") + widget_id;
         if (ImGui::SmallButton(close_id.c_str())) {
-            for (auto& wi : layout_.widgets) {
-                if (wi.title == title) { remove_widget(wi.id); break; }
-            }
+            remove_widget(widget_id);
         }
         ImGui::PopStyleColor(3);
     }
@@ -390,7 +894,7 @@ void DashboardScreen::render_widget_frame(const char* title, const ImVec4& accen
     if (content_h < 10) content_h = 10;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 2));
-    ImGui::BeginChild((std::string("##wc_") + title).c_str(), ImVec2(w - 2, content_h), false);
+    ImGui::BeginChild((std::string("##wc_") + widget_id).c_str(), ImVec2(w - 2, content_h), false);
 
     switch (type) {
         case WidgetType::GlobalIndices:      widget_global_indices(w, content_h); break;
@@ -404,11 +908,48 @@ void DashboardScreen::render_widget_frame(const char* title, const ImVec4& accen
         case WidgetType::Performance:        widget_performance(w, content_h); break;
         case WidgetType::TopMovers:          widget_top_movers(w, content_h); break;
         case WidgetType::MarketData:         widget_market_data(w, content_h); break;
+        case WidgetType::YouTubeStream:     widget_youtube_stream(w, content_h); break;
         default: ImGui::TextColored(FC_MUTED, "Unknown widget"); break;
     }
 
     ImGui::EndChild();
     ImGui::PopStyleVar();
+
+    // --- Resize grip (bottom-right corner) ---
+    {
+        float grip_sz = 14.0f;
+        ImVec2 widget_screen_br = ImVec2(hdr_start.x + w, hdr_start.y + h);
+        ImVec2 grip_min = ImVec2(widget_screen_br.x - grip_sz, widget_screen_br.y - grip_sz);
+        ImVec2 grip_max = widget_screen_br;
+        ImVec2 mouse = ImGui::GetIO().MousePos;
+        bool hover_grip = (mouse.x >= grip_min.x && mouse.x <= grip_max.x &&
+                           mouse.y >= grip_min.y && mouse.y <= grip_max.y);
+
+        // Draw resize triangle
+        ImU32 grip_col = hover_grip || resizing_widget_id_ == widget_id
+            ? IM_COL32(255, 136, 0, 200) : IM_COL32(120, 120, 120, 100);
+        dl->AddTriangleFilled(
+            ImVec2(grip_max.x, grip_max.y - grip_sz),
+            ImVec2(grip_max.x - grip_sz, grip_max.y),
+            grip_max, grip_col);
+
+        if (hover_grip && ImGui::IsMouseClicked(0) && resizing_widget_id_.empty()
+            && dragging_widget_id_.empty()) {
+            resizing_widget_id_ = widget_id;
+            drag_start_mouse_ = mouse;
+            for (auto& wi : layout_.widgets) {
+                if (wi.id == widget_id) {
+                    resize_start_col_span_ = wi.col_span;
+                    resize_start_row_span_ = wi.row_span;
+                    break;
+                }
+            }
+        }
+
+        if (hover_grip || resizing_widget_id_ == widget_id) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
+        }
+    }
 
     ImGui::EndChild();
     ImGui::PopStyleVar(2);

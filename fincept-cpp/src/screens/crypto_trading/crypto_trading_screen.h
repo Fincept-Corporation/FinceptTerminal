@@ -26,6 +26,12 @@ private:
     void init();
     void load_portfolio();
 
+    // Exchange & symbol switching — proper lifecycle management
+    void switch_exchange(const std::string& exchange_id);
+    void switch_symbol(const std::string& symbol);
+    void restart_ws_stream();
+    void clear_market_data();
+
     // Async data fetchers — run in background threads
     void async_refresh_ticker();
     void async_refresh_orderbook();
@@ -71,6 +77,14 @@ private:
     int watchlist_selected_ = 0;
     char watchlist_filter_[64] = "";
 
+    // --- Symbol search (exchange-wide) ---
+    std::vector<trading::MarketInfo> search_results_;
+    std::atomic<bool> search_fetching_{false};
+    bool search_markets_loaded_ = false;
+    std::vector<trading::MarketInfo> all_markets_; // cached market list for current exchange
+    std::string search_cache_exchange_;            // exchange_id when markets were fetched
+    std::string pending_symbol_switch_;            // deferred switch (set inside locked section)
+
     // --- Ticker (selected symbol) ---
     trading::TickerData current_ticker_;
     std::atomic<bool> ticker_loading_{false};
@@ -89,6 +103,7 @@ private:
 
     // --- Order entry ---
     OrderFormState order_form_;
+    std::atomic<bool> order_submitting_{false};
 
     // --- Paper trading portfolio ---
     std::string portfolio_id_;

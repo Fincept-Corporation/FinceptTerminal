@@ -678,6 +678,323 @@ class PortfolioAnalytics:
 # CLI Interface
 # ============================================================================
 
+def convert_numpy(obj):
+    """Convert numpy types to JSON-serializable Python types"""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy(item) for item in obj]
+    elif isinstance(obj, (np.integer, np.floating)):
+        v = float(obj)
+        if np.isnan(v):
+            return None
+        return v
+    return obj
+
+
+def cmd_calculate_portfolio_metrics(params):
+    """Calculate portfolio metrics from holdings data (called from C++ via stdin).
+
+    Input: {"holdings": [{"symbol": "AAPL", "quantity": 10, "weight": 0.5, ...}, ...]}
+    Fetches historical returns via yfinance, runs comprehensive analysis.
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        return {"error": "yfinance not installed"}
+
+    holdings = params.get("holdings", [])
+    if not holdings:
+        return {"error": "No holdings provided"}
+
+    symbols = [h["symbol"] for h in holdings]
+    weights_list = [h.get("weight", 1.0 / len(holdings)) for h in holdings]
+    weights_arr = np.array(weights_list)
+    w_sum = weights_arr.sum()
+    if w_sum > 0:
+        weights_arr = weights_arr / w_sum
+
+    try:
+        # Download all symbols + SPY benchmark together
+        all_tickers = list(set(symbols + ["SPY"]))
+        data = yf.download(all_tickers, period="1y", auto_adjust=True, progress=False)
+        if data.empty:
+            return {"error": "No price data available from yfinance"}
+
+        # Extract Close prices
+        if isinstance(data.columns, pd.MultiIndex):
+            close = data["Close"]
+        else:
+            # Single ticker returns flat columns
+            close = data[["Close"]]
+            close.columns = all_tickers[:1]
+
+        # Ensure close is a DataFrame
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=all_tickers[0])
+
+        # Compute daily returns
+        returns_all = close.pct_change().dropna()
+        if returns_all.empty:
+            return {"error": "Insufficient return data after computing returns"}
+
+        # Split into portfolio symbols and SPY
+        available = [s for s in symbols if s in returns_all.columns]
+        if not available:
+            return {"error": "No return data for portfolio symbols: " + ", ".join(symbols)}
+
+        has_spy = "SPY" in returns_all.columns
+
+        # Align indices
+        returns = returns_all[available]
+        if has_spy:
+            spy_returns = returns_all["SPY"]
+            common_idx = returns.index.intersection(spy_returns.index)
+            returns = returns.loc[common_idx]
+            market = spy_returns.loc[common_idx].values
+        else:
+            market = None
+
+        # Adjust weights for available symbols
+        avail_idx = [symbols.index(s) for s in available]
+        w = weights_arr[avail_idx]
+        w = w / w.sum()
+
+        n_assets = len(available)
+
+        # For single-asset portfolios, compute simpler metrics
+        if n_assets == 1:
+            asset_returns = returns.iloc[:, 0].values
+            ann_return = float(np.mean(asset_returns) * 252)
+            ann_vol = float(np.std(asset_returns, ddof=1) * np.sqrt(252))
+            sharpe = (ann_return - 0.03) / ann_vol if ann_vol > 0 else 0
+
+            result = {
+                "portfolio_metrics": {
+                    "weights": {available[0]: 1.0},
+                    "expected_return": ann_return,
+                    "standard_deviation": ann_vol,
+                    "variance": ann_vol ** 2,
+                    "sharpe_ratio": sharpe,
+                },
+                "risk_metrics": {
+                    "value_at_risk_95": float(np.percentile(asset_returns, 5)),
+                    "value_at_risk_99": float(np.percentile(asset_returns, 1)),
+                    "maximum_drawdown": float(np.min(
+                        (np.cumprod(1 + asset_returns) -
+                         np.maximum.accumulate(np.cumprod(1 + asset_returns))) /
+                        np.maximum.accumulate(np.cumprod(1 + asset_returns))
+                    )),
+                },
+            }
+            if market is not None and len(market) == len(asset_returns):
+                cov = np.cov(asset_returns, market)
+                beta = cov[0, 1] / cov[1, 1] if cov[1, 1] != 0 else 0
+                mkt_return = float(np.mean(market) * 252)
+                alpha = ann_return - (0.03 + beta * (mkt_return - 0.03))
+                result["capm_analysis"] = {
+                    "alpha": alpha,
+                    "beta": float(beta),
+                    "actual_return": ann_return,
+                    "market_return": mkt_return,
+                }
+            return convert_numpy(result)
+
+        # Multi-asset: run full comprehensive analysis
+        returns_dict = {col: returns[col].values for col in returns.columns}
+        analytics = PortfolioAnalytics()
+        result = analytics.comprehensive_analysis(returns_dict, w, market)
+        return convert_numpy(result)
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+
+def cmd_tax_report(params):
+    """Generate capital gains tax report from holdings data"""
+    holdings = params.get("holdings", [])
+    if not holdings:
+        return {"error": "No holdings provided"}
+
+    total_cost_basis = 0.0
+    total_market_value = 0.0
+    total_realized_gain = 0.0
+    total_unrealized_gain = 0.0
+    short_term_gains = 0.0
+    long_term_gains = 0.0
+    tax_loss_harvest = []
+
+    for h in holdings:
+        symbol = h.get("symbol", "")
+        qty = float(h.get("quantity", 0))
+        avg_price = float(h.get("avg_price", 0))
+        current = float(h.get("current_price", avg_price))
+
+        cost_basis = qty * avg_price
+        market_val = qty * current
+        gain = market_val - cost_basis
+        gain_pct = (gain / cost_basis * 100) if cost_basis > 0 else 0
+
+        total_cost_basis += cost_basis
+        total_market_value += market_val
+        total_unrealized_gain += gain
+
+        # Assume all short-term for now (no purchase date info)
+        if gain > 0:
+            short_term_gains += gain
+        else:
+            tax_loss_harvest.append({"symbol": symbol, "unrealized_loss": round(gain, 2)})
+
+    total_gain_pct = (total_unrealized_gain / total_cost_basis * 100) if total_cost_basis > 0 else 0
+
+    # Estimated tax (simplified: 22% short-term, 15% long-term)
+    est_short_term_tax = short_term_gains * 0.22
+    est_long_term_tax = long_term_gains * 0.15
+
+    result = {
+        "total_cost_basis": round(total_cost_basis, 2),
+        "total_market_value": round(total_market_value, 2),
+        "total_unrealized_gain": round(total_unrealized_gain, 2),
+        "total_gain_pct": round(total_gain_pct, 2),
+        "short_term_gains": round(short_term_gains, 2),
+        "long_term_gains": round(long_term_gains, 2),
+        "estimated_short_term_tax": round(est_short_term_tax, 2),
+        "estimated_long_term_tax": round(est_long_term_tax, 2),
+        "estimated_total_tax": round(est_short_term_tax + est_long_term_tax, 2),
+        "num_positions": len(holdings),
+        "positions_with_losses": len(tax_loss_harvest),
+    }
+
+    if tax_loss_harvest:
+        total_harvestable = sum(t["unrealized_loss"] for t in tax_loss_harvest)
+        result["tax_loss_harvest_potential"] = round(total_harvestable, 2)
+        result["tax_savings_potential"] = round(abs(total_harvestable) * 0.22, 2)
+
+    return result
+
+
+def cmd_pme_analysis(params):
+    """Public Market Equivalent analysis — compare portfolio vs benchmark"""
+    symbols = params.get("symbols", [])
+    if not symbols:
+        return {"error": "No symbols provided"}
+
+    try:
+        import yfinance as yf
+
+        # Download portfolio symbols and benchmark
+        all_syms = symbols + ["SPY"]
+        data = yf.download(all_syms, period="1y", interval="1d", progress=False)
+        if data is None or data.empty:
+            return {"error": "Could not fetch price data"}
+
+        close = data["Close"]
+
+        # Portfolio equal-weighted returns
+        port_returns = close[symbols].pct_change().dropna().mean(axis=1)
+        bench_returns = close["SPY"].pct_change().dropna()
+
+        # Align
+        common = port_returns.index.intersection(bench_returns.index)
+        port_returns = port_returns.loc[common]
+        bench_returns = bench_returns.loc[common]
+
+        port_cum = float((1 + port_returns).prod() - 1)
+        bench_cum = float((1 + bench_returns).prod() - 1)
+        n_days = len(common)
+        ann_factor = 252
+
+        port_ann = float((1 + port_cum) ** (ann_factor / max(n_days, 1)) - 1)
+        bench_ann = float((1 + bench_cum) ** (ann_factor / max(n_days, 1)) - 1)
+
+        # PME ratio
+        pme_ratio = float((1 + port_cum) / (1 + bench_cum)) if (1 + bench_cum) != 0 else 1.0
+
+        # Alpha and tracking error
+        excess = port_returns - bench_returns
+        alpha_ann = float(excess.mean() * ann_factor)
+        tracking_error = float(excess.std() * np.sqrt(ann_factor))
+        info_ratio = float(alpha_ann / tracking_error) if tracking_error > 0 else 0
+
+        # Up/down capture
+        up_mask = bench_returns > 0
+        down_mask = bench_returns < 0
+        up_capture = float(port_returns[up_mask].mean() / bench_returns[up_mask].mean()) if up_mask.sum() > 0 and bench_returns[up_mask].mean() != 0 else 1.0
+        down_capture = float(port_returns[down_mask].mean() / bench_returns[down_mask].mean()) if down_mask.sum() > 0 and bench_returns[down_mask].mean() != 0 else 1.0
+
+        return {
+            "pme_ratio": round(pme_ratio, 4),
+            "portfolio_total_return": round(port_cum, 4),
+            "benchmark_total_return": round(bench_cum, 4),
+            "portfolio_ann_return": round(port_ann, 4),
+            "benchmark_ann_return": round(bench_ann, 4),
+            "annualized_alpha": round(alpha_ann, 4),
+            "tracking_error": round(tracking_error, 4),
+            "information_ratio": round(info_ratio, 4),
+            "up_capture_ratio": round(up_capture, 4),
+            "down_capture_ratio": round(down_capture, 4),
+            "outperformance": round(port_cum - bench_cum, 4),
+            "trading_days": n_days,
+            "benchmark": "SPY",
+        }
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+
+def cmd_allocation_analysis(params):
+    """Analyze portfolio allocation vs target/benchmark"""
+    holdings = params.get("holdings", [])
+    if not holdings:
+        return {"error": "No holdings provided"}
+
+    symbols = [h["symbol"] for h in holdings]
+    weights = [h.get("weight", 0) for h in holdings]
+    values = [h.get("value", 0) for h in holdings]
+    total_value = sum(values)
+
+    n = len(symbols)
+
+    # Normalize weights to fractions (0-1) if they look like percentages
+    w = np.array(weights, dtype=float)
+    if np.sum(w) > 1.5:
+        w = w / np.sum(w)
+    weights_norm = w.tolist()
+
+    # Concentration metrics
+    hhi = float(np.sum(w ** 2))  # Herfindahl-Hirschman Index (0-1)
+    effective_n = float(1.0 / hhi) if hhi > 0 else n
+
+    # Top holdings concentration
+    sorted_w = sorted(weights_norm, reverse=True)
+    top3 = sum(sorted_w[:3]) if len(sorted_w) >= 3 else sum(sorted_w)
+    top5 = sum(sorted_w[:5]) if len(sorted_w) >= 5 else sum(sorted_w)
+
+    # Ideal equal weight
+    equal_weight = 1.0 / n if n > 0 else 0
+    max_deviation = max(abs(wt - equal_weight) for wt in weights_norm) if weights_norm else 0
+
+    result = {
+        "num_holdings": n,
+        "total_value": round(total_value, 2),
+        "hhi_concentration": round(hhi, 4),
+        "effective_num_stocks": round(effective_n, 2),
+        "top_3_concentration_pct": round(top3 * 100, 2),
+        "top_5_concentration_pct": round(top5 * 100, 2),
+        "equal_weight_target": round(equal_weight, 4),
+        "max_deviation_from_equal": round(max_deviation, 4),
+        "is_concentrated": "Yes" if hhi > 0.25 else "No",
+        "diversification_score": round((1 - hhi) * 100, 1),
+    }
+
+    # Sector classification would require additional data, skip for now
+    return result
+
+
 if __name__ == "__main__":
     import sys
     import json
@@ -688,34 +1005,58 @@ if __name__ == "__main__":
 
     command = sys.argv[1]
 
+    # Read params from stdin if available (C++ execute_with_stdin pipes data here)
+    stdin_params = None
     try:
-        if command == "comprehensive_analysis":
+        if not sys.stdin.isatty():
+            stdin_data = sys.stdin.read()
+            if stdin_data.strip():
+                stdin_params = json.loads(stdin_data)
+    except (json.JSONDecodeError, OSError):
+        pass
+
+    try:
+        if command == "calculate_portfolio_metrics":
+            if stdin_params is None:
+                print(json.dumps({"error": "No input data provided via stdin"}))
+                sys.exit(1)
+            result = cmd_calculate_portfolio_metrics(stdin_params)
+            print(json.dumps(result))
+
+        elif command == "comprehensive_analysis":
             returns_data = json.loads(sys.argv[2])
             weights = json.loads(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] != "null" else None
             market_returns = json.loads(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4] != "null" else None
-            
-            # Convert to numpy arrays
+
             returns_dict = {k: np.array(v) for k, v in returns_data.items()}
             weights_arr = np.array(weights) if weights else None
             market_arr = np.array(market_returns) if market_returns else None
-            
+
             analytics = PortfolioAnalytics()
             result = analytics.comprehensive_analysis(returns_dict, weights_arr, market_arr)
-            
-            # Convert numpy to JSON-serializable
-            def convert_numpy(obj):
-                if isinstance(obj, np.ndarray):
-                    return obj.tolist()
-                elif isinstance(obj, dict):
-                    return {k: convert_numpy(v) for k, v in obj.items()}
-                elif isinstance(obj, list):
-                    return [convert_numpy(item) for item in obj]
-                elif isinstance(obj, (np.integer, np.floating)):
-                    return float(obj)
-                return obj
-            
             result = convert_numpy(result)
             print(json.dumps(result))
+
+        elif command == "tax_report":
+            if stdin_params is None:
+                print(json.dumps({"error": "No input data provided via stdin"}))
+                sys.exit(1)
+            result = cmd_tax_report(stdin_params)
+            print(json.dumps(convert_numpy(result)))
+
+        elif command == "pme_analysis":
+            if stdin_params is None:
+                print(json.dumps({"error": "No input data provided via stdin"}))
+                sys.exit(1)
+            result = cmd_pme_analysis(stdin_params)
+            print(json.dumps(convert_numpy(result)))
+
+        elif command == "allocation_analysis":
+            if stdin_params is None:
+                print(json.dumps({"error": "No input data provided via stdin"}))
+                sys.exit(1)
+            result = cmd_allocation_analysis(stdin_params)
+            print(json.dumps(convert_numpy(result)))
 
         else:
             print(json.dumps({"error": f"Unknown command: {command}"}))

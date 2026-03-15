@@ -4,7 +4,7 @@
   "configurePresets": [
     {
       "name": "default",
-      "displayName": "Default (vcpkg)",
+      "displayName": "Default (Ninja + vcpkg)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
@@ -27,6 +27,15 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "msvc-release",
+      "displayName": "MSVC Release (Visual Studio)",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build-msvc",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
     }
   ],
   "buildPresets": [
@@ -41,6 +50,11 @@
     {
       "name": "release",
       "configurePreset": "release"
+    },
+    {
+      "name": "msvc-release",
+      "configurePreset": "msvc-release",
+      "configuration": "Release"
     }
   ]
 }

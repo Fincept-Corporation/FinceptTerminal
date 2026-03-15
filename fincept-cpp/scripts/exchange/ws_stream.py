@@ -19,6 +19,7 @@ import json
 import sys
 import signal
 import traceback
+import platform
 
 MAX_CONSECUTIVE_ERRORS = 10  # Stop a watcher after this many consecutive errors
 
@@ -221,6 +222,18 @@ async def main():
         "timeout": 30000,
         "options": {"defaultType": "spot"},
     })
+
+    # Fix: On Windows, aiodns/pycares async DNS resolver can fail.
+    # Force aiohttp to use ThreadedResolver (synchronous DNS in a thread pool)
+    # which works reliably across all platforms.
+    try:
+        import aiohttp
+        from aiohttp.resolver import ThreadedResolver
+        exchange.session = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(resolver=ThreadedResolver())
+        )
+    except Exception as resolver_err:
+        emit({"type": "error", "message": f"Failed to set ThreadedResolver: {resolver_err}"})
 
     # Try to load markets with retry — some exchanges may be temporarily unreachable
     MAX_RETRIES = 5

@@ -4,6 +4,7 @@
 #include "indices_view.h"
 #include "storage/database.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "core/logger.h"
 #include <imgui.h>
@@ -12,6 +13,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <algorithm>
+#include <thread>
 
 namespace fincept::portfolio {
 
@@ -206,86 +208,110 @@ void IndicesView::remove_constituent(const std::string& id) {
 void IndicesView::recalculate_index(const std::string& index_id) {
     if (constituents_.empty()) return;
 
-    // Fetch current prices via Python
-    try {
-        nlohmann::json req;
-        std::vector<std::string> symbols;
-        for (const auto& c : constituents_)
-            symbols.push_back(c.symbol);
-        req["symbols"] = symbols;
+    // Copy data needed for the thread
+    auto constituents_copy = constituents_;
+    auto indices_copy_id = index_id;
 
-        auto result = python::execute_with_stdin(
-            "Analytics/portfolioManagement/fetch_quotes.py", {}, req.dump());
+    std::thread([this, constituents_copy, indices_copy_id]() {
+        auto local_constituents = constituents_copy;
 
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded() && j.is_object()) {
-                auto& dbi = db::Database::instance();
-                for (auto& c : constituents_) {
-                    if (j.contains(c.symbol) && j[c.symbol].is_object()) {
-                        double price = j[c.symbol].value("price", c.current_price);
-                        double prev = j[c.symbol].value("prev_close", c.prev_close);
-                        auto ustmt = dbi.prepare("UPDATE index_constituents SET current_price = ?, prev_close = ? WHERE id = ?");
-                        ustmt.bind_double(1, price);
-                        ustmt.bind_double(2, prev);
-                        ustmt.bind_text(3, c.id);
-                        ustmt.execute();
-                        c.current_price = price;
-                        c.prev_close = prev;
+        // Fetch current prices via Python
+        try {
+            nlohmann::json req;
+            std::vector<std::string> symbols;
+            for (const auto& c : local_constituents)
+                symbols.push_back(c.symbol);
+            req["symbols"] = symbols;
+
+            std::string sym_key;
+            for (const auto& s : symbols) sym_key += s + "_";
+            auto& cache = CacheService::instance();
+            std::string ck = CacheService::make_key("market-quotes", "index-prices",
+                sym_key.substr(0, std::min((size_t)64, sym_key.size())));
+
+            std::string output;
+            auto cached = cache.get(ck);
+            if (cached && !cached->empty()) { output = *cached; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/portfolioManagement/fetch_quotes.py", {}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    output = result.output;
+                    cache.set(ck, output, "market-quotes", CacheTTL::FIVE_MIN);
+                }
+            }
+
+            if (!output.empty()) {
+                auto j = nlohmann::json::parse(output, nullptr, false);
+                if (!j.is_discarded() && j.is_object()) {
+                    auto& dbi = db::Database::instance();
+                    for (auto& c : local_constituents) {
+                        if (j.contains(c.symbol) && j[c.symbol].is_object()) {
+                            double price = j[c.symbol].value("price", c.current_price);
+                            double prev = j[c.symbol].value("prev_close", c.prev_close);
+                            auto ustmt = dbi.prepare("UPDATE index_constituents SET current_price = ?, prev_close = ? WHERE id = ?");
+                            ustmt.bind_double(1, price);
+                            ustmt.bind_double(2, prev);
+                            ustmt.bind_text(3, c.id);
+                            ustmt.execute();
+                            c.current_price = price;
+                            c.prev_close = prev;
+                        }
                     }
                 }
             }
+        } catch (const std::exception& e) {
+            LOG_ERROR("IndicesView", "Price fetch failed: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        LOG_ERROR("IndicesView", "Price fetch failed: %s", e.what());
-    }
 
-    // Calculate index value based on method
-    double index_value = 0;
-    auto it = std::find_if(indices_.begin(), indices_.end(),
-        [&](const CustomIndex& idx) { return idx.id == index_id; });
-    if (it == indices_.end()) return;
+        // Calculate index value based on method
+        double index_value = 0;
+        auto it = std::find_if(indices_.begin(), indices_.end(),
+            [&](const CustomIndex& idx) { return idx.id == indices_copy_id; });
+        if (it == indices_.end()) return;
 
-    if (it->method == "equal_weighted") {
-        double sum = 0;
-        int count = 0;
-        for (const auto& c : constituents_) {
-            if (c.prev_close > 0) {
-                sum += c.current_price / c.prev_close;
-                count++;
+        if (it->method == "equal_weighted") {
+            double sum = 0;
+            int count = 0;
+            for (const auto& c : local_constituents) {
+                if (c.prev_close > 0) {
+                    sum += c.current_price / c.prev_close;
+                    count++;
+                }
             }
+            index_value = count > 0 ? it->prev_close * (sum / count) : it->base_value;
+        } else if (it->method == "price_weighted") {
+            double sum = 0;
+            for (const auto& c : local_constituents)
+                sum += c.current_price;
+            double divisor = static_cast<double>(local_constituents.size());
+            index_value = divisor > 0 ? sum / divisor * (it->base_value / 100.0) : it->base_value;
+        } else {
+            double total_weight = 0;
+            for (const auto& c : local_constituents)
+                total_weight += c.weight;
+            if (total_weight <= 0) total_weight = static_cast<double>(local_constituents.size());
+
+            double weighted_return = 0;
+            for (const auto& c : local_constituents) {
+                double w = total_weight > 0 ? c.weight / total_weight : 1.0 / static_cast<double>(local_constituents.size());
+                if (c.prev_close > 0)
+                    weighted_return += w * (c.current_price / c.prev_close);
+            }
+            index_value = it->prev_close * weighted_return;
         }
-        index_value = count > 0 ? it->prev_close * (sum / count) : it->base_value;
-    } else if (it->method == "price_weighted") {
-        double sum = 0;
-        for (const auto& c : constituents_)
-            sum += c.current_price;
-        double divisor = static_cast<double>(constituents_.size());
-        index_value = divisor > 0 ? sum / divisor * (it->base_value / 100.0) : it->base_value;
-    } else {
-        // Market cap weighted
-        double total_weight = 0;
-        for (const auto& c : constituents_)
-            total_weight += c.weight;
-        if (total_weight <= 0) total_weight = static_cast<double>(constituents_.size());
 
-        double weighted_return = 0;
-        for (const auto& c : constituents_) {
-            double w = total_weight > 0 ? c.weight / total_weight : 1.0 / static_cast<double>(constituents_.size());
-            if (c.prev_close > 0)
-                weighted_return += w * (c.current_price / c.prev_close);
-        }
-        index_value = it->prev_close * weighted_return;
-    }
+        // Update in database
+        auto& dbi = db::Database::instance();
+        auto ustmt = dbi.prepare("UPDATE custom_indices SET current_value = ? WHERE id = ?");
+        ustmt.bind_double(1, index_value);
+        ustmt.bind_text(2, indices_copy_id);
+        ustmt.execute();
 
-    // Update in database
-    auto& dbi = db::Database::instance();
-    auto ustmt = dbi.prepare("UPDATE custom_indices SET current_value = ? WHERE id = ?");
-    ustmt.bind_double(1, index_value);
-    ustmt.bind_text(2, index_id);
-    ustmt.execute();
-
-    it->current_value = index_value;
+        it->current_value = index_value;
+        constituents_ = local_constituents;
+        needs_refresh_ = true;
+    }).detach();
 }
 
 // ============================================================================

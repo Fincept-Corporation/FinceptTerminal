@@ -28,6 +28,7 @@ ImVec4 DashboardScreen::accent_for(WidgetType type) {
         case WidgetType::Performance:        return FC_GREEN;
         case WidgetType::TopMovers:          return FC_PURPLE;
         case WidgetType::MarketData:         return FC_BLUE;
+        case WidgetType::YouTubeStream:     return FC_RED;
         default: return FC_ORANGE;
     }
 }
@@ -134,6 +135,16 @@ void DashboardScreen::load_layout() {
             layout_ = DashboardLayout::from_json(j);
         }
     } catch (...) {}
+
+    // Sanitize widget positions: clamp to grid bounds
+    const int gc = std::max(1, layout_.grid_cols);
+    const int gr = std::max(1, layout_.grid_rows);
+    for (auto& w : layout_.widgets) {
+        w.col_span = std::clamp(w.col_span, 1, gc);
+        w.row_span = std::clamp(w.row_span, 1, gr);
+        w.col = std::clamp(w.col, 0, gc - w.col_span);
+        w.row = std::clamp(w.row, 0, gr - w.row_span);
+    }
 }
 
 // ============================================================================
@@ -144,12 +155,50 @@ void DashboardScreen::add_widget(WidgetType type) {
     w.id = generate_widget_id();
     w.type = type;
     w.title = widget_type_name(type);
+
+    // Find first empty cell in the grid by scanning row-by-row, col-by-col
+    // Build an occupancy grid to find gaps
+    int grid_cols = std::max(layout_.grid_cols, 1);
     int max_row = 0;
     for (auto& existing : layout_.widgets) {
+        if (!existing.visible) continue;
         int end_row = existing.row + existing.row_span;
         if (end_row > max_row) max_row = end_row;
     }
-    w.col = 0; w.row = max_row; w.col_span = 1; w.row_span = 1;
+    // Search up to max_row+1 to allow placing in a new row if grid is full
+    int search_rows = std::max(max_row + 1, layout_.grid_rows);
+
+    // Build occupancy map
+    std::vector<std::vector<bool>> occupied(search_rows, std::vector<bool>(grid_cols, false));
+    for (auto& existing : layout_.widgets) {
+        if (!existing.visible) continue;
+        for (int r = existing.row; r < existing.row + existing.row_span && r < search_rows; r++) {
+            for (int c = existing.col; c < existing.col + existing.col_span && c < grid_cols; c++) {
+                occupied[r][c] = true;
+            }
+        }
+    }
+
+    // Find first empty cell
+    bool found = false;
+    for (int r = 0; r < search_rows && !found; r++) {
+        for (int c = 0; c < grid_cols && !found; c++) {
+            if (!occupied[r][c]) {
+                w.col = c;
+                w.row = r;
+                found = true;
+            }
+        }
+    }
+
+    // If grid is completely full, add a new row
+    if (!found) {
+        w.col = 0;
+        w.row = max_row;
+    }
+
+    w.col_span = 1;
+    w.row_span = 1;
     layout_.widgets.push_back(w);
     save_layout();
 }

@@ -7,6 +7,7 @@
 #include "http/http_client.h"
 #include "auth/auth_manager.h"
 #include "storage/database.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "core/logger.h"
 #include <imgui.h>
@@ -17,6 +18,7 @@
 #include <algorithm>
 #include <cstring>
 #include <ctime>
+#include <thread>
 
 namespace fincept::economics {
 
@@ -137,184 +139,207 @@ void EconomicsScreen::fetch_data() {
     const auto& cfg = get_source_config(data_source_);
     std::string country_code = get_country_code();
 
-    try {
-        // Check API key requirements
-        if (cfg.requires_api_key && cfg.api_key_name) {
-            std::string key = get_api_key(cfg.api_key_name);
-            if (key.empty()) {
-                // EIA only needs key for STEO
-                bool needs_key = true;
-                if (data_source_ == DataSource::EIA) {
-                    std::string ind(selected_indicator_);
-                    needs_key = ind.substr(0, 5) == "steo_";
-                }
-                if (needs_key) {
-                    error_ = std::string(cfg.name) + " API Key required. Configure in the key panel.";
-                    show_api_key_panel_ = true;
-                    loading_ = false;
-                    return;
-                }
+    // Pre-flight check on UI thread (fast, no I/O)
+    if (cfg.requires_api_key && cfg.api_key_name) {
+        std::string key = get_api_key(cfg.api_key_name);
+        if (key.empty()) {
+            bool needs_key = true;
+            if (data_source_ == DataSource::EIA) {
+                std::string ind(selected_indicator_);
+                needs_key = ind.substr(0, 5) == "steo_";
             }
-        }
-
-        std::string raw_json;
-
-        if (data_source_ == DataSource::Fincept) {
-            // Direct HTTP to Fincept API
-            const std::string BASE = "https://api.fincept.in";
-            std::string url;
-            std::string ind(selected_indicator_);
-
-            static const char* CEIC_COUNTRIES[] = {
-                "china", "european-union", "france", "germany", "italy", "japan", "united-states"
-            };
-            std::string ceic_country = CEIC_COUNTRIES[fincept_ceic_country_idx_];
-
-            if (ind == "ceic_series_countries")
-                url = BASE + "/macro/ceic/series/countries";
-            else if (ind == "ceic_series_indicators")
-                url = BASE + "/macro/ceic/series/indicators?country=" + ceic_country;
-            else if (ind == "ceic_series") {
-                url = BASE + "/macro/ceic/series?country=" + ceic_country;
-                if (!fincept_ceic_indicator_.empty())
-                    url += "&indicator=" + fincept_ceic_indicator_;
-                url += "&year_from=" + std::string(start_date_).substr(0, 4);
-                url += "&year_to=" + std::string(end_date_).substr(0, 4);
-                url += "&limit=500";
-            } else if (ind == "economic_calendar")
-                url = BASE + "/macro/economic-calendar?start_date=" + std::string(start_date_) + "&end_date=" + std::string(end_date_) + "&limit=200";
-            else if (ind == "upcoming_events")
-                url = BASE + "/macro/upcoming-events?limit=200";
-            else if (ind == "wgb_central_bank_rates")
-                url = BASE + "/macro/wgb/central-bank-rates";
-            else if (ind == "wgb_credit_ratings")
-                url = BASE + "/macro/wgb/credit-ratings";
-            else if (ind == "wgb_sovereign_cds")
-                url = BASE + "/macro/wgb/sovereign-cds";
-            else if (ind == "wgb_bond_spreads")
-                url = BASE + "/macro/wgb/bond-spreads";
-            else if (ind == "wgb_inverted_yields")
-                url = BASE + "/macro/wgb/inverted-yields";
-            else
-                url = BASE + "/macro/wgb/central-bank-rates";
-
-            auto& auth = auth::AuthManager::instance();
-            std::string api_key = auth.session().api_key;
-            http::Headers headers = {{"X-API-Key", api_key}, {"Accept", "application/json"}};
-            auto resp = http::HttpClient::instance().get(url, headers);
-            if (!resp.success) {
-                error_ = "HTTP error: " + std::to_string(resp.status_code);
+            if (needs_key) {
+                error_ = std::string(cfg.name) + " API Key required. Configure in the key panel.";
+                show_api_key_panel_ = true;
                 loading_ = false;
                 return;
             }
-            raw_json = resp.body;
-        } else {
-            // Python script execution
-            std::vector<std::string> args;
-            std::string env_key, env_val;
-
-            switch (data_source_) {
-                case DataSource::WorldBank:
-                    args = {"indicators", country_code, selected_indicator_};
-                    break;
-                case DataSource::BIS:
-                    args = {"fetch", selected_indicator_, country_code};
-                    break;
-                case DataSource::IMF:
-                    args = {"weo", country_code, selected_indicator_};
-                    break;
-                case DataSource::FRED:
-                    args = {"series", selected_indicator_};
-                    break;
-                case DataSource::OECD:
-                    args = {"fetch", selected_indicator_, country_code};
-                    break;
-                case DataSource::WTO:
-                    args = {"timeseries_data", "--i", selected_indicator_, "--reporters", country_code, get_api_key("wto_api_key")};
-                    break;
-                case DataSource::CFTC:
-                    args = {"cot_historical_trend", selected_indicator_, "legacy", "104"};
-                    break;
-                case DataSource::EIA: {
-                    std::string ind(selected_indicator_);
-                    if (ind.substr(0, 5) == "steo_") {
-                        std::string table = ind.substr(5);
-                        args = {"get_steo", table, "", "month"};
-                        env_key = "eia_api_key";
-                        env_val = get_api_key("eia_api_key");
-                    } else {
-                        args = {"get_petroleum", selected_indicator_};
-                    }
-                    break;
-                }
-                case DataSource::ADB: {
-                    std::string ind(selected_indicator_);
-                    std::string sy = std::string(start_date_).substr(0, 4);
-                    std::string ey = std::string(end_date_).substr(0, 4);
-                    if (ind.substr(0, 3) == "LP_" || ind.substr(0, 3) == "SP_" || ind.substr(0, 3) == "SM_")
-                        args = {"get_population", country_code, selected_indicator_, sy, ey};
-                    else
-                        args = {"get_gdp", country_code, selected_indicator_, sy, ey};
-                    break;
-                }
-                case DataSource::Fed: {
-                    std::string ind(selected_indicator_);
-                    if (ind == "market_overview")
-                        args = {"market_overview"};
-                    else if (ind == "yield_curve")
-                        args = {"yield_curve", end_date_};
-                    else if (ind == "money_measures")
-                        args = {"money_measures", start_date_, end_date_, "false"};
-                    else if (ind == "money_measures_adjusted")
-                        args = {"money_measures", start_date_, end_date_, "true"};
-                    else
-                        args = {selected_indicator_, start_date_, end_date_};
-                    break;
-                }
-                case DataSource::BLS:
-                    args = {"get_series", selected_indicator_, start_date_, end_date_};
-                    env_key = "bls_api_key";
-                    env_val = get_api_key("bls_api_key");
-                    break;
-                case DataSource::UNESCO: {
-                    std::string sy = std::string(start_date_).substr(0, 4);
-                    std::string ey = std::string(end_date_).substr(0, 4);
-                    args = {"fetch", selected_indicator_, country_code, sy, ey};
-                    break;
-                }
-                case DataSource::FiscalData:
-                    args = {"fetch", selected_indicator_, start_date_, end_date_};
-                    break;
-                case DataSource::BEA:
-                    args = {"fetch", selected_indicator_, start_date_, end_date_};
-                    env_key = "bea_api_key";
-                    env_val = get_api_key("bea_api_key");
-                    break;
-                default:
-                    break;
-            }
-
-            // Build env JSON if needed
-            std::string stdin_data = "{}";
-            // For scripts that need env vars, we pass them via args or stdin
-            // The python_runner uses execute_with_stdin which takes script, args, stdin
-
-            auto result = python::execute_with_stdin(cfg.script_name, args, stdin_data);
-            if (!result.success || result.output.empty()) {
-                error_ = result.error.empty() ? "No data returned" : result.error;
-                loading_ = false;
-                return;
-            }
-            raw_json = result.output;
         }
-
-        parse_response(raw_json);
-
-    } catch (const std::exception& e) {
-        error_ = std::string("Failed to fetch data: ") + e.what();
     }
 
-    loading_ = false;
+    // Capture all state needed by the background thread (avoid touching 'this' members
+    // that the UI thread may read concurrently — only loading_/error_/results are shared)
+    DataSource ds = data_source_;
+    std::string script_name = cfg.script_name;
+    std::string indicator(selected_indicator_);
+    std::string start(start_date_);
+    std::string end(end_date_);
+    int ceic_idx = fincept_ceic_country_idx_;
+    std::string ceic_indicator = fincept_ceic_indicator_;
+
+    // Collect API keys on UI thread (they read from DB/keychain)
+    std::string wto_key = get_api_key("wto_api_key");
+    std::string eia_key = get_api_key("eia_api_key");
+    std::string bls_key = get_api_key("bls_api_key");
+    std::string bea_key = get_api_key("bea_api_key");
+
+    std::thread([this, ds, script_name, country_code, indicator, start, end,
+                 ceic_idx, ceic_indicator, wto_key, eia_key, bls_key, bea_key]() {
+        try {
+            std::string raw_json;
+            auto& cache = CacheService::instance();
+
+            if (ds == DataSource::Fincept) {
+                const std::string BASE = "https://api.fincept.in";
+                std::string url;
+
+                static const char* CEIC_COUNTRIES[] = {
+                    "china", "european-union", "france", "germany", "italy", "japan", "united-states"
+                };
+                std::string ceic_country = CEIC_COUNTRIES[ceic_idx];
+
+                if (indicator == "ceic_series_countries")
+                    url = BASE + "/macro/ceic/series/countries";
+                else if (indicator == "ceic_series_indicators")
+                    url = BASE + "/macro/ceic/series/indicators?country=" + ceic_country;
+                else if (indicator == "ceic_series") {
+                    url = BASE + "/macro/ceic/series?country=" + ceic_country;
+                    if (!ceic_indicator.empty())
+                        url += "&indicator=" + ceic_indicator;
+                    url += "&year_from=" + start.substr(0, 4);
+                    url += "&year_to=" + end.substr(0, 4);
+                    url += "&limit=500";
+                } else if (indicator == "economic_calendar")
+                    url = BASE + "/macro/economic-calendar?start_date=" + start + "&end_date=" + end + "&limit=200";
+                else if (indicator == "upcoming_events")
+                    url = BASE + "/macro/upcoming-events?limit=200";
+                else if (indicator == "wgb_central_bank_rates")
+                    url = BASE + "/macro/wgb/central-bank-rates";
+                else if (indicator == "wgb_credit_ratings")
+                    url = BASE + "/macro/wgb/credit-ratings";
+                else if (indicator == "wgb_sovereign_cds")
+                    url = BASE + "/macro/wgb/sovereign-cds";
+                else if (indicator == "wgb_bond_spreads")
+                    url = BASE + "/macro/wgb/bond-spreads";
+                else if (indicator == "wgb_inverted_yields")
+                    url = BASE + "/macro/wgb/inverted-yields";
+                else
+                    url = BASE + "/macro/wgb/central-bank-rates";
+
+                std::string fincept_cache_key = CacheService::make_key("economic", "fincept", indicator);
+                auto fincept_cached = cache.get(fincept_cache_key);
+                if (fincept_cached && !fincept_cached->empty()) {
+                    raw_json = *fincept_cached;
+                } else {
+                    auto& auth = auth::AuthManager::instance();
+                    std::string api_key = auth.session().api_key;
+                    http::Headers headers = {{"X-API-Key", api_key}, {"Accept", "application/json"}};
+                    auto resp = http::HttpClient::instance().get(url, headers);
+                    if (!resp.success) {
+                        error_ = "HTTP error: " + std::to_string(resp.status_code);
+                        loading_ = false;
+                        return;
+                    }
+                    raw_json = resp.body;
+                    if (!raw_json.empty()) {
+                        cache.set(fincept_cache_key, raw_json, "economic", CacheTTL::FIFTEEN_MIN);
+                    }
+                }
+            } else {
+                // Python script execution
+                std::vector<std::string> args;
+
+                switch (ds) {
+                    case DataSource::WorldBank:
+                        args = {"indicators", country_code, indicator};
+                        break;
+                    case DataSource::BIS:
+                        args = {"fetch", indicator, country_code};
+                        break;
+                    case DataSource::IMF:
+                        args = {"weo", country_code, indicator};
+                        break;
+                    case DataSource::FRED:
+                        args = {"series", indicator};
+                        break;
+                    case DataSource::OECD:
+                        args = {"fetch", indicator, country_code};
+                        break;
+                    case DataSource::WTO:
+                        args = {"timeseries_data", "--i", indicator, "--reporters", country_code, wto_key};
+                        break;
+                    case DataSource::CFTC:
+                        args = {"cot_historical_trend", indicator, "legacy", "104"};
+                        break;
+                    case DataSource::EIA: {
+                        if (indicator.substr(0, 5) == "steo_") {
+                            std::string table = indicator.substr(5);
+                            args = {"get_steo", table, "", "month"};
+                        } else {
+                            args = {"get_petroleum", indicator};
+                        }
+                        break;
+                    }
+                    case DataSource::ADB: {
+                        std::string sy = start.substr(0, 4);
+                        std::string ey = end.substr(0, 4);
+                        if (indicator.substr(0, 3) == "LP_" || indicator.substr(0, 3) == "SP_" || indicator.substr(0, 3) == "SM_")
+                            args = {"get_population", country_code, indicator, sy, ey};
+                        else
+                            args = {"get_gdp", country_code, indicator, sy, ey};
+                        break;
+                    }
+                    case DataSource::Fed: {
+                        if (indicator == "market_overview")
+                            args = {"market_overview"};
+                        else if (indicator == "yield_curve")
+                            args = {"yield_curve", end};
+                        else if (indicator == "money_measures")
+                            args = {"money_measures", start, end, "false"};
+                        else if (indicator == "money_measures_adjusted")
+                            args = {"money_measures", start, end, "true"};
+                        else
+                            args = {indicator, start, end};
+                        break;
+                    }
+                    case DataSource::BLS:
+                        args = {"get_series", indicator, start, end};
+                        break;
+                    case DataSource::UNESCO: {
+                        std::string sy = start.substr(0, 4);
+                        std::string ey = end.substr(0, 4);
+                        args = {"fetch", indicator, country_code, sy, ey};
+                        break;
+                    }
+                    case DataSource::FiscalData:
+                        args = {"fetch", indicator, start, end};
+                        break;
+                    case DataSource::BEA:
+                        args = {"fetch", indicator, start, end};
+                        break;
+                    default:
+                        break;
+                }
+
+                std::string stdin_data = "{}";
+
+                std::string py_cache_key = CacheService::make_key("economic", script_name,
+                    country_code + "_" + indicator);
+                auto py_cached = cache.get(py_cache_key);
+                if (py_cached && !py_cached->empty()) {
+                    raw_json = *py_cached;
+                } else {
+                    auto result = python::execute_with_stdin(script_name, args, stdin_data);
+                    if (!result.success || result.output.empty()) {
+                        error_ = result.error.empty() ? "No data returned" : result.error;
+                        loading_ = false;
+                        return;
+                    }
+                    raw_json = result.output;
+                    if (!raw_json.empty()) {
+                        cache.set(py_cache_key, raw_json, "economic", CacheTTL::FIFTEEN_MIN);
+                    }
+                }
+            }
+
+            parse_response(raw_json);
+
+        } catch (const std::exception& e) {
+            error_ = std::string("Failed to fetch data: ") + e.what();
+        }
+
+        loading_ = false;
+    }).detach();
 }
 
 void EconomicsScreen::parse_response(const std::string& raw_json) {

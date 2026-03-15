@@ -1,5 +1,6 @@
 #include "gov_data.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "core/logger.h"
 #include <thread>
 #include <nlohmann/json.hpp>
@@ -20,11 +21,28 @@ void GovData::run_script(const std::string& script,
     }
 
     std::thread([this, script, args]() {
+        // Build cache key from script + args
+        auto& cache = CacheService::instance();
+        std::string args_key;
+        for (const auto& a : args) args_key += a + "_";
+        std::string cache_key = CacheService::make_key("reference", "gov-data", script + "_" + args_key);
+
+        auto cached = cache.get(cache_key);
+        if (cached && !cached->empty()) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            parse_result(*cached);
+            loading_.store(false);
+            return;
+        }
+
         auto py_result = python::execute(script, args);
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (py_result.success) {
                 parse_result(py_result.output);
+                if (has_result_ && !py_result.output.empty()) {
+                    cache.set(cache_key, py_result.output, "reference", CacheTTL::ONE_HOUR);
+                }
             } else {
                 error_ = py_result.error.empty()
                     ? "Script failed (exit " + std::to_string(py_result.exit_code) + ")"

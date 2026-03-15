@@ -1,6 +1,6 @@
 #pragma once
-// Watchlist Screen — three-panel layout: sidebar | stock list | stock detail
-// Mirrors WatchlistTab.tsx from the Tauri project
+// Watchlist Screen — Bloomberg Terminal style
+// Dense 4-zone layout: command bar | sidebar+table+detail | status bar
 
 #include "watchlist_types.h"
 #include "watchlist_data.h"
@@ -30,7 +30,7 @@ private:
     // Data fetcher
     WatchlistData data_;
     float refresh_timer_ = 0;
-    static constexpr float REFRESH_INTERVAL = 600.0f; // 10 min
+    static constexpr float REFRESH_INTERVAL = 600.0f;
 
     // Create watchlist modal
     bool show_create_modal_ = false;
@@ -47,6 +47,10 @@ private:
     std::string status_;
     double status_time_ = 0;
 
+    // Bloomberg blink state
+    float blink_timer_ = 0;
+    bool blink_on_ = true;
+
     // Init & data
     void init();
     void load_watchlists();
@@ -54,13 +58,12 @@ private:
     void refresh_quotes();
     void sort_stocks();
 
-    // Rendering panels
-    void render_header_bar();
-    void render_info_bar();
+    // Bloomberg-style rendering
+    void render_command_bar(float width);
     void render_sidebar(float width, float height);
-    void render_stock_list(float width, float height);
-    void render_stock_detail(float width, float height);
-    void render_status_bar();
+    void render_stock_table(float width, float height);
+    void render_detail_panel(float width, float height);
+    void render_footer_bar(float width);
 
     // Modals
     void render_create_modal();
@@ -71,6 +74,11 @@ private:
     void delete_watchlist(const std::string& id);
     void add_stock();
     void remove_stock(const std::string& symbol);
+
+    // Bloomberg drawing helpers
+    void bb_label(const char* label, const char* value, ImVec4 val_color = {1,1,1,1});
+    void bb_separator_line(float width);
+    bool bb_func_key(const char* label, bool active, float width = 0);
 };
 
 } // namespace fincept::watchlist

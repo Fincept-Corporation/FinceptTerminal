@@ -5,10 +5,12 @@
 
 #include "dashboard_data.h"
 #include "widget_registry.h"
+#include "media/mpv_player.h"
 #include <imgui.h>
 #include <string>
 #include <vector>
 #include <chrono>
+#include <memory>
 
 namespace fincept::dashboard {
 
@@ -54,7 +56,8 @@ private:
 
     // Widget frame — wraps any widget with header, accent, close button
     void render_widget_frame(const char* title, const ImVec4& accent,
-                              float w, float h, WidgetType type);
+                              float w, float h, WidgetType type,
+                              const std::string& widget_id);
 
     // Individual widget renderers (read from DashboardData)
     void widget_global_indices(float w, float h);
@@ -68,6 +71,34 @@ private:
     void widget_performance(float w, float h);
     void widget_top_movers(float w, float h);
     void widget_market_data(float w, float h);
+    void widget_youtube_stream(float w, float h);
+
+    // Drag & resize state
+    std::string dragging_widget_id_;     // widget being dragged
+    std::string resizing_widget_id_;     // widget being resized
+    ImVec2 drag_start_mouse_;            // mouse pos at drag start
+    int drag_start_col_ = 0;             // original col at drag start
+    int drag_start_row_ = 0;             // original row at drag start
+    int resize_start_col_span_ = 1;      // original col_span at resize start
+    int resize_start_row_span_ = 1;      // original row_span at resize start
+    float grid_cell_w_ = 100.0f;         // current cell width (for drag calc)
+    float grid_cell_h_ = 100.0f;         // current cell height (for drag calc)
+    float grid_gap_ = 4.0f;              // grid gap
+
+    // YouTube widget state
+    struct YouTubeEntry {
+        std::string url;
+        std::string title;
+        std::string author;
+        bool fetched = false;
+        bool fetching = false;
+    };
+    char yt_url_buf_[512] = {};
+    std::vector<YouTubeEntry> yt_entries_;
+    int yt_active_player_ = -1;          // index of entry currently playing (-1 = none)
+    int yt_volume_ = 80;                 // 0-100
+    std::unique_ptr<media::MpvPlayer> yt_player_;
+    void yt_fetch_metadata(int index);
 
     // Render a generic quote table (reused by many widgets)
     void render_quote_table(const char* table_id,

@@ -21,6 +21,7 @@ enum class WidgetType {
     Performance,
     TopMovers,
     MarketData,     // generic quote table
+    YouTubeStream,  // YouTube link launcher — opens in browser
     Count
 };
 
@@ -37,6 +38,7 @@ inline const char* widget_type_name(WidgetType t) {
         case WidgetType::Performance:        return "Performance";
         case WidgetType::TopMovers:          return "Top Movers";
         case WidgetType::MarketData:         return "Market Data";
+        case WidgetType::YouTubeStream:     return "YouTube Stream";
         default: return "Unknown";
     }
 }
@@ -54,6 +56,7 @@ inline const char* widget_type_id(WidgetType t) {
         case WidgetType::Performance:        return "performance";
         case WidgetType::TopMovers:          return "topmovers";
         case WidgetType::MarketData:         return "marketdata";
+        case WidgetType::YouTubeStream:     return "youtube";
         default: return "unknown";
     }
 }
@@ -70,6 +73,7 @@ inline WidgetType widget_type_from_id(const std::string& id) {
     if (id == "performance")  return WidgetType::Performance;
     if (id == "topmovers")    return WidgetType::TopMovers;
     if (id == "marketdata")   return WidgetType::MarketData;
+    if (id == "youtube")      return WidgetType::YouTubeStream;
     return WidgetType::GlobalIndices;
 }
 

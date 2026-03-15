@@ -15,7 +15,18 @@
 namespace fincept::crypto {
 
 using namespace theme::colors;
-static const char* TAG = "CryptoTrading";
+static constexpr const char* TAG = "CryptoTrading";
+
+// Named constants (ES.45: avoid magic numbers)
+static constexpr int    OHLCV_FETCH_COUNT        = 200;
+static constexpr double DEFAULT_PAPER_BALANCE     = 100000.0;
+static constexpr int    PORTFOLIO_CLEANUP_THRESH  = 10;
+static constexpr float  TICKER_POLL_INTERVAL      = 3.0f;   // seconds (REST fallback)
+static constexpr float  ORDERBOOK_POLL_INTERVAL   = 3.0f;
+static constexpr float  WATCHLIST_POLL_INTERVAL   = 15.0f;
+static constexpr float  PORTFOLIO_REFRESH_INTERVAL = 1.5f;
+static constexpr float  MARKET_INFO_INTERVAL      = 30.0f;
+static constexpr int    PRICE_FEED_POLL_SEC       = 3;
 
 // ============================================================================
 // Default watchlist — top crypto pairs
@@ -92,7 +103,7 @@ void CryptoTradingScreen::init() {
 
     // Start the price feed for watched symbols (drives OrderMatcher + position updates)
     if (!svc.is_feed_running()) {
-        svc.start_price_feed(3);
+        svc.start_price_feed(PRICE_FEED_POLL_SEC);
     }
 
     initialized_ = true;
@@ -113,7 +124,7 @@ void CryptoTradingScreen::init() {
     std::string sym = selected_symbol_;
     std::thread([this, sym]() {
         try {
-            auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(sym, "1m", 200);
+            auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(sym, "1m", OHLCV_FETCH_COUNT);
             LOG_INFO(TAG, "<<< Initial OHLCV received: %d candles", (int)ohlcv.size());
             {
                 std::lock_guard<std::mutex> lock(data_mutex_);
@@ -131,95 +142,8 @@ void CryptoTradingScreen::init() {
     }).detach();
 
     // Start WebSocket streaming for real-time updates
-    try {
-        LOG_INFO(TAG, "Registering WS callbacks...");
-        auto& svc2 = trading::ExchangeService::instance();
-
-        // Register price callback
-        ws_price_cb_id_ = svc2.on_price_update([this](const std::string& symbol, const trading::TickerData& ticker) {
-            std::lock_guard<std::mutex> lock(data_mutex_);
-            if (symbol == selected_symbol_) {
-                current_ticker_ = ticker;
-                ticker_loading_ = false;
-            }
-            for (auto& w : watchlist_) {
-                if (w.symbol == symbol) {
-                    w.price = ticker.last;
-                    w.change = ticker.change;
-                    w.change_pct = ticker.percentage;
-                    w.volume = ticker.base_volume;
-                    w.has_data = true;
-                    break;
-                }
-            }
-            last_data_update_ = time(nullptr);
-        });
-
-        // Register orderbook callback
-        ws_ob_cb_id_ = svc2.on_orderbook_update([this](const std::string& symbol, const trading::OrderBookData& ob) {
-            if (symbol != selected_symbol_) return;
-            std::lock_guard<std::mutex> lock(data_mutex_);
-
-            ob_bids_.clear();
-            ob_asks_.clear();
-            double cum = 0;
-            for (auto& [price, amount] : ob.bids) {
-                cum += amount;
-                ob_bids_.push_back({price, amount, cum});
-            }
-            cum = 0;
-            for (auto& [price, amount] : ob.asks) {
-                cum += amount;
-                ob_asks_.push_back({price, amount, cum});
-            }
-            ob_spread_ = ob.spread;
-            ob_spread_pct_ = ob.spread_pct;
-            ob_loading_ = false;
-            last_data_update_ = time(nullptr);
-        });
-
-        // Register candle callback
-        ws_candle_cb_id_ = svc2.on_candle_update([this](const std::string& symbol, const trading::Candle& candle) {
-            if (symbol != selected_symbol_) return;
-            std::lock_guard<std::mutex> lock(data_mutex_);
-
-            if (!candles_.empty() && candles_.back().timestamp == candle.timestamp) {
-                candles_.back() = candle;
-            } else {
-                candles_.push_back(candle);
-                if (candles_.size() > 500) {
-                    candles_.erase(candles_.begin());
-                }
-            }
-        });
-
-        // Register trade callback for Time & Sales
-        ws_trade_cb_id_ = svc2.on_trade_update([this](const std::string& symbol, const trading::TradeData& trade) {
-            if (symbol != selected_symbol_) return;
-            std::lock_guard<std::mutex> lock(data_mutex_);
-            recent_trades_.insert(recent_trades_.begin(), TradeEntry{
-                trade.id, trade.side, trade.price, trade.amount, trade.timestamp
-            });
-            if ((int)recent_trades_.size() > MAX_TRADES) {
-                recent_trades_.resize(MAX_TRADES);
-            }
-        });
-
-        LOG_INFO(TAG, "WS callbacks registered, starting stream...");
-
-        // Collect all watchlist symbols for WS
-        std::vector<std::string> all_symbols;
-        for (auto& w : watchlist_) all_symbols.push_back(w.symbol);
-
-        svc2.start_ws_stream(selected_symbol_, all_symbols);
-        ws_started_ = true;
-        LOG_INFO(TAG, "WebSocket stream started for %s + %d symbols",
-                 selected_symbol_.c_str(), (int)all_symbols.size());
-    } catch (const std::exception& e) {
-        LOG_ERROR(TAG, "Failed to start WS stream: %s", e.what());
-        last_error_ = std::string("WS start failed: ") + e.what();
-        error_count_++;
-    }
+    // restart_ws_stream() handles callback registration + stream start
+    restart_ws_stream();
 
     // Fetch initial trades and market info via REST
     async_fetch_trades();
@@ -249,14 +173,14 @@ void CryptoTradingScreen::load_portfolio() {
         // Create if not found
         if (portfolio_id_.empty()) {
             portfolio_ = trading::pt_create_portfolio(
-                "Crypto Paper Trading", 100000.0, "USDT", 1.0, "cross", 0.001);
+                "Crypto Paper Trading", DEFAULT_PAPER_BALANCE, "USDT", 1.0, "cross", 0.001);
             portfolio_id_ = portfolio_.id;
             LOG_INFO(TAG, "Created new portfolio: %s (balance=%.2f)",
                      portfolio_id_.c_str(), portfolio_.balance);
         }
 
         // Cleanup: delete empty portfolios (not ours) to prevent DB bloat
-        if (portfolios.size() > 10) {
+        if (portfolios.size() > PORTFOLIO_CLEANUP_THRESH) {
             int cleaned = 0;
             for (const auto& p : portfolios) {
                 if (p.id == portfolio_id_) continue;
@@ -286,6 +210,248 @@ void CryptoTradingScreen::load_portfolio() {
         last_error_ = std::string("Portfolio load failed: ") + e.what();
         error_count_++;
     }
+}
+
+// ============================================================================
+// Exchange & symbol switching — proper lifecycle management
+// ============================================================================
+
+void CryptoTradingScreen::clear_market_data() {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    current_ticker_ = {};
+    ob_bids_.clear();
+    ob_asks_.clear();
+    ob_spread_ = 0.0;
+    ob_spread_pct_ = 0.0;
+    candles_.clear();
+    recent_trades_.clear();
+    market_info_ = {};
+    for (auto& w : watchlist_) {
+        w.price = 0.0;
+        w.change = 0.0;
+        w.change_pct = 0.0;
+        w.volume = 0.0;
+        w.has_data = false;
+    }
+    last_error_.clear();
+    error_count_ = 0;
+    success_count_ = 0;
+}
+
+void CryptoTradingScreen::restart_ws_stream() {
+    auto& svc = trading::ExchangeService::instance();
+
+    // Tear down existing WS
+    if (ws_started_) {
+        svc.stop_ws_stream();
+        ws_started_ = false;
+    }
+
+    // Remove old callbacks
+    if (ws_price_cb_id_ >= 0) { svc.remove_price_callback(ws_price_cb_id_); ws_price_cb_id_ = -1; }
+    if (ws_ob_cb_id_ >= 0) { svc.remove_orderbook_callback(ws_ob_cb_id_); ws_ob_cb_id_ = -1; }
+    if (ws_candle_cb_id_ >= 0) { svc.remove_candle_callback(ws_candle_cb_id_); ws_candle_cb_id_ = -1; }
+    if (ws_trade_cb_id_ >= 0) { svc.remove_trade_callback(ws_trade_cb_id_); ws_trade_cb_id_ = -1; }
+
+    // Re-register callbacks (same as in init())
+    ws_price_cb_id_ = svc.on_price_update([this](const std::string& symbol, const trading::TickerData& ticker) {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        if (symbol == selected_symbol_) {
+            current_ticker_ = ticker;
+            ticker_loading_ = false;
+        }
+        for (auto& w : watchlist_) {
+            if (w.symbol == symbol) {
+                w.price = ticker.last;
+                w.change = ticker.change;
+                w.change_pct = ticker.percentage;
+                w.volume = ticker.base_volume;
+                w.has_data = true;
+                break;
+            }
+        }
+        last_data_update_ = time(nullptr);
+    });
+
+    ws_ob_cb_id_ = svc.on_orderbook_update([this](const std::string& symbol, const trading::OrderBookData& ob) {
+        if (symbol != selected_symbol_) return;
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        ob_bids_.clear();
+        ob_asks_.clear();
+        double cum = 0;
+        for (auto& [price, amount] : ob.bids) {
+            cum += amount;
+            ob_bids_.push_back({price, amount, cum});
+        }
+        cum = 0;
+        for (auto& [price, amount] : ob.asks) {
+            cum += amount;
+            ob_asks_.push_back({price, amount, cum});
+        }
+        ob_spread_ = ob.spread;
+        ob_spread_pct_ = ob.spread_pct;
+        ob_loading_ = false;
+        last_data_update_ = time(nullptr);
+    });
+
+    ws_candle_cb_id_ = svc.on_candle_update([this](const std::string& symbol, const trading::Candle& candle) {
+        if (symbol != selected_symbol_) return;
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        if (!candles_.empty() && candles_.back().timestamp == candle.timestamp) {
+            candles_.back() = candle;
+        } else {
+            candles_.push_back(candle);
+            if (candles_.size() > 500) candles_.erase(candles_.begin());
+        }
+    });
+
+    ws_trade_cb_id_ = svc.on_trade_update([this](const std::string& symbol, const trading::TradeData& trade) {
+        if (symbol != selected_symbol_) return;
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        recent_trades_.insert(recent_trades_.begin(), TradeEntry{
+            trade.id, trade.side, trade.price, trade.amount, trade.timestamp
+        });
+        if ((int)recent_trades_.size() > MAX_TRADES) recent_trades_.resize(MAX_TRADES);
+    });
+
+    // Start new WS stream
+    std::vector<std::string> all_symbols;
+    for (auto& w : watchlist_) all_symbols.push_back(w.symbol);
+
+    try {
+        svc.start_ws_stream(selected_symbol_, all_symbols);
+        ws_started_ = true;
+        LOG_INFO(TAG, "WS stream restarted for %s + %d symbols on %s",
+                 selected_symbol_.c_str(), (int)all_symbols.size(), exchange_id_.c_str());
+    } catch (const std::exception& e) {
+        LOG_ERROR(TAG, "Failed to restart WS: %s", e.what());
+        last_error_ = std::string("WS restart failed: ") + e.what();
+    }
+}
+
+void CryptoTradingScreen::switch_exchange(const std::string& exchange_id) {
+    if (exchange_id == exchange_id_) return;
+
+    LOG_INFO(TAG, "Switching exchange: %s -> %s", exchange_id_.c_str(), exchange_id.c_str());
+
+    // Stop price feed before switching (it uses the old exchange)
+    auto& svc = trading::ExchangeService::instance();
+    svc.stop_price_feed();
+
+    // Update exchange
+    exchange_id_ = exchange_id;
+    svc.set_exchange(exchange_id);
+
+    // Invalidate search cache — new exchange has different markets
+    search_markets_loaded_ = false;
+    search_cache_exchange_.clear();
+    all_markets_.clear();
+    search_results_.clear();
+
+    // Clear all stale market data from previous exchange
+    clear_market_data();
+
+    // Reset loading states
+    ticker_loading_ = true;
+    ob_loading_ = true;
+    candles_loading_ = true;
+
+    // Restart price feed with new exchange
+    svc.start_price_feed(PRICE_FEED_POLL_SEC);
+
+    // Re-watch the selected symbol for paper trading
+    if (!portfolio_id_.empty()) {
+        svc.watch_symbol(selected_symbol_, portfolio_id_);
+    }
+
+    // Restart WebSocket stream for new exchange
+    restart_ws_stream();
+
+    // Kick off REST fetches for immediate data
+    async_refresh_ticker();
+    async_refresh_orderbook();
+    async_refresh_watchlist_prices();
+    async_fetch_trades();
+    async_fetch_market_info();
+
+    // Fetch fresh candles
+    candles_fetching_ = true;
+    std::string sym = selected_symbol_;
+    std::thread([this, sym]() {
+        try {
+            auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(sym, "1m", OHLCV_FETCH_COUNT);
+            {
+                std::lock_guard<std::mutex> lock(data_mutex_);
+                candles_ = std::move(ohlcv);
+            }
+            candles_loading_ = false;
+            candles_fetching_ = false;
+        } catch (const std::exception& e) {
+            LOG_ERROR(TAG, "OHLCV fetch failed on exchange switch: %s", e.what());
+            candles_loading_ = false;
+            candles_fetching_ = false;
+        }
+    }).detach();
+
+    LOG_INFO(TAG, "Exchange switch complete: %s", exchange_id.c_str());
+}
+
+void CryptoTradingScreen::switch_symbol(const std::string& symbol) {
+    if (symbol == selected_symbol_) return;
+
+    LOG_INFO(TAG, "Switching symbol: %s -> %s", selected_symbol_.c_str(), symbol.c_str());
+
+    selected_symbol_ = symbol;
+
+    // Clear symbol-specific data (keep watchlist prices intact)
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        current_ticker_ = {};
+        ob_bids_.clear();
+        ob_asks_.clear();
+        ob_spread_ = 0.0;
+        ob_spread_pct_ = 0.0;
+        candles_.clear();
+        recent_trades_.clear();
+        market_info_ = {};
+    }
+
+    ticker_loading_ = true;
+    ob_loading_ = true;
+    candles_loading_ = true;
+
+    // Watch new symbol for paper trading price updates
+    if (!portfolio_id_.empty()) {
+        trading::ExchangeService::instance().watch_symbol(symbol, portfolio_id_);
+    }
+
+    // Restart WS with new primary symbol
+    restart_ws_stream();
+
+    // Immediate REST fetches while WS connects
+    async_refresh_ticker();
+    async_refresh_orderbook();
+    async_fetch_trades();
+    async_fetch_market_info();
+
+    // Fetch candles for new symbol
+    candles_fetching_ = true;
+    std::string sym = symbol;
+    std::thread([this, sym]() {
+        try {
+            auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(sym, "1m", OHLCV_FETCH_COUNT);
+            {
+                std::lock_guard<std::mutex> lock(data_mutex_);
+                candles_ = std::move(ohlcv);
+            }
+            candles_loading_ = false;
+            candles_fetching_ = false;
+        } catch (const std::exception& e) {
+            LOG_ERROR(TAG, "OHLCV fetch failed on symbol switch: %s", e.what());
+            candles_loading_ = false;
+            candles_fetching_ = false;
+        }
+    }).detach();
 }
 
 // ============================================================================
@@ -492,6 +658,13 @@ void CryptoTradingScreen::refresh_portfolio_data() {
 void CryptoTradingScreen::render() {
     if (!initialized_) init();
 
+    // Handle deferred symbol switch (set from search results while holding data_mutex_)
+    if (!pending_symbol_switch_.empty()) {
+        std::string sym = pending_symbol_switch_;
+        pending_symbol_switch_.clear();
+        switch_symbol(sym);
+    }
+
     ui::ScreenFrame frame("##crypto_trading", ImVec2(0, 0), BG_DARKEST);
     if (!frame.begin()) { frame.end(); return; }
 
@@ -558,28 +731,28 @@ void CryptoTradingScreen::render() {
         ob_timer_ += dt;
         wl_timer_ += dt;
 
-        if (ticker_timer_ >= 3.0f) {
+        if (ticker_timer_ >= TICKER_POLL_INTERVAL) {
             ticker_timer_ = 0;
             async_refresh_ticker();
         }
-        if (ob_timer_ >= 3.0f) {
+        if (ob_timer_ >= ORDERBOOK_POLL_INTERVAL) {
             ob_timer_ = 0;
             async_refresh_orderbook();
         }
-        if (wl_timer_ >= 15.0f) {
+        if (wl_timer_ >= WATCHLIST_POLL_INTERVAL) {
             wl_timer_ = 0;
             async_refresh_watchlist_prices();
         }
     }
 
-    if (portfolio_timer_ >= 1.5f) {
+    if (portfolio_timer_ >= PORTFOLIO_REFRESH_INTERVAL) {
         portfolio_timer_ = 0;
         refresh_portfolio_data();
     }
 
     // Market info refresh (every 30s)
     market_info_timer_ += dt;
-    if (market_info_timer_ >= 30.0f) {
+    if (market_info_timer_ >= MARKET_INFO_INTERVAL) {
         market_info_timer_ = 0;
         async_fetch_market_info();
     }
@@ -614,15 +787,13 @@ void CryptoTradingScreen::render_top_nav(float w, float h) {
     ImGui::PushItemWidth(100);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
     static const char* exchanges[] = {"binance", "kraken", "bybit", "okx", "coinbase"};
-    static int ex_idx = 0;
+    // Find current index from exchange_id_ (not static — stays in sync)
+    int ex_idx = 0;
+    for (int i = 0; i < 5; ++i) {
+        if (exchange_id_ == exchanges[i]) { ex_idx = i; break; }
+    }
     if (ImGui::Combo("##exchange", &ex_idx, exchanges, 5)) {
-        exchange_id_ = exchanges[ex_idx];
-        trading::ExchangeService::instance().set_exchange(exchange_id_);
-        LOG_INFO(TAG, "Exchange changed to: %s", exchange_id_.c_str());
-        // Force refresh with new exchange
-        ticker_timer_ = 99;
-        ob_timer_ = 99;
-        wl_timer_ = 99;
+        switch_exchange(exchanges[ex_idx]);
     }
     ImGui::PopStyleColor();
     ImGui::PopItemWidth();
@@ -646,15 +817,25 @@ void CryptoTradingScreen::render_top_nav(float w, float h) {
     if (ImGui::SmallButton("LIVE")) trading_mode_ = TradingMode::Live;
     ImGui::PopStyleColor(2);
 
-    // Right side: balance
-    float balance_w = 200;
+    // Right side: mode badge + balance
+    float balance_w = 280;
     float avail = ImGui::GetContentRegionAvail().x;
     if (avail > balance_w + 20) {
         ImGui::SameLine(ImGui::GetCursorPosX() + avail - balance_w);
+        if (is_paper) {
+            ImGui::TextColored(ImVec4(0.0f, 0.7f, 0.3f, 1.0f), "PAPER");
+        } else {
+            ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.2f, 1.0f), "LIVE");
+        }
+        ImGui::SameLine(0, 8);
         ImGui::TextColored(TEXT_DIM, "Balance:");
         ImGui::SameLine(0, 4);
         char bal_buf[32];
-        std::snprintf(bal_buf, sizeof(bal_buf), "%.2f USDT", portfolio_.balance);
+        if (is_paper) {
+            std::snprintf(bal_buf, sizeof(bal_buf), "%.2f %s", portfolio_.balance, portfolio_.currency.c_str());
+        } else {
+            std::snprintf(bal_buf, sizeof(bal_buf), "-- (Live)");
+        }
         ImGui::TextColored(MARKET_GREEN, "%s", bal_buf);
     }
 
@@ -797,24 +978,73 @@ void CryptoTradingScreen::render_watchlist(float w, float h) {
         ImGui::TextColored(WARNING, "[*]");
     }
 
-    // Filter
+    // Search / Filter field
     ImGui::PushItemWidth(-1);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
-    ImGui::InputTextWithHint("##wl_filter", "Filter...", watchlist_filter_, sizeof(watchlist_filter_));
+    bool search_changed = ImGui::InputTextWithHint("##wl_filter", "Search symbol...",
+                                                    watchlist_filter_, sizeof(watchlist_filter_));
     ImGui::PopStyleColor();
     ImGui::PopItemWidth();
+
+    std::string filter_str(watchlist_filter_);
+    for (auto& c : filter_str) c = (char)std::toupper((unsigned char)c);
+
+    // Fetch exchange markets for search (lazy, cached per exchange)
+    if (search_changed && filter_str.length() >= 2 && !search_fetching_) {
+        // Load markets if not cached for this exchange
+        if (search_cache_exchange_ != exchange_id_ || !search_markets_loaded_) {
+            search_fetching_ = true;
+            std::string ex_id = exchange_id_;
+            std::thread([this, ex_id]() {
+                try {
+                    auto markets = trading::ExchangeService::instance().fetch_markets("spot");
+                    LOG_INFO(TAG, "Loaded %d markets for search from %s",
+                             (int)markets.size(), ex_id.c_str());
+                    std::lock_guard<std::mutex> lock(data_mutex_);
+                    all_markets_ = std::move(markets);
+                    search_cache_exchange_ = ex_id;
+                    search_markets_loaded_ = true;
+                } catch (const std::exception& e) {
+                    LOG_ERROR(TAG, "Failed to load markets for search: %s", e.what());
+                }
+                search_fetching_ = false;
+            }).detach();
+        }
+    }
+
+    // Build search results from cached markets
+    bool has_search = filter_str.length() >= 2 && search_markets_loaded_;
+    std::vector<trading::MarketInfo> filtered_markets;
+    if (has_search) {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        int count = 0;
+        for (const auto& m : all_markets_) {
+            if (!m.active) continue;
+            std::string sym_upper = m.symbol;
+            for (auto& c : sym_upper) c = (char)std::toupper((unsigned char)c);
+            if (sym_upper.find(filter_str) != std::string::npos) {
+                // Skip if already in watchlist
+                bool in_wl = false;
+                for (const auto& w : watchlist_) {
+                    if (w.symbol == m.symbol) { in_wl = true; break; }
+                }
+                if (!in_wl) {
+                    filtered_markets.push_back(m);
+                    if (++count >= 20) break; // limit results
+                }
+            }
+        }
+    }
 
     ImGui::Separator();
 
     // Scrollable list
     ImGui::BeginChild("##wl_scroll", ImVec2(0, 0), false);
 
-    std::string filter_str(watchlist_filter_);
-    for (auto& c : filter_str) c = (char)std::toupper((unsigned char)c);
-
     char buf[64];
     std::lock_guard<std::mutex> lock(data_mutex_);
 
+    // --- Watchlist entries ---
     for (int i = 0; i < (int)watchlist_.size(); i++) {
         auto& entry = watchlist_[i];
 
@@ -833,15 +1063,7 @@ void CryptoTradingScreen::render_watchlist(float w, float h) {
 
         if (ImGui::Selectable("##wl_sel", is_selected, ImGuiSelectableFlags_SpanAllColumns, ImVec2(0, 22))) {
             watchlist_selected_ = i;
-            // Watch new symbol for position price updates
-            if (!portfolio_id_.empty() && entry.symbol != selected_symbol_) {
-                trading::ExchangeService::instance().watch_symbol(entry.symbol, portfolio_id_);
-            }
-            selected_symbol_ = entry.symbol;
-            LOG_INFO(TAG, "Symbol selected: %s", selected_symbol_.c_str());
-            // Force immediate refresh
-            ticker_timer_ = 99;
-            ob_timer_ = 99;
+            switch_symbol(entry.symbol);
         }
 
         ImGui::PopStyleColor(2);
@@ -890,6 +1112,75 @@ void CryptoTradingScreen::render_watchlist(float w, float h) {
         ImGui::PopID();
     }
 
+    // --- Exchange search results (symbols not in watchlist) ---
+    if (!filtered_markets.empty()) {
+        ImGui::Separator();
+        ImGui::TextColored(TEXT_DIM, "Exchange results:");
+        ImGui::Spacing();
+
+        for (int i = 0; i < (int)filtered_markets.size(); i++) {
+            const auto& m = filtered_markets[i];
+            ImGui::PushID(10000 + i);
+
+            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.1f, 0.15f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, BG_HOVER);
+
+            if (ImGui::Selectable("##search_sel", false, ImGuiSelectableFlags_SpanAllColumns, ImVec2(0, 22))) {
+                // Add to watchlist
+                WatchlistEntry new_entry;
+                new_entry.symbol = m.symbol;
+                watchlist_.push_back(new_entry);
+                watchlist_selected_ = (int)watchlist_.size() - 1;
+                LOG_INFO(TAG, "Added %s to watchlist from search", m.symbol.c_str());
+
+                // Clear search field
+                watchlist_filter_[0] = '\0';
+
+                // Defer symbol switch — we hold data_mutex_ here,
+                // switch_symbol() will run in the render loop next frame
+                pending_symbol_switch_ = m.symbol;
+            }
+
+            ImGui::PopStyleColor(2);
+
+            ImGui::SameLine(4);
+
+            // Show base/quote
+            std::string base = m.base;
+            ImGui::TextColored(ACCENT, "%s", base.c_str());
+            ImGui::SameLine(0, 2);
+            ImGui::TextColored(TEXT_DIM, "/%s", m.quote.c_str());
+
+            // Type on right
+            float type_w = ImGui::CalcTextSize(m.type.c_str()).x;
+            float avail = ImGui::GetContentRegionAvail().x;
+            if (avail > type_w + 4) {
+                ImGui::SameLine(w - type_w - 16);
+                ImGui::TextColored(TEXT_DIM, "%s", m.type.c_str());
+            }
+
+            ImGui::PopID();
+        }
+    } else if (filter_str.length() >= 2 && search_fetching_) {
+        ImGui::Separator();
+        ImGui::TextColored(TEXT_DIM, "Searching...");
+    } else if (filter_str.length() >= 2 && search_markets_loaded_ && filtered_markets.empty()) {
+        // Check if all matches are in watchlist already
+        bool any_watchlist_match = false;
+        for (const auto& w : watchlist_) {
+            std::string sym_upper = w.symbol;
+            for (auto& c : sym_upper) c = (char)std::toupper((unsigned char)c);
+            if (sym_upper.find(filter_str) != std::string::npos) {
+                any_watchlist_match = true;
+                break;
+            }
+        }
+        if (!any_watchlist_match) {
+            ImGui::Separator();
+            ImGui::TextColored(TEXT_DIM, "No results");
+        }
+    }
+
     ImGui::EndChild();
     ImGui::EndChild();
     ImGui::PopStyleColor();
@@ -931,7 +1222,7 @@ void CryptoTradingScreen::render_chart_area(float w, float h) {
                 std::string tf = candle_timeframe_;
                 std::thread([this, sym, tf]() {
                     try {
-                        auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(sym, tf, 200);
+                        auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(sym, tf, OHLCV_FETCH_COUNT);
                         LOG_INFO(TAG, "<<< OHLCV %s received: %d candles", tf.c_str(), (int)ohlcv.size());
                         {
                             std::lock_guard<std::mutex> lock(data_mutex_);
@@ -1208,8 +1499,8 @@ void CryptoTradingScreen::render_bottom_panel(float w, float h) {
         ImGui::PopStyleColor(2);
     }
 
-    // Count badges
-    {
+    // Count badges (paper mode only — live data would come from exchange)
+    if (trading_mode_ == TradingMode::Paper) {
         std::lock_guard<std::mutex> lock(data_mutex_);
         ImGui::SameLine(0, 8);
         if (!positions_.empty()) {
@@ -1245,6 +1536,20 @@ void CryptoTradingScreen::render_bottom_panel(float w, float h) {
 }
 
 void CryptoTradingScreen::render_positions_tab() {
+    bool is_live = (trading_mode_ == TradingMode::Live);
+
+    // Mode label
+    ImGui::TextColored(is_live ? ImVec4(0.9f, 0.2f, 0.2f, 1.0f) : ImVec4(0.0f, 0.7f, 0.3f, 1.0f),
+                       is_live ? "[LIVE POSITIONS]" : "[PAPER POSITIONS]");
+
+    if (is_live) {
+        // Live mode — show positions from exchange
+        ImGui::TextColored(TEXT_DIM, "Live positions require API credentials.");
+        ImGui::TextColored(TEXT_DIM, "Configure in Settings > Exchange API.");
+        return;
+    }
+
+    // Paper mode — show simulated positions
     std::lock_guard<std::mutex> lock(data_mutex_);
 
     if (!portfolio_loaded_) {
@@ -1312,6 +1617,17 @@ void CryptoTradingScreen::render_positions_tab() {
 }
 
 void CryptoTradingScreen::render_orders_tab() {
+    bool is_live = (trading_mode_ == TradingMode::Live);
+
+    ImGui::TextColored(is_live ? ImVec4(0.9f, 0.2f, 0.2f, 1.0f) : ImVec4(0.0f, 0.7f, 0.3f, 1.0f),
+                       is_live ? "[LIVE ORDERS]" : "[PAPER ORDERS]");
+
+    if (is_live) {
+        ImGui::TextColored(TEXT_DIM, "Live orders require API credentials.");
+        ImGui::TextColored(TEXT_DIM, "Configure in Settings > Exchange API.");
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(data_mutex_);
 
     if (!portfolio_loaded_) {
@@ -1392,6 +1708,15 @@ void CryptoTradingScreen::render_orders_tab() {
 }
 
 void CryptoTradingScreen::render_history_tab() {
+    bool is_live = (trading_mode_ == TradingMode::Live);
+    ImGui::TextColored(is_live ? ImVec4(0.9f, 0.2f, 0.2f, 1.0f) : ImVec4(0.0f, 0.7f, 0.3f, 1.0f),
+                       is_live ? "[LIVE HISTORY]" : "[PAPER HISTORY]");
+
+    if (is_live) {
+        ImGui::TextColored(TEXT_DIM, "Live trade history requires API credentials.");
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(data_mutex_);
 
     if (!portfolio_loaded_) {
@@ -1453,6 +1778,15 @@ void CryptoTradingScreen::render_history_tab() {
 }
 
 void CryptoTradingScreen::render_stats_tab() {
+    bool is_live = (trading_mode_ == TradingMode::Live);
+    ImGui::TextColored(is_live ? ImVec4(0.9f, 0.2f, 0.2f, 1.0f) : ImVec4(0.0f, 0.7f, 0.3f, 1.0f),
+                       is_live ? "[LIVE STATS]" : "[PAPER STATS]");
+
+    if (is_live) {
+        ImGui::TextColored(TEXT_DIM, "Live statistics not available yet.");
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(data_mutex_);
     char buf[32];
 
@@ -1709,7 +2043,15 @@ void CryptoTradingScreen::render_order_entry(float w, float h) {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
     ImGui::BeginChild("##crypto_order_entry", ImVec2(w, h), true);
 
+    // Mode indicator
+    bool is_paper = (trading_mode_ == TradingMode::Paper);
     ImGui::TextColored(ACCENT, "ORDER ENTRY");
+    ImGui::SameLine(0, 6);
+    if (is_paper) {
+        ImGui::TextColored(ImVec4(0.0f, 0.7f, 0.3f, 1.0f), "[PAPER]");
+    } else {
+        ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.2f, 1.0f), "[LIVE]");
+    }
     ImGui::Separator();
 
     float input_w = w - 24;
@@ -1807,20 +2149,41 @@ void CryptoTradingScreen::render_order_entry(float w, float h) {
 
     ImGui::Spacing();
 
-    // Submit button
+    // Submit button — clearly labeled with mode
     {
         bool is_buy = (order_form_.side_idx == 0);
         ImVec4 btn_col = is_buy ? ImVec4(0.0f, 0.55f, 0.25f, 1.0f) : ImVec4(0.65f, 0.1f, 0.1f, 1.0f);
+
+        // Show base symbol without quote (e.g., "BTC" not "BTC/USDT")
+        std::string base_sym = selected_symbol_;
+        auto slash_pos = base_sym.find('/');
+        if (slash_pos != std::string::npos) base_sym = base_sym.substr(0, slash_pos);
+
         char label[64];
-        std::snprintf(label, sizeof(label), "%s %s", is_buy ? "BUY" : "SELL", selected_symbol_.c_str());
+        if (is_paper) {
+            std::snprintf(label, sizeof(label), "%s %s (Paper)",
+                          is_buy ? "BUY" : "SELL", base_sym.c_str());
+        } else {
+            std::snprintf(label, sizeof(label), "%s %s (LIVE)",
+                          is_buy ? "BUY" : "SELL", base_sym.c_str());
+            // Add red border for live orders as a safety indicator
+            btn_col = is_buy ? ImVec4(0.0f, 0.4f, 0.2f, 1.0f) : ImVec4(0.6f, 0.05f, 0.05f, 1.0f);
+        }
 
         ImGui::PushStyleColor(ImGuiCol_Button, btn_col);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(btn_col.x + 0.1f, btn_col.y + 0.1f, btn_col.z + 0.1f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
-        if (ImGui::Button(label, ImVec2(input_w, 28))) {
+        if (order_submitting_.load()) {
+            ImGui::Button("Submitting...", ImVec2(input_w, 28));
+        } else if (ImGui::Button(label, ImVec2(input_w, 28))) {
             submit_order();
         }
         ImGui::PopStyleColor(3);
+
+        // Warning for live mode
+        if (!is_paper) {
+            ImGui::TextColored(ImVec4(0.9f, 0.5f, 0.1f, 1.0f), "Real money at risk!");
+        }
     }
 
     // Error / Success messages
@@ -2047,9 +2410,20 @@ void CryptoTradingScreen::submit_order() {
     order_form_.error.clear();
     order_form_.success.clear();
 
-    LOG_INFO(TAG, "Submitting order: symbol=%s side=%d type=%d qty='%s' price='%s'",
+    bool is_live = (trading_mode_ == TradingMode::Live);
+    LOG_INFO(TAG, "Submitting %s order: symbol=%s side=%d type=%d qty='%s' price='%s'",
+             is_live ? "LIVE" : "PAPER",
              selected_symbol_.c_str(), order_form_.side_idx, order_form_.type_idx,
              order_form_.quantity_buf, order_form_.price_buf);
+
+    // Live mode guard — require credentials
+    if (is_live) {
+        // Check if exchange has credentials configured
+        // (credentials are stored in ExchangeService)
+        auto& svc = trading::ExchangeService::instance();
+        // For now, just warn — the actual API call will fail if no creds
+        LOG_INFO(TAG, "Live order being routed to %s exchange API", exchange_id_.c_str());
+    }
 
     // Parse quantity
     double qty = 0;
@@ -2121,13 +2495,36 @@ void CryptoTradingScreen::submit_order() {
 
     try {
         if (trading_mode_ == TradingMode::Live) {
-            // Live trading — route through exchange API
-            auto& svc = trading::ExchangeService::instance();
-            auto result = svc.place_order(selected_symbol_, side, order_type, qty,
-                                           price.value_or(0.0));
-            LOG_INFO(TAG, "Live order placed: %s", result.dump(2).c_str());
-            order_form_.success = "Live order sent!";
-            order_form_.msg_timer = 3.0f;
+            // Live trading — route through exchange API on background thread
+            order_submitting_.store(true);
+            std::string sym = selected_symbol_;
+            std::string pid = portfolio_id_;
+            std::thread([this, sym, side, order_type, qty, price, pid]() {
+                try {
+                    auto& svc = trading::ExchangeService::instance();
+                    auto result = svc.place_order(sym, side, order_type, qty,
+                                                   price.value_or(0.0));
+                    LOG_INFO(TAG, "Live order placed: %s", result.dump(2).c_str());
+                    {
+                        std::lock_guard<std::mutex> lock(data_mutex_);
+                        order_form_.success = "Live order sent!";
+                        order_form_.msg_timer = 3.0f;
+                    }
+                    trading::ExchangeService::instance().watch_symbol(sym, pid);
+                    refresh_portfolio_data();
+                } catch (const std::exception& e) {
+                    std::lock_guard<std::mutex> lock(data_mutex_);
+                    order_form_.error = e.what();
+                    order_form_.msg_timer = 5.0f;
+                    LOG_ERROR(TAG, "Live order FAILED: %s", e.what());
+                }
+                order_submitting_.store(false);
+            }).detach();
+            // Clear form immediately
+            order_form_.quantity_buf[0] = '\0';
+            order_form_.price_buf[0] = '\0';
+            order_form_.stop_price_buf[0] = '\0';
+            return; // skip the rest — thread handles result
         } else {
             // Paper trading
             auto order = trading::pt_place_order(
@@ -2170,7 +2567,11 @@ void CryptoTradingScreen::submit_order() {
 }
 
 void CryptoTradingScreen::cancel_order(const std::string& order_id) {
-    LOG_INFO(TAG, "Cancelling order: %s", order_id.c_str());
+    if (trading_mode_ != TradingMode::Paper) {
+        LOG_WARN(TAG, "cancel_order called in Live mode — not yet supported");
+        return;
+    }
+    LOG_INFO(TAG, "Cancelling paper order: %s", order_id.c_str());
     try {
         trading::pt_cancel_order(order_id);
         trading::OrderMatcher::instance().remove_order(order_id);

@@ -18,6 +18,7 @@ private:
     bool retirement_loaded_ = false;
     bool loading_ = false;
     std::string loaded_for_portfolio_;
+    std::string error_;
 
     // Retirement planner inputs
     char current_age_[8] = "30";

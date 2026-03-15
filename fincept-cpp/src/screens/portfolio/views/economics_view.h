@@ -17,6 +17,7 @@ private:
     bool cycle_loaded_ = false;
     bool erp_loaded_ = false;
     bool loading_ = false;
+    std::string error_;
 
     void fetch_business_cycle();
     void fetch_erp();

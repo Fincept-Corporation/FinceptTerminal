@@ -3,11 +3,13 @@
 
 #include "risk_view.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "core/logger.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cstdio>
+#include <thread>
 
 namespace fincept::portfolio {
 
@@ -121,33 +123,57 @@ void RiskView::fetch_overview(const PortfolioSummary& summary) {
     loading_ = true;
     error_.clear();
 
-    try {
-        nlohmann::json req;
-        req["symbols"] = build_symbols_csv(summary);
-        req["weights"] = build_weights_array(summary);
-        req["portfolio_value"] = summary.total_market_value;
-        req["function"] = "comprehensive_risk_analysis";
+    auto sym_csv = build_symbols_csv(summary);
+    auto weights = build_weights_array(summary);
+    double mv = summary.total_market_value;
+    std::thread([this, sym_csv, weights, mv]() {
+        try {
+            nlohmann::json req;
+            req["symbols"] = sym_csv;
+            req["weights"] = weights;
+            req["portfolio_value"] = mv;
+            req["function"] = "full_analysis";
 
-        auto result = python::execute_with_stdin(
-            "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-            {"comprehensive_risk_analysis"}, req.dump());
-
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) {
-                overview_result_ = j;
-                overview_loaded_ = true;
-            } else {
-                error_ = "Failed to parse analysis results";
+            auto& cache = CacheService::instance();
+            std::string ck = CacheService::make_key("reference", "risk-overview", sym_csv.substr(0, std::min((size_t)64, sym_csv.size())));
+            std::string output;
+            auto cached_r = cache.get(ck);
+            if (cached_r && !cached_r->empty()) { output = *cached_r; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+                    {"full_analysis"}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    output = result.output;
+                    auto check = nlohmann::json::parse(output, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache.set(ck, output, "reference", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
             }
-        } else {
-            error_ = result.error.empty() ? "Python script failed" : result.error;
+
+            if (!output.empty()) {
+                auto j = nlohmann::json::parse(output, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error")) {
+                        error_ = j["error"].get<std::string>();
+                    } else {
+                        overview_result_ = j;
+                        overview_loaded_ = true;
+                    }
+                } else {
+                    error_ = "Failed to parse analysis results";
+                }
+            } else if (error_.empty()) {
+                error_ = "Python script returned empty output";
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("RiskView", "Overview fetch failed: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        error_ = e.what();
-        LOG_ERROR("RiskView", "Overview fetch failed: %s", e.what());
-    }
-    loading_ = false;
+        loading_ = false;
+    }).detach();
 }
 
 void RiskView::fetch_stress(const PortfolioSummary& summary) {
@@ -155,29 +181,51 @@ void RiskView::fetch_stress(const PortfolioSummary& summary) {
     loading_ = true;
     error_.clear();
 
-    try {
-        nlohmann::json req;
-        req["symbols"] = build_symbols_csv(summary);
-        req["half_life"] = 252;
+    auto sym_csv = build_symbols_csv(summary);
+    std::thread([this, sym_csv]() {
+        try {
+            nlohmann::json req;
+            req["returns"] = sym_csv;
+            req["half_life"] = 252;
 
-        auto result = python::execute_with_stdin(
-            "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-            {"exp_decay_and_covariance"}, req.dump());
-
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) {
-                stress_result_ = j;
-                stress_loaded_ = true;
+            auto& cache_s = CacheService::instance();
+            std::string sc = CacheService::make_key("reference", "risk-stress", sym_csv.substr(0, std::min((size_t)64, sym_csv.size())));
+            std::string s_out;
+            auto cs = cache_s.get(sc);
+            if (cs && !cs->empty()) { s_out = *cs; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+                    {"exp_decay_weighting"}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    s_out = result.output;
+                    auto check = nlohmann::json::parse(s_out, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache_s.set(sc, s_out, "reference", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
             }
-        } else {
-            error_ = result.error.empty() ? "Python script failed" : result.error;
+
+            if (!s_out.empty()) {
+                auto j = nlohmann::json::parse(s_out, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error")) {
+                        error_ = j["error"].get<std::string>();
+                    } else {
+                        stress_result_ = j;
+                        stress_loaded_ = true;
+                    }
+                }
+            } else if (error_.empty()) {
+                error_ = "Python script returned empty output";
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("RiskView", "Stress fetch failed: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        error_ = e.what();
-        LOG_ERROR("RiskView", "Stress fetch failed: %s", e.what());
-    }
-    loading_ = false;
+        loading_ = false;
+    }).detach();
 }
 
 void RiskView::fetch_fortitudo(const PortfolioSummary& summary) {
@@ -185,29 +233,50 @@ void RiskView::fetch_fortitudo(const PortfolioSummary& summary) {
     loading_ = true;
     error_.clear();
 
-    try {
-        nlohmann::json req;
-        req["weights"] = build_weights_array(summary);
-        req["n_scenarios"] = 1000;
+    auto weights = build_weights_array(summary);
+    std::thread([this, weights]() {
+        try {
+            nlohmann::json req;
+            req["weights"] = weights;
 
-        auto result = python::execute_with_stdin(
-            "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-            {"entropy_pooling_and_stacking"}, req.dump());
-
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) {
-                fortitudo_result_ = j;
-                fortitudo_loaded_ = true;
+            auto& cache_f = CacheService::instance();
+            std::string fc = CacheService::make_key("reference", "risk-fortitudo", weights.dump().substr(0, 64));
+            std::string f_out;
+            auto cf = cache_f.get(fc);
+            if (cf && !cf->empty()) { f_out = *cf; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+                    {"entropy_pooling"}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    f_out = result.output;
+                    auto check = nlohmann::json::parse(f_out, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache_f.set(fc, f_out, "reference", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
             }
-        } else {
-            error_ = result.error.empty() ? "Python script failed" : result.error;
+
+            if (!f_out.empty()) {
+                auto j = nlohmann::json::parse(f_out, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error")) {
+                        error_ = j["error"].get<std::string>();
+                    } else {
+                        fortitudo_result_ = j;
+                        fortitudo_loaded_ = true;
+                    }
+                }
+            } else if (error_.empty()) {
+                error_ = "Python script returned empty output";
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("RiskView", "Fortitudo fetch failed: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        error_ = e.what();
-        LOG_ERROR("RiskView", "Fortitudo fetch failed: %s", e.what());
-    }
-    loading_ = false;
+        loading_ = false;
+    }).detach();
 }
 
 void RiskView::fetch_frontiers(const PortfolioSummary& summary) {
@@ -215,30 +284,52 @@ void RiskView::fetch_frontiers(const PortfolioSummary& summary) {
     loading_ = true;
     error_.clear();
 
-    try {
-        nlohmann::json req;
-        req["symbols"] = build_symbols_csv(summary);
-        req["n_points"] = 20;
-        req["alpha"] = 0.05;
+    auto sym_csv = build_symbols_csv(summary);
+    std::thread([this, sym_csv]() {
+        try {
+            nlohmann::json req;
+            req["returns"] = sym_csv;
+            req["n_points"] = 20;
+            req["alpha"] = 0.05;
 
-        auto result = python::execute_with_stdin(
-            "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-            {"efficient_frontiers"}, req.dump());
-
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) {
-                frontier_result_ = j;
-                frontier_loaded_ = true;
+            auto& cache_fr = CacheService::instance();
+            std::string frc = CacheService::make_key("reference", "risk-frontier", sym_csv.substr(0, std::min((size_t)64, sym_csv.size())));
+            std::string fr_out;
+            auto cfr = cache_fr.get(frc);
+            if (cfr && !cfr->empty()) { fr_out = *cfr; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+                    {"efficient_frontier_mv"}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    fr_out = result.output;
+                    auto check = nlohmann::json::parse(fr_out, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache_fr.set(frc, fr_out, "reference", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
             }
-        } else {
-            error_ = result.error.empty() ? "Python script failed" : result.error;
+
+            if (!fr_out.empty()) {
+                auto j = nlohmann::json::parse(fr_out, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error")) {
+                        error_ = j["error"].get<std::string>();
+                    } else {
+                        frontier_result_ = j;
+                        frontier_loaded_ = true;
+                    }
+                }
+            } else if (error_.empty()) {
+                error_ = "Python script returned empty output";
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("RiskView", "Frontier fetch failed: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        error_ = e.what();
-        LOG_ERROR("RiskView", "Frontier fetch failed: %s", e.what());
-    }
-    loading_ = false;
+        loading_ = false;
+    }).detach();
 }
 
 // ============================================================================

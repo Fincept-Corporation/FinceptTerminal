@@ -45,8 +45,8 @@ static std::string fetch_tile_data(const std::string& url) {
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_binary);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 3L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "FinceptTerminal/4.0.0");
@@ -182,6 +182,11 @@ void TileMap::ensure_tile(const TileKey& key) {
     if (it != tile_cache_.end()) {
         // Already loaded, loading, or failed — don't re-request
         return;
+    }
+
+    // Throttle concurrent loads to avoid spawning dozens of threads
+    if (pending_loads_.load() >= MAX_CONCURRENT_LOADS) {
+        return; // Will retry next frame
     }
 
     tile_cache_[key].state = TileState::Loading;
@@ -406,11 +411,8 @@ void TileMap::render_tiles(ImDrawList* dl, ImVec2 pos, ImVec2 size) {
         }
     }
 
-    for (auto& info : visible_tiles) {
-        ensure_tile(info.key);
-    }
-
-    // Second pass: render
+    // Second pass: render existing tiles and collect missing ones
+    std::vector<TileKey> missing_keys;
     {
         std::lock_guard<std::mutex> lock(tile_mutex_);
         for (auto& info : visible_tiles) {
@@ -422,8 +424,16 @@ void TileMap::render_tiles(ImDrawList* dl, ImVec2 pos, ImVec2 size) {
             } else {
                 dl->AddRectFilled(info.tile_min, info.tile_max, IM_COL32(24, 24, 26, 255));
                 dl->AddRect(info.tile_min, info.tile_max, IM_COL32(40, 40, 44, 100));
+                if (it == tile_cache_.end()) {
+                    missing_keys.push_back(info.key);
+                }
             }
         }
+    }
+
+    // Third pass: request missing tiles (outside render lock)
+    for (auto& key : missing_keys) {
+        ensure_tile(key);
     }
 
     dl->PopClipRect();

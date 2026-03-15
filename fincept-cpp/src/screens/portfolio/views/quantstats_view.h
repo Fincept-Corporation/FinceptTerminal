@@ -18,6 +18,7 @@ private:
     bool ffn_loaded_ = false;
     bool loading_ = false;
     std::string loaded_for_portfolio_;
+    std::string error_;
 
     void fetch_quantstats(const PortfolioSummary& summary);
     void fetch_ffn(const PortfolioSummary& summary);

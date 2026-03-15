@@ -160,7 +160,12 @@ def fetch_returns_for_tickers(tickers_str: str) -> pd.DataFrame:
 
 def parse_returns_json(returns_json: str) -> pd.DataFrame:
     """Parse JSON returns data into DataFrame"""
-    data = json.loads(returns_json)
+    # Handle plain ticker strings (e.g. "AAPL,MSFT") that aren't JSON-wrapped
+    try:
+        data = json.loads(returns_json)
+    except (json.JSONDecodeError, TypeError):
+        # Treat as a plain comma-separated ticker string
+        data = returns_json
 
     # Handle the case where the frontend sends a JSON-encoded ticker string
     # e.g. JSON.stringify("AAPL,MSFT,GOOGL") → data is a plain string
@@ -698,6 +703,14 @@ def main(args: list) -> str:
                 params = json.loads(args[1])
             except json.JSONDecodeError as e:
                 return serialize_result({"success": False, "error": f"Invalid JSON params: {e}"})
+    else:
+        # No explicit params arg — read from stdin (C++ execute_with_stdin pipes data here)
+        try:
+            stdin_data = sys.stdin.read()
+            if stdin_data and stdin_data.strip():
+                params = json.loads(stdin_data)
+        except (json.JSONDecodeError, OSError):
+            pass
 
     # Route commands
     handlers = {

@@ -3,6 +3,7 @@
 
 #include "performance_view.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "core/logger.h"
 #include <imgui.h>
@@ -12,6 +13,7 @@
 #include <cstdio>
 #include <cmath>
 #include <set>
+#include <thread>
 
 namespace fincept::portfolio {
 
@@ -128,112 +130,150 @@ void PerformanceView::render_period_bar(const ComputedMetrics& metrics) {
 void PerformanceView::fetch_historical(const PortfolioSummary& summary) {
     if (data_loading_) return;
     data_loading_ = true;
+    error_msg_.clear();
 
-    try {
-        nlohmann::json req;
-        std::vector<std::string> symbols;
-        for (const auto& h : summary.holdings)
-            symbols.push_back(h.asset.symbol);
+    // Capture holdings data by value for the thread
+    struct HoldingInfo { std::string symbol; double quantity; };
+    std::vector<HoldingInfo> holdings_copy;
+    std::vector<std::string> symbols;
+    for (const auto& h : summary.holdings) {
+        holdings_copy.push_back({h.asset.symbol, h.asset.quantity});
+        symbols.push_back(h.asset.symbol);
+    }
+    symbols.push_back("SPY");
+    int period = period_idx_;
 
-        // Also fetch SPY as benchmark
-        symbols.push_back("SPY");
-        req["symbols"] = symbols;
+    std::thread([this, holdings_copy, symbols, period]() {
+        try {
+            nlohmann::json req;
+            req["symbols"] = symbols;
 
-        // Map period to yfinance period strings
-        const char* yf_periods[] = {"1mo", "3mo", "6mo", "1y", "5y"};
-        req["period"] = yf_periods[period_idx_];
-        req["interval"] = "1d";
+            const char* yf_periods[] = {"1mo", "3mo", "6mo", "1y", "5y"};
+            req["period"] = yf_periods[period];
+            req["interval"] = "1d";
 
-        auto result = python::execute_with_stdin(
-            "Analytics/portfolioManagement/fetch_historical.py",
-            {}, req.dump());
+            auto& cache = CacheService::instance();
+            std::string sym_key;
+            for (const auto& s : symbols) sym_key += s + "_";
+            std::string cache_key = CacheService::make_key("market-quotes", "perf-hist",
+                sym_key + yf_periods[period]);
 
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded() && j.is_object()) {
-                // Build portfolio NAV from weighted holdings
-                // First, collect all unique dates across all symbols
-                std::map<std::string, std::map<std::string, double>> sym_data; // symbol -> {date -> close}
+            std::string output;
+            auto cached = cache.get(cache_key);
+            if (cached && !cached->empty()) {
+                output = *cached;
+            } else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/portfolioManagement/fetch_historical.py",
+                    {}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    output = result.output;
+                    // Only cache if valid JSON and no error
+                    auto check = nlohmann::json::parse(output, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache.set(cache_key, output, "market-quotes", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_msg_ = result.error;
+                    data_loading_ = false;
+                    return;
+                }
+            }
 
-                for (const auto& sym : symbols) {
-                    if (!j.contains(sym)) continue;
-                    auto& sd = j[sym];
-                    if (!sd.contains("dates") || !sd.contains("closes")) continue;
-                    auto& dates = sd["dates"];
-                    auto& closes = sd["closes"];
-                    for (size_t i = 0; i < dates.size() && i < closes.size(); i++) {
-                        sym_data[sym][dates[i].get<std::string>()] = closes[i].get<double>();
+            if (!output.empty()) {
+                auto j = nlohmann::json::parse(output, nullptr, false);
+                if (!j.is_discarded() && j.is_object()) {
+                    if (j.contains("error")) {
+                        error_msg_ = j["error"].get<std::string>();
+                        data_loading_ = false;
+                        return;
                     }
-                }
+                    std::map<std::string, std::map<std::string, double>> sym_data;
 
-                // Collect all dates
-                std::set<std::string> all_dates;
-                for (const auto& [sym, dmap] : sym_data) {
-                    if (sym == "SPY") continue;
-                    for (const auto& [d, _] : dmap) all_dates.insert(d);
-                }
-
-                std::vector<std::string> sorted_dates(all_dates.begin(), all_dates.end());
-                std::sort(sorted_dates.begin(), sorted_dates.end());
-
-                // Build NAV: sum(quantity * close) for each date
-                nav_values_.clear();
-                nav_times_.clear();
-                nav_dates_.clear();
-
-                for (size_t di = 0; di < sorted_dates.size(); di++) {
-                    const auto& date = sorted_dates[di];
-                    double nav = 0;
-                    bool has_any = false;
-
-                    for (const auto& h : summary.holdings) {
-                        auto sit = sym_data.find(h.asset.symbol);
-                        if (sit == sym_data.end()) continue;
-                        auto dit = sit->second.find(date);
-                        if (dit != sit->second.end()) {
-                            nav += h.asset.quantity * dit->second;
-                            has_any = true;
+                    for (const auto& sym : symbols) {
+                        if (!j.contains(sym)) continue;
+                        auto& sd = j[sym];
+                        if (sd.is_array()) {
+                            // Format: [{"date": "2024-01-01", "close": 150.0}, ...]
+                            for (const auto& rec : sd) {
+                                if (rec.contains("date") && rec.contains("close")) {
+                                    sym_data[sym][rec["date"].get<std::string>()] = rec["close"].get<double>();
+                                }
+                            }
+                        } else if (sd.is_object() && sd.contains("dates") && sd.contains("closes")) {
+                            // Legacy format: {"dates": [...], "closes": [...]}
+                            auto& dates = sd["dates"];
+                            auto& closes = sd["closes"];
+                            for (size_t i = 0; i < dates.size() && i < closes.size(); i++) {
+                                sym_data[sym][dates[i].get<std::string>()] = closes[i].get<double>();
+                            }
                         }
                     }
 
-                    if (has_any) {
-                        nav_values_.push_back(nav);
-                        nav_times_.push_back(static_cast<double>(di));
-                        nav_dates_.push_back(date);
+                    std::set<std::string> all_dates;
+                    for (const auto& [sym, dmap] : sym_data) {
+                        if (sym == "SPY") continue;
+                        for (const auto& [d, _] : dmap) all_dates.insert(d);
                     }
-                }
 
-                // Build benchmark returns
-                bench_returns_.clear();
-                auto spy_it = sym_data.find("SPY");
-                if (spy_it != sym_data.end()) {
-                    std::vector<double> spy_closes;
-                    for (const auto& date : sorted_dates) {
-                        auto dit = spy_it->second.find(date);
-                        if (dit != spy_it->second.end())
-                            spy_closes.push_back(dit->second);
+                    std::vector<std::string> sorted_dates(all_dates.begin(), all_dates.end());
+                    std::sort(sorted_dates.begin(), sorted_dates.end());
+
+                    nav_values_.clear();
+                    nav_times_.clear();
+                    nav_dates_.clear();
+
+                    for (size_t di = 0; di < sorted_dates.size(); di++) {
+                        const auto& date = sorted_dates[di];
+                        double nav = 0;
+                        bool has_any = false;
+
+                        for (const auto& h : holdings_copy) {
+                            auto sit = sym_data.find(h.symbol);
+                            if (sit == sym_data.end()) continue;
+                            auto dit = sit->second.find(date);
+                            if (dit != sit->second.end()) {
+                                nav += h.quantity * dit->second;
+                                has_any = true;
+                            }
+                        }
+
+                        if (has_any) {
+                            nav_values_.push_back(nav);
+                            nav_times_.push_back(static_cast<double>(di));
+                            nav_dates_.push_back(date);
+                        }
                     }
-                    for (size_t i = 1; i < spy_closes.size(); i++) {
-                        if (spy_closes[i - 1] > 0)
-                            bench_returns_.push_back((spy_closes[i] - spy_closes[i - 1]) / spy_closes[i - 1]);
+
+                    bench_returns_.clear();
+                    auto spy_it = sym_data.find("SPY");
+                    if (spy_it != sym_data.end()) {
+                        std::vector<double> spy_closes;
+                        for (const auto& date : sorted_dates) {
+                            auto dit = spy_it->second.find(date);
+                            if (dit != spy_it->second.end())
+                                spy_closes.push_back(dit->second);
+                        }
+                        for (size_t i = 1; i < spy_closes.size(); i++) {
+                            if (spy_closes[i - 1] > 0)
+                                bench_returns_.push_back((spy_closes[i] - spy_closes[i - 1]) / spy_closes[i - 1]);
+                        }
                     }
-                }
 
-                // Compute period return
-                if (nav_values_.size() >= 2) {
-                    start_nav_ = nav_values_.front();
-                    current_nav_ = nav_values_.back();
-                    period_return_ = start_nav_ > 0 ? ((current_nav_ - start_nav_) / start_nav_) * 100.0 : 0.0;
-                    trading_days_ = static_cast<int>(nav_values_.size());
-                }
+                    if (nav_values_.size() >= 2) {
+                        start_nav_ = nav_values_.front();
+                        current_nav_ = nav_values_.back();
+                        period_return_ = start_nav_ > 0 ? ((current_nav_ - start_nav_) / start_nav_) * 100.0 : 0.0;
+                        trading_days_ = static_cast<int>(nav_values_.size());
+                    }
 
-                data_loaded_ = true;
+                    data_loaded_ = true;
+                }
             }
+        } catch (const std::exception& e) {
+            LOG_ERROR("PerformanceView", "Failed to fetch historical: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        LOG_ERROR("PerformanceView", "Failed to fetch historical: %s", e.what());
-    }
-    data_loading_ = false;
+        data_loading_ = false;
+    }).detach();
 }
 
 // ============================================================================
@@ -246,6 +286,8 @@ void PerformanceView::render_nav_chart() {
     if (!data_loaded_ || nav_values_.size() < 2) {
         if (data_loading_) {
             theme::LoadingSpinner("Loading historical data...");
+        } else if (!error_msg_.empty()) {
+            ImGui::TextColored(theme::colors::MARKET_RED, "Error: %s", error_msg_.c_str());
         } else {
             ImGui::TextColored(theme::colors::TEXT_DIM, "No historical data available.");
         }

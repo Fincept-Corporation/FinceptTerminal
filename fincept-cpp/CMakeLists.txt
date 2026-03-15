@@ -6,6 +6,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # =============================================================================
+# Build acceleration: Unity builds (merge .cpp files into batches)
+# =============================================================================
+option(FINCEPT_UNITY_BUILD "Enable unity (jumbo) builds for faster compilation" ON)
+if(FINCEPT_UNITY_BUILD)
+    set(CMAKE_UNITY_BUILD ON)
+    set(CMAKE_UNITY_BUILD_BATCH_SIZE 12)
+endif()
+
+
+# =============================================================================
 # Dependencies via vcpkg
 # =============================================================================
 find_package(glfw3 CONFIG REQUIRED)
@@ -20,6 +30,41 @@ find_path(STB_INCLUDE_DIRS "stb_image.h")
 
 # OpenGL
 find_package(OpenGL REQUIRED)
+
+# =============================================================================
+# Optional: libmpv for inline video playback (YouTube widget)
+# Cross-platform: Windows uses third_party/mpv, Linux/macOS use pkg-config
+# =============================================================================
+option(FINCEPT_ENABLE_MPV "Enable mpv video playback in YouTube widget" ON)
+set(FINCEPT_HAS_MPV FALSE)
+set(MPV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/mpv")
+
+if(FINCEPT_ENABLE_MPV)
+    if(WIN32 AND EXISTS "${MPV_DIR}/include/mpv/client.h")
+        # Windows: use prebuilt library from third_party/mpv
+        set(FINCEPT_HAS_MPV TRUE)
+        set(MPV_INCLUDE_DIR "${MPV_DIR}/include")
+        set(MPV_LIBRARY "${MPV_DIR}/mpv.lib")
+        message(STATUS "libmpv found (Windows prebuilt): ${MPV_DIR}")
+    elseif(NOT WIN32)
+        # Linux/macOS: find via pkg-config
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(MPV QUIET mpv)
+            if(MPV_FOUND)
+                set(FINCEPT_HAS_MPV TRUE)
+                set(MPV_INCLUDE_DIR ${MPV_INCLUDE_DIRS})
+                set(MPV_LIBRARY ${MPV_LIBRARIES})
+                message(STATUS "libmpv found (pkg-config): ${MPV_LIBRARIES}")
+            endif()
+        endif()
+        if(NOT FINCEPT_HAS_MPV)
+            message(STATUS "libmpv not found — install libmpv-dev (apt) or mpv (brew). YouTube widget will use link-only mode")
+        endif()
+    else()
+        message(STATUS "libmpv not found at ${MPV_DIR} — YouTube widget will use link-only mode")
+    endif()
+endif()
 
 # =============================================================================
 # Sources
@@ -102,6 +147,10 @@ set(SOURCES
     src/screens/node_editor/node_executor.cpp
     src/screens/node_editor/node_editor_screen.cpp
     src/screens/node_editor/workflow_templates.cpp
+
+    # Screens — AI Chat
+    src/screens/ai_chat/llm_service.cpp
+    src/screens/ai_chat/ai_chat_screen.cpp
 
     # Screens — Agent Studio
     src/screens/agent_studio/agent_service.cpp
@@ -206,14 +255,37 @@ set(SOURCES
     # Trading — Unified Trading
     src/trading/unified_trading.cpp
 
+    # Screens — AI Quant Lab
+    src/screens/ai_quant_lab/ai_quant_lab_api.cpp
+    src/screens/ai_quant_lab/ai_quant_lab_screen.cpp
+
     # Screens — Code Editor
     src/screens/code_editor/notebook_io.cpp
     src/screens/code_editor/code_editor_screen.cpp
+
+    # Media — mpv video player
+    src/media/mpv_player.cpp
 
     # Python bridge
     src/python/python_runner.cpp
     src/python/setup_manager.cpp
     src/python/setup_screen.cpp
+
+    # MCP — Model Context Protocol
+    src/mcp/mcp_provider.cpp
+    src/mcp/mcp_client.cpp
+    src/mcp/mcp_manager.cpp
+    src/mcp/mcp_service.cpp
+    src/mcp/mcp_init.cpp
+    src/mcp/tools/navigation_tools.cpp
+    src/mcp/tools/market_data_tools.cpp
+    src/mcp/tools/settings_tools.cpp
+    src/mcp/tools/portfolio_tools.cpp
+
+    # Screens — Data Mapping
+    src/screens/data_mapping/data_mapping_engine.cpp
+    src/screens/data_mapping/data_mapping_db.cpp
+    src/screens/data_mapping/data_mapping_screen.cpp
 
     # Core (continued)
     src/core/device_id.cpp
@@ -224,6 +296,28 @@ set(SOURCES
 # =============================================================================
 add_executable(${PROJECT_NAME} ${SOURCES})
 
+# Files that conflict under unity builds (ODR: duplicate static symbols across files)
+set_source_files_properties(
+    src/screens/gov_data/providers/us_treasury.cpp
+    src/screens/gov_data/providers/us_congress.cpp
+    src/screens/gov_data/providers/canada_gov.cpp
+    src/screens/gov_data/providers/openafrica.cpp
+    src/screens/gov_data/providers/spain_data.cpp
+    src/screens/gov_data/providers/pxweb.cpp
+    src/screens/gov_data/providers/swiss_gov.cpp
+    src/screens/gov_data/providers/french_gov.cpp
+    src/screens/gov_data/providers/universal_ckan.cpp
+    src/screens/gov_data/providers/data_gov_hk.cpp
+    src/screens/research/research_screen.cpp
+    src/screens/research/overview_panel.cpp
+    src/screens/research/financials_panel.cpp
+    src/screens/research/analysis_panel.cpp
+    src/screens/research/technicals_panel.cpp
+    src/screens/research/news_panel.cpp
+    src/media/mpv_player.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
+)
+
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/fonts
@@ -231,11 +325,59 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${STB_INCLUDE_DIRS}
 )
 
+# mpv include path
+if(FINCEPT_HAS_MPV)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${MPV_INCLUDE_DIR})
+endif()
+
+# =============================================================================
+# Precompiled Header (PCH) — compiles heavy headers once
+# =============================================================================
+option(FINCEPT_USE_PCH "Enable precompiled headers for faster builds" ON)
+if(FINCEPT_USE_PCH)
+    target_precompile_headers(${PROJECT_NAME} PRIVATE
+        # C++ standard library (used everywhere)
+        <string>
+        <vector>
+        <unordered_map>
+        <unordered_set>
+        <mutex>
+        <thread>
+        <atomic>
+        <functional>
+        <chrono>
+        <memory>
+        <optional>
+        <algorithm>
+        <cstdio>
+        <cmath>
+        <sstream>
+        <fstream>
+        # Heavy third-party headers
+        <nlohmann/json.hpp>
+    )
+endif()
+
+# =============================================================================
+# Compiler cache (sccache/ccache) — caches compiled objects across builds
+# =============================================================================
+find_program(CCACHE_PROGRAM ccache)
+find_program(SCCACHE_PROGRAM sccache)
+if(SCCACHE_PROGRAM)
+    message(STATUS "Using sccache: ${SCCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER ${SCCACHE_PROGRAM})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${SCCACHE_PROGRAM})
+elseif(CCACHE_PROGRAM)
+    message(STATUS "Using ccache: ${CCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+endif()
+
 # =============================================================================
 # Compiler warnings (enable for code quality, CI enforcement)
 # =============================================================================
 if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /W3 /FS)
+    target_compile_options(${PROJECT_NAME} PRIVATE /W3 /FS /MP)
     target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
@@ -246,6 +388,11 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     IMGUI_USE_WCHAR32
     IMGUI_ENABLE_FREETYPE
 )
+
+# mpv compile definition
+if(FINCEPT_HAS_MPV)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE FINCEPT_HAS_MPV)
+endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     glfw
@@ -259,6 +406,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     implot::implot
     yoga::yogacore
 )
+
+# mpv link library
+if(FINCEPT_HAS_MPV)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${MPV_LIBRARY})
+    if(NOT WIN32)
+        target_link_directories(${PROJECT_NAME} PRIVATE ${MPV_LIBRARY_DIRS})
+    endif()
+endif()
 
 # =============================================================================
 # Platform-specific
@@ -287,6 +442,17 @@ elseif(UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         pthread
         dl
+    )
+endif()
+
+# =============================================================================
+# Copy mpv DLL to build directory (Windows only — Linux/macOS use system lib)
+# =============================================================================
+if(FINCEPT_HAS_MPV AND WIN32)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${MPV_DIR}/libmpv-2.dll"
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
     )
 endif()
 

@@ -1,5 +1,6 @@
 #include "watchlist_data.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <sstream>
@@ -36,8 +37,29 @@ void WatchlistData::fetch_quotes(const std::vector<std::string>& symbols) {
     std::string args = "batch_quotes";
     for (auto& s : symbols) args += " " + s;
 
-    std::thread([this, args]() {
-        std::string out = run_python(args);
+    std::thread([this, args, symbols]() {
+        auto& cache = CacheService::instance();
+
+        // Build a cache key that includes the actual symbols
+        std::string sym_key;
+        for (auto& s : symbols) {
+            if (!sym_key.empty()) sym_key += ",";
+            sym_key += s;
+        }
+        std::string cache_key = CacheService::make_key("market-quotes", "watchlist", sym_key);
+
+        std::string out;
+        auto cached = cache.get(cache_key);
+        if (cached && !cached->empty() && *cached != "[]") {
+            out = *cached;
+        } else {
+            out = run_python(args);
+            // Only cache non-empty, non-trivial results
+            if (!out.empty() && out != "[]") {
+                cache.set(cache_key, out, "market-quotes", CacheTTL::FIVE_MIN);
+            }
+        }
+
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (!out.empty()) {

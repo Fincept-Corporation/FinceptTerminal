@@ -4,6 +4,7 @@
 
 #include "dbnomics_screen.h"
 #include "http/http_client.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "core/logger.h"
 #include <imgui.h>
@@ -82,14 +83,29 @@ void DBnomicsScreen::load_providers() {
 
     async_task_ = std::async(std::launch::async, [this]() {
         try {
-            std::string url = std::string(DBNOMICS_API_BASE) + "/providers";
-            auto resp = http::HttpClient::instance().get(url);
-            if (!resp.success) {
-                error_ = "Failed to load providers: " + resp.body;
-                loading_ = false;
-                return;
+            auto& cache = CacheService::instance();
+            std::string cache_key = CacheService::make_key("reference", "dbnomics", "providers");
+
+            std::string body;
+            auto cached = cache.get(cache_key);
+            if (cached && !cached->empty()) {
+                body = *cached;
+                LOG_INFO("DBnomics", "Cache HIT for providers");
+            } else {
+                std::string url = std::string(DBNOMICS_API_BASE) + "/providers";
+                auto resp = http::HttpClient::instance().get(url);
+                if (!resp.success) {
+                    error_ = "Failed to load providers: " + resp.body;
+                    loading_ = false;
+                    return;
+                }
+                body = resp.body;
+                if (!body.empty()) {
+                    cache.set(cache_key, body, "reference", CacheTTL::ONE_DAY);
+                }
             }
-            auto j = json::parse(resp.body, nullptr, false);
+
+            auto j = json::parse(body, nullptr, false);
             if (j.is_discarded()) {
                 error_ = "Invalid JSON from providers API";
                 loading_ = false;
@@ -123,17 +139,32 @@ void DBnomicsScreen::load_datasets(const std::string& provider_code, int offset,
 
     async_task_ = std::async(std::launch::async, [this, provider_code, offset, append]() {
         try {
-            std::string url = std::string(DBNOMICS_API_BASE) + "/datasets/"
-                + url_encode(provider_code)
-                + "?limit=" + std::to_string(DATASETS_PAGE_SIZE)
-                + "&offset=" + std::to_string(offset);
-            auto resp = http::HttpClient::instance().get(url);
-            if (!resp.success) {
-                error_ = "Failed to load datasets";
-                loading_ = false;
-                return;
+            auto& cache = CacheService::instance();
+            std::string cache_key = CacheService::make_key("reference", "dbnomics-datasets",
+                provider_code + "_o" + std::to_string(offset));
+
+            std::string body;
+            auto cached = cache.get(cache_key);
+            if (cached && !cached->empty()) {
+                body = *cached;
+            } else {
+                std::string url = std::string(DBNOMICS_API_BASE) + "/datasets/"
+                    + url_encode(provider_code)
+                    + "?limit=" + std::to_string(DATASETS_PAGE_SIZE)
+                    + "&offset=" + std::to_string(offset);
+                auto resp = http::HttpClient::instance().get(url);
+                if (!resp.success) {
+                    error_ = "Failed to load datasets";
+                    loading_ = false;
+                    return;
+                }
+                body = resp.body;
+                if (!body.empty()) {
+                    cache.set(cache_key, body, "reference", CacheTTL::ONE_HOUR);
+                }
             }
-            auto j = json::parse(resp.body, nullptr, false);
+
+            auto j = json::parse(body, nullptr, false);
             if (j.is_discarded()) { error_ = "Invalid JSON"; loading_ = false; return; }
 
             int total = j.value("datasets", json::object()).value("num_found", 0);
@@ -174,17 +205,32 @@ void DBnomicsScreen::load_series(const std::string& provider, const std::string&
 
     async_task_ = std::async(std::launch::async, [this, provider, dataset, offset, append, query]() {
         try {
-            std::string url = std::string(DBNOMICS_API_BASE) + "/series/"
-                + url_encode(provider) + "/" + url_encode(dataset)
-                + "?limit=" + std::to_string(SERIES_PAGE_SIZE)
-                + "&offset=" + std::to_string(offset)
-                + "&observations=false";
-            if (!query.empty())
-                url += "&q=" + url_encode(query);
+            auto& cache = CacheService::instance();
+            std::string cache_key = CacheService::make_key("reference", "dbnomics-series",
+                provider + "_" + dataset + "_o" + std::to_string(offset) + "_q" + query);
 
-            auto resp = http::HttpClient::instance().get(url);
-            if (!resp.success) { error_ = "Failed to load series"; loading_ = false; return; }
-            auto j = json::parse(resp.body, nullptr, false);
+            std::string body;
+            auto cached = cache.get(cache_key);
+            if (cached && !cached->empty()) {
+                body = *cached;
+            } else {
+                std::string url = std::string(DBNOMICS_API_BASE) + "/series/"
+                    + url_encode(provider) + "/" + url_encode(dataset)
+                    + "?limit=" + std::to_string(SERIES_PAGE_SIZE)
+                    + "&offset=" + std::to_string(offset)
+                    + "&observations=false";
+                if (!query.empty())
+                    url += "&q=" + url_encode(query);
+
+                auto resp = http::HttpClient::instance().get(url);
+                if (!resp.success) { error_ = "Failed to load series"; loading_ = false; return; }
+                body = resp.body;
+                if (!body.empty()) {
+                    cache.set(cache_key, body, "reference", CacheTTL::ONE_HOUR);
+                }
+            }
+
+            auto j = json::parse(body, nullptr, false);
             if (j.is_discarded()) { error_ = "Invalid JSON"; loading_ = false; return; }
 
             int total = j.value("series", json::object()).value("num_found", 0);
@@ -233,13 +279,28 @@ void DBnomicsScreen::load_series_data(const std::string& full_id, const std::str
 
     async_task_ = std::async(std::launch::async, [this, prov, ds, sc, full_id, name]() {
         try {
-            std::string url = std::string(DBNOMICS_API_BASE) + "/series/"
-                + url_encode(prov) + "/" + url_encode(ds) + "/" + url_encode(sc)
-                + "?observations=1&format=json";
+            auto& cache = CacheService::instance();
+            std::string cache_key = CacheService::make_key("economic", "dbnomics-data",
+                prov + "_" + ds + "_" + sc);
 
-            auto resp = http::HttpClient::instance().get(url);
-            if (!resp.success) { error_ = "Failed to load data"; loading_ = false; return; }
-            auto j = json::parse(resp.body, nullptr, false);
+            std::string body;
+            auto cached = cache.get(cache_key);
+            if (cached && !cached->empty()) {
+                body = *cached;
+            } else {
+                std::string url = std::string(DBNOMICS_API_BASE) + "/series/"
+                    + url_encode(prov) + "/" + url_encode(ds) + "/" + url_encode(sc)
+                    + "?observations=1&format=json";
+
+                auto resp = http::HttpClient::instance().get(url);
+                if (!resp.success) { error_ = "Failed to load data"; loading_ = false; return; }
+                body = resp.body;
+                if (!body.empty()) {
+                    cache.set(cache_key, body, "economic", CacheTTL::ONE_HOUR);
+                }
+            }
+
+            auto j = json::parse(body, nullptr, false);
             if (j.is_discarded()) { error_ = "Invalid JSON"; loading_ = false; return; }
 
             auto series_docs = j.value("series", json::object()).value("docs", json::array());
@@ -292,14 +353,29 @@ void DBnomicsScreen::execute_global_search(const std::string& query, int offset,
 
     async_task_ = std::async(std::launch::async, [this, query, offset, append]() {
         try {
-            std::string url = std::string(DBNOMICS_API_BASE) + "/search?q="
-                + url_encode(query)
-                + "&limit=" + std::to_string(SEARCH_PAGE_SIZE)
-                + "&offset=" + std::to_string(offset);
+            auto& cache = CacheService::instance();
+            std::string cache_key = CacheService::make_key("reference", "dbnomics-search",
+                query + "_o" + std::to_string(offset));
 
-            auto resp = http::HttpClient::instance().get(url);
-            if (!resp.success) { error_ = "Search failed"; loading_ = false; return; }
-            auto j = json::parse(resp.body, nullptr, false);
+            std::string body;
+            auto cached = cache.get(cache_key);
+            if (cached && !cached->empty()) {
+                body = *cached;
+            } else {
+                std::string url = std::string(DBNOMICS_API_BASE) + "/search?q="
+                    + url_encode(query)
+                    + "&limit=" + std::to_string(SEARCH_PAGE_SIZE)
+                    + "&offset=" + std::to_string(offset);
+
+                auto resp = http::HttpClient::instance().get(url);
+                if (!resp.success) { error_ = "Search failed"; loading_ = false; return; }
+                body = resp.body;
+                if (!body.empty()) {
+                    cache.set(cache_key, body, "reference", CacheTTL::FIFTEEN_MIN);
+                }
+            }
+
+            auto j = json::parse(body, nullptr, false);
             if (j.is_discarded()) { error_ = "Invalid JSON"; loading_ = false; return; }
 
             int total = 0;

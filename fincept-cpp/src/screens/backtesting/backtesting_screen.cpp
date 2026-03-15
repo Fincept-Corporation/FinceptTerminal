@@ -1,6 +1,7 @@
 #include "backtesting_screen.h"
 #include "backtesting_constants.h"
 #include "ui/theme.h"
+#include "core/logger.h"
 #include <imgui.h>
 #include <cstdio>
 #include <cstring>
@@ -78,6 +79,7 @@ void BacktestingScreen::render_top_nav() {
     for (auto& p : provider_list()) {
         if (ProviderTab(p.display_name, provider_color(p.slug), selected_provider_ == p.slug)) {
             selected_provider_ = p.slug;
+            LOG_INFO("Backtesting", "Provider switched to: %s", p.display_name);
             // Reset to first available command
             auto cmds = provider_commands(selected_provider_);
             if (!cmds.empty()) active_command_ = cmds[0];
@@ -2055,12 +2057,14 @@ void BacktestingScreen::pickup_result() {
         error_msg_.clear();
         status_ = "Data loaded";
         status_time_ = ImGui::GetTime();
+        LOG_INFO("Backtesting", "Result received for command: %s", command_label(active_command_));
     } else if (!data_.error().empty()) {
         has_error_ = true;
         error_msg_ = data_.error();
         result_ = json();
         status_ = "Error: " + data_.error();
         status_time_ = ImGui::GetTime();
+        LOG_ERROR("Backtesting", "Command failed: %s — %s", command_label(active_command_), error_msg_.c_str());
     }
     data_.clear();
 }
@@ -2072,6 +2076,10 @@ void BacktestingScreen::execute_command() {
     auto& info = get_provider_info(selected_provider_);
     std::string py_command = command_to_python(selected_provider_, active_command_);
     std::string args_json = build_args_json();
+
+    LOG_INFO("Backtesting", "Executing: provider=%s command=%s py_cmd=%s",
+             info.display_name, command_label(active_command_), py_command.c_str());
+    LOG_DEBUG("Backtesting", "Args JSON: %s", args_json.c_str());
 
     result_ = json();
     has_error_ = false;

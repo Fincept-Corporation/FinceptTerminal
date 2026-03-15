@@ -35,6 +35,9 @@
 #include "screens/gov_data/gov_data_screen.h"
 #include "screens/backtesting/backtesting_screen.h"
 #include "screens/algo_trading/algo_trading_screen.h"
+#include "screens/ai_chat/ai_chat_screen.h"
+#include "screens/ai_quant_lab/ai_quant_lab_screen.h"
+#include "screens/data_mapping/data_mapping_screen.h"
 
 // Fullscreen toggle (implemented in main.cpp, delegates to Window)
 void toggle_fullscreen();
@@ -91,6 +94,9 @@ private:
     gov_data::GovDataScreen gov_data_screen_;
     backtesting::BacktestingScreen backtesting_screen_;
     algo::AlgoTradingScreen algo_trading_screen_;
+    ai_chat::AIChatScreen ai_chat_screen_;
+    ai_quant_lab::AIQuantLabScreen ai_quant_lab_screen_;
+    data_mapping::DataMappingScreen data_mapping_screen_;
 
     // Rendering sections
     void render_top_bar();

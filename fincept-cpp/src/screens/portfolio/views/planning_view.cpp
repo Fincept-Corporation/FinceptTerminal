@@ -3,12 +3,14 @@
 
 #include "planning_view.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "core/logger.h"
 #include <imgui.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <thread>
 
 namespace fincept::portfolio {
 
@@ -29,6 +31,11 @@ void PlanningView::render(const PortfolioSummary& summary) {
     }
     ImGui::PopStyleVar();
     ImGui::Separator();
+
+    if (!error_.empty()) {
+        ImGui::TextColored(theme::colors::MARKET_RED, "[Error] %s", error_.c_str());
+        ImGui::Spacing();
+    }
 
     if (sub_tab_ == 0) {
         // Asset allocation from current holdings
@@ -174,32 +181,64 @@ void PlanningView::render(const PortfolioSummary& summary) {
 void PlanningView::fetch_allocation(const PortfolioSummary& summary) {
     if (loading_) return;
     loading_ = true;
-    try {
-        nlohmann::json req;
-        auto holdings = nlohmann::json::array();
-        for (const auto& h : summary.holdings) {
-            holdings.push_back({
-                {"symbol", h.asset.symbol},
-                {"weight", h.weight / 100.0},
-                {"value", h.market_value}
-            });
-        }
-        req["holdings"] = holdings;
+    error_.clear();
 
-        auto result = python::execute_with_stdin(
-            "Analytics/portfolioManagement/portfolio_analytics.py",
-            {"allocation_analysis"}, req.dump());
-
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) { allocation_result_ = j; }
-        }
-        allocation_loaded_ = true;
-    } catch (const std::exception& e) {
-        LOG_ERROR("PlanningView", "Allocation analysis failed: %s", e.what());
-        allocation_loaded_ = true; // show table anyway
+    nlohmann::json holdings = nlohmann::json::array();
+    for (const auto& h : summary.holdings) {
+        holdings.push_back({
+            {"symbol", h.asset.symbol},
+            {"weight", h.weight / 100.0},
+            {"value", h.market_value}
+        });
     }
-    loading_ = false;
+    std::string sym_key;
+    for (const auto& h : summary.holdings) sym_key += h.asset.symbol + "_";
+
+    std::thread([this, holdings, sym_key]() {
+        try {
+            nlohmann::json req;
+            req["holdings"] = holdings;
+
+            auto& cache = CacheService::instance();
+            std::string ck = CacheService::make_key("reference", "allocation-analysis",
+                sym_key.substr(0, std::min((size_t)64, sym_key.size())));
+
+            std::string output;
+            auto cached = cache.get(ck);
+            if (cached && !cached->empty()) { output = *cached; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/portfolioManagement/portfolio_analytics.py",
+                    {"allocation_analysis"}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    output = result.output;
+                    auto check = nlohmann::json::parse(output, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache.set(ck, output, "reference", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
+            }
+
+            if (!output.empty()) {
+                auto j = nlohmann::json::parse(output, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error"))
+                        error_ = j["error"].get<std::string>();
+                    else
+                        allocation_result_ = j;
+                }
+            } else if (error_.empty()) {
+                error_ = "Script returned empty output";
+            }
+            allocation_loaded_ = true;
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("PlanningView", "Allocation analysis failed: %s", e.what());
+            allocation_loaded_ = true;
+        }
+        loading_ = false;
+    }).detach();
 }
 
 void PlanningView::fetch_retirement() {

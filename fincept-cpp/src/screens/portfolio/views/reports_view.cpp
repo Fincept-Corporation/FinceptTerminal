@@ -3,10 +3,12 @@
 
 #include "reports_view.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "core/logger.h"
 #include <imgui.h>
 #include <cstdio>
+#include <thread>
 
 namespace fincept::portfolio {
 
@@ -38,6 +40,11 @@ void ReportsView::render(const PortfolioSummary& summary) {
     }
 
     ImGui::Separator();
+
+    if (!error_.empty()) {
+        ImGui::TextColored(theme::colors::MARKET_RED, "[Error] %s", error_.c_str());
+        ImGui::Spacing();
+    }
 
     if (sub_tab_ == 0) {
         if (!tax_loaded_) {
@@ -93,57 +100,121 @@ void ReportsView::render(const PortfolioSummary& summary) {
 void ReportsView::fetch_tax_report(const PortfolioSummary& summary) {
     if (loading_) return;
     loading_ = true;
-    try {
-        nlohmann::json req;
-        auto txns = nlohmann::json::array();
-        for (const auto& h : summary.holdings) {
-            txns.push_back({
-                {"symbol", h.asset.symbol},
-                {"quantity", h.asset.quantity},
-                {"avg_price", h.asset.avg_buy_price},
-                {"current_price", h.current_price}
-            });
-        }
-        req["holdings"] = txns;
-        req["portfolio_name"] = summary.portfolio.name;
+    error_.clear();
 
-        auto result = python::execute_with_stdin(
-            "Analytics/portfolioManagement/portfolio_analytics.py",
-            {"tax_report"}, req.dump());
-
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) { tax_result_ = j; tax_loaded_ = true; }
-        }
-    } catch (const std::exception& e) {
-        LOG_ERROR("ReportsView", "Tax report failed: %s", e.what());
+    nlohmann::json txns = nlohmann::json::array();
+    for (const auto& h : summary.holdings) {
+        txns.push_back({
+            {"symbol", h.asset.symbol},
+            {"quantity", h.asset.quantity},
+            {"avg_price", h.asset.avg_buy_price},
+            {"current_price", h.current_price}
+        });
     }
-    loading_ = false;
+    std::string pf_name = summary.portfolio.name;
+    std::string sym_key;
+    for (const auto& h : summary.holdings) sym_key += h.asset.symbol + "_";
+
+    std::thread([this, txns, pf_name, sym_key]() {
+        try {
+            nlohmann::json req;
+            req["holdings"] = txns;
+            req["portfolio_name"] = pf_name;
+
+            auto& cache = CacheService::instance();
+            std::string ck = CacheService::make_key("reference", "tax-report",
+                sym_key.substr(0, std::min((size_t)64, sym_key.size())));
+
+            std::string output;
+            auto cached = cache.get(ck);
+            if (cached && !cached->empty()) { output = *cached; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/portfolioManagement/portfolio_analytics.py",
+                    {"tax_report"}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    output = result.output;
+                    auto check = nlohmann::json::parse(output, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache.set(ck, output, "reference", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
+            }
+
+            if (!output.empty()) {
+                auto j = nlohmann::json::parse(output, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error"))
+                        error_ = j["error"].get<std::string>();
+                    else { tax_result_ = j; tax_loaded_ = true; }
+                }
+            } else if (error_.empty()) {
+                error_ = "Script returned empty output";
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("ReportsView", "Tax report failed: %s", e.what());
+        }
+        loading_ = false;
+    }).detach();
 }
 
 void ReportsView::fetch_pme(const PortfolioSummary& summary) {
     if (loading_) return;
     loading_ = true;
-    try {
-        nlohmann::json req;
-        std::vector<std::string> symbols;
-        for (const auto& h : summary.holdings)
-            symbols.push_back(h.asset.symbol);
-        req["symbols"] = symbols;
-        req["portfolio_name"] = summary.portfolio.name;
+    error_.clear();
 
-        auto result = python::execute_with_stdin(
-            "Analytics/portfolioManagement/portfolio_analytics.py",
-            {"pme_analysis"}, req.dump());
+    std::vector<std::string> symbols;
+    for (const auto& h : summary.holdings)
+        symbols.push_back(h.asset.symbol);
+    std::string pf_name = summary.portfolio.name;
 
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) { pme_result_ = j; pme_loaded_ = true; }
+    std::thread([this, symbols, pf_name]() {
+        try {
+            nlohmann::json req;
+            req["symbols"] = symbols;
+            req["portfolio_name"] = pf_name;
+
+            auto& cache_p = CacheService::instance();
+            std::string psym;
+            for (const auto& s : symbols) psym += s + "_";
+            std::string pck = CacheService::make_key("reference", "pme-analysis",
+                psym.substr(0, std::min((size_t)64, psym.size())));
+
+            std::string p_out;
+            auto cached_p = cache_p.get(pck);
+            if (cached_p && !cached_p->empty()) { p_out = *cached_p; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/portfolioManagement/portfolio_analytics.py",
+                    {"pme_analysis"}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    p_out = result.output;
+                    auto check = nlohmann::json::parse(p_out, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache_p.set(pck, p_out, "reference", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
+            }
+
+            if (!p_out.empty()) {
+                auto j = nlohmann::json::parse(p_out, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error"))
+                        error_ = j["error"].get<std::string>();
+                    else { pme_result_ = j; pme_loaded_ = true; }
+                }
+            } else if (error_.empty()) {
+                error_ = "Script returned empty output";
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("ReportsView", "PME analysis failed: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        LOG_ERROR("ReportsView", "PME analysis failed: %s", e.what());
-    }
-    loading_ = false;
+        loading_ = false;
+    }).detach();
 }
 
 } // namespace fincept::portfolio

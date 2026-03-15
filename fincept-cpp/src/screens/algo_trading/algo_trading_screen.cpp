@@ -630,11 +630,21 @@ void AlgoTradingScreen::render_library(float w, float h) {
             ImGui::InputText("##clone_name", custom_name_, sizeof(custom_name_));
 
             ImGui::SameLine();
-            if (ImGui::Button("Validate Syntax")) {
-                std::string err;
-                bool valid = AlgoService::instance().validate_python_syntax(custom_code_, err);
-                syntax_error_ = valid ? "" : err;
-                status_msg_ = valid ? "Syntax OK" : "Syntax error";
+            if (validating_syntax_.load()) {
+                ImGui::Button("Validating...");
+            } else if (ImGui::Button("Validate Syntax")) {
+                validating_syntax_.store(true);
+                std::string code_copy(custom_code_);
+                std::thread([this, code_copy]() {
+                    std::string err;
+                    bool valid = AlgoService::instance().validate_python_syntax(code_copy, err);
+                    {
+                        std::lock_guard<std::mutex> lock(data_mutex_);
+                        syntax_error_ = valid ? "" : err;
+                        status_msg_ = valid ? "Syntax OK" : "Syntax error";
+                    }
+                    validating_syntax_.store(false);
+                }).detach();
             }
             ImGui::SameLine();
             if (ImGui::Button("Save as Custom")) {

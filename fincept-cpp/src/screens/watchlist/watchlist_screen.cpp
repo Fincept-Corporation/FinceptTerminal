@@ -5,12 +5,74 @@
 #include <cstring>
 #include <cstdio>
 #include <ctime>
+#include <cmath>
 #include <algorithm>
 
 namespace fincept::watchlist {
 
+// Bloomberg amber/orange palette overlaid on Fincept theme
+namespace bb {
+    constexpr ImVec4 AMBER       = {1.00f, 0.53f, 0.00f, 1.0f};  // #FF8800 — Bloomberg signature amber
+    constexpr ImVec4 AMBER_DIM   = {0.80f, 0.42f, 0.00f, 1.0f};  // dimmed amber for labels
+    constexpr ImVec4 AMBER_BG    = {1.00f, 0.53f, 0.00f, 0.06f};  // amber tint background
+    constexpr ImVec4 WHITE       = {0.95f, 0.95f, 0.97f, 1.0f};  // bright data text
+    constexpr ImVec4 WHITE_DIM   = {0.65f, 0.65f, 0.70f, 1.0f};  // secondary text
+    constexpr ImVec4 GREEN       = {0.00f, 0.85f, 0.35f, 1.0f};  // positive change
+    constexpr ImVec4 RED         = {0.95f, 0.22f, 0.22f, 1.0f};  // negative change
+    constexpr ImVec4 YELLOW      = {1.00f, 0.85f, 0.00f, 1.0f};  // highlights/warnings
+    constexpr ImVec4 CYAN        = {0.00f, 0.80f, 0.90f, 1.0f};  // info accent
+    constexpr ImVec4 BG_BLACK    = {0.04f, 0.04f, 0.05f, 1.0f};  // near-black background
+    constexpr ImVec4 BG_PANEL    = {0.07f, 0.07f, 0.08f, 1.0f};  // panel background
+    constexpr ImVec4 BG_ROW_ALT  = {0.06f, 0.06f, 0.07f, 1.0f};  // alternating row
+    constexpr ImVec4 BG_SELECTED = {0.15f, 0.10f, 0.00f, 1.0f};  // selected row (amber tint)
+    constexpr ImVec4 BG_HEADER   = {0.10f, 0.10f, 0.12f, 1.0f};  // header bar bg
+    constexpr ImVec4 BORDER      = {0.18f, 0.18f, 0.20f, 1.0f};  // thin grid lines
+    constexpr ImVec4 BORDER_DIM  = {0.12f, 0.12f, 0.14f, 1.0f};  // subtle borders
+    constexpr ImVec4 FUNC_KEY_BG = {0.12f, 0.12f, 0.15f, 1.0f};  // function key background
+    constexpr ImVec4 FUNC_KEY_AC = {0.20f, 0.14f, 0.00f, 1.0f};  // active function key
+}
+
 // ============================================================================
-// Init & data loading
+// Bloomberg drawing helpers
+// ============================================================================
+void WatchlistScreen::bb_label(const char* label, const char* value, ImVec4 val_color) {
+    ImGui::TextColored(bb::AMBER_DIM, "%-12s", label);
+    ImGui::SameLine(100);
+    ImGui::TextColored(val_color, "%s", value);
+}
+
+void WatchlistScreen::bb_separator_line(float width) {
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    ImGui::GetWindowDrawList()->AddLine(
+        p, ImVec2(p.x + width, p.y),
+        ImGui::ColorConvertFloat4ToU32(bb::BORDER), 1.0f);
+    ImGui::Dummy(ImVec2(width, 1));
+}
+
+bool WatchlistScreen::bb_func_key(const char* label, bool active, float width) {
+    if (width <= 0) width = ImGui::CalcTextSize(label).x + 16;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 3));
+
+    if (active) {
+        ImGui::PushStyleColor(ImGuiCol_Button, bb::FUNC_KEY_AC);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bb::AMBER_DIM);
+        ImGui::PushStyleColor(ImGuiCol_Text, bb::AMBER);
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button, bb::FUNC_KEY_BG);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bb::BORDER);
+        ImGui::PushStyleColor(ImGuiCol_Text, bb::WHITE_DIM);
+    }
+
+    bool clicked = ImGui::Button(label, ImVec2(width, 0));
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
+    return clicked;
+}
+
+// ============================================================================
+// Init & data loading (unchanged logic, reused from original)
 // ============================================================================
 void WatchlistScreen::init() {
     if (initialized_) return;
@@ -29,18 +91,14 @@ void WatchlistScreen::load_watchlists() {
         wc.color = wl.color;
         wc.created_at = wl.created_at;
         wc.updated_at = wl.updated_at;
-        // Count stocks
         auto stocks = db::ops::get_watchlist_stocks(wl.id);
         wc.stock_count = static_cast<int>(stocks.size());
         watchlists_.push_back(std::move(wc));
     }
-
-    // Auto-select first if nothing selected
     if (selected_watchlist_ < 0 && !watchlists_.empty()) {
         selected_watchlist_ = 0;
         load_stocks();
     }
-    // Validate selection
     if (selected_watchlist_ >= static_cast<int>(watchlists_.size())) {
         selected_watchlist_ = watchlists_.empty() ? -1 : 0;
         if (selected_watchlist_ >= 0) load_stocks();
@@ -50,13 +108,10 @@ void WatchlistScreen::load_watchlists() {
 void WatchlistScreen::load_stocks() {
     stocks_.clear();
     selected_stock_ = -1;
-
     if (selected_watchlist_ < 0 || selected_watchlist_ >= static_cast<int>(watchlists_.size()))
         return;
-
     auto& wl = watchlists_[selected_watchlist_];
     auto db_stocks = db::ops::get_watchlist_stocks(wl.id);
-
     for (auto& s : db_stocks) {
         WatchlistStockEntry entry;
         entry.id = s.id;
@@ -66,18 +121,14 @@ void WatchlistScreen::load_stocks() {
         entry.notes = s.notes.value_or("");
         stocks_.push_back(std::move(entry));
     }
-
-    // Fetch quotes for loaded stocks
     refresh_quotes();
 }
 
 void WatchlistScreen::refresh_quotes() {
     if (stocks_.empty()) return;
-
     std::vector<std::string> symbols;
     symbols.reserve(stocks_.size());
     for (auto& s : stocks_) symbols.push_back(s.symbol);
-
     data_.fetch_quotes(symbols);
     refresh_timer_ = 0;
 }
@@ -86,288 +137,254 @@ void WatchlistScreen::sort_stocks() {
     std::sort(stocks_.begin(), stocks_.end(),
         [this](const WatchlistStockEntry& a, const WatchlistStockEntry& b) {
             switch (sort_by_) {
-                case SortCriteria::Ticker:
-                    return a.symbol < b.symbol;
-                case SortCriteria::Change:
-                    return b.quote.change_percent < a.quote.change_percent;
-                case SortCriteria::Volume:
-                    return b.quote.volume < a.quote.volume;
-                case SortCriteria::Price:
-                    return b.quote.price < a.quote.price;
+                case SortCriteria::Ticker: return a.symbol < b.symbol;
+                case SortCriteria::Change: return b.quote.change_percent < a.quote.change_percent;
+                case SortCriteria::Volume: return b.quote.volume < a.quote.volume;
+                case SortCriteria::Price:  return b.quote.price < a.quote.price;
             }
             return false;
         });
 }
 
 // ============================================================================
-// Actions
+// Actions (unchanged logic)
 // ============================================================================
 void WatchlistScreen::create_watchlist() {
     std::string name(create_name_);
     if (name.empty()) return;
-
     std::string desc(create_desc_);
     const auto& colors = watchlist_colors();
     std::string color = colors[create_color_idx_ % colors.size()];
-
     db::ops::create_watchlist(name, color, desc);
     load_watchlists();
-
-    // Select the new one (last added)
     if (!watchlists_.empty()) {
         selected_watchlist_ = static_cast<int>(watchlists_.size()) - 1;
         load_stocks();
     }
-
     std::memset(create_name_, 0, sizeof(create_name_));
     std::memset(create_desc_, 0, sizeof(create_desc_));
     create_color_idx_ = 0;
     show_create_modal_ = false;
-
-    status_ = "Watchlist created: " + name;
+    status_ = "CREATED: " + name;
     status_time_ = ImGui::GetTime();
 }
 
 void WatchlistScreen::delete_watchlist(const std::string& id) {
     db::ops::delete_watchlist(id);
     load_watchlists();
-
-    status_ = "Watchlist deleted";
+    status_ = "WATCHLIST DELETED";
     status_time_ = ImGui::GetTime();
 }
 
 void WatchlistScreen::add_stock() {
     if (selected_watchlist_ < 0 || selected_watchlist_ >= static_cast<int>(watchlists_.size()))
         return;
-
     std::string symbol(add_symbol_);
     if (symbol.empty()) return;
-
-    // Uppercase
     for (auto& c : symbol) c = static_cast<char>(std::toupper(c));
-
-    // Check duplicate
     for (auto& s : stocks_) {
         if (s.symbol == symbol) {
-            status_ = symbol + " already in this watchlist";
+            status_ = symbol + " DUPLICATE";
             status_time_ = ImGui::GetTime();
             return;
         }
     }
-
     auto& wl = watchlists_[selected_watchlist_];
     std::string notes(add_notes_);
     db::ops::add_watchlist_stock(wl.id, symbol, notes);
-
     load_stocks();
-    load_watchlists(); // Update count
-
+    load_watchlists();
     std::memset(add_symbol_, 0, sizeof(add_symbol_));
     std::memset(add_notes_, 0, sizeof(add_notes_));
     show_add_stock_ = false;
-
-    status_ = "Added " + symbol;
+    status_ = "ADDED " + symbol;
     status_time_ = ImGui::GetTime();
 }
 
 void WatchlistScreen::remove_stock(const std::string& symbol) {
     if (selected_watchlist_ < 0 || selected_watchlist_ >= static_cast<int>(watchlists_.size()))
         return;
-
     auto& wl = watchlists_[selected_watchlist_];
     db::ops::remove_watchlist_stock(wl.id, symbol);
-
     if (selected_stock_ >= 0 && selected_stock_ < static_cast<int>(stocks_.size()) &&
         stocks_[selected_stock_].symbol == symbol) {
         selected_stock_ = -1;
     }
-
     load_stocks();
     load_watchlists();
-
-    status_ = "Removed " + symbol;
+    status_ = "REMOVED " + symbol;
     status_time_ = ImGui::GetTime();
 }
 
 // ============================================================================
-// Header bar — top navigation with status and action buttons
+// COMMAND BAR — Bloomberg top bar with WLIST<GO> branding
 // ============================================================================
-void WatchlistScreen::render_header_bar() {
-    using namespace theme::colors;
+void WatchlistScreen::render_command_bar(float width) {
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bb::BG_HEADER);
+    ImGui::BeginChild("##bb_cmdbar", ImVec2(width, 28), ImGuiChildFlags_Borders);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
-    ImGui::BeginChild("##wl_header", ImVec2(0, 36), ImGuiChildFlags_Borders);
+    // WLIST<GO> branding
+    ImGui::TextColored(bb::AMBER, "WLIST");
+    ImGui::SameLine(0, 0);
+    ImGui::TextColored(bb::YELLOW, "<GO>");
 
-    // Left: title + status
-    ImGui::TextColored(ACCENT, "WATCHLIST MONITOR");
-    ImGui::SameLine(0, 12);
-    ImGui::TextColored(BORDER_BRIGHT, "|");
-    ImGui::SameLine(0, 12);
+    ImGui::SameLine(0, 16);
+    ImGui::TextColored(bb::BORDER, "|");
+    ImGui::SameLine(0, 8);
 
-    // Status dot
+    // Title
+    ImGui::TextColored(bb::WHITE, "WATCHLIST MONITOR");
+
+    ImGui::SameLine(0, 16);
+    ImGui::TextColored(bb::BORDER, "|");
+    ImGui::SameLine(0, 8);
+
+    // Live status with blink
     bool loading = data_.is_loading();
-    ImVec4 dot_color = loading ? WARNING : MARKET_GREEN;
-    ImGui::TextColored(dot_color, "[*]");
-    ImGui::SameLine(0, 4);
-    ImGui::TextColored(dot_color, "%s", loading ? "UPDATING" : "LIVE");
-
-    ImGui::SameLine(0, 12);
-    ImGui::TextColored(BORDER_BRIGHT, "|");
-    ImGui::SameLine(0, 12);
-
-    // Timestamp
-    time_t now = time(nullptr);
-    struct tm* t = localtime(&now);
-    char datetime[32];
-    std::strftime(datetime, sizeof(datetime), "%Y-%m-%d %H:%M:%S", t);
-    ImGui::TextColored(INFO, "%s", datetime);
-
-    // Right: action buttons
-    float right_x = ImGui::GetWindowWidth() - 340;
-    ImGui::SameLine(right_x);
-
-    bool has_wl = selected_watchlist_ >= 0 && selected_watchlist_ < static_cast<int>(watchlists_.size());
-
-    if (has_wl) {
-        if (theme::SecondaryButton("+ ADD STOCK")) {
-            show_add_stock_ = true;
-        }
-        ImGui::SameLine();
+    if (loading) {
+        ImGui::TextColored(bb::YELLOW, "[*]");
+        ImGui::SameLine(0, 4);
+        ImGui::TextColored(bb::YELLOW, "UPDATING");
+    } else {
+        ImVec4 dot_color = blink_on_ ? bb::GREEN : ImVec4(0, 0, 0, 0);
+        // Draw blinking dot
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        float cy = p.y + ImGui::GetTextLineHeight() * 0.5f;
+        ImGui::GetWindowDrawList()->AddCircleFilled(
+            ImVec2(p.x + 4, cy), 3.0f,
+            ImGui::ColorConvertFloat4ToU32(dot_color));
+        ImGui::Dummy(ImVec2(12, 0));
+        ImGui::SameLine(0, 4);
+        ImGui::TextColored(bb::GREEN, "LIVE");
     }
 
-    if (theme::SecondaryButton("REFRESH")) {
+    ImGui::SameLine(0, 16);
+    ImGui::TextColored(bb::BORDER, "|");
+    ImGui::SameLine(0, 8);
+
+    // Security count
+    ImGui::TextColored(bb::AMBER_DIM, "SEC:");
+    ImGui::SameLine(0, 4);
+    ImGui::TextColored(bb::WHITE, "%d", static_cast<int>(stocks_.size()));
+
+    // Right side: timestamp + action buttons
+    float right_x = width - 420;
+    if (right_x > 300) {
+        ImGui::SameLine(right_x);
+
+        // Timestamp
+        time_t now = time(nullptr);
+        struct tm* t = localtime(&now);
+        char datetime[32];
+        std::strftime(datetime, sizeof(datetime), "%Y-%m-%d %H:%M:%S", t);
+        ImGui::TextColored(bb::CYAN, "%s", datetime);
+
+        ImGui::SameLine(0, 16);
+    } else {
+        ImGui::SameLine(width - 200);
+    }
+
+    // Action buttons
+    bool has_wl = selected_watchlist_ >= 0 && selected_watchlist_ < static_cast<int>(watchlists_.size());
+    if (has_wl) {
+        if (bb_func_key("+SEC", false, 50)) show_add_stock_ = true;
+        ImGui::SameLine(0, 2);
+    }
+    if (bb_func_key("RFSH", false, 50)) {
         if (has_wl) refresh_quotes();
     }
-
-    ImGui::SameLine();
-    if (theme::AccentButton("+ NEW LIST")) {
-        show_create_modal_ = true;
-    }
+    ImGui::SameLine(0, 2);
+    if (bb_func_key("+NEW", false, 50)) show_create_modal_ = true;
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
 
 // ============================================================================
-// Info bar — active watchlist summary
-// ============================================================================
-void WatchlistScreen::render_info_bar() {
-    using namespace theme::colors;
-
-    if (selected_watchlist_ < 0 || selected_watchlist_ >= static_cast<int>(watchlists_.size()))
-        return;
-
-    auto& wl = watchlists_[selected_watchlist_];
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
-    ImGui::BeginChild("##wl_info", ImVec2(0, 22), ImGuiChildFlags_Borders);
-
-    ImGui::TextColored(TEXT_DIM, "ACTIVE LIST");
-    ImGui::SameLine(0, 8);
-    ImGui::TextColored(WARNING, "%s", wl.name.c_str());
-    ImGui::SameLine(0, 16);
-    ImGui::TextColored(BORDER_BRIGHT, "|");
-    ImGui::SameLine(0, 16);
-    ImGui::TextColored(TEXT_DIM, "SYMBOLS");
-    ImGui::SameLine(0, 8);
-    ImGui::TextColored(INFO, "%d", static_cast<int>(stocks_.size()));
-    ImGui::SameLine(0, 16);
-    ImGui::TextColored(BORDER_BRIGHT, "|");
-    ImGui::SameLine(0, 16);
-    ImGui::TextColored(TEXT_DIM, "SORT");
-    ImGui::SameLine(0, 8);
-    ImGui::TextColored(INFO, "%s", sort_label(sort_by_));
-
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-}
-
-// ============================================================================
-// Sidebar — watchlist list + market stats
+// SIDEBAR — Watchlist navigation + market movers
 // ============================================================================
 void WatchlistScreen::render_sidebar(float width, float height) {
-    using namespace theme::colors;
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
-    ImGui::BeginChild("##wl_sidebar", ImVec2(width, height), ImGuiChildFlags_Borders);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bb::BG_PANEL);
+    ImGui::BeginChild("##bb_sidebar", ImVec2(width, height), ImGuiChildFlags_Borders);
 
     // Header
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARK);
-    ImGui::BeginChild("##wl_sidebar_hdr", ImVec2(0, 32), ImGuiChildFlags_Borders);
-    char hdr[64];
-    std::snprintf(hdr, sizeof(hdr), "WATCHLISTS (%d)", static_cast<int>(watchlists_.size()));
-    ImGui::TextColored(TEXT_DIM, "%s", hdr);
-    ImGui::SameLine(width - 60);
-    ImGui::PushStyleColor(ImGuiCol_Button, ACCENT);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ACCENT_HOVER);
-    ImGui::PushStyleColor(ImGuiCol_Text, BG_DARKEST);
-    if (ImGui::SmallButton("+ NEW")) {
-        show_create_modal_ = true;
-    }
-    ImGui::PopStyleColor(3);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bb::BG_HEADER);
+    ImGui::BeginChild("##sb_hdr", ImVec2(0, 22), ImGuiChildFlags_Borders);
+    ImGui::TextColored(bb::AMBER, "LISTS");
+    ImGui::SameLine(width - 50);
+    ImGui::TextColored(bb::WHITE_DIM, "(%d)", static_cast<int>(watchlists_.size()));
     ImGui::EndChild();
     ImGui::PopStyleColor();
 
     // Watchlist items
     if (watchlists_.empty()) {
         ImGui::Spacing();
-        ImGui::TextColored(TEXT_DIM, "  No watchlists yet.");
-        ImGui::TextColored(TEXT_DIM, "  Click + NEW to create one.");
+        ImGui::TextColored(bb::WHITE_DIM, " No watchlists.");
+        ImGui::TextColored(bb::AMBER_DIM, " Press +NEW");
     } else {
         for (int i = 0; i < static_cast<int>(watchlists_.size()); i++) {
             auto& wl = watchlists_[i];
-            bool is_selected = (i == selected_watchlist_);
+            bool is_sel = (i == selected_watchlist_);
 
             ImGui::PushID(i);
 
-            // Highlight selected
-            if (is_selected) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ACCENT_BG);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ACCENT_BG);
-                ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
-            } else {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, BG_HOVER);
-                ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
+            // Row background
+            ImVec2 row_start = ImGui::GetCursorScreenPos();
+            float row_h = ImGui::GetTextLineHeightWithSpacing() + 4;
+
+            if (is_sel) {
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    row_start,
+                    ImVec2(row_start.x + width - 2, row_start.y + row_h),
+                    ImGui::ColorConvertFloat4ToU32(bb::BG_SELECTED));
             }
 
-            // Color dot + name
+            // Color indicator bar (3px left edge)
             ImVec4 wl_color = hex_to_color(wl.color);
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                row_start,
+                ImVec2(row_start.x + 3, row_start.y + row_h),
+                ImGui::ColorConvertFloat4ToU32(wl_color));
+
+            // Clickable row
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bb::BORDER_DIM);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 2));
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
 
             char label[128];
-            std::snprintf(label, sizeof(label), "%s (%d)##wl_%d",
-                wl.name.c_str(), wl.stock_count, i);
+            std::snprintf(label, sizeof(label), " %s%s##wl_%d",
+                is_sel ? "> " : "  ", wl.name.c_str(), i);
 
-            if (ImGui::Button(label, ImVec2(width - 44, 0))) {
+            ImGui::PushStyleColor(ImGuiCol_Text, is_sel ? bb::AMBER : bb::WHITE);
+            if (ImGui::Button(label, ImVec2(width - 38, 0))) {
                 if (selected_watchlist_ != i) {
                     selected_watchlist_ = i;
                     load_stocks();
                 }
             }
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor(2);
 
-            ImGui::PopStyleVar();
-            ImGui::PopStyleColor(3);
+            // Stock count badge
+            ImGui::SameLine(width - 50);
+            ImGui::TextColored(bb::WHITE_DIM, "%d", wl.stock_count);
 
-            // Color indicator (drawn after button)
-            ImVec2 btn_min = ImGui::GetItemRectMin();
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                ImVec2(btn_min.x, btn_min.y),
-                ImVec2(btn_min.x + 3, ImGui::GetItemRectMax().y),
-                ImGui::ColorConvertFloat4ToU32(wl_color));
-
-            // Delete button
-            ImGui::SameLine();
+            // Delete
+            ImGui::SameLine(width - 30);
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, BG_HOVER);
-            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
-            if (ImGui::SmallButton("X")) {
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(bb::RED.x, bb::RED.y, bb::RED.z, 0.3f));
+            ImGui::PushStyleColor(ImGuiCol_Text, bb::BORDER);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
+            if (ImGui::SmallButton("x")) {
                 delete_watchlist(wl.id);
             }
+            ImGui::PopStyleVar();
             ImGui::PopStyleColor(3);
             if (ImGui::IsItemHovered()) {
-                ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
-                ImGui::SetTooltip("Delete %s", wl.name.c_str());
+                ImGui::PushStyleColor(ImGuiCol_PopupBg, bb::BG_HEADER);
+                ImGui::SetTooltip("DEL %s", wl.name.c_str());
                 ImGui::PopStyleColor();
             }
 
@@ -375,39 +392,37 @@ void WatchlistScreen::render_sidebar(float width, float height) {
         }
     }
 
-    // Market movers section (bottom of sidebar)
-    // Show top gainers/losers from current watchlist stocks
+    // ── MARKET MOVERS ──
     if (!stocks_.empty() && data_.has_data()) {
         ImGui::Spacing();
-        ImGui::Separator();
 
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARK);
-        ImGui::BeginChild("##mkt_movers", ImVec2(0, 0), ImGuiChildFlags_Borders);
-        ImGui::TextColored(TEXT_DIM, "MARKET MOVERS");
-        ImGui::Separator();
+        // Divider line
+        bb_separator_line(width - 16);
+        ImGui::Spacing();
 
-        // Collect stocks with valid quotes, sort by change
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, bb::BG_BLACK);
+        ImGui::BeginChild("##bb_movers", ImVec2(0, 0), ImGuiChildFlags_Borders);
+
+        ImGui::TextColored(bb::AMBER, "MOVERS");
+        ImGui::Spacing();
+
+        // Collect and sort by change
         std::vector<const WatchlistStockEntry*> sorted;
-        for (auto& s : stocks_) {
-            std::lock_guard<std::mutex> lock(data_.mutex());
-            auto* q = data_.quote(s.symbol);
-            if (q && q->valid) sorted.push_back(&s);
-        }
-
-        // Sort by change_percent
         {
             std::lock_guard<std::mutex> lock(data_.mutex());
+            for (auto& s : stocks_) {
+                auto* q = data_.quote(s.symbol);
+                if (q && q->valid) sorted.push_back(&s);
+            }
             std::sort(sorted.begin(), sorted.end(),
                 [this](const WatchlistStockEntry* a, const WatchlistStockEntry* b) {
                     auto* qa = data_.quote(a->symbol);
                     auto* qb = data_.quote(b->symbol);
-                    double ca = qa ? qa->change_percent : 0;
-                    double cb = qb ? qb->change_percent : 0;
-                    return cb < ca;
+                    return (qb ? qb->change_percent : 0) < (qa ? qa->change_percent : 0);
                 });
         }
 
-        // Top 3 gainers
+        // Top gainers
         int shown = 0;
         {
             std::lock_guard<std::mutex> lock(data_.mutex());
@@ -415,27 +430,30 @@ void WatchlistScreen::render_sidebar(float width, float height) {
                 if (shown >= 3) break;
                 auto* q = data_.quote(s->symbol);
                 if (!q || q->change_percent <= 0) break;
-                ImGui::TextColored(MARKET_GREEN, " + ");
-                ImGui::SameLine();
-                ImGui::TextColored(INFO, "%-6s", s->symbol.c_str());
-                ImGui::SameLine(width - 80);
-                ImGui::TextColored(MARKET_GREEN, "+%.2f%%", q->change_percent);
+
+                // Green up arrow + symbol + change
+                ImGui::TextColored(bb::GREEN, " %s", "\xe2\x96\xb2"); // ▲
+                ImGui::SameLine(0, 4);
+                ImGui::TextColored(bb::WHITE, "%-6s", s->symbol.c_str());
+                ImGui::SameLine(width - 70);
+                ImGui::TextColored(bb::GREEN, "+%.2f%%", q->change_percent);
                 shown++;
             }
         }
 
-        // Bottom 2 losers
+        // Bottom losers
         shown = 0;
         {
             std::lock_guard<std::mutex> lock(data_.mutex());
             for (int i = static_cast<int>(sorted.size()) - 1; i >= 0 && shown < 2; i--) {
                 auto* q = data_.quote(sorted[i]->symbol);
                 if (!q || q->change_percent >= 0) break;
-                ImGui::TextColored(MARKET_RED, " - ");
-                ImGui::SameLine();
-                ImGui::TextColored(INFO, "%-6s", sorted[i]->symbol.c_str());
-                ImGui::SameLine(width - 80);
-                ImGui::TextColored(MARKET_RED, "%.2f%%", q->change_percent);
+
+                ImGui::TextColored(bb::RED, " %s", "\xe2\x96\xbc"); // ▼
+                ImGui::SameLine(0, 4);
+                ImGui::TextColored(bb::WHITE, "%-6s", sorted[i]->symbol.c_str());
+                ImGui::SameLine(width - 70);
+                ImGui::TextColored(bb::RED, "%.2f%%", q->change_percent);
                 shown++;
             }
         }
@@ -449,22 +467,20 @@ void WatchlistScreen::render_sidebar(float width, float height) {
 }
 
 // ============================================================================
-// Stock list — table with sort buttons
+// STOCK TABLE — Dense Bloomberg-style data grid
 // ============================================================================
-void WatchlistScreen::render_stock_list(float width, float height) {
-    using namespace theme::colors;
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARK);
-    ImGui::BeginChild("##wl_stocks", ImVec2(width, height), ImGuiChildFlags_Borders);
+void WatchlistScreen::render_stock_table(float width, float height) {
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bb::BG_BLACK);
+    ImGui::BeginChild("##bb_table", ImVec2(width, height), ImGuiChildFlags_Borders);
 
     bool has_wl = selected_watchlist_ >= 0 && selected_watchlist_ < static_cast<int>(watchlists_.size());
 
     if (!has_wl) {
         float cy = height * 0.4f;
         ImGui::SetCursorPosY(cy);
-        float tw = ImGui::CalcTextSize("SELECT A WATCHLIST TO VIEW").x;
+        float tw = ImGui::CalcTextSize("SELECT A WATCHLIST").x;
         ImGui::SetCursorPosX((width - tw) * 0.5f);
-        ImGui::TextColored(TEXT_DIM, "SELECT A WATCHLIST TO VIEW");
+        ImGui::TextColored(bb::WHITE_DIM, "SELECT A WATCHLIST");
         ImGui::EndChild();
         ImGui::PopStyleColor();
         return;
@@ -472,41 +488,30 @@ void WatchlistScreen::render_stock_list(float width, float height) {
 
     auto& wl = watchlists_[selected_watchlist_];
 
-    // Header with sort buttons
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
-    ImGui::BeginChild("##stock_hdr", ImVec2(0, 28), ImGuiChildFlags_Borders);
+    // Table header bar with sort function keys
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bb::BG_HEADER);
+    ImGui::BeginChild("##tbl_hdr", ImVec2(0, 24), ImGuiChildFlags_Borders);
 
-    char title[64];
-    std::snprintf(title, sizeof(title), "%s (%d)", wl.name.c_str(), static_cast<int>(stocks_.size()));
-    ImGui::TextColored(TEXT_DIM, "%s", title);
+    ImGui::TextColored(bb::AMBER, "%s", wl.name.c_str());
+    ImGui::SameLine(0, 8);
+    ImGui::TextColored(bb::WHITE_DIM, "(%d)", static_cast<int>(stocks_.size()));
 
-    // Sort buttons (right side)
-    static const SortCriteria sort_opts[] = {
-        SortCriteria::Ticker, SortCriteria::Change,
-        SortCriteria::Volume, SortCriteria::Price
-    };
-
-    float btn_start = width - 240;
-    ImGui::SameLine(btn_start);
-
-    for (int i = 0; i < 4; i++) {
-        bool active = (sort_by_ == sort_opts[i]);
-        if (active) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ACCENT);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ACCENT_HOVER);
-            ImGui::PushStyleColor(ImGuiCol_Text, BG_DARKEST);
-        } else {
-            ImGui::PushStyleColor(ImGuiCol_Button, BG_WIDGET);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, BG_HOVER);
-            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
+    // Sort function keys (right side)
+    float btn_start = width - 260;
+    if (btn_start > 150) {
+        ImGui::SameLine(btn_start);
+        static const SortCriteria opts[] = {
+            SortCriteria::Ticker, SortCriteria::Change,
+            SortCriteria::Volume, SortCriteria::Price
+        };
+        static const char* labels[] = {"F1 SYM", "F2 CHG", "F3 VOL", "F4 PX"};
+        for (int i = 0; i < 4; i++) {
+            if (bb_func_key(labels[i], sort_by_ == opts[i], 58)) {
+                sort_by_ = opts[i];
+                sort_stocks();
+            }
+            if (i < 3) ImGui::SameLine(0, 2);
         }
-
-        if (ImGui::SmallButton(sort_label(sort_opts[i]))) {
-            sort_by_ = sort_opts[i];
-            sort_stocks();
-        }
-        ImGui::PopStyleColor(3);
-        if (i < 3) ImGui::SameLine(0, 2);
     }
 
     ImGui::EndChild();
@@ -522,93 +527,176 @@ void WatchlistScreen::render_stock_list(float width, float height) {
         sort_stocks();
     }
 
-    // Stock table
+    // Data table
     if (stocks_.empty()) {
         ImGui::Spacing();
-        float tw = ImGui::CalcTextSize("NO STOCKS IN THIS WATCHLIST").x;
+        float tw = ImGui::CalcTextSize("NO SECURITIES").x;
         ImGui::SetCursorPosX((width - tw) * 0.5f);
-        ImGui::TextColored(TEXT_DIM, "NO STOCKS IN THIS WATCHLIST");
-        ImGui::SetCursorPosX((width - ImGui::CalcTextSize("Click ADD STOCK to get started").x) * 0.5f);
-        ImGui::TextColored(TEXT_DIM, "Click ADD STOCK to get started");
+        ImGui::TextColored(bb::WHITE_DIM, "NO SECURITIES");
+        ImGui::Spacing();
+        float tw2 = ImGui::CalcTextSize("Press +SEC to add").x;
+        ImGui::SetCursorPosX((width - tw2) * 0.5f);
+        ImGui::TextColored(bb::AMBER_DIM, "Press +SEC to add");
     } else {
-        if (ImGui::BeginTable("##stock_table", 5,
-                ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable)) {
+        // Bloomberg-style dense table
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 1));
+        ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, bb::BG_HEADER);
+        ImGui::PushStyleColor(ImGuiCol_TableBorderStrong, bb::BORDER);
+        ImGui::PushStyleColor(ImGuiCol_TableBorderLight, bb::BORDER_DIM);
+        ImGui::PushStyleColor(ImGuiCol_TableRowBg, bb::BG_BLACK);
+        ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, bb::BG_ROW_ALT);
 
-            ImGui::TableSetupColumn("SYMBOL", ImGuiTableColumnFlags_WidthFixed, 90);
-            ImGui::TableSetupColumn("PRICE", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("CHANGE", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("VOLUME", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("##act", ImGuiTableColumnFlags_WidthFixed, 30);
-            ImGui::TableHeadersRow();
+        if (ImGui::BeginTable("##bb_stock_tbl", 7,
+                ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable |
+                ImGuiTableFlags_SizingFixedFit)) {
+
+            ImGui::TableSetupColumn("SYMBOL",  ImGuiTableColumnFlags_WidthFixed, 80);
+            ImGui::TableSetupColumn("LAST",    ImGuiTableColumnFlags_WidthFixed, 72);
+            ImGui::TableSetupColumn("CHG",     ImGuiTableColumnFlags_WidthFixed, 64);
+            ImGui::TableSetupColumn("CHG%",    ImGuiTableColumnFlags_WidthFixed, 60);
+            ImGui::TableSetupColumn("VOLUME",  ImGuiTableColumnFlags_WidthFixed, 68);
+            ImGui::TableSetupColumn("RANGE",   ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("##del",   ImGuiTableColumnFlags_WidthFixed, 20);
+
+            // Custom header row styling
+            ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+            const char* hdrs[] = {"SYMBOL", "LAST", "CHG", "CHG%", "VOLUME", "RANGE", ""};
+            for (int col = 0; col < 7; col++) {
+                ImGui::TableSetColumnIndex(col);
+                ImGui::TextColored(bb::AMBER_DIM, "%s", hdrs[col]);
+            }
 
             for (int i = 0; i < static_cast<int>(stocks_.size()); i++) {
                 auto& stock = stocks_[i];
-                bool is_selected = (i == selected_stock_);
+                bool is_sel = (i == selected_stock_);
 
                 ImGui::TableNextRow();
                 ImGui::PushID(i);
 
-                // Row click highlight
-                if (is_selected) {
+                // Selected row highlight
+                if (is_sel) {
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                        ImGui::ColorConvertFloat4ToU32(ACCENT_BG));
+                        ImGui::ColorConvertFloat4ToU32(bb::BG_SELECTED));
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg1,
+                        ImGui::ColorConvertFloat4ToU32(bb::BG_SELECTED));
                 }
 
-                // Symbol
+                // SYMBOL
                 ImGui::TableNextColumn();
-                if (ImGui::Selectable(stock.symbol.c_str(), is_selected,
+                ImGui::PushStyleColor(ImGuiCol_Header, bb::BG_SELECTED);
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered, bb::BG_SELECTED);
+                if (ImGui::Selectable(stock.symbol.c_str(), is_sel,
                         ImGuiSelectableFlags_SpanAllColumns)) {
                     selected_stock_ = i;
                 }
+                ImGui::PopStyleColor(2);
 
-                // Price
+                // LAST
                 ImGui::TableNextColumn();
                 if (stock.quote.valid) {
-                    ImGui::TextColored(TEXT_PRIMARY, "$%.2f", stock.quote.price);
+                    ImGui::TextColored(bb::WHITE, "%.2f", stock.quote.price);
                 } else {
-                    ImGui::TextColored(TEXT_DIM, "--");
+                    ImGui::TextColored(bb::WHITE_DIM, "--");
                 }
 
-                // Change
+                // CHG
                 ImGui::TableNextColumn();
                 if (stock.quote.valid) {
-                    ImVec4 chg_color = stock.quote.change_percent >= 0 ? MARKET_GREEN : MARKET_RED;
-                    ImGui::TextColored(chg_color, "%s%.2f%%",
-                        stock.quote.change_percent >= 0 ? "+" : "",
-                        stock.quote.change_percent);
-                    ImGui::SameLine(0, 8);
-                    ImGui::TextColored(chg_color, "($%.2f)", stock.quote.change);
+                    ImVec4 cc = stock.quote.change >= 0 ? bb::GREEN : bb::RED;
+                    ImGui::TextColored(cc, "%+.2f", stock.quote.change);
                 } else {
-                    ImGui::TextColored(TEXT_DIM, "--");
+                    ImGui::TextColored(bb::WHITE_DIM, "--");
                 }
 
-                // Volume
+                // CHG%
+                ImGui::TableNextColumn();
+                if (stock.quote.valid) {
+                    ImVec4 cc = stock.quote.change_percent >= 0 ? bb::GREEN : bb::RED;
+                    // Change percent with background color bar
+                    ImVec2 p = ImGui::GetCursorScreenPos();
+                    float bar_w = std::min(std::abs((float)stock.quote.change_percent) * 8.0f, 55.0f);
+                    ImGui::GetWindowDrawList()->AddRectFilled(
+                        p, ImVec2(p.x + bar_w, p.y + ImGui::GetTextLineHeight()),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(cc.x, cc.y, cc.z, 0.12f)));
+                    ImGui::TextColored(cc, "%+.2f%%", stock.quote.change_percent);
+                } else {
+                    ImGui::TextColored(bb::WHITE_DIM, "--");
+                }
+
+                // VOLUME
                 ImGui::TableNextColumn();
                 if (stock.quote.valid && stock.quote.volume > 0) {
-                    ImGui::TextColored(WARNING, "%s", format_volume(stock.quote.volume).c_str());
+                    ImGui::TextColored(bb::YELLOW, "%s", format_volume(stock.quote.volume).c_str());
                 } else {
-                    ImGui::TextColored(TEXT_DIM, "--");
+                    ImGui::TextColored(bb::WHITE_DIM, "--");
                 }
 
-                // Remove button
+                // RANGE (mini inline bar)
+                ImGui::TableNextColumn();
+                if (stock.quote.valid && stock.quote.high > stock.quote.low && stock.quote.high > 0) {
+                    ImVec2 p = ImGui::GetCursorScreenPos();
+                    float cell_w = ImGui::GetContentRegionAvail().x;
+                    float bar_h = 3.0f;
+                    float bar_y = p.y + ImGui::GetTextLineHeight() * 0.5f - bar_h * 0.5f;
+
+                    // Track background
+                    ImGui::GetWindowDrawList()->AddRectFilled(
+                        ImVec2(p.x, bar_y),
+                        ImVec2(p.x + cell_w, bar_y + bar_h),
+                        ImGui::ColorConvertFloat4ToU32(bb::BORDER_DIM));
+
+                    // Gradient: red → green
+                    float half = cell_w * 0.5f;
+                    ImGui::GetWindowDrawList()->AddRectFilledMultiColor(
+                        ImVec2(p.x, bar_y),
+                        ImVec2(p.x + half, bar_y + bar_h),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(bb::RED.x, bb::RED.y, bb::RED.z, 0.4f)),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(bb::YELLOW.x, bb::YELLOW.y, bb::YELLOW.z, 0.3f)),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(bb::YELLOW.x, bb::YELLOW.y, bb::YELLOW.z, 0.3f)),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(bb::RED.x, bb::RED.y, bb::RED.z, 0.4f)));
+                    ImGui::GetWindowDrawList()->AddRectFilledMultiColor(
+                        ImVec2(p.x + half, bar_y),
+                        ImVec2(p.x + cell_w, bar_y + bar_h),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(bb::YELLOW.x, bb::YELLOW.y, bb::YELLOW.z, 0.3f)),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(bb::GREEN.x, bb::GREEN.y, bb::GREEN.z, 0.4f)),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(bb::GREEN.x, bb::GREEN.y, bb::GREEN.z, 0.4f)),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(bb::YELLOW.x, bb::YELLOW.y, bb::YELLOW.z, 0.3f)));
+
+                    // Price position dot
+                    float range = (float)(stock.quote.high - stock.quote.low);
+                    float pct = (float)((stock.quote.price - stock.quote.low) / range);
+                    pct = std::max(0.0f, std::min(1.0f, pct));
+                    float dot_x = p.x + pct * cell_w;
+                    ImGui::GetWindowDrawList()->AddCircleFilled(
+                        ImVec2(dot_x, bar_y + bar_h * 0.5f), 4.0f,
+                        ImGui::ColorConvertFloat4ToU32(bb::AMBER));
+                    ImGui::GetWindowDrawList()->AddCircle(
+                        ImVec2(dot_x, bar_y + bar_h * 0.5f), 4.0f,
+                        ImGui::ColorConvertFloat4ToU32(bb::WHITE), 0, 1.0f);
+
+                    ImGui::Dummy(ImVec2(cell_w, ImGui::GetTextLineHeight()));
+                } else {
+                    ImGui::TextColored(bb::WHITE_DIM, "--");
+                }
+
+                // DELETE
                 ImGui::TableNextColumn();
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, BG_HOVER);
-                ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
-                if (ImGui::SmallButton("X")) {
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(bb::RED.x, bb::RED.y, bb::RED.z, 0.2f));
+                ImGui::PushStyleColor(ImGuiCol_Text, bb::BORDER);
+                if (ImGui::SmallButton("x")) {
                     remove_stock(stock.symbol);
                 }
                 ImGui::PopStyleColor(3);
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("Remove %s", stock.symbol.c_str());
-                }
 
                 ImGui::PopID();
             }
-
             ImGui::EndTable();
         }
+
+        ImGui::PopStyleColor(5);
+        ImGui::PopStyleVar();
     }
 
     ImGui::EndChild();
@@ -616,20 +704,18 @@ void WatchlistScreen::render_stock_list(float width, float height) {
 }
 
 // ============================================================================
-// Stock detail — right panel showing selected stock info
+// DETAIL PANEL — Bloomberg security detail view
 // ============================================================================
-void WatchlistScreen::render_stock_detail(float width, float height) {
-    using namespace theme::colors;
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
-    ImGui::BeginChild("##wl_detail", ImVec2(width, height), ImGuiChildFlags_Borders);
+void WatchlistScreen::render_detail_panel(float width, float height) {
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bb::BG_PANEL);
+    ImGui::BeginChild("##bb_detail", ImVec2(width, height), ImGuiChildFlags_Borders);
 
     if (selected_stock_ < 0 || selected_stock_ >= static_cast<int>(stocks_.size())) {
-        float cy = height * 0.4f;
+        float cy = height * 0.35f;
         ImGui::SetCursorPosY(cy);
-        float tw = ImGui::CalcTextSize("SELECT A STOCK TO VIEW DETAILS").x;
+        float tw = ImGui::CalcTextSize("SELECT SECURITY").x;
         ImGui::SetCursorPosX((width - tw) * 0.5f);
-        ImGui::TextColored(TEXT_DIM, "SELECT A STOCK TO VIEW DETAILS");
+        ImGui::TextColored(bb::WHITE_DIM, "SELECT SECURITY");
         ImGui::EndChild();
         ImGui::PopStyleColor();
         return;
@@ -637,156 +723,228 @@ void WatchlistScreen::render_stock_detail(float width, float height) {
 
     auto& stock = stocks_[selected_stock_];
 
-    // Header
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARK);
-    ImGui::BeginChild("##detail_hdr", ImVec2(0, 24), ImGuiChildFlags_Borders);
-    ImGui::TextColored(TEXT_DIM, "STOCK DETAIL");
+    // Security header
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bb::BG_HEADER);
+    ImGui::BeginChild("##det_hdr", ImVec2(0, 22), ImGuiChildFlags_Borders);
+    ImGui::TextColored(bb::AMBER, "DES");
+    ImGui::SameLine(0, 8);
+    ImGui::TextColored(bb::WHITE, "%s", stock.symbol.c_str());
+    ImGui::SameLine(0, 4);
+    ImGui::TextColored(bb::WHITE_DIM, "US Equity");
     ImGui::EndChild();
     ImGui::PopStyleColor();
 
     ImGui::Spacing();
 
-    // Symbol hero
-    ImGui::TextColored(INFO, "%s", stock.symbol.c_str());
-
     if (!stock.quote.valid) {
-        ImGui::Spacing();
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(ERROR_RED.x, ERROR_RED.y, ERROR_RED.z, 0.1f));
-        ImGui::BeginChild("##no_data", ImVec2(0, 28), ImGuiChildFlags_Borders);
-        ImGui::TextColored(ERROR_RED, " FAILED TO LOAD MARKET DATA");
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
-    } else {
-        auto& q = stock.quote;
-
-        // Price + change
-        ImGui::SetWindowFontScale(1.5f);
-        ImGui::TextColored(TEXT_PRIMARY, "$%.2f", q.price);
-        ImGui::SetWindowFontScale(1.0f);
-
-        ImVec4 chg_color = q.change_percent >= 0 ? MARKET_GREEN : MARKET_RED;
-
-        // Change badge
+        // Error state
         ImVec2 p = ImGui::GetCursorScreenPos();
         ImGui::GetWindowDrawList()->AddRectFilled(
-            p, ImVec2(p.x + 80, p.y + 18),
-            ImGui::ColorConvertFloat4ToU32(ImVec4(chg_color.x, chg_color.y, chg_color.z, 0.15f)),
-            2.0f);
-        char chg_buf[32];
-        std::snprintf(chg_buf, sizeof(chg_buf), " %s%.2f%%",
-            q.change_percent >= 0 ? "+" : "", q.change_percent);
-        ImGui::TextColored(chg_color, "%s", chg_buf);
-        ImGui::SameLine(0, 8);
-        ImGui::TextColored(chg_color, "($%.2f)", q.change);
+            p, ImVec2(p.x + width - 16, p.y + 20),
+            ImGui::ColorConvertFloat4ToU32(ImVec4(bb::RED.x, bb::RED.y, bb::RED.z, 0.1f)));
+        ImGui::TextColored(bb::RED, " NO MARKET DATA");
+        ImGui::Spacing();
+    } else {
+        auto& q = stock.quote;
+        ImVec4 chg_color = q.change_percent >= 0 ? bb::GREEN : bb::RED;
+
+        // Big price display
+        ImGui::SetWindowFontScale(1.8f);
+        ImGui::TextColored(bb::WHITE, " %.2f", q.price);
+        ImGui::SetWindowFontScale(1.0f);
+
+        // Change badge with colored background
+        ImGui::SameLine(0, 12);
+        ImVec2 badge_pos = ImGui::GetCursorScreenPos();
+        char chg_text[32];
+        std::snprintf(chg_text, sizeof(chg_text), " %+.2f (%+.2f%%) ",
+            q.change, q.change_percent);
+        ImVec2 badge_sz = ImGui::CalcTextSize(chg_text);
+
+        // Badge background
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            badge_pos,
+            ImVec2(badge_pos.x + badge_sz.x + 4, badge_pos.y + badge_sz.y + 2),
+            ImGui::ColorConvertFloat4ToU32(ImVec4(chg_color.x, chg_color.y, chg_color.z, 0.2f)));
+        ImGui::TextColored(chg_color, "%s", chg_text);
 
         ImGui::Spacing();
-        ImGui::Separator();
+
+        // Horizontal divider
+        bb_separator_line(width - 16);
         ImGui::Spacing();
 
-        // Stats rows
-        auto stat_row = [&](const char* label, const char* val, ImVec4 color) {
-            ImGui::TextColored(TEXT_DIM, "%-12s", label);
-            ImGui::SameLine(120);
-            ImGui::TextColored(color, "%s", val);
-        };
-
+        // Stats grid — Bloomberg style label:value pairs
         char buf[32];
-        std::snprintf(buf, sizeof(buf), "$%.2f", q.open);
-        stat_row("OPEN", buf, TEXT_PRIMARY);
-        std::snprintf(buf, sizeof(buf), "$%.2f", q.previous_close);
-        stat_row("PREV CLOSE", buf, TEXT_PRIMARY);
-        std::snprintf(buf, sizeof(buf), "$%.2f", q.high);
-        stat_row("DAY HIGH", buf, MARKET_GREEN);
-        std::snprintf(buf, sizeof(buf), "$%.2f", q.low);
-        stat_row("DAY LOW", buf, MARKET_RED);
-        stat_row("VOLUME", format_volume(q.volume).c_str(), WARNING);
 
-        // Day range visual bar
+        std::snprintf(buf, sizeof(buf), "%.2f", q.open);
+        bb_label("OPEN", buf, bb::WHITE);
+
+        std::snprintf(buf, sizeof(buf), "%.2f", q.previous_close);
+        bb_label("PREV CLOSE", buf, bb::WHITE);
+
+        std::snprintf(buf, sizeof(buf), "%.2f", q.high);
+        bb_label("DAY HIGH", buf, bb::GREEN);
+
+        std::snprintf(buf, sizeof(buf), "%.2f", q.low);
+        bb_label("DAY LOW", buf, bb::RED);
+
+        bb_label("VOLUME", format_volume(q.volume).c_str(), bb::YELLOW);
+
+        // Day range calculation
         if (q.high > q.low && q.high > 0) {
             ImGui::Spacing();
-            ImGui::TextColored(TEXT_DIM, "DAY RANGE");
+            bb_separator_line(width - 16);
+            ImGui::Spacing();
 
-            float bar_w = width - 24;
+            ImGui::TextColored(bb::AMBER_DIM, "DAY RANGE");
+            ImGui::Spacing();
+
+            // Low label
+            ImGui::TextColored(bb::RED, "%.2f", q.low);
+            ImGui::SameLine(0, 8);
+
+            // Range bar
+            float bar_w = width - 120;
+            if (bar_w < 60) bar_w = 60;
             ImVec2 bar_pos = ImGui::GetCursorScreenPos();
-            float bar_h = 4.0f;
+            float bar_h = 8.0f;
 
-            // Background bar
+            // Track
             ImGui::GetWindowDrawList()->AddRectFilled(
                 bar_pos,
                 ImVec2(bar_pos.x + bar_w, bar_pos.y + bar_h),
-                ImGui::ColorConvertFloat4ToU32(BORDER_DIM), 2.0f);
+                ImGui::ColorConvertFloat4ToU32(bb::BORDER_DIM));
 
-            // Gradient overlay
-            float range = static_cast<float>(q.high - q.low);
-            float pos_pct = static_cast<float>((q.price - q.low) / range);
-            pos_pct = std::max(0.0f, std::min(1.0f, pos_pct));
+            // Gradient fill (red -> amber -> green)
+            float third = bar_w / 3.0f;
+            ImGui::GetWindowDrawList()->AddRectFilledMultiColor(
+                bar_pos,
+                ImVec2(bar_pos.x + third, bar_pos.y + bar_h),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::RED.x, bb::RED.y, bb::RED.z, 0.6f)),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::AMBER.x, bb::AMBER.y, bb::AMBER.z, 0.5f)),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::AMBER.x, bb::AMBER.y, bb::AMBER.z, 0.5f)),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::RED.x, bb::RED.y, bb::RED.z, 0.6f)));
+            ImGui::GetWindowDrawList()->AddRectFilledMultiColor(
+                ImVec2(bar_pos.x + third, bar_pos.y),
+                ImVec2(bar_pos.x + third * 2, bar_pos.y + bar_h),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::AMBER.x, bb::AMBER.y, bb::AMBER.z, 0.5f)),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::YELLOW.x, bb::YELLOW.y, bb::YELLOW.z, 0.5f)),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::YELLOW.x, bb::YELLOW.y, bb::YELLOW.z, 0.5f)),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::AMBER.x, bb::AMBER.y, bb::AMBER.z, 0.5f)));
+            ImGui::GetWindowDrawList()->AddRectFilledMultiColor(
+                ImVec2(bar_pos.x + third * 2, bar_pos.y),
+                ImVec2(bar_pos.x + bar_w, bar_pos.y + bar_h),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::YELLOW.x, bb::YELLOW.y, bb::YELLOW.z, 0.5f)),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::GREEN.x, bb::GREEN.y, bb::GREEN.z, 0.6f)),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::GREEN.x, bb::GREEN.y, bb::GREEN.z, 0.6f)),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(bb::YELLOW.x, bb::YELLOW.y, bb::YELLOW.z, 0.5f)));
 
-            // Current price indicator
-            float dot_x = bar_pos.x + pos_pct * bar_w;
-            ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(dot_x, bar_pos.y + bar_h * 0.5f), 5.0f,
-                ImGui::ColorConvertFloat4ToU32(ACCENT));
+            // Current price marker (diamond shape)
+            float range = (float)(q.high - q.low);
+            float pct = (float)((q.price - q.low) / range);
+            pct = std::max(0.0f, std::min(1.0f, pct));
+            float marker_x = bar_pos.x + pct * bar_w;
+            float marker_y = bar_pos.y + bar_h * 0.5f;
 
-            ImGui::Dummy(ImVec2(bar_w, bar_h + 4));
+            // Diamond marker
+            ImVec2 diamond[4] = {
+                {marker_x, marker_y - 6},
+                {marker_x + 5, marker_y},
+                {marker_x, marker_y + 6},
+                {marker_x - 5, marker_y}
+            };
+            ImGui::GetWindowDrawList()->AddConvexPolyFilled(diamond, 4,
+                ImGui::ColorConvertFloat4ToU32(bb::AMBER));
+            ImGui::GetWindowDrawList()->AddPolyline(diamond, 4,
+                ImGui::ColorConvertFloat4ToU32(bb::WHITE), ImDrawFlags_Closed, 1.0f);
 
-            // Low / High labels
-            ImGui::TextColored(MARKET_RED, "$%.2f", q.low);
-            ImGui::SameLine(width - 80);
-            ImGui::TextColored(MARKET_GREEN, "$%.2f", q.high);
+            ImGui::Dummy(ImVec2(bar_w, bar_h + 8));
+
+            // High label
+            ImGui::SameLine(0, 8);
+            ImGui::TextColored(bb::GREEN, "%.2f", q.high);
+        }
+
+        // Price position percentage
+        if (q.high > q.low) {
+            float range = (float)(q.high - q.low);
+            float pct = (float)((q.price - q.low) / range) * 100.0f;
+            char pos_buf[32];
+            std::snprintf(pos_buf, sizeof(pos_buf), "%.0f%%", pct);
+            bb_label("POSITION", pos_buf, bb::CYAN);
         }
     }
 
     // Notes section
     if (!stock.notes.empty()) {
         ImGui::Spacing();
-        ImGui::Separator();
+        bb_separator_line(width - 16);
         ImGui::Spacing();
-        ImGui::TextColored(WARNING, "NOTES");
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARKEST);
-        ImGui::BeginChild("##stock_notes", ImVec2(0, 60), ImGuiChildFlags_Borders);
-        ImGui::TextWrapped("%s", stock.notes.c_str());
+
+        ImGui::TextColored(bb::AMBER, "NOTES");
+
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, bb::BG_BLACK);
+        ImGui::BeginChild("##bb_notes", ImVec2(0, 60), ImGuiChildFlags_Borders);
+        ImGui::TextColored(bb::WHITE_DIM, "%s", stock.notes.c_str());
         ImGui::EndChild();
         ImGui::PopStyleColor();
     }
+
+    // Added date
+    ImGui::Spacing();
+    ImGui::TextColored(bb::BORDER, "ADDED %s", stock.added_at.c_str());
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
 
 // ============================================================================
-// Status bar
+// FOOTER BAR — Bloomberg status line
 // ============================================================================
-void WatchlistScreen::render_status_bar() {
-    using namespace theme::colors;
+void WatchlistScreen::render_footer_bar(float width) {
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bb::BG_HEADER);
+    ImGui::BeginChild("##bb_footer", ImVec2(width, ImGui::GetFrameHeight()), ImGuiChildFlags_Borders);
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARKEST);
-    ImGui::BeginChild("##wl_status", ImVec2(0, ImGui::GetFrameHeight()), ImGuiChildFlags_Borders);
+    // Left: branding
+    ImGui::TextColored(bb::AMBER, "WLIST");
+    ImGui::SameLine(0, 8);
+    ImGui::TextColored(bb::BORDER, "|");
+    ImGui::SameLine(0, 8);
 
-    ImGui::TextColored(TEXT_DIM, "FINCEPT WATCHLIST");
-    ImGui::SameLine(0, 16);
-    ImGui::TextColored(BORDER_BRIGHT, "|");
-    ImGui::SameLine(0, 16);
-
-    ImGui::TextColored(TEXT_DIM, "LISTS:");
+    // Stats
+    ImGui::TextColored(bb::AMBER_DIM, "LISTS");
     ImGui::SameLine(0, 4);
-    ImGui::TextColored(INFO, "%d", static_cast<int>(watchlists_.size()));
-    ImGui::SameLine(0, 16);
-    ImGui::TextColored(TEXT_DIM, "STOCKS:");
-    ImGui::SameLine(0, 4);
-    ImGui::TextColored(INFO, "%d", static_cast<int>(stocks_.size()));
-    ImGui::SameLine(0, 16);
-    ImGui::TextColored(TEXT_DIM, "STATUS:");
-    ImGui::SameLine(0, 4);
-    ImGui::TextColored(data_.is_loading() ? WARNING : MARKET_GREEN,
-        "%s", data_.is_loading() ? "LOADING" : "CONNECTED");
+    ImGui::TextColored(bb::WHITE, "%d", static_cast<int>(watchlists_.size()));
+    ImGui::SameLine(0, 12);
 
-    // Status message on right
+    ImGui::TextColored(bb::AMBER_DIM, "SEC");
+    ImGui::SameLine(0, 4);
+    ImGui::TextColored(bb::WHITE, "%d", static_cast<int>(stocks_.size()));
+    ImGui::SameLine(0, 12);
+
+    ImGui::TextColored(bb::AMBER_DIM, "STATUS");
+    ImGui::SameLine(0, 4);
+    if (data_.is_loading()) {
+        ImGui::TextColored(bb::YELLOW, "LOADING");
+    } else {
+        ImGui::TextColored(bb::GREEN, "CONNECTED");
+    }
+
+    // Right: status message (fades after 5s)
     if (!status_.empty()) {
         double elapsed = ImGui::GetTime() - status_time_;
         if (elapsed < 5.0) {
-            float msg_w = ImGui::CalcTextSize(status_.c_str()).x + 16;
-            ImGui::SameLine(ImGui::GetWindowWidth() - msg_w);
-            ImGui::TextColored(SUCCESS, "%s", status_.c_str());
+            // Flash effect for first second
+            bool show = true;
+            if (elapsed < 1.0) {
+                show = (int)(elapsed * 6) % 2 == 0;
+            }
+            if (show) {
+                float msg_w = ImGui::CalcTextSize(status_.c_str()).x + 24;
+                ImGui::SameLine(width - msg_w);
+                ImGui::TextColored(bb::YELLOW, "%s", status_.c_str());
+            }
         } else {
             status_.clear();
         }
@@ -797,44 +955,49 @@ void WatchlistScreen::render_status_bar() {
 }
 
 // ============================================================================
-// Create watchlist modal
+// CREATE WATCHLIST MODAL — Bloomberg-styled dark modal
 // ============================================================================
 void WatchlistScreen::render_create_modal() {
-    using namespace theme::colors;
-
     if (!show_create_modal_) return;
 
-    // Center the modal
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(420, 320));
+    ImGui::SetNextWindowSize(ImVec2(400, 300));
 
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, BG_PANEL);
-    ImGui::PushStyleColor(ImGuiCol_TitleBg, BG_DARK);
-    ImGui::PushStyleColor(ImGuiCol_TitleBgActive, BG_DARK);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, bb::BG_PANEL);
+    ImGui::PushStyleColor(ImGuiCol_TitleBg, bb::BG_HEADER);
+    ImGui::PushStyleColor(ImGuiCol_TitleBgActive, bb::BG_HEADER);
+    ImGui::PushStyleColor(ImGuiCol_Border, bb::AMBER_DIM);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 
-    if (ImGui::Begin("CREATE NEW WATCHLIST##modal", &show_create_modal_,
+    if (ImGui::Begin("NEW WATCHLIST##bb_modal", &show_create_modal_,
             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoDocking)) {
 
         // Name
-        ImGui::TextColored(TEXT_DIM, "WATCHLIST NAME *");
+        ImGui::TextColored(bb::AMBER, "NAME *");
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, bb::BG_BLACK);
+        ImGui::PushStyleColor(ImGuiCol_Text, bb::WHITE);
         ImGui::SetNextItemWidth(-1);
-        ImGui::InputTextWithHint("##wl_name", "My Watchlist",
+        ImGui::InputTextWithHint("##wl_name", "WATCHLIST NAME",
             create_name_, sizeof(create_name_));
+        ImGui::PopStyleColor(2);
 
         ImGui::Spacing();
 
         // Description
-        ImGui::TextColored(TEXT_DIM, "DESCRIPTION");
+        ImGui::TextColored(bb::AMBER, "DESCRIPTION");
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, bb::BG_BLACK);
+        ImGui::PushStyleColor(ImGuiCol_Text, bb::WHITE);
         ImGui::SetNextItemWidth(-1);
         ImGui::InputTextMultiline("##wl_desc", create_desc_, sizeof(create_desc_),
-            ImVec2(-1, 60));
+            ImVec2(-1, 50));
+        ImGui::PopStyleColor(2);
 
         ImGui::Spacing();
 
-        // Color picker
-        ImGui::TextColored(TEXT_DIM, "COLOR");
+        // Color picker (horizontal swatches)
+        ImGui::TextColored(bb::AMBER, "COLOR");
         const auto& colors = watchlist_colors();
         for (int i = 0; i < static_cast<int>(colors.size()); i++) {
             ImVec4 c = hex_to_color(colors[i]);
@@ -843,153 +1006,188 @@ void WatchlistScreen::render_create_modal() {
             ImGui::PushID(i);
             ImGui::PushStyleColor(ImGuiCol_Button, c);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                ImVec4(c.x * 0.8f, c.y * 0.8f, c.z * 0.8f, 1.0f));
+                ImVec4(c.x * 0.7f, c.y * 0.7f, c.z * 0.7f, 1.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
 
-            float size = selected ? 32.0f : 28.0f;
-            if (ImGui::Button("##color", ImVec2(size, size))) {
+            float sz = selected ? 28.0f : 24.0f;
+            if (ImGui::Button("##clr", ImVec2(sz, sz))) {
                 create_color_idx_ = i;
             }
+            ImGui::PopStyleVar();
             ImGui::PopStyleColor(2);
 
             if (selected) {
                 ImVec2 mn = ImGui::GetItemRectMin();
                 ImVec2 mx = ImGui::GetItemRectMax();
                 ImGui::GetWindowDrawList()->AddRect(mn, mx,
-                    ImGui::ColorConvertFloat4ToU32(TEXT_PRIMARY), 0, 0, 2.0f);
+                    ImGui::ColorConvertFloat4ToU32(bb::WHITE), 0, 0, 2.0f);
             }
 
             ImGui::PopID();
-            if (i < static_cast<int>(colors.size()) - 1) ImGui::SameLine(0, 6);
+            if (i < static_cast<int>(colors.size()) - 1) ImGui::SameLine(0, 4);
         }
 
         ImGui::Spacing();
-        ImGui::Separator();
+        bb_separator_line(380);
         ImGui::Spacing();
 
         // Buttons
-        float btn_w = 100;
-        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - btn_w * 2 - 24);
+        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 180);
 
-        if (theme::SecondaryButton("Cancel")) {
+        if (bb_func_key("CANCEL", false, 70)) {
             show_create_modal_ = false;
         }
-        ImGui::SameLine();
+        ImGui::SameLine(0, 8);
+
         bool can_create = create_name_[0] != '\0';
         if (!can_create) ImGui::BeginDisabled();
-        if (theme::AccentButton("Create")) {
+
+        ImGui::PushStyleColor(ImGuiCol_Button, bb::AMBER_DIM);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bb::AMBER);
+        ImGui::PushStyleColor(ImGuiCol_Text, bb::BG_BLACK);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
+        if (ImGui::Button("CREATE", ImVec2(70, 0))) {
             create_watchlist();
         }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+
         if (!can_create) ImGui::EndDisabled();
     }
     ImGui::End();
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
 }
 
 // ============================================================================
-// Add stock modal
+// ADD STOCK MODAL
 // ============================================================================
 void WatchlistScreen::render_add_stock_modal() {
-    using namespace theme::colors;
-
     if (!show_add_stock_) return;
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(400, 260));
+    ImGui::SetNextWindowSize(ImVec2(380, 240));
 
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, BG_PANEL);
-    ImGui::PushStyleColor(ImGuiCol_TitleBg, BG_DARK);
-    ImGui::PushStyleColor(ImGuiCol_TitleBgActive, BG_DARK);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, bb::BG_PANEL);
+    ImGui::PushStyleColor(ImGuiCol_TitleBg, bb::BG_HEADER);
+    ImGui::PushStyleColor(ImGuiCol_TitleBgActive, bb::BG_HEADER);
+    ImGui::PushStyleColor(ImGuiCol_Border, bb::AMBER_DIM);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 
-    if (ImGui::Begin("ADD STOCK TO WATCHLIST##add_modal", &show_add_stock_,
+    if (ImGui::Begin("ADD SECURITY##bb_add", &show_add_stock_,
             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoDocking)) {
 
-        // Symbol
-        ImGui::TextColored(TEXT_DIM, "SYMBOL *");
+        // Symbol input
+        ImGui::TextColored(bb::AMBER, "TICKER *");
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, bb::BG_BLACK);
+        ImGui::PushStyleColor(ImGuiCol_Text, bb::WHITE);
         ImGui::SetNextItemWidth(-1);
-        if (ImGui::InputTextWithHint("##add_sym", "AAPL",
-                add_symbol_, sizeof(add_symbol_),
-                ImGuiInputTextFlags_CharsUppercase)) {
-        }
-        ImGui::TextColored(TEXT_DIM, "Enter stock ticker (e.g., AAPL, MSFT, GOOGL)");
+        ImGui::InputTextWithHint("##add_sym", "AAPL",
+            add_symbol_, sizeof(add_symbol_),
+            ImGuiInputTextFlags_CharsUppercase);
+        ImGui::PopStyleColor(2);
+
+        ImGui::TextColored(bb::WHITE_DIM, "Enter ticker symbol (AAPL, MSFT, GOOGL)");
 
         ImGui::Spacing();
 
         // Notes
-        ImGui::TextColored(TEXT_DIM, "NOTES (OPTIONAL)");
+        ImGui::TextColored(bb::AMBER, "NOTES");
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, bb::BG_BLACK);
+        ImGui::PushStyleColor(ImGuiCol_Text, bb::WHITE);
         ImGui::SetNextItemWidth(-1);
         ImGui::InputTextMultiline("##add_notes", add_notes_, sizeof(add_notes_),
-            ImVec2(-1, 60));
+            ImVec2(-1, 50));
+        ImGui::PopStyleColor(2);
 
         ImGui::Spacing();
-        ImGui::Separator();
+        bb_separator_line(360);
         ImGui::Spacing();
 
         // Buttons
-        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 220);
-        if (theme::SecondaryButton("Cancel")) {
+        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 180);
+
+        if (bb_func_key("CANCEL", false, 70)) {
             show_add_stock_ = false;
         }
-        ImGui::SameLine();
+        ImGui::SameLine(0, 8);
 
         bool can_add = add_symbol_[0] != '\0';
         if (!can_add) ImGui::BeginDisabled();
-        ImGui::PushStyleColor(ImGuiCol_Button, MARKET_GREEN);
+
+        ImGui::PushStyleColor(ImGuiCol_Button, bb::GREEN);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-            ImVec4(MARKET_GREEN.x * 0.8f, MARKET_GREEN.y * 0.8f, MARKET_GREEN.z * 0.8f, 1));
-        ImGui::PushStyleColor(ImGuiCol_Text, BG_DARKEST);
-        if (ImGui::Button("Add Stock")) {
+            ImVec4(bb::GREEN.x * 0.8f, bb::GREEN.y * 0.8f, bb::GREEN.z * 0.8f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Text, bb::BG_BLACK);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
+        if (ImGui::Button("ADD", ImVec2(70, 0))) {
             add_stock();
         }
+        ImGui::PopStyleVar();
         ImGui::PopStyleColor(3);
+
         if (!can_add) ImGui::EndDisabled();
     }
     ImGui::End();
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
 }
 
 // ============================================================================
-// Main render
+// MAIN RENDER — Bloomberg 4-zone layout
 // ============================================================================
 void WatchlistScreen::render() {
     init();
 
-    using namespace theme::colors;
-
-    // Auto-refresh timer
+    // Blink timer (1Hz pulse for live indicator)
     float dt = ImGui::GetIO().DeltaTime;
+    blink_timer_ += dt;
+    if (blink_timer_ >= 0.8f) {
+        blink_on_ = !blink_on_;
+        blink_timer_ = 0;
+    }
+
+    // Auto-refresh
     refresh_timer_ += dt;
     if (refresh_timer_ >= REFRESH_INTERVAL && !data_.is_loading()) {
         refresh_quotes();
     }
 
-    ui::ScreenFrame frame("##watchlist", ImVec2(4, 4), BG_DARKEST);
+    // Full-screen Bloomberg frame
+    ui::ScreenFrame frame("##watchlist", ImVec2(0, 0), bb::BG_BLACK);
     if (!frame.begin()) { frame.end(); return; }
 
-    // Header bar
-    render_header_bar();
+    float total_w = frame.width();
+    float total_h = frame.height();
 
-    // Info bar
-    render_info_bar();
+    // ── ZONE 1: Command bar (top) ──
+    float cmd_h = 28;
+    render_command_bar(total_w);
 
-    // Three-panel layout
-    float sidebar_w = 240.0f;
-    float detail_w = 280.0f;
-    float status_h = ImGui::GetFrameHeight() + 4;
-    float header_h = 36 + 22 + 8; // header + info + spacing
-    float content_h = frame.height() - header_h - status_h;
-    float stock_list_w = frame.width() - sidebar_w - detail_w - 8;
-    if (stock_list_w < 200) stock_list_w = 200;
+    // ── ZONE 2: Three-panel content area ──
+    float footer_h = ImGui::GetFrameHeight() + 2;
+    float content_h = total_h - cmd_h - footer_h - 4;
 
-    render_sidebar(sidebar_w, content_h);
-    ImGui::SameLine(0, 4);
-    render_stock_list(stock_list_w, content_h);
-    ImGui::SameLine(0, 4);
-    render_stock_detail(detail_w, content_h);
+    // Use yoga for responsive three-panel layout
+    auto panels = ui::three_panel_layout(
+        total_w, content_h,
+        16, 22,          // left%, right%
+        180, 240, 300,   // min widths
+        2                // gap
+    );
 
-    // Status bar
-    render_status_bar();
+    render_sidebar(panels.left_w, panels.left_h);
+    ImGui::SameLine(0, panels.gap);
+    render_stock_table(panels.center_w, panels.center_h);
+    if (panels.right_w > 0) {
+        ImGui::SameLine(0, panels.gap);
+        render_detail_panel(panels.right_w, panels.right_h);
+    }
+
+    // ── ZONE 3: Footer status bar ──
+    render_footer_bar(total_w);
 
     frame.end();
 

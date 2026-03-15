@@ -17,6 +17,9 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <atomic>
+#include <mutex>
+#include <thread>
 
 namespace fincept::portfolio {
 
@@ -46,6 +49,8 @@ private:
     PortfolioSummary summary_;
     bool needs_refresh_ = true;
     float refresh_timer_ = 0.0f;
+    std::atomic<bool> data_loading_{false};
+    std::mutex data_mutex_;
 
     // Live price cache
     std::map<std::string, std::pair<double, double>> price_cache_; // symbol -> (current, prev_close)

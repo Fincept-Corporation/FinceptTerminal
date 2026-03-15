@@ -3,10 +3,12 @@
 
 #include "optimization_view.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "core/logger.h"
 #include <imgui.h>
 #include <cstdio>
+#include <thread>
 
 namespace fincept::portfolio {
 
@@ -56,40 +58,66 @@ void OptimizationView::fetch_optimization(const PortfolioSummary& summary, int t
     loading_ = true;
     error_.clear();
 
-    try {
-        nlohmann::json req;
-        std::vector<std::string> symbols;
-        for (const auto& h : summary.holdings)
-            symbols.push_back(h.asset.symbol);
-        req["symbols"] = symbols;
+    std::vector<std::string> symbols;
+    for (const auto& h : summary.holdings)
+        symbols.push_back(h.asset.symbol);
 
-        const char* strategies[] = {
-            "max_sharpe", "min_volatility", "efficient_risk", "efficient_return",
-            "max_quadratic_utility", "risk_parity", "black_litterman",
-            "hrp", "custom_constraints"
-        };
-        req["strategy"] = strategies[tab];
+    std::thread([this, symbols, tab]() {
+        try {
+            nlohmann::json req;
+            req["symbols"] = symbols;
 
-        auto result = python::execute_with_stdin(
-            "Analytics/portfolioManagement/portfolio_optimization.py",
-            {"optimize"}, req.dump());
+            const char* strategies[] = {
+                "max_sharpe", "min_volatility", "efficient_risk", "efficient_return",
+                "max_quadratic_utility", "risk_parity", "black_litterman",
+                "hrp", "custom_constraints"
+            };
+            req["strategy"] = strategies[tab];
 
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) {
-                results_[tab] = j;
-                loaded_[tab] = true;
-            } else {
-                error_ = "Failed to parse optimization results";
+            auto& cache = CacheService::instance();
+            std::string sym_key;
+            for (const auto& s : symbols) sym_key += s + "_";
+            std::string ck = CacheService::make_key("reference", "optimization",
+                sym_key.substr(0, std::min((size_t)48, sym_key.size())) + strategies[tab]);
+
+            std::string output;
+            auto cached = cache.get(ck);
+            if (cached && !cached->empty()) { output = *cached; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/portfolioManagement/portfolio_optimization.py",
+                    {"optimize"}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    output = result.output;
+                    auto check = nlohmann::json::parse(output, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache.set(ck, output, "reference", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                } else {
+                    error_ = "Optimization script failed";
+                }
             }
-        } else {
-            error_ = result.error.empty() ? "Optimization failed" : result.error;
+
+            if (!output.empty()) {
+                auto j = nlohmann::json::parse(output, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error")) {
+                        error_ = j["error"].get<std::string>();
+                    } else {
+                        results_[tab] = j;
+                        loaded_[tab] = true;
+                    }
+                } else {
+                    error_ = "Failed to parse optimization results";
+                }
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("OptimizationView", "Optimization failed: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        error_ = e.what();
-        LOG_ERROR("OptimizationView", "Optimization failed: %s", e.what());
-    }
-    loading_ = false;
+        loading_ = false;
+    }).detach();
 }
 
 void OptimizationView::render_result(const nlohmann::json& result) {

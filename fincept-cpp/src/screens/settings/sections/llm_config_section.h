@@ -43,11 +43,13 @@ private:
 
     void render_sub_tabs();
     void render_providers();
+    void render_fincept_panel();
     void render_global_settings();
     void render_model_library();
 
     void save_provider_config();
     void save_global_settings();
+    void ensure_fincept_config();
 };
 
 } // namespace fincept::settings

@@ -1,5 +1,6 @@
 #include "research_data.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <cmath>
@@ -69,9 +70,22 @@ void ResearchData::fetch(const std::string& symbol, ChartPeriod period) {
     std::string per = chart_period_yf(period);
 
     std::thread([this, sym, per]() {
+        auto& cache = CacheService::instance();
+
+        // Helper: try cache, fallback to Python, cache on success
+        auto cached_python = [&](const std::string& args, const std::string& cache_cat,
+                                  const std::string& cache_sub, int64_t ttl) -> std::string {
+            std::string key = CacheService::make_key(cache_cat, cache_sub, sym);
+            auto cached = cache.get(key);
+            if (cached && !cached->empty()) return *cached;
+            std::string out = run_python(args);
+            if (!out.empty()) cache.set(key, out, cache_cat, ttl);
+            return out;
+        };
+
         // 1. Fetch quote
         {
-            std::string out = run_python("quote " + sym);
+            std::string out = cached_python("quote " + sym, "market-quotes", "research-quote", CacheTTL::FIVE_MIN);
             if (!out.empty()) {
                 std::lock_guard<std::mutex> lock(mutex_);
                 parse_quote(out);
@@ -80,7 +94,7 @@ void ResearchData::fetch(const std::string& symbol, ChartPeriod period) {
 
         // 2. Fetch stock info
         {
-            std::string out = run_python("info " + sym);
+            std::string out = cached_python("info " + sym, "reference", "research-info", CacheTTL::ONE_HOUR);
             if (!out.empty()) {
                 std::lock_guard<std::mutex> lock(mutex_);
                 parse_stock_info(out);
@@ -89,7 +103,15 @@ void ResearchData::fetch(const std::string& symbol, ChartPeriod period) {
 
         // 3. Fetch historical data
         {
-            std::string out = run_python("historical_period " + sym + " " + per + " 1d");
+            std::string hist_key = CacheService::make_key("market-quotes", "research-hist", sym + "_" + per);
+            std::string out;
+            auto cached_hist = cache.get(hist_key);
+            if (cached_hist && !cached_hist->empty()) {
+                out = *cached_hist;
+            } else {
+                out = run_python("historical_period " + sym + " " + per + " 1d");
+                if (!out.empty()) cache.set(hist_key, out, "market-quotes", CacheTTL::FIVE_MIN);
+            }
             if (!out.empty()) {
                 std::lock_guard<std::mutex> lock(mutex_);
                 parse_historical(out);
@@ -98,7 +120,7 @@ void ResearchData::fetch(const std::string& symbol, ChartPeriod period) {
 
         // 4. Fetch financials
         {
-            std::string out = run_python("financials " + sym);
+            std::string out = cached_python("financials " + sym, "reference", "research-financials", CacheTTL::ONE_HOUR);
             if (!out.empty()) {
                 std::lock_guard<std::mutex> lock(mutex_);
                 parse_financials(out);
@@ -123,7 +145,16 @@ void ResearchData::fetch_news(const std::string& symbol) {
 
     std::string sym = symbol;
     std::thread([this, sym]() {
-        std::string out = run_python("news " + sym + " 20");
+        auto& cache = CacheService::instance();
+        std::string cache_key = CacheService::make_key("news", "research-news", sym);
+        std::string out;
+        auto cached = cache.get(cache_key);
+        if (cached && !cached->empty()) {
+            out = *cached;
+        } else {
+            out = run_python("news " + sym + " 20");
+            if (!out.empty()) cache.set(cache_key, out, "news", CacheTTL::TEN_MIN);
+        }
         if (!out.empty()) {
             std::lock_guard<std::mutex> lock(mutex_);
             parse_news(out);

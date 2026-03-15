@@ -1,6 +1,7 @@
 #include "dashboard_data.h"
 #include "python/python_runner.h"
 #include "http/http_client.h"
+#include "storage/cache_service.h"
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <sstream>
@@ -288,7 +289,6 @@ void DashboardData::fetch_category(DataCategory cat) {
 
     auto syms = symbols_for(cat);
     if (syms.empty()) {
-        // No symbols to fetch (e.g. Ticker assembles from other categories)
         state.has_data = true;
         state.last_fetch = std::chrono::steady_clock::now();
         return;
@@ -298,11 +298,22 @@ void DashboardData::fetch_category(DataCategory cat) {
     auto lbls = labels_for(cat);
 
     std::thread([this, idx, syms, lbls]() {
-        // Build command: "batch_quotes SYM1 SYM2 ..."
         std::string args = "batch_quotes";
         for (auto& s : syms) args += " " + s;
 
-        std::string output = run_yfinance(args);
+        auto& cache = CacheService::instance();
+        std::string cache_key = CacheService::make_key("market-quotes", "dashboard", std::to_string(idx));
+
+        std::string output;
+        auto cached = cache.get(cache_key);
+        if (cached && !cached->empty()) {
+            output = *cached;
+        } else {
+            output = run_yfinance(args);
+            if (!output.empty()) {
+                cache.set(cache_key, output, "market-quotes", CacheTTL::FIVE_MIN);
+            }
+        }
         auto parsed = parse_quotes(output, lbls);
 
         {
@@ -313,7 +324,6 @@ void DashboardData::fetch_category(DataCategory cat) {
             } else if (categories_[idx].quotes.empty()) {
                 categories_[idx].error = "Failed to fetch data";
             }
-            // Keep stale data if fetch fails but we had data before
             categories_[idx].has_data = !categories_[idx].quotes.empty();
             categories_[idx].last_fetch = std::chrono::steady_clock::now();
         }
@@ -336,12 +346,11 @@ void DashboardData::fetch_news_feeds() {
 
         // Tier 1-2 financial RSS feeds (same as NewsScreen)
         FeedDef feeds[] = {
-            {"https://feeds.reuters.com/reuters/businessNews",   "Reuters",     "MARKETS",     1},
-            {"https://feeds.reuters.com/reuters/financialsNews", "Reuters",     "MARKETS",     1},
-            {"https://feeds.bloomberg.com/markets/news.rss",     "Bloomberg",   "MARKETS",     2},
             {"https://feeds.a.dj.com/rss/RSSMarketsMain.xml",   "WSJ",         "MARKETS",     2},
             {"https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "CNBC", "MARKETS", 2},
             {"https://feeds.marketwatch.com/marketwatch/topstories/", "MarketWatch", "MARKETS", 2},
+            {"https://finance.yahoo.com/news/rssindex",          "Yahoo Finance","MARKETS",    2},
+            {"https://www.investing.com/rss/news.rss",           "Investing.com","MARKETS",    2},
             {"https://www.coindesk.com/arc/outboundfeeds/rss/",  "CoinDesk",    "CRYPTO",      2},
             {"https://www.federalreserve.gov/feeds/press_all.xml","Fed Reserve", "ECONOMIC",    1},
         };
@@ -353,12 +362,21 @@ void DashboardData::fetch_news_feeds() {
         hdrs["User-Agent"] = "FinceptTerminal/4.0.0";
         hdrs["Accept"] = "application/rss+xml, application/xml, text/xml, */*";
 
-        for (auto& feed : feeds) {
-            auto resp = http.get(feed.url, hdrs);
-            if (!resp.success || resp.body.empty()) continue;
+        auto& cache = CacheService::instance();
 
-            // Simple RSS XML parsing — extract <item> blocks
-            std::string& xml = resp.body;
+        for (auto& feed : feeds) {
+            std::string feed_cache_key = CacheService::make_key("news", "dashboard-rss", feed.source);
+            std::string xml;
+
+            auto feed_cached = cache.get(feed_cache_key);
+            if (feed_cached && !feed_cached->empty()) {
+                xml = *feed_cached;
+            } else {
+                auto resp = http.get(feed.url, hdrs);
+                if (!resp.success || resp.body.empty()) continue;
+                xml = resp.body;
+                cache.set(feed_cache_key, xml, "news", CacheTTL::TEN_MIN);
+            }
             size_t pos = 0;
             int count = 0;
             while (count < 5 && pos < xml.size()) {  // Max 5 items per feed

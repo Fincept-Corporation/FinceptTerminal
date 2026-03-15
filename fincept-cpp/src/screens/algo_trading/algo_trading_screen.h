@@ -66,6 +66,7 @@ private:
     char custom_name_[128] = "";
     char custom_desc_[256] = "";
     std::string syntax_error_;
+    std::atomic<bool> validating_syntax_{false};
 
     // --- Scanner state ---
     char scan_symbols_[512] = "";

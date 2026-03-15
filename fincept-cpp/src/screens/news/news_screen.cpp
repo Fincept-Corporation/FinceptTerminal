@@ -1,8 +1,10 @@
 #include "news_screen.h"
 #include "http/http_client.h"
+#include "storage/cache_service.h"
 #include "core/logger.h"
 #include "ui/yoga_helpers.h"
 #include <imgui.h>
+#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <ctime>
 #include <cstdio>
@@ -29,22 +31,41 @@ void NewsScreen::fetch_news() {
 
     std::thread([this]() {
         auto feeds = get_default_feeds();
-        auto& http = http::HttpClient::instance();
+        auto& http_client = http::HttpClient::instance();
+        auto& cache = CacheService::instance();
         std::vector<NewsArticle> all_articles;
 
         int success_count = 0;
         int fail_count = 0;
+        int cache_hit_count = 0;
 
         for (const auto& feed : feeds) {
             if (!feed.enabled) continue;
 
-            http::Headers hdrs;
-            hdrs["User-Agent"] = "FinceptTerminal/4.0.0";
-            hdrs["Accept"] = "application/rss+xml, application/xml, text/xml, */*";
+            std::string cache_key = CacheService::make_key("news", "rss", feed.id);
+            std::string body;
 
-            auto resp = http.get(feed.url, hdrs);
-            if (resp.success && !resp.body.empty()) {
-                auto parsed = parse_rss_xml(resp.body, feed);
+            // Try cache first
+            auto cached = cache.get(cache_key);
+            if (cached) {
+                body = *cached;
+                cache_hit_count++;
+            } else {
+                // Fetch from network
+                http::Headers hdrs;
+                hdrs["User-Agent"] = "FinceptTerminal/4.0.0";
+                hdrs["Accept"] = "application/rss+xml, application/xml, text/xml, */*";
+
+                auto resp = http_client.get(feed.url, hdrs);
+                if (resp.success && !resp.body.empty()) {
+                    body = resp.body;
+                    // Cache RSS response for 10 minutes
+                    cache.set(cache_key, body, "news", CacheTTL::TEN_MIN);
+                }
+            }
+
+            if (!body.empty()) {
+                auto parsed = parse_rss_xml(body, feed);
                 all_articles.insert(all_articles.end(), parsed.begin(), parsed.end());
                 success_count++;
             } else {
@@ -70,7 +91,8 @@ void NewsScreen::fetch_news() {
 
         loading_ = false;
         last_fetch_time_ = (double)std::time(nullptr);
-        LOG_INFO("News", "Fetched %d articles from %d feeds", (int)articles_.size(), success_count);
+        LOG_INFO("News", "Fetched %d articles from %d feeds (%d cached)",
+                 (int)articles_.size(), success_count, cache_hit_count);
     }).detach();
 }
 

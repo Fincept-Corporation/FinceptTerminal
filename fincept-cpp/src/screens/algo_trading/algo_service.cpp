@@ -1,6 +1,7 @@
 #include "algo_service.h"
 #include "storage/database.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "trading/unified_trading.h"
 #include "core/logger.h"
 #include <nlohmann/json.hpp>
@@ -483,11 +484,22 @@ std::vector<ScanResult> AlgoService::run_scan(const std::string& conditions_json
         "--db", get_db_path()
     };
 
-    auto py_result = python::execute("algo_trading/scanner_engine.py", args);
-    if (!py_result.success) return results;
+    auto& cache = CacheService::instance();
+    std::string scan_key = CacheService::make_key("market-quotes", "algo-scan",
+        syms.substr(0, std::min((size_t)48, syms.size())) + "_" + timeframe);
+
+    std::string scan_out;
+    auto cached_scan = cache.get(scan_key);
+    if (cached_scan && !cached_scan->empty()) { scan_out = *cached_scan; }
+    else {
+        auto py_result = python::execute("algo_trading/scanner_engine.py", args);
+        if (!py_result.success) return results;
+        scan_out = py_result.output;
+        cache.set(scan_key, scan_out, "market-quotes", CacheTTL::FIVE_MIN);
+    }
 
     try {
-        auto j = json::parse(py_result.output);
+        auto j = json::parse(scan_out);
         for (auto& r : j.value("results", json::array())) {
             ScanResult sr;
             sr.symbol      = r.value("symbol", "");

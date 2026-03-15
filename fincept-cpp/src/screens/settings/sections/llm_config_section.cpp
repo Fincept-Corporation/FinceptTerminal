@@ -11,7 +11,28 @@ void LLMConfigSection::init() {
     if (initialized_) return;
     load_configs();
     load_global_settings();
+    ensure_fincept_config();
     initialized_ = true;
+}
+
+void LLMConfigSection::ensure_fincept_config() {
+    // Auto-create Fincept LLM config if user has a fincept_api_key (set on login)
+    auto api_key = db::ops::get_setting("fincept_api_key");
+    if (!api_key || api_key->empty()) return;
+
+    // Check if Fincept config already exists
+    for (auto& cfg : configs_) {
+        if (cfg.provider == "Fincept") return; // already exists
+    }
+
+    // Auto-create it
+    db::LLMConfig cfg;
+    cfg.provider = "Fincept";
+    cfg.api_key = *api_key;
+    cfg.model = "fincept-llm";
+    cfg.is_active = false;
+    db::ops::save_llm_config(cfg);
+    load_configs();
 }
 
 void LLMConfigSection::load_configs() {
@@ -172,52 +193,133 @@ void LLMConfigSection::render_providers() {
     ImGui::BeginChild("##prov_config", ImVec2(config_w, 0), ImGuiChildFlags_Borders);
 
     if (selected_provider_ >= 0 && selected_provider_ < (int)providers.size()) {
-        char header[128];
-        std::snprintf(header, sizeof(header), "CONFIGURE: %s", providers[selected_provider_]);
-        ImGui::TextColored(ACCENT, "%s", header);
-        ImGui::Separator();
-        ImGui::Spacing();
+        const char* prov_name = providers[selected_provider_];
+        bool is_fincept = (std::string(prov_name) == "Fincept");
 
-        float label_w = 100.0f;
-        float input_w = ImGui::GetContentRegionAvail().x - label_w - 8;
+        if (is_fincept) {
+            // ── Special Fincept auto-configured panel ──
+            render_fincept_panel();
+        } else {
+            // ── Standard provider config form ──
+            char header[128];
+            std::snprintf(header, sizeof(header), "CONFIGURE: %s", prov_name);
+            ImGui::TextColored(ACCENT, "%s", header);
+            ImGui::Separator();
+            ImGui::Spacing();
 
-        // API Key
-        ImGui::TextColored(TEXT_SECONDARY, "API Key");
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(input_w);
-        ImGui::InputText("##llm_api_key", edit_api_key_, sizeof(edit_api_key_),
-                         ImGuiInputTextFlags_Password);
+            float label_w = 100.0f;
+            float input_w = ImGui::GetContentRegionAvail().x - label_w - 8;
 
-        // Base URL
-        ImGui::TextColored(TEXT_SECONDARY, "Base URL");
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(input_w);
-        ImGui::InputTextWithHint("##llm_base_url", "https://api.openai.com/v1",
-                                 edit_base_url_, sizeof(edit_base_url_));
+            // API Key
+            ImGui::TextColored(TEXT_SECONDARY, "API Key");
+            ImGui::SameLine(label_w);
+            ImGui::SetNextItemWidth(input_w);
+            ImGui::InputText("##llm_api_key", edit_api_key_, sizeof(edit_api_key_),
+                             ImGuiInputTextFlags_Password);
 
-        // Model
-        ImGui::TextColored(TEXT_SECONDARY, "Model");
-        ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(input_w);
-        ImGui::InputTextWithHint("##llm_model", "gpt-4o",
-                                 edit_model_, sizeof(edit_model_));
+            // Base URL
+            ImGui::TextColored(TEXT_SECONDARY, "Base URL");
+            ImGui::SameLine(label_w);
+            ImGui::SetNextItemWidth(input_w);
+            ImGui::InputTextWithHint("##llm_base_url", "https://api.openai.com/v1",
+                                     edit_base_url_, sizeof(edit_base_url_));
 
-        ImGui::Spacing();
+            // Model
+            ImGui::TextColored(TEXT_SECONDARY, "Model");
+            ImGui::SameLine(label_w);
+            ImGui::SetNextItemWidth(input_w);
+            ImGui::InputTextWithHint("##llm_model", "gpt-4o",
+                                     edit_model_, sizeof(edit_model_));
 
-        // Save & Set Active buttons
-        if (theme::AccentButton("Save Config")) {
-            save_provider_config();
-        }
-        ImGui::SameLine();
-        if (theme::SecondaryButton("Set as Active")) {
-            db::ops::set_active_llm_provider(providers[selected_provider_]);
-            load_configs();
-            status_ = std::string(providers[selected_provider_]) + " set as active";
-            status_time_ = ImGui::GetTime();
+            ImGui::Spacing();
+
+            // Save & Set Active buttons
+            if (theme::AccentButton("Save Config")) {
+                save_provider_config();
+            }
+            ImGui::SameLine();
+            if (theme::SecondaryButton("Set as Active")) {
+                db::ops::set_active_llm_provider(prov_name);
+                load_configs();
+                status_ = std::string(prov_name) + " set as active";
+                status_time_ = ImGui::GetTime();
+            }
         }
     }
 
     ImGui::EndChild();
+}
+
+// ============================================================================
+// Fincept auto-configured panel (mirrors FinceptConfigPanel.tsx)
+// ============================================================================
+void LLMConfigSection::render_fincept_panel() {
+    using namespace theme::colors;
+
+    ImGui::TextColored(ACCENT, "FINCEPT LLM");
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    auto api_key = db::ops::get_setting("fincept_api_key");
+    bool has_key = api_key && !api_key->empty();
+
+    if (has_key) {
+        // Auto-configured status
+        ImGui::TextColored(SUCCESS, "AUTO CONFIGURED");
+        ImGui::Spacing();
+
+        // Show masked API key
+        std::string masked = api_key->substr(0, 8) + "..." +
+                             api_key->substr(api_key->size() > 8 ? api_key->size() - 4 : 0);
+        ImGui::TextColored(TEXT_SECONDARY, "API Key:");
+        ImGui::SameLine();
+        ImGui::TextColored(TEXT_DIM, "%s", masked.c_str());
+
+        ImGui::TextColored(TEXT_SECONDARY, "Model:");
+        ImGui::SameLine();
+        ImGui::TextColored(TEXT_PRIMARY, "fincept-llm");
+
+        ImGui::TextColored(TEXT_SECONDARY, "Cost:");
+        ImGui::SameLine();
+        ImGui::TextColored(TEXT_PRIMARY, "5 credits / response");
+
+        ImGui::TextColored(TEXT_SECONDARY, "Endpoint:");
+        ImGui::SameLine();
+        ImGui::TextColored(TEXT_DIM, "api.fincept.in/research/llm");
+
+        ImGui::Spacing();
+        ImGui::TextColored(TEXT_DIM,
+            "Fincept LLM is automatically configured when you log in.");
+        ImGui::TextColored(TEXT_DIM,
+            "No manual setup required. API key is linked to your account.");
+
+        ImGui::Spacing();
+
+        // Set as Active button
+        bool is_active = false;
+        for (auto& cfg : configs_) {
+            if (cfg.provider == "Fincept") {
+                is_active = cfg.is_active;
+                break;
+            }
+        }
+
+        if (is_active) {
+            ImGui::TextColored(SUCCESS, "Currently Active");
+        } else {
+            if (theme::AccentButton("Set as Active")) {
+                db::ops::set_active_llm_provider("Fincept");
+                load_configs();
+                status_ = "Fincept set as active";
+                status_time_ = ImGui::GetTime();
+            }
+        }
+    } else {
+        ImGui::TextColored(TEXT_DIM,
+            "Fincept LLM requires a Fincept account.");
+        ImGui::TextColored(TEXT_DIM,
+            "Log in to your Fincept account to auto-configure.");
+    }
 }
 
 // ============================================================================

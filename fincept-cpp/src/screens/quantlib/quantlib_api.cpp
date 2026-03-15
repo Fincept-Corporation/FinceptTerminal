@@ -1,6 +1,7 @@
 #include "quantlib_api.h"
 #include "http/http_client.h"
 #include "auth/auth_manager.h"
+#include "storage/cache_service.h"
 #include "core/logger.h"
 #include <chrono>
 
@@ -70,6 +71,24 @@ std::future<ApiResult> QuantLibApi::get(const std::string& path,
             }
         }
 
+        // Check cache for GET requests
+        auto& cache = CacheService::instance();
+        std::string params_key;
+        for (auto& [k, v] : params) params_key += k + "=" + v + "&";
+        std::string cache_key = CacheService::make_key("api-response", "quantlib", path + "_" + params_key);
+
+        auto cached = cache.get(cache_key);
+        if (cached && !cached->empty()) {
+            auto end = std::chrono::high_resolution_clock::now();
+            result.elapsed_ms = std::chrono::duration<double, std::milli>(end - start).count();
+            result.data = nlohmann::json::parse(*cached, nullptr, false);
+            if (!result.data.is_discarded()) {
+                result.success = true;
+                result.status_code = 200;
+                return result;
+            }
+        }
+
         std::string api_key = get_api_key();
         std::map<std::string, std::string> headers;
         if (!api_key.empty()) {
@@ -86,6 +105,9 @@ std::future<ApiResult> QuantLibApi::get(const std::string& path,
         if (resp.success) {
             result.data = resp.json_body();
             result.success = true;
+            if (!resp.body.empty()) {
+                cache.set(cache_key, resp.body, "api-response", CacheTTL::FIFTEEN_MIN);
+            }
         } else {
             result.error = resp.error.empty()
                 ? ("HTTP " + std::to_string(resp.status_code))

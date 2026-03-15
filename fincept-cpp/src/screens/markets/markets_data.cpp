@@ -1,5 +1,6 @@
 #include "markets_data.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <sstream>
@@ -53,16 +54,31 @@ void MarketsData::fetch_category(const std::string& category, const std::vector<
     state.loading = true;
     state.error.clear();
 
-    // Build symbol args: "batch_quotes SYM1 SYM2 SYM3..."
     std::string args = "batch_quotes";
     for (auto& s : symbols) args += " " + s;
 
     std::string cat = category;
-    std::thread([this, cat, args]() {
+    std::string cache_key = CacheService::make_key("market-quotes", "markets", cat);
+
+    std::thread([this, cat, args, cache_key]() {
+        auto& cache = CacheService::instance();
+
+        // Try cache first
+        auto cached = cache.get(cache_key);
+        if (cached && !cached->empty()) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            parse_quotes(cat, *cached);
+            categories_[cat].has_data = true;
+            categories_[cat].loading = false;
+            return;
+        }
+
+        // Cache miss — fetch from Python
         std::string out = run_python(args);
         if (!out.empty()) {
             std::lock_guard<std::mutex> lock(mutex_);
             parse_quotes(cat, out);
+            cache.set(cache_key, out, "market-quotes", CacheTTL::FIVE_MIN);
         } else {
             std::lock_guard<std::mutex> lock(mutex_);
             categories_[cat].error = "Failed to fetch data";

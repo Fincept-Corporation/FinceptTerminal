@@ -25,6 +25,7 @@ private:
     bool data_loading_ = false;
     std::string loaded_for_portfolio_;
     int loaded_for_period_ = -1;
+    std::string error_msg_;
 
     // Benchmark data
     std::vector<double> bench_returns_;

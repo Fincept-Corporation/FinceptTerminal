@@ -258,23 +258,19 @@ def get_batch_quotes(symbols):
         results = []
         for symbol in symbols:
             try:
-                if len(symbols) == 1:
-                    # Single symbol: data columns are flat (Open, High, Low, Close, Volume)
+                if not isinstance(data.columns, pd.MultiIndex):
+                    # Flat columns (rare): use directly
                     hist = data
                 else:
-                    # Multiple symbols: newer yfinance uses (Price, Ticker) MultiIndex
-                    # older versions use (Ticker, Price) — handle both orderings
-                    if isinstance(data.columns, pd.MultiIndex):
-                        level0 = data.columns.get_level_values(0).unique().tolist()
-                        level1 = data.columns.get_level_values(1).unique().tolist()
-                        if symbol in level1:
-                            # New yfinance: (Price, Ticker) — use xs on level 1
-                            hist = data.xs(symbol, axis=1, level=1)
-                        elif symbol in level0:
-                            # Old yfinance: (Ticker, Price)
-                            hist = data[symbol]
-                        else:
-                            continue
+                    # MultiIndex columns — detect (Ticker, Price) vs (Price, Ticker)
+                    level0 = data.columns.get_level_values(0).unique().tolist()
+                    level1 = data.columns.get_level_values(1).unique().tolist()
+                    if symbol in level0:
+                        # (Ticker, Price) ordering
+                        hist = data[symbol]
+                    elif symbol in level1:
+                        # (Price, Ticker) ordering
+                        hist = data.xs(symbol, axis=1, level=1)
                     else:
                         continue
 

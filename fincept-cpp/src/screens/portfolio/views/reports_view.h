@@ -18,6 +18,7 @@ private:
     bool pme_loaded_ = false;
     bool loading_ = false;
     std::string loaded_for_portfolio_;
+    std::string error_;
 
     void fetch_tax_report(const PortfolioSummary& summary);
     void fetch_pme(const PortfolioSummary& summary);

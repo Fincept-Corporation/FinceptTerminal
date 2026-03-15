@@ -3,10 +3,12 @@
 
 #include "economics_view.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "core/logger.h"
 #include <imgui.h>
 #include <cstdio>
+#include <thread>
 
 namespace fincept::portfolio {
 
@@ -33,6 +35,11 @@ void EconomicsView::render(const PortfolioSummary& /*summary*/) {
     }
 
     ImGui::Separator();
+
+    if (!error_.empty()) {
+        ImGui::TextColored(theme::colors::MARKET_RED, "[Error] %s", error_.c_str());
+        ImGui::Spacing();
+    }
 
     if (sub_tab_ == 0) {
         if (!cycle_loaded_) {
@@ -88,37 +95,89 @@ void EconomicsView::render(const PortfolioSummary& /*summary*/) {
 void EconomicsView::fetch_business_cycle() {
     if (loading_) return;
     loading_ = true;
-    try {
-        auto result = python::execute_with_stdin(
-            "Analytics/economics/business_cycle.py",
-            {"get_indicators"}, "{}");
+    error_.clear();
+    std::thread([this]() {
+        try {
+            auto& cache = CacheService::instance();
+            std::string ck = CacheService::make_key("economic", "business-cycle", "indicators");
 
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) { cycle_result_ = j; cycle_loaded_ = true; }
+            std::string output;
+            auto cached = cache.get(ck);
+            if (cached && !cached->empty()) { output = *cached; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/economics/business_cycle.py",
+                    {"get_indicators"}, "{}");
+                if (result.success && !result.output.empty()) {
+                    output = result.output;
+                    auto check = nlohmann::json::parse(output, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache.set(ck, output, "economic", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
+            }
+
+            if (!output.empty()) {
+                auto j = nlohmann::json::parse(output, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error"))
+                        error_ = j["error"].get<std::string>();
+                    else { cycle_result_ = j; cycle_loaded_ = true; }
+                }
+            } else if (error_.empty()) {
+                error_ = "Script returned empty output";
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("EconomicsView", "Business cycle fetch failed: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        LOG_ERROR("EconomicsView", "Business cycle fetch failed: %s", e.what());
-    }
-    loading_ = false;
+        loading_ = false;
+    }).detach();
 }
 
 void EconomicsView::fetch_erp() {
     if (loading_) return;
     loading_ = true;
-    try {
-        auto result = python::execute_with_stdin(
-            "Analytics/economics/equity_risk_premium.py",
-            {"estimate_erp"}, "{}");
+    error_.clear();
+    std::thread([this]() {
+        try {
+            auto& cache = CacheService::instance();
+            std::string ck = CacheService::make_key("economic", "equity-risk-premium", "erp");
 
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) { erp_result_ = j; erp_loaded_ = true; }
+            std::string output;
+            auto cached = cache.get(ck);
+            if (cached && !cached->empty()) { output = *cached; }
+            else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/economics/equity_risk_premium.py",
+                    {"estimate_erp"}, "{}");
+                if (result.success && !result.output.empty()) {
+                    output = result.output;
+                    auto check = nlohmann::json::parse(output, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache.set(ck, output, "economic", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
+            }
+
+            if (!output.empty()) {
+                auto j = nlohmann::json::parse(output, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error"))
+                        error_ = j["error"].get<std::string>();
+                    else { erp_result_ = j; erp_loaded_ = true; }
+                }
+            } else if (error_.empty()) {
+                error_ = "Script returned empty output";
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("EconomicsView", "ERP fetch failed: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        LOG_ERROR("EconomicsView", "ERP fetch failed: %s", e.what());
-    }
-    loading_ = false;
+        loading_ = false;
+    }).detach();
 }
 
 } // namespace fincept::portfolio

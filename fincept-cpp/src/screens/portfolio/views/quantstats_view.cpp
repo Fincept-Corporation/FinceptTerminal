@@ -3,10 +3,12 @@
 
 #include "quantstats_view.h"
 #include "python/python_runner.h"
+#include "storage/cache_service.h"
 #include "ui/theme.h"
 #include "core/logger.h"
 #include <imgui.h>
 #include <cstdio>
+#include <thread>
 
 namespace fincept::portfolio {
 
@@ -38,6 +40,11 @@ void QuantStatsView::render(const PortfolioSummary& summary) {
     }
 
     ImGui::Separator();
+
+    if (!error_.empty()) {
+        ImGui::TextColored(theme::colors::MARKET_RED, "[Error] %s", error_.c_str());
+        ImGui::Spacing();
+    }
 
     if (sub_tab_ == 0) {
         if (!qs_loaded_) {
@@ -130,53 +137,115 @@ void QuantStatsView::render_stats_table(const nlohmann::json& data) {
 void QuantStatsView::fetch_quantstats(const PortfolioSummary& summary) {
     if (loading_) return;
     loading_ = true;
-    try {
-        nlohmann::json req;
-        std::vector<std::string> symbols;
-        std::vector<double> weights;
-        for (const auto& h : summary.holdings) {
-            symbols.push_back(h.asset.symbol);
-            weights.push_back(h.weight / 100.0);
-        }
-        req["symbols"] = symbols;
-        req["weights"] = weights;
+    error_.clear();
 
-        auto result = python::execute_with_stdin(
-            "Analytics/portfolioManagement/quantstats_analysis.py",
-            {"portfolio_stats"}, req.dump());
-
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) { qs_result_ = j; qs_loaded_ = true; }
-        }
-    } catch (const std::exception& e) {
-        LOG_ERROR("QuantStatsView", "QuantStats failed: %s", e.what());
+    std::vector<std::string> symbols;
+    std::vector<double> weights;
+    for (const auto& h : summary.holdings) {
+        symbols.push_back(h.asset.symbol);
+        weights.push_back(h.weight / 100.0);
     }
-    loading_ = false;
+
+    std::thread([this, symbols, weights]() {
+        try {
+            nlohmann::json req;
+            req["symbols"] = symbols;
+            req["weights"] = weights;
+
+            auto& cache = CacheService::instance();
+            std::string sym_key;
+            for (const auto& s : symbols) sym_key += s + "_";
+            std::string cache_key = CacheService::make_key("reference", "quantstats", sym_key);
+
+            std::string output;
+            auto cached_qs = cache.get(cache_key);
+            if (cached_qs && !cached_qs->empty()) {
+                output = *cached_qs;
+            } else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/portfolioManagement/quantstats_analysis.py",
+                    {"portfolio_stats"}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    output = result.output;
+                    auto check = nlohmann::json::parse(output, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache.set(cache_key, output, "reference", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
+            }
+
+            if (!output.empty()) {
+                auto j = nlohmann::json::parse(output, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error"))
+                        error_ = j["error"].get<std::string>();
+                    else { qs_result_ = j; qs_loaded_ = true; }
+                }
+            } else if (error_.empty()) {
+                error_ = "Script returned empty output";
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("QuantStatsView", "QuantStats failed: %s", e.what());
+        }
+        loading_ = false;
+    }).detach();
 }
 
 void QuantStatsView::fetch_ffn(const PortfolioSummary& summary) {
     if (loading_) return;
     loading_ = true;
-    try {
-        nlohmann::json req;
-        std::vector<std::string> symbols;
-        for (const auto& h : summary.holdings)
-            symbols.push_back(h.asset.symbol);
-        req["symbols"] = symbols;
+    error_.clear();
 
-        auto result = python::execute_with_stdin(
-            "Analytics/portfolioManagement/ffn_analysis.py",
-            {"run_ffn"}, req.dump());
+    std::vector<std::string> symbols;
+    for (const auto& h : summary.holdings)
+        symbols.push_back(h.asset.symbol);
 
-        if (result.success && !result.output.empty()) {
-            auto j = nlohmann::json::parse(result.output, nullptr, false);
-            if (!j.is_discarded()) { ffn_result_ = j; ffn_loaded_ = true; }
+    std::thread([this, symbols]() {
+        try {
+            nlohmann::json req;
+            req["symbols"] = symbols;
+
+            auto& cache_svc = CacheService::instance();
+            std::string ffn_sym_key;
+            for (const auto& s : symbols) ffn_sym_key += s + "_";
+            std::string ffn_cache_key = CacheService::make_key("reference", "ffn", ffn_sym_key);
+
+            std::string ffn_output;
+            auto cached_ffn = cache_svc.get(ffn_cache_key);
+            if (cached_ffn && !cached_ffn->empty()) {
+                ffn_output = *cached_ffn;
+            } else {
+                auto result = python::execute_with_stdin(
+                    "Analytics/portfolioManagement/ffn_analysis.py",
+                    {"run_ffn"}, req.dump());
+                if (result.success && !result.output.empty()) {
+                    ffn_output = result.output;
+                    auto check = nlohmann::json::parse(ffn_output, nullptr, false);
+                    if (!check.is_discarded() && !check.contains("error"))
+                        cache_svc.set(ffn_cache_key, ffn_output, "reference", CacheTTL::FIFTEEN_MIN);
+                } else if (!result.error.empty()) {
+                    error_ = result.error;
+                }
+            }
+
+            if (!ffn_output.empty()) {
+                auto j = nlohmann::json::parse(ffn_output, nullptr, false);
+                if (!j.is_discarded()) {
+                    if (j.contains("error"))
+                        error_ = j["error"].get<std::string>();
+                    else { ffn_result_ = j; ffn_loaded_ = true; }
+                }
+            } else if (error_.empty()) {
+                error_ = "Script returned empty output";
+            }
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            LOG_ERROR("QuantStatsView", "FFN failed: %s", e.what());
         }
-    } catch (const std::exception& e) {
-        LOG_ERROR("QuantStatsView", "FFN failed: %s", e.what());
-    }
-    loading_ = false;
+        loading_ = false;
+    }).detach();
 }
 
 } // namespace fincept::portfolio

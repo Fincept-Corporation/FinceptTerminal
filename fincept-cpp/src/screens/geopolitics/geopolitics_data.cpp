@@ -3,6 +3,7 @@
 #include "geopolitics_data.h"
 #include "http/http_client.h"
 #include "auth/auth_manager.h"
+#include "storage/cache_service.h"
 #include "core/logger.h"
 #include <thread>
 
@@ -48,30 +49,53 @@ void GeopoliticsData::fetch_events(const std::string& api_key, const std::string
 
         LOG_INFO("Geo", "GET %s", url.c_str());
 
-        auto headers = make_headers(api_key);
-        auto resp = http::HttpClient::instance().get(url, headers);
+        auto& cache = CacheService::instance();
+        std::string cache_key = CacheService::make_key("api-response", "geo-events",
+            country + "_" + category + "_p" + std::to_string(page));
 
-        LOG_INFO("Geo", "Response: status=%d, success=%d, body_len=%zu, error='%s'",
-                 resp.status_code, (int)resp.success, resp.body.size(), resp.error.c_str());
+        // Try cache first
+        auto cached_body = cache.get(cache_key);
+        std::string body;
+        int status_code = 200;
+        bool success = false;
 
-        // Log first 500 chars of body for debugging
-        if (!resp.body.empty()) {
-            std::string preview = resp.body.substr(0, std::min((size_t)500, resp.body.size()));
-            LOG_DEBUG("Geo", "Body preview: %s", preview.c_str());
+        if (cached_body) {
+            body = *cached_body;
+            success = true;
+            LOG_INFO("Geo", "Cache HIT for geo-events key");
+        } else {
+            auto headers = make_headers(api_key);
+            auto resp = http::HttpClient::instance().get(url, headers);
+            body = resp.body;
+            status_code = resp.status_code;
+            success = resp.success;
+
+            LOG_INFO("Geo", "Response: status=%d, success=%d, body_len=%zu, error='%s'",
+                     resp.status_code, (int)resp.success, resp.body.size(), resp.error.c_str());
+
+            if (!resp.body.empty()) {
+                std::string preview = resp.body.substr(0, std::min((size_t)500, resp.body.size()));
+                LOG_DEBUG("Geo", "Body preview: %s", preview.c_str());
+            }
+
+            // Cache successful responses for 15 minutes
+            if (resp.success && !resp.body.empty()) {
+                cache.set(cache_key, resp.body, "api-response", CacheTTL::FIFTEEN_MIN);
+            }
         }
 
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!resp.success) {
+        if (!success) {
             // Try to extract error message from API response body
-            if (!resp.body.empty()) {
+            if (!body.empty()) {
                 try {
-                    auto err_json = nlohmann::json::parse(resp.body);
-                    error_ = err_json.value("message", "API error (HTTP " + std::to_string(resp.status_code) + ")");
+                    auto err_json = nlohmann::json::parse(body);
+                    error_ = err_json.value("message", "API error (HTTP " + std::to_string(status_code) + ")");
                 } catch (...) {
-                    error_ = "HTTP " + std::to_string(resp.status_code);
+                    error_ = "HTTP " + std::to_string(status_code);
                 }
             } else {
-                error_ = resp.error.empty() ? "Network error" : resp.error;
+                error_ = "Network error";
             }
             LOG_ERROR("Geo", "Fetch events FAILED: %s", error_.c_str());
             loading_ = false;
@@ -79,7 +103,7 @@ void GeopoliticsData::fetch_events(const std::string& api_key, const std::string
         }
 
         try {
-            auto j = resp.json_body();
+            auto j = nlohmann::json::parse(body);
 
             // Log top-level keys
             std::string keys;
@@ -118,18 +142,18 @@ void GeopoliticsData::fetch_events(const std::string& api_key, const std::string
             LOG_INFO("Geo", "events array size: %zu", events_arr.size());
 
             int with_coords = 0;
-            for (auto& e : events_arr) {
+            for (const auto& ev_json : events_arr) {
                 GeoEvent ev;
-                ev.url = e.value("url", "");
-                ev.domain = e.value("domain", "");
-                ev.event_category = e.value("event_category", "");
-                ev.matched_keywords = e.value("matched_keywords", "");
-                ev.city = e.value("city", "");
-                ev.country = e.value("country", "");
-                ev.latitude = e.value("latitude", 0.0);
-                ev.longitude = e.value("longitude", 0.0);
-                ev.extracted_date = e.value("extracted_date", "");
-                ev.created_at = e.value("created_at", "");
+                ev.url = ev_json.value("url", "");
+                ev.domain = ev_json.value("domain", "");
+                ev.event_category = ev_json.value("event_category", "");
+                ev.matched_keywords = ev_json.value("matched_keywords", "");
+                ev.city = ev_json.value("city", "");
+                ev.country = ev_json.value("country", "");
+                ev.latitude = ev_json.value("latitude", 0.0);
+                ev.longitude = ev_json.value("longitude", 0.0);
+                ev.extracted_date = ev_json.value("extracted_date", "");
+                ev.created_at = ev_json.value("created_at", "");
 
                 if (ev.latitude != 0.0 || ev.longitude != 0.0) with_coords++;
 
@@ -174,22 +198,37 @@ void GeopoliticsData::fetch_events(const std::string& api_key, const std::string
 void GeopoliticsData::fetch_countries(const std::string& api_key) {
     LOG_INFO("Geo", "=== fetch_countries called, api_key_len=%zu", api_key.size());
     std::thread([this, api_key]() {
-        std::string url = std::string(API_BASE) + "/research/news-events?get_unique_countries=true";
-        LOG_INFO("Geo", "GET %s", url.c_str());
-        auto resp = http::HttpClient::instance().get(url, make_headers(api_key));
+        auto& cache = CacheService::instance();
+        std::string cache_key = CacheService::make_key("api-response", "geo-countries", "list");
 
-        LOG_INFO("Geo", "Countries response: status=%d, success=%d, body_len=%zu",
-                 resp.status_code, (int)resp.success, resp.body.size());
+        std::string body;
+        auto cached = cache.get(cache_key);
+        if (cached) {
+            body = *cached;
+            LOG_INFO("Geo", "Cache HIT for geo-countries");
+        } else {
+            std::string url = std::string(API_BASE) + "/research/news-events?get_unique_countries=true";
+            LOG_INFO("Geo", "GET %s", url.c_str());
+            auto resp = http::HttpClient::instance().get(url, make_headers(api_key));
 
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!resp.success) {
-            LOG_ERROR("Geo", "Countries fetch FAILED: %s (body: %.200s)",
-                      resp.error.c_str(), resp.body.c_str());
-            return;
+            LOG_INFO("Geo", "Countries response: status=%d, success=%d, body_len=%zu",
+                     resp.status_code, (int)resp.success, resp.body.size());
+
+            if (!resp.success) {
+                std::lock_guard<std::mutex> lock(mutex_);
+                LOG_ERROR("Geo", "Countries fetch FAILED: %s (body: %.200s)",
+                          resp.error.c_str(), resp.body.c_str());
+                return;
+            }
+            body = resp.body;
+            if (!body.empty()) {
+                cache.set(cache_key, body, "api-response", CacheTTL::ONE_HOUR);
+            }
         }
 
+        std::lock_guard<std::mutex> lock(mutex_);
         try {
-            auto j = resp.json_body();
+            auto j = nlohmann::json::parse(body);
             if (!j.value("success", false)) {
                 LOG_ERROR("Geo", "Countries API returned success=false");
                 return;
@@ -235,22 +274,37 @@ void GeopoliticsData::fetch_countries(const std::string& api_key) {
 void GeopoliticsData::fetch_categories(const std::string& api_key) {
     LOG_INFO("Geo", "=== fetch_categories called, api_key_len=%zu", api_key.size());
     std::thread([this, api_key]() {
-        std::string url = std::string(API_BASE) + "/research/news-events?get_unique_categories=true";
-        LOG_INFO("Geo", "GET %s", url.c_str());
-        auto resp = http::HttpClient::instance().get(url, make_headers(api_key));
+        auto& cache = CacheService::instance();
+        std::string cache_key = CacheService::make_key("api-response", "geo-categories", "list");
 
-        LOG_INFO("Geo", "Categories response: status=%d, success=%d, body_len=%zu",
-                 resp.status_code, (int)resp.success, resp.body.size());
+        std::string body;
+        auto cached = cache.get(cache_key);
+        if (cached) {
+            body = *cached;
+            LOG_INFO("Geo", "Cache HIT for geo-categories");
+        } else {
+            std::string url = std::string(API_BASE) + "/research/news-events?get_unique_categories=true";
+            LOG_INFO("Geo", "GET %s", url.c_str());
+            auto resp = http::HttpClient::instance().get(url, make_headers(api_key));
 
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!resp.success) {
-            LOG_ERROR("Geo", "Categories fetch FAILED: %s (body: %.200s)",
-                      resp.error.c_str(), resp.body.c_str());
-            return;
+            LOG_INFO("Geo", "Categories response: status=%d, success=%d, body_len=%zu",
+                     resp.status_code, (int)resp.success, resp.body.size());
+
+            if (!resp.success) {
+                std::lock_guard<std::mutex> lock(mutex_);
+                LOG_ERROR("Geo", "Categories fetch FAILED: %s (body: %.200s)",
+                          resp.error.c_str(), resp.body.c_str());
+                return;
+            }
+            body = resp.body;
+            if (!body.empty()) {
+                cache.set(cache_key, body, "api-response", CacheTTL::ONE_HOUR);
+            }
         }
 
+        std::lock_guard<std::mutex> lock(mutex_);
         try {
-            auto j = resp.json_body();
+            auto j = nlohmann::json::parse(body);
             if (!j.value("success", false)) {
                 LOG_ERROR("Geo", "Categories API returned success=false");
                 return;

@@ -388,6 +388,8 @@ std::vector<ChatSession> get_chat_sessions(int limit = -1);
 ChatMessage add_chat_message(const ChatMessage& msg);
 std::vector<ChatMessage> get_chat_messages(const std::string& session_uuid);
 void delete_chat_session(const std::string& session_uuid);
+void update_chat_session_title(const std::string& session_uuid, const std::string& title);
+void clear_chat_session_messages(const std::string& session_uuid);
 
 // --- Watchlist ---
 Watchlist create_watchlist(const std::string& name, const std::string& color,
