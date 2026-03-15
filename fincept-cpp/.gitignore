@@ -1,5 +1,6 @@
 # Build
 build/
+build-msvc/
 cmake-build-*/
 out/
 
@@ -12,6 +13,11 @@ out/
 *.sln
 *.vcxproj*
 compile_commands.json
+.clangd
+
+# Claude / MCP local config
+.claude-flow/
+.mcp.json
 
 # ImGui layout state
 fincept_imgui.ini
@@ -29,3 +35,6 @@ third_party/
 # Debug artifacts
 *.log
 stderr_out.txt
+
+# Temporary files
+tmp/

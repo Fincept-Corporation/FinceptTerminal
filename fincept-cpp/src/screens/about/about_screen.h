@@ -1,5 +1,6 @@
 #pragma once
-// About screen — static info page showing version, license, resources, contact
+// About screen — Bloomberg terminal style info page
+// Dense three-panel layout: System Info | License & Legal | Resources & Contact
 
 #include <imgui.h>
 
@@ -10,11 +11,10 @@ public:
     void render();
 
 private:
-    void render_version_info();
-    void render_license_panels();
-    void render_trademarks();
-    void render_resources();
-    void render_contact();
+    void render_header_bar();
+    void render_system_info(float width, float height);
+    void render_license_panel(float width, float height);
+    void render_resources_panel(float width, float height);
 };
 
 } // namespace fincept::about

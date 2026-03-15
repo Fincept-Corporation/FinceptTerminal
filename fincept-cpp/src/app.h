@@ -38,6 +38,8 @@
 #include "screens/ai_chat/ai_chat_screen.h"
 #include "screens/ai_quant_lab/ai_quant_lab_screen.h"
 #include "screens/data_mapping/data_mapping_screen.h"
+#include "screens/screener/screener_screen.h"
+#include "screens/equity_trading/equity_trading_screen.h"
 
 // Fullscreen toggle (implemented in main.cpp, delegates to Window)
 void toggle_fullscreen();
@@ -97,10 +99,18 @@ private:
     ai_chat::AIChatScreen ai_chat_screen_;
     ai_quant_lab::AIQuantLabScreen ai_quant_lab_screen_;
     data_mapping::DataMappingScreen data_mapping_screen_;
+    screener::ScreenerScreen screener_screen_;
+    equity_trading::EquityTradingScreen equity_trading_screen_;
+
+    // Command bar state
+    char cmd_buf_[128] = {};
+    bool cmd_focused_ = false;
+    int cmd_selected_ = 0;
 
     // Rendering sections
     void render_top_bar();
     void render_tab_bar();
+    void render_command_bar();
     void render_footer();
     void render_loading();
 

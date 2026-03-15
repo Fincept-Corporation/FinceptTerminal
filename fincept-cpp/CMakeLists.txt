@@ -287,6 +287,12 @@ set(SOURCES
     src/screens/data_mapping/data_mapping_db.cpp
     src/screens/data_mapping/data_mapping_screen.cpp
 
+    # Screens — Screener (FRED Economic Data)
+    src/screens/screener/screener_screen.cpp
+
+    # Screens — Equity Trading
+    src/screens/equity_trading/equity_trading_screen.cpp
+
     # Core (continued)
     src/core/device_id.cpp
 )

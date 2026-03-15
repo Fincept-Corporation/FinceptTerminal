@@ -158,22 +158,22 @@ fincept-terminal-desktop/src-tauri/resources/bun/
 # ============================================================
 # Legacy and deprecated
 # ============================================================
-legacy-python-depreciated
-legacy-python-depreciated/python
-python
-cmder
-reqgen.py
-treeview.py
-testing
-fincept_terminal/backup_20250730_072611
-fincept_terminal_structure.txt
-launcher.cpp
-te
-fincept.bat
-pdm.lock
-upx.exe
-fincept_icon.ico
-setup.iss
-temp
-tempdist
-nul
+/legacy-python-depreciated
+/legacy-python-depreciated/python
+/python
+/cmder
+/reqgen.py
+/treeview.py
+/testing
+/fincept_terminal/backup_20250730_072611
+/fincept_terminal_structure.txt
+/launcher.cpp
+/te
+/fincept.bat
+/pdm.lock
+/upx.exe
+/fincept_icon.ico
+/setup.iss
+/temp
+/tempdist
+/nul

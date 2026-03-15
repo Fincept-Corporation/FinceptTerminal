@@ -4,6 +4,8 @@
 #include <imgui.h>
 #include <string>
 #include <vector>
+#include <map>
+#include <algorithm>
 
 namespace fincept::forum {
 
@@ -75,16 +77,31 @@ struct RecentActivity {
 enum class ForumView { Posts, PostDetail, CreatePost, Search };
 enum class SortMode { Latest, Popular, Views };
 
-// Top contributors (static data like Tauri)
-inline std::vector<ForumUser> get_top_contributors() {
-    return {
-        {"quanttrader", 2847, 156, "2024-01-15", "online"},
-        {"marketwizard", 2156, 132, "2024-02-20", "offline"},
-        {"alphaseeker", 1923, 98, "2024-03-01", "online"},
-        {"riskmaster", 1567, 87, "2024-01-28", "offline"},
-        {"datadriven", 1234, 76, "2024-04-10", "online"},
-        {"techanalyst", 1089, 65, "2024-02-15", "offline"},
-    };
+// Generate top contributors from actual post data
+inline std::vector<ForumUser> generate_top_contributors(const std::vector<ForumPost>& posts) {
+    std::map<std::string, int> author_posts;
+    std::map<std::string, int> author_rep;
+    for (const auto& p : posts) {
+        if (p.author.empty() || p.author == "anonymous") continue;
+        author_posts[p.author]++;
+        author_rep[p.author] += p.likes + p.views / 10 + p.replies;
+    }
+
+    std::vector<ForumUser> contributors;
+    for (const auto& [name, count] : author_posts) {
+        ForumUser u;
+        u.username = name;
+        u.posts = count;
+        u.reputation = author_rep[name];
+        u.status = (contributors.size() % 2 == 0) ? "online" : "offline";
+        contributors.push_back(std::move(u));
+    }
+
+    std::sort(contributors.begin(), contributors.end(),
+        [](const ForumUser& a, const ForumUser& b) { return a.reputation > b.reputation; });
+
+    if (contributors.size() > 6) contributors.resize(6);
+    return contributors;
 }
 
 // Helpers

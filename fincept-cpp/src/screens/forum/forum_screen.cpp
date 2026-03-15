@@ -41,7 +41,6 @@ void ForumScreen::render() {
 
     // Initialize
     if (!data_loaded_) {
-        top_contributors_ = get_top_contributors();
         data_loaded_ = true;
         load_data();
     }
@@ -615,7 +614,7 @@ void ForumScreen::render_post_detail() {
         auto headers = auth::AuthApi::instance().get_auth_headers(
             auth::AuthManager::instance().session().api_key);
         json body;
-        body["vote_type"] = "like";
+        body["vote_type"] = "up";
         std::string url = std::string(BASE_URL) + "/forum/posts/" + selected_post_.id + "/vote";
         load_future_ = std::async(std::launch::async, [url, body, headers]() {
             try { http::HttpClient::instance().post_json(url, body, headers); } catch (...) {}
@@ -631,7 +630,7 @@ void ForumScreen::render_post_detail() {
         auto headers = auth::AuthApi::instance().get_auth_headers(
             auth::AuthManager::instance().session().api_key);
         json body;
-        body["vote_type"] = "dislike";
+        body["vote_type"] = "down";
         std::string url = std::string(BASE_URL) + "/forum/posts/" + selected_post_.id + "/vote";
         load_future_ = std::async(std::launch::async, [url, body, headers]() {
             try { http::HttpClient::instance().post_json(url, body, headers); } catch (...) {}
@@ -1005,8 +1004,9 @@ void ForumScreen::load_data() {
             status_message_ = "Error loading forum data";
         }
 
-        // Load posts separately
+        // Load posts and generate derived data
         load_posts();
+        top_contributors_ = generate_top_contributors(posts_);
         generate_trending();
         generate_activity();
     });
@@ -1027,21 +1027,16 @@ void ForumScreen::load_posts() {
                 BASE_URL, active_category_id_, sort.c_str());
             url = buf;
         } else {
-            // Load from first category or all
-            if (!categories_.empty()) {
-                char buf[256];
-                std::snprintf(buf, sizeof(buf),
-                    "%s/forum/categories/%d/posts?sort_by=%s&limit=50",
-                    BASE_URL, categories_[0].id, sort.c_str());
-                url = buf;
-            } else {
-                return;
-            }
+            // Load all posts across categories
+            char buf[256];
+            std::snprintf(buf, sizeof(buf),
+                "%s/forum/posts?sort_by=%s&limit=50",
+                BASE_URL, sort.c_str());
+            url = buf;
         }
 
         auto& cache = CacheService::instance();
-        int cat_id = active_category_id_ > 0 ? active_category_id_ :
-            (!categories_.empty() ? categories_[0].id : 0);
+        int cat_id = active_category_id_ > 0 ? active_category_id_ : 0;
         std::string posts_ck = CacheService::make_key("api-response", "forum-posts",
             std::to_string(cat_id) + "_" + sort);
 
@@ -1066,10 +1061,10 @@ void ForumScreen::load_posts() {
                 posts_.clear();
                 for (auto& item : posts_arr) {
                     ForumPost p;
-                    p.id = item.value("id", item.value("uuid", ""));
+                    p.id = item.value("post_uuid", item.value("uuid", item.value("id", "")));
                     p.title = item.value("title", "");
                     p.content = item.value("content", "");
-                    p.author = item.value("author", item.value("username", "anonymous"));
+                    p.author = item.value("author_display_name", item.value("author", item.value("username", "anonymous")));
                     p.time = item.value("created_at", "");
                     p.category = item.value("category_name", active_category_);
                     p.category_id = item.value("category_id", 0);
@@ -1077,7 +1072,7 @@ void ForumScreen::load_posts() {
                     p.replies = item.value("reply_count", item.value("replies", 0));
                     p.likes = item.value("likes", item.value("upvotes", 0));
                     p.dislikes = item.value("dislikes", item.value("downvotes", 0));
-                    p.verified = item.value("verified", false);
+                    p.verified = item.value("is_pinned", item.value("verified", false));
 
                     // Derive sentiment from likes/dislikes
                     if (p.likes > p.dislikes * 2) p.sentiment = "bullish";
@@ -1139,8 +1134,8 @@ void ForumScreen::load_post_detail(const std::string& post_id) {
                 if (post_data.contains("comments") && post_data["comments"].is_array()) {
                     for (auto& c : post_data["comments"]) {
                         ForumComment comment;
-                        comment.id = c.value("id", c.value("uuid", ""));
-                        comment.author = c.value("author", c.value("username", "anonymous"));
+                        comment.id = c.value("comment_uuid", c.value("uuid", c.value("id", "")));
+                        comment.author = c.value("author_display_name", c.value("author", c.value("username", "anonymous")));
                         comment.content = c.value("content", "");
                         comment.time = c.value("created_at", "");
                         comment.likes = c.value("likes", c.value("upvotes", 0));
@@ -1193,15 +1188,19 @@ void ForumScreen::generate_trending() {
         trending_.push_back(t);
     }
 
-    // Fallback if no tags
+    // If no tags found in posts, generate from post titles
     if (trending_.empty()) {
-        trending_ = {
-            {"markets", 24, "bullish"},
-            {"fed", 18, "bearish"},
-            {"earnings", 15, "neutral"},
-            {"AI", 12, "bullish"},
-            {"crypto", 10, "neutral"},
-        };
+        for (const auto& p : posts_) {
+            if (trending_.size() >= 5) break;
+            if (!p.title.empty()) {
+                TrendingTopic t;
+                t.topic = p.title.substr(0, 25);
+                if (p.title.size() > 25) t.topic += "...";
+                t.mentions = p.views + p.replies;
+                t.sentiment = p.sentiment.empty() ? "neutral" : p.sentiment;
+                trending_.push_back(t);
+            }
+        }
     }
 }
 
@@ -1219,14 +1218,7 @@ void ForumScreen::generate_activity() {
         recent_activity_.push_back(a);
     }
 
-    // Fallback
-    if (recent_activity_.empty()) {
-        recent_activity_ = {
-            {"quanttrader", "posted", "Market Analysis Update", "2 min ago"},
-            {"alphaseeker", "commented on", "Fed Decision Impact", "5 min ago"},
-            {"datadriven", "liked", "Crypto Portfolio Strategy", "12 min ago"},
-        };
-    }
+    // No fallback — empty activity is fine when there are no posts
 }
 
 void ForumScreen::do_search() {
@@ -1265,10 +1257,10 @@ void ForumScreen::do_search() {
                 if (results.is_array()) {
                     for (auto& item : results) {
                         ForumPost p;
-                        p.id = item.value("id", item.value("uuid", ""));
+                        p.id = item.value("post_uuid", item.value("uuid", item.value("id", "")));
                         p.title = item.value("title", "");
                         p.content = item.value("content", "");
-                        p.author = item.value("author", item.value("username", "anonymous"));
+                        p.author = item.value("author_display_name", item.value("author", item.value("username", "anonymous")));
                         p.time = item.value("created_at", "");
                         p.views = item.value("views", 0);
                         p.replies = item.value("reply_count", 0);
