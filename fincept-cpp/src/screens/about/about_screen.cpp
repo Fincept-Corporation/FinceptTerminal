@@ -1,5 +1,6 @@
 #include "about_screen.h"
 #include "ui/theme.h"
+#include "ui/yoga_helpers.h"
 #include "core/config.h"
 #include <imgui.h>
 #include <cstdio>
@@ -29,6 +30,9 @@ static constexpr ImGuiTableFlags TBL =
 // Main render — three-panel layout
 // =============================================================================
 void AboutScreen::render() {
+    ui::ScreenFrame frame("##about_screen", ImVec2(0, 0), BG_DARK);
+    if (!frame.begin()) { frame.end(); return; }
+
     render_header_bar();
 
     float avail_w = ImGui::GetContentRegionAvail().x;
@@ -58,6 +62,8 @@ void AboutScreen::render() {
     ImGui::BeginChild("##about_right", ImVec2(right_w, avail_h), ImGuiChildFlags_Borders);
     render_resources_panel(right_w, avail_h);
     ImGui::EndChild();
+
+    frame.end();
 }
 
 // =============================================================================

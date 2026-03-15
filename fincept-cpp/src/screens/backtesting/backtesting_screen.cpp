@@ -1,6 +1,7 @@
 #include "backtesting_screen.h"
 #include "backtesting_constants.h"
 #include "ui/theme.h"
+#include "ui/yoga_helpers.h"
 #include "core/logger.h"
 #include <imgui.h>
 #include <cstdio>
@@ -18,6 +19,10 @@ using json = nlohmann::json;
 // Main render
 // =============================================================================
 void BacktestingScreen::render() {
+    using namespace theme::colors;
+    ui::ScreenFrame frame("##backtesting", ImVec2(0, 0), BG_DARK);
+    if (!frame.begin()) { frame.end(); return; }
+
     pickup_result();
 
     // Top nav bar
@@ -57,6 +62,8 @@ void BacktestingScreen::render() {
 
     // Status bar
     render_status_bar();
+
+    frame.end();
 }
 
 // =============================================================================
