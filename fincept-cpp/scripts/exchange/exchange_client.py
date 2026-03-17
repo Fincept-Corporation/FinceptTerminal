@@ -5,19 +5,61 @@ Handles exchange instantiation, credential loading, and error normalization.
 Called by C++ python_runner as subprocess — outputs JSON to stdout.
 """
 
+import os
 import sys
 import json
+import time
 import ccxt
 
+# Markets cache TTL — 30 minutes is a safe balance between freshness and speed.
+# Exchange market lists rarely change within a session.
+_MARKETS_CACHE_TTL = 1800
 
-def make_exchange(exchange_id: str, credentials: dict = None, sandbox: bool = False) -> ccxt.Exchange:
-    """Create and configure a ccxt exchange instance."""
+
+def get_markets_cache_path(exchange_id: str) -> str:
+    """Return path to the per-exchange markets cache file."""
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, f"markets_{exchange_id}.json")
+
+
+def load_cached_markets(exchange_id: str) -> dict | None:
+    """Return cached markets dict if still fresh (within TTL), else None."""
+    path = get_markets_cache_path(exchange_id)
+    try:
+        if os.path.exists(path):
+            age = time.time() - os.path.getmtime(path)
+            if age < _MARKETS_CACHE_TTL:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+    except Exception:
+        pass
+    return None
+
+
+def save_markets_cache(exchange_id: str, markets: dict) -> None:
+    """Persist markets dict to disk so the next WS startup can skip load_markets()."""
+    path = get_markets_cache_path(exchange_id)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(markets, f)
+    except Exception:
+        pass
+
+
+def make_exchange(exchange_id: str, credentials: dict = None,
+                  sandbox: bool = False, timeout_ms: int = 10000) -> ccxt.Exchange:
+    """Create and configure a ccxt exchange instance.
+
+    timeout_ms defaults to 10s (was 30s) — fast failure on slow exchanges.
+    WS stream sets its own timeout directly on the ccxt.pro instance.
+    """
     if exchange_id not in ccxt.exchanges:
         raise ValueError(f"Unknown exchange: {exchange_id}. Available: {len(ccxt.exchanges)}")
 
     config = {
         "enableRateLimit": True,
-        "timeout": 30000,
+        "timeout": timeout_ms,
     }
 
     if credentials:
