@@ -172,7 +172,7 @@ static constexpr int PERIOD_COUNT = 3;
 
 static std::string timestamp_to_str(int64_t ts) {
     time_t t = static_cast<time_t>(ts / 1000);  // ms -> s
-    struct tm tm_buf;
+    struct tm tm_buf{};
 #ifdef _WIN32
     localtime_s(&tm_buf, &t);
 #else

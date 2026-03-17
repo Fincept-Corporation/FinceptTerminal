@@ -358,6 +358,7 @@ void AlgoTradingScreen::render_strategies(float w, float h) {
         ImGui::TableHeadersRow();
 
         std::lock_guard lock(data_mutex_);
+        std::string pending_delete_strategy;
         for (auto& s : strategies_) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn(); ImGui::Text("%s", s.name.c_str());
@@ -379,12 +380,15 @@ void AlgoTradingScreen::render_strategies(float w, float h) {
             if (ImGui::SmallButton("Backtest")) run_backtest(s.id);
             ImGui::SameLine();
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f,0.1f,0.1f,1));
-            if (ImGui::SmallButton("Del")) delete_strategy(s.id);
+            if (ImGui::SmallButton("Del")) pending_delete_strategy = s.id;
             ImGui::PopStyleColor();
             ImGui::PopID();
         }
 
         ImGui::EndTable();
+        if (!pending_delete_strategy.empty()) {
+            delete_strategy(pending_delete_strategy);
+        }
     }
 
     // Deployments section
@@ -404,6 +408,7 @@ void AlgoTradingScreen::render_strategies(float w, float h) {
         ImGui::TableHeadersRow();
 
         std::lock_guard lock(data_mutex_);
+        std::string pending_delete_deploy;
         for (auto& d : deployments_) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn(); ImGui::Text("%s", d.strategy_name.c_str());
@@ -426,12 +431,15 @@ void AlgoTradingScreen::render_strategies(float w, float h) {
                 ImGui::PopStyleColor();
             } else {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f,0.1f,0.1f,1));
-                if (ImGui::SmallButton("Delete")) delete_deployment_action(d.id);
+                if (ImGui::SmallButton("Delete")) pending_delete_deploy = d.id;
                 ImGui::PopStyleColor();
             }
             ImGui::PopID();
         }
         ImGui::EndTable();
+        if (!pending_delete_deploy.empty()) {
+            delete_deployment_action(pending_delete_deploy);
+        }
     }
 
     // Backtest results (shown inline after running a backtest)

@@ -89,7 +89,7 @@ void MarketsScreen::render_header() {
         static char tb[32] = {};
         if (now != cached_mkt_time) {
             cached_mkt_time = now;
-            struct tm t_buf;
+            struct tm t_buf{};
 #ifdef _WIN32
             localtime_s(&t_buf, &now);
 #else

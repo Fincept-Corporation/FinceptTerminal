@@ -57,7 +57,7 @@ void StatusBar::render() {
         time_t now = time(nullptr);
         if (now != cached_sb_time) {
             cached_sb_time = now;
-            struct tm t_buf;
+            struct tm t_buf{};
 #ifdef _WIN32
             localtime_s(&t_buf, &now);
 #else

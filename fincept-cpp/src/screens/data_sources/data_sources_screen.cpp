@@ -738,13 +738,17 @@ void DataSourcesScreen::render_connections_table(float w, float h) {
             char del_id[64];
             std::snprintf(del_id, sizeof(del_id), "DEL##cd_%d", row);
             if (ImGui::SmallButton(del_id)) {
-                delete_connection(conn.id);
+                pending_delete_conn_ = conn.id;
             }
             ImGui::PopStyleColor(3);
 
             ImGui::PopStyleVar(2);
             ImGui::PopID();
             row++;
+        }
+        if (!pending_delete_conn_.empty()) {
+            delete_connection(pending_delete_conn_);
+            pending_delete_conn_.clear();
         }
 
         ImGui::EndTable();

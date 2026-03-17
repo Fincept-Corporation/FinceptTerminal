@@ -29,7 +29,7 @@ namespace fincept::economics {
 
 static void compute_date_range(int preset_idx, char* start, char* end) {
     time_t now = time(nullptr);
-    struct tm t_end;
+    struct tm t_end{};
 #ifdef _WIN32
     localtime_s(&t_end, &now);
 #else

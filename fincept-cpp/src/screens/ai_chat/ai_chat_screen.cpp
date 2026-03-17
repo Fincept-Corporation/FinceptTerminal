@@ -485,6 +485,7 @@ void AIChatScreen::render_navbar(float width) {
     if (ImGui::BeginPopup("##prov_popup")) {
         ImGui::TextColored(TEXT_DIM, "SELECT PROVIDER");
         ImGui::Separator();
+        std::string pending_provider;
         for (auto& cfg : all_configs_) {
             bool is_active = (cfg.provider == active_config_.provider);
             std::string label = cfg.provider;
@@ -492,10 +493,13 @@ void AIChatScreen::render_navbar(float width) {
             if (is_active) label += "  [ACTIVE]";
 
             if (ImGui::Selectable(label.c_str(), is_active)) {
-                switch_provider(cfg.provider);
+                pending_provider = cfg.provider;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::TextColored(TEXT_DIM, "  Model: %s", cfg.model.c_str());
+        }
+        if (!pending_provider.empty()) {
+            switch_provider(pending_provider);
         }
         if (all_configs_.empty()) {
             ImGui::TextColored(TEXT_DIM, "No providers configured.");

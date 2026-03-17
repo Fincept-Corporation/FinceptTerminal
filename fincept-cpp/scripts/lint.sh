@@ -33,6 +33,7 @@ run_cppcheck() {
         --enable=warning,performance,portability \
         --suppress=missingIncludeSystem \
         --suppress=unusedFunction \
+        --suppress=*:*/vendor/* \
         --inline-suppr \
         --std=c++20 \
         -I "$SRC_DIR" \

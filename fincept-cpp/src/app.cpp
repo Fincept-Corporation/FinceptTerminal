@@ -205,7 +205,7 @@ void App::render_top_bar() {
             time_t now = time(nullptr);
             if (now != cached_topbar_time) {
                 cached_topbar_time = now;
-                struct tm t_buf;
+                struct tm t_buf{};
 #ifdef _WIN32
                 localtime_s(&t_buf, &now);
 #else
@@ -566,7 +566,7 @@ void App::render_command_bar() {
         for (auto& c : name_lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
         if (name_lower == query) score = 100;
-        else if (name_lower.find(query) == 0) score = 90;
+        else if (name_lower.starts_with(query)) score = 90;
         else if (name_lower.find(query) != std::string::npos) score = 80;
 
         if (score == 0) {
@@ -744,7 +744,7 @@ void App::render_footer() {
         time_t now = time(nullptr);
         if (now != cached_footer_time) {
             cached_footer_time = now;
-            struct tm t_buf;
+            struct tm t_buf{};
 #ifdef _WIN32
             localtime_s(&t_buf, &now);
 #else

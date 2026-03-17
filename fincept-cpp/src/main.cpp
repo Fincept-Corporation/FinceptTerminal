@@ -60,8 +60,8 @@ int main(int /*argc*/, char** /*argv*/) {
     // Redirect stdout/stderr to a log file so output survives crashes
     {
         FILE* dummy = nullptr;
-        freopen_s(&dummy, "fincept_stdout.log", "w", stdout);
-        freopen_s(&dummy, "fincept_stderr.log", "w", stderr);
+        (void)freopen_s(&dummy, "fincept_stdout.log", "w", stdout);
+        (void)freopen_s(&dummy, "fincept_stderr.log", "w", stderr);
         // Disable buffering so output is flushed immediately
         if (stdout) setvbuf(stdout, nullptr, _IONBF, 0);
         if (stderr) setvbuf(stderr, nullptr, _IONBF, 0);

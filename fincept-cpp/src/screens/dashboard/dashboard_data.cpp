@@ -467,7 +467,7 @@ void DashboardData::fetch_news_feeds() {
                 }
 
                 time_t ts = static_cast<time_t>(ni.sort_ts);
-                struct tm lt_buf;
+                struct tm lt_buf{};
 #ifdef _WIN32
                 localtime_s(&lt_buf, &ts);
 #else

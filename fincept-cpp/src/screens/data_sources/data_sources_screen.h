@@ -49,6 +49,7 @@ private:
     std::string editing_id_;
     std::map<std::string, std::string> form_data_;
     std::string save_error_;
+    std::string pending_delete_conn_;  // deferred delete to avoid iterator invalidation
 
     // Connection testing state
     bool testing_ = false;
