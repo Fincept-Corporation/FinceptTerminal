@@ -861,6 +861,17 @@ bool ExchangeService::is_ws_connected() const {
     return ws_connected_;
 }
 
+void ExchangeService::set_ws_primary_symbol(const std::string& symbol) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ws_primary_symbol_ = symbol;
+    LOG_INFO(TAG, "WS primary symbol changed to: %s", symbol.c_str());
+}
+
+std::string ExchangeService::get_ws_primary_symbol() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return ws_primary_symbol_;
+}
+
 void ExchangeService::ws_reader_loop() {
     // Read stdout line by line, parse JSON, dispatch
     std::string line_buf;

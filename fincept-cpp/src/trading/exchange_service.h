@@ -168,6 +168,12 @@ public:
     void stop_ws_stream();
     bool is_ws_connected() const;
 
+    // Change which symbol is "primary" for WS routing — does NOT restart subprocess.
+    // Callbacks on CryptoTradingScreen read selected_symbol_ dynamically so this
+    // takes effect immediately on the next incoming WS message.
+    void set_ws_primary_symbol(const std::string& symbol);
+    std::string get_ws_primary_symbol() const;
+
     // --- One-shot data fetches (called from UI) ---
     TickerData fetch_ticker(const std::string& symbol);
     std::vector<TickerData> fetch_tickers(const std::vector<std::string>& symbols);

@@ -38,6 +38,10 @@ private:
     void async_refresh_watchlist_prices();
     void refresh_portfolio_data(); // DB only, fast, runs on main thread
 
+    // Thread lifecycle — RAII tracked threads (CP.26: no detach)
+    void launch_async(std::thread t);
+    void join_pending_threads();
+
     // Layout panels
     void render_top_nav(float w, float h);
     void render_ticker_bar(float w, float h);
@@ -154,6 +158,10 @@ private:
     int success_count_ = 0;
 
     std::mutex data_mutex_;
+
+    // --- Async thread tracking (CP.26: no detach — join on destroy) ---
+    std::vector<std::thread> async_threads_;
+    std::mutex threads_mutex_;
 
     // Default watchlist symbols
     static std::vector<std::string> default_watchlist_symbols();

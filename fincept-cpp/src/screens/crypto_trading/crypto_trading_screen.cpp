@@ -18,15 +18,18 @@ using namespace theme::colors;
 static constexpr const char* TAG = "CryptoTrading";
 
 // Named constants (ES.45: avoid magic numbers)
-static constexpr int    OHLCV_FETCH_COUNT        = 200;
-static constexpr double DEFAULT_PAPER_BALANCE     = 100000.0;
-static constexpr int    PORTFOLIO_CLEANUP_THRESH  = 10;
-static constexpr float  TICKER_POLL_INTERVAL      = 3.0f;   // seconds (REST fallback)
-static constexpr float  ORDERBOOK_POLL_INTERVAL   = 3.0f;
-static constexpr float  WATCHLIST_POLL_INTERVAL   = 15.0f;
-static constexpr float  PORTFOLIO_REFRESH_INTERVAL = 1.5f;
-static constexpr float  MARKET_INFO_INTERVAL      = 30.0f;
-static constexpr int    PRICE_FEED_POLL_SEC       = 3;
+static constexpr int    OHLCV_FETCH_COUNT             = 200;
+static constexpr double DEFAULT_PAPER_BALANCE          = 100000.0;
+static constexpr int    PORTFOLIO_CLEANUP_THRESH       = 10;
+static constexpr float  TICKER_POLL_INTERVAL           = 3.0f;   // seconds (REST fallback)
+static constexpr float  ORDERBOOK_POLL_INTERVAL        = 3.0f;
+static constexpr float  WATCHLIST_POLL_INTERVAL        = 15.0f;
+static constexpr float  PORTFOLIO_REFRESH_INTERVAL     = 1.5f;
+static constexpr float  MARKET_INFO_INTERVAL           = 30.0f;
+static constexpr int    PRICE_FEED_POLL_SEC            = 3;
+static constexpr int    WS_MAX_WATCHLIST_SYMBOLS       = 10;   // cap WS subscriptions
+static constexpr int    MAX_CANDLE_BUFFER              = 500;  // rolling candle window
+static constexpr int    PORTFOLIO_CLEANUP_TRADE_LIMIT  = 1;   // min trades to keep portfolio
 
 // ============================================================================
 // Default watchlist — top crypto pairs
@@ -45,6 +48,7 @@ std::vector<std::string> CryptoTradingScreen::default_watchlist_symbols() {
 // ============================================================================
 CryptoTradingScreen::~CryptoTradingScreen() {
     LOG_INFO(TAG, "Shutting down");
+    join_pending_threads();  // wait for in-flight fetches before tearing down (CP.26)
 
     auto& svc = trading::ExchangeService::instance();
     if (ws_started_) {
@@ -55,6 +59,27 @@ CryptoTradingScreen::~CryptoTradingScreen() {
     if (ws_ob_cb_id_ >= 0) svc.remove_orderbook_callback(ws_ob_cb_id_);
     if (ws_candle_cb_id_ >= 0) svc.remove_candle_callback(ws_candle_cb_id_);
     if (ws_trade_cb_id_ >= 0) svc.remove_trade_callback(ws_trade_cb_id_);
+}
+
+// ============================================================================
+// Thread lifecycle — RAII tracked async threads (CP.26: no detach)
+// ============================================================================
+void CryptoTradingScreen::launch_async(std::thread t) {
+    std::lock_guard<std::mutex> lock(threads_mutex_);
+    // Prune already-finished threads to keep the vector bounded
+    async_threads_.erase(
+        std::remove_if(async_threads_.begin(), async_threads_.end(),
+                       [](std::thread& th) { return !th.joinable(); }),
+        async_threads_.end());
+    async_threads_.push_back(std::move(t));
+}
+
+void CryptoTradingScreen::join_pending_threads() {
+    std::lock_guard<std::mutex> lock(threads_mutex_);
+    for (auto& t : async_threads_) {
+        if (t.joinable()) t.join();
+    }
+    async_threads_.clear();
 }
 
 // ============================================================================
@@ -121,8 +146,8 @@ void CryptoTradingScreen::init() {
     // Fetch initial OHLCV candles via REST
     candles_loading_ = true;
     candles_fetching_ = true;
-    std::string sym = selected_symbol_;
-    std::thread([this, sym]() {
+    const std::string sym = selected_symbol_;
+    launch_async(std::thread([this, sym]() {
         try {
             auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(sym, "1m", OHLCV_FETCH_COUNT);
             LOG_INFO(TAG, "<<< Initial OHLCV received: %d candles", (int)ohlcv.size());
@@ -139,7 +164,7 @@ void CryptoTradingScreen::init() {
             candles_fetching_ = false;
             error_count_++;
         }
-    }).detach();
+    }));
 
     // Start WebSocket streaming for real-time updates
     // restart_ws_stream() handles callback registration + stream start
@@ -301,7 +326,7 @@ void CryptoTradingScreen::restart_ws_stream() {
             candles_.back() = candle;
         } else {
             candles_.push_back(candle);
-            if (candles_.size() > 500) candles_.erase(candles_.begin());
+            if (candles_.size() > MAX_CANDLE_BUFFER) candles_.erase(candles_.begin());
         }
     });
 
@@ -314,9 +339,18 @@ void CryptoTradingScreen::restart_ws_stream() {
         if ((int)recent_trades_.size() > MAX_TRADES) recent_trades_.resize(MAX_TRADES);
     });
 
-    // Start new WS stream
+    // Start new WS stream — cap to top N symbols to limit concurrent WS subscriptions.
+    // Primary symbol is always first; remaining slots filled from watchlist in order.
+    // Callbacks capture `this` — selected_symbol_ is read at invocation time,
+    // so symbol switches (via set_ws_primary_symbol) take effect automatically
+    // without restarting these callbacks.
     std::vector<std::string> all_symbols;
-    for (auto& w : watchlist_) all_symbols.push_back(w.symbol);
+    all_symbols.reserve(WS_MAX_WATCHLIST_SYMBOLS + 1);
+    all_symbols.push_back(selected_symbol_);
+    for (const auto& w : watchlist_) {
+        if ((int)all_symbols.size() >= WS_MAX_WATCHLIST_SYMBOLS) break;
+        if (w.symbol != selected_symbol_) all_symbols.push_back(w.symbol);
+    }
 
     try {
         svc.start_ws_stream(selected_symbol_, all_symbols);
@@ -356,13 +390,12 @@ void CryptoTradingScreen::switch_exchange(const std::string& exchange_id) {
     ob_loading_ = true;
     candles_loading_ = true;
 
-    // Restart price feed with new exchange
-    svc.start_price_feed(PRICE_FEED_POLL_SEC);
-
-    // Re-watch the selected symbol for paper trading
+    // Re-watch the selected symbol BEFORE starting the feed so the first
+    // poll cycle has something to fetch (avoids one empty iteration).
     if (!portfolio_id_.empty()) {
         svc.watch_symbol(selected_symbol_, portfolio_id_);
     }
+    svc.start_price_feed(PRICE_FEED_POLL_SEC);
 
     // Restart WebSocket stream for new exchange
     restart_ws_stream();
@@ -376,8 +409,8 @@ void CryptoTradingScreen::switch_exchange(const std::string& exchange_id) {
 
     // Fetch fresh candles
     candles_fetching_ = true;
-    std::string sym = selected_symbol_;
-    std::thread([this, sym]() {
+    const std::string sym = selected_symbol_;
+    launch_async(std::thread([this, sym]() {
         try {
             auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(sym, "1m", OHLCV_FETCH_COUNT);
             {
@@ -391,7 +424,7 @@ void CryptoTradingScreen::switch_exchange(const std::string& exchange_id) {
             candles_loading_ = false;
             candles_fetching_ = false;
         }
-    }).detach();
+    }));
 
     LOG_INFO(TAG, "Exchange switch complete: %s", exchange_id.c_str());
 }
@@ -425,21 +458,35 @@ void CryptoTradingScreen::switch_symbol(const std::string& symbol) {
         trading::ExchangeService::instance().watch_symbol(symbol, portfolio_id_);
     }
 
-    // Restart WS with new primary symbol
-    restart_ws_stream();
+    // Tell ExchangeService the new primary — WS subprocess stays alive,
+    // callbacks filter on selected_symbol_ (member read at invocation time)
+    // so they automatically route to the new symbol without a subprocess restart.
+    trading::ExchangeService::instance().set_ws_primary_symbol(symbol);
 
-    // Immediate REST fetches while WS connects
+    // Serve from price cache immediately — eliminates blank ticker on switch
+    {
+        const auto cached = trading::ExchangeService::instance().get_cached_price(symbol);
+        if (cached.last > 0.0) {
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            current_ticker_ = cached;
+            ticker_loading_ = false;
+            LOG_INFO(TAG, "Showing cached price for %s: %.4f", symbol.c_str(), cached.last);
+        }
+    }
+
+    // REST fetches to fill data not yet in cache (orderbook, candles, trades, market info)
     async_refresh_ticker();
     async_refresh_orderbook();
     async_fetch_trades();
     async_fetch_market_info();
 
-    // Fetch candles for new symbol
+    // Fetch OHLCV candles for new symbol
     candles_fetching_ = true;
-    std::string sym = symbol;
-    std::thread([this, sym]() {
+    const std::string sym = symbol;
+    launch_async(std::thread([this, sym]() {
         try {
-            auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(sym, "1m", OHLCV_FETCH_COUNT);
+            auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(
+                sym, candle_timeframe_, OHLCV_FETCH_COUNT);
             {
                 std::lock_guard<std::mutex> lock(data_mutex_);
                 candles_ = std::move(ohlcv);
@@ -451,7 +498,7 @@ void CryptoTradingScreen::switch_symbol(const std::string& symbol) {
             candles_loading_ = false;
             candles_fetching_ = false;
         }
-    }).detach();
+    }));
 }
 
 // ============================================================================
@@ -465,10 +512,10 @@ void CryptoTradingScreen::async_refresh_ticker() {
 
     ticker_fetching_ = true;
     ticker_loading_ = true;
-    std::string symbol = selected_symbol_;
+    const std::string symbol = selected_symbol_;
     LOG_INFO(TAG, ">>> Fetching ticker for %s...", symbol.c_str());
 
-    std::thread([this, symbol]() {
+    launch_async(std::thread([this, symbol]() {
         try {
             auto ticker = trading::ExchangeService::instance().fetch_ticker(symbol);
 
@@ -503,7 +550,7 @@ void CryptoTradingScreen::async_refresh_ticker() {
             last_error_ = std::string("Ticker: ") + e.what();
             error_count_++;
         }
-    }).detach();
+    }));
 }
 
 void CryptoTradingScreen::async_refresh_orderbook() {
@@ -514,10 +561,10 @@ void CryptoTradingScreen::async_refresh_orderbook() {
 
     ob_fetching_ = true;
     ob_loading_ = true;
-    std::string symbol = selected_symbol_;
+    const std::string symbol = selected_symbol_;
     LOG_INFO(TAG, ">>> Fetching orderbook for %s...", symbol.c_str());
 
-    std::thread([this, symbol]() {
+    launch_async(std::thread([this, symbol]() {
         try {
             auto ob = trading::ExchangeService::instance().fetch_orderbook(symbol, 15);
 
@@ -557,7 +604,7 @@ void CryptoTradingScreen::async_refresh_orderbook() {
             last_error_ = std::string("Orderbook: ") + e.what();
             error_count_++;
         }
-    }).detach();
+    }));
 }
 
 void CryptoTradingScreen::async_refresh_watchlist_prices() {
@@ -579,7 +626,7 @@ void CryptoTradingScreen::async_refresh_watchlist_prices() {
 
     LOG_INFO(TAG, ">>> Fetching watchlist prices for %d symbols...", (int)symbols.size());
 
-    std::thread([this, symbols]() {
+    launch_async(std::thread([this, symbols]() {
         try {
             auto tickers = trading::ExchangeService::instance().fetch_tickers(symbols);
 
@@ -618,7 +665,7 @@ void CryptoTradingScreen::async_refresh_watchlist_prices() {
             last_error_ = std::string("Watchlist: ") + e.what();
             error_count_++;
         }
-    }).detach();
+    }));
 }
 
 void CryptoTradingScreen::refresh_portfolio_data() {
@@ -995,7 +1042,7 @@ void CryptoTradingScreen::render_watchlist(float w, float h) {
         if (search_cache_exchange_ != exchange_id_ || !search_markets_loaded_) {
             search_fetching_ = true;
             std::string ex_id = exchange_id_;
-            std::thread([this, ex_id]() {
+            launch_async(std::thread([this, ex_id]() {
                 try {
                     auto markets = trading::ExchangeService::instance().fetch_markets("spot");
                     LOG_INFO(TAG, "Loaded %d markets for search from %s",
@@ -1008,7 +1055,7 @@ void CryptoTradingScreen::render_watchlist(float w, float h) {
                     LOG_ERROR(TAG, "Failed to load markets for search: %s", e.what());
                 }
                 search_fetching_ = false;
-            }).detach();
+            }));
         }
     }
 
@@ -1218,9 +1265,9 @@ void CryptoTradingScreen::render_chart_area(float w, float h) {
                 // Re-fetch candles for new timeframe
                 candles_loading_ = true;
                 candles_fetching_ = true;
-                std::string sym = selected_symbol_;
+                const std::string sym = selected_symbol_;
                 std::string tf = candle_timeframe_;
-                std::thread([this, sym, tf]() {
+                launch_async(std::thread([this, sym, tf]() {
                     try {
                         auto ohlcv = trading::ExchangeService::instance().fetch_ohlcv(sym, tf, OHLCV_FETCH_COUNT);
                         LOG_INFO(TAG, "<<< OHLCV %s received: %d candles", tf.c_str(), (int)ohlcv.size());
@@ -1237,7 +1284,7 @@ void CryptoTradingScreen::render_chart_area(float w, float h) {
                         candles_fetching_ = false;
                         error_count_++;
                     }
-                }).detach();
+                }));
             }
         }
         ImGui::PopStyleColor(2);
@@ -1928,8 +1975,8 @@ void CryptoTradingScreen::async_fetch_trades() {
     if (trades_fetching_) return;
     trades_fetching_ = true;
 
-    std::string sym = selected_symbol_;
-    std::thread([this, sym]() {
+    const std::string sym = selected_symbol_;
+    launch_async(std::thread([this, sym]() {
         try {
             auto trades = trading::ExchangeService::instance().fetch_trades(sym, 100);
             std::lock_guard<std::mutex> lock(data_mutex_);
@@ -1941,7 +1988,7 @@ void CryptoTradingScreen::async_fetch_trades() {
             LOG_ERROR("CryptoTrading", "Failed to fetch trades: %s", e.what());
         }
         trades_fetching_ = false;
-    }).detach();
+    }));
 }
 
 // ============================================================================
@@ -2014,8 +2061,8 @@ void CryptoTradingScreen::async_fetch_market_info() {
     if (market_info_fetching_) return;
     market_info_fetching_ = true;
 
-    std::string sym = selected_symbol_;
-    std::thread([this, sym]() {
+    const std::string sym = selected_symbol_;
+    launch_async(std::thread([this, sym]() {
         try {
             auto& svc = trading::ExchangeService::instance();
             auto fr = svc.fetch_funding_rate(sym);
@@ -2033,7 +2080,7 @@ void CryptoTradingScreen::async_fetch_market_info() {
             LOG_DEBUG("CryptoTrading", "Market info fetch failed: %s", e.what());
         }
         market_info_fetching_ = false;
-    }).detach();
+    }));
 }
 
 // ============================================================================
@@ -2497,9 +2544,9 @@ void CryptoTradingScreen::submit_order() {
         if (trading_mode_ == TradingMode::Live) {
             // Live trading — route through exchange API on background thread
             order_submitting_.store(true);
-            std::string sym = selected_symbol_;
+            const std::string sym = selected_symbol_;
             std::string pid = portfolio_id_;
-            std::thread([this, sym, side, order_type, qty, price, pid]() {
+            launch_async(std::thread([this, sym, side, order_type, qty, price, pid]() {
                 try {
                     auto& svc = trading::ExchangeService::instance();
                     auto result = svc.place_order(sym, side, order_type, qty,
@@ -2519,7 +2566,7 @@ void CryptoTradingScreen::submit_order() {
                     LOG_ERROR(TAG, "Live order FAILED: %s", e.what());
                 }
                 order_submitting_.store(false);
-            }).detach();
+            }));
             // Clear form immediately
             order_form_.quantity_buf[0] = '\0';
             order_form_.price_buf[0] = '\0';
