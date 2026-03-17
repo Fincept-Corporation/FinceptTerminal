@@ -16,10 +16,15 @@ Each line is a JSON object with a "type" field:
 
 import asyncio
 import json
+import os
 import sys
 import signal
 import traceback
 import platform
+
+# Import markets cache helpers from exchange_client (same directory)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from exchange_client import load_cached_markets, save_markets_cache
 
 MAX_CONSECUTIVE_ERRORS = 10  # Stop a watcher after this many consecutive errors
 
@@ -235,29 +240,42 @@ async def main():
     except Exception as resolver_err:
         emit({"type": "error", "message": f"Failed to set ThreadedResolver: {resolver_err}"})
 
-    # Try to load markets with retry — some exchanges may be temporarily unreachable
+    # Load markets — use disk cache if still fresh, else fetch from exchange with retry.
+    # On warm cache this completes in <100ms instead of 3–10s.
     MAX_RETRIES = 5
     markets_loaded = False
-    for attempt in range(1, MAX_RETRIES + 1):
+
+    cached = load_cached_markets(exchange_id)
+    if cached is not None:
         try:
-            emit({"type": "status", "connected": False, "exchange": exchange_id,
-                  "symbols": all_symbols, "message": f"Loading markets (attempt {attempt}/{MAX_RETRIES})..."})
-            await exchange.load_markets()
-            emit({
-                "type": "status",
-                "connected": True,
-                "exchange": exchange_id,
-                "symbols": all_symbols,
-            })
+            exchange.markets = cached
+            exchange.markets_by_id = exchange.index_by(cached, "id")
+            emit({"type": "status", "connected": True, "exchange": exchange_id,
+                  "symbols": all_symbols, "message": "markets loaded from cache"})
             markets_loaded = True
-            break
         except Exception as e:
-            emit({"type": "error", "message": f"Failed to load markets (attempt {attempt}): {e}"})
-            if attempt < MAX_RETRIES:
-                delay = min(attempt * 5, 30)
+            emit({"type": "error", "message": f"Cache restore failed, fetching fresh: {e}"})
+
+    if not markets_loaded:
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
                 emit({"type": "status", "connected": False, "exchange": exchange_id,
-                      "symbols": all_symbols, "message": f"Retrying in {delay}s..."})
-                await asyncio.sleep(delay)
+                      "symbols": all_symbols,
+                      "message": f"Loading markets (attempt {attempt}/{MAX_RETRIES})..."})
+                await exchange.load_markets()
+                save_markets_cache(exchange_id, exchange.markets)
+                emit({"type": "status", "connected": True,
+                      "exchange": exchange_id, "symbols": all_symbols})
+                markets_loaded = True
+                break
+            except Exception as e:
+                emit({"type": "error",
+                      "message": f"Failed to load markets (attempt {attempt}): {e}"})
+                if attempt < MAX_RETRIES:
+                    delay = min(attempt * 3, 15)  # 3s, 6s, 9s, 12s, 15s (was up to 30s)
+                    emit({"type": "status", "connected": False, "exchange": exchange_id,
+                          "symbols": all_symbols, "message": f"Retrying in {delay}s..."})
+                    await asyncio.sleep(delay)
 
     if not markets_loaded:
         emit({"type": "status", "connected": False, "exchange": exchange_id,
@@ -267,16 +285,18 @@ async def main():
 
     try:
         tasks = [
-            # Primary symbol gets full treatment: ticker + orderbook + ohlcv
+            # Primary symbol gets full treatment: ticker + orderbook + ohlcv + trades
             asyncio.create_task(watch_ticker(exchange, primary_symbol)),
             asyncio.create_task(watch_orderbook(exchange, primary_symbol, 15)),
             asyncio.create_task(watch_ohlcv(exchange, primary_symbol, "1m")),
             asyncio.create_task(watch_trades_stream(exchange, primary_symbol)),
         ]
 
-        # All symbols get batch ticker updates
-        if len(all_symbols) > 1:
-            tasks.append(asyncio.create_task(watch_tickers(exchange, all_symbols)))
+        # Batch ticker for watchlist — exclude primary (already streamed individually above)
+        # to avoid duplicate updates and redundant connections.
+        other_symbols = [s for s in all_symbols if s != primary_symbol]
+        if other_symbols:
+            tasks.append(asyncio.create_task(watch_tickers(exchange, other_symbols)))
 
         await asyncio.gather(*tasks)
     except asyncio.CancelledError:
