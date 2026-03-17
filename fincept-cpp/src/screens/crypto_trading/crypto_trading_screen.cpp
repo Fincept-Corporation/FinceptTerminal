@@ -10,6 +10,7 @@
 #include <cmath>
 #include <ctime>
 #include <algorithm>
+#include <chrono>
 #include <thread>
 
 namespace fincept::crypto {
@@ -2002,51 +2003,92 @@ void CryptoTradingScreen::render_market_info_tab() {
         if (market_info_fetching_) {
             ImGui::TextColored(TEXT_DIM, "Loading market info...");
         } else {
-            ImGui::TextColored(TEXT_DIM, "No market info available (spot mode)");
+            // Not yet fetched — show a trigger hint
+            ImGui::TextColored(TEXT_DIM, "Fetching market info...");
         }
         return;
     }
 
     ImGui::Columns(2, "##mktinfo_cols", false);
 
+    // --- Fees (always available for any symbol) ---
+    ImGui::TextColored(TEXT_DIM, "Maker Fee");
+    if (market_info_.maker_fee > 0.0) {
+        std::snprintf(buf, sizeof(buf), "%.4f%%", market_info_.maker_fee * 100.0);
+        ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+    } else {
+        ImGui::TextColored(TEXT_DIM, "N/A");
+    }
+    ImGui::Spacing();
+
+    ImGui::TextColored(TEXT_DIM, "Taker Fee");
+    if (market_info_.taker_fee > 0.0) {
+        std::snprintf(buf, sizeof(buf), "%.4f%%", market_info_.taker_fee * 100.0);
+        ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+    } else {
+        ImGui::TextColored(TEXT_DIM, "N/A");
+    }
+    ImGui::Spacing();
+
+    // --- Perp-only fields (show N/A for spot) ---
     ImGui::TextColored(TEXT_DIM, "Funding Rate");
-    std::snprintf(buf, sizeof(buf), "%.4f%%", market_info_.funding_rate * 100);
-    ImVec4 fr_col = market_info_.funding_rate >= 0 ? MARKET_GREEN : MARKET_RED;
-    ImGui::TextColored(fr_col, "%s", buf);
+    if (market_info_.funding_rate != 0.0) {
+        std::snprintf(buf, sizeof(buf), "%.4f%%", market_info_.funding_rate * 100.0);
+        ImVec4 fr_col = market_info_.funding_rate >= 0 ? MARKET_GREEN : MARKET_RED;
+        ImGui::TextColored(fr_col, "%s", buf);
+    } else {
+        ImGui::TextColored(TEXT_DIM, "N/A (spot)");
+    }
     ImGui::Spacing();
 
     ImGui::TextColored(TEXT_DIM, "Mark Price");
-    std::snprintf(buf, sizeof(buf), "%.2f", market_info_.mark_price);
-    ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+    if (market_info_.mark_price > 0.0) {
+        std::snprintf(buf, sizeof(buf), "%.4f", market_info_.mark_price);
+        ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+    } else {
+        ImGui::TextColored(TEXT_DIM, "N/A (spot)");
+    }
     ImGui::Spacing();
 
     ImGui::TextColored(TEXT_DIM, "Index Price");
-    std::snprintf(buf, sizeof(buf), "%.2f", market_info_.index_price);
-    ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+    if (market_info_.index_price > 0.0) {
+        std::snprintf(buf, sizeof(buf), "%.4f", market_info_.index_price);
+        ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+    } else {
+        ImGui::TextColored(TEXT_DIM, "N/A (spot)");
+    }
 
     ImGui::NextColumn();
 
     ImGui::TextColored(TEXT_DIM, "Open Interest");
-    std::snprintf(buf, sizeof(buf), "%.2f", market_info_.open_interest);
-    ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+    if (market_info_.open_interest > 0.0) {
+        std::snprintf(buf, sizeof(buf), "%.2f", market_info_.open_interest);
+        ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+    } else {
+        ImGui::TextColored(TEXT_DIM, "N/A (spot)");
+    }
     ImGui::Spacing();
 
     ImGui::TextColored(TEXT_DIM, "OI Value (USD)");
-    double oi_val = market_info_.open_interest_value;
-    if (oi_val > 1e9) std::snprintf(buf, sizeof(buf), "%.2fB", oi_val / 1e9);
-    else if (oi_val > 1e6) std::snprintf(buf, sizeof(buf), "%.2fM", oi_val / 1e6);
-    else std::snprintf(buf, sizeof(buf), "%.0f", oi_val);
-    ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+    if (market_info_.open_interest_value > 0.0) {
+        const double oi_val = market_info_.open_interest_value;
+        if (oi_val > 1e9)      std::snprintf(buf, sizeof(buf), "%.2fB", oi_val / 1e9);
+        else if (oi_val > 1e6) std::snprintf(buf, sizeof(buf), "%.2fM", oi_val / 1e6);
+        else                   std::snprintf(buf, sizeof(buf), "%.0f",  oi_val);
+        ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+    } else {
+        ImGui::TextColored(TEXT_DIM, "N/A (spot)");
+    }
     ImGui::Spacing();
 
     if (market_info_.next_funding_time > 0) {
         ImGui::TextColored(TEXT_DIM, "Next Funding");
-        int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
-        int64_t diff_s = (market_info_.next_funding_time - now_ms) / 1000;
+        const int64_t diff_s = (market_info_.next_funding_time - now_ms) / 1000;
         if (diff_s > 0) {
-            int h = (int)(diff_s / 3600);
-            int m = (int)((diff_s % 3600) / 60);
+            const int h = static_cast<int>(diff_s / 3600);
+            const int m = static_cast<int>((diff_s % 3600) / 60);
             std::snprintf(buf, sizeof(buf), "%dh %dm", h, m);
         } else {
             std::snprintf(buf, sizeof(buf), "Now");
@@ -2055,6 +2097,10 @@ void CryptoTradingScreen::render_market_info_tab() {
     }
 
     ImGui::Columns(1);
+
+    // Refresh hint
+    ImGui::Spacing();
+    ImGui::TextColored(TEXT_DIM, "(refreshes every %.0fs)", MARKET_INFO_INTERVAL);
 }
 
 void CryptoTradingScreen::async_fetch_market_info() {
@@ -2063,21 +2109,40 @@ void CryptoTradingScreen::async_fetch_market_info() {
 
     const std::string sym = selected_symbol_;
     launch_async(std::thread([this, sym]() {
-        try {
-            auto& svc = trading::ExchangeService::instance();
-            auto fr = svc.fetch_funding_rate(sym);
-            auto oi = svc.fetch_open_interest(sym);
+        auto& svc = trading::ExchangeService::instance();
 
-            std::lock_guard<std::mutex> lock(data_mutex_);
-            market_info_.funding_rate = fr.funding_rate;
-            market_info_.mark_price = fr.mark_price;
-            market_info_.index_price = fr.index_price;
-            market_info_.next_funding_time = fr.next_funding_timestamp;
-            market_info_.open_interest = oi.open_interest;
-            market_info_.open_interest_value = oi.open_interest_value;
-            market_info_.has_data = true;
+        // Fetch funding rate + OI (perp only — scripts return nulls gracefully for spot)
+        const auto fr = svc.fetch_funding_rate(sym);
+        const auto oi = svc.fetch_open_interest(sym);
+
+        // Fetch trading fees — always available for any symbol on any exchange.
+        // fetch_trading_fees.py with a symbol arg returns: {"symbol":..., "maker":..., "taker":...}
+        double maker_fee = 0.0;
+        double taker_fee = 0.0;
+        try {
+            const auto fees_j = svc.fetch_trading_fees(sym);
+            if (fees_j.contains("data")) {
+                const auto& d = fees_j["data"];
+                if (d.contains("maker") && !d["maker"].is_null())
+                    maker_fee = d["maker"].get<double>();
+                if (d.contains("taker") && !d["taker"].is_null())
+                    taker_fee = d["taker"].get<double>();
+            }
         } catch (const std::exception& e) {
-            LOG_DEBUG("CryptoTrading", "Market info fetch failed: %s", e.what());
+            LOG_DEBUG(TAG, "Trading fees fetch failed: %s", e.what());
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            market_info_.funding_rate       = fr.funding_rate;
+            market_info_.mark_price         = fr.mark_price;
+            market_info_.index_price        = fr.index_price;
+            market_info_.next_funding_time  = fr.next_funding_timestamp;
+            market_info_.open_interest      = oi.open_interest;
+            market_info_.open_interest_value = oi.open_interest_value;
+            market_info_.maker_fee          = maker_fee;
+            market_info_.taker_fee          = taker_fee;
+            market_info_.has_data           = true;  // always mark ready after fetch attempt
         }
         market_info_fetching_ = false;
     }));
