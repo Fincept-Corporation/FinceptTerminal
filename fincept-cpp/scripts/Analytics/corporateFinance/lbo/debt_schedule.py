@@ -136,7 +136,7 @@ class DebtSchedule:
         }
 
 def main():
-    """CLI entry point - outputs JSON for Tauri integration"""
+    """CLI entry point - outputs JSON for C++ integration"""
     import json
 
     if len(sys.argv) < 2:

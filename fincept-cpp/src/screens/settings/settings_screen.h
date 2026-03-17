@@ -11,6 +11,7 @@
 #include "sections/storage_cache_section.h"
 #include "sections/notifications_section.h"
 #include "sections/general_section.h"
+#include "sections/voice_section.h"
 
 namespace fincept::settings {
 
@@ -28,6 +29,7 @@ private:
     TerminalAppearanceSection appearance_;
     StorageCacheSection storage_;
     NotificationsSection notifications_;
+    VoiceSection voice_;
     GeneralSection general_;
 
     // Status bar message

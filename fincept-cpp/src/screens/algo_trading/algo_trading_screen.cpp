@@ -1,31 +1,39 @@
 #include "algo_trading_screen.h"
 #include "algo_service.h"
 #include "storage/database.h"
+#include "ui/yoga_helpers.h"
+#include "core/notification.h"
 #include <thread>
 
 namespace fincept::algo {
 
 void AlgoTradingScreen::init() {
-    load_strategies();
-    load_deployments();
-    refresh_running_count();
+    try {
+        load_strategies();
+        load_deployments();
+        refresh_running_count();
+    } catch (const std::exception& e) {
+        status_msg_ = std::string("Init error: ") + e.what();
+    }
     initialized_ = true;
 }
 
 void AlgoTradingScreen::render() {
     if (!initialized_) init();
 
-    ImVec2 avail = ImGui::GetContentRegionAvail();
-    float w = avail.x;
-    float h = avail.y;
+    ui::ScreenFrame frame("##algo_trading_screen", ImVec2(0, 0),
+                          ImVec4(0.05f, 0.05f, 0.07f, 1.0f));
+    if (!frame.begin()) { frame.end(); return; }
 
-    // Top navigation bar (sub-view tabs)
-    float nav_h = 40.0f;
+    const float w = frame.width();
+    const float h = frame.height();
+
+    // Yoga vstack: nav(40) | content(flex) | status(28)
+    auto vstack = ui::vstack_layout(w, h, {40.0f, -1, 28.0f});
+
     render_top_nav(w);
 
-    // Status bar at bottom
-    float status_h = 28.0f;
-    float content_h = h - nav_h - status_h;
+    const float content_h = vstack.heights[1];
 
     // Content area
     ImGui::BeginChild("##algo_content", ImVec2(w, content_h), false);
@@ -39,6 +47,8 @@ void AlgoTradingScreen::render() {
     ImGui::EndChild();
 
     render_status_bar(w);
+
+    frame.end();
 }
 
 void AlgoTradingScreen::render_top_nav(float w) {
@@ -603,8 +613,12 @@ void AlgoTradingScreen::render_library(float w, float h) {
                         std::lock_guard lock(data_mutex_);
                         backtest_result_ = result;
                         status_msg_ = "Python backtest complete";
+                        core::notify::send("Backtest Complete",
+                            "Strategy backtest finished successfully",
+                            core::NotifyLevel::Success);
                     } catch (const std::exception& e) {
                         status_msg_ = std::string("Backtest failed: ") + e.what();
+                        core::notify::send("Backtest Failed", e.what(), core::NotifyLevel::Error);
                     }
                     backtest_running_ = false;
                 }).detach();
@@ -1050,8 +1064,12 @@ void AlgoTradingScreen::deploy_strategy(const std::string& strategy_id,
             auto dep_id = AlgoService::instance().deploy_strategy(
                 sid, symbol, mode, prov, tf, qty);
             status_msg_ = "Deployed: " + dep_id;
+            core::notify::send("Strategy Deployed",
+                "Deployment started: " + dep_id.substr(0, 8),
+                core::NotifyLevel::Success);
         } catch (const std::exception& e) {
             status_msg_ = std::string("Deploy failed: ") + e.what();
+            core::notify::send("Deploy Failed", e.what(), core::NotifyLevel::Error);
         }
         load_deployments();
     }).detach();
@@ -1063,6 +1081,10 @@ void AlgoTradingScreen::stop_deployment(const std::string& deployment_id) {
     std::thread([this, did]() {
         bool ok = AlgoService::instance().stop_deployment(did);
         status_msg_ = ok ? "Deployment stopped" : "Failed to stop deployment";
+        if (ok) {
+            core::notify::send("Deployment Stopped",
+                "Strategy deployment halted", core::NotifyLevel::Warning);
+        }
         load_deployments();
     }).detach();
 }

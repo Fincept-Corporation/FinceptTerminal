@@ -84,6 +84,7 @@ struct PtPortfolio {
     double leverage = 1.0;
     std::string margin_mode = "cross"; // "cross" | "isolated"
     double fee_rate = 0.001;
+    std::string exchange;              // broker/exchange ID — isolates portfolios per exchange
     std::string created_at;
 };
 

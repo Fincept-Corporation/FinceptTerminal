@@ -20,6 +20,7 @@ void MCPProvider::register_tool(ToolDef tool) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto name = tool.name;
     tools_.emplace(std::move(name), std::move(tool));
+    ++generation_;
 }
 
 void MCPProvider::register_tools(std::vector<ToolDef> tools) {
@@ -28,11 +29,13 @@ void MCPProvider::register_tools(std::vector<ToolDef> tools) {
         auto name = t.name;
         tools_.emplace(std::move(name), std::move(t));
     }
+    ++generation_;
 }
 
 void MCPProvider::unregister_tool(const std::string& name) {
     std::lock_guard<std::mutex> lock(mutex_);
     tools_.erase(name);
+    ++generation_;
 }
 
 // ============================================================================
@@ -45,6 +48,7 @@ void MCPProvider::set_tool_enabled(const std::string& name, bool enabled) {
         disabled_tools_.erase(name);
     else
         disabled_tools_.insert(name);
+    ++generation_;
 }
 
 bool MCPProvider::is_tool_enabled(const std::string& name) const {
@@ -130,10 +134,14 @@ ToolResult MCPProvider::call_tool(const std::string& name, const json& args) {
         handler = it->second.handler;
     }
 
+    // Normalize args: handlers expect a JSON object, never null/array/etc.
+    // This prevents crashes in handlers that call args.value() on non-objects.
+    const json& safe_args = args.is_object() ? args : json::object();
+
     // Execute outside the lock to avoid deadlocks
     try {
         LOG_DEBUG(TAG_PROVIDER, "Calling tool: %s", name.c_str());
-        return handler(args);
+        return handler(safe_args);
     } catch (const std::exception& e) {
         LOG_ERROR(TAG_PROVIDER, "Tool '%s' threw exception: %s", name.c_str(), e.what());
         return ToolResult::fail(std::string("Tool execution error: ") + e.what());
@@ -181,6 +189,16 @@ void MCPProvider::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     tools_.clear();
     disabled_tools_.clear();
+    ++generation_;
+}
+
+// ============================================================================
+// Generation Counter
+// ============================================================================
+
+uint64_t MCPProvider::generation() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return generation_;
 }
 
 } // namespace fincept::mcp

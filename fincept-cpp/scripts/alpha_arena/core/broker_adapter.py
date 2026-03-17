@@ -1,7 +1,7 @@
 """
 Broker Adapter for Alpha Arena
 
-Provides unified access to multiple exchange adapters via Tauri commands.
+Provides unified access to multiple exchange adapters via C++ commands.
 Extends market data capabilities to support live trading when enabled.
 """
 
@@ -741,7 +741,7 @@ class BrokerAdapter:
         Execute order on live exchange.
 
         NOTE: Live trading requires proper API integration.
-        This method would typically call Tauri commands that
+        This method would typically call C++ commands that
         route to the TypeScript broker adapters.
         """
         logger.warning(f"Live execution not implemented for {self.broker_id}")

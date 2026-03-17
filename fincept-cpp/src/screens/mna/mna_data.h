@@ -24,8 +24,8 @@ public:
 
     // State queries
     bool is_loading() const { return loading_.load(); }
-    bool has_result() const;
-    const std::string& error() const;
+    bool has_result() const { return has_result_.load(); }
+    std::string error() const;
 
     // Access the JSON result (caller must hold mutex)
     std::mutex& mutex() { return mutex_; }
@@ -35,11 +35,11 @@ public:
     void clear();
 
 private:
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::atomic<bool> loading_{false};
     nlohmann::json result_;
     std::string error_;
-    bool has_result_ = false;
+    std::atomic<bool> has_result_{false};
 
     void parse_result(const std::string& output);
 };

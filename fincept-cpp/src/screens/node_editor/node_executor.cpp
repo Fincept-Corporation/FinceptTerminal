@@ -7,6 +7,7 @@
 #include "python/python_runner.h"
 #include "storage/cache_service.h"
 #include "screens/agent_studio/agent_service.h"
+#include "storage/database.h"
 #include "core/logger.h"
 #include <chrono>
 #include <thread>
@@ -172,7 +173,13 @@ ExecutionResult NodeExecutor::exec_data_source(const NodeInstance& node, const j
         } else {
             // Fallback: try Fincept API via HTTP
             auto& http = http::HttpClient::instance();
-            auto resp = http.get("https://api.fincept.in/api/market/quote/" + symbol);
+            http::Headers api_hdrs;
+            api_hdrs["accept"] = "application/json";
+            auto api_key = db::ops::get_setting("fincept_api_key");
+            if (api_key.has_value() && !api_key->empty()) {
+                api_hdrs["X-API-Key"] = *api_key;
+            }
+            auto resp = http.get("https://api.fincept.in/market/price/" + symbol, api_hdrs);
             if (resp.success) {
                 result.data = resp.json_body();
                 result.display_text = "Fetched quote for " + symbol + " via API";

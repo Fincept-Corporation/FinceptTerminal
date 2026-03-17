@@ -34,7 +34,7 @@ Fields per item:
   prodajni_tecaj  — selling rate
   srednji_tecaj   — middle/reference rate
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

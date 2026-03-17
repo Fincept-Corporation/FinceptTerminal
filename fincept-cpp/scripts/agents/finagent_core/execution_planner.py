@@ -713,7 +713,7 @@ def _fallback_plan_from_query(query: str) -> Dict[str, Any]:
     return {"success": True, "plan": result, "generated_by": "fallback"}
 
 
-# Entry points for Tauri commands
+# Entry points for C++ commands
 def create_stock_analysis_plan(symbol: str) -> Dict[str, Any]:
     """Create a stock analysis plan"""
     plan = ExecutionPlanner.stock_analysis_plan(symbol)

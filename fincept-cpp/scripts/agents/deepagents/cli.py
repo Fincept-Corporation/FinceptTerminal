@@ -1,6 +1,6 @@
 """
 DeepAgents CLI - Command-line interface for Fincept DeepAgents
-Exposes DeepAgents functionality to Tauri/Rust backend
+Exposes DeepAgents functionality to C++ backend
 
 Dual-path routing:
   - Tool-calling LLMs (OpenAI, Anthropic, Google, Groq, etc.) -> deepagents library

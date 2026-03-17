@@ -4,6 +4,7 @@
 
 #include "markets_types.h"
 #include <mutex>
+#include <shared_mutex>
 #include <atomic>
 #include <string>
 #include <vector>
@@ -19,7 +20,7 @@ public:
     // Fetch all categories at once
     void fetch_all(const std::vector<MarketCategory>& categories);
 
-    std::mutex& mutex() { return mutex_; }
+    std::shared_mutex& mutex() { return mutex_; }
 
     bool is_loading(const std::string& category) const;
     bool has_data(const std::string& category) const;
@@ -29,7 +30,7 @@ public:
     const std::vector<MarketQuote>& quotes(const std::string& category) const;
 
 private:
-    std::mutex mutex_;
+    mutable std::shared_mutex mutex_;
 
     struct CategoryState {
         std::atomic<bool> loading{false};

@@ -15,6 +15,7 @@ enum class Section {
     Appearance,
     Storage,
     Notifications,
+    Voice,
     General
 };
 
@@ -119,22 +120,55 @@ inline const std::vector<TimezoneEntry>& timezone_list() {
     return zones;
 }
 
-// Notification provider definition
+// Notification provider config field definition
+struct NotifFieldDef {
+    const char* key;
+    const char* label;
+    const char* placeholder;
+    bool is_password;
+    bool required;
+};
+
+// Notification provider definition — mirrors Tauri NotificationProvider
 struct NotificationProviderDef {
     const char* id;
     const char* label;
-    const char* placeholder;
-    bool uses_webhook;  // true = webhook URL, false = API key
+    std::vector<NotifFieldDef> fields;
 };
 
 inline const std::vector<NotificationProviderDef>& notification_providers() {
     static const std::vector<NotificationProviderDef> providers = {
-        {"pushbullet", "Pushbullet",  "Access Token",  false},
-        {"ifttt",      "IFTTT",       "Webhook Key",   true},
-        {"discord",    "Discord",     "Webhook URL",   true},
-        {"slack",      "Slack",       "Webhook URL",   true},
-        {"email",      "Email",       "SMTP Config",   false},
-        {"webhook",    "Custom Webhook", "URL",         true},
+        // Tier 1 — most popular
+        {"telegram",   "Telegram",    {{"bot_token", "Bot Token", "123456:ABC-DEF...", true, true},
+                                        {"chat_id",   "Chat ID",   "e.g. 123456789",  false, true}}},
+        {"discord",    "Discord",     {{"webhook_url", "Webhook URL", "https://discord.com/api/webhooks/...", false, true}}},
+        {"whatsapp",   "WhatsApp",    {{"phone_id", "Phone Number ID", "e.g. 123456", false, true},
+                                        {"token",    "Access Token",    "Bearer token",  true,  true}}},
+        {"slack",      "Slack",       {{"webhook_url", "Webhook URL", "https://hooks.slack.com/services/...", false, true}}},
+        {"pushover",   "Pushover",    {{"user_key", "User Key", "u...", true, true},
+                                        {"api_token","App Token","a...", true, true}}},
+        {"ntfy",       "ntfy",        {{"server_url", "Server URL", "https://ntfy.sh", false, true},
+                                        {"topic",     "Topic",      "fincept-alerts",  false, true}}},
+        {"email",      "Email",       {{"smtp_host","SMTP Host","smtp.gmail.com",false,true},
+                                        {"smtp_port","Port","587",false,true},
+                                        {"username", "Username","user@example.com",false,true},
+                                        {"password", "Password","app password",true,true},
+                                        {"to",       "To","recipient@example.com",false,true}}},
+        // Tier 2 — power user
+        {"teams",      "Teams",       {{"webhook_url", "Webhook URL", "https://outlook.office.com/webhook/...", false, true}}},
+        {"pushbullet", "Pushbullet",  {{"access_token", "Access Token", "o.xxx...", true, true}}},
+        {"ifttt",      "IFTTT",       {{"webhook_key", "Webhook Key", "xxx...", true, true},
+                                        {"event_name", "Event Name", "fincept_alert", false, true}}},
+        {"gotify",     "Gotify",      {{"server_url", "Server URL", "https://gotify.example.com", false, true},
+                                        {"app_token", "App Token",  "Axxx...", true, true}}},
+        // Tier 3 — specialized
+        {"pagerduty",  "PagerDuty",   {{"routing_key", "Routing Key", "xxx...", true, true}}},
+        {"opsgenie",   "OpsGenie",    {{"api_key", "API Key", "xxx...", true, true}}},
+        {"twilio",     "Twilio SMS",  {{"account_sid","Account SID","ACxxx",false,true},
+                                        {"auth_token", "Auth Token","xxx",true,true},
+                                        {"from_number","From Number","+1234567890",false,true},
+                                        {"to_number",  "To Number",  "+0987654321",false,true}}},
+        {"line",       "LINE Notify", {{"access_token", "Access Token", "xxx...", true, true}}},
     };
     return providers;
 }

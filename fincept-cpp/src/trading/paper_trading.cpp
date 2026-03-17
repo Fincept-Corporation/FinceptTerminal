@@ -35,7 +35,7 @@ static PtPortfolio read_portfolio_row(db::Statement& stmt) {
         stmt.col_text(0), stmt.col_text(1),
         stmt.col_double(2), stmt.col_double(3), stmt.col_text(4),
         stmt.col_double(5), stmt.col_text(6), stmt.col_double(7),
-        stmt.col_text(8)
+        stmt.col_text(8), stmt.col_text(9)
     };
 }
 
@@ -94,7 +94,8 @@ static PtTrade read_trade_row(db::Statement& stmt) {
 
 PtPortfolio pt_create_portfolio(const std::string& name, double balance,
                                  const std::string& currency, double leverage,
-                                 const std::string& margin_mode, double fee_rate) {
+                                 const std::string& margin_mode, double fee_rate,
+                                 const std::string& exchange) {
     auto& db = db::Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
 
@@ -103,7 +104,7 @@ PtPortfolio pt_create_portfolio(const std::string& name, double balance,
 
     auto stmt = db.prepare(
         "INSERT INTO pt_portfolios (id, name, initial_balance, balance, currency, leverage, "
-        "margin_mode, fee_rate, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)");
+        "margin_mode, fee_rate, exchange, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)");
     stmt.bind_text(1, id);
     stmt.bind_text(2, name);
     stmt.bind_double(3, balance);
@@ -112,10 +113,11 @@ PtPortfolio pt_create_portfolio(const std::string& name, double balance,
     stmt.bind_double(6, leverage);
     stmt.bind_text(7, margin_mode);
     stmt.bind_double(8, fee_rate);
-    stmt.bind_text(9, now);
+    stmt.bind_text(9, exchange);
+    stmt.bind_text(10, now);
     stmt.execute();
 
-    return PtPortfolio{id, name, balance, balance, currency, leverage, margin_mode, fee_rate, now};
+    return PtPortfolio{id, name, balance, balance, currency, leverage, margin_mode, fee_rate, exchange, now};
 }
 
 PtPortfolio pt_get_portfolio(const std::string& id) {
@@ -124,19 +126,38 @@ PtPortfolio pt_get_portfolio(const std::string& id) {
 
     auto stmt = db.prepare(
         "SELECT id, name, initial_balance, balance, currency, leverage, margin_mode, fee_rate, "
-        "created_at FROM pt_portfolios WHERE id = ?1");
+        "exchange, created_at FROM pt_portfolios WHERE id = ?1");
     stmt.bind_text(1, id);
     if (!stmt.step()) throw std::runtime_error("Portfolio not found: " + id);
     return read_portfolio_row(stmt);
 }
 
-std::vector<PtPortfolio> pt_list_portfolios() {
+std::optional<PtPortfolio> pt_find_portfolio(const std::string& name,
+                                              const std::string& exchange) {
     auto& db = db::Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
 
     auto stmt = db.prepare(
         "SELECT id, name, initial_balance, balance, currency, leverage, margin_mode, fee_rate, "
-        "created_at FROM pt_portfolios");
+        "exchange, created_at FROM pt_portfolios WHERE name = ?1 AND exchange = ?2 LIMIT 1");
+    stmt.bind_text(1, name);
+    stmt.bind_text(2, exchange);
+    if (!stmt.step()) return std::nullopt;
+    return read_portfolio_row(stmt);
+}
+
+std::vector<PtPortfolio> pt_list_portfolios(const std::string& exchange) {
+    auto& db = db::Database::instance();
+    std::lock_guard<std::recursive_mutex> lock(db.mutex());
+
+    std::string sql =
+        "SELECT id, name, initial_balance, balance, currency, leverage, margin_mode, fee_rate, "
+        "exchange, created_at FROM pt_portfolios";
+    if (!exchange.empty()) sql += " WHERE exchange = ?1";
+
+    auto stmt = db.prepare(sql.c_str());
+    if (!exchange.empty()) stmt.bind_text(1, exchange);
+
     std::vector<PtPortfolio> result;
     while (stmt.step()) result.push_back(read_portfolio_row(stmt));
     return result;
@@ -336,7 +357,7 @@ PtTrade pt_fill_order(const std::string& order_id, double fill_price,
         // 2. Get portfolio
         auto pf_stmt = db.prepare(
             "SELECT id, name, initial_balance, balance, currency, leverage, margin_mode, "
-            "fee_rate, created_at FROM pt_portfolios WHERE id = ?1");
+            "fee_rate, exchange, created_at FROM pt_portfolios WHERE id = ?1");
         pf_stmt.bind_text(1, order.portfolio_id);
         if (!pf_stmt.step()) throw std::runtime_error("Portfolio not found");
         PtPortfolio portfolio = read_portfolio_row(pf_stmt);

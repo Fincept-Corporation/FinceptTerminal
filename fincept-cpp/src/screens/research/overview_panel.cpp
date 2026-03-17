@@ -63,7 +63,7 @@ static void section_header(const char* label, ImVec4 color) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 void OverviewPanel::render(ResearchData& data, ChartPeriod& period) {
-    std::lock_guard<std::mutex> lock(data.mutex());
+    std::shared_lock<std::shared_mutex> lock(data.mutex());
     auto& si = data.stock_info();
     auto& q  = data.quote_data();
     auto& hist = data.historical();

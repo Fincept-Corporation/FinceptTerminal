@@ -62,6 +62,13 @@ public:
     /// Clear all registered tools
     void clear();
 
+    // ── Generation Counter ─────────────────────────────────────────────────
+
+    /// Monotonically increasing counter — incremented on any mutation
+    /// (register, unregister, enable, disable, clear).
+    /// Consumers (MCPService) use this to detect when their cache is stale.
+    uint64_t generation() const;
+
     MCPProvider(const MCPProvider&) = delete;
     MCPProvider& operator=(const MCPProvider&) = delete;
 
@@ -71,6 +78,7 @@ private:
     mutable std::mutex mutex_;
     std::unordered_map<std::string, ToolDef> tools_;
     std::unordered_set<std::string> disabled_tools_;
+    uint64_t generation_ = 0;
 };
 
 } // namespace fincept::mcp

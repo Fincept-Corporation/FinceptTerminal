@@ -63,6 +63,7 @@ private:
     // Tool cache
     std::vector<UnifiedTool> cached_tools_;
     std::chrono::steady_clock::time_point cache_time_;
+    uint64_t cached_generation_ = 0;   // provider generation at last refresh
     static constexpr int CACHE_TTL_MS = 5000;
 
     void refresh_cache();

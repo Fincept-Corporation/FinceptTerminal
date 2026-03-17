@@ -7,6 +7,7 @@
 #include "python/python_runner.h"
 #include "core/logger.h"
 #include "core/event_bus.h"
+#include "core/notification.h"
 #include <chrono>
 
 #ifdef _WIN32
@@ -354,6 +355,15 @@ std::vector<ExchangeInfo> ExchangeService::list_exchanges() {
         info.has_fetch_positions = e.value("has_fetch_positions", false);
         info.has_set_leverage = e.value("has_set_leverage", false);
         result.push_back(info);
+    }
+    return result;
+}
+
+std::vector<std::string> ExchangeService::list_exchange_ids() {
+    auto j = call_script("exchange/list_exchange_ids.py", {});
+    std::vector<std::string> result;
+    for (const auto& id : j["data"]["ids"]) {
+        if (id.is_string()) result.push_back(id.get<std::string>());
     }
     return result;
 }
@@ -972,6 +982,15 @@ void ExchangeService::ws_reader_loop() {
         // Continue reading from the new subprocess
         ws_reader_loop();
         return;
+    }
+
+    // All reconnect attempts exhausted — notify user
+    if (ws_running_) {
+        LOG_ERROR(TAG, "WS permanently disconnected after %d retries", WS_MAX_RECONNECTS);
+        core::notify::send("Connection Lost",
+            "WebSocket disconnected from " + exchange_id_ + " after " +
+            std::to_string(WS_MAX_RECONNECTS) + " retries",
+            core::NotifyLevel::Error);
     }
 }
 

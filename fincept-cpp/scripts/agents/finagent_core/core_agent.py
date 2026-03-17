@@ -927,5 +927,5 @@ class CoreAgentBuilder:
 
 
 # NOTE: All dispatch logic lives in finagent_core/main.py which is the
-# single entry point called by Rust/Tauri. Do not add a separate main()
+# single entry point called by C++. Do not add a separate main()
 # here — it creates confusion and duplicated logic.

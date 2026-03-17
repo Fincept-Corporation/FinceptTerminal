@@ -4,6 +4,7 @@
 #include "trading/paper_trading.h"
 #include "trading/order_matcher.h"
 #include "core/logger.h"
+#include "core/notification.h"
 #include <imgui.h>
 #include <cstdio>
 #include <cstring>
@@ -112,6 +113,9 @@ void CryptoTradingScreen::init() {
     svc.set_exchange(exchange_id_);
     LOG_INFO(TAG, "Exchange set to: %s", exchange_id_.c_str());
 
+    // Load stored API credentials for this exchange (if any)
+    load_exchange_credentials();
+
     // Build watchlist entries
     auto symbols = default_watchlist_symbols();
     watchlist_.clear();
@@ -139,6 +143,23 @@ void CryptoTradingScreen::init() {
     // Start the price feed for watched symbols (drives OrderMatcher + position updates)
     if (!svc.is_feed_running()) {
         svc.start_price_feed(PRICE_FEED_POLL_SEC);
+    }
+
+    // Fetch available exchanges from ccxt (async, non-blocking)
+    if (!exchanges_loaded_ && !exchanges_fetching_) {
+        exchanges_fetching_ = true;
+        launch_async(std::thread([this]() {
+            try {
+                auto ids = trading::ExchangeService::instance().list_exchange_ids();
+                LOG_INFO(TAG, "Loaded %d exchange IDs from ccxt", (int)ids.size());
+                std::lock_guard<std::mutex> lock(data_mutex_);
+                available_exchanges_ = std::move(ids);
+                exchanges_loaded_ = true;
+            } catch (const std::exception& e) {
+                LOG_ERROR(TAG, "Failed to load exchange IDs: %s", e.what());
+            }
+            exchanges_fetching_ = false;
+        }));
     }
 
     initialized_ = true;
@@ -186,49 +207,35 @@ void CryptoTradingScreen::init() {
 }
 
 void CryptoTradingScreen::load_portfolio() {
-    LOG_INFO(TAG, "Loading paper trading portfolio...");
+    LOG_INFO(TAG, "Loading paper trading portfolio for exchange: %s", exchange_id_.c_str());
 
     try {
-        // Try to find existing crypto paper trading portfolio
-        auto portfolios = trading::pt_list_portfolios();
-        LOG_INFO(TAG, "Found %d existing portfolios", (int)portfolios.size());
+        // Reset state so stale data from previous exchange doesn't leak
+        portfolio_id_.clear();
+        portfolio_ = {};
+        positions_.clear();
+        orders_.clear();
+        trades_.clear();
+        stats_ = {};
+        portfolio_loaded_ = false;
 
-        for (auto& p : portfolios) {
-            LOG_DEBUG(TAG, "  Portfolio: id=%s name='%s' balance=%.2f",
-                      p.id.c_str(), p.name.c_str(), p.balance);
-            if (p.name == "Crypto Paper Trading") {
-                portfolio_ = p;
-                portfolio_id_ = p.id;
-                LOG_INFO(TAG, "Using existing portfolio: %s (balance=%.2f)",
-                         portfolio_id_.c_str(), portfolio_.balance);
-                break;
-            }
+        // Find portfolio scoped to this exchange
+        auto found = trading::pt_find_portfolio("Crypto Paper Trading", exchange_id_);
+        if (found) {
+            portfolio_ = *found;
+            portfolio_id_ = found->id;
+            LOG_INFO(TAG, "Using existing portfolio: %s (exchange=%s, balance=%.2f)",
+                     portfolio_id_.c_str(), exchange_id_.c_str(), portfolio_.balance);
         }
 
-        // Create if not found
+        // Create if not found for this exchange
         if (portfolio_id_.empty()) {
             portfolio_ = trading::pt_create_portfolio(
-                "Crypto Paper Trading", DEFAULT_PAPER_BALANCE, "USDT", 1.0, "cross", 0.001);
+                "Crypto Paper Trading", DEFAULT_PAPER_BALANCE, "USDT",
+                1.0, "cross", 0.001, exchange_id_);
             portfolio_id_ = portfolio_.id;
-            LOG_INFO(TAG, "Created new portfolio: %s (balance=%.2f)",
-                     portfolio_id_.c_str(), portfolio_.balance);
-        }
-
-        // Cleanup: delete empty portfolios (not ours) to prevent DB bloat
-        if (portfolios.size() > PORTFOLIO_CLEANUP_THRESH) {
-            int cleaned = 0;
-            for (const auto& p : portfolios) {
-                if (p.id == portfolio_id_) continue;
-                auto p_trades = trading::pt_get_trades(p.id, 1);
-                auto p_positions = trading::pt_get_positions(p.id);
-                if (p_trades.empty() && p_positions.empty()) {
-                    trading::pt_delete_portfolio(p.id);
-                    cleaned++;
-                }
-            }
-            if (cleaned > 0) {
-                LOG_INFO(TAG, "Cleaned up %d empty portfolios", cleaned);
-            }
+            LOG_INFO(TAG, "Created new portfolio: %s (exchange=%s, balance=%.2f)",
+                     portfolio_id_.c_str(), exchange_id_.c_str(), portfolio_.balance);
         }
 
         // Load positions, orders, trades, stats from DB
@@ -438,18 +445,37 @@ void CryptoTradingScreen::switch_exchange(const std::string& exchange_id) {
     all_markets_.clear();
     search_results_.clear();
 
+    // Load credentials for the new exchange
+    load_exchange_credentials();
+    live_data_loaded_ = false;
+
     // Clear all stale market data from previous exchange
     clear_market_data();
+
+    // Swap portfolio — each exchange gets its own isolated paper portfolio
+    // Unwatch symbols from old portfolio first
+    if (!portfolio_id_.empty()) {
+        svc.unwatch_symbol(selected_symbol_, portfolio_id_);
+        for (const auto& pos : positions_) {
+            svc.unwatch_symbol(pos.symbol, portfolio_id_);
+        }
+        trading::OrderMatcher::instance().clear_portfolio_orders(portfolio_id_);
+    }
+    load_portfolio();
 
     // Reset loading states
     ticker_loading_ = true;
     ob_loading_ = true;
     candles_loading_ = true;
 
-    // Re-watch the selected symbol BEFORE starting the feed so the first
-    // poll cycle has something to fetch (avoids one empty iteration).
+    // Re-watch the selected symbol with the NEW portfolio
     if (!portfolio_id_.empty()) {
         svc.watch_symbol(selected_symbol_, portfolio_id_);
+        for (const auto& pos : positions_) {
+            if (pos.symbol != selected_symbol_) {
+                svc.watch_symbol(pos.symbol, portfolio_id_);
+            }
+        }
     }
     svc.start_price_feed(PRICE_FEED_POLL_SEC);
 
@@ -833,6 +859,9 @@ void CryptoTradingScreen::render() {
 
     render_status_bar(W, vstack.heights[3]);
 
+    // Credentials popup (rendered outside frame to overlay properly)
+    render_credentials_popup();
+
     frame.end();
 
     // Periodic refreshes — WS handles ticker/orderbook/candles in real-time,
@@ -866,6 +895,17 @@ void CryptoTradingScreen::render() {
         refresh_portfolio_data();
     }
 
+    // Live data refresh (positions, orders, balance from exchange API)
+    if (trading_mode_ == TradingMode::Live && has_credentials_) {
+        live_data_timer_ += dt;
+        if (live_data_timer_ >= LIVE_DATA_REFRESH_INTERVAL) {
+            live_data_timer_ = 0;
+            async_fetch_live_positions();
+            async_fetch_live_orders();
+            async_fetch_live_balance();
+        }
+    }
+
     // Market info refresh (every 30s)
     market_info_timer_ += dt;
     if (market_info_timer_ >= MARKET_INFO_INTERVAL) {
@@ -897,22 +937,64 @@ void CryptoTradingScreen::render_top_nav(float w, float h) {
     ImGui::TextColored(BORDER_BRIGHT, "|");
     ImGui::SameLine(0, 12);
 
-    // Exchange selector
+    // Exchange selector — dynamic list from ccxt (with search filter)
     ImGui::TextColored(TEXT_DIM, "Exchange:");
     ImGui::SameLine(0, 4);
-    ImGui::PushItemWidth(100);
+    ImGui::PushItemWidth(140);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
-    static const char* exchanges[] = {"binance", "kraken", "bybit", "okx", "coinbase"};
-    // Find current index from exchange_id_ (not static — stays in sync)
-    int ex_idx = 0;
-    for (int i = 0; i < 5; ++i) {
-        if (exchange_id_ == exchanges[i]) { ex_idx = i; break; }
+
+    if (exchanges_loaded_) {
+        if (ImGui::BeginCombo("##exchange", exchange_id_.c_str())) {
+            ImGui::PushItemWidth(-1);
+            ImGui::InputTextWithHint("##ex_filter", "Filter...",
+                                     exchange_filter_, sizeof(exchange_filter_));
+            ImGui::PopItemWidth();
+            ImGui::Separator();
+
+            std::string filter(exchange_filter_);
+            for (auto& c : filter) c = (char)std::tolower((unsigned char)c);
+
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            for (const auto& ex_id : available_exchanges_) {
+                if (!filter.empty() && ex_id.find(filter) == std::string::npos)
+                    continue;
+                bool selected = (ex_id == exchange_id_);
+                if (ImGui::Selectable(ex_id.c_str(), selected)) {
+                    switch_exchange(ex_id);
+                    exchange_filter_[0] = '\0';
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+    } else {
+        ImGui::BeginDisabled();
+        if (ImGui::BeginCombo("##exchange",
+                exchanges_fetching_ ? "Loading..." : exchange_id_.c_str())) {
+            ImGui::EndCombo();
+        }
+        ImGui::EndDisabled();
     }
-    if (ImGui::Combo("##exchange", &ex_idx, exchanges, 5)) {
-        switch_exchange(exchanges[ex_idx]);
-    }
+
     ImGui::PopStyleColor();
     ImGui::PopItemWidth();
+
+    // API key indicator + settings button
+    ImGui::SameLine(0, 6);
+    if (has_credentials_) {
+        ImGui::TextColored(MARKET_GREEN, "[KEY]");
+    } else {
+        ImGui::TextColored(TEXT_DIM, "[NO KEY]");
+    }
+    ImGui::SameLine(0, 4);
+    ImGui::PushStyleColor(ImGuiCol_Button, BG_WIDGET);
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+    if (ImGui::SmallButton("API")) {
+        show_credentials_popup_ = true;
+        // Pre-fill from DB if we have stored credentials
+        load_exchange_credentials();
+    }
+    ImGui::PopStyleColor(2);
 
     ImGui::SameLine(0, 12);
     ImGui::TextColored(BORDER_BRIGHT, "|");
@@ -930,7 +1012,15 @@ void CryptoTradingScreen::render_top_nav(float w, float h) {
     bool is_live = (trading_mode_ == TradingMode::Live);
     ImGui::PushStyleColor(ImGuiCol_Button, is_live ? ImVec4(0.7f, 0.1f, 0.1f, 1.0f) : BG_WIDGET);
     ImGui::PushStyleColor(ImGuiCol_Text, is_live ? TEXT_PRIMARY : TEXT_DIM);
-    if (ImGui::SmallButton("LIVE")) trading_mode_ = TradingMode::Live;
+    if (ImGui::SmallButton("LIVE")) {
+        trading_mode_ = TradingMode::Live;
+        // Trigger initial live data fetch when switching to live mode
+        if (has_credentials_ && !live_data_loaded_) {
+            async_fetch_live_balance();
+            async_fetch_live_positions();
+            async_fetch_live_orders();
+        }
+    }
     ImGui::PopStyleColor(2);
 
     // Right side: mode badge + balance
@@ -949,6 +1039,8 @@ void CryptoTradingScreen::render_top_nav(float w, float h) {
         char bal_buf[32];
         if (is_paper) {
             std::snprintf(bal_buf, sizeof(bal_buf), "%.2f %s", portfolio_.balance, portfolio_.currency.c_str());
+        } else if (has_credentials_ && live_equity_ > 0.0) {
+            std::snprintf(bal_buf, sizeof(bal_buf), "%.2f USDT", live_equity_);
         } else {
             std::snprintf(bal_buf, sizeof(bal_buf), "-- (Live)");
         }
@@ -1615,22 +1707,39 @@ void CryptoTradingScreen::render_bottom_panel(float w, float h) {
         ImGui::PopStyleColor(2);
     }
 
-    // Count badges (paper mode only — live data would come from exchange)
-    if (trading_mode_ == TradingMode::Paper) {
+    // Count badges
+    {
         std::lock_guard<std::mutex> lock(data_mutex_);
         ImGui::SameLine(0, 8);
-        if (!positions_.empty()) {
-            char badge[16];
-            std::snprintf(badge, sizeof(badge), "[%d pos]", (int)positions_.size());
-            ImGui::TextColored(ACCENT, "%s", badge);
-            ImGui::SameLine(0, 4);
-        }
-        int pending = 0;
-        for (auto& o : orders_) if (o.status == "pending") pending++;
-        if (pending > 0) {
-            char badge[16];
-            std::snprintf(badge, sizeof(badge), "[%d ord]", pending);
-            ImGui::TextColored(WARNING, "%s", badge);
+
+        if (trading_mode_ == TradingMode::Live && has_credentials_) {
+            if (!live_positions_.empty()) {
+                char badge[16];
+                std::snprintf(badge, sizeof(badge), "[%d pos]", (int)live_positions_.size());
+                ImGui::TextColored(ACCENT, "%s", badge);
+                ImGui::SameLine(0, 4);
+            }
+            int open_count = 0;
+            for (auto& o : live_orders_) if (o.status == "open") open_count++;
+            if (open_count > 0) {
+                char badge[16];
+                std::snprintf(badge, sizeof(badge), "[%d ord]", open_count);
+                ImGui::TextColored(WARNING, "%s", badge);
+            }
+        } else if (trading_mode_ == TradingMode::Paper) {
+            if (!positions_.empty()) {
+                char badge[16];
+                std::snprintf(badge, sizeof(badge), "[%d pos]", (int)positions_.size());
+                ImGui::TextColored(ACCENT, "%s", badge);
+                ImGui::SameLine(0, 4);
+            }
+            int pending = 0;
+            for (auto& o : orders_) if (o.status == "pending") pending++;
+            if (pending > 0) {
+                char badge[16];
+                std::snprintf(badge, sizeof(badge), "[%d ord]", pending);
+                ImGui::TextColored(WARNING, "%s", badge);
+            }
         }
     }
 
@@ -1659,9 +1768,82 @@ void CryptoTradingScreen::render_positions_tab() {
                        is_live ? "[LIVE POSITIONS]" : "[PAPER POSITIONS]");
 
     if (is_live) {
-        // Live mode — show positions from exchange
-        ImGui::TextColored(TEXT_DIM, "Live positions require API credentials.");
-        ImGui::TextColored(TEXT_DIM, "Configure in Settings > Exchange API.");
+        if (!has_credentials_) {
+            ImGui::TextColored(TEXT_DIM, "API credentials required for live trading.");
+            ImGui::SameLine(0, 8);
+            ImGui::PushStyleColor(ImGuiCol_Button, ACCENT_BG);
+            if (ImGui::SmallButton("Configure API Key")) {
+                show_credentials_popup_ = true;
+                load_exchange_credentials();
+            }
+            ImGui::PopStyleColor();
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(data_mutex_);
+
+        if (live_positions_fetching_) {
+            theme::LoadingSpinner("Fetching positions...");
+            return;
+        }
+
+        if (live_positions_.empty()) {
+            ImGui::TextColored(TEXT_DIM, "No open positions on %s", exchange_id_.c_str());
+            return;
+        }
+
+        ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY;
+
+        if (ImGui::BeginTable("##live_positions", 7, flags)) {
+            ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupColumn("Side", ImGuiTableColumnFlags_WidthStretch, 0.6f);
+            ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+            ImGui::TableSetupColumn("Entry", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("Current", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("PnL", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("Lev", ImGuiTableColumnFlags_WidthStretch, 0.5f);
+            ImGui::TableSetupScrollFreeze(0, 1);
+            ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, BG_DARKEST);
+            ImGui::TableHeadersRow();
+            ImGui::PopStyleColor();
+
+            char buf[32];
+            for (const auto& pos : live_positions_) {
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(TEXT_PRIMARY, "%s", pos.symbol.c_str());
+
+                ImGui::TableSetColumnIndex(1);
+                ImVec4 side_col = (pos.side == "long") ? MARKET_GREEN : MARKET_RED;
+                ImGui::TextColored(side_col, "%s", pos.side == "long" ? "LONG" : "SHORT");
+
+                ImGui::TableSetColumnIndex(2);
+                std::snprintf(buf, sizeof(buf), "%.4f", pos.quantity);
+                ImGui::TextColored(TEXT_SECONDARY, "%s", buf);
+
+                ImGui::TableSetColumnIndex(3);
+                std::snprintf(buf, sizeof(buf), "%.2f", pos.entry_price);
+                ImGui::TextColored(TEXT_SECONDARY, "%s", buf);
+
+                ImGui::TableSetColumnIndex(4);
+                std::snprintf(buf, sizeof(buf), "%.2f", pos.current_price);
+                ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+
+                ImGui::TableSetColumnIndex(5);
+                ImVec4 pnl_col = pos.unrealized_pnl >= 0 ? MARKET_GREEN : MARKET_RED;
+                std::snprintf(buf, sizeof(buf), "%s%.2f",
+                    pos.unrealized_pnl >= 0 ? "+" : "", pos.unrealized_pnl);
+                ImGui::TextColored(pnl_col, "%s", buf);
+
+                ImGui::TableSetColumnIndex(6);
+                std::snprintf(buf, sizeof(buf), "%.0fx", pos.leverage);
+                ImGui::TextColored(TEXT_DIM, "%s", buf);
+            }
+
+            ImGui::EndTable();
+        }
         return;
     }
 
@@ -1739,8 +1921,95 @@ void CryptoTradingScreen::render_orders_tab() {
                        is_live ? "[LIVE ORDERS]" : "[PAPER ORDERS]");
 
     if (is_live) {
-        ImGui::TextColored(TEXT_DIM, "Live orders require API credentials.");
-        ImGui::TextColored(TEXT_DIM, "Configure in Settings > Exchange API.");
+        if (!has_credentials_) {
+            ImGui::TextColored(TEXT_DIM, "API credentials required.");
+            ImGui::SameLine(0, 8);
+            ImGui::PushStyleColor(ImGuiCol_Button, ACCENT_BG);
+            if (ImGui::SmallButton("Configure##orders")) {
+                show_credentials_popup_ = true;
+                load_exchange_credentials();
+            }
+            ImGui::PopStyleColor();
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(data_mutex_);
+
+        if (live_orders_fetching_) {
+            theme::LoadingSpinner("Fetching orders...");
+            return;
+        }
+
+        if (live_orders_.empty()) {
+            ImGui::TextColored(TEXT_DIM, "No open orders on %s", exchange_id_.c_str());
+            return;
+        }
+
+        ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY;
+
+        if (ImGui::BeginTable("##live_orders", 7, flags)) {
+            ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("Side", ImGuiTableColumnFlags_WidthStretch, 0.5f);
+            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthStretch, 0.7f);
+            ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+            ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 0.7f);
+            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch, 0.6f);
+            ImGui::TableSetupScrollFreeze(0, 1);
+            ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, BG_DARKEST);
+            ImGui::TableHeadersRow();
+            ImGui::PopStyleColor();
+
+            char buf[32];
+            for (auto& ord : live_orders_) {
+                ImGui::TableNextRow();
+                ImGui::PushID(ord.id.c_str());
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(TEXT_PRIMARY, "%s", ord.symbol.c_str());
+
+                ImGui::TableSetColumnIndex(1);
+                ImVec4 side_col = (ord.side == "buy") ? MARKET_GREEN : MARKET_RED;
+                ImGui::TextColored(side_col, "%s", ord.side == "buy" ? "BUY" : "SELL");
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TextColored(TEXT_SECONDARY, "%s", ord.type.c_str());
+
+                ImGui::TableSetColumnIndex(3);
+                std::snprintf(buf, sizeof(buf), "%.4f", ord.quantity);
+                ImGui::TextColored(TEXT_SECONDARY, "%s", buf);
+
+                ImGui::TableSetColumnIndex(4);
+                if (ord.price > 0.0) {
+                    std::snprintf(buf, sizeof(buf), "%.2f", ord.price);
+                    ImGui::TextColored(TEXT_PRIMARY, "%s", buf);
+                } else {
+                    ImGui::TextColored(TEXT_DIM, "MKT");
+                }
+
+                ImGui::TableSetColumnIndex(5);
+                ImVec4 status_col = TEXT_DIM;
+                if (ord.status == "open") status_col = WARNING;
+                else if (ord.status == "closed" || ord.status == "filled") status_col = MARKET_GREEN;
+                else if (ord.status == "canceled" || ord.status == "cancelled") status_col = MARKET_RED;
+                ImGui::TextColored(status_col, "%s", ord.status.c_str());
+
+                ImGui::TableSetColumnIndex(6);
+                if (ord.status == "open") {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.1f, 0.1f, 0.8f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, MARKET_RED);
+                    if (ImGui::SmallButton("Cancel")) {
+                        cancel_order(ord.id);
+                    }
+                    ImGui::PopStyleColor(2);
+                }
+
+                ImGui::PopID();
+            }
+
+            ImGui::EndTable();
+        }
         return;
     }
 
@@ -1829,7 +2098,72 @@ void CryptoTradingScreen::render_history_tab() {
                        is_live ? "[LIVE HISTORY]" : "[PAPER HISTORY]");
 
     if (is_live) {
-        ImGui::TextColored(TEXT_DIM, "Live trade history requires API credentials.");
+        if (!has_credentials_) {
+            ImGui::TextColored(TEXT_DIM, "API credentials required.");
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(data_mutex_);
+
+        if (live_trades_fetching_) {
+            theme::LoadingSpinner("Fetching trade history...");
+            return;
+        }
+
+        if (live_trades_.empty()) {
+            ImGui::TextColored(TEXT_DIM, "No trade history on %s", exchange_id_.c_str());
+            // Trigger initial fetch
+            if (!live_data_loaded_) {
+                live_data_loaded_ = true;
+                async_fetch_live_trades();
+            }
+            return;
+        }
+
+        ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY;
+
+        if (ImGui::BeginTable("##live_trades_hist", 6, flags)) {
+            ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("Side", ImGuiTableColumnFlags_WidthStretch, 0.5f);
+            ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+            ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+            ImGui::TableSetupColumn("Fee", ImGuiTableColumnFlags_WidthStretch, 0.6f);
+            ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+            ImGui::TableSetupScrollFreeze(0, 1);
+            ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, BG_DARKEST);
+            ImGui::TableHeadersRow();
+            ImGui::PopStyleColor();
+
+            char buf[32];
+            for (const auto& t : live_trades_) {
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(TEXT_PRIMARY, "%s", t.symbol.c_str());
+
+                ImGui::TableSetColumnIndex(1);
+                ImVec4 side_col = (t.side == "buy") ? MARKET_GREEN : MARKET_RED;
+                ImGui::TextColored(side_col, "%s", t.side == "buy" ? "BUY" : "SELL");
+
+                ImGui::TableSetColumnIndex(2);
+                std::snprintf(buf, sizeof(buf), "%.2f", t.price);
+                ImGui::TextColored(TEXT_SECONDARY, "%s", buf);
+
+                ImGui::TableSetColumnIndex(3);
+                std::snprintf(buf, sizeof(buf), "%.4f", t.quantity);
+                ImGui::TextColored(TEXT_SECONDARY, "%s", buf);
+
+                ImGui::TableSetColumnIndex(4);
+                std::snprintf(buf, sizeof(buf), "%.4f", t.fee);
+                ImGui::TextColored(TEXT_DIM, "%s", buf);
+
+                ImGui::TableSetColumnIndex(5);
+                ImGui::TextColored(TEXT_DIM, "%s", t.timestamp.c_str());
+            }
+
+            ImGui::EndTable();
+        }
         return;
     }
 
@@ -2907,10 +3241,11 @@ void CryptoTradingScreen::submit_order() {
 
     // Live mode guard — require credentials
     if (is_live) {
-        // Check if exchange has credentials configured
-        // (credentials are stored in ExchangeService)
-        auto& svc = trading::ExchangeService::instance();
-        // For now, just warn — the actual API call will fail if no creds
+        if (!has_credentials_) {
+            order_form_.error = "API credentials required. Click 'API' button to configure.";
+            order_form_.msg_timer = 5.0f;
+            return;
+        }
         LOG_INFO(TAG, "Live order being routed to %s exchange API", exchange_id_.c_str());
     }
 
@@ -3013,6 +3348,9 @@ void CryptoTradingScreen::submit_order() {
                     auto result = svc.place_order(sym, side, order_type, qty,
                                                    price.value_or(0.0));
                     LOG_INFO(TAG, "Live order placed: %s", result.dump(2).c_str());
+                    core::notify::send("Order Placed",
+                        sym + " " + side + " " + std::to_string(qty),
+                        core::NotifyLevel::Success);
                     {
                         std::lock_guard<std::mutex> lock(data_mutex_);
                         order_form_.success = "Live order sent!";
@@ -3025,6 +3363,7 @@ void CryptoTradingScreen::submit_order() {
                     order_form_.error = e.what();
                     order_form_.msg_timer = 5.0f;
                     LOG_ERROR(TAG, "Live order FAILED: %s", e.what());
+                    core::notify::send("Order Failed", e.what(), core::NotifyLevel::Error);
                 }
                 order_submitting_.store(false);
             }));
@@ -3050,6 +3389,13 @@ void CryptoTradingScreen::submit_order() {
                 if (fill_price <= 0) fill_price = current_ticker_.last;
                 LOG_INFO(TAG, "Market order fill at %.2f", fill_price);
                 trading::pt_fill_order(order.id, fill_price);
+                {
+                    char msg[128];
+                    std::snprintf(msg, sizeof(msg), "%s %s %.4f @ %.2f",
+                                  side == "buy" ? "BUY" : "SELL",
+                                  selected_symbol_.c_str(), qty, fill_price);
+                    core::notify::send("Order Filled", msg, core::NotifyLevel::Success);
+                }
             } else {
                 trading::OrderMatcher::instance().add_order(order);
                 LOG_INFO(TAG, "Order added to matcher");
@@ -3091,10 +3437,28 @@ void CryptoTradingScreen::submit_order() {
 }
 
 void CryptoTradingScreen::cancel_order(const std::string& order_id) {
-    if (trading_mode_ != TradingMode::Paper) {
-        LOG_WARN(TAG, "cancel_order called in Live mode — not yet supported");
+    if (trading_mode_ == TradingMode::Live) {
+        // Live cancel — route through exchange API
+        LOG_INFO(TAG, "Cancelling live order: %s on %s", order_id.c_str(), exchange_id_.c_str());
+        const std::string sym = selected_symbol_;
+        launch_async(std::thread([this, order_id, sym]() {
+            try {
+                auto& svc = trading::ExchangeService::instance();
+                auto result = svc.cancel_order(order_id, sym);
+                LOG_INFO(TAG, "Live order cancelled: %s", result.dump(2).c_str());
+                // Refresh live orders
+                async_fetch_live_orders();
+            } catch (const std::exception& e) {
+                LOG_ERROR(TAG, "Live cancel failed: %s", e.what());
+                std::lock_guard<std::mutex> lock(data_mutex_);
+                order_form_.error = std::string("Cancel failed: ") + e.what();
+                order_form_.msg_timer = 5.0f;
+            }
+        }));
         return;
     }
+
+    // Paper cancel
     LOG_INFO(TAG, "Cancelling paper order: %s", order_id.c_str());
     try {
         trading::pt_cancel_order(order_id);
@@ -3104,6 +3468,322 @@ void CryptoTradingScreen::cancel_order(const std::string& order_id) {
     } catch (const std::exception& e) {
         LOG_ERROR(TAG, "Cancel failed: %s", e.what());
     }
+}
+
+// ============================================================================
+// Live trading data fetchers — call exchange API via ExchangeService
+// ============================================================================
+
+void CryptoTradingScreen::async_fetch_live_positions() {
+    if (live_positions_fetching_ || !has_credentials_) return;
+    live_positions_fetching_ = true;
+
+    launch_async(std::thread([this]() {
+        try {
+            auto& svc = trading::ExchangeService::instance();
+            auto result = svc.fetch_positions_live();
+            if (result.value("success", false) && result.contains("data")) {
+                std::lock_guard<std::mutex> lock(data_mutex_);
+                live_positions_.clear();
+                auto& positions = result["data"]["positions"];
+                if (positions.is_array()) {
+                    for (const auto& p : positions) {
+                        LivePosition pos;
+                        pos.symbol = p.value("symbol", "");
+                        pos.side = p.value("side", "long");
+                        pos.quantity = std::abs(p.value("contracts", p.value("contractSize", 0.0)));
+                        if (pos.quantity == 0.0) pos.quantity = std::abs(p.value("amount", 0.0));
+                        pos.entry_price = p.value("entryPrice", 0.0);
+                        pos.current_price = p.value("markPrice", p.value("liquidationPrice", 0.0));
+                        pos.unrealized_pnl = p.value("unrealizedPnl", 0.0);
+                        pos.leverage = p.value("leverage", 1.0);
+                        if (pos.quantity > 0.0) {
+                            live_positions_.push_back(pos);
+                        }
+                    }
+                }
+                live_data_loaded_ = true;
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR(TAG, "Live positions fetch failed: %s", e.what());
+        }
+        live_positions_fetching_ = false;
+    }));
+}
+
+void CryptoTradingScreen::async_fetch_live_orders() {
+    if (live_orders_fetching_ || !has_credentials_) return;
+    live_orders_fetching_ = true;
+
+    launch_async(std::thread([this]() {
+        try {
+            auto& svc = trading::ExchangeService::instance();
+            auto result = svc.fetch_open_orders_live();
+            if (result.value("success", false) && result.contains("data")) {
+                std::lock_guard<std::mutex> lock(data_mutex_);
+                live_orders_.clear();
+                auto& orders = result["data"]["orders"];
+                if (orders.is_array()) {
+                    for (const auto& o : orders) {
+                        LiveOrder ord;
+                        ord.id = o.value("id", "");
+                        ord.symbol = o.value("symbol", "");
+                        ord.side = o.value("side", "");
+                        ord.type = o.value("type", "");
+                        ord.status = o.value("status", "");
+                        ord.quantity = o.value("amount", 0.0);
+                        ord.price = o.value("price", 0.0);
+                        ord.filled_qty = o.value("filled", 0.0);
+                        ord.timestamp = o.value("datetime", "");
+                        live_orders_.push_back(ord);
+                    }
+                }
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR(TAG, "Live orders fetch failed: %s", e.what());
+        }
+        live_orders_fetching_ = false;
+    }));
+}
+
+void CryptoTradingScreen::async_fetch_live_balance() {
+    if (live_balance_fetching_ || !has_credentials_) return;
+    live_balance_fetching_ = true;
+
+    launch_async(std::thread([this]() {
+        try {
+            auto& svc = trading::ExchangeService::instance();
+            auto result = svc.fetch_balance();
+            if (result.value("success", false) && result.contains("data")) {
+                std::lock_guard<std::mutex> lock(data_mutex_);
+                auto& bal = result["data"];
+                // ccxt returns balance as {free: {USDT: x}, used: {USDT: x}, total: {USDT: x}}
+                if (bal.contains("total") && bal["total"].is_object()) {
+                    live_equity_ = bal["total"].value("USDT", bal["total"].value("USD", 0.0));
+                }
+                if (bal.contains("free") && bal["free"].is_object()) {
+                    live_balance_ = bal["free"].value("USDT", bal["free"].value("USD", 0.0));
+                }
+                if (bal.contains("used") && bal["used"].is_object()) {
+                    live_used_margin_ = bal["used"].value("USDT", bal["used"].value("USD", 0.0));
+                }
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR(TAG, "Live balance fetch failed: %s", e.what());
+        }
+        live_balance_fetching_ = false;
+    }));
+}
+
+void CryptoTradingScreen::async_fetch_live_trades() {
+    if (live_trades_fetching_ || !has_credentials_) return;
+    live_trades_fetching_ = true;
+
+    const std::string sym = selected_symbol_;
+    launch_async(std::thread([this, sym]() {
+        try {
+            auto& svc = trading::ExchangeService::instance();
+            auto result = svc.fetch_my_trades_live(sym, 50);
+            if (result.value("success", false) && result.contains("data")) {
+                std::lock_guard<std::mutex> lock(data_mutex_);
+                live_trades_.clear();
+                auto& trades = result["data"]["trades"];
+                if (trades.is_array()) {
+                    for (const auto& t : trades) {
+                        LiveTrade tr;
+                        tr.id = t.value("id", "");
+                        tr.symbol = t.value("symbol", sym);
+                        tr.side = t.value("side", "");
+                        tr.price = t.value("price", 0.0);
+                        tr.quantity = t.value("amount", 0.0);
+                        // fee can be an object {cost: x, currency: y} or a number
+                        if (t.contains("fee") && t["fee"].is_object()) {
+                            tr.fee = t["fee"].value("cost", 0.0);
+                        } else {
+                            tr.fee = t.value("fee", 0.0);
+                        }
+                        tr.timestamp = t.value("datetime", "");
+                        live_trades_.push_back(tr);
+                    }
+                }
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR(TAG, "Live trades fetch failed: %s", e.what());
+        }
+        live_trades_fetching_ = false;
+    }));
+}
+
+// ============================================================================
+// Credential Management — store/load API keys per exchange
+// ============================================================================
+
+void CryptoTradingScreen::load_exchange_credentials() {
+    std::string service = "exchange_" + exchange_id_;
+    auto opt = db::ops::get_credential_by_service(service);
+    if (opt) {
+        std::strncpy(cred_api_key_, opt->api_key.value_or("").c_str(), sizeof(cred_api_key_) - 1);
+        std::strncpy(cred_api_secret_, opt->api_secret.value_or("").c_str(), sizeof(cred_api_secret_) - 1);
+        std::strncpy(cred_password_, opt->password.value_or("").c_str(), sizeof(cred_password_) - 1);
+
+        has_credentials_ = (cred_api_key_[0] != '\0' && cred_api_secret_[0] != '\0');
+
+        // Push to ExchangeService
+        if (has_credentials_) {
+            trading::ExchangeCredentials ec;
+            ec.api_key = cred_api_key_;
+            ec.secret = cred_api_secret_;
+            ec.password = cred_password_;
+            trading::ExchangeService::instance().set_credentials(ec);
+        }
+    } else {
+        cred_api_key_[0] = '\0';
+        cred_api_secret_[0] = '\0';
+        cred_password_[0] = '\0';
+        has_credentials_ = false;
+    }
+    credentials_loaded_ = true;
+}
+
+void CryptoTradingScreen::save_exchange_credentials() {
+    std::string service = "exchange_" + exchange_id_;
+
+    db::Credential c;
+    c.service_name = service;
+    c.api_key = std::string(cred_api_key_);
+    c.api_secret = std::string(cred_api_secret_);
+    c.password = std::string(cred_password_);
+    db::ops::save_credential(c);
+
+    has_credentials_ = (cred_api_key_[0] != '\0' && cred_api_secret_[0] != '\0');
+
+    // Push to ExchangeService
+    if (has_credentials_) {
+        trading::ExchangeCredentials ec;
+        ec.api_key = cred_api_key_;
+        ec.secret = cred_api_secret_;
+        ec.password = cred_password_;
+        trading::ExchangeService::instance().set_credentials(ec);
+
+        // Trigger initial live data fetch
+        if (trading_mode_ == TradingMode::Live) {
+            async_fetch_live_balance();
+            async_fetch_live_positions();
+            async_fetch_live_orders();
+        }
+    }
+
+    LOG_INFO(TAG, "Credentials saved for %s (has_key=%d)", exchange_id_.c_str(), has_credentials_);
+}
+
+bool CryptoTradingScreen::has_credentials() const {
+    return has_credentials_;
+}
+
+void CryptoTradingScreen::render_credentials_popup() {
+    if (!show_credentials_popup_) return;
+
+    ImGui::SetNextWindowSize(ImVec2(420, 320), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Exchange API Credentials", &show_credentials_popup_,
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking)) {
+
+        // Exchange name header
+        char header[128];
+        std::snprintf(header, sizeof(header), "Configure API Key for: %s", exchange_id_.c_str());
+        ImGui::TextColored(ACCENT, "%s", header);
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        float input_w = ImGui::GetContentRegionAvail().x - 16;
+
+        // API Key
+        ImGui::TextColored(TEXT_DIM, "API Key");
+        ImGui::PushItemWidth(input_w);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
+        ImGui::InputText("##cred_api_key", cred_api_key_, sizeof(cred_api_key_));
+        ImGui::PopStyleColor();
+        ImGui::PopItemWidth();
+
+        ImGui::Spacing();
+
+        // API Secret
+        ImGui::TextColored(TEXT_DIM, "API Secret");
+        ImGui::PushItemWidth(input_w);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
+        ImGui::InputText("##cred_api_secret", cred_api_secret_, sizeof(cred_api_secret_),
+                         ImGuiInputTextFlags_Password);
+        ImGui::PopStyleColor();
+        ImGui::PopItemWidth();
+
+        ImGui::Spacing();
+
+        // Password (for exchanges that require it: OKX, Kucoin, etc.)
+        bool needs_password = (exchange_id_ == "okx" || exchange_id_ == "kucoin" ||
+                               exchange_id_ == "gate" || exchange_id_ == "bitget");
+        if (needs_password) {
+            ImGui::TextColored(TEXT_DIM, "Passphrase / Password");
+            ImGui::PushItemWidth(input_w);
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
+            ImGui::InputText("##cred_password", cred_password_, sizeof(cred_password_),
+                             ImGuiInputTextFlags_Password);
+            ImGui::PopStyleColor();
+            ImGui::PopItemWidth();
+            ImGui::Spacing();
+        }
+
+        // Status
+        if (has_credentials_) {
+            ImGui::TextColored(MARKET_GREEN, "Credentials configured");
+        } else {
+            ImGui::TextColored(TEXT_DIM, "No credentials stored for this exchange");
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Buttons
+        float btn_w = (input_w - 12) / 3;
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.25f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        if (ImGui::Button("Save", ImVec2(btn_w, 28))) {
+            save_exchange_credentials();
+            show_credentials_popup_ = false;
+        }
+        ImGui::PopStyleColor(2);
+
+        ImGui::SameLine(0, 6);
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.1f, 0.1f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        if (ImGui::Button("Clear", ImVec2(btn_w, 28))) {
+            cred_api_key_[0] = '\0';
+            cred_api_secret_[0] = '\0';
+            cred_password_[0] = '\0';
+            save_exchange_credentials();
+            has_credentials_ = false;
+        }
+        ImGui::PopStyleColor(2);
+
+        ImGui::SameLine(0, 6);
+
+        ImGui::PushStyleColor(ImGuiCol_Button, BG_WIDGET);
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        if (ImGui::Button("Cancel", ImVec2(btn_w, 28))) {
+            show_credentials_popup_ = false;
+        }
+        ImGui::PopStyleColor(2);
+
+        ImGui::Spacing();
+
+        // Security note
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::TextWrapped("Credentials are stored encrypted in the local database. "
+                           "Use read-only API keys when possible.");
+        ImGui::PopStyleColor();
+    }
+    ImGui::End();
 }
 
 } // namespace fincept::crypto

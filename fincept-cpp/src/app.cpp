@@ -5,7 +5,9 @@
 #include "core/config.h"
 #include "core/logger.h"
 #include "core/event_bus.h"
+#include "core/notification.h"
 #include "mcp/mcp_init.h"
+#include "python/python_runner.h"
 #include "ui/theme.h"
 #include <imgui.h>
 #include <ctime>
@@ -17,14 +19,17 @@
 namespace fincept {
 
 void App::initialize() {
-    // Initialize databases before anything else
+    // Initialize databases before anything else (local SQLite, fast)
     db::Database::instance().initialize();
     db::CacheDatabase::instance().initialize();
     CacheService::instance().initialize();
 
+    // Auth — loads saved session from SQLite instantly; server validation
+    // runs in a background thread (see auth_manager.cpp)
     auth::AuthManager::instance().initialize();
 
-    // Initialize MCP system (registers all internal tools, starts external servers)
+    // Register internal MCP tools (fast, in-memory) then start external
+    // servers in background (see mcp_service.cpp)
     mcp::initialize_all_tools();
 
     // Subscribe to MCP navigation events
@@ -32,8 +37,15 @@ void App::initialize() {
         active_tab_ = e.get<int>("tab_index");
     });
 
-    initialized_ = true;
+    // Initialize persistent Python worker pool in background
+    // (see python_runner.cpp — falls back to subprocess if not ready)
+    python::init_worker_pool();
 
+    initialized_ = true;
+    init_time_ = std::chrono::steady_clock::now();
+
+    // Check if Python setup is needed — uses fs::exists checks which are
+    // fast on typical systems but cached to avoid re-checking every frame
     if (setup_screen_.needs_setup()) {
         current_screen_ = AppScreen::PythonSetup;
     } else {
@@ -44,6 +56,7 @@ void App::initialize() {
 
 void App::shutdown() {
     LOG_INFO("App", "Shutting down");
+    python::shutdown_worker_pool();
     mcp::shutdown_mcp();
     CacheService::instance().shutdown();
     db::CacheDatabase::instance().close();
@@ -138,7 +151,9 @@ void App::render_top_bar() {
             if (ImGui::MenuItem("AI Chat", "F10"))          { active_tab_ = 5; }
             if (ImGui::MenuItem("AI Quant Lab"))            { active_tab_ = 10; }
             if (ImGui::MenuItem("M&A Analytics"))           { active_tab_ = 21; }
+            if (ImGui::MenuItem("Derivatives"))             { active_tab_ = 32; }
             if (ImGui::MenuItem("Geopolitics", "F7"))       { active_tab_ = 15; }
+            if (ImGui::MenuItem("Polymarket"))              { active_tab_ = 34; }
 
             ImGui::Spacing();
 
@@ -149,6 +164,8 @@ void App::render_top_bar() {
             if (ImGui::MenuItem("Node Editor"))             { active_tab_ = 8; }
             if (ImGui::MenuItem("Code Editor"))             { active_tab_ = 9; }
             if (ImGui::MenuItem("Agent Studio"))            { active_tab_ = 27; }
+            if (ImGui::MenuItem("Report Builder"))          { active_tab_ = 31; }
+            if (ImGui::MenuItem("Excel"))                   { active_tab_ = 33; }
             if (ImGui::MenuItem("Notes"))                   { active_tab_ = 19; }
             if (ImGui::MenuItem("Settings"))                { active_tab_ = 12; }
             if (ImGui::MenuItem("Profile", "F12"))          { active_tab_ = 13; }
@@ -183,10 +200,19 @@ void App::render_top_bar() {
 
         // === CENTER: Command Bar | DateTime | Version | Brand ===
         {
+            static time_t cached_topbar_time = 0;
+            static char datetime[32] = {};
             time_t now = time(nullptr);
-            struct tm* t = localtime(&now);
-            char datetime[32];
-            std::strftime(datetime, sizeof(datetime), "%H:%M:%S", t);
+            if (now != cached_topbar_time) {
+                cached_topbar_time = now;
+                struct tm t_buf;
+#ifdef _WIN32
+                localtime_s(&t_buf, &now);
+#else
+                localtime_r(&now, &t_buf);
+#endif
+                std::strftime(datetime, sizeof(datetime), "%H:%M:%S", &t_buf);
+            }
 
             char ver_str[16];
             std::snprintf(ver_str, sizeof(ver_str), "v%s", config::APP_VERSION);
@@ -226,16 +252,37 @@ void App::render_top_bar() {
                 ImGui::GetIO().KeyCtrl && !cmd_focused_) {
                 ImGui::SetKeyboardFocusHere();
                 cmd_buf_[0] = '\0';
+                cmd_focused_ = true;
+                cmd_selected_ = 0;
             }
 
-            bool was_active = cmd_focused_;
+            // CRITICAL: While search is active, keep focus on the InputText
+            // so the dropdown window doesn't steal keyboard input
+            if (cmd_focused_) {
+                ImGui::SetKeyboardFocusHere();
+            }
+
             ImGui::InputTextWithHint("##cmd_bar", "> Search tabs... (Ctrl+K)",
                     cmd_buf_, sizeof(cmd_buf_));
-            cmd_focused_ = ImGui::IsItemActive() || ImGui::IsItemFocused();
 
-            // If just focused, reset selection
-            if (cmd_focused_ && !was_active) {
+            // Detect new activation (user clicked on the input field)
+            if (ImGui::IsItemActivated() && !cmd_focused_) {
+                cmd_focused_ = true;
                 cmd_selected_ = 0;
+            }
+
+            // Escape closes the search
+            if (cmd_focused_ && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                cmd_buf_[0] = '\0';
+                cmd_focused_ = false;
+            }
+
+            // Clicking elsewhere (not input, not dropdown) closes search
+            if (cmd_focused_ && ImGui::IsMouseClicked(0) &&
+                !ImGui::IsItemHovered() &&
+                !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+                cmd_buf_[0] = '\0';
+                cmd_focused_ = false;
             }
 
             ImGui::PopStyleVar(3);
@@ -443,34 +490,18 @@ void App::render_tab_bar() {
 void App::render_command_bar() {
     using namespace theme::colors;
 
-    // Track dropdown visibility: show when focused, keep showing briefly to allow clicks
-    static bool dropdown_visible = false;
-    static int hide_countdown = 0;  // frames to keep visible after losing focus
+    // Only show when focused and has text
+    if (!cmd_focused_ || cmd_buf_[0] == '\0') return;
 
-    if (cmd_focused_) {
-        dropdown_visible = true;
-        hide_countdown = 0;
-    } else if (dropdown_visible) {
-        // Keep visible for a few frames so click events on dropdown items register
-        hide_countdown++;
-        if (hide_countdown > 3) {
-            dropdown_visible = false;
-            hide_countdown = 0;
-        }
-    }
-
-    if (!dropdown_visible) return;
-
-    // Navigation command registry — matches Tauri app's commandRegistry.ts
+    // Navigation command registry
     struct CmdEntry {
         const char* name;
-        const char* aliases;     // space-separated search keywords
+        const char* aliases;
         const char* category;
-        const char* shortcut;    // nullable
+        const char* shortcut;
         int tab_idx;
     };
     static constexpr CmdEntry commands[] = {
-        // Primary
         {"Dashboard",           "dash home main overview",                  "Navigation", "F1",  0},
         {"Markets",             "mkts markets market live stocks quotes",   "Navigation", "F2",  1},
         {"Crypto Trading",      "trade trading crypto kraken",              "Navigation", "F9",  2},
@@ -485,7 +516,6 @@ void App::render_command_bar() {
         {"QuantLib",            "quantlib qlcore finance math",             "Tools",      nullptr, 11},
         {"Settings",            "settings preferences config options",      "System",     nullptr, 12},
         {"Profile",             "prof profile account user",                "Navigation", "F12", 13},
-        // Secondary
         {"Surface Analytics",   "surface volsurface vol volatility 3d",     "Research",   "F6",  14},
         {"Geopolitics",         "geo geopolitics politics global",          "Research",   "F7",  15},
         {"Watchlist",           "watch watchlist wl favorites monitor",     "Navigation", "F8",  16},
@@ -503,219 +533,142 @@ void App::render_command_bar() {
         {"Data Mapping",        "datamap mapping schema transform",         "Tools",      nullptr, 28},
         {"Screener",            "screener fred economic data series",       "Data",       nullptr, 29},
         {"Equity Trading",      "equity stock trading broker nse bse",     "Trading",    nullptr, 30},
+        {"Report Builder",      "report builder document pdf export",      "Tools",      nullptr, 31},
+        {"Derivatives",         "derivatives options bonds swaps greeks",  "Research",   nullptr, 32},
+        {"Excel",               "excel spreadsheet csv cells formulas",   "Tools",      nullptr, 33},
+        {"Polymarket",          "polymarket prediction markets bets",    "Research",   nullptr, 34},
+        {"AKShare Data",        "akshare china asian data explorer",     "Data",       nullptr, 35},
+        {"Asia Markets",        "asia asian stocks cn hk exchange",      "Data",       nullptr, 36},
+        {"Relationship Map",    "relmap relationship corporate graph",  "Research",   nullptr, 37},
+        {"Alt Investments",     "alternative investments bonds pe vc",  "Research",   nullptr, 38},
+        {"Maritime",            "maritime shipping vessel tracking",    "Research",   nullptr, 39},
+        {"MCP Servers",         "mcp model context protocol servers",   "Tools",      nullptr, 40},
+        {"Alpha Arena",         "alpha arena ai competition trading",   "Trading",    nullptr, 41},
+        {"Trade Viz",           "trade visualization flows global",     "Data",       nullptr, 42},
     };
     constexpr int n_cmds = sizeof(commands) / sizeof(commands[0]);
 
-    // Build query string
+    // Build lowercase query
     std::string query(cmd_buf_);
     for (auto& c : query) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-
-    // Trim whitespace
     while (!query.empty() && query.back() == ' ') query.pop_back();
     while (!query.empty() && query.front() == ' ') query.erase(query.begin());
+    if (query.empty()) return;
 
-    bool has_query = !query.empty();
-
+    // Match
     struct Match { int idx; int score; };
     Match matches[n_cmds];
     int n_matches = 0;
 
     for (int i = 0; i < n_cmds; i++) {
         int score = 0;
+        std::string name_lower(commands[i].name);
+        for (auto& c : name_lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
-        if (!has_query) {
-            // No search text — show all, ordered by tab index (primary first)
-            score = 1000 - commands[i].tab_idx;
-        } else {
-            // Check name (case-insensitive)
-            std::string name_lower(commands[i].name);
-            for (auto& c : name_lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (name_lower == query) score = 100;
+        else if (name_lower.find(query) == 0) score = 90;
+        else if (name_lower.find(query) != std::string::npos) score = 80;
 
-            if (name_lower == query) {
-                score = 100;  // exact match
-            } else if (name_lower.find(query) == 0) {
-                score = 90;   // prefix match
-            } else if (name_lower.find(query) != std::string::npos) {
-                score = 80;   // substring match
-            }
-
-            // Check aliases
-            if (score == 0) {
-                std::string aliases(commands[i].aliases);
-                for (auto& c : aliases) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                if (aliases.find(query) != std::string::npos) {
-                    score = 50;
-                }
-            }
-            // Check category
-            if (score == 0) {
-                std::string cat(commands[i].category);
-                for (auto& c : cat) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                if (cat.find(query) != std::string::npos) {
-                    score = 20;
-                }
-            }
+        if (score == 0) {
+            std::string aliases(commands[i].aliases);
+            for (auto& c : aliases) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (aliases.find(query) != std::string::npos) score = 50;
         }
-
-        if (score > 0) {
-            matches[n_matches++] = {i, score};
+        if (score == 0) {
+            std::string cat(commands[i].category);
+            for (auto& c : cat) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (cat.find(query) != std::string::npos) score = 20;
         }
+        if (score > 0) matches[n_matches++] = {i, score};
     }
 
-    if (n_matches == 0) {
-        // Show "No results" message
-        ImGuiViewport* vp = ImGui::GetMainViewport();
-        float dropdown_w = 380.0f;
-        float dropdown_x = vp->WorkPos.x + (vp->WorkSize.x - dropdown_w) * 0.5f;
-        float dropdown_y = vp->WorkPos.y - 2;
-
-        ImGui::SetNextWindowPos(ImVec2(dropdown_x, dropdown_y));
-        ImGui::SetNextWindowSize(ImVec2(dropdown_w, 0));
-
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.05f, 0.97f));
-        ImGui::PushStyleColor(ImGuiCol_Border, ACCENT);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 8));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
-
-        ImGui::Begin("##cmd_dropdown", nullptr,
-            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize |
-            ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus |
-            ImGuiWindowFlags_NoNav);
-
-        ImGui::TextColored(TEXT_DIM, "No matching tabs found for \"%s\"", cmd_buf_);
-
-        ImGui::End();
-        ImGui::PopStyleVar(3);
-        ImGui::PopStyleColor(2);
-        return;
-    }
-
-    // Sort by score descending
+    // Sort and limit
     std::sort(matches, matches + n_matches,
         [](const Match& a, const Match& b) { return a.score > b.score; });
-
-    // Limit results
-    int max_show = has_query ? 10 : 15;
-    if (n_matches > max_show) n_matches = max_show;
+    if (n_matches > 10) n_matches = 10;
 
     // Clamp selection
     if (cmd_selected_ >= n_matches) cmd_selected_ = n_matches - 1;
     if (cmd_selected_ < 0) cmd_selected_ = 0;
 
-    // Handle keyboard navigation (Up/Down/Enter/Escape)
-    if (cmd_focused_) {
-        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
-            cmd_selected_ = (cmd_selected_ + 1) % n_matches;
-        }
-        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
-            cmd_selected_ = (cmd_selected_ - 1 + n_matches) % n_matches;
-        }
-        if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
-            active_tab_ = commands[matches[cmd_selected_].idx].tab_idx;
-            cmd_buf_[0] = '\0';
-            cmd_focused_ = false;
-            dropdown_visible = false;
-            return;
-        }
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-            cmd_buf_[0] = '\0';
-            cmd_focused_ = false;
-            dropdown_visible = false;
-            return;
-        }
+    // Keyboard navigation
+    if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+        cmd_selected_ = (cmd_selected_ + 1) % (n_matches > 0 ? n_matches : 1);
+    if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+        cmd_selected_ = (cmd_selected_ - 1 + (n_matches > 0 ? n_matches : 1)) % (n_matches > 0 ? n_matches : 1);
+    if (n_matches > 0 && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))) {
+        active_tab_ = commands[matches[cmd_selected_].idx].tab_idx;
+        cmd_buf_[0] = '\0';
+        cmd_focused_ = false;
+        // Focus cleared via cmd_focused_ = false above
+        return;
     }
 
-    // Render dropdown window
+    // Position: centered, below the tab bar area
     ImGuiViewport* vp = ImGui::GetMainViewport();
-    float dropdown_w = 380.0f;
+    float dropdown_w = 420.0f;
     float dropdown_x = vp->WorkPos.x + (vp->WorkSize.x - dropdown_w) * 0.5f;
-    float dropdown_y = vp->WorkPos.y - 2;  // just below menu bar
+    float dropdown_y = vp->WorkPos.y + ImGui::GetFrameHeight() + 8;
 
-    ImGui::SetNextWindowPos(ImVec2(dropdown_x, dropdown_y));
-    ImGui::SetNextWindowSize(ImVec2(dropdown_w, 0));  // auto-height
-
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.05f, 0.97f));
+    ImGui::SetNextWindowPos(ImVec2(dropdown_x, dropdown_y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(dropdown_w, 0), ImGuiCond_Always);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.06f, 0.06f, 0.98f));
     ImGui::PushStyleColor(ImGuiCol_Border, ACCENT);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 6));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
 
-    ImGui::Begin("##cmd_dropdown", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize |
+    bool open = true;
+    ImGui::Begin("##cmd_results", &open,
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize |
         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus |
-        ImGuiWindowFlags_NoNav);
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
 
-    // Header hint
-    if (!has_query) {
-        ImGui::TextColored(TEXT_DIM, "  Type to search or select a tab:");
-        ImGui::Spacing();
+    if (n_matches == 0) {
+        ImGui::TextColored(TEXT_DIM, "No results for \"%s\"", cmd_buf_);
+    } else {
+        for (int i = 0; i < n_matches; i++) {
+            auto& cmd = commands[matches[i].idx];
+            bool is_sel = (i == cmd_selected_);
+            bool is_cur = (cmd.tab_idx == active_tab_);
+
+            ImGui::PushID(i);
+
+            // Build label
+            char label[256];
+            if (cmd.shortcut)
+                std::snprintf(label, sizeof(label), "%s%s  [%s]  %s",
+                    is_cur ? "> " : "  ", cmd.name, cmd.shortcut, cmd.category);
+            else
+                std::snprintf(label, sizeof(label), "%s%s  %s",
+                    is_cur ? "> " : "  ", cmd.name, cmd.category);
+
+            // Colors
+            ImVec4 bg = is_sel ? ImVec4(ACCENT.x*0.3f, ACCENT.y*0.3f, ACCENT.z*0.3f, 1.0f)
+                               : ImVec4(0, 0, 0, 0);
+            ImGui::PushStyleColor(ImGuiCol_Header, bg);
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ACCENT.x*0.2f, ACCENT.y*0.2f, ACCENT.z*0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(ACCENT.x*0.4f, ACCENT.y*0.4f, ACCENT.z*0.4f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, is_cur ? ACCENT : TEXT_PRIMARY);
+
+            if (ImGui::Selectable(label, is_sel || is_cur)) {
+                active_tab_ = cmd.tab_idx;
+                cmd_buf_[0] = '\0';
+                cmd_focused_ = false;
+                // Focus cleared via cmd_focused_ = false above
+            }
+            if (ImGui::IsItemHovered()) {
+                cmd_selected_ = i;
+            }
+
+            ImGui::PopStyleColor(4);
+            ImGui::PopID();
+        }
     }
 
-    for (int i = 0; i < n_matches; i++) {
-        auto& cmd = commands[matches[i].idx];
-        bool is_selected = (i == cmd_selected_);
-        bool is_current = (cmd.tab_idx == active_tab_);
-
-        // Background color for selected/current
-        if (is_selected) {
-            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(ACCENT.x * 0.3f, ACCENT.y * 0.3f, ACCENT.z * 0.3f, 1.0f));
-        } else if (is_current) {
-            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(ACCENT.x * 0.1f, ACCENT.y * 0.1f, ACCENT.z * 0.1f, 1.0f));
-        } else {
-            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
-        }
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(ACCENT.x * 0.2f, ACCENT.y * 0.2f, ACCENT.z * 0.2f, 1.0f));
-
-        // Selectable row
-        char label_buf[128];
-        std::snprintf(label_buf, sizeof(label_buf), "##cmd_%d", i);
-        if (ImGui::Selectable(label_buf, is_selected || is_current, 0, ImVec2(0, 24))) {
-            active_tab_ = cmd.tab_idx;
-            cmd_buf_[0] = '\0';
-            cmd_focused_ = false;
-            dropdown_visible = false;
-        }
-
-        // Hover updates selection
-        if (ImGui::IsItemHovered()) {
-            cmd_selected_ = i;
-        }
-
-        // Overlay: current-tab marker + name
-        ImGui::SameLine(8);
-        if (is_current) {
-            ImGui::TextColored(ACCENT, ">");
-            ImGui::SameLine(0, 4);
-        }
-        ImGui::TextColored(is_current ? ACCENT : TEXT_PRIMARY, "%s", cmd.name);
-
-        // Right side: shortcut + category
-        float tag_x = dropdown_w - 12;
-        if (cmd.shortcut) {
-            char sk_buf[16];
-            std::snprintf(sk_buf, sizeof(sk_buf), "[%s]", cmd.shortcut);
-            float sk_w = ImGui::CalcTextSize(sk_buf).x + 4;
-            tag_x -= sk_w;
-            ImGui::SameLine(tag_x);
-            ImGui::TextColored(TEXT_DIM, "%s", sk_buf);
-            tag_x -= 4;
-        }
-        float cat_w = ImGui::CalcTextSize(cmd.category).x + 4;
-        tag_x -= cat_w;
-        if (tag_x > ImGui::GetCursorPosX() + 20) {
-            ImGui::SameLine(tag_x);
-            ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1.0f), "%s", cmd.category);
-        }
-
-        ImGui::PopStyleColor(2);
-    }
-
-    // Footer hint
     ImGui::Spacing();
-    ImGui::TextColored(TEXT_DIM, "  Up/Down to navigate  Enter to select  Esc to close");
+    ImGui::TextColored(TEXT_DIM, " Up/Down Enter Esc | Click to navigate");
 
     ImGui::End();
     ImGui::PopStyleVar(3);
@@ -784,11 +737,22 @@ void App::render_footer() {
 
     ImGui::TextColored(TEXT_DIM, "%s", config::APP_NAME);
 
-    // Right: Timestamp
-    time_t now = time(nullptr);
-    struct tm* t = localtime(&now);
-    char tb[32];
-    std::strftime(tb, sizeof(tb), "%Y-%m-%d %H:%M:%S", t);
+    // Right: Timestamp — cached per second
+    static time_t cached_footer_time = 0;
+    static char tb[32] = {};
+    {
+        time_t now = time(nullptr);
+        if (now != cached_footer_time) {
+            cached_footer_time = now;
+            struct tm t_buf;
+#ifdef _WIN32
+            localtime_s(&t_buf, &now);
+#else
+            localtime_r(&now, &t_buf);
+#endif
+            std::strftime(tb, sizeof(tb), "%Y-%m-%d %H:%M:%S", &t_buf);
+        }
+    }
 
     float time_w = ImGui::CalcTextSize(tb).x + 12;
     ImGui::SameLine(ImGui::GetWindowWidth() - time_w);
@@ -866,8 +830,19 @@ void App::render() {
     if (initialized_ && !auth.is_loading())
         apply_auto_navigation();
 
-    // Loading state — no chrome
-    if (!initialized_ || auth.is_loading() || auth.is_logging_out()) {
+    // Loading state — no chrome, but with a safety timeout.
+    // If background auth validation hangs (server unreachable, DNS timeout),
+    // stop blocking the UI after 10 seconds and show the login screen.
+    // The validation thread will complete eventually and update the session.
+    bool auth_loading = auth.is_loading();
+    if (auth_loading && initialized_) {
+        auto elapsed = std::chrono::steady_clock::now() - init_time_;
+        if (elapsed > std::chrono::seconds(10)) {
+            LOG_WARN("App", "Auth validation timed out after 10s, proceeding to login");
+            auth_loading = false;
+        }
+    }
+    if (!initialized_ || auth_loading || auth.is_logging_out()) {
         render_loading();
         return;
     }
@@ -877,7 +852,6 @@ void App::render() {
 
     if (show_chrome) {
         render_top_bar();
-        render_command_bar();
         render_tab_bar();
     }
 
@@ -897,36 +871,48 @@ void App::render() {
         // App screens — with chrome
         case AppScreen::Pricing:        pricing_screen_.render(next_screen_); break;
         case AppScreen::Dashboard:
-            if (active_tab_ == 26)      gov_data_screen_.render();
-            else if (active_tab_ == 6)  backtesting_screen_.render();
-            else if (active_tab_ == 25) about_screen_.render();
-            else if (active_tab_ == 24) support_screen_.render();
-            else if (active_tab_ == 23) docs_screen_.render();
-            else if (active_tab_ == 22) forum_screen_.render();
-            else if (active_tab_ == 21) mna_screen_.render();
-            else if (active_tab_ == 20) data_sources_screen_.render();
-            else if (active_tab_ == 19) notes_screen_.render();
-            else if (active_tab_ == 18) dbnomics_screen_.render();
-            else if (active_tab_ == 17) economics_screen_.render();
-            else if (active_tab_ == 16) watchlist_screen_.render();
-            else if (active_tab_ == 15) geopolitics_screen_.render();
-            else if (active_tab_ == 14) surface_screen_.render();
-            else if (active_tab_ == 13) profile_screen_.render();
-            else if (active_tab_ == 4)  news_screen_.render();
-            else if (active_tab_ == 3)  portfolio_screen_.render();
-            else if (active_tab_ == 9)  code_editor_screen_.render();
-            else if (active_tab_ == 8)  node_editor_screen_.render();
+            if (active_tab_ == 26)      lazy(gov_data_screen_).render();
+            else if (active_tab_ == 6)  lazy(backtesting_screen_).render();
+            else if (active_tab_ == 25) lazy(about_screen_).render();
+            else if (active_tab_ == 24) lazy(support_screen_).render();
+            else if (active_tab_ == 23) lazy(docs_screen_).render();
+            else if (active_tab_ == 22) lazy(forum_screen_).render();
+            else if (active_tab_ == 21) lazy(mna_screen_).render();
+            else if (active_tab_ == 20) lazy(data_sources_screen_).render();
+            else if (active_tab_ == 19) lazy(notes_screen_).render();
+            else if (active_tab_ == 18) lazy(dbnomics_screen_).render();
+            else if (active_tab_ == 17) lazy(economics_screen_).render();
+            else if (active_tab_ == 16) lazy(watchlist_screen_).render();
+            else if (active_tab_ == 15) lazy(geopolitics_screen_).render();
+            else if (active_tab_ == 14) lazy(surface_screen_).render();
+            else if (active_tab_ == 13) lazy(profile_screen_).render();
+            else if (active_tab_ == 4)  lazy(news_screen_).render();
+            else if (active_tab_ == 3)  lazy(portfolio_screen_).render();
+            else if (active_tab_ == 9)  lazy(code_editor_screen_).render();
+            else if (active_tab_ == 8)  lazy(node_editor_screen_).render();
             else if (active_tab_ == 12) settings_screen_.render();
-            else if (active_tab_ == 5)  ai_chat_screen_.render();
-            else if (active_tab_ == 27) agent_studio_screen_.render();
-            else if (active_tab_ == 2)  crypto_trading_screen_.render();
-            else if (active_tab_ == 10) ai_quant_lab_screen_.render();
-            else if (active_tab_ == 11) quantlib_screen_.render();
-            else if (active_tab_ == 1)  markets_screen_.render();
-            else if (active_tab_ == 7)  algo_trading_screen_.render();
-            else if (active_tab_ == 28) data_mapping_screen_.render();
-            else if (active_tab_ == 29) screener_screen_.render();
-            else if (active_tab_ == 30) equity_trading_screen_.render();
+            else if (active_tab_ == 5)  lazy(ai_chat_screen_).render();
+            else if (active_tab_ == 27) lazy(agent_studio_screen_).render();
+            else if (active_tab_ == 2)  lazy(crypto_trading_screen_).render();
+            else if (active_tab_ == 10) lazy(ai_quant_lab_screen_).render();
+            else if (active_tab_ == 11) lazy(quantlib_screen_).render();
+            else if (active_tab_ == 1)  lazy(markets_screen_).render();
+            else if (active_tab_ == 7)  lazy(algo_trading_screen_).render();
+            else if (active_tab_ == 28) lazy(data_mapping_screen_).render();
+            else if (active_tab_ == 29) lazy(screener_screen_).render();
+            else if (active_tab_ == 30) lazy(equity_trading_screen_).render();
+            else if (active_tab_ == 31) lazy(report_builder_screen_).render();
+            else if (active_tab_ == 32) lazy(derivatives_screen_).render();
+            else if (active_tab_ == 33) lazy(excel_screen_).render();
+            else if (active_tab_ == 34) lazy(polymarket_screen_).render();
+            else if (active_tab_ == 35) lazy(akshare_screen_).render();
+            else if (active_tab_ == 36) lazy(asia_markets_screen_).render();
+            else if (active_tab_ == 37) lazy(relationship_map_screen_).render();
+            else if (active_tab_ == 38) lazy(alt_investments_screen_).render();
+            else if (active_tab_ == 39) lazy(maritime_screen_).render();
+            else if (active_tab_ == 40) lazy(mcp_servers_screen_).render();
+            else if (active_tab_ == 41) lazy(alpha_arena_screen_).render();
+            else if (active_tab_ == 42) lazy(trade_viz_screen_).render();
             else                        dashboard_screen_.render();
             break;
         default:
@@ -936,7 +922,11 @@ void App::render() {
 
     if (show_chrome) {
         render_footer();
+        render_command_bar();  // Render last so dropdown appears on top
     }
+
+    // Render notification toasts (always on top, all screens)
+    core::notify::render_toasts();
 
     // Screen transitions
     if (next_screen_ != current_screen_) {

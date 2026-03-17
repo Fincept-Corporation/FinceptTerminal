@@ -15,7 +15,7 @@ This wrapper covers the full edgartools API surface including:
 - Search and discovery functions
 - Reference data and company subsets
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 
 Author: Fincept Terminal
 Library: edgartools (https://github.com/dgunning/edgartools)

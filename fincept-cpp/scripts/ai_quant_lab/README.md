@@ -27,7 +27,7 @@ AI Quant Lab combines Microsoft's Qlib quantitative investment platform with RDA
 | **Portfolio Optimization** | `qlib_portfolio_opt.py` | Portfolio construction, risk management |
 | **Reporting** | `qlib_reporting.py` | Performance reports, visualizations |
 | **Strategy** | `qlib_strategy.py` | Trading strategy implementation |
-| **Service** | `qlib_service.py` | Main service interface for Tauri integration |
+| **Service** | `qlib_service.py` | Main service interface for C++ integration |
 
 ### Advanced Modules (NEW - 100% Qlib Coverage)
 | Module | File | Purpose |
@@ -257,7 +257,7 @@ weights = optimize_portfolio(
 
 ## Integration with Fincept Terminal
 
-Services exposed via Tauri commands:
+Services exposed via C++ commands:
 - `qlib_service.py`: Main Qlib interface
 - `qlib_rl.py`: Reinforcement learning agents
 - `qlib_online_learning.py`: Online/incremental learning

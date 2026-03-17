@@ -1,8 +1,0 @@
-{
-  "title": "Data DBnomics",
-  "toolbar": {
-    "fetch": "[ID] FETCH",
-    "refresh": "[ID] REFRESH",
-    "export": "[ID] EXPORT"
-  }
-}

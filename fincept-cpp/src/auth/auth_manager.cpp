@@ -5,6 +5,7 @@
 #include "core/validators.h"
 #include "core/logger.h"
 #include "core/event_bus.h"
+#include "core/notification.h"
 #include <thread>
 #include <cstdio>
 #include <ctime>
@@ -25,36 +26,61 @@ AuthManager& AuthManager::instance() {
 }
 
 void AuthManager::initialize() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    loading_ = true;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        loading_ = true;
 
-    // Database is initialized in App::initialize() before this call
-
-    if (load_session()) {
-        if (session_.is_registered()) {
-            // Validate with server in background
-            auto validated = validate_session(session_);
-            if (validated.authenticated) {
-                session_ = validated;
-                save_session();
-            } else {
-                clear_session();
+        // Load saved session from DB (fast, local-only)
+        if (load_session()) {
+            if (session_.is_registered()) {
+                // Session loaded — mark authenticated optimistically so the UI
+                // can proceed immediately.  Server validation runs in background.
+                LOG_INFO("Auth", "Loaded saved session, validating in background...");
             }
+            // Guest sessions are used as-is (checked for expiry in load_session)
         }
-        // Guest sessions are used as-is (checked for expiry in load_session)
+
+        // If no registered session needs validation, we're done loading
+        if (!session_.is_registered() || !session_.authenticated) {
+            loading_ = false;
+            LOG_INFO("Auth", "Initialized — authenticated: %d, type: %s",
+                     session_.authenticated, session_.user_type.c_str());
+
+            if (session_.authenticated) {
+                core::EventBus::instance().publish("auth.session_changed", {
+                    {"authenticated", true},
+                    {"user_type", session_.user_type},
+                    {"has_api_key", !session_.api_key.empty()}
+                });
+            }
+            return;
+        }
     }
 
-    loading_ = false;
-    LOG_INFO("Auth", "Initialized — authenticated: %d, type: %s, api_key present: %d",
-             session_.authenticated, session_.user_type.c_str(), !session_.api_key.empty());
+    // Validate registered session with server in background thread
+    // to avoid blocking the render loop during startup
+    auto saved_session = session_;
+    std::thread([this, saved_session]() {
+        auto validated = validate_session(saved_session);
 
-    if (session_.authenticated) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (validated.authenticated) {
+            session_ = validated;
+            save_session();
+        } else {
+            clear_session();
+        }
+        loading_ = false;
+
+        LOG_INFO("Auth", "Background validation complete — authenticated: %d, type: %s",
+                 session_.authenticated, session_.user_type.c_str());
+
         core::EventBus::instance().publish("auth.session_changed", {
-            {"authenticated", true},
+            {"authenticated", session_.authenticated},
             {"user_type", session_.user_type},
             {"has_api_key", !session_.api_key.empty()}
         });
-    }
+    }).detach();
 }
 
 // =============================================================================
@@ -114,6 +140,9 @@ bool AuthManager::load_session() {
                 time_t now = time(nullptr);
                 if (now > expires_time) {
                     LOG_WARN("Auth", "Guest session expired, clearing");
+                    core::notify::send("Session Expired",
+                        "Your session has expired. Please log in again.",
+                        core::NotifyLevel::Warning);
                     clear_session();
                     return false;
                 }

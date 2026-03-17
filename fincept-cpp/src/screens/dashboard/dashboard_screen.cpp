@@ -28,7 +28,27 @@ ImVec4 DashboardScreen::accent_for(WidgetType type) {
         case WidgetType::Performance:        return FC_GREEN;
         case WidgetType::TopMovers:          return FC_PURPLE;
         case WidgetType::MarketData:         return FC_BLUE;
-        case WidgetType::YouTubeStream:     return FC_RED;
+        case WidgetType::VideoPlayer:        return FC_RED;
+        case WidgetType::Watchlist:          return FC_CYAN;
+        case WidgetType::Portfolio:          return FC_GREEN;
+        case WidgetType::StockQuote:         return FC_ORANGE;
+        case WidgetType::EconomicCalendar:   return FC_YELLOW;
+        case WidgetType::MarketSentiment:    return FC_PURPLE;
+        case WidgetType::QuickTrade:         return FC_GREEN;
+        case WidgetType::Notes:              return FC_ORANGE;
+        case WidgetType::Screener:           return FC_CYAN;
+        case WidgetType::RiskMetrics:        return FC_RED;
+        case WidgetType::AlgoStatus:         return FC_GREEN;
+        case WidgetType::AlphaArena:         return FC_PURPLE;
+        case WidgetType::BacktestSummary:    return FC_BLUE;
+        case WidgetType::WatchlistAlerts:    return FC_YELLOW;
+        case WidgetType::LiveSignals:        return FC_GREEN;
+        case WidgetType::DBnomics:           return FC_BLUE;
+        case WidgetType::AkShare:            return FC_RED;
+        case WidgetType::Maritime:           return FC_CYAN;
+        case WidgetType::Polymarket:         return FC_PURPLE;
+        case WidgetType::Forum:              return FC_ORANGE;
+        case WidgetType::DataSource:         return FC_BLUE;
         default: return FC_ORANGE;
     }
 }
@@ -148,6 +168,40 @@ void DashboardScreen::load_layout() {
 }
 
 // ============================================================================
+// YouTube entries persistence
+// ============================================================================
+void DashboardScreen::save_yt_entries() {
+    try {
+        nlohmann::json j = nlohmann::json::array();
+        for (auto& e : yt_entries_) {
+            j.push_back({{"url", e.url}, {"title", e.title}, {"author", e.author}});
+        }
+        fincept::db::ops::save_setting("dashboard_yt_entries", j.dump(), "dashboard");
+    } catch (...) {}
+}
+
+void DashboardScreen::load_yt_entries() {
+    try {
+        auto opt = fincept::db::ops::get_setting("dashboard_yt_entries");
+        if (opt.has_value() && !opt->empty()) {
+            auto j = nlohmann::json::parse(*opt);
+            if (j.is_array()) {
+                for (auto& ej : j) {
+                    YouTubeEntry entry;
+                    entry.url = ej.value("url", "");
+                    entry.title = ej.value("title", "");
+                    entry.author = ej.value("author", "");
+                    entry.fetched = !entry.title.empty();
+                    if (!entry.url.empty()) {
+                        yt_entries_.push_back(std::move(entry));
+                    }
+                }
+            }
+        }
+    } catch (...) {}
+}
+
+// ============================================================================
 // Widget management
 // ============================================================================
 void DashboardScreen::add_widget(WidgetType type) {
@@ -156,45 +210,52 @@ void DashboardScreen::add_widget(WidgetType type) {
     w.type = type;
     w.title = widget_type_name(type);
 
-    // Find first empty cell in the grid by scanning row-by-row, col-by-col
-    // Build an occupancy grid to find gaps
+    // Default config for widgets that need it (matches React DEFAULT_WIDGET_CONFIGS)
+    switch (type) {
+        case WidgetType::StockQuote:       w.config = {{"stockSymbol","AAPL"}}; break;
+        case WidgetType::EconomicCalendar: w.config = {{"country","US"},{"limit",10}}; break;
+        case WidgetType::Screener:         w.config = {{"screenerPreset","value"}}; break;
+        case WidgetType::WatchlistAlerts:  w.config = {{"alertThreshold",3}}; break;
+        case WidgetType::Watchlist:        w.config = {{"watchlistName","Default"}}; break;
+        case WidgetType::DBnomics:         w.config = {{"dbnomicsSeriesId","FRED/UNRATE"}}; break;
+        case WidgetType::Notes:            w.config = {{"notesCategory","all"},{"notesLimit",10}}; break;
+        default: break;
+    }
+
     int grid_cols = std::max(layout_.grid_cols, 1);
-    int max_row = 0;
-    for (auto& existing : layout_.widgets) {
-        if (!existing.visible) continue;
-        int end_row = existing.row + existing.row_span;
-        if (end_row > max_row) max_row = end_row;
-    }
-    // Search up to max_row+1 to allow placing in a new row if grid is full
-    int search_rows = std::max(max_row + 1, layout_.grid_rows);
 
-    // Build occupancy map
-    std::vector<std::vector<bool>> occupied(search_rows, std::vector<bool>(grid_cols, false));
+    // Find the last occupied row and scan that row for an empty col slot.
+    int last_row = 0;
     for (auto& existing : layout_.widgets) {
         if (!existing.visible) continue;
-        for (int r = existing.row; r < existing.row + existing.row_span && r < search_rows; r++) {
-            for (int c = existing.col; c < existing.col + existing.col_span && c < grid_cols; c++) {
-                occupied[r][c] = true;
-            }
+        last_row = std::max(last_row, existing.row);
+    }
+
+    // Build occupancy for last_row only
+    std::vector<bool> row_occupied(grid_cols, false);
+    for (auto& existing : layout_.widgets) {
+        if (!existing.visible) continue;
+        if (existing.row == last_row) {
+            for (int c = existing.col; c < existing.col + existing.col_span && c < grid_cols; c++)
+                row_occupied[c] = true;
         }
     }
 
-    // Find first empty cell
+    // Find first free col in last_row
     bool found = false;
-    for (int r = 0; r < search_rows && !found; r++) {
-        for (int c = 0; c < grid_cols && !found; c++) {
-            if (!occupied[r][c]) {
-                w.col = c;
-                w.row = r;
-                found = true;
-            }
+    for (int c = 0; c < grid_cols; c++) {
+        if (!row_occupied[c]) {
+            w.col = c;
+            w.row = last_row;
+            found = true;
+            break;
         }
     }
 
-    // If grid is completely full, add a new row
+    // Last row full — start a new row
     if (!found) {
         w.col = 0;
-        w.row = max_row;
+        w.row = last_row + 1;
     }
 
     w.col_span = 1;
@@ -245,12 +306,23 @@ void DashboardScreen::render_header_bar(float width) {
     ImGui::TextColored(FC_BORDER, "|");
     ImGui::SameLine(0, 10);
 
-    // Clock
-    time_t now = time(nullptr);
-    struct tm* t = localtime(&now);
-    char tb[32];
-    std::strftime(tb, sizeof(tb), "%H:%M:%S", t);
-    ImGui::TextColored(FC_YELLOW, "%s", tb);
+    // Clock — cached per second to avoid localtime() every frame
+    {
+        static time_t cached_time = 0;
+        static char cached_tb[32] = {};
+        time_t now = time(nullptr);
+        if (now != cached_time) {
+            cached_time = now;
+            struct tm t_buf;
+#ifdef _WIN32
+            localtime_s(&t_buf, &now);
+#else
+            localtime_r(&now, &t_buf);
+#endif
+            std::strftime(cached_tb, sizeof(cached_tb), "%H:%M:%S", &t_buf);
+        }
+        ImGui::TextColored(FC_YELLOW, "%s", cached_tb);
+    }
 
     ImGui::SameLine(0, 10);
     ImGui::TextColored(FC_BORDER, "|");
@@ -323,14 +395,24 @@ void DashboardScreen::render_ticker_bar(float width) {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.02f, 0.02f, 0.02f, 1.0f));
     ImGui::BeginChild("##ticker_bar", ImVec2(width, 20), false);
 
-    // Assemble ticker from existing categories (no separate fetch needed)
-    std::vector<QuoteEntry> ticker_quotes;
-    for (auto cat : {DataCategory::Indices, DataCategory::Crypto, DataCategory::Forex, DataCategory::MarketPulse}) {
-        auto q = DashboardData::instance().get_quotes(cat);
-        ticker_quotes.insert(ticker_quotes.end(), q.begin(), q.end());
+    // Rebuild ticker cache only when data version changes (avoids 4 vector copies + CalcTextSize per frame)
+    const uint64_t dv = DashboardData::instance().data_version();
+    if (dv != ticker_data_version_) {
+        ticker_data_version_ = dv;
+        ticker_quotes_.clear();
+        for (auto cat : {DataCategory::Indices, DataCategory::Crypto, DataCategory::Forex, DataCategory::MarketPulse}) {
+            auto q = DashboardData::instance().get_quotes(cat);
+            ticker_quotes_.insert(ticker_quotes_.end(), q.begin(), q.end());
+        }
+        ticker_total_width_ = 0;
+        for (auto& q : ticker_quotes_) {
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "%s %.2f %+.2f%%  ", q.label.c_str(), q.price, q.change_percent);
+            ticker_total_width_ += ImGui::CalcTextSize(buf).x;
+        }
     }
 
-    if (ticker_quotes.empty()) {
+    if (ticker_quotes_.empty()) {
         ImGui::SetCursorPos(ImVec2(width / 2 - 60, 2));
         ImGui::TextColored(FC_MUTED, "Loading market data...");
         ImGui::EndChild();
@@ -340,24 +422,19 @@ void DashboardScreen::render_ticker_bar(float width) {
 
     ticker_offset_ -= ImGui::GetIO().DeltaTime * 55.0f;
 
-    float total_w = 0;
-    for (auto& q : ticker_quotes) {
-        char buf[64];
-        std::snprintf(buf, sizeof(buf), "%s %.2f %+.2f%%  ", q.label.c_str(), q.price, q.change_percent);
-        total_w += ImGui::CalcTextSize(buf).x;
-    }
-    if (total_w > 0 && ticker_offset_ < -total_w) ticker_offset_ = width;
+    if (ticker_total_width_ > 0 && ticker_offset_ < -ticker_total_width_) ticker_offset_ = width;
 
     ImGui::SetCursorPos(ImVec2(0, 2));
 
     float cur_x = ticker_offset_;
-    for (auto& q : ticker_quotes) {
+    for (auto& q : ticker_quotes_) {
         if (cur_x > width + 200) break;
         if (cur_x > -200) {
             ImGui::SetCursorPosX(cur_x);
             ImGui::TextColored(FC_WHITE, "%s", q.label.c_str());
             ImGui::SameLine(0, 3);
-            ImGui::TextColored(FC_GRAY, "%s", fmt_price(q.price).c_str());
+            char pb[32]; fmt_price_buf(pb, sizeof(pb), q.price);
+            ImGui::TextColored(FC_GRAY, "%s", pb);
             ImGui::SameLine(0, 3);
             ImGui::TextColored(chg_col(q.change_percent), "%+.2f%%", q.change_percent);
             ImGui::SameLine(0, 14);
@@ -430,8 +507,12 @@ void DashboardScreen::render() {
 
     DashboardData::instance().update(ImGui::GetIO().DeltaTime);
 
-    // Refresh econ/geo/perf panels from live data every frame (cheap — just copies)
-    refresh_live_panels();
+    // Only refresh derived panels when upstream data has changed (skip 59/60 frames)
+    const uint64_t cur_ver = DashboardData::instance().data_version();
+    if (cur_ver != last_data_version_) {
+        last_data_version_ = cur_ver;
+        refresh_live_panels();
+    }
 
     // ScreenFrame replaces all manual viewport math
     ui::ScreenFrame frame("##dash", ImVec2(0, 0), FC_DARK);
@@ -457,18 +538,50 @@ void DashboardScreen::render() {
     // Ticker bar
     render_ticker_bar(content_w);
 
-    // Main area: responsive two-panel via Yoga (widget grid + market pulse)
+    // Main area: widget grid + optional resizable Market Pulse sidebar
     float grid_area_h = vstack.heights[3];
     if (grid_area_h < 100) grid_area_h = 100;
 
-    auto panels = ui::two_panel_layout(content_w, grid_area_h,
-        layout_.market_pulse_open, 25, 280, 340);
+    if (layout_.market_pulse_open) {
+        const float min_side = 220.0f;
+        const float max_side = 420.0f;
+        const float splitter_w = 4.0f;
+        pulse_width_ = std::clamp(pulse_width_, min_side, max_side);
 
-    render_widget_grid(panels.main_w, panels.main_h);
+        float grid_w = content_w - pulse_width_ - splitter_w;
+        if (grid_w < 200.0f) grid_w = 200.0f;
 
-    if (layout_.market_pulse_open && panels.side_w > 0) {
+        render_widget_grid(grid_w, grid_area_h);
         ImGui::SameLine(0, 0);
-        render_market_pulse(panels.side_w, panels.side_h);
+
+        // Splitter handle — 4px wide, draggable
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.12f,0.12f,0.12f,1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f,0.533f,0.0f,0.5f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f,0.533f,0.0f,0.8f));
+            ImGui::Button("##splitter", ImVec2(splitter_w, grid_area_h));
+            ImGui::PopStyleColor(3);
+
+            if (ImGui::IsItemActive()) {
+                pulse_width_ -= ImGui::GetIO().MouseDelta.x;
+                pulse_width_ = std::clamp(pulse_width_, min_side, max_side);
+            }
+            if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        }
+
+        ImGui::SameLine(0, 0);
+
+        // Sidebar — fixed width, no ResizeX
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.04f,0.04f,0.04f,1.0f));
+        ImGui::BeginChild("##pulse_panel", ImVec2(pulse_width_, grid_area_h),
+                          ImGuiChildFlags_Borders,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        render_market_pulse(pulse_width_, grid_area_h);
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+    } else {
+        render_widget_grid(content_w, grid_area_h);
     }
 
     frame.end();
@@ -476,6 +589,7 @@ void DashboardScreen::render() {
     // Modals (rendered outside main window)
     render_add_widget_modal();
     render_template_picker_modal();
+    render_widget_config_popup();
 }
 
 } // namespace fincept::dashboard

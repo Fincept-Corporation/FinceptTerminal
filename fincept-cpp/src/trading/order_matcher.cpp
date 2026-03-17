@@ -5,6 +5,7 @@
 #include "paper_trading.h"
 #include "core/logger.h"
 #include "core/event_bus.h"
+#include "core/notification.h"
 #include <chrono>
 #include <algorithm>
 
@@ -267,6 +268,15 @@ void OrderMatcher::check_orders(const std::string& symbol, const PriceData& pric
                     {"symbol", symbol}
                 });
 
+                // OS + ImGui notification for background fills
+                {
+                    char msg[128];
+                    std::snprintf(msg, sizeof(msg), "%s %s %.4f @ %.2f",
+                                  order.side == "buy" ? "BUY" : "SELL",
+                                  order.symbol.c_str(), order.quantity, fill_price);
+                    core::notify::send("Order Filled", msg, core::NotifyLevel::Success);
+                }
+
                 orders_to_remove.push_back(order.id);
             } catch (const std::exception& e) {
                 LOG_ERROR("OrderMatcher", "Failed to fill order %s: %s", order.id.c_str(), e.what());
@@ -352,6 +362,12 @@ void OrderMatcher::check_sl_tp_triggers(const std::string& portfolio_id,
                 pt_fill_order(close_order.id, current_price);
                 LOG_INFO("OrderMatcher", "%s close filled: side=%s qty=%.6f at %.4f",
                          reason, close_side.c_str(), pos.quantity, current_price);
+                {
+                    char msg[128];
+                    std::snprintf(msg, sizeof(msg), "%s hit on %s — closed %.4f @ %.2f",
+                                  reason, symbol.c_str(), pos.quantity, current_price);
+                    core::notify::send("Stop Triggered", msg, core::NotifyLevel::Warning);
+                }
                 break;
             }
         } catch (const std::exception& e) {

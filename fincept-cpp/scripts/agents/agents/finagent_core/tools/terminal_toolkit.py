@@ -1,11 +1,11 @@
 """
 TerminalToolkit - Agno Toolkit that proxies calls to Fincept Terminal internal MCP tools.
 
-When finagent_core runs as a Python subprocess, it cannot call Tauri IPC directly.
+When finagent_core runs as a Python subprocess, it cannot call C++ IPC directly.
 This toolkit bridges that gap via the local HTTP bridge (mcp_bridge.rs):
 
   Python agent → POST http://127.0.0.1:{port}/tool → Rust bridge
-    → Tauri event → TypeScript mcpToolService.executeToolDirect()
+    → C++ MCP service call
     → register_mcp_tool_result → Rust bridge → HTTP response → Python
 
 Usage:

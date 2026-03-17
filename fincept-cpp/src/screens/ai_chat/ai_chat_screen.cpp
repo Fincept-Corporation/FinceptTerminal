@@ -31,6 +31,25 @@ void AIChatScreen::init() {
     load_config();
     load_sessions();
     load_statistics();
+
+    // Initialize voice service
+    if (!voice_initialized_) {
+        auto& vs = voice::VoiceService::instance();
+        vs.init();
+
+        // When transcription is ready, put it in input and send
+        vs.set_transcript_callback([this](const std::string& text) {
+            std::strncpy(input_buf_, text.c_str(), sizeof(input_buf_) - 1);
+            input_buf_[sizeof(input_buf_) - 1] = '\0';
+            // Auto-send if in voice mode
+            if (voice_mode_) {
+                send_message();
+            }
+        });
+
+        voice_initialized_ = true;
+    }
+
     status_ = "READY";
     last_config_reload_ = std::chrono::steady_clock::now();
     initialized_ = true;
@@ -346,6 +365,11 @@ void AIChatScreen::check_streaming_result() {
         total_tokens_ += resp.total_tokens;
         scroll_to_bottom_ = true;
         status_ = "READY";
+
+        // Voice mode: speak the AI response
+        if (voice_mode_) {
+            voice::VoiceService::instance().speak(resp.content);
+        }
     } else if (!resp.error.empty()) {
         // Save error as assistant message
         db::ChatMessage err_msg;
@@ -493,9 +517,41 @@ void AIChatScreen::render_navbar(float width) {
     ImGui::TextColored(TEXT_SECONDARY, "%s", clock_buf);
 
     // Right side buttons
-    float right_x = width - 200;
+    float right_x = width - 320;
     ImGui::SameLine(right_x);
 
+    // Voice mode toggle
+    {
+        auto& vs = voice::VoiceService::instance();
+        bool vm = voice_mode_;
+        ImVec4 voice_color = vm ? ACCENT : TEXT_DIM;
+        ImVec4 voice_bg = vm ? ACCENT_BG : ImVec4(0, 0, 0, 0);
+
+        ImGui::PushStyleColor(ImGuiCol_Button, voice_bg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, vm ? ACCENT_BG : BG_HOVER);
+        ImGui::PushStyleColor(ImGuiCol_Text, voice_color);
+        if (ImGui::SmallButton(vm ? "VOICE [ON]" : "VOICE")) {
+            voice_mode_ = !voice_mode_;
+            if (voice_mode_) {
+                vs.enable_voice_mode();
+            } else {
+                vs.disable_voice_mode();
+            }
+        }
+        ImGui::PopStyleColor(3);
+
+        // Voice state indicator
+        if (vs.state() != voice::VoiceState::Idle) {
+            ImGui::SameLine();
+            ImVec4 state_color = SUCCESS;
+            if (vs.state() == voice::VoiceState::Speaking) state_color = INFO;
+            if (vs.state() == voice::VoiceState::Processing) state_color = WARNING;
+            if (vs.state() == voice::VoiceState::Error) state_color = ERROR_RED;
+            ImGui::TextColored(state_color, "%s", voice::voice_state_to_string(vs.state()));
+        }
+    }
+
+    ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, BG_HOVER);
     ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
@@ -874,7 +930,8 @@ void AIChatScreen::render_input_area(float width) {
     ImGui::BeginChild("##input_area", ImVec2(width, 90), ImGuiChildFlags_None);
 
     float btn_w = 80;
-    float input_w = width - btn_w - 24;
+    float mic_w = 40;
+    float input_w = width - btn_w - mic_w - 32;
 
     ImGui::SetCursorPos(ImVec2(8, 8));
 
@@ -892,6 +949,41 @@ void AIChatScreen::render_input_area(float width) {
     // Send on Enter (when not streaming)
     bool can_send = std::strlen(input_buf_) > 0 && !is_streaming_;
 
+    // MIC button
+    ImGui::SameLine();
+    ImGui::SetCursorPosY(8);
+    {
+        auto& vs = voice::VoiceService::instance();
+        bool listening = vs.is_listening();
+
+        ImVec4 mic_color = listening ? ERROR_RED : TEXT_SECONDARY;
+        ImVec4 mic_bg = listening ? ImVec4(ERROR_RED.x, ERROR_RED.y, ERROR_RED.z, 0.15f) : BG_WIDGET;
+
+        ImGui::PushStyleColor(ImGuiCol_Button, mic_bg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, listening ? ImVec4(ERROR_RED.x, ERROR_RED.y, ERROR_RED.z, 0.3f) : BG_HOVER);
+        ImGui::PushStyleColor(ImGuiCol_Text, mic_color);
+
+        if (ImGui::Button(listening ? "STOP" : "MIC", ImVec2(mic_w, 50))) {
+            if (listening) {
+                vs.stop_listening();
+            } else {
+                vs.start_listening();
+            }
+        }
+        ImGui::PopStyleColor(3);
+
+        // Pulsing indicator when listening
+        if (listening) {
+            float level = vs.audio_level();
+            ImVec2 p = ImGui::GetItemRectMin();
+            float bar_h = level * 40.0f;
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImVec2(p.x, p.y + 50 - bar_h), ImVec2(p.x + mic_w, p.y + 50),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(ERROR_RED.x, ERROR_RED.y, ERROR_RED.z, 0.4f)));
+        }
+    }
+
+    // SEND button
     ImGui::SameLine();
     ImGui::SetCursorPosY(8);
 
@@ -908,11 +1000,24 @@ void AIChatScreen::render_input_area(float width) {
 
     // Status line
     ImGui::SetCursorPos(ImVec2(8, 65));
-    size_t len = std::strlen(input_buf_);
-    if (len > 0) {
-        ImGui::TextColored(TEXT_DIM, "%zu CHARS", len);
-    } else {
-        ImGui::TextColored(TEXT_DIM, "STATUS: %s", status_.c_str());
+    {
+        auto& vs = voice::VoiceService::instance();
+        if (vs.is_listening()) {
+            double t = ImGui::GetTime();
+            int dots = ((int)(t * 3)) % 4;
+            char dot_buf[8] = {};
+            for (int i = 0; i < dots; i++) dot_buf[i] = '.';
+            ImGui::TextColored(ERROR_RED, "LISTENING%s", dot_buf);
+        } else if (vs.is_speaking()) {
+            ImGui::TextColored(INFO, "SPEAKING...");
+        } else {
+            size_t len = std::strlen(input_buf_);
+            if (len > 0) {
+                ImGui::TextColored(TEXT_DIM, "%zu CHARS", len);
+            } else {
+                ImGui::TextColored(TEXT_DIM, "STATUS: %s", status_.c_str());
+            }
+        }
     }
 
     // Error display

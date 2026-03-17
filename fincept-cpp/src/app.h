@@ -1,6 +1,7 @@
 #pragma once
 // Application — state machine routing between auth screens and dashboard
 // Owns all screen instances as members (no static globals)
+// Heavy screens use std::optional for lazy construction on first navigation.
 
 #include "core/app_screen.h"
 #include "auth/login_screen.h"
@@ -40,6 +41,20 @@
 #include "screens/data_mapping/data_mapping_screen.h"
 #include "screens/screener/screener_screen.h"
 #include "screens/equity_trading/equity_trading_screen.h"
+#include "screens/report_builder/report_builder_screen.h"
+#include "screens/derivatives/derivatives_screen.h"
+#include "screens/excel/excel_screen.h"
+#include "screens/polymarket/polymarket_screen.h"
+#include "screens/akshare/akshare_screen.h"
+#include "screens/asia_markets/asia_markets_screen.h"
+#include "screens/relationship_map/relationship_map_screen.h"
+#include "screens/alt_investments/alt_investments_screen.h"
+#include "screens/maritime/maritime_screen.h"
+#include "screens/mcp_servers/mcp_servers_screen.h"
+#include "screens/alpha_arena/alpha_arena_screen.h"
+#include "screens/trade_viz/trade_viz_screen.h"
+#include <optional>
+#include <chrono>
 
 // Fullscreen toggle (implemented in main.cpp, delegates to Window)
 void toggle_fullscreen();
@@ -62,45 +77,67 @@ private:
     bool came_from_login_ = false;
     bool has_chosen_free_ = false;
     int active_tab_ = 0;
+    std::chrono::steady_clock::time_point init_time_{};
 
-    // Screen instances (owned by App, not static globals)
+    // Eagerly constructed screens (needed at startup)
     python::SetupScreen setup_screen_;
     auth::LoginScreen login_screen_;
     auth::RegisterScreen register_screen_;
     auth::ForgotPasswordScreen forgot_password_screen_;
     auth::PricingScreen pricing_screen_;
     dashboard::DashboardScreen dashboard_screen_;
-    profile::ProfileScreen profile_screen_;
-    news::NewsScreen news_screen_;
-    research::ResearchScreen research_screen_;
-    markets::MarketsScreen markets_screen_;
-    surface::SurfaceScreen surface_screen_;
-    portfolio::PortfolioScreen portfolio_screen_;
-    geopolitics::GeopoliticsScreen geopolitics_screen_;
-    crypto::CryptoTradingScreen crypto_trading_screen_;
-    node_editor::NodeEditorScreen node_editor_screen_;
     settings::SettingsScreen settings_screen_;
-    agent_studio::AgentStudioScreen agent_studio_screen_;
-    watchlist::WatchlistScreen watchlist_screen_;
-    economics::EconomicsScreen economics_screen_;
-    dbnomics::DBnomicsScreen dbnomics_screen_;
-    quantlib::QuantLibScreen quantlib_screen_;
-    notes::NotesScreen notes_screen_;
-    data_sources::DataSourcesScreen data_sources_screen_;
-    mna::MNAScreen mna_screen_;
-    forum::ForumScreen forum_screen_;
-    docs::DocsScreen docs_screen_;
-    support::SupportScreen support_screen_;
-    about::AboutScreen about_screen_;
-    code_editor::CodeEditorScreen code_editor_screen_;
-    gov_data::GovDataScreen gov_data_screen_;
-    backtesting::BacktestingScreen backtesting_screen_;
-    algo::AlgoTradingScreen algo_trading_screen_;
-    ai_chat::AIChatScreen ai_chat_screen_;
-    ai_quant_lab::AIQuantLabScreen ai_quant_lab_screen_;
-    data_mapping::DataMappingScreen data_mapping_screen_;
-    screener::ScreenerScreen screener_screen_;
-    equity_trading::EquityTradingScreen equity_trading_screen_;
+
+    // Lazily constructed screens — only allocated when first navigated to.
+    // This avoids constructing ~35 screen objects at startup, reducing memory
+    // pressure and constructor time.
+    template<typename T> T& lazy(std::optional<T>& opt) {
+        if (!opt) opt.emplace();
+        return *opt;
+    }
+
+    std::optional<profile::ProfileScreen> profile_screen_;
+    std::optional<news::NewsScreen> news_screen_;
+    std::optional<research::ResearchScreen> research_screen_;
+    std::optional<markets::MarketsScreen> markets_screen_;
+    std::optional<surface::SurfaceScreen> surface_screen_;
+    std::optional<portfolio::PortfolioScreen> portfolio_screen_;
+    std::optional<geopolitics::GeopoliticsScreen> geopolitics_screen_;
+    std::optional<crypto::CryptoTradingScreen> crypto_trading_screen_;
+    std::optional<node_editor::NodeEditorScreen> node_editor_screen_;
+    std::optional<agent_studio::AgentStudioScreen> agent_studio_screen_;
+    std::optional<watchlist::WatchlistScreen> watchlist_screen_;
+    std::optional<economics::EconomicsScreen> economics_screen_;
+    std::optional<dbnomics::DBnomicsScreen> dbnomics_screen_;
+    std::optional<quantlib::QuantLibScreen> quantlib_screen_;
+    std::optional<notes::NotesScreen> notes_screen_;
+    std::optional<data_sources::DataSourcesScreen> data_sources_screen_;
+    std::optional<mna::MNAScreen> mna_screen_;
+    std::optional<forum::ForumScreen> forum_screen_;
+    std::optional<docs::DocsScreen> docs_screen_;
+    std::optional<support::SupportScreen> support_screen_;
+    std::optional<about::AboutScreen> about_screen_;
+    std::optional<code_editor::CodeEditorScreen> code_editor_screen_;
+    std::optional<gov_data::GovDataScreen> gov_data_screen_;
+    std::optional<backtesting::BacktestingScreen> backtesting_screen_;
+    std::optional<algo::AlgoTradingScreen> algo_trading_screen_;
+    std::optional<ai_chat::AIChatScreen> ai_chat_screen_;
+    std::optional<ai_quant_lab::AIQuantLabScreen> ai_quant_lab_screen_;
+    std::optional<data_mapping::DataMappingScreen> data_mapping_screen_;
+    std::optional<screener::ScreenerScreen> screener_screen_;
+    std::optional<equity_trading::EquityTradingScreen> equity_trading_screen_;
+    std::optional<report_builder::ReportBuilderScreen> report_builder_screen_;
+    std::optional<derivatives::DerivativesScreen> derivatives_screen_;
+    std::optional<excel::ExcelScreen> excel_screen_;
+    std::optional<polymarket::PolymarketScreen> polymarket_screen_;
+    std::optional<akshare::AkShareScreen> akshare_screen_;
+    std::optional<asia_markets::AsiaMarketsScreen> asia_markets_screen_;
+    std::optional<relationship_map::RelationshipMapScreen> relationship_map_screen_;
+    std::optional<alt_investments::AltInvestmentsScreen> alt_investments_screen_;
+    std::optional<maritime::MaritimeScreen> maritime_screen_;
+    std::optional<mcp_servers::MCPServersScreen> mcp_servers_screen_;
+    std::optional<alpha_arena::AlphaArenaScreen> alpha_arena_screen_;
+    std::optional<trade_viz::TradeVizScreen> trade_viz_screen_;
 
     // Command bar state
     char cmd_buf_[128] = {};

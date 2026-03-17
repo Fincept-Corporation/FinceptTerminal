@@ -183,6 +183,7 @@ public:
                                      int limit = 100);
     std::vector<MarketInfo> fetch_markets(const std::string& type = "");
     std::vector<ExchangeInfo> list_exchanges();
+    std::vector<std::string> list_exchange_ids(); // fast — no instantiation
     std::vector<TradeData> fetch_trades(const std::string& symbol, int limit = 50);
     FundingRateData fetch_funding_rate(const std::string& symbol);
     OpenInterestData fetch_open_interest(const std::string& symbol);

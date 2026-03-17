@@ -1,5 +1,6 @@
 #include "valuation_panel.h"
 #include "ui/theme.h"
+#include "core/logger.h"
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 #include <cstdio>
@@ -28,7 +29,13 @@ void ValuationPanel::render(MNAData& data) {
     }
 
     ImGui::Spacing();
-    render_result_section();
+    try {
+        render_result_section();
+    } catch (const std::exception& ex) {
+        LOG_ERROR("ValuationPanel", "render_result_section EXCEPTION: %s", ex.what());
+        ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "Render error: %s", ex.what());
+        has_result_ = false;
+    }
 }
 
 // =============================================================================
@@ -39,7 +46,7 @@ void ValuationPanel::render_sub_tabs() {
         "DCF", "LBO Returns", "LBO Model", "Debt Schedule",
         "LBO Sensitivity", "Trading Comps", "Precedent Txn"
     };
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < static_cast<int>(std::size(tabs)); i++) {
         if (ColoredButton(tabs[i], ma_colors::VALUATION, sub_tab_ == i)) {
             sub_tab_ = i;
             has_result_ = false;
@@ -90,53 +97,70 @@ void ValuationPanel::render_dcf(MNAData& data) {
     ImGui::Spacing();
 
     if (RunButton("RUN DCF ANALYSIS", data.is_loading(), ma_colors::VALUATION)) {
-        // Build JSON args for dcf_model.py dcf command
-        json wacc_inputs = {
-            {"risk_free_rate",       dcf_rfr_},
-            {"market_risk_premium",  0.06},
-            {"beta",                 dcf_beta_},
-            {"cost_of_debt",         dcf_cod_},
-            {"tax_rate",             dcf_tax_},
-            {"market_value_equity",  dcf_mcap_},
-            {"market_value_debt",    dcf_debt_}
-        };
-        json fcf_inputs = {
-            {"ebit",          dcf_ebit_},
-            {"tax_rate",      dcf_tax_},
-            {"depreciation",  dcf_depr_},
-            {"capex",         dcf_capex_},
-            {"change_in_nwc", dcf_nwc_}
-        };
-        json growth_rates = {0.08, 0.07, 0.06, 0.05, 0.04};
-        json balance_sheet = {
-            {"cash", dcf_cash_},
-            {"debt", dcf_debt_}
-        };
+        printf("[DCF_UI] Button clicked, building JSON args...\n"); fflush(stdout);
+        try {
+            // Build JSON args for dcf_model.py dcf command
+            json wacc_inputs = {
+                {"risk_free_rate",       dcf_rfr_},
+                {"market_risk_premium",  0.06},
+                {"beta",                 dcf_beta_},
+                {"cost_of_debt",         dcf_cod_},
+                {"tax_rate",             dcf_tax_},
+                {"market_value_equity",  dcf_mcap_},
+                {"market_value_debt",    dcf_debt_}
+            };
+            printf("[DCF_UI] wacc_inputs built\n"); fflush(stdout);
+            json fcf_inputs = {
+                {"ebit",          dcf_ebit_},
+                {"tax_rate",      dcf_tax_},
+                {"depreciation",  dcf_depr_},
+                {"capex",         dcf_capex_},
+                {"change_in_nwc", dcf_nwc_}
+            };
+            printf("[DCF_UI] fcf_inputs built\n"); fflush(stdout);
+            json growth_rates = {0.08, 0.07, 0.06, 0.05, 0.04};
+            json balance_sheet = {
+                {"cash", dcf_cash_},
+                {"debt", dcf_debt_}
+            };
+            printf("[DCF_UI] All JSON built, calling dump()...\n"); fflush(stdout);
 
-        data.run_analysis("valuation/dcf_model.py", {
-            "dcf",
-            wacc_inputs.dump(),
-            fcf_inputs.dump(),
-            growth_rates.dump(),
-            std::to_string(dcf_term_growth_),
-            balance_sheet.dump(),
-            std::to_string(dcf_shares_)
-        });
+            std::string s_wacc = wacc_inputs.dump();
+            std::string s_fcf = fcf_inputs.dump();
+            std::string s_growth = growth_rates.dump();
+            std::string s_tg = std::to_string(dcf_term_growth_);
+            std::string s_bs = balance_sheet.dump();
+            std::string s_shares = std::to_string(dcf_shares_);
+            printf("[DCF_UI] All dump() done, calling run_analysis...\n"); fflush(stdout);
+
+            data.run_analysis("valuation/dcf_model.py", {
+                "dcf", s_wacc, s_fcf, s_growth, s_tg, s_bs, s_shares
+            });
+            printf("[DCF_UI] run_analysis returned OK\n"); fflush(stdout);
+        } catch (const std::exception& ex) {
+            printf("[DCF_UI] EXCEPTION: %s\n", ex.what()); fflush(stdout);
+        } catch (...) {
+            printf("[DCF_UI] UNKNOWN EXCEPTION\n"); fflush(stdout);
+        }
     }
 
     // Check for results
-    if (!data.is_loading() && data.has_result()) {
-        std::lock_guard<std::mutex> lock(data.mutex());
-        result_ = data.result();
-        has_result_ = true;
-        status_ = "DCF analysis complete";
-        status_time_ = ImGui::GetTime();
-        data.clear();
-    }
-    if (!data.is_loading() && !data.error().empty()) {
-        status_ = "Error: " + data.error();
-        status_time_ = ImGui::GetTime();
-        data.clear();
+    try {
+        if (!data.is_loading() && data.has_result()) {
+            std::lock_guard<std::mutex> lock(data.mutex());
+            result_ = data.result();
+            has_result_ = true;
+            status_ = "DCF analysis complete";
+            status_time_ = ImGui::GetTime();
+            data.clear();
+        }
+        if (!data.is_loading() && !data.error().empty()) {
+            status_ = "Error: " + data.error();
+            status_time_ = ImGui::GetTime();
+            data.clear();
+        }
+    } catch (const std::exception& ex) {
+        printf("[DCF_UI] Result check EXCEPTION: %s\n", ex.what()); fflush(stdout);
     }
 }
 
@@ -216,48 +240,64 @@ void ValuationPanel::render_lbo_model(MNAData& data) {
     ImGui::Spacing();
 
     if (RunButton("BUILD LBO MODEL", data.is_loading(), ma_colors::VALUATION)) {
-        json target = {
-            {"company_name", std::string(lbo_model_.company_name)},
-            {"revenue",      lbo_model_.revenue},
-            {"ebitda",       lbo_model_.ebitda},
-            {"ebit",         lbo_model_.ebit},
-            {"capex",        lbo_model_.capex},
-            {"nwc",          lbo_model_.nwc}
-        };
-        json assumptions = {
-            {"entry_multiple",    lbo_model_.entry_multiple},
-            {"exit_multiples",    {lbo_model_.exit_multiple}},
-            {"target_leverage",   lbo_model_.debt_percent * lbo_model_.entry_multiple},
-            {"revenue_growth",    lbo_model_.revenue_growth},
-            {"ebitda_margin",     lbo_model_.ebitda_margin},
-            {"capex_pct_revenue", lbo_model_.capex_pct_revenue},
-            {"nwc_pct_revenue",   lbo_model_.nwc_pct_revenue},
-            {"tax_rate",          lbo_model_.tax_rate},
-            {"hurdle_irr",        lbo_model_.hurdle_irr},
-            {"exit_year",         lbo_model_.projection_years},
-            {"projection_years",  lbo_model_.projection_years}
-        };
+        printf("[LBO_UI] Button clicked, building JSON args...\n"); fflush(stdout);
+        try {
+            json target = {
+                {"company_name", std::string(lbo_model_.company_name)},
+                {"revenue",      lbo_model_.revenue},
+                {"ebitda",       lbo_model_.ebitda},
+                {"ebit",         lbo_model_.ebit},
+                {"capex",        lbo_model_.capex},
+                {"nwc",          lbo_model_.nwc}
+            };
+            printf("[LBO_UI] target built\n"); fflush(stdout);
+            json assumptions = {
+                {"entry_multiple",    lbo_model_.entry_multiple},
+                {"exit_multiples",    {lbo_model_.exit_multiple}},
+                {"target_leverage",   lbo_model_.debt_percent * lbo_model_.entry_multiple},
+                {"revenue_growth",    lbo_model_.revenue_growth},
+                {"ebitda_margin",     lbo_model_.ebitda_margin},
+                {"capex_pct_revenue", lbo_model_.capex_pct_revenue},
+                {"nwc_pct_revenue",   lbo_model_.nwc_pct_revenue},
+                {"tax_rate",          lbo_model_.tax_rate},
+                {"hurdle_irr",        lbo_model_.hurdle_irr},
+                {"exit_year",         lbo_model_.projection_years},
+                {"projection_years",  lbo_model_.projection_years}
+            };
+            printf("[LBO_UI] assumptions built\n"); fflush(stdout);
 
-        data.run_analysis("lbo/lbo_model.py", {
-            "build",
-            target.dump(),
-            assumptions.dump(),
-            std::to_string(lbo_model_.projection_years)
-        });
+            std::string s_target = target.dump();
+            std::string s_assumptions = assumptions.dump();
+            std::string s_years = std::to_string(lbo_model_.projection_years);
+            printf("[LBO_UI] dump() done, calling run_analysis...\n"); fflush(stdout);
+
+            data.run_analysis("lbo/lbo_model.py", {
+                "build", s_target, s_assumptions, s_years
+            });
+            printf("[LBO_UI] run_analysis returned OK\n"); fflush(stdout);
+        } catch (const std::exception& ex) {
+            printf("[LBO_UI] EXCEPTION: %s\n", ex.what()); fflush(stdout);
+        } catch (...) {
+            printf("[LBO_UI] UNKNOWN EXCEPTION\n"); fflush(stdout);
+        }
     }
 
-    if (!data.is_loading() && data.has_result()) {
-        std::lock_guard<std::mutex> lock(data.mutex());
-        result_ = data.result();
-        has_result_ = true;
-        status_ = "LBO model complete";
-        status_time_ = ImGui::GetTime();
-        data.clear();
-    }
-    if (!data.is_loading() && !data.error().empty()) {
-        status_ = "Error: " + data.error();
-        status_time_ = ImGui::GetTime();
-        data.clear();
+    try {
+        if (!data.is_loading() && data.has_result()) {
+            std::lock_guard<std::mutex> lock(data.mutex());
+            result_ = data.result();
+            has_result_ = true;
+            status_ = "LBO model complete";
+            status_time_ = ImGui::GetTime();
+            data.clear();
+        }
+        if (!data.is_loading() && !data.error().empty()) {
+            status_ = "Error: " + data.error();
+            status_time_ = ImGui::GetTime();
+            data.clear();
+        }
+    } catch (const std::exception& ex) {
+        printf("[LBO_UI] Result check EXCEPTION: %s\n", ex.what()); fflush(stdout);
     }
 }
 
@@ -527,6 +567,20 @@ void ValuationPanel::render_result_section() {
 
     if (!has_result_ || result_.is_null()) return;
 
+    // Helper lambda: safe double extraction
+    auto safe_dbl = [](const json& j, const char* key, double def = 0.0) -> double {
+        if (!j.contains(key)) return def;
+        auto& v = j[key];
+        if (v.is_number()) return v.get<double>();
+        return def;
+    };
+    auto safe_int = [](const json& j, const char* key, int def = 0) -> int {
+        if (!j.contains(key)) return def;
+        auto& v = j[key];
+        if (v.is_number()) return v.get<int>();
+        return def;
+    };
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
@@ -534,38 +588,37 @@ void ValuationPanel::render_result_section() {
     ImGui::Spacing();
 
     // === DCF results ===
-    if (result_.contains("summary")) {
+    if (result_.contains("summary") && result_["summary"].is_object()) {
         auto& s = result_["summary"];
         ImGui::TextColored(ma_colors::VALUATION, "DCF Valuation Summary");
         ImGui::Spacing();
         if (s.contains("enterprise_value"))
-            DataRow("Enterprise Value", format_currency(s["enterprise_value"].get<double>()).c_str(), TEXT_PRIMARY);
+            DataRow("Enterprise Value", format_currency(safe_dbl(s, "enterprise_value")).c_str(), TEXT_PRIMARY);
         if (s.contains("equity_value"))
-            DataRow("Equity Value", format_currency(s["equity_value"].get<double>()).c_str(), TEXT_PRIMARY);
+            DataRow("Equity Value", format_currency(safe_dbl(s, "equity_value")).c_str(), TEXT_PRIMARY);
         if (s.contains("price_per_share")) {
             char buf[32];
-            std::snprintf(buf, sizeof(buf), "$%.2f", s["price_per_share"].get<double>());
+            std::snprintf(buf, sizeof(buf), "$%.2f", safe_dbl(s, "price_per_share"));
             DataRow("Price Per Share", buf, SUCCESS);
         }
-        if (s.contains("wacc")) {
-            DataRow("WACC", format_percent(s["wacc"].get<double>()).c_str(), TEXT_SECONDARY);
-        }
+        if (s.contains("wacc"))
+            DataRow("WACC", format_percent(safe_dbl(s, "wacc")).c_str(), TEXT_SECONDARY);
         if (s.contains("terminal_growth"))
-            DataRow("Terminal Growth", format_percent(s["terminal_growth"].get<double>()).c_str(), TEXT_SECONDARY);
+            DataRow("Terminal Growth", format_percent(safe_dbl(s, "terminal_growth")).c_str(), TEXT_SECONDARY);
 
         // WACC breakdown
-        if (result_.contains("wacc")) {
+        if (result_.contains("wacc") && result_["wacc"].is_object()) {
             ImGui::Spacing();
             ImGui::TextColored(TEXT_DIM, "WACC Breakdown");
             auto& w = result_["wacc"];
             if (w.contains("cost_of_equity"))
-                DataRow("Cost of Equity", format_percent(w["cost_of_equity"].get<double>()).c_str(), TEXT_SECONDARY);
+                DataRow("Cost of Equity", format_percent(safe_dbl(w, "cost_of_equity")).c_str(), TEXT_SECONDARY);
             if (w.contains("cost_of_debt_aftertax"))
-                DataRow("After-Tax Cost of Debt", format_percent(w["cost_of_debt_aftertax"].get<double>()).c_str(), TEXT_SECONDARY);
+                DataRow("After-Tax Cost of Debt", format_percent(safe_dbl(w, "cost_of_debt_aftertax")).c_str(), TEXT_SECONDARY);
             if (w.contains("equity_weight"))
-                DataRow("Equity Weight", format_percent(w["equity_weight"].get<double>()).c_str(), TEXT_SECONDARY);
+                DataRow("Equity Weight", format_percent(safe_dbl(w, "equity_weight")).c_str(), TEXT_SECONDARY);
             if (w.contains("debt_weight"))
-                DataRow("Debt Weight", format_percent(w["debt_weight"].get<double>()).c_str(), TEXT_SECONDARY);
+                DataRow("Debt Weight", format_percent(safe_dbl(w, "debt_weight")).c_str(), TEXT_SECONDARY);
         }
 
         // FCF projections
@@ -586,15 +639,16 @@ void ValuationPanel::render_result_section() {
         ImGui::TextColored(ma_colors::VALUATION, "LBO Returns Summary");
         ImGui::Spacing();
         char buf[32];
-        std::snprintf(buf, sizeof(buf), "%.2fx", result_["moic"].get<double>());
+        std::snprintf(buf, sizeof(buf), "%.2fx", safe_dbl(result_, "moic"));
         DataRow("MOIC", buf, SUCCESS);
-        DataRow("IRR", format_percent(result_["irr"].get<double>()).c_str(), SUCCESS);
-        DataRow("Cash Return", format_currency(result_["cash_return"].get<double>()).c_str(), TEXT_PRIMARY);
-        DataRow("Holding Period", (std::to_string(result_["holding_period"].get<int>()) + " years").c_str(), TEXT_SECONDARY);
+        DataRow("IRR", format_percent(safe_dbl(result_, "irr")).c_str(), SUCCESS);
+        DataRow("Cash Return", format_currency(safe_dbl(result_, "cash_return")).c_str(), TEXT_PRIMARY);
+        DataRow("Holding Period", (std::to_string(safe_int(result_, "holding_period")) + " years").c_str(), TEXT_SECONDARY);
     }
 
     // === LBO Model results ===
-    if (result_.contains("transaction_summary") && result_.contains("returns")) {
+    if (result_.contains("transaction_summary") && result_["transaction_summary"].is_object()
+        && result_.contains("returns") && result_["returns"].is_object()) {
         auto& ts = result_["transaction_summary"];
         auto& ret = result_["returns"];
 
@@ -602,38 +656,37 @@ void ValuationPanel::render_result_section() {
         ImGui::Spacing();
 
         if (ts.contains("entry_enterprise_value"))
-            DataRow("Entry EV", format_currency(ts["entry_enterprise_value"].get<double>()).c_str(), TEXT_PRIMARY);
-        if (ts.contains("entry_multiple")) {
-            DataRow("Entry Multiple", format_multiple(ts["entry_multiple"].get<double>()).c_str(), TEXT_SECONDARY);
-        }
+            DataRow("Entry EV", format_currency(safe_dbl(ts, "entry_enterprise_value")).c_str(), TEXT_PRIMARY);
+        if (ts.contains("entry_multiple"))
+            DataRow("Entry Multiple", format_multiple(safe_dbl(ts, "entry_multiple")).c_str(), TEXT_SECONDARY);
 
         ImGui::Spacing();
         ImGui::TextColored(TEXT_DIM, "Returns");
         if (ret.contains("irr"))
-            DataRow("IRR", format_percent(ret["irr"].get<double>() * 100).c_str(), SUCCESS);
+            DataRow("IRR", format_percent(safe_dbl(ret, "irr") * 100).c_str(), SUCCESS);
         if (ret.contains("moic")) {
             char buf[16];
-            std::snprintf(buf, sizeof(buf), "%.2fx", ret["moic"].get<double>());
+            std::snprintf(buf, sizeof(buf), "%.2fx", safe_dbl(ret, "moic"));
             DataRow("MOIC", buf, SUCCESS);
         }
         if (ret.contains("entry_equity"))
-            DataRow("Entry Equity", format_currency(ret["entry_equity"].get<double>()).c_str(), TEXT_SECONDARY);
+            DataRow("Entry Equity", format_currency(safe_dbl(ret, "entry_equity")).c_str(), TEXT_SECONDARY);
         if (ret.contains("exit_equity"))
-            DataRow("Exit Equity", format_currency(ret["exit_equity"].get<double>()).c_str(), TEXT_SECONDARY);
+            DataRow("Exit Equity", format_currency(safe_dbl(ret, "exit_equity")).c_str(), TEXT_SECONDARY);
 
         // Sources & Uses
-        if (result_.contains("sources_uses")) {
+        if (result_.contains("sources_uses") && result_["sources_uses"].is_object()) {
             ImGui::Spacing();
             ImGui::TextColored(TEXT_DIM, "Sources & Uses");
             auto& su = result_["sources_uses"];
-            if (su.contains("sources")) {
+            if (su.contains("sources") && su["sources"].is_object()) {
                 auto& src = su["sources"];
                 if (src.contains("senior_debt"))
-                    DataRow("Senior Debt", format_currency(src["senior_debt"].get<double>()).c_str(), TEXT_SECONDARY);
+                    DataRow("Senior Debt", format_currency(safe_dbl(src, "senior_debt")).c_str(), TEXT_SECONDARY);
                 if (src.contains("subordinated_debt"))
-                    DataRow("Sub Debt", format_currency(src["subordinated_debt"].get<double>()).c_str(), TEXT_SECONDARY);
+                    DataRow("Sub Debt", format_currency(safe_dbl(src, "subordinated_debt")).c_str(), TEXT_SECONDARY);
                 if (src.contains("sponsor_equity"))
-                    DataRow("Sponsor Equity", format_currency(src["sponsor_equity"].get<double>()).c_str(), TEXT_SECONDARY);
+                    DataRow("Sponsor Equity", format_currency(safe_dbl(src, "sponsor_equity")).c_str(), TEXT_SECONDARY);
             }
         }
     }
@@ -643,7 +696,6 @@ void ValuationPanel::render_result_section() {
         ImGui::TextColored(ma_colors::VALUATION, "Debt Schedule");
         ImGui::Spacing();
 
-        // Table header
         if (ImGui::BeginTable("##debt_sched", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn("Year", ImGuiTableColumnFlags_WidthFixed, 50);
             ImGui::TableSetupColumn("Sr Balance", ImGuiTableColumnFlags_WidthFixed, 90);
@@ -674,16 +726,17 @@ void ValuationPanel::render_result_section() {
         ImGui::Spacing();
 
         auto& irr_m = result_["irr_matrix"];
-        auto& exit_range = result_["exit_multiple_range"];
-        int cols = exit_range.is_array() ? static_cast<int>(exit_range.size()) : 0;
-        auto& rev_range = result_["revenue_growth_range"];
+        int cols = 0;
+        if (result_.contains("exit_multiple_range") && result_["exit_multiple_range"].is_array())
+            cols = static_cast<int>(result_["exit_multiple_range"].size());
 
         if (cols > 0 && ImGui::BeginTable("##irr_sens", cols + 1,
                 ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn("Rev Growth", ImGuiTableColumnFlags_WidthFixed, 80);
             for (int c = 0; c < cols; c++) {
                 char hdr[16];
-                std::snprintf(hdr, sizeof(hdr), "%.1fx", exit_range[c].get<double>());
+                auto& er = result_["exit_multiple_range"][c];
+                std::snprintf(hdr, sizeof(hdr), "%.1fx", er.is_number() ? er.get<double>() : 0.0);
                 ImGui::TableSetupColumn(hdr, ImGuiTableColumnFlags_WidthFixed, 60);
             }
             ImGui::TableHeadersRow();
@@ -691,19 +744,24 @@ void ValuationPanel::render_result_section() {
             for (size_t r = 0; r < irr_m.size(); r++) {
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
-                if (rev_range.is_array() && r < rev_range.size())
-                    ImGui::Text("%.0f%%", rev_range[r].get<double>() * 100);
-                else
+                if (result_.contains("revenue_growth_range") && result_["revenue_growth_range"].is_array()
+                    && r < result_["revenue_growth_range"].size()) {
+                    auto& rv = result_["revenue_growth_range"][r];
+                    ImGui::Text("%.0f%%", (rv.is_number() ? rv.get<double>() : 0.0) * 100);
+                } else {
                     ImGui::Text("Row %zu", r);
+                }
 
                 auto& row = irr_m[r];
-                for (size_t c = 0; c < row.size(); c++) {
-                    ImGui::TableNextColumn();
-                    double val = row[c].get<double>() * 100;
-                    ImVec4 color = (val >= 20) ? SUCCESS :
-                                   (val >= 10) ? ImVec4(1.0f, 0.77f, 0.0f, 1.0f) :
-                                                 ImVec4(0.96f, 0.30f, 0.30f, 1.0f);
-                    ImGui::TextColored(color, "%.1f%%", val);
+                if (row.is_array()) {
+                    for (size_t c = 0; c < row.size(); c++) {
+                        ImGui::TableNextColumn();
+                        double val = row[c].is_number() ? row[c].get<double>() * 100 : 0.0;
+                        ImVec4 color = (val >= 20) ? SUCCESS :
+                                       (val >= 10) ? ImVec4(1.0f, 0.77f, 0.0f, 1.0f) :
+                                                     ImVec4(0.96f, 0.30f, 0.30f, 1.0f);
+                        ImGui::TextColored(color, "%.1f%%", val);
+                    }
                 }
             }
             ImGui::EndTable();
@@ -743,18 +801,18 @@ void ValuationPanel::render_result_section() {
         }
 
         // Target valuation from comps
-        if (result_.contains("target_valuation")) {
+        if (result_.contains("target_valuation") && result_["target_valuation"].is_object()) {
             auto& tv = result_["target_valuation"];
-            if (tv.contains("valuations")) {
+            if (tv.contains("valuations") && tv["valuations"].is_object()) {
                 ImGui::Spacing();
                 ImGui::TextColored(TEXT_DIM, "Implied Valuations");
                 auto& v = tv["valuations"];
                 if (v.contains("ev_ebitda_median"))
-                    DataRow("EV/EBITDA (Median)", format_currency(v["ev_ebitda_median"].get<double>()).c_str(), TEXT_PRIMARY);
+                    DataRow("EV/EBITDA (Median)", format_currency(safe_dbl(v, "ev_ebitda_median")).c_str(), TEXT_PRIMARY);
                 if (v.contains("ev_revenue_median"))
-                    DataRow("EV/Revenue (Median)", format_currency(v["ev_revenue_median"].get<double>()).c_str(), TEXT_PRIMARY);
+                    DataRow("EV/Revenue (Median)", format_currency(safe_dbl(v, "ev_revenue_median")).c_str(), TEXT_PRIMARY);
                 if (v.contains("blended_median"))
-                    DataRow("Blended Median", format_currency(v["blended_median"].get<double>()).c_str(), SUCCESS);
+                    DataRow("Blended Median", format_currency(safe_dbl(v, "blended_median")).c_str(), SUCCESS);
             }
         }
     }
@@ -762,22 +820,24 @@ void ValuationPanel::render_result_section() {
     // === Precedent Transaction results ===
     if (result_.contains("comp_count") && result_.contains("summary_statistics")
         && !result_.contains("target_ticker")) {
-        // This distinguishes precedent from trading comps
-        if (result_.contains("target_valuation")) {
+        if (result_.contains("target_valuation") && result_["target_valuation"].is_object()) {
             auto& tv = result_["target_valuation"];
-            if (tv.contains("valuations")) {
+            if (tv.contains("valuations") && tv["valuations"].is_object()) {
                 ImGui::TextColored(ma_colors::VALUATION, "Precedent Transaction Valuation");
                 ImGui::Spacing();
                 auto& v = tv["valuations"];
                 if (v.contains("ev_ebitda_median"))
-                    DataRow("EV/EBITDA (Median)", format_currency(v["ev_ebitda_median"].get<double>()).c_str(), TEXT_PRIMARY);
+                    DataRow("EV/EBITDA (Median)", format_currency(safe_dbl(v, "ev_ebitda_median")).c_str(), TEXT_PRIMARY);
                 if (v.contains("ev_revenue_median"))
-                    DataRow("EV/Revenue (Median)", format_currency(v["ev_revenue_median"].get<double>()).c_str(), TEXT_PRIMARY);
+                    DataRow("EV/Revenue (Median)", format_currency(safe_dbl(v, "ev_revenue_median")).c_str(), TEXT_PRIMARY);
                 if (v.contains("blended_median"))
-                    DataRow("Blended Valuation", format_currency(v["blended_median"].get<double>()).c_str(), SUCCESS);
+                    DataRow("Blended Valuation", format_currency(safe_dbl(v, "blended_median")).c_str(), SUCCESS);
             }
         }
     }
+
+    // === Generic JSON fallback — dump raw if no known structure matched ===
+    // (helps debug unexpected result formats)
 }
 
 } // namespace fincept::mna

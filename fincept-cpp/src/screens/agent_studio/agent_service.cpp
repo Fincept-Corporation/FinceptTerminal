@@ -158,7 +158,7 @@ std::future<AgentResult> AgentService::run_agent(const AgentConfig& config,
                 if (config.provider == "openai") base_url = "https://api.openai.com/v1";
                 else if (config.provider == "groq") base_url = "https://api.groq.com/openai/v1";
                 else if (config.provider == "ollama") base_url = "http://localhost:11434/v1";
-                else if (config.provider == "fincept") base_url = "https://api.fincept.in/api/llm";
+                else if (config.provider == "fincept") base_url = "https://api.fincept.in/research/llm";
                 else {
                     // Check DB for custom base_url
                     auto cfgs = db::ops::get_llm_configs();
@@ -403,7 +403,7 @@ std::future<AgentResult> AgentService::call_llm_direct(
         if (provider == "openai")       base_url = "https://api.openai.com/v1";
         else if (provider == "groq")    base_url = "https://api.groq.com/openai/v1";
         else if (provider == "ollama")  base_url = "http://localhost:11434/v1";
-        else if (provider == "fincept") base_url = "https://api.fincept.in/api/llm";
+        else if (provider == "fincept") base_url = "https://api.fincept.in/research/llm";
         else if (provider == "google")  base_url = "https://generativelanguage.googleapis.com/v1beta";
         else {
             auto cfgs = db::ops::get_llm_configs();

@@ -5,7 +5,9 @@
 
 namespace fincept::surface {
 
-static float randf() { return (float)rand() / (float)RAND_MAX; }
+float demo_randf() { return (float)rand() / (float)RAND_MAX; }
+
+static float randf() { return demo_randf(); }
 
 // Generate realistic vol smile/skew
 static float vol_smile(float moneyness, float dte, float base_vol = 0.20f) {

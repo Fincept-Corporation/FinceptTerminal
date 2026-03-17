@@ -1,10 +1,10 @@
 # skfolio Backend System
 
-A comprehensive backend system for portfolio optimization using skfolio, designed for integration with Tauri desktop applications.
+A comprehensive backend system for portfolio optimization using skfolio, designed for integration with C++ desktop applications.
 
 ## Overview
 
-This backend provides a complete, modular portfolio optimization system built on the skfolio library. It exposes all skfolio capabilities through a clean, JSON-based API that can be easily integrated with your Tauri frontend.
+This backend provides a complete, modular portfolio optimization system built on the skfolio library. It exposes all skfolio capabilities through a clean, JSON-based API that can be easily integrated with your C++ ImGui frontend.
 
 ## Architecture
 
@@ -160,13 +160,13 @@ async_result = api.optimize_portfolio(large_data, params, async_execution=True)
 status = api.get_task_status(async_result.data["task_id"])
 ```
 
-## Integration with Tauri
+## Integration with C++ App
 
 ### 1. File Structure
-Place the `skfolio_backend` folder in your Tauri resources directory:
+Place the `skfolio_backend` folder in your scripts directory:
 
 ```
-src-tauri/
+fincept-cpp/
 └── resources/
     └── scripts/
         └── skfolio_backend/
@@ -184,12 +184,12 @@ src-tauri/
 Use the embedded Python interpreter to call the API functions:
 
 ```rust
-use tauri::Manager;
+// C++ python bridge
 use std::process::Command;
 
 fn optimize_portfolio(data: &str, params: &str) -> Result<String, String> {
     let output = Command::new("python")
-        .arg("C:/path/to/tauri/resources/scripts/skfolio_backend/skfolio_api.py")
+        .arg("scripts/Analytics/skfolio_backend/skfolio_api.py")
         .arg("optimize")
         .arg("--data")
         .arg(data)

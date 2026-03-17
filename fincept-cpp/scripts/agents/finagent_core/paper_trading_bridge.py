@@ -1,7 +1,7 @@
 """
 Paper Trading Bridge - Connects Alpha Arena to Rust paper trading module
 
-Provides Python interface to the Rust paper trading commands via Tauri IPC.
+Provides Python interface to the Rust paper trading commands via C++ IPC.
 Used by AI agents to execute simulated trades.
 """
 
@@ -97,18 +97,18 @@ class PaperTradingBridge:
     """
     Bridge to Rust paper trading module.
 
-    In Tauri context, this calls the pt_* commands.
+    In C++ context, this calls the pt_* commands.
     For testing/standalone, can simulate locally.
     """
 
-    def __init__(self, use_tauri: bool = True):
+    def __init__(self, use_host_bridge: bool = True):
         """
         Initialize bridge.
 
         Args:
-            use_tauri: If True, calls Rust commands. If False, uses local simulation.
+            use_host_bridge: If True, calls Rust commands. If False, uses local simulation.
         """
-        self.use_tauri = use_tauri
+        self.use_host_bridge = use_host_bridge
         self._local_portfolios: Dict[str, Portfolio] = {}
         self._local_orders: Dict[str, Order] = {}
         self._local_positions: Dict[str, Position] = {}
@@ -128,8 +128,8 @@ class PaperTradingBridge:
         fee_rate: float = 0.001
     ) -> Portfolio:
         """Create a new paper trading portfolio"""
-        if self.use_tauri:
-            result = self._invoke_tauri("pt_create_portfolio", {
+        if self.use_host_bridge:
+            result = self._invoke_host("pt_create_portfolio", {
                 "name": name,
                 "balance": balance,
                 "currency": currency,
@@ -157,24 +157,24 @@ class PaperTradingBridge:
 
     def get_portfolio(self, portfolio_id: str) -> Optional[Portfolio]:
         """Get portfolio by ID"""
-        if self.use_tauri:
-            result = self._invoke_tauri("pt_get_portfolio", {"id": portfolio_id})
+        if self.use_host_bridge:
+            result = self._invoke_host("pt_get_portfolio", {"id": portfolio_id})
             return Portfolio(**result) if result else None
         else:
             return self._local_portfolios.get(portfolio_id)
 
     def list_portfolios(self) -> List[Portfolio]:
         """List all portfolios"""
-        if self.use_tauri:
-            result = self._invoke_tauri("pt_list_portfolios", {})
+        if self.use_host_bridge:
+            result = self._invoke_host("pt_list_portfolios", {})
             return [Portfolio(**p) for p in result]
         else:
             return list(self._local_portfolios.values())
 
     def delete_portfolio(self, portfolio_id: str) -> bool:
         """Delete a portfolio"""
-        if self.use_tauri:
-            self._invoke_tauri("pt_delete_portfolio", {"id": portfolio_id})
+        if self.use_host_bridge:
+            self._invoke_host("pt_delete_portfolio", {"id": portfolio_id})
             return True
         else:
             if portfolio_id in self._local_portfolios:
@@ -184,8 +184,8 @@ class PaperTradingBridge:
 
     def reset_portfolio(self, portfolio_id: str) -> Portfolio:
         """Reset portfolio to initial state"""
-        if self.use_tauri:
-            result = self._invoke_tauri("pt_reset_portfolio", {"id": portfolio_id})
+        if self.use_host_bridge:
+            result = self._invoke_host("pt_reset_portfolio", {"id": portfolio_id})
             return Portfolio(**result)
         else:
             portfolio = self._local_portfolios.get(portfolio_id)
@@ -215,8 +215,8 @@ class PaperTradingBridge:
         reduce_only: bool = False
     ) -> Order:
         """Place a paper trading order"""
-        if self.use_tauri:
-            result = self._invoke_tauri("pt_place_order", {
+        if self.use_host_bridge:
+            result = self._invoke_host("pt_place_order", {
                 "portfolio_id": portfolio_id,
                 "symbol": symbol,
                 "side": side,
@@ -246,8 +246,8 @@ class PaperTradingBridge:
 
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an order"""
-        if self.use_tauri:
-            self._invoke_tauri("pt_cancel_order", {"order_id": order_id})
+        if self.use_host_bridge:
+            self._invoke_host("pt_cancel_order", {"order_id": order_id})
             return True
         else:
             order = self._local_orders.get(order_id)
@@ -258,8 +258,8 @@ class PaperTradingBridge:
 
     def get_orders(self, portfolio_id: str, status: Optional[str] = None) -> List[Order]:
         """Get orders for portfolio"""
-        if self.use_tauri:
-            result = self._invoke_tauri("pt_get_orders", {
+        if self.use_host_bridge:
+            result = self._invoke_host("pt_get_orders", {
                 "portfolio_id": portfolio_id,
                 "status": status
             })
@@ -278,8 +278,8 @@ class PaperTradingBridge:
         fill_qty: Optional[float] = None
     ) -> Trade:
         """Fill an order at given price"""
-        if self.use_tauri:
-            result = self._invoke_tauri("pt_fill_order", {
+        if self.use_host_bridge:
+            result = self._invoke_host("pt_fill_order", {
                 "order_id": order_id,
                 "fill_price": fill_price,
                 "fill_qty": fill_qty
@@ -321,8 +321,8 @@ class PaperTradingBridge:
 
     def get_positions(self, portfolio_id: str) -> List[Position]:
         """Get positions for portfolio"""
-        if self.use_tauri:
-            result = self._invoke_tauri("pt_get_positions", {"portfolio_id": portfolio_id})
+        if self.use_host_bridge:
+            result = self._invoke_host("pt_get_positions", {"portfolio_id": portfolio_id})
             return [Position(**p) for p in result]
         else:
             return [p for p in self._local_positions.values()
@@ -330,8 +330,8 @@ class PaperTradingBridge:
 
     def update_position_price(self, portfolio_id: str, symbol: str, price: float) -> bool:
         """Update current price for a position"""
-        if self.use_tauri:
-            self._invoke_tauri("pt_update_price", {
+        if self.use_host_bridge:
+            self._invoke_host("pt_update_price", {
                 "portfolio_id": portfolio_id,
                 "symbol": symbol,
                 "price": price
@@ -354,8 +354,8 @@ class PaperTradingBridge:
 
     def get_trades(self, portfolio_id: str, limit: int = 50) -> List[Trade]:
         """Get trades for portfolio"""
-        if self.use_tauri:
-            result = self._invoke_tauri("pt_get_trades", {
+        if self.use_host_bridge:
+            result = self._invoke_host("pt_get_trades", {
                 "portfolio_id": portfolio_id,
                 "limit": limit
             })
@@ -366,8 +366,8 @@ class PaperTradingBridge:
 
     def get_stats(self, portfolio_id: str) -> Stats:
         """Get portfolio statistics"""
-        if self.use_tauri:
-            result = self._invoke_tauri("pt_get_stats", {"portfolio_id": portfolio_id})
+        if self.use_host_bridge:
+            result = self._invoke_host("pt_get_stats", {"portfolio_id": portfolio_id})
             return Stats(**result)
         else:
             trades = [t for t in self._local_trades if t.portfolio_id == portfolio_id]
@@ -400,22 +400,22 @@ class PaperTradingBridge:
     # Helper Methods
     # =========================================================================
 
-    def _invoke_tauri(self, command: str, args: Dict[str, Any]) -> Any:
+    def _invoke_host(self, command: str, args: Dict[str, Any]) -> Any:
         """
-        Invoke Tauri command.
+        Invoke C++ command.
 
-        In actual Tauri context, this is handled via IPC.
+        In actual C++ context, this is handled via IPC.
         For Python-only execution, we simulate or raise.
         """
-        # This would be called from Rust via tauri::invoke
+        # This would be called from Rust via C++ host bridge
         # For now, log and simulate
-        logger.debug(f"Tauri invoke: {command} with args: {args}")
+        logger.debug(f"C++ invoke: {command} with args: {args}")
 
         # In real implementation, Rust calls Python with the result
-        # For standalone Python testing, raise to indicate Tauri needed
+        # For standalone Python testing, raise to indicate C++ host bridge needed
         raise NotImplementedError(
-            f"Tauri command {command} requires Rust runtime. "
-            "Use use_tauri=False for local simulation."
+            f"C++ command {command} requires Rust runtime. "
+            "Use use_host_bridge=False for local simulation."
         )
 
 
@@ -426,11 +426,11 @@ class PaperTradingBridge:
 _bridge: Optional[PaperTradingBridge] = None
 
 
-def get_bridge(use_tauri: bool = False) -> PaperTradingBridge:
+def get_bridge(use_host_bridge: bool = False) -> PaperTradingBridge:
     """Get singleton bridge instance"""
     global _bridge
     if _bridge is None:
-        _bridge = PaperTradingBridge(use_tauri=use_tauri)
+        _bridge = PaperTradingBridge(use_host_bridge=use_host_bridge)
     return _bridge
 
 

@@ -26,7 +26,7 @@ Verified dataflows:
   GOVT_GENERIC_RATES  — Government bond yields by tenor (3M–10Y)
   MONEY_MARKET        — Interbank money market transactions
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

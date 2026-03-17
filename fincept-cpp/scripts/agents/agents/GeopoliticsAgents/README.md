@@ -163,7 +163,7 @@ This folder contains comprehensive guides for converting influential geopolitics
 - Multi-LLM provider support (OpenAI, Anthropic)
 - Agent intercommunication where frameworks interact
 - Real-world data integration
-- Frontend Tauri command structure
+- Frontend C++ command structure
 
 ## 🧪 **Testing & Usage**
 
@@ -192,7 +192,7 @@ python test_agents/westphalian_order_test.py
 3. **Implement Agent** - Use guide templates and production patterns
 4. **Validate Depth** - Ensure 70%+ compliance with author's core thesis
 5. **Test Integration** - Verify agent intercommunication and frontend connectivity
-6. **Production Deployment** - Integrate with Tauri commands and React frontend
+6. **Production Deployment** - Integrate with C++ commands and React frontend
 
 ## 🏗️ **Frontend Integration**
 
@@ -243,7 +243,7 @@ Both frameworks support multiple LLM providers with structured prompts:
 3. **Follow Usage Example**: Set up testing with dummy data and real LLM
 4. **Build Your Agent**: Use templates and production requirements
 5. **Validate & Test**: Ensure compliance with author's core thesis
-6. **Deploy**: Integrate with Fincept Terminal Tauri commands
+6. **Deploy**: Integrate with Fincept Terminal C++ commands
 
 ## 📞 **Support & Contribution**
 

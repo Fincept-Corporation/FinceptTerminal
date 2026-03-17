@@ -2,7 +2,7 @@
 Functime Service - Python backend for analytics
 =================================================================
 
-Provides JSON-RPC interface for Rust/Tauri to call functime forecasting functions.
+Provides JSON-RPC interface for C++ to call functime forecasting functions.
 
 Note: This service provides local-only forecasting when functime cloud is not configured.
 Uses sklearn-based implementations as fallback for cloud API.

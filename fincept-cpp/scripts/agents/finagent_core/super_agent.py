@@ -703,7 +703,7 @@ class SuperAgent:
         return instructions.get(intent, instructions[QueryIntent.GENERAL])
 
 
-# Entry point for Tauri commands
+# Entry point for C++ commands
 def route_query(query: str, api_keys: Dict[str, str] = None) -> Dict[str, Any]:
     """Route a query and return routing info"""
     agent = SuperAgent(api_keys=api_keys)

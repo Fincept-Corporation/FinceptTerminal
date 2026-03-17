@@ -28,7 +28,7 @@ CSV structure (semicolons):
 Multi-dimension cubes produce one row per (date × d0 × d1) combination.
 The wrapper pivots these to wide format: date → {d0_d1: value}.
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

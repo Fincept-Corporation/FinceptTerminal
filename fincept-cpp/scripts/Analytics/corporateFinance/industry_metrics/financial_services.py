@@ -448,7 +448,7 @@ def _build_financial_standard_output(analysis: dict, sector: str) -> dict:
 
 
 def main():
-    """CLI entry point - outputs JSON for Tauri integration"""
+    """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 

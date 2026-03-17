@@ -15,7 +15,7 @@
     {
       "guid": "fincept-terminal",
       "name": "Fincept Terminal",
-      "description": "Cross-platform financial intelligence terminal built with Tauri, React, and Rust. Features complete CFA Level 1-3 analytics, 20+ AI investor personas, 100+ data connectors, visual workflow automation, 3D maritime tracking, and geopolitical intelligence frameworks. A professional alternative to Bloomberg Terminal, built for analysts who refuse to be limited by traditional software.",
+      "description": "Native C++20 financial intelligence terminal built with Dear ImGui and embedded Python. Features complete CFA Level 1-3 analytics, 20+ AI investor personas, 100+ data connectors, visual workflow automation, maritime tracking, and geopolitical intelligence frameworks. A professional alternative to Bloomberg Terminal, built for analysts who refuse to be limited by traditional software.",
       "webpageUrl": {
         "url": "https://github.com/Fincept-Corporation/FinceptTerminal"
       },
@@ -33,8 +33,8 @@
         "portfolio-management",
         "data-visualization",
         "workflow-automation",
-        "rust",
-        "typescript",
+        "cpp",
+        "imgui",
         "python"
       ]
     }

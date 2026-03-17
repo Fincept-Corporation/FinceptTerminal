@@ -82,12 +82,23 @@ void MarketsScreen::render_header() {
     ImGui::TextColored(BORDER_BRIGHT, "|");
     ImGui::SameLine(0, 16);
 
-    // Timestamp
+    // Timestamp — cached per second
     time_t now = time(nullptr);
-    struct tm* t = localtime(&now);
-    char tb[32];
-    std::strftime(tb, sizeof(tb), "%Y-%m-%d %H:%M:%S", t);
-    ImGui::TextColored(TEXT_DIM, "%s", tb);
+    {
+        static time_t cached_mkt_time = 0;
+        static char tb[32] = {};
+        if (now != cached_mkt_time) {
+            cached_mkt_time = now;
+            struct tm t_buf;
+#ifdef _WIN32
+            localtime_s(&t_buf, &now);
+#else
+            localtime_r(&now, &t_buf);
+#endif
+            std::strftime(tb, sizeof(tb), "%Y-%m-%d %H:%M:%S", &t_buf);
+        }
+        ImGui::TextColored(TEXT_DIM, "%s", tb);
+    }
 
     // Right side: last refresh info
     float avail = ImGui::GetContentRegionAvail().x;
@@ -235,7 +246,7 @@ void MarketsScreen::render_panels() {
 
 // ============================================================================
 void MarketsScreen::render_panel(const MarketCategory& cat) {
-    std::lock_guard<std::mutex> lock(data_.mutex());
+    std::shared_lock<std::shared_mutex> lock(data_.mutex());
 
     bool loading = data_.is_loading(cat.title);
     auto& quotes = data_.quotes(cat.title);

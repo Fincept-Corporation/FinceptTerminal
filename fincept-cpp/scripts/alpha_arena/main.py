@@ -1,7 +1,7 @@
 """
 Alpha Arena Main Entry Point
 
-Single JSON payload interface for Rust/Tauri integration.
+Single JSON payload interface for C++ integration.
 """
 
 import asyncio
@@ -1534,7 +1534,7 @@ async def search_agent_memory_handler(params: Dict) -> Dict[str, Any]:
 
 def main(args=None):
     """
-    Main entry point - accepts single JSON payload from Rust/Tauri.
+    Main entry point - accepts single JSON payload from C++.
 
     Payload format:
     {

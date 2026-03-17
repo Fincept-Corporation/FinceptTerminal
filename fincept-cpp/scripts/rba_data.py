@@ -20,7 +20,7 @@ CSV Structure:
   Row 8: Blank separator
   Row 9+: DATE, value1, value2, ...  (date format: DD-Mon-YYYY or Mon-YYYY or YYYY)
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

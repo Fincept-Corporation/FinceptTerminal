@@ -50,11 +50,22 @@ void StatusBar::render() {
     ImGui::TextColored(session.is_registered() ? theme::colors::SUCCESS : theme::colors::WARNING,
         "%s", session.is_registered() ? "Registered" : "Guest");
 
-    // Right: Clock
-    time_t now = time(nullptr);
-    struct tm* tm_info = localtime(&now);
-    char time_buf[32];
-    std::snprintf(time_buf, sizeof(time_buf), "%02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+    // Right: Clock — cached per second, thread-safe
+    static time_t cached_sb_time = 0;
+    static char time_buf[32] = {};
+    {
+        time_t now = time(nullptr);
+        if (now != cached_sb_time) {
+            cached_sb_time = now;
+            struct tm t_buf;
+#ifdef _WIN32
+            localtime_s(&t_buf, &now);
+#else
+            localtime_r(&now, &t_buf);
+#endif
+            std::snprintf(time_buf, sizeof(time_buf), "%02d:%02d:%02d", t_buf.tm_hour, t_buf.tm_min, t_buf.tm_sec);
+        }
+    }
 
     float time_width = ImGui::CalcTextSize(time_buf).x + 16;
     ImGui::SameLine(ImGui::GetWindowWidth() - time_width);

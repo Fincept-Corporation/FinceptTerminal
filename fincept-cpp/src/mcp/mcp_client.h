@@ -8,6 +8,7 @@
 #include <thread>
 #include <atomic>
 #include <condition_variable>
+#include <future>
 #include <queue>
 
 #ifdef _WIN32

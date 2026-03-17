@@ -30,8 +30,8 @@ The Fincept Terminal backtesting system is a **provider-agnostic** architecture 
 
 ### Tech Stack
 
-- **Frontend**: TypeScript + React (Tauri)
-- **Backend**: Rust (Tauri commands)
+- **Frontend**: C++20 + Dear ImGui
+- **Backend**: C++ (commands)
 - **Providers**: Python 3.11+ (backtesting engines)
 
 ---
@@ -61,7 +61,7 @@ The Fincept Terminal backtesting system is a **provider-agnostic** architecture 
          ▼
 ┌─────────────────┐
 │  Rust Commands  │ (backtesting.rs)
-│  Tauri IPC      │
+│  C++ IPC      │
 └────────┬────────┘
          │
          ▼
@@ -74,7 +74,7 @@ The Fincept Terminal backtesting system is a **provider-agnostic** architecture 
 ### Directory Structure
 
 ```
-src-tauri/resources/scripts/Analytics/backtesting/
+scripts/Analytics/backtesting/
 ├── README.md                           # This file
 ├── base/
 │   └── base_provider.py               # Base class for all providers
@@ -98,8 +98,8 @@ src/services/backtesting/
     └── vectorbt/
         └── VectorBTAdapter.ts
 
-src-tauri/src/commands/
-└── backtesting.rs                     # Rust Tauri commands
+src/screens/ (or relevant module)
+└── backtesting.rs                     # Rust C++ commands
 ```
 
 ---
@@ -235,7 +235,7 @@ Follow these steps to add a new backtesting library (e.g., "Backtrader", "Ziplin
 
 ### Step 1: Create Python Provider
 
-Create: `src-tauri/resources/scripts/Analytics/backtesting/<provider_name>/<provider_name>_provider.py`
+Create: `scripts/Analytics/backtesting/<provider_name>/<provider_name>_provider.py`
 
 ```python
 """
@@ -469,7 +469,7 @@ Create: `src/services/backtesting/adapters/<provider_name>/<ProviderName>Adapter
  * <Provider Name> Adapter
  */
 
-import { invoke } from '@tauri-apps/api/core';
+// Scripts are called via python_runner.cpp
 import { BaseBacktestingAdapter } from '../BaseAdapter';
 import {
   ProviderCapabilities,
@@ -828,8 +828,8 @@ if __name__ == '__main__':
 // backtesting.rs handles this automatically
 let possible_paths = vec![
     PathBuf::from(&script_relative_path), // Production
-    PathBuf::from("src-tauri").join(&script_relative_path), // Development
-    PathBuf::from("../src-tauri").join(&script_relative_path), // Alt dev
+    PathBuf::from("scripts").join(&script_relative_path), // Development
+    PathBuf::from("../scripts").join(&script_relative_path), // Alt dev
 ];
 ```
 
@@ -951,7 +951,7 @@ When adding a new provider, test these scenarios:
 ### General
 
 1. **Test Incrementally**: Test each layer (Python → Rust → TypeScript → UI)
-2. **Read Logs**: Check browser console AND Tauri terminal output
+2. **Read Logs**: Check browser console AND C++ terminal output
 3. **Follow Patterns**: Look at Backtesting.py implementation as reference
 4. **Document**: Add comments for complex logic
 5. **Version Lock**: Pin Python package versions in requirements
@@ -1018,7 +1018,7 @@ For questions or issues:
 
 1. Check this README first
 2. Review Backtesting.py implementation (reference example)
-3. Check browser console and Tauri terminal logs
+3. Check browser console and C++ terminal logs
 4. Open GitHub issue with full error logs
 
 ---

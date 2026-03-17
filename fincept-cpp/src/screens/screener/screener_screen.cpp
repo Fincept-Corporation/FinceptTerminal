@@ -6,6 +6,7 @@
 #include "storage/database.h"
 #include "http/http_client.h"
 #include "core/logger.h"
+#include "core/raii.h"
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -392,13 +393,13 @@ void ScreenerScreen::export_csv() {
     std::snprintf(filename, sizeof(filename), "fred_data_%04d-%02d-%02d.csv",
                   t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
 
-    FILE* f = fopen(filename, "w");
+    core::FileHandle f(filename, "w");
     if (f) {
         const std::string content = csv.str();
-        fwrite(content.data(), 1, content.size(), f);
-        fclose(f);
+        fwrite(content.data(), 1, content.size(), f.get());
         LOG_INFO("Screener", "Exported CSV: %s", filename);
     }
+    // f closed automatically by FileHandle destructor
 }
 
 // ============================================================================

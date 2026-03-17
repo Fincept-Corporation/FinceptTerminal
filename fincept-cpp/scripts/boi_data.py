@@ -30,7 +30,7 @@ Key exchange rate series:
   RER_CHF_ILS, RER_AUD_ILS, RER_CAD_ILS, RER_SEK_ILS,
   RER_NOK_ILS, RER_DKK_ILS, RER_ZAR_ILS, RER_JOD_ILS
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

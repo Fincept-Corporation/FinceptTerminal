@@ -1,6 +1,6 @@
 """
 PxWeb Statistics Data Fetcher
-Location: fincept-terminal-desktop/src-tauri/resources/scripts/
+Location: fincept-cpp/scripts/
 Description: Standardized PxWeb API wrapper for Statistics Finland.
 """
 
@@ -32,7 +32,7 @@ class PxWebWrapper:
         """
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': 'Fincept-Desktop-Tauri/1.0'})
+        self.session.headers.update({'User-Agent': 'Fincept-Desktop/4.0'})
 
     def _make_request(self, path: str, method: str = "GET", json_data: Optional[Dict] = None) -> Dict[str, Any]:
         """
@@ -127,7 +127,7 @@ def main():
     else:
         result = {"success": False, "error": f"Unknown command: {command}"}
 
-    # Standard minified JSON output for Tauri
+    # Standard minified JSON output for C++
     print(json.dumps(result, separators=(',', ':')), flush=True)
 
 if __name__ == "__main__":

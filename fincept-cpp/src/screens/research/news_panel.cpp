@@ -18,7 +18,7 @@ static void open_url(const std::string& url) {
 }
 
 void ResearchNewsPanel::render(ResearchData& data, const std::string& symbol) {
-    std::lock_guard<std::mutex> lock(data.mutex());
+    std::shared_lock<std::shared_mutex> lock(data.mutex());
     auto& articles = data.news();
 
     // Header bar

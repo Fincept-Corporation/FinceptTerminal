@@ -25,100 +25,90 @@ DashboardData& DashboardData::instance() {
 // =============================================================================
 // Symbol lists — matching React's widget configurations exactly
 // =============================================================================
-std::vector<std::string> DashboardData::symbols_for(DataCategory cat) {
+const std::vector<std::string>& DashboardData::symbols_for(DataCategory cat) {
+    // Static storage — constructed once, never reallocated
+    static const std::vector<std::string> indices = {
+        "^GSPC", "^DJI", "^IXIC", "^FTSE", "^GDAXI", "^N225", "^HSI", "^NSEI"
+    };
+    static const std::vector<std::string> forex = {
+        "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCHF=X",
+        "USDCAD=X", "AUDUSD=X", "NZDUSD=X", "EURCHF=X",
+        "EURGBP=X", "EURJPY=X", "GBPJPY=X",
+        "USDCNY=X", "USDINR=X"
+    };
+    static const std::vector<std::string> commodities = { "GC=F", "SI=F", "CL=F", "NG=F", "HG=F" };
+    static const std::vector<std::string> crypto = {
+        "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "BNB-USD", "ADA-USD", "DOGE-USD"
+    };
+    static const std::vector<std::string> sector_etfs = {
+        "XLK", "XLV", "XLF", "XLE", "XLI", "XLY", "XLB", "XLU", "XLRE", "XLC"
+    };
+    static const std::vector<std::string> top_movers = { "NVDA", "TSLA", "AMD", "PLTR", "SMCI", "INTC" };
+    static const std::vector<std::string> empty = {};
+    static const std::vector<std::string> market_pulse = { "^VIX", "^TNX", "DX-Y.NYB" };
+
     switch (cat) {
-        case DataCategory::Indices:
-            return {
-                "^GSPC", "^DJI", "^IXIC", "^FTSE",
-                "^GDAXI", "^N225", "^HSI", "^NSEI"
-            };
-        case DataCategory::Forex:
-            return {
-                // G10 Majors
-                "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCHF=X",
-                "USDCAD=X", "AUDUSD=X", "NZDUSD=X", "EURCHF=X",
-                // Key crosses
-                "EURGBP=X", "EURJPY=X", "GBPJPY=X",
-                // Key EM
-                "USDCNY=X", "USDINR=X"
-            };
-        case DataCategory::Commodities:
-            return {
-                "GC=F", "SI=F", "CL=F", "NG=F", "HG=F"
-            };
-        case DataCategory::Crypto:
-            return {
-                "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD",
-                "BNB-USD", "ADA-USD", "DOGE-USD"
-            };
-        case DataCategory::SectorETFs:
-            return {
-                "XLK", "XLV", "XLF", "XLE", "XLI", "XLY",
-                "XLB", "XLU", "XLRE", "XLC"
-            };
-        case DataCategory::TopMovers:
-            return {
-                "NVDA", "TSLA", "AMD", "PLTR", "SMCI", "INTC"
-            };
-        case DataCategory::Ticker:
-            return {};  // reuses Indices + Crypto + Forex data, no separate fetch
-        case DataCategory::MarketPulse:
-            return {
-                "^VIX", "^TNX", "DX-Y.NYB"
-            };
-        default:
-            return {};
+        case DataCategory::Indices:     return indices;
+        case DataCategory::Forex:       return forex;
+        case DataCategory::Commodities: return commodities;
+        case DataCategory::Crypto:      return crypto;
+        case DataCategory::SectorETFs:  return sector_etfs;
+        case DataCategory::TopMovers:   return top_movers;
+        case DataCategory::Ticker:      return empty;
+        case DataCategory::MarketPulse: return market_pulse;
+        default:                        return empty;
     }
 }
 
-std::map<std::string, std::string> DashboardData::labels_for(DataCategory cat) {
+const std::map<std::string, std::string>& DashboardData::labels_for(DataCategory cat) {
+    // Static storage — constructed once, zero allocations on subsequent calls
+    static const std::map<std::string, std::string> indices = {
+        {"^GSPC", "S&P 500"}, {"^DJI", "DOW JONES"}, {"^IXIC", "NASDAQ"},
+        {"^FTSE", "FTSE 100"}, {"^GDAXI", "DAX"},
+        {"^N225", "NIKKEI 225"}, {"^HSI", "HANG SENG"}, {"^NSEI", "NIFTY 50"}
+    };
+    static const std::map<std::string, std::string> forex = {
+        {"EURUSD=X", "EUR/USD"}, {"GBPUSD=X", "GBP/USD"}, {"USDJPY=X", "USD/JPY"},
+        {"USDCHF=X", "USD/CHF"}, {"USDCAD=X", "USD/CAD"}, {"AUDUSD=X", "AUD/USD"},
+        {"NZDUSD=X", "NZD/USD"}, {"EURCHF=X", "EUR/CHF"},
+        {"EURGBP=X", "EUR/GBP"}, {"EURJPY=X", "EUR/JPY"}, {"GBPJPY=X", "GBP/JPY"},
+        {"USDCNY=X", "USD/CNY"}, {"USDINR=X", "USD/INR"}
+    };
+    static const std::map<std::string, std::string> commodities = {
+        {"GC=F", "Gold"}, {"SI=F", "Silver"},
+        {"CL=F", "WTI Crude"}, {"NG=F", "Natural Gas"}, {"HG=F", "Copper"}
+    };
+    static const std::map<std::string, std::string> crypto = {
+        {"BTC-USD", "Bitcoin"}, {"ETH-USD", "Ethereum"}, {"SOL-USD", "Solana"},
+        {"XRP-USD", "XRP"}, {"BNB-USD", "BNB"}, {"ADA-USD", "Cardano"},
+        {"DOGE-USD", "Dogecoin"}
+    };
+    static const std::map<std::string, std::string> sector_etfs = {
+        {"XLK", "Technology"}, {"XLV", "Healthcare"}, {"XLF", "Financials"},
+        {"XLE", "Energy"}, {"XLI", "Industrials"}, {"XLY", "Consumer Disc."},
+        {"XLB", "Materials"}, {"XLU", "Utilities"}, {"XLRE", "Real Estate"},
+        {"XLC", "Comm. Services"}
+    };
+    static const std::map<std::string, std::string> top_movers = {
+        {"NVDA", "NVIDIA"}, {"TSLA", "Tesla"}, {"AMD", "AMD"},
+        {"PLTR", "Palantir"}, {"SMCI", "Super Micro"}, {"INTC", "Intel"}
+    };
+    static const std::map<std::string, std::string> empty = {};
+    static const std::map<std::string, std::string> market_pulse = {
+        {"^VIX", "VIX"}, {"^TNX", "US 10Y"}, {"DX-Y.NYB", "DXY"},
+        {"GC=F", "Gold"}, {"CL=F", "Oil"}, {"BTC-USD", "BTC"}
+    };
+
     switch (cat) {
-        case DataCategory::Indices:
-            return {
-                {"^GSPC", "S&P 500"}, {"^DJI", "DOW JONES"}, {"^IXIC", "NASDAQ"},
-                {"^FTSE", "FTSE 100"}, {"^GDAXI", "DAX"},
-                {"^N225", "NIKKEI 225"}, {"^HSI", "HANG SENG"}, {"^NSEI", "NIFTY 50"}
-            };
-        case DataCategory::Forex:
-            return {
-                {"EURUSD=X", "EUR/USD"}, {"GBPUSD=X", "GBP/USD"}, {"USDJPY=X", "USD/JPY"},
-                {"USDCHF=X", "USD/CHF"}, {"USDCAD=X", "USD/CAD"}, {"AUDUSD=X", "AUD/USD"},
-                {"NZDUSD=X", "NZD/USD"}, {"EURCHF=X", "EUR/CHF"},
-                {"EURGBP=X", "EUR/GBP"}, {"EURJPY=X", "EUR/JPY"}, {"GBPJPY=X", "GBP/JPY"},
-                {"USDCNY=X", "USD/CNY"}, {"USDINR=X", "USD/INR"}
-            };
-        case DataCategory::Commodities:
-            return {
-                {"GC=F", "Gold"}, {"SI=F", "Silver"},
-                {"CL=F", "WTI Crude"}, {"NG=F", "Natural Gas"}, {"HG=F", "Copper"}
-            };
-        case DataCategory::Crypto:
-            return {
-                {"BTC-USD", "Bitcoin"}, {"ETH-USD", "Ethereum"}, {"SOL-USD", "Solana"},
-                {"XRP-USD", "XRP"}, {"BNB-USD", "BNB"}, {"ADA-USD", "Cardano"},
-                {"DOGE-USD", "Dogecoin"}
-            };
-        case DataCategory::SectorETFs:
-            return {
-                {"XLK", "Technology"}, {"XLV", "Healthcare"}, {"XLF", "Financials"},
-                {"XLE", "Energy"}, {"XLI", "Industrials"}, {"XLY", "Consumer Disc."},
-                {"XLB", "Materials"}, {"XLU", "Utilities"}, {"XLRE", "Real Estate"},
-                {"XLC", "Comm. Services"}
-            };
-        case DataCategory::TopMovers:
-            return {
-                {"NVDA", "NVIDIA"}, {"TSLA", "Tesla"}, {"AMD", "AMD"},
-                {"PLTR", "Palantir"}, {"SMCI", "Super Micro"}, {"INTC", "Intel"}
-            };
-        case DataCategory::Ticker:
-            return {};  // ticker bar assembles from other categories
-        case DataCategory::MarketPulse:
-            return {
-                {"^VIX", "VIX"}, {"^TNX", "US 10Y"}, {"DX-Y.NYB", "DXY"},
-                {"GC=F", "Gold"}, {"CL=F", "Oil"}, {"BTC-USD", "BTC"}
-            };
-        default:
-            return {};
+        case DataCategory::Indices:     return indices;
+        case DataCategory::Forex:       return forex;
+        case DataCategory::Commodities: return commodities;
+        case DataCategory::Crypto:      return crypto;
+        case DataCategory::SectorETFs:  return sector_etfs;
+        case DataCategory::TopMovers:   return top_movers;
+        case DataCategory::Ticker:      return empty;
+        case DataCategory::MarketPulse: return market_pulse;
+        default:                        return empty;
     }
 }
 
@@ -180,11 +170,15 @@ void DashboardData::initialize() {
     if (initialized_) return;
     initialized_ = true;
 
-    // Stagger initial fetches to avoid hammering Python all at once
-    // Categories with shorter timers will fire first
+    // Stagger initial fetches so they don't all fire on the same frame.
+    // Each category waits an additional 2s, spreading the load over ~16s.
+    // This prevents spawning 8+ Python subprocesses simultaneously which
+    // saturates CPU/memory and freezes the desktop on Windows.
     for (int i = 0; i < static_cast<int>(DataCategory::Count); i++) {
-        categories_[i].timer = refresh_interval_ + 1.0f; // trigger immediately
+        float stagger = static_cast<float>(i) * 2.0f;
+        categories_[i].timer = refresh_interval_ + 1.0f - stagger;
     }
+    // News fetches via HTTP (not Python), so it can go immediately
     news_timer_ = refresh_interval_ + 1.0f;
 }
 
@@ -228,12 +222,12 @@ void DashboardData::refresh(DataCategory cat) {
 std::vector<QuoteEntry> DashboardData::get_quotes(DataCategory cat) const {
     int idx = static_cast<int>(cat);
     if (idx < 0 || idx >= static_cast<int>(DataCategory::Count)) return {};
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::shared_lock<std::shared_mutex> lock(mutex_);
     return categories_[idx].quotes;
 }
 
 std::vector<NewsItem> DashboardData::get_news() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::shared_lock<std::shared_mutex> lock(mutex_);
     return news_;
 }
 
@@ -246,14 +240,14 @@ bool DashboardData::is_loading(DataCategory cat) const {
 bool DashboardData::has_data(DataCategory cat) const {
     int idx = static_cast<int>(cat);
     if (idx < 0 || idx >= static_cast<int>(DataCategory::Count)) return false;
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::shared_lock<std::shared_mutex> lock(mutex_);
     return categories_[idx].has_data;
 }
 
 std::string DashboardData::get_error(DataCategory cat) const {
     int idx = static_cast<int>(cat);
     if (idx < 0 || idx >= static_cast<int>(DataCategory::Count)) return "";
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::shared_lock<std::shared_mutex> lock(mutex_);
     return categories_[idx].error;
 }
 
@@ -261,7 +255,7 @@ float DashboardData::time_since_refresh(DataCategory cat) const {
     int idx = static_cast<int>(cat);
     if (idx < 0 || idx >= static_cast<int>(DataCategory::Count)) return 999.0f;
     auto elapsed = std::chrono::steady_clock::now() - categories_[idx].last_fetch;
-    return (float)std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+    return static_cast<float>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
 }
 
 std::string DashboardData::last_refresh_str(DataCategory cat) const {
@@ -270,9 +264,9 @@ std::string DashboardData::last_refresh_str(DataCategory cat) const {
     auto tp = categories_[idx].last_fetch;
     if (tp == std::chrono::steady_clock::time_point{}) return "Never";
     float secs = time_since_refresh(cat);
-    if (secs < 60) return std::to_string((int)secs) + "s ago";
-    if (secs < 3600) return std::to_string((int)(secs / 60)) + "m ago";
-    return std::to_string((int)(secs / 3600)) + "h ago";
+    if (secs < 60) return std::to_string(static_cast<int>(secs)) + "s ago";
+    if (secs < 3600) return std::to_string(static_cast<int>(secs / 60)) + "m ago";
+    return std::to_string(static_cast<int>(secs / 3600)) + "h ago";
 }
 
 void DashboardData::set_refresh_interval(float seconds) {
@@ -317,7 +311,7 @@ void DashboardData::fetch_category(DataCategory cat) {
         auto parsed = parse_quotes(output, lbls);
 
         {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::unique_lock<std::shared_mutex> lock(mutex_);
             if (!parsed.empty()) {
                 categories_[idx].quotes = std::move(parsed);
                 categories_[idx].error.clear();
@@ -327,6 +321,7 @@ void DashboardData::fetch_category(DataCategory cat) {
             categories_[idx].has_data = !categories_[idx].quotes.empty();
             categories_[idx].last_fetch = std::chrono::steady_clock::now();
         }
+        data_version_.fetch_add(1, std::memory_order_release);
         categories_[idx].loading = false;
     }).detach();
 }
@@ -472,9 +467,14 @@ void DashboardData::fetch_news_feeds() {
                 }
 
                 time_t ts = static_cast<time_t>(ni.sort_ts);
-                struct tm* lt = localtime(&ts);
+                struct tm lt_buf;
+#ifdef _WIN32
+                localtime_s(&lt_buf, &ts);
+#else
+                localtime_r(&ts, &lt_buf);
+#endif
                 char tbuf[32];
-                std::strftime(tbuf, sizeof(tbuf), "%H:%M", lt);
+                std::strftime(tbuf, sizeof(tbuf), "%H:%M", &lt_buf);
                 ni.time_str = tbuf;
 
                 items.push_back(ni);
@@ -491,10 +491,11 @@ void DashboardData::fetch_news_feeds() {
         if (items.size() > 30) items.resize(30);
 
         {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::unique_lock<std::shared_mutex> lock(mutex_);
             news_ = std::move(items);
             news_has_data_ = true;
         }
+        data_version_.fetch_add(1, std::memory_order_release);
         news_loading_ = false;
     }).detach();
 }

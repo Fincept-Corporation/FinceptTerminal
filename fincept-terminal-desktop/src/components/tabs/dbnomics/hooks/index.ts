@@ -1,1 +1,0 @@
-export { useDBnomicsData } from './useDBnomicsData';

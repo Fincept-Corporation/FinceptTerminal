@@ -87,7 +87,7 @@ void ResearchData::fetch(const std::string& symbol, ChartPeriod period) {
         {
             std::string out = cached_python("quote " + sym, "market-quotes", "research-quote", CacheTTL::FIVE_MIN);
             if (!out.empty()) {
-                std::lock_guard<std::mutex> lock(mutex_);
+                std::unique_lock<std::shared_mutex> lock(mutex_);
                 parse_quote(out);
             }
         }
@@ -96,7 +96,7 @@ void ResearchData::fetch(const std::string& symbol, ChartPeriod period) {
         {
             std::string out = cached_python("info " + sym, "reference", "research-info", CacheTTL::ONE_HOUR);
             if (!out.empty()) {
-                std::lock_guard<std::mutex> lock(mutex_);
+                std::unique_lock<std::shared_mutex> lock(mutex_);
                 parse_stock_info(out);
             }
         }
@@ -113,7 +113,7 @@ void ResearchData::fetch(const std::string& symbol, ChartPeriod period) {
                 if (!out.empty()) cache.set(hist_key, out, "market-quotes", CacheTTL::FIVE_MIN);
             }
             if (!out.empty()) {
-                std::lock_guard<std::mutex> lock(mutex_);
+                std::unique_lock<std::shared_mutex> lock(mutex_);
                 parse_historical(out);
             }
         }
@@ -122,14 +122,14 @@ void ResearchData::fetch(const std::string& symbol, ChartPeriod period) {
         {
             std::string out = cached_python("financials " + sym, "reference", "research-financials", CacheTTL::ONE_HOUR);
             if (!out.empty()) {
-                std::lock_guard<std::mutex> lock(mutex_);
+                std::unique_lock<std::shared_mutex> lock(mutex_);
                 parse_financials(out);
             }
         }
 
         // 5. Compute technicals from historical data
         {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::unique_lock<std::shared_mutex> lock(mutex_);
             compute_technicals();
         }
 
@@ -156,7 +156,7 @@ void ResearchData::fetch_news(const std::string& symbol) {
             if (!out.empty()) cache.set(cache_key, out, "news", CacheTTL::TEN_MIN);
         }
         if (!out.empty()) {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::unique_lock<std::shared_mutex> lock(mutex_);
             parse_news(out);
         }
         news_loading_ = false;

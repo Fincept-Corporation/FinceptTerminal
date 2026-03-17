@@ -2,7 +2,7 @@
 FFN Service - Python backend for analytics
 ========================================================
 
-Provides JSON-RPC interface for Rust/Tauri to call FFN analytics functions.
+Provides JSON-RPC interface for C++ to call FFN analytics functions.
 """
 
 import json

@@ -347,7 +347,7 @@ class ProcessQualityAssessment:
         return weaknesses
 
 def main():
-    """CLI entry point - outputs JSON for Tauri integration"""
+    """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 

@@ -1,1 +1,0 @@
-export { useScreenerData } from './useScreenerData';

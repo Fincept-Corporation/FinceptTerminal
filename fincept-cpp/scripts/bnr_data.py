@@ -21,7 +21,7 @@ Currencies published (36+):
   HUF, IDR, ILS, INR, ISK, JPY, KRW, MDL, MXN, MYR, NOK, NZD, PHP,
   PLN, RON (1), RSD, RUB, SEK, SGD, THB, TRY, UAH, USD, XAU, XDR, ZAR
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

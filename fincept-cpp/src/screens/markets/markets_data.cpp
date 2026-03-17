@@ -31,18 +31,21 @@ bool MarketsData::is_loading(const std::string& category) const {
 }
 
 bool MarketsData::has_data(const std::string& category) const {
+    std::shared_lock<std::shared_mutex> lock(mutex_);
     auto it = categories_.find(category);
     if (it == categories_.end()) return false;
     return it->second.has_data;
 }
 
 const std::string& MarketsData::error(const std::string& category) const {
+    std::shared_lock<std::shared_mutex> lock(mutex_);
     auto it = categories_.find(category);
     if (it == categories_.end()) return empty_string_;
     return it->second.error;
 }
 
 const std::vector<MarketQuote>& MarketsData::quotes(const std::string& category) const {
+    std::shared_lock<std::shared_mutex> lock(mutex_);
     auto it = categories_.find(category);
     if (it == categories_.end()) return empty_quotes_;
     return it->second.quotes;
@@ -66,7 +69,7 @@ void MarketsData::fetch_category(const std::string& category, const std::vector<
         // Try cache first
         auto cached = cache.get(cache_key);
         if (cached && !cached->empty()) {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::unique_lock<std::shared_mutex> lock(mutex_);
             parse_quotes(cat, *cached);
             categories_[cat].has_data = true;
             categories_[cat].loading = false;
@@ -76,11 +79,11 @@ void MarketsData::fetch_category(const std::string& category, const std::vector<
         // Cache miss — fetch from Python
         std::string out = run_python(args);
         if (!out.empty()) {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::unique_lock<std::shared_mutex> lock(mutex_);
             parse_quotes(cat, out);
             cache.set(cache_key, out, "market-quotes", CacheTTL::FIVE_MIN);
         } else {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::unique_lock<std::shared_mutex> lock(mutex_);
             categories_[cat].error = "Failed to fetch data";
         }
         categories_[cat].has_data = true;

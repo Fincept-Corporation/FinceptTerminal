@@ -1,1 +1,0 @@
-# VisionQuant Models

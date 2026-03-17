@@ -72,6 +72,6 @@ Licenses are non-transferable. Annual licenses renew yearly. Refunds within 30 d
 
 ---
 
-**Last Updated:** February 2026
+**Last Updated:** March 2026
 
 For full license terms, see [LICENSE](../LICENSE).

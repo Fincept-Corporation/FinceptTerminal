@@ -1,6 +1,21 @@
 #include "broker_registry.h"
 #include "broker_interface.h"
 #include "brokers/fyers_broker.h"
+#include "brokers/zerodha_broker.h"
+#include "brokers/angelone_broker.h"
+#include "brokers/upstox_broker.h"
+#include "brokers/dhan_broker.h"
+#include "brokers/kotak_broker.h"
+#include "brokers/groww_broker.h"
+#include "brokers/aliceblue_broker.h"
+#include "brokers/fivepaisa_broker.h"
+#include "brokers/iifl_broker.h"
+#include "brokers/motilal_broker.h"
+#include "brokers/shoonya_broker.h"
+#include "brokers/alpaca_broker.h"
+#include "brokers/ibkr_broker.h"
+#include "brokers/tradier_broker.h"
+#include "brokers/saxobank_broker.h"
 #include "brokers/generic_broker.h"
 #include "storage/database.h"
 
@@ -49,29 +64,26 @@ BrokerRegistry::BrokerRegistry() {
 }
 
 void BrokerRegistry::register_all() {
-    // Fyers — fully implemented
-    brokers_["fyers"] = std::make_unique<FyersBroker>();
-
-    // Stub brokers — registered with GenericBroker defaults
-    // Indian
+    // Fully implemented Indian brokers
+    brokers_["fyers"]     = std::make_unique<FyersBroker>();
     brokers_["zerodha"]   = std::make_unique<ZerodhaBroker>();
+    brokers_["angelone"]  = std::make_unique<AngelOneBroker>();
     brokers_["upstox"]    = std::make_unique<UpstoxBroker>();
     brokers_["dhan"]      = std::make_unique<DhanBroker>();
     brokers_["kotak"]     = std::make_unique<KotakBroker>();
     brokers_["groww"]     = std::make_unique<GrowwBroker>();
     brokers_["aliceblue"] = std::make_unique<AliceBlueBroker>();
-    brokers_["angelone"]  = std::make_unique<AngelOneBroker>();
     brokers_["fivepaisa"] = std::make_unique<FivePaisaBroker>();
     brokers_["iifl"]      = std::make_unique<IIFLBroker>();
     brokers_["motilal"]   = std::make_unique<MotilalBroker>();
     brokers_["shoonya"]   = std::make_unique<ShoonyaBroker>();
 
-    // US
+    // Fully implemented US brokers
     brokers_["alpaca"]    = std::make_unique<AlpacaBroker>();
     brokers_["ibkr"]      = std::make_unique<IBKRBroker>();
     brokers_["tradier"]   = std::make_unique<TradierBroker>();
 
-    // EU
+    // Fully implemented EU brokers
     brokers_["saxobank"]  = std::make_unique<SaxoBankBroker>();
 }
 

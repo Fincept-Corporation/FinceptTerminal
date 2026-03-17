@@ -37,6 +37,7 @@ void SettingsScreen::render_sidebar(float width, float height) {
         {Section::Appearance,    "Appearance",     "[T]"},
         {Section::Storage,       "Storage & Cache","[D]"},
         {Section::Notifications, "Notifications",  "[N]"},
+        {Section::Voice,         "Voice",          "[V]"},
         {Section::General,       "General",        "[G]"},
     };
 
@@ -94,6 +95,7 @@ void SettingsScreen::render_content(float width, float height) {
         case Section::Appearance:    appearance_.render(); break;
         case Section::Storage:       storage_.render(); break;
         case Section::Notifications: notifications_.render(); break;
+        case Section::Voice:         voice_.render(); break;
         case Section::General:       general_.render(); break;
     }
 
@@ -121,10 +123,10 @@ void SettingsScreen::render_status_bar() {
     // Show section name
     const char* section_names[] = {
         "Credentials", "LLM Configuration", "Appearance",
-        "Storage & Cache", "Notifications", "General"
+        "Storage & Cache", "Notifications", "Voice", "General"
     };
     int idx = static_cast<int>(active_section_);
-    if (idx >= 0 && idx < 6) {
+    if (idx >= 0 && idx < 7) {
         ImGui::TextColored(ACCENT, "%s", section_names[idx]);
     }
 

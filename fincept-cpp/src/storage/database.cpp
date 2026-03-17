@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <chrono>
 #include <random>
+#include <mutex>
 #include <sstream>
 #include <iomanip>
 #include <stdexcept>
@@ -25,16 +26,21 @@ namespace fincept::db {
 // Utility
 // ============================================================================
 int64_t now_timestamp() {
-    return (int64_t)std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
 std::string generate_uuid() {
-    static std::random_device rd;
-    static std::mt19937_64 gen(rd());
+    static std::mutex rng_mutex;
+    static std::mt19937_64 gen(std::random_device{}());
     static std::uniform_int_distribution<uint64_t> dist;
 
-    uint64_t a = dist(gen), b = dist(gen);
+    uint64_t a, b;
+    {
+        std::lock_guard<std::mutex> lock(rng_mutex);
+        a = dist(gen);
+        b = dist(gen);
+    }
     // Set version 4 and variant bits
     a = (a & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
     b = (b & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
@@ -42,11 +48,11 @@ std::string generate_uuid() {
     char buf[37];
     std::snprintf(buf, sizeof(buf),
         "%08x-%04x-%04x-%04x-%012llx",
-        (uint32_t)(a >> 32),
-        (uint16_t)(a >> 16),
-        (uint16_t)(a),
-        (uint16_t)(b >> 48),
-        (unsigned long long)(b & 0x0000FFFFFFFFFFFFULL));
+        static_cast<uint32_t>(a >> 32),
+        static_cast<uint16_t>(a >> 16),
+        static_cast<uint16_t>(a),
+        static_cast<uint16_t>(b >> 48),
+        static_cast<unsigned long long>(b & 0x0000FFFFFFFFFFFFULL));
     return buf;
 }
 
@@ -181,12 +187,14 @@ bool Database::initialize(const std::string& db_path) {
         return false;
     }
 
-    // Performance PRAGMAs — matching Tauri configuration
+    // Performance PRAGMAs — tuned for reliability on low-end devices
+    // mmap capped at 256MB (was 30GB) to avoid virtual address space exhaustion
+    // on 32-bit or low-memory systems; cache_size 16MB (was 64MB) to reduce footprint
     exec("PRAGMA journal_mode = WAL;"
          "PRAGMA synchronous = NORMAL;"
-         "PRAGMA cache_size = -64000;"
+         "PRAGMA cache_size = -16000;"
          "PRAGMA temp_store = MEMORY;"
-         "PRAGMA mmap_size = 30000000000;"
+         "PRAGMA mmap_size = 268435456;"
          "PRAGMA page_size = 4096;"
          "PRAGMA foreign_keys = ON;");
 
@@ -405,6 +413,7 @@ void Database::create_schema() {
             leverage REAL DEFAULT 1.0,
             margin_mode TEXT DEFAULT 'cross',
             fee_rate REAL DEFAULT 0.001,
+            exchange TEXT DEFAULT '',
             created_at TEXT NOT NULL
         );
 
@@ -660,6 +669,25 @@ void Database::create_schema() {
             PRIMARY KEY (symbol)
         );
     )");
+
+    // --- Schema migrations: add missing columns to existing tables ---
+    // SQLite has no ADD COLUMN IF NOT EXISTS, so we attempt each and ignore
+    // "duplicate column name" errors.
+    auto try_add_column = [this](const char* sql) {
+        char* err = nullptr;
+        sqlite3_exec(db_, sql, nullptr, nullptr, &err);
+        if (err) sqlite3_free(err);  // silently ignore (duplicate column)
+    };
+
+    // algo_strategies: columns added after initial schema
+    try_add_column("ALTER TABLE algo_strategies ADD COLUMN position_size REAL DEFAULT 1;");
+    try_add_column("ALTER TABLE algo_strategies ADD COLUMN max_positions INTEGER DEFAULT 1;");
+    try_add_column("ALTER TABLE algo_strategies ADD COLUMN provider TEXT DEFAULT 'fyers';");
+    try_add_column("ALTER TABLE algo_strategies ADD COLUMN is_active INTEGER DEFAULT 1;");
+    try_add_column("ALTER TABLE algo_strategies ADD COLUMN trailing_stop REAL DEFAULT 0;");
+
+    // pt_portfolios: exchange column for broker/exchange isolation
+    try_add_column("ALTER TABLE pt_portfolios ADD COLUMN exchange TEXT DEFAULT '';");
 }
 
 // ============================================================================
@@ -1690,7 +1718,7 @@ int64_t tab_session_cleanup(int64_t max_age_days) {
 // ============================================================================
 // Agent Configs
 // ============================================================================
-void ops::save_agent_config(const AgentConfigRow& config) {
+void save_agent_config(const AgentConfigRow& config) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -1706,7 +1734,7 @@ void ops::save_agent_config(const AgentConfigRow& config) {
     stmt.execute();
 }
 
-std::vector<AgentConfigRow> ops::get_agent_configs() {
+std::vector<AgentConfigRow> get_agent_configs() {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -1727,7 +1755,7 @@ std::vector<AgentConfigRow> ops::get_agent_configs() {
     return result;
 }
 
-std::optional<AgentConfigRow> ops::get_agent_config(const std::string& id) {
+std::optional<AgentConfigRow> get_agent_config(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -1748,7 +1776,7 @@ std::optional<AgentConfigRow> ops::get_agent_config(const std::string& id) {
     return std::nullopt;
 }
 
-void ops::delete_agent_config(const std::string& id) {
+void delete_agent_config(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare("DELETE FROM agent_configs WHERE id = ?1");
@@ -1758,7 +1786,7 @@ void ops::delete_agent_config(const std::string& id) {
 
 // --- LLM Model Configs ---
 
-std::vector<LLMModelConfig> ops::get_llm_model_configs() {
+std::vector<LLMModelConfig> get_llm_model_configs() {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -1782,7 +1810,7 @@ std::vector<LLMModelConfig> ops::get_llm_model_configs() {
     return result;
 }
 
-void ops::save_llm_model_config(const LLMModelConfig& config) {
+void save_llm_model_config(const LLMModelConfig& config) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -1800,7 +1828,7 @@ void ops::save_llm_model_config(const LLMModelConfig& config) {
     stmt.execute();
 }
 
-void ops::delete_llm_model_config(const std::string& id) {
+void delete_llm_model_config(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare("DELETE FROM llm_model_configs WHERE id = ?1");
@@ -1808,7 +1836,7 @@ void ops::delete_llm_model_config(const std::string& id) {
     stmt.execute();
 }
 
-void ops::toggle_llm_model_config_enabled(const std::string& id) {
+void toggle_llm_model_config_enabled(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -1820,7 +1848,7 @@ void ops::toggle_llm_model_config_enabled(const std::string& id) {
 
 // --- Data Sources ---
 
-void ops::save_data_source(const DataSource& source) {
+void save_data_source(const DataSource& source) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -1840,7 +1868,7 @@ void ops::save_data_source(const DataSource& source) {
     stmt.execute();
 }
 
-std::vector<DataSource> ops::get_all_data_sources() {
+std::vector<DataSource> get_all_data_sources() {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -1866,7 +1894,7 @@ std::vector<DataSource> ops::get_all_data_sources() {
     return result;
 }
 
-void ops::delete_data_source(const std::string& id) {
+void delete_data_source(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare("DELETE FROM data_sources WHERE id = ?1");
@@ -1916,7 +1944,7 @@ static const char* NOTE_SELECT_COLS =
     "id, title, content, category, priority, tags, tickers, sentiment, "
     "is_favorite, is_archived, color_code, created_at, updated_at, reminder_date, word_count";
 
-Note ops::create_note(const Note& note) {
+Note create_note(const Note& note) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     int64_t wc = count_words(note.content);
@@ -1945,7 +1973,7 @@ Note ops::create_note(const Note& note) {
     return read_note_row(q);
 }
 
-std::vector<Note> ops::get_all_notes() {
+std::vector<Note> get_all_notes() {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare((std::string("SELECT ") + NOTE_SELECT_COLS +
@@ -1957,7 +1985,7 @@ std::vector<Note> ops::get_all_notes() {
     return result;
 }
 
-void ops::update_note(const Note& note) {
+void update_note(const Note& note) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     int64_t wc = count_words(note.content);
@@ -1982,7 +2010,7 @@ void ops::update_note(const Note& note) {
     stmt.execute();
 }
 
-void ops::delete_note(int64_t id) {
+void delete_note(int64_t id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare("DELETE FROM notes WHERE id = ?1");
@@ -1990,7 +2018,7 @@ void ops::delete_note(int64_t id) {
     stmt.execute();
 }
 
-std::vector<Note> ops::search_notes(const std::string& query) {
+std::vector<Note> search_notes(const std::string& query) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     std::string like = "%" + query + "%";
@@ -2005,7 +2033,7 @@ std::vector<Note> ops::search_notes(const std::string& query) {
     return result;
 }
 
-void ops::toggle_note_favorite(int64_t id) {
+void toggle_note_favorite(int64_t id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2014,7 +2042,7 @@ void ops::toggle_note_favorite(int64_t id) {
     stmt.execute();
 }
 
-void ops::archive_note(int64_t id) {
+void archive_note(int64_t id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2027,7 +2055,7 @@ void ops::archive_note(int64_t id) {
 // Algo Trading Operations
 // ============================================================================
 
-void ops::save_algo_strategy(const algo::AlgoStrategy& s) {
+void save_algo_strategy(const algo::AlgoStrategy& s) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(R"(
@@ -2079,7 +2107,7 @@ static algo::AlgoStrategy read_algo_strategy_row(Statement& stmt) {
     return s;
 }
 
-std::vector<algo::AlgoStrategy> ops::list_algo_strategies() {
+std::vector<algo::AlgoStrategy> list_algo_strategies() {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2092,7 +2120,7 @@ std::vector<algo::AlgoStrategy> ops::list_algo_strategies() {
     return result;
 }
 
-std::optional<algo::AlgoStrategy> ops::get_algo_strategy(const std::string& id) {
+std::optional<algo::AlgoStrategy> get_algo_strategy(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2105,7 +2133,7 @@ std::optional<algo::AlgoStrategy> ops::get_algo_strategy(const std::string& id) 
     return std::nullopt;
 }
 
-void ops::delete_algo_strategy(const std::string& id) {
+void delete_algo_strategy(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare("DELETE FROM algo_strategies WHERE id = ?1");
@@ -2115,7 +2143,7 @@ void ops::delete_algo_strategy(const std::string& id) {
 
 // --- Deployments ---
 
-void ops::save_algo_deployment(const algo::AlgoDeployment& d) {
+void save_algo_deployment(const algo::AlgoDeployment& d) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(R"(
@@ -2154,7 +2182,7 @@ static algo::AlgoDeployment read_algo_deployment_row(Statement& stmt) {
     return d;
 }
 
-std::vector<algo::AlgoDeployment> ops::list_algo_deployments() {
+std::vector<algo::AlgoDeployment> list_algo_deployments() {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2166,7 +2194,7 @@ std::vector<algo::AlgoDeployment> ops::list_algo_deployments() {
     return result;
 }
 
-std::optional<algo::AlgoDeployment> ops::get_algo_deployment(const std::string& id) {
+std::optional<algo::AlgoDeployment> get_algo_deployment(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2178,7 +2206,7 @@ std::optional<algo::AlgoDeployment> ops::get_algo_deployment(const std::string& 
     return std::nullopt;
 }
 
-void ops::update_algo_deployment_status(const std::string& id, const std::string& status,
+void update_algo_deployment_status(const std::string& id, const std::string& status,
                                          const std::string& error) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
@@ -2200,7 +2228,7 @@ void ops::update_algo_deployment_status(const std::string& id, const std::string
     }
 }
 
-void ops::delete_algo_deployment(const std::string& id) {
+void delete_algo_deployment(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     // Cascade: delete trades, metrics, signals first
@@ -2216,7 +2244,7 @@ void ops::delete_algo_deployment(const std::string& id) {
 
 // --- Metrics ---
 
-void ops::save_algo_metrics(const algo::AlgoMetrics& m) {
+void save_algo_metrics(const algo::AlgoMetrics& m) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(R"(
@@ -2238,7 +2266,7 @@ void ops::save_algo_metrics(const algo::AlgoMetrics& m) {
     stmt.execute();
 }
 
-std::optional<algo::AlgoMetrics> ops::get_algo_metrics(const std::string& deployment_id) {
+std::optional<algo::AlgoMetrics> get_algo_metrics(const std::string& deployment_id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2264,7 +2292,7 @@ std::optional<algo::AlgoMetrics> ops::get_algo_metrics(const std::string& deploy
 
 // --- Trades ---
 
-void ops::save_algo_trade(const algo::AlgoTrade& t) {
+void save_algo_trade(const algo::AlgoTrade& t) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(R"(
@@ -2286,7 +2314,7 @@ void ops::save_algo_trade(const algo::AlgoTrade& t) {
     stmt.execute();
 }
 
-std::vector<algo::AlgoTrade> ops::get_algo_trades(const std::string& deployment_id, int limit) {
+std::vector<algo::AlgoTrade> get_algo_trades(const std::string& deployment_id, int limit) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2316,7 +2344,7 @@ std::vector<algo::AlgoTrade> ops::get_algo_trades(const std::string& deployment_
 
 // --- Order Signals ---
 
-void ops::save_algo_signal(const algo::AlgoOrderSignal& s) {
+void save_algo_signal(const algo::AlgoOrderSignal& s) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(R"(
@@ -2336,7 +2364,7 @@ void ops::save_algo_signal(const algo::AlgoOrderSignal& s) {
     stmt.execute();
 }
 
-std::vector<algo::AlgoOrderSignal> ops::get_pending_signals() {
+std::vector<algo::AlgoOrderSignal> get_pending_signals() {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2366,7 +2394,7 @@ std::vector<algo::AlgoOrderSignal> ops::get_pending_signals() {
     return result;
 }
 
-void ops::update_signal_status(const std::string& id, const std::string& status,
+void update_signal_status(const std::string& id, const std::string& status,
                                 const std::string& error) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
@@ -2381,7 +2409,7 @@ void ops::update_signal_status(const std::string& id, const std::string& status,
 
 // --- Candle Cache ---
 
-void ops::insert_candles(const std::vector<algo::CandleData>& candles) {
+void insert_candles(const std::vector<algo::CandleData>& candles) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     db.begin_transaction();
@@ -2410,7 +2438,7 @@ void ops::insert_candles(const std::vector<algo::CandleData>& candles) {
     }
 }
 
-std::vector<algo::CandleData> ops::get_candle_cache(const std::string& symbol,
+std::vector<algo::CandleData> get_candle_cache(const std::string& symbol,
                                                       const std::string& timeframe,
                                                       int limit) {
     auto& db = Database::instance();
@@ -2439,7 +2467,7 @@ std::vector<algo::CandleData> ops::get_candle_cache(const std::string& symbol,
     return result;
 }
 
-int64_t ops::count_candles(const std::string& symbol, const std::string& timeframe) {
+int64_t count_candles(const std::string& symbol, const std::string& timeframe) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2452,7 +2480,7 @@ int64_t ops::count_candles(const std::string& symbol, const std::string& timefra
 
 // --- Custom Python Strategies ---
 
-void ops::save_custom_python_strategy(const algo::CustomPythonStrategy& s) {
+void save_custom_python_strategy(const algo::CustomPythonStrategy& s) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(R"(
@@ -2469,7 +2497,7 @@ void ops::save_custom_python_strategy(const algo::CustomPythonStrategy& s) {
     stmt.execute();
 }
 
-std::vector<algo::CustomPythonStrategy> ops::list_custom_python_strategies() {
+std::vector<algo::CustomPythonStrategy> list_custom_python_strategies() {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2491,7 +2519,7 @@ std::vector<algo::CustomPythonStrategy> ops::list_custom_python_strategies() {
     return result;
 }
 
-std::optional<algo::CustomPythonStrategy> ops::get_custom_python_strategy(const std::string& id) {
+std::optional<algo::CustomPythonStrategy> get_custom_python_strategy(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(
@@ -2511,7 +2539,7 @@ std::optional<algo::CustomPythonStrategy> ops::get_custom_python_strategy(const 
     return s;
 }
 
-void ops::delete_custom_python_strategy(const std::string& id) {
+void delete_custom_python_strategy(const std::string& id) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare("DELETE FROM custom_python_strategies WHERE id = ?1");
@@ -2521,7 +2549,7 @@ void ops::delete_custom_python_strategy(const std::string& id) {
 
 // --- Price Cache ---
 
-void ops::update_price_cache(const std::string& symbol, double price,
+void update_price_cache(const std::string& symbol, double price,
                               double volume, double change_pct) {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
@@ -2537,7 +2565,7 @@ void ops::update_price_cache(const std::string& symbol, double price,
     stmt.execute();
 }
 
-std::vector<algo::PriceCacheEntry> ops::get_price_cache_entries() {
+std::vector<algo::PriceCacheEntry> get_price_cache_entries() {
     auto& db = Database::instance();
     std::lock_guard<std::recursive_mutex> lock(db.mutex());
     auto stmt = db.prepare(

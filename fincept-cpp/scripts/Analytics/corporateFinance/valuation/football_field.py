@@ -273,7 +273,7 @@ class FootballFieldChart:
         }
 
 def main():
-    """CLI entry point - outputs JSON for Tauri integration
+    """CLI entry point - outputs JSON for C++ integration
 
     Usage:
         python football_field.py generate <valuation_methods_json> [current_price] [offer_price] [format_type]

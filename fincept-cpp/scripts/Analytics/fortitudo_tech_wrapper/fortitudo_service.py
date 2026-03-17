@@ -2,7 +2,7 @@
 Fortitudo.tech Service - Python backend for analytics
 ===============================================================================
 
-Provides JSON-RPC interface for Rust/Tauri to call fortitudo.tech analytics functions.
+Provides JSON-RPC interface for C++ to call fortitudo.tech analytics functions.
 Includes portfolio risk metrics, option pricing, entropy pooling, and exposure stacking.
 
 Supports Python 3.14+ via pure NumPy/SciPy fallback implementations when fortitudo.tech
@@ -682,7 +682,7 @@ def efficient_frontier_cvar(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def main(args: list) -> str:
-    """Main entry point for Tauri command execution"""
+    """Main entry point for C++ command execution"""
     if not args:
         return serialize_result({"success": False, "error": "No command specified"})
 

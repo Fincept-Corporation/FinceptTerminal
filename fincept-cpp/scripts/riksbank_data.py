@@ -31,7 +31,7 @@ Key series IDs:
   Government bond yields:
     SEGVB2YC, SEGVB5YC, SEGVB7YC, SEGVB10YC
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

@@ -37,7 +37,7 @@ static const char* signal_arrow(Signal s) {
 }
 
 void TechnicalsPanel::render(ResearchData& data) {
-    std::lock_guard<std::mutex> lock(data.mutex());
+    std::shared_lock<std::shared_mutex> lock(data.mutex());
     auto& tech = data.technicals();
 
     if (tech.indicators.empty()) {

@@ -1,62 +1,63 @@
-# 🎉 Contribute to Fincept Terminal 🚀
+# Contribute to Fincept Terminal
 
-Hey there, awesome developer! 👋 Want to make Fincept Terminal even cooler? We’d love your help! Here’s how you can contribute:
+Want to make Fincept Terminal even better? We'd love your help!
 
-## 🚀 Where We Need You
+## Where We Need You
 
-💡 **Data Portals Integration**  
-   - Connect government financial databases (e.g., [data.gov.in](https://data.gov.in), [data.gov](https://www.data.gov/)).  
-   - Standardize global economic and financial data.
+**C++ Development**
+   - Build new screens and features in Dear ImGui
+   - Improve core infrastructure, performance, and stability
 
-📊 **Stock Backtesting & Analysis**  
-   - Build robust backtesting tools.  
-   - Implement new financial data visualization features.
+**Data Source Integration**
+   - Connect government financial databases (e.g., data.gov.in, data.gov)
+   - Write Python data fetcher scripts for new APIs
 
-🌎 **New Data Sources**  
-   - Integrate global financial & alternative data providers.  
-   - Enhance data pipelines for market research.
+**Analytics & AI**
+   - Build Python analytics modules (portfolio, derivatives, risk)
+   - Implement new AI agent frameworks
 
-📈 **Brokerage API Integration**  
-   - Connect stock brokers so users can **buy/sell directly** from the terminal.  
-   - Work on **country-specific broker plugins**.
+**Brokerage API Integration**
+   - Connect stock brokers so users can trade directly from the terminal
+   - Work on country-specific broker adapters in C++
 
-📖 **Fincept Docs**
-
-   - Create and maintain comprehensive documentation for Fincept Terminal.
-   - Cover installation, API usage, troubleshooting, and developer guides.
-   - Keep the documentation up-to-date with new features.
+**Documentation**
+   - Create and maintain comprehensive documentation
+   - Cover build setup, architecture, and developer guides
 
 ---
 
-## 🛠 How to Get Started
+## How to Get Started
 
-1️⃣ **Fork** this repo & clone it:  
+1. **Fork** this repo & clone it:
    ```bash
    git clone https://github.com/your-username/FinceptTerminal.git
    ```
 
-2️⃣ **Create a new branch** for your feature:  
+2. **Build** the project:
    ```bash
-   git checkout -b feature-awesome-feature
+   cd FinceptTerminal/fincept-cpp
+   cmake --preset=default
+   cmake --build build --config Release
    ```
 
-3️⃣ **Code like a rockstar 🎸**, follow [PEP8](https://www.python.org/dev/peps/pep-0008/), and document your changes.
-
-4️⃣ **Push your changes** and open a **pull request**:  
+3. **Create a new branch** for your feature:
    ```bash
-   git push origin feature-awesome-feature
+   git checkout -b feature/awesome-feature
    ```
 
-5️⃣ **Submit a PR** and boom 💥, you're contributing!
+4. **Code**, follow the [C++ Contributing Guide](../fincept-cpp/CONTRIBUTING.md) or [Python Guide](../docs/PYTHON_CONTRIBUTOR_GUIDE.md), and document your changes.
+
+5. **Push your changes** and open a **pull request**:
+   ```bash
+   git push origin feature/awesome-feature
+   ```
 
 ---
 
-## 📝 Guidelines
+## Guidelines
 
-✔ **Bug Reports:** [File an issue](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new).  
-✔ **Feature Requests:** Let’s talk! Open a [GitHub Discussion](https://github.com/Fincept-Corporation/FinceptTerminal/discussions).  
-✔ **Code Contributions:** Keep it clean & simple. Well-documented code = ❤️.  
+- **Bug Reports:** [File an issue](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new)
+- **Feature Requests:** Open a [GitHub Discussion](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+- **Code Contributions:** Keep it clean & simple. Well-documented code is appreciated.
 
-🚀 **Join the movement!** Let’s build the future of finance together. Have questions? Ping us at [dev@fincept.in](mailto:dev@fincept.in).
-
-👾 Happy coding! 🎉
+**Join the movement!** Let's build the future of finance together. Questions? Ping us at [support@fincept.in](mailto:support@fincept.in).

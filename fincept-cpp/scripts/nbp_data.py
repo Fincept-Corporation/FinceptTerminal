@@ -28,7 +28,7 @@ NBP interest rates are published at:
   https://api.nbp.pl/api/rates/reference/  (no REST; scraped from HTML)
   We use the NBP SDMX data alternatively.
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

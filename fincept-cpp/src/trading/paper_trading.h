@@ -14,9 +14,12 @@ PtPortfolio pt_create_portfolio(const std::string& name, double balance,
                                  const std::string& currency = "USD",
                                  double leverage = 1.0,
                                  const std::string& margin_mode = "cross",
-                                 double fee_rate = 0.001);
+                                 double fee_rate = 0.001,
+                                 const std::string& exchange = "");
 PtPortfolio pt_get_portfolio(const std::string& id);
-std::vector<PtPortfolio> pt_list_portfolios();
+std::optional<PtPortfolio> pt_find_portfolio(const std::string& name,
+                                              const std::string& exchange);
+std::vector<PtPortfolio> pt_list_portfolios(const std::string& exchange = "");
 void pt_delete_portfolio(const std::string& id);
 PtPortfolio pt_reset_portfolio(const std::string& id);
 

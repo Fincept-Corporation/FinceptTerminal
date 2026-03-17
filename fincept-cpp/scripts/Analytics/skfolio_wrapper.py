@@ -1106,7 +1106,7 @@ def demo_portfolio_analytics():
     return engine
 
 def main(args=None):
-    """CLI entry point for Tauri integration"""
+    """CLI entry point for C++ integration"""
     import sys
 
     # Support both function call and CLI execution

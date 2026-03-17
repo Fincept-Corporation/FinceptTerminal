@@ -7,6 +7,7 @@
 #include "crypto_types.h"
 #include "trading/exchange_service.h"
 #include "portfolio/portfolio_types.h"
+#include "storage/database.h"
 #include <imgui.h>
 #include <vector>
 #include <string>
@@ -75,12 +76,30 @@ private:
     void submit_order();
     void cancel_order(const std::string& order_id);
 
+    // Live trading data fetchers
+    void async_fetch_live_positions();
+    void async_fetch_live_orders();
+    void async_fetch_live_balance();
+    void async_fetch_live_trades();
+
+    // Credential management
+    void render_credentials_popup();
+    void load_exchange_credentials();
+    void save_exchange_credentials();
+    bool has_credentials() const;
+
     bool initialized_ = false;
 
     // --- Exchange state ---
     std::string exchange_id_ = "binance";
     std::string selected_symbol_ = "BTC/USDT";
     TradingMode trading_mode_ = TradingMode::Paper;
+
+    // --- Dynamic exchange list (fetched from ccxt at startup) ---
+    std::vector<std::string> available_exchanges_;
+    std::atomic<bool> exchanges_loaded_{false};
+    std::atomic<bool> exchanges_fetching_{false};
+    char exchange_filter_[64] = "";
 
     // --- Watchlist ---
     std::vector<WatchlistEntry> watchlist_;
@@ -155,6 +174,59 @@ private:
     int ws_ob_cb_id_ = -1;
     int ws_candle_cb_id_ = -1;
     int ws_trade_cb_id_ = -1;
+
+    // --- Live trading data (fetched from exchange API) ---
+    struct LivePosition {
+        std::string symbol;
+        std::string side;
+        double quantity = 0;
+        double entry_price = 0;
+        double current_price = 0;
+        double unrealized_pnl = 0;
+        double leverage = 1.0;
+    };
+    struct LiveOrder {
+        std::string id;
+        std::string symbol;
+        std::string side;
+        std::string type;
+        std::string status;
+        double quantity = 0;
+        double price = 0;
+        double filled_qty = 0;
+        std::string timestamp;
+    };
+    struct LiveTrade {
+        std::string id;
+        std::string symbol;
+        std::string side;
+        double price = 0;
+        double quantity = 0;
+        double fee = 0;
+        std::string timestamp;
+    };
+
+    std::vector<LivePosition> live_positions_;
+    std::vector<LiveOrder> live_orders_;
+    std::vector<LiveTrade> live_trades_;
+    double live_balance_ = 0.0;
+    double live_equity_ = 0.0;
+    double live_used_margin_ = 0.0;
+    std::atomic<bool> live_positions_fetching_{false};
+    std::atomic<bool> live_orders_fetching_{false};
+    std::atomic<bool> live_balance_fetching_{false};
+    std::atomic<bool> live_trades_fetching_{false};
+    bool live_data_loaded_ = false;
+    float live_data_timer_ = 0;
+    static constexpr float LIVE_DATA_REFRESH_INTERVAL = 5.0f;
+
+    // --- Credential management ---
+    bool show_credentials_popup_ = false;
+    char cred_api_key_[256] = "";
+    char cred_api_secret_[256] = "";
+    char cred_password_[128] = "";   // OKX, Kucoin etc.
+    bool credentials_loaded_ = false;
+    bool has_credentials_ = false;
 
     // --- Timers ---
     float ticker_timer_ = 0;

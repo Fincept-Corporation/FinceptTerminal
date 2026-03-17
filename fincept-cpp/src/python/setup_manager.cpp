@@ -3,6 +3,7 @@
 
 #include "setup_manager.h"
 #include "python_runner.h"
+#include "core/raii.h"
 #include <curl/curl.h>
 #include <fstream>
 #include <sstream>
@@ -128,34 +129,31 @@ static size_t download_write_cb(void* ptr, size_t size, size_t nmemb, void* user
 }
 
 bool SetupManager::download_file(const std::string& url, const fs::path& dest) {
-    CURL* curl = curl_easy_init();
+    core::CurlHandle curl;
     if (!curl) return false;
 
     DownloadData data;
 #ifdef _WIN32
-    data.fp = _wfopen(dest.wstring().c_str(), L"wb");
+    core::FileHandle file(dest.wstring().c_str(), L"wb");
 #else
-    data.fp = fopen(dest.string().c_str(), "wb");
+    core::FileHandle file(dest.string().c_str(), "wb");
 #endif
-    if (!data.fp) {
-        curl_easy_cleanup(curl);
-        return false;
-    }
+    if (!file) return false;
+    data.fp = file.get();
 
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, download_write_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 10L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "FinceptTerminal/3.3.1");
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 600L); // 10 min for large downloads
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, download_write_cb);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &data);
+    curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_MAXREDIRS, 10L);
+    curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYHOST, 2L);
+    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, "FinceptTerminal/3.3.1");
+    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, 600L); // 10 min for large downloads
+    curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 30L);
 
-    CURLcode res = curl_easy_perform(curl);
-    fclose(data.fp);
-    curl_easy_cleanup(curl);
+    CURLcode res = curl_easy_perform(curl.get());
+    // file and curl cleaned up automatically by destructors
 
     if (res != CURLE_OK) {
         std::cerr << "[SETUP] Download failed: " << curl_easy_strerror(res) << "\n";

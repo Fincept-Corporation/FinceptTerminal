@@ -3,6 +3,7 @@
 // line charts, stats bar, data table, Fincept CEIC drill-down
 
 #include "economics_screen.h"
+#include "ui/yoga_helpers.h"
 #include "python/python_runner.h"
 #include "http/http_client.h"
 #include "auth/auth_manager.h"
@@ -629,6 +630,9 @@ void EconomicsScreen::render() {
     static bool date_init = false;
     if (!date_init) { update_date_range(); date_init = true; }
 
+    ui::ScreenFrame frame("##economics_screen", ImVec2(0, 0), theme::colors::BG_DARKEST);
+    if (!frame.begin()) { frame.end(); return; }
+
     render_header();
 
     if (show_api_key_panel_) {
@@ -684,6 +688,8 @@ void EconomicsScreen::render() {
     ImGui::EndChild();
 
     render_status_bar();
+
+    frame.end();
 }
 
 // ============================================================================

@@ -130,7 +130,7 @@ agno_trading/
 ### 1. Install Python Dependencies
 
 ```bash
-cd src-tauri/resources/scripts/agno_trading
+cd scripts/agno_trading
 pip install -r requirements.txt
 ```
 
@@ -158,15 +158,15 @@ export DEEPSEEK_API_KEY="your-key"
 export XAI_API_KEY="your-key"
 ```
 
-## Usage from Rust/Tauri
+## Usage from C++
 
 ### List Available Models
 
 ```rust
-use tauri::command;
+// C++ command
 
-#[tauri::command]
-async fn list_models(app: tauri::AppHandle) -> Result<String, String> {
+// C++ function
+async fn list_models(app: /* app handle */) -> Result<String, String> {
     commands::agno_trading::agno_list_models(app, None).await
 }
 ```
@@ -224,7 +224,7 @@ commands::agno_trading::agno_manage_risk(
 ## Usage from Frontend (TypeScript)
 
 ```typescript
-import { invoke } from '@tauri-apps/api/core';
+// Scripts are called via python_runner.cpp
 
 // List available models
 const models = await invoke('agno_list_models', {

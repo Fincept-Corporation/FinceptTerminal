@@ -4,6 +4,7 @@
 #include "mcp_provider.h"
 #include "mcp_manager.h"
 #include "../core/logger.h"
+#include <thread>
 
 namespace fincept::mcp {
 
@@ -19,10 +20,17 @@ MCPService& MCPService::instance() {
 // ============================================================================
 
 void MCPService::initialize() {
-    // Manager handles external servers
+    // Manager handles external servers — load configs from DB (fast)
     MCPManager::instance().initialize();
-    MCPManager::instance().start_auto_servers();
-    MCPManager::instance().start_health_check();
+
+    // Start external MCP servers in a background thread to avoid blocking
+    // the main/render thread.  Each server start involves spawning a process,
+    // running an IPC handshake, and listing tools — all potentially slow.
+    std::thread([]() {
+        MCPManager::instance().start_auto_servers();
+        MCPManager::instance().start_health_check();
+        LOG_INFO(TAG_SERVICE, "MCP external servers started in background");
+    }).detach();
 
     LOG_INFO(TAG_SERVICE, "MCPService initialized — %zu internal tools",
              MCPProvider::instance().tool_count());
@@ -186,6 +194,9 @@ Result<void> MCPService::validate_params(const std::string& tool_name, const jso
 // ============================================================================
 
 bool MCPService::is_cache_valid() const {
+    // Invalidate if the provider's tool set has changed (generation mismatch)
+    if (MCPProvider::instance().generation() != cached_generation_) return false;
+
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - cache_time_).count();
     return elapsed < CACHE_TTL_MS && !cached_tools_.empty();
@@ -212,6 +223,7 @@ void MCPService::refresh_cache() {
     }
 
     cache_time_ = std::chrono::steady_clock::now();
+    cached_generation_ = MCPProvider::instance().generation();
     LOG_DEBUG(TAG_SERVICE, "Refreshed tool cache: %zu total (%zu internal, %zu external)",
               cached_tools_.size(), internal.size(), external.size());
 }

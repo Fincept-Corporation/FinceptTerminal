@@ -26,7 +26,9 @@ find_package(OpenSSL REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(yoga CONFIG REQUIRED)
 find_package(implot CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h")
+find_path(MINIAUDIO_INCLUDE_DIRS "miniaudio.h")
 
 # OpenGL
 find_package(OpenGL REQUIRED)
@@ -76,6 +78,7 @@ set(SOURCES
     src/core/window.cpp
     src/core/font_loader.cpp
     src/core/hot_reload.cpp
+    src/core/notification.cpp
 
     # HTTP & Storage
     src/http/http_client.cpp
@@ -94,6 +97,7 @@ set(SOURCES
     # Screens — Dashboard
     src/screens/dashboard/dashboard_screen.cpp
     src/screens/dashboard/dashboard_widgets.cpp
+    src/screens/dashboard/dashboard_widgets_ext.cpp
     src/screens/dashboard/dashboard_panels.cpp
     src/screens/dashboard/dashboard_data.cpp
     src/screens/dashboard/stock_ticker.cpp
@@ -123,7 +127,24 @@ set(SOURCES
 
     # Screens — Surface Analytics
     src/screens/surface_analytics/demo_data.cpp
+    src/screens/surface_analytics/demo_data_derivatives.cpp
+    src/screens/surface_analytics/demo_data_fixed_income.cpp
+    src/screens/surface_analytics/demo_data_fx.cpp
+    src/screens/surface_analytics/demo_data_credit.cpp
+    src/screens/surface_analytics/demo_data_commodities.cpp
+    src/screens/surface_analytics/demo_data_risk.cpp
+    src/screens/surface_analytics/demo_data_macro.cpp
     src/screens/surface_analytics/surface_screen.cpp
+    src/screens/surface_analytics/surface_3d_renderer.cpp
+    src/screens/surface_analytics/surface_tables.cpp
+    src/screens/surface_analytics/panels_derivatives.cpp
+    src/screens/surface_analytics/panels_fixed_income.cpp
+    src/screens/surface_analytics/panels_fx.cpp
+    src/screens/surface_analytics/panels_credit.cpp
+    src/screens/surface_analytics/panels_commodities.cpp
+    src/screens/surface_analytics/panels_risk.cpp
+    src/screens/surface_analytics/panels_macro.cpp
+    src/screens/surface_analytics/tables_extended.cpp
 
     # UI — Tile Map
     src/ui/tile_map.cpp
@@ -160,6 +181,13 @@ set(SOURCES
     # Screens — QuantLib
     src/screens/quantlib/quantlib_api.cpp
     src/screens/quantlib/quantlib_screen.cpp
+    src/screens/quantlib/quantlib_ui.cpp
+    src/screens/quantlib/quantlib_helpers.cpp
+    src/screens/quantlib/panels_core.cpp
+    src/screens/quantlib/panels_models.cpp
+    src/screens/quantlib/panels_analytics.cpp
+    src/screens/quantlib/panels_instruments.cpp
+    src/screens/quantlib/panels_quant.cpp
 
     # Screens — Watchlist
     src/screens/watchlist/watchlist_data.cpp
@@ -182,6 +210,21 @@ set(SOURCES
     src/trading/exchange_service.cpp
     src/trading/broker_registry.cpp
     src/trading/brokers/fyers_broker.cpp
+    src/trading/brokers/zerodha_broker.cpp
+    src/trading/brokers/angelone_broker.cpp
+    src/trading/brokers/upstox_broker.cpp
+    src/trading/brokers/dhan_broker.cpp
+    src/trading/brokers/kotak_broker.cpp
+    src/trading/brokers/groww_broker.cpp
+    src/trading/brokers/aliceblue_broker.cpp
+    src/trading/brokers/fivepaisa_broker.cpp
+    src/trading/brokers/iifl_broker.cpp
+    src/trading/brokers/motilal_broker.cpp
+    src/trading/brokers/shoonya_broker.cpp
+    src/trading/brokers/alpaca_broker.cpp
+    src/trading/brokers/ibkr_broker.cpp
+    src/trading/brokers/tradier_broker.cpp
+    src/trading/brokers/saxobank_broker.cpp
     src/screens/portfolio/portfolio_screen.cpp
     src/screens/portfolio/views/analytics_view.cpp
     src/screens/portfolio/views/performance_view.cpp
@@ -281,6 +324,11 @@ set(SOURCES
     src/mcp/tools/market_data_tools.cpp
     src/mcp/tools/settings_tools.cpp
     src/mcp/tools/portfolio_tools.cpp
+    src/mcp/tools/trading_tools.cpp
+    src/mcp/tools/portfolio_tools_ext.cpp
+    src/mcp/tools/python_tools.cpp
+    src/mcp/tools/exchange_tools.cpp
+    src/mcp/tools/system_tools.cpp
 
     # Screens — Data Mapping
     src/screens/data_mapping/data_mapping_engine.cpp
@@ -292,6 +340,53 @@ set(SOURCES
 
     # Screens — Equity Trading
     src/screens/equity_trading/equity_trading_screen.cpp
+
+    # Screens — Report Builder
+    src/screens/report_builder/report_builder_screen.cpp
+
+    # Screens — Derivatives
+    src/screens/derivatives/derivatives_screen.cpp
+
+    # Screens — Excel / Spreadsheet
+    src/screens/excel/excel_screen.cpp
+
+    # Screens — Polymarket
+    src/screens/polymarket/polymarket_screen.cpp
+
+    # Screens — AKShare Data Explorer
+    src/screens/akshare/akshare_screen.cpp
+
+    # Screens — Asia Markets
+    src/screens/asia_markets/asia_markets_screen.cpp
+
+    # Screens — Relationship Map
+    src/screens/relationship_map/relationship_map_screen.cpp
+
+    # Screens — Alternative Investments
+    src/screens/alt_investments/alt_investments_screen.cpp
+
+    # Screens — Maritime Intelligence
+    src/screens/maritime/maritime_screen.cpp
+
+    # Screens — MCP Servers
+    src/screens/mcp_servers/mcp_servers_screen.cpp
+
+    # Screens — Alpha Arena
+    src/screens/alpha_arena/alpha_arena_screen.cpp
+
+    # Screens — Trade Visualization
+    src/screens/trade_viz/trade_viz_screen.cpp
+
+    # Voice — audio capture, playback, TTS, STT, service
+    src/voice/audio_capture.cpp
+    src/voice/audio_player.cpp
+    src/voice/tts_engine.cpp
+    src/voice/stt_engine.cpp
+    src/voice/text_preprocessor.cpp
+    src/voice/voice_service.cpp
+
+    # Settings — Voice section
+    src/screens/settings/sections/voice_section.cpp
 
     # Core (continued)
     src/core/device_id.cpp
@@ -321,6 +416,28 @@ set_source_files_properties(
     src/screens/research/technicals_panel.cpp
     src/screens/research/news_panel.cpp
     src/media/mpv_player.cpp
+    src/voice/audio_capture.cpp
+    src/voice/audio_player.cpp
+    src/voice/tts_engine.cpp
+    src/screens/surface_analytics/demo_data.cpp
+    src/screens/surface_analytics/demo_data_derivatives.cpp
+    src/screens/surface_analytics/demo_data_fixed_income.cpp
+    src/screens/surface_analytics/demo_data_fx.cpp
+    src/screens/surface_analytics/demo_data_credit.cpp
+    src/screens/surface_analytics/demo_data_commodities.cpp
+    src/screens/surface_analytics/demo_data_risk.cpp
+    src/screens/surface_analytics/demo_data_macro.cpp
+    src/screens/surface_analytics/surface_screen.cpp
+    src/screens/surface_analytics/surface_3d_renderer.cpp
+    src/screens/surface_analytics/surface_tables.cpp
+    src/screens/surface_analytics/panels_derivatives.cpp
+    src/screens/surface_analytics/panels_fixed_income.cpp
+    src/screens/surface_analytics/panels_fx.cpp
+    src/screens/surface_analytics/panels_credit.cpp
+    src/screens/surface_analytics/panels_commodities.cpp
+    src/screens/surface_analytics/panels_risk.cpp
+    src/screens/surface_analytics/panels_macro.cpp
+    src/screens/surface_analytics/tables_extended.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
 )
 
@@ -329,6 +446,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/fonts
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vendor/imnodes
     ${STB_INCLUDE_DIRS}
+    ${MINIAUDIO_INCLUDE_DIRS}
 )
 
 # mpv include path
@@ -389,8 +507,51 @@ else()
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# =============================================================================
+# Static Analysis / Linting (opt-in for fast CI and local quality checks)
+# Usage:
+#   cmake -DFINCEPT_LINT_CPPCHECK=ON ..    # enable cppcheck on build
+#   cmake -DFINCEPT_LINT_CLANG_TIDY=ON ..  # enable clang-tidy on build
+#   cmake --build build --target lint       # run cppcheck on all sources
+# =============================================================================
+option(FINCEPT_LINT_CPPCHECK   "Run cppcheck during build"   OFF)
+option(FINCEPT_LINT_CLANG_TIDY "Run clang-tidy during build" OFF)
+
+# --- cppcheck: fast, low false-positive bug detection ---
+if(FINCEPT_LINT_CPPCHECK)
+    find_program(CPPCHECK_EXE NAMES cppcheck)
+    if(CPPCHECK_EXE)
+        message(STATUS "cppcheck enabled: ${CPPCHECK_EXE}")
+        set(CMAKE_CXX_CPPCHECK
+            ${CPPCHECK_EXE}
+            --enable=warning,performance,portability
+            --suppress=missingIncludeSystem
+            --inline-suppr
+            --quiet
+            --std=c++20
+        )
+    else()
+        message(WARNING "FINCEPT_LINT_CPPCHECK=ON but cppcheck not found")
+    endif()
+endif()
+
+# --- clang-tidy: deep analysis using .clang-tidy config ---
+if(FINCEPT_LINT_CLANG_TIDY)
+    find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+    if(CLANG_TIDY_EXE)
+        message(STATUS "clang-tidy enabled: ${CLANG_TIDY_EXE}")
+        set(CMAKE_CXX_CLANG_TIDY
+            ${CLANG_TIDY_EXE}
+            --extra-arg=-std=c++20
+        )
+    else()
+        message(WARNING "FINCEPT_LINT_CLANG_TIDY=ON but clang-tidy not found")
+    endif()
+endif()
+
 # Enable 32-bit Unicode (emoji support) and FreeType color glyphs
 target_compile_definitions(${PROJECT_NAME} PRIVATE
+    IMGUI_DEFINE_MATH_OPERATORS
     IMGUI_USE_WCHAR32
     IMGUI_ENABLE_FREETYPE
 )
@@ -404,6 +565,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     glfw
     OpenGL::GL
     CURL::libcurl
+    spdlog::spdlog
     nlohmann_json::nlohmann_json
     unofficial::sqlite3::sqlite3
     OpenSSL::SSL
@@ -425,7 +587,7 @@ endif()
 # Platform-specific
 # =============================================================================
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 crypt32 wldap32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 crypt32 wldap32 sapi ole32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
     # Hide console window in production (Windows GUI subsystem)
     # Use /SUBSYSTEM:WINDOWS with mainCRTStartup so standard main() still works
@@ -440,8 +602,11 @@ elseif(APPLE)
         ${IOKIT_FRAMEWORK}
         ${COREVIDEO_FRAMEWORK}
         "-framework OpenGL"
+        "-framework Foundation"
     )
     target_compile_definitions(${PROJECT_NAME} PRIVATE GL_SILENCE_DEPRECATION)
+    # macOS notification bridge (Obj-C++)
+    target_sources(${PROJECT_NAME} PRIVATE src/core/notification_mac.mm)
 elseif(UNIX)
     # Linux
     find_package(PkgConfig REQUIRED)
@@ -496,3 +661,26 @@ install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/fonts DESTINATION bin/fonts)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/resources DESTINATION bin/resources)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts DESTINATION bin/scripts)
+
+# =============================================================================
+# Lint targets (on-demand — run without rebuilding the whole project)
+#   cmake --build build --target lint         # fast cppcheck scan
+#   cmake --build build --target lint-tidy    # deep clang-tidy analysis
+# =============================================================================
+find_program(CPPCHECK_EXE_STANDALONE NAMES cppcheck)
+if(CPPCHECK_EXE_STANDALONE)
+    add_custom_target(lint
+        COMMAND ${CPPCHECK_EXE_STANDALONE}
+            --enable=warning,performance,portability
+            --suppress=missingIncludeSystem
+            --suppress=unusedFunction
+            --inline-suppr
+            --quiet
+            --std=c++20
+            -I ${CMAKE_SOURCE_DIR}/src
+            ${CMAKE_SOURCE_DIR}/src
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Running cppcheck static analysis on src/..."
+        VERBATIM
+    )
+endif()

@@ -1,6 +1,6 @@
 """
 FDIC Bank Data Fetcher
-Location: fincept-terminal-desktop/src-tauri/resources/scripts/
+Location: fincept-cpp/scripts/
 Description: Robust, auto-paginated wrapper for the FDIC Bank Data API.
 """
 
@@ -31,7 +31,7 @@ class FDICWrapper:
         self.base_url = FDIC_BASE_URL
         self.api_key = api_key
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': 'Fincept-Desktop-Tauri/1.0'})
+        self.session.headers.update({'User-Agent': 'Fincept-Desktop/4.0'})
 
     def _fetch_all(self, endpoint: str, filters: str = "", fields: str = "", max_records: int = 5000) -> Dict[str, Any]:
         """
@@ -132,7 +132,7 @@ class FDICWrapper:
 # ===== TAURI CLI HANDLER =====
 
 def main():
-    """CLI Entry point for Tauri. Outputs minified JSON to stdout."""
+    """CLI Entry point for C++. Outputs minified JSON to stdout."""
     if len(sys.argv) < 2:
         print(json.dumps({"success": False, "error": "No command provided"}), flush=True)
         return
@@ -140,7 +140,7 @@ def main():
     command = sys.argv[1]
     filters = sys.argv[2] if len(sys.argv) > 2 else ""
     
-    # Optional: Allow passing a custom safety cap from Tauri via 3rd argument
+    # Optional: Allow passing a custom safety cap from C++ via 3rd argument
     try:
         custom_limit = int(sys.argv[3]) if len(sys.argv) > 3 else 5000
     except (ValueError, IndexError):

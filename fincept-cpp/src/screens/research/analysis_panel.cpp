@@ -59,7 +59,7 @@ static void section_start(const char* title, ImVec4 color) {
 }
 
 void AnalysisPanel::render(ResearchData& data) {
-    std::lock_guard<std::mutex> lock(data.mutex());
+    std::shared_lock<std::shared_mutex> lock(data.mutex());
     auto& si = data.stock_info();
     char buf[64];
 

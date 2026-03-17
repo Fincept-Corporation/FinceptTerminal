@@ -337,10 +337,10 @@ fortitudo_tech_wrapper/
 
 ## Integration with Fincept Terminal
 
-### Rust Tauri Command Example
+### C++ Command Example
 
 ```rust
-#[tauri::command]
+// C++ function
 pub async fn calculate_portfolio_risk(
     returns_json: String,
     weights_json: String,
@@ -367,7 +367,7 @@ print(json.dumps(metrics))
 ### TypeScript Service Example
 
 ```typescript
-import { invoke } from '@tauri-apps/api/core';
+// Scripts are called via python_runner.cpp
 
 export interface PortfolioMetrics {
     expected_return: number;

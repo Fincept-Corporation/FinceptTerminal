@@ -1,7 +1,7 @@
 """
 FinAgent Core Main Entry Point
 
-Unified entry point for all agent operations via Tauri.
+Unified entry point for all agent operations via C++.
 Handles JSON payload dispatch to appropriate modules.
 
 Performance notes:
@@ -115,7 +115,7 @@ def _setup_agent_modules(agent, config: Dict[str, Any], params: Dict[str, Any]):
 
 def main(args=None):
     """
-    Main entry point - accepts single JSON payload from Rust/Tauri.
+    Main entry point - accepts single JSON payload from C++.
 
     Payload format:
     {
@@ -752,7 +752,7 @@ def dispatch_action_streaming(
 ) -> Dict[str, Any]:
     """
     Dispatch action with streaming output.
-    Prints chunks in real-time for Rust to capture and emit via Tauri events.
+    Prints chunks in real-time for Rust to capture and emit via C++ events.
     """
 
     # =========================================================================

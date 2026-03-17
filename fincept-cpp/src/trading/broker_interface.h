@@ -1,6 +1,6 @@
 #pragma once
 // Broker Interface — abstract base class for all 16 broker integrations
-// Each broker implements auth, orders, portfolio, market data via HTTP REST APIs.
+// All 16 fully implemented: Fyers, Zerodha, AngelOne, Upstox, Dhan, Kotak, Groww, AliceBlue, 5Paisa, IIFL, Motilal, Shoonya, Alpaca, IBKR, Tradier, SaxoBank
 
 #include "broker_types.h"
 #include <memory>

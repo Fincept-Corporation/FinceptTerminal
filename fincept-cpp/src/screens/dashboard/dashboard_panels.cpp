@@ -12,15 +12,23 @@ namespace fincept::dashboard {
 // Matches original Tauri MarketPulsePanel getMarketStatus()
 // ============================================================================
 static const char* get_market_status(const char* region) {
+    // Cache UTC time — only recompute once per second
+    static time_t cached_mkt_time = 0;
+    static int cached_h = 0, cached_wd = 0;
     time_t now = time(nullptr);
-    struct tm utc_tm;
+    if (now != cached_mkt_time) {
+        cached_mkt_time = now;
+        struct tm utc_tm;
 #ifdef _WIN32
-    gmtime_s(&utc_tm, &now);
+        gmtime_s(&utc_tm, &now);
 #else
-    gmtime_r(&now, &utc_tm);
+        gmtime_r(&now, &utc_tm);
 #endif
-    int h = utc_tm.tm_hour;
-    int wd = utc_tm.tm_wday; // 0=Sun, 6=Sat
+        cached_h = utc_tm.tm_hour;
+        cached_wd = utc_tm.tm_wday;
+    }
+    int h = cached_h;
+    int wd = cached_wd; // 0=Sun, 6=Sat
 
     // Weekend — all closed
     if (wd == 0 || wd == 6) return "CLOSED";
@@ -96,13 +104,8 @@ static void breadth_bar(float pad, float inner_w, const char* label, int advanci
 //   → Global Snapshot → Market Hours
 // ============================================================================
 void DashboardScreen::render_market_pulse(float width, float height) {
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.04f, 0.04f, 0.04f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Border, FC_BORDER);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-    ImGui::BeginChild("##market_pulse", ImVec2(width, height), ImGuiChildFlags_Borders);
-
     float pad = 8.0f;
-    float inner_w = width - pad * 2;
+    float inner_w = ImGui::GetContentRegionAvail().x - pad * 2;
 
     // ── Panel Header with live pulse dot ──
     ImGui::SetCursorPos(ImVec2(pad, 4));
@@ -274,8 +277,7 @@ void DashboardScreen::render_market_pulse(float width, float height) {
         });
 
         int shown = 0;
-        if (ImGui::BeginTable("##pulse_gainers", 3, ImGuiTableFlags_SizingStretchProp,
-                              ImVec2(inner_w + pad, 0))) {
+        if (ImGui::BeginTable("##pulse_gainers", 3, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("Sym", 0, 1.0f);
             ImGui::TableSetupColumn("Vol", 0, 0.8f);
             ImGui::TableSetupColumn("Chg", 0, 0.8f);
@@ -322,8 +324,7 @@ void DashboardScreen::render_market_pulse(float width, float height) {
         });
 
         int shown = 0;
-        if (ImGui::BeginTable("##pulse_losers", 3, ImGuiTableFlags_SizingStretchProp,
-                              ImVec2(inner_w + pad, 0))) {
+        if (ImGui::BeginTable("##pulse_losers", 3, ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("Sym", 0, 1.0f);
             ImGui::TableSetupColumn("Vol", 0, 0.8f);
             ImGui::TableSetupColumn("Chg", 0, 0.8f);
@@ -487,9 +488,6 @@ void DashboardScreen::render_market_pulse(float width, float height) {
         ImGui::PopStyleColor();
     }
 
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
 }
 
 // ============================================================================
@@ -562,24 +560,22 @@ void DashboardScreen::render_widget_grid(float width, float height) {
     max_col = std::max(max_col, grid_cols);
     max_row = std::max(max_row, grid_rows);
 
-    // Fixed cell height — widgets keep their size, scrollbar handles overflow.
-    // Use the viewport height divided by the *configured* grid rows (not max_row)
-    // so adding more widgets doesn't shrink existing ones.
-    float base_rows = (float)grid_rows;
     float cell_w = (width - (max_col + 1) * gap) / max_col;
-    float cell_h = (height - (base_rows + 1) * gap) / base_rows;
-
-    // Enforce minimum sizes for usability
     cell_w = std::max(100.0f, cell_w);
+
+    // Fixed cell height based on layout_.grid_rows (the *configured* rows, not actual).
+    // When user adds more widgets beyond grid_rows, extra rows scroll — they don't squish.
+    float cell_h = (height - (layout_.grid_rows + 1) * gap) / layout_.grid_rows;
     cell_h = std::max(180.0f, cell_h);
 
     grid_cell_w_ = cell_w;
     grid_cell_h_ = cell_h;
 
-    // Total content height — always allow scroll if content exceeds view
+    // Content height based on actual rows used — may exceed viewport → scrollbar
     float content_h = max_row * (cell_h + gap) + gap;
     ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysVerticalScrollbar;
 
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, FC_PANEL);
     ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0.03f, 0.03f, 0.03f, 0.8f));
     ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(1.0f, 0.533f, 0.0f, 0.35f));
     ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, ImVec4(1.0f, 0.533f, 0.0f, 0.55f));
@@ -613,9 +609,9 @@ void DashboardScreen::render_widget_grid(float width, float height) {
                 if (w.id == dragging_widget_id_) {
                     int new_col = drag_start_col_ + col_delta;
                     int new_row = drag_start_row_ + row_delta;
-                    // Clamp to grid bounds
+                    // Clamp col to grid, row to actual used rows (not configured rows)
                     new_col = std::clamp(new_col, 0, grid_cols - w.col_span);
-                    new_row = std::clamp(new_row, 0, grid_rows - w.row_span);
+                    new_row = std::max(0, new_row);
                     // Only apply if no overlap at new position
                     if (!would_overlap(layout_.widgets, w.id,
                                        new_col, new_row, w.col_span, w.row_span)) {
@@ -637,12 +633,10 @@ void DashboardScreen::render_widget_grid(float width, float height) {
 
             for (auto& w : layout_.widgets) {
                 if (w.id == resizing_widget_id_) {
-                    // Clamp col_span to grid boundary
+                    // Clamp col_span to grid boundary, row_span unbounded downward
                     int new_cs = std::clamp(resize_start_col_span_ + cs_delta,
                                             1, grid_cols - w.col);
-                    // Clamp row_span to grid boundary
-                    int new_rs = std::clamp(resize_start_row_span_ + rs_delta,
-                                            1, grid_rows - w.row);
+                    int new_rs = std::max(1, resize_start_row_span_ + rs_delta);
                     // Further clamp to prevent overlap with other widgets
                     int limit_cs = max_col_span_for(layout_.widgets, w.id,
                                                      w.col, w.row, new_rs, grid_cols);
@@ -736,7 +730,7 @@ void DashboardScreen::render_widget_grid(float width, float height) {
             int snap_row = drag_start_row_ + (int)std::round(drag_pixel_dy / (cell_h + gap));
             // Clamp ghost to grid bounds
             snap_col = std::clamp(snap_col, 0, grid_cols - w.col_span);
-            snap_row = std::clamp(snap_row, 0, grid_rows - w.row_span);
+            snap_row = std::max(0, snap_row);
 
             float ghost_x = gap + snap_col * (cell_w + gap);
             float ghost_y = gap + snap_row * (cell_h + gap);
@@ -765,7 +759,7 @@ void DashboardScreen::render_widget_grid(float width, float height) {
     }
 
     ImGui::EndChild();
-    ImGui::PopStyleColor(4);
+    ImGui::PopStyleColor(5);
 }
 
 // ============================================================================
@@ -776,7 +770,7 @@ void DashboardScreen::render_add_widget_modal() {
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(420, 380), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(460, 520), ImGuiCond_FirstUseEver);
 
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.06f, 0.06f, 0.97f));
     ImGui::PushStyleColor(ImGuiCol_TitleBgActive, FC_HEADER);
@@ -789,20 +783,38 @@ void DashboardScreen::render_add_widget_modal() {
         ImGui::Separator();
         ImGui::Spacing();
 
-        for (int i = 0; i < static_cast<int>(WidgetType::Count); i++) {
-            auto type = static_cast<WidgetType>(i);
-            ImVec4 accent = accent_for(type);
-
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                ImVec4(accent.x * 0.3f, accent.y * 0.3f, accent.z * 0.3f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_Text, accent);
-
-            if (ImGui::Button(widget_type_name(type), ImVec2(-1, 26))) {
-                add_widget(type);
-                show_add_widget_modal_ = false;
+        // Group widgets by category
+        for (int cat = 0; cat <= static_cast<int>(WidgetCategory::Tools); cat++) {
+            auto category = static_cast<WidgetCategory>(cat);
+            bool has_any = false;
+            for (int i = 0; i < static_cast<int>(WidgetType::Count); i++) {
+                if (widget_category_for(static_cast<WidgetType>(i)) == category) {
+                    has_any = true; break;
+                }
             }
-            ImGui::PopStyleColor(3);
+            if (!has_any) continue;
+
+            // Category header
+            ImGui::TextColored(FC_GRAY, "%s", widget_category_name(category));
+            ImGui::Separator();
+
+            for (int i = 0; i < static_cast<int>(WidgetType::Count); i++) {
+                auto type = static_cast<WidgetType>(i);
+                if (widget_category_for(type) != category) continue;
+
+                ImVec4 accent = accent_for(type);
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                    ImVec4(accent.x * 0.3f, accent.y * 0.3f, accent.z * 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, accent);
+
+                if (ImGui::Button(widget_type_name(type), ImVec2(-1, 24))) {
+                    add_widget(type);
+                    show_add_widget_modal_ = false;
+                }
+                ImGui::PopStyleColor(3);
+            }
+            ImGui::Spacing();
         }
     }
     ImGui::End();
@@ -817,7 +829,7 @@ void DashboardScreen::render_template_picker_modal() {
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(500, 340), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(520, 560), ImGuiCond_FirstUseEver);
 
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.06f, 0.06f, 0.97f));
     ImGui::PushStyleColor(ImGuiCol_TitleBgActive, FC_HEADER);

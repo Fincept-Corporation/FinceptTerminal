@@ -1,6 +1,7 @@
 #include "llm_service.h"
 #include "http/http_client.h"
 #include "core/logger.h"
+#include "core/raii.h"
 #include "mcp/mcp_service.h"
 #include <curl/curl.h>
 #include <sstream>
@@ -627,7 +628,7 @@ LLMResponse LLMService::do_streaming_request(const std::string& user_message,
     std::string body_str = req_body.dump();
 
     // Use raw libcurl for streaming
-    CURL* curl = curl_easy_init();
+    core::CurlHandle curl;
     if (!curl) {
         resp.error = "Failed to initialize CURL";
         on_chunk("", true);
@@ -638,40 +639,40 @@ LLMResponse LLMService::do_streaming_request(const std::string& user_message,
     ctx.callback = on_chunk;
     ctx.provider = p;
 
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body_str.c_str());
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body_str.size());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, stream_write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_POST, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, body_str.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDSIZE, (long)body_str.size());
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, stream_write_callback);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &ctx);
+    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, 120L);
+    curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 15L);
+    curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYHOST, 2L);
+    curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT,
         "Mozilla/5.0 FinceptTerminal/4.0.0");
 
     // Build header list
-    struct curl_slist* header_list = nullptr;
-    header_list = curl_slist_append(header_list, "Content-Type: application/json");
-    header_list = curl_slist_append(header_list, "Accept: text/event-stream");
+    core::CurlSlist header_list;
+    header_list.append("Content-Type: application/json");
+    header_list.append("Accept: text/event-stream");
     for (const auto& [key, value] : headers) {
         std::string h = key + ": " + value;
-        header_list = curl_slist_append(header_list, h.c_str());
+        header_list.append(h.c_str());
     }
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+    curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, header_list.get());
 
     LOG_DEBUG("LLM", "STREAM POST %s provider=%s", url.c_str(), p.c_str());
 
-    CURLcode res = curl_easy_perform(curl);
+    CURLcode res = curl_easy_perform(curl.get());
 
     if (res != CURLE_OK) {
         resp.error = curl_easy_strerror(res);
         LOG_ERROR("LLM", "Stream request failed: %s", resp.error.c_str());
     } else {
         long http_code = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+        curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &http_code);
         if (http_code >= 200 && http_code < 300) {
             resp.content = ctx.accumulated;
             resp.completion_tokens = ctx.tokens;
@@ -695,8 +696,7 @@ LLMResponse LLMService::do_streaming_request(const std::string& user_message,
     // Ensure done callback fires
     on_chunk("", true);
 
-    curl_slist_free_all(header_list);
-    curl_easy_cleanup(curl);
+    // header_list and curl cleaned up automatically by destructors
 
     return resp;
 }

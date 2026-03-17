@@ -1,12 +1,13 @@
 #include "notifications_section.h"
 #include "screens/settings/settings_types.h"
 #include "storage/database.h"
-#include "http/http_client.h"
+#include "core/notification.h"
 #include "ui/theme.h"
 #include <imgui.h>
 #include <cstring>
 #include <cstdio>
 #include <nlohmann/json.hpp>
+#include <thread>
 
 namespace fincept::settings {
 
@@ -19,7 +20,12 @@ void NotificationsSection::init() {
     providers_.resize(defs.size());
     for (size_t i = 0; i < defs.size(); i++) {
         providers_[i].id = defs[i].id;
-        std::memset(providers_[i].value, 0, sizeof(providers_[i].value));
+        providers_[i].enabled = false;
+        // Initialize field buffers
+        for (const auto& f : defs[i].fields) {
+            providers_[i].fields[f.key] = "";
+            providers_[i].field_bufs[f.key] = {};
+        }
     }
 
     load_config();
@@ -36,20 +42,38 @@ void NotificationsSection::load_config() {
         if (j.contains("filters")) {
             auto& f = j["filters"];
             filter_success_ = f.value("success", true);
-            filter_error_ = f.value("error", true);
+            filter_error_   = f.value("error", true);
             filter_warning_ = f.value("warning", true);
-            filter_info_ = f.value("info", true);
+            filter_info_    = f.value("info", true);
         }
 
         if (j.contains("providers")) {
             for (auto& [key, val] : j["providers"].items()) {
                 for (auto& p : providers_) {
-                    if (p.id == key) {
-                        p.enabled = val.value("enabled", false);
-                        std::string v = val.value("value", "");
-                        std::strncpy(p.value, v.c_str(), sizeof(p.value) - 1);
-                        break;
+                    if (p.id != key) continue;
+                    p.enabled = val.value("enabled", false);
+
+                    // Multi-field config
+                    if (val.contains("config") && val["config"].is_object()) {
+                        for (auto& [fk, fv] : val["config"].items()) {
+                            std::string v = fv.get<std::string>();
+                            p.fields[fk] = v;
+                            if (p.field_bufs.count(fk)) {
+                                std::strncpy(p.field_bufs[fk].data(), v.c_str(), 255);
+                            }
+                        }
                     }
+                    // Legacy single "value" field
+                    if (val.contains("value") && val["value"].is_string()) {
+                        std::string v = val["value"].get<std::string>();
+                        // Map to first field
+                        if (!p.field_bufs.empty()) {
+                            auto& first = p.field_bufs.begin()->second;
+                            std::strncpy(first.data(), v.c_str(), 255);
+                            p.fields[p.field_bufs.begin()->first] = v;
+                        }
+                    }
+                    break;
                 }
             }
         }
@@ -61,22 +85,32 @@ void NotificationsSection::save_config() {
 
     j["filters"] = {
         {"success", filter_success_},
-        {"error", filter_error_},
+        {"error",   filter_error_},
         {"warning", filter_warning_},
-        {"info", filter_info_}
+        {"info",    filter_info_}
     };
 
     json providers_json;
     for (auto& p : providers_) {
+        json cfg;
+        for (auto& [fk, buf] : p.field_bufs) {
+            p.fields[fk] = std::string(buf.data());
+            cfg[fk] = p.fields[fk];
+        }
         providers_json[p.id] = {
             {"enabled", p.enabled},
-            {"value", std::string(p.value)}
+            {"config", cfg}
         };
     }
     j["providers"] = providers_json;
 
     db::ops::save_setting("notifications_config", j.dump(), "notifications");
+
+    // Reload into the notification system so send() picks up changes
+    core::notify::load_provider_config();
+
     status_ = "Notification settings saved";
+    status_is_error_ = false;
     status_time_ = ImGui::GetTime();
 }
 
@@ -84,37 +118,21 @@ void NotificationsSection::test_notification(int provider_idx) {
     if (provider_idx < 0 || provider_idx >= (int)providers_.size()) return;
 
     auto& prov = providers_[provider_idx];
-    std::string url(prov.value);
-    if (url.empty()) {
-        status_ = "No URL/key configured for " + prov.id;
+    testing_provider_ = provider_idx;
+
+    // Save first so provider config is current
+    save_config();
+
+    // Test on background thread
+    std::string pid = prov.id;
+    std::thread([this, pid, provider_idx]() {
+        bool ok = core::notify::test_provider(pid);
+        status_ = ok ? ("Test sent to " + pid)
+                      : ("Test failed for " + pid);
+        status_is_error_ = !ok;
         status_time_ = ImGui::GetTime();
-        return;
-    }
-
-    const auto& defs = notification_providers();
-    if (defs[provider_idx].uses_webhook) {
-        // Send test webhook
-        json payload = {
-            {"content", "Fincept Terminal test notification"},
-            {"text", "Fincept Terminal test notification"},
-            {"username", "Fincept Terminal"}
-        };
-
-        auto& http = http::HttpClient::instance();
-        http::Headers headers = {
-            {"Content-Type", "application/json"}
-        };
-        auto resp = http.post(url, payload.dump(), headers);
-
-        if (resp.success) {
-            status_ = "Test notification sent to " + prov.id;
-        } else {
-            status_ = "Failed to send test: " + resp.error;
-        }
-    } else {
-        status_ = "Test sent (API key providers use different methods)";
-    }
-    status_time_ = ImGui::GetTime();
+        testing_provider_ = -1;
+    }).detach();
 }
 
 void NotificationsSection::render() {
@@ -133,73 +151,122 @@ void NotificationsSection::render() {
     if (!status_.empty()) {
         double elapsed = ImGui::GetTime() - status_time_;
         if (elapsed < 5.0) {
-            ImGui::TextColored(SUCCESS, "%s", status_.c_str());
+            ImGui::TextColored(status_is_error_ ? MARKET_RED : SUCCESS, "%s", status_.c_str());
         } else {
             status_.clear();
         }
     }
 
     ImGui::Spacing();
-
     ImGui::BeginChild("##notif_content", ImVec2(0, 0));
 
-    // Event filters
+    // ---- Event Filters ----
     theme::SectionHeader("EVENT FILTERS");
-    ImGui::TextColored(TEXT_DIM, "Select which event types trigger notifications.");
+    ImGui::TextColored(TEXT_DIM, "Select which event types trigger external notifications.");
     ImGui::Spacing();
 
-    ImGui::Checkbox("Success", &filter_success_);
-    ImGui::SameLine(0, 20);
-    ImGui::Checkbox("Error", &filter_error_);
-    ImGui::SameLine(0, 20);
-    ImGui::Checkbox("Warning", &filter_warning_);
-    ImGui::SameLine(0, 20);
-    ImGui::Checkbox("Info", &filter_info_);
+    // Colored filter toggles
+    {
+        auto color_toggle = [](const char* label, bool* val, ImVec4 color) {
+            ImGui::PushStyleColor(ImGuiCol_CheckMark, color);
+            ImGui::Checkbox(label, val);
+            ImGui::PopStyleColor();
+        };
+
+        color_toggle("Success", &filter_success_, MARKET_GREEN);
+        ImGui::SameLine(0, 20);
+        color_toggle("Error", &filter_error_, MARKET_RED);
+        ImGui::SameLine(0, 20);
+        color_toggle("Warning", &filter_warning_, WARNING);
+        ImGui::SameLine(0, 20);
+        color_toggle("Info", &filter_info_, ACCENT);
+    }
 
     ImGui::Spacing();
+    ImGui::Spacing();
 
-    // Notification providers
+    // ---- Providers ----
     theme::SectionHeader("PROVIDERS");
-    ImGui::TextColored(TEXT_DIM,
-        "Configure notification delivery channels.");
+    ImGui::TextColored(TEXT_DIM, "Configure notification delivery channels. "
+                                  "15 providers available.");
     ImGui::Spacing();
 
     const auto& defs = notification_providers();
 
-    if (ImGui::BeginTable("##notif_providers", 4,
-            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+    for (int i = 0; i < (int)defs.size() && i < (int)providers_.size(); i++) {
+        ImGui::PushID(i);
+        auto& prov = providers_[i];
+        auto& def = defs[i];
+        bool is_testing = (testing_provider_ == i);
 
-        ImGui::TableSetupColumn("Provider", ImGuiTableColumnFlags_WidthFixed, 120);
-        ImGui::TableSetupColumn("Enabled", ImGuiTableColumnFlags_WidthFixed, 60);
-        ImGui::TableSetupColumn("Key / URL", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Test", ImGuiTableColumnFlags_WidthFixed, 60);
-        ImGui::TableHeadersRow();
+        // Provider card
+        ImVec4 border_col = prov.enabled ? ACCENT : BORDER_DIM;
+        ImGui::PushStyleColor(ImGuiCol_Border, border_col);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
+        ImGui::BeginChild(def.id, ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
-        for (int i = 0; i < (int)defs.size() && i < (int)providers_.size(); i++) {
-            ImGui::TableNextRow();
-            ImGui::PushID(i);
+        // Header: name + toggle + buttons
+        {
+            ImGui::TextColored(TEXT_PRIMARY, "%s", def.label);
+            ImGui::SameLine(0, 8);
 
-            ImGui::TableNextColumn();
-            ImGui::TextColored(TEXT_PRIMARY, "%s", defs[i].label);
-
-            ImGui::TableNextColumn();
-            ImGui::Checkbox("##enabled", &providers_[i].enabled);
-
-            ImGui::TableNextColumn();
-            ImGui::SetNextItemWidth(-1);
-            ImGui::InputTextWithHint("##value", defs[i].placeholder,
-                providers_[i].value, sizeof(providers_[i].value),
-                ImGuiInputTextFlags_Password);
-
-            ImGui::TableNextColumn();
-            if (ImGui::SmallButton("Test")) {
-                test_notification(i);
+            if (prov.enabled) {
+                ImGui::TextColored(MARKET_GREEN, "[ON]");
+            } else {
+                ImGui::TextColored(TEXT_DIM, "[OFF]");
             }
 
-            ImGui::PopID();
+            // Right-side buttons
+            float btn_x = ImGui::GetContentRegionAvail().x;
+            if (btn_x > 160) {
+                ImGui::SameLine(ImGui::GetCursorPosX() + btn_x - 160);
+
+                ImGui::Checkbox("##enabled", &prov.enabled);
+                ImGui::SameLine(0, 8);
+
+                ImGui::PushStyleColor(ImGuiCol_Button, BG_WIDGET);
+                ImGui::PushStyleColor(ImGuiCol_Text, ACCENT);
+                if (is_testing) {
+                    ImGui::SmallButton("Testing...");
+                } else if (ImGui::SmallButton("Test")) {
+                    test_notification(i);
+                }
+                ImGui::PopStyleColor(2);
+            }
         }
 
-        ImGui::EndTable();
+        ImGui::Spacing();
+
+        // Config fields
+        float field_w = ImGui::GetContentRegionAvail().x - 8;
+        for (const auto& field : def.fields) {
+            ImGui::TextColored(TEXT_DIM, "%s", field.label);
+            if (field.required) {
+                ImGui::SameLine(0, 4);
+                ImGui::TextColored(MARKET_RED, "*");
+            }
+
+            ImGui::PushItemWidth(field_w);
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
+
+            char input_id[64];
+            std::snprintf(input_id, sizeof(input_id), "##%s_%s", def.id, field.key);
+
+            auto& buf = prov.field_bufs[field.key];
+            ImGuiInputTextFlags flags = 0;
+            if (field.is_password) flags |= ImGuiInputTextFlags_Password;
+
+            ImGui::InputTextWithHint(input_id, field.placeholder, buf.data(), buf.size(), flags);
+
+            ImGui::PopStyleColor();
+            ImGui::PopItemWidth();
+            ImGui::Spacing();
+        }
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor(2);
+        ImGui::Spacing();
+        ImGui::PopID();
     }
 
     ImGui::EndChild();

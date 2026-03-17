@@ -29,7 +29,7 @@ Published currencies (31):
   ILS, INR, ISK, JPY (×100), KRW (×100), MXN, MYR, NOK, NZD, PHP,
   PLN, RON, RSD, RUB, SEK, SGD, THB, TRY, UAH, USD, ZAR
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

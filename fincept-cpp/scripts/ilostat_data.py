@@ -26,7 +26,7 @@ SDMX Key dimension order (dot-separated):
     Wildcarding: omit a dimension to wildcard it (use just the dots).
     OR logic: use + between values, e.g. "CAN+USA+GBR"
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys
@@ -1510,7 +1510,7 @@ class ILOStatWrapper:
 
 
 # ---------------------------------------------------------------------------
-# CLI entry point (invoked by Tauri Rust bridge)
+# CLI entry point (invoked by C++ Python bridge)
 # ---------------------------------------------------------------------------
 
 COMMANDS = {

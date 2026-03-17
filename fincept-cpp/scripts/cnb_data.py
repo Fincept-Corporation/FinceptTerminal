@@ -36,7 +36,7 @@ Verified Endpoints:
   GET /skd/daily?[date=YYYY-MM-DD]&lang=EN
       Short-term government debt (SKD) rates
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

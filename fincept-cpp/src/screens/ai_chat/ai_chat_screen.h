@@ -5,6 +5,7 @@
 
 #include "llm_service.h"
 #include "storage/database.h"
+#include "voice/voice_service.h"
 #include <imgui.h>
 #include <string>
 #include <vector>
@@ -65,6 +66,10 @@ private:
 
     // ── Quick Prompts ──
     std::vector<QuickPrompt> quick_prompts_;
+
+    // ── Voice ──
+    bool voice_initialized_ = false;
+    bool voice_mode_ = false;
 
     // ── Status ──
     std::string status_ = "INITIALIZING...";

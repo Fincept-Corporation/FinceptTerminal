@@ -62,8 +62,8 @@ private:
     HttpResponse perform(const std::string& method, const std::string& url,
                          const std::string& body, const Headers& headers);
 
-    long timeout_seconds_ = 30;
-    long connect_timeout_seconds_ = 10;
+    long timeout_seconds_ = 15;
+    long connect_timeout_seconds_ = 5;
     std::mutex mutex_;
 };
 

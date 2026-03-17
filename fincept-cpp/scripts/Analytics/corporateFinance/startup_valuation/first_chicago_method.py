@@ -187,7 +187,7 @@ class FirstChicagoMethod:
         return max(0, min(1, breakeven_prob))
 
 def main():
-    """CLI entry point - outputs JSON for Tauri integration"""
+    """CLI entry point - outputs JSON for C++ integration"""
     import json
 
     if len(sys.argv) < 2:

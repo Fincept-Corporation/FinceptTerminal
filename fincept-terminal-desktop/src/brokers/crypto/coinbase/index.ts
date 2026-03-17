@@ -1,1 +1,0 @@
-export { CoinbaseAdapter } from './CoinbaseAdapter';

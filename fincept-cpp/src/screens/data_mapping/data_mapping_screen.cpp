@@ -1,5 +1,6 @@
-// Data Mapping Screen — Bloomberg Terminal-inspired API mapping UI
-// Dense, data-focused layout matching the project's visual language
+// Data Mapping Screen — Fincept-themed API mapping configuration UI
+// 2-panel layout with horizontal stepper, card-based sections, rich visual hierarchy
+// Uses theme::colors exclusively — no custom BB_* palette
 
 #include "data_mapping_screen.h"
 #include "data_mapping_schemas.h"
@@ -11,27 +12,12 @@
 #include <algorithm>
 #include <cstring>
 #include <chrono>
+#include <cmath>
 
 namespace fincept::data_mapping {
 
 using json = nlohmann::json;
 using namespace theme::colors;
-
-// Bloomberg-style colors (matching data_sources_screen)
-static constexpr ImVec4 BB_BG        = {0.055f, 0.055f, 0.060f, 1.0f};
-static constexpr ImVec4 BB_PANEL     = {0.075f, 0.075f, 0.082f, 1.0f};
-static constexpr ImVec4 BB_SIDEBAR   = {0.062f, 0.062f, 0.068f, 1.0f};
-static constexpr ImVec4 BB_ROW_ALT   = {0.082f, 0.082f, 0.090f, 1.0f};
-static constexpr ImVec4 BB_HEADER_BG = {0.090f, 0.090f, 0.098f, 1.0f};
-static constexpr ImVec4 BB_CMD_BG    = {0.067f, 0.067f, 0.073f, 1.0f};
-static constexpr ImVec4 BB_AMBER     = {1.0f, 0.65f, 0.0f, 1.0f};
-static constexpr ImVec4 BB_GREEN     = {0.0f, 0.85f, 0.35f, 1.0f};
-static constexpr ImVec4 BB_RED       = {1.0f, 0.25f, 0.20f, 1.0f};
-static constexpr ImVec4 BB_CYAN      = {0.0f, 0.75f, 0.85f, 1.0f};
-static constexpr ImVec4 BB_WHITE     = {0.92f, 0.92f, 0.93f, 1.0f};
-static constexpr ImVec4 BB_GRAY      = {0.50f, 0.50f, 0.54f, 1.0f};
-static constexpr ImVec4 BB_DIM       = {0.35f, 0.35f, 0.38f, 1.0f};
-static constexpr ImVec4 BB_BORDER    = {0.16f, 0.16f, 0.18f, 1.0f};
 
 // Step definitions
 static constexpr CreateStep ALL_STEPS[] = {
@@ -40,6 +26,114 @@ static constexpr CreateStep ALL_STEPS[] = {
     CreateStep::test_save
 };
 static constexpr int NUM_STEPS = 5;
+
+// Method colors for badges
+static ImVec4 method_color(HttpMethod m) {
+    switch (m) {
+        case HttpMethod::get:   return SUCCESS;
+        case HttpMethod::post:  return INFO;
+        case HttpMethod::put:   return WARNING;
+        case HttpMethod::del:   return ERROR_RED;
+        case HttpMethod::patch: return {0.70f, 0.50f, 0.90f, 1.0f};
+    }
+    return TEXT_DIM;
+}
+
+// Schema colors for badges
+static ImVec4 schema_color(SchemaType t) {
+    switch (t) {
+        case SchemaType::ohlcv:      return {0.30f, 0.70f, 1.00f, 1.0f};
+        case SchemaType::quote:      return {0.40f, 0.85f, 0.55f, 1.0f};
+        case SchemaType::tick:       return {0.90f, 0.60f, 0.20f, 1.0f};
+        case SchemaType::order:      return {0.80f, 0.40f, 0.80f, 1.0f};
+        case SchemaType::position:   return {0.50f, 0.80f, 0.90f, 1.0f};
+        case SchemaType::portfolio:  return {0.90f, 0.75f, 0.30f, 1.0f};
+        case SchemaType::instrument: return {0.65f, 0.65f, 0.80f, 1.0f};
+    }
+    return TEXT_DIM;
+}
+
+// ============================================================================
+// UI Helpers — reusable card/badge/label components
+// ============================================================================
+
+bool DataMappingScreen::card_begin(const char* id, const char* title, float w) {
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_WIDGET);
+    ImGui::PushStyleColor(ImGuiCol_Border, BORDER_DIM);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 3.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 8});
+
+    const float card_w = (w > 0) ? w : ImGui::GetContentRegionAvail().x;
+    ImGui::BeginChild(id, {card_w, 0}, ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+
+    // Card title with accent underline
+    if (title && title[0] != '\0') {
+        ImGui::PushStyleColor(ImGuiCol_Text, ACCENT);
+        ImGui::Text("%s", title);
+        ImGui::PopStyleColor();
+
+        // Orange accent line under title
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddLine(
+            {p.x, p.y}, {p.x + card_w - 20, p.y},
+            ImGui::ColorConvertFloat4ToU32({ACCENT.x, ACCENT.y, ACCENT.z, 0.4f}), 1.0f);
+        ImGui::Spacing();
+    }
+    return true;
+}
+
+void DataMappingScreen::card_end() {
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    ImGui::Spacing();
+}
+
+void DataMappingScreen::method_badge(HttpMethod method) {
+    const ImVec4 col = method_color(method);
+    const char* label = http_method_label(method);
+
+    ImGui::PushStyleColor(ImGuiCol_Button, {col.x, col.y, col.z, 0.20f});
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {col.x, col.y, col.z, 0.30f});
+    ImGui::PushStyleColor(ImGuiCol_Text, col);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {6, 2});
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+    ImGui::SmallButton(label);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(3);
+}
+
+void DataMappingScreen::schema_badge(SchemaType type) {
+    const ImVec4 col = schema_color(type);
+    const char* label = schema_type_id(type);
+
+    ImGui::PushStyleColor(ImGuiCol_Button, {col.x, col.y, col.z, 0.18f});
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {col.x, col.y, col.z, 0.28f});
+    ImGui::PushStyleColor(ImGuiCol_Text, col);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8, 2});
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 10.0f);
+    ImGui::SmallButton(label);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(3);
+}
+
+void DataMappingScreen::tag_pill(const char* text, const ImVec4& color) {
+    ImGui::PushStyleColor(ImGuiCol_Button, {color.x, color.y, color.z, 0.12f});
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {color.x, color.y, color.z, 0.20f});
+    ImGui::PushStyleColor(ImGuiCol_Text, {color.x, color.y, color.z, 0.85f});
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {5, 1});
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+    ImGui::SmallButton(text);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(3);
+}
+
+void DataMappingScreen::inline_label(const char* label, float label_w) {
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
+    ImGui::Text("%s", label);
+    ImGui::PopStyleColor();
+    ImGui::SameLine(label_w);
+}
 
 // ============================================================================
 // Initialization
@@ -55,7 +149,7 @@ void DataMappingScreen::init() {
 }
 
 // ============================================================================
-// Main render
+// Main render — 2-panel layout
 // ============================================================================
 
 void DataMappingScreen::render() {
@@ -77,77 +171,91 @@ void DataMappingScreen::render() {
     }
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
+    // Account for app chrome (menu bar + tab bar at top, app footer at bottom)
+    const float chrome_top = ImGui::GetFrameHeight() + 4.0f;
+    const float chrome_bot = ImGui::GetFrameHeight();
+    const float ox = vp->WorkPos.x;
+    const float oy = vp->WorkPos.y + chrome_top;
     const float w = vp->WorkSize.x;
-    const float h = vp->WorkSize.y;
+    const float h = vp->WorkSize.y - chrome_top - chrome_bot;
 
     // Background
     ImGui::GetWindowDrawList()->AddRectFilled(
-        vp->WorkPos, {vp->WorkPos.x + w, vp->WorkPos.y + h},
-        ImGui::ColorConvertFloat4ToU32(BB_BG));
+        {ox, oy}, {ox + w, oy + h},
+        ImGui::ColorConvertFloat4ToU32(BG_DARKEST));
 
-    // Layout: command bar (top) | sidebar + content + status | footer
-    const float cmd_h = 28.0f;
-    const float footer_h = 22.0f;
-    const float sidebar_w = sidebar_minimized_ ? 32.0f : 180.0f;
-    const float status_w = 240.0f;
-    const float content_x = vp->WorkPos.x + sidebar_w;
-    const float content_y = vp->WorkPos.y + cmd_h;
-    const float content_w = w - sidebar_w - status_w;
+    // Layout: command bar (top) | sidebar + content | footer
+    const float cmd_h = 32.0f;
+    const float footer_h = 24.0f;
+    const float sidebar_w = sidebar_minimized_ ? 36.0f : 220.0f;
+    const float content_x = ox + sidebar_w;
+    const float content_y = oy + cmd_h;
+    const float content_w = w - sidebar_w;
     const float content_h = h - cmd_h - footer_h;
 
     render_command_bar(w);
-    render_sidebar(vp->WorkPos.x, content_y, sidebar_w, content_h);
+    render_sidebar(ox, content_y, sidebar_w, content_h);
     render_content(content_x, content_y, content_w, content_h);
-    render_status_panel(content_x + content_w, content_y, status_w, content_h);
     render_footer(w, footer_h);
 }
 
 // ============================================================================
-// Command bar
+// Command bar — top navigation with view tabs and search
 // ============================================================================
 
 void DataMappingScreen::render_command_bar(float w) {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(vp->WorkPos);
-    ImGui::SetNextWindowSize({w, 28.0f});
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, BB_CMD_BG);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8, 4});
+    const float chrome_top = ImGui::GetFrameHeight() + 4.0f;
+    ImGui::SetNextWindowPos({vp->WorkPos.x, vp->WorkPos.y + chrome_top});
+    ImGui::SetNextWindowSize({w, 32.0f});
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, BG_DARK);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {12, 6});
 
     ImGui::Begin("##dm_cmdbar", nullptr,
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking);
 
     // Title
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
+    ImGui::PushStyleColor(ImGuiCol_Text, ACCENT);
     ImGui::Text("DATA MAPPING");
     ImGui::PopStyleColor();
-    ImGui::SameLine();
 
-    // View buttons
-    ImGui::SameLine(160);
-    const bool on_list = (view_ == MappingView::list);
-    const bool on_create = (view_ == MappingView::create);
-    const bool on_templates = (view_ == MappingView::templates);
+    // View tabs — styled like proper tab buttons
+    ImGui::SameLine(170);
 
-    if (on_list) ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-    if (ImGui::SmallButton("LIST")) { view_ = MappingView::list; load_mappings(); }
-    if (on_list) ImGui::PopStyleColor();
+    auto tab_button = [&](const char* label, MappingView target_view) {
+        const bool active = (view_ == target_view);
+        if (active) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ACCENT_BG);
+            ImGui::PushStyleColor(ImGuiCol_Text, ACCENT);
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, {0, 0, 0, 0});
+            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
+        }
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {10, 3});
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+        if (ImGui::Button(label)) {
+            view_ = target_view;
+            if (target_view == MappingView::list) load_mappings();
+            if (target_view == MappingView::create) reset_create_form();
+        }
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
+        ImGui::SameLine();
+    };
 
-    ImGui::SameLine();
-    if (on_create) ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-    if (ImGui::SmallButton("+ NEW")) { view_ = MappingView::create; reset_create_form(); }
-    if (on_create) ImGui::PopStyleColor();
+    tab_button("Mappings", MappingView::list);
+    tab_button("+ New", MappingView::create);
+    tab_button("Templates", MappingView::templates);
 
-    ImGui::SameLine();
-    if (on_templates) ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-    if (ImGui::SmallButton("TEMPLATES")) { view_ = MappingView::templates; }
-    if (on_templates) ImGui::PopStyleColor();
-
-    // Search
-    ImGui::SameLine(w - 260);
-    ImGui::PushItemWidth(200);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, BB_PANEL);
+    // Search bar (right-aligned)
+    const float search_w = 220.0f;
+    ImGui::SameLine(w - search_w - 16);
+    ImGui::PushItemWidth(search_w);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
     ImGui::InputTextWithHint("##dm_search", "Search mappings...", search_buf_, sizeof(search_buf_));
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor();
     ImGui::PopItemWidth();
 
@@ -157,52 +265,97 @@ void DataMappingScreen::render_command_bar(float w) {
 }
 
 // ============================================================================
-// Sidebar — step navigation in create mode, quick actions in list mode
+// Sidebar — context-sensitive: stats/filter in list, config summary in create
 // ============================================================================
 
 void DataMappingScreen::render_sidebar(float x, float y, float w, float h) {
     ImGui::SetNextWindowPos({x, y});
     ImGui::SetNextWindowSize({w, h});
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, BB_SIDEBAR);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {6, 6});
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, BG_PANEL);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8, 8});
 
     ImGui::Begin("##dm_sidebar", nullptr,
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking);
+        ImGuiWindowFlags_NoDocking);
 
+    // Collapse toggle
     if (sidebar_minimized_) {
-        if (ImGui::SmallButton(">")) sidebar_minimized_ = false;
+        if (ImGui::Button(">", {20, 20})) sidebar_minimized_ = false;
         ImGui::End();
         ImGui::PopStyleVar();
         ImGui::PopStyleColor();
         return;
     }
 
-    if (ImGui::SmallButton("<")) { sidebar_minimized_ = true; }
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+    if (ImGui::Button("<", {20, 20})) sidebar_minimized_ = true;
+    ImGui::PopStyleColor();
 
-    ImGui::Separator();
+    ImGui::Spacing();
 
     if (view_ == MappingView::create) {
-        // Step navigation
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-        ImGui::Text("WIZARD STEPS");
-        ImGui::PopStyleColor();
+        // ---- Create mode: config summary ----
+        theme::SectionHeader("CONFIG SUMMARY");
         ImGui::Spacing();
 
-        for (int i = 0; i < NUM_STEPS; ++i) {
-            const bool is_current = (ALL_STEPS[i] == current_step_);
-            const bool is_past = (i < static_cast<int>(current_step_));
-
-            if (is_current) ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-            else if (is_past) ImGui::PushStyleColor(ImGuiCol_Text, BB_GREEN);
-            else ImGui::PushStyleColor(ImGuiCol_Text, BB_DIM);
-
-            char label[64];
-            std::snprintf(label, sizeof(label), "%d. %s", i + 1, create_step_label(ALL_STEPS[i]));
-            if (ImGui::Selectable(label, is_current)) {
-                current_step_ = ALL_STEPS[i];
-            }
+        // Live URL preview
+        if (api_base_url_buf_[0] != '\0') {
+            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+            ImGui::Text("URL");
             ImGui::PopStyleColor();
+            ImGui::PushStyleColor(ImGuiCol_Text, INFO);
+            ImGui::TextWrapped("%s%s", api_base_url_buf_, api_endpoint_buf_);
+            ImGui::PopStyleColor();
+            ImGui::Spacing();
+        }
+
+        // Method badge
+        if (api_base_url_buf_[0] != '\0') {
+            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+            ImGui::Text("Method");
+            ImGui::PopStyleColor();
+            ImGui::SameLine(70);
+            method_badge(static_cast<HttpMethod>(api_method_idx_));
+            ImGui::Spacing();
+        }
+
+        // Schema badge
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::Text("Schema");
+        ImGui::PopStyleColor();
+        ImGui::SameLine(70);
+        if (current_mapping_.is_predefined_schema) {
+            schema_badge(current_mapping_.schema_type);
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
+            ImGui::Text("Custom");
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::Spacing();
+
+        // Field count
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::Text("Fields");
+        ImGui::PopStyleColor();
+        ImGui::SameLine(70);
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        ImGui::Text("%d", static_cast<int>(current_mapping_.field_mappings.size()));
+        ImGui::PopStyleColor();
+
+        // Sample data status
+        ImGui::Spacing();
+        if (!sample_data_json_.empty()) {
+            theme::StatusIndicator("Sample data loaded", true);
+        } else {
+            theme::StatusIndicator("No sample data", false);
+        }
+
+        // Test status
+        if (test_result_) {
+            theme::StatusIndicator(
+                test_result_->success ? "Last test: PASSED" : "Last test: FAILED",
+                test_result_->success);
         }
 
         ImGui::Spacing();
@@ -212,46 +365,88 @@ void DataMappingScreen::render_sidebar(float x, float y, float w, float h) {
         // Navigation buttons
         const int step_idx = static_cast<int>(current_step_);
         if (step_idx > 0) {
-            if (ImGui::Button("< Back", {w - 16, 0})) {
+            if (theme::SecondaryButton("< Back", {w - 20, 0})) {
                 current_step_ = ALL_STEPS[step_idx - 1];
             }
+            ImGui::Spacing();
         }
         if (step_idx < NUM_STEPS - 1) {
-            if (ImGui::Button("Next >", {w - 16, 0})) {
+            if (theme::AccentButton("Next >", {w - 20, 0})) {
                 current_step_ = ALL_STEPS[step_idx + 1];
             }
         }
+
     } else {
-        // List mode sidebar — stats
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-        ImGui::Text("OVERVIEW");
-        ImGui::PopStyleColor();
+        // ---- List/Templates mode: overview + schema filter ----
+        theme::SectionHeader("OVERVIEW");
         ImGui::Spacing();
 
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_WHITE);
-        ImGui::Text("Mappings: %d", static_cast<int>(saved_mappings_.size()));
+        // Stats
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        ImGui::Text("%d", static_cast<int>(saved_mappings_.size()));
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::Text("mappings saved");
+        ImGui::PopStyleColor();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        ImGui::Text("%d", static_cast<int>(templates_.size()));
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::Text("templates available");
         ImGui::PopStyleColor();
 
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
 
-        // Schema type filter
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-        ImGui::Text("SCHEMAS");
-        ImGui::PopStyleColor();
+        // Schema filter (clickable)
+        theme::SectionHeader("FILTER BY SCHEMA");
+        ImGui::Spacing();
+
+        // "All" option
+        {
+            const bool selected = (filter_schema_idx_ == -1);
+            if (selected) ImGui::PushStyleColor(ImGuiCol_Text, ACCENT);
+            else ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
+
+            if (ImGui::Selectable("  All", selected)) filter_schema_idx_ = -1;
+            ImGui::PopStyleColor();
+        }
 
         const auto schema_names = get_schema_type_names();
-        for (const auto& name : schema_names) {
+        for (int i = 0; i < static_cast<int>(schema_names.size()); ++i) {
             int count = 0;
             for (const auto& m : saved_mappings_) {
-                if (m.is_predefined_schema && schema_type_id(m.schema_type) == name) {
+                if (m.is_predefined_schema &&
+                    schema_type_id(m.schema_type) == schema_names[static_cast<size_t>(i)]) {
                     ++count;
                 }
             }
-            ImGui::PushStyleColor(ImGuiCol_Text, count > 0 ? BB_WHITE : BB_DIM);
-            ImGui::Text("  %s (%d)", name.c_str(), count);
+
+            const bool selected = (filter_schema_idx_ == i);
+            if (selected) ImGui::PushStyleColor(ImGuiCol_Text, ACCENT);
+            else if (count > 0) ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+            else ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
+
+            char label[64];
+            std::snprintf(label, sizeof(label), "  %s (%d)", schema_names[static_cast<size_t>(i)].c_str(), count);
+            if (ImGui::Selectable(label, selected)) {
+                filter_schema_idx_ = selected ? -1 : i;
+            }
             ImGui::PopStyleColor();
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Quick actions
+        if (theme::AccentButton("+ New Mapping", {w - 20, 0})) {
+            view_ = MappingView::create;
+            reset_create_form();
         }
     }
 
@@ -261,14 +456,14 @@ void DataMappingScreen::render_sidebar(float x, float y, float w, float h) {
 }
 
 // ============================================================================
-// Main content area — dispatches to current view
+// Main content area
 // ============================================================================
 
 void DataMappingScreen::render_content(float x, float y, float w, float h) {
     ImGui::SetNextWindowPos({x, y});
     ImGui::SetNextWindowSize({w, h});
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, BB_BG);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8, 8});
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, BG_DARKEST);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {12, 10});
 
     ImGui::Begin("##dm_content", nullptr,
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
@@ -286,129 +481,170 @@ void DataMappingScreen::render_content(float x, float y, float w, float h) {
 }
 
 // ============================================================================
-// List View — table of saved mappings
+// List View — card-style rows with badges, method tags, inline actions
 // ============================================================================
 
 void DataMappingScreen::render_list_view(float w, float /*h*/) {
     if (saved_mappings_.empty()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_DIM);
-        ImGui::Text("No mappings configured yet. Click '+ NEW' to create one.");
+        // Empty state
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::SetCursorPosX((w - 300) * 0.5f);
+        ImGui::Text("No mappings configured yet.");
         ImGui::PopStyleColor();
+        ImGui::Spacing();
+        ImGui::SetCursorPosX((w - 160) * 0.5f);
+        if (theme::AccentButton("Create First Mapping")) {
+            view_ = MappingView::create;
+            reset_create_form();
+        }
         return;
     }
 
     const std::string filter(search_buf_);
+    const auto schema_names = get_schema_type_names();
 
-    // Table header
-    if (ImGui::BeginTable("##mappings_table", 6,
-            ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable |
-            ImGuiTableFlags_ScrollY)) {
+    // Count visible items for header
+    int visible_count = 0;
 
-        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None, w * 0.22f);
-        ImGui::TableSetupColumn("Schema", ImGuiTableColumnFlags_None, w * 0.12f);
-        ImGui::TableSetupColumn("API Endpoint", ImGuiTableColumnFlags_None, w * 0.25f);
-        ImGui::TableSetupColumn("Fields", ImGuiTableColumnFlags_None, w * 0.08f);
-        ImGui::TableSetupColumn("Updated", ImGuiTableColumnFlags_None, w * 0.15f);
-        ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_None, w * 0.16f);
+    for (size_t i = 0; i < saved_mappings_.size(); ++i) {
+        const auto& m = saved_mappings_[i];
 
-        ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, BB_HEADER_BG);
-        ImGui::TableHeadersRow();
-        ImGui::PopStyleColor();
-
-        for (size_t i = 0; i < saved_mappings_.size(); ++i) {
-            const auto& m = saved_mappings_[i];
-
-            // Filter
-            if (!filter.empty()) {
-                const std::string name_lower = [&] {
-                    std::string s = m.name;
-                    std::transform(s.begin(), s.end(), s.begin(),
-                        [](unsigned char c) { return std::tolower(c); });
-                    return s;
-                }();
-                std::string filter_lower = filter;
-                std::transform(filter_lower.begin(), filter_lower.end(),
-                    filter_lower.begin(), [](unsigned char c) { return std::tolower(c); });
-                if (name_lower.find(filter_lower) == std::string::npos) continue;
-            }
-
-            ImGui::TableNextRow();
-            if (i % 2 == 1) {
-                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                    ImGui::ColorConvertFloat4ToU32(BB_ROW_ALT));
-            }
-
-            // Name
-            ImGui::TableNextColumn();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_WHITE);
-            ImGui::Text("%s", m.name.c_str());
-            ImGui::PopStyleColor();
-
-            // Schema
-            ImGui::TableNextColumn();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-            if (m.is_predefined_schema) {
-                ImGui::Text("%s", schema_type_id(m.schema_type));
-            } else {
-                ImGui::Text("Custom");
-            }
-            ImGui::PopStyleColor();
-
-            // Endpoint
-            ImGui::TableNextColumn();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_GRAY);
-            const std::string endpoint = m.api_config.base_url.substr(0,
-                std::min<size_t>(30, m.api_config.base_url.size())) + m.api_config.endpoint;
-            ImGui::Text("%s", endpoint.c_str());
-            ImGui::PopStyleColor();
-
-            // Fields count
-            ImGui::TableNextColumn();
-            ImGui::Text("%d", static_cast<int>(m.field_mappings.size()));
-
-            // Updated
-            ImGui::TableNextColumn();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_DIM);
-            ImGui::Text("%s", m.updated_at.substr(0, 10).c_str());
-            ImGui::PopStyleColor();
-
-            // Actions
-            ImGui::TableNextColumn();
-            ImGui::PushID(static_cast<int>(i));
-            if (ImGui::SmallButton("Edit")) {
-                edit_mapping(m);
-            }
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Dup")) {
-                mapping_ops::duplicate_mapping(m.id);
-                load_mappings();
-            }
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_RED);
-            if (ImGui::SmallButton("Del")) {
-                delete_mapping_by_id(m.id);
-            }
-            ImGui::PopStyleColor();
-            ImGui::PopID();
+        // Search filter
+        if (!filter.empty()) {
+            std::string name_lower = m.name;
+            std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+            std::string filter_lower = filter;
+            std::transform(filter_lower.begin(), filter_lower.end(),
+                filter_lower.begin(), [](unsigned char c) { return std::tolower(c); });
+            if (name_lower.find(filter_lower) == std::string::npos) continue;
         }
 
-        ImGui::EndTable();
+        // Schema filter
+        if (filter_schema_idx_ >= 0 && m.is_predefined_schema) {
+            if (schema_type_id(m.schema_type) !=
+                schema_names[static_cast<size_t>(filter_schema_idx_)]) continue;
+        }
+
+        visible_count++;
+
+        // Card for each mapping
+        ImGui::PushID(static_cast<int>(i));
+
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
+        ImGui::PushStyleColor(ImGuiCol_Border, BORDER_DIM);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 3.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 8});
+        ImGui::BeginChild("##map_card", {0, 0}, ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+
+        // Row 1: Name + Schema badge + Method badge
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        ImGui::Text("%s", m.name.c_str());
+        ImGui::PopStyleColor();
+
+        ImGui::SameLine(w * 0.35f);
+        if (m.is_predefined_schema) {
+            schema_badge(m.schema_type);
+        } else {
+            tag_pill("Custom", TEXT_DIM);
+        }
+
+        ImGui::SameLine(w * 0.48f);
+        method_badge(m.api_config.method);
+
+        // Field count
+        ImGui::SameLine(w * 0.58f);
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::Text("%d fields", static_cast<int>(m.field_mappings.size()));
+        ImGui::PopStyleColor();
+
+        // Actions (right-aligned)
+        ImGui::SameLine(w * 0.72f);
+        if (theme::SecondaryButton("Edit")) {
+            edit_mapping(m);
+        }
+        ImGui::SameLine();
+        if (theme::SecondaryButton("Dup")) {
+            mapping_ops::duplicate_mapping(m.id);
+            load_mappings();
+        }
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, {ERROR_RED.x, ERROR_RED.y, ERROR_RED.z, 0.15f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {ERROR_RED.x, ERROR_RED.y, ERROR_RED.z, 0.30f});
+        ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
+        if (ImGui::Button("Del")) {
+            pending_delete_id_ = m.id;
+        }
+        ImGui::PopStyleColor(3);
+
+        // Row 2: Endpoint + Updated date
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        const std::string endpoint_display =
+            m.api_config.base_url.substr(0, std::min<size_t>(40, m.api_config.base_url.size())) +
+            m.api_config.endpoint;
+        ImGui::Text("%s", endpoint_display.c_str());
+        ImGui::PopStyleColor();
+
+        if (!m.updated_at.empty()) {
+            ImGui::SameLine(w * 0.72f);
+            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
+            ImGui::Text("Updated %s", m.updated_at.substr(0, 10).c_str());
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
+
+        ImGui::PopID();
+    }
+
+    if (visible_count == 0) {
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::Text("No mappings match the current filter.");
+        ImGui::PopStyleColor();
+    }
+
+    // Delete confirmation popup
+    if (!pending_delete_id_.empty()) {
+        ImGui::OpenPopup("Confirm Delete");
+    }
+    if (ImGui::BeginPopupModal("Confirm Delete", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        ImGui::Text("Delete this mapping permanently?");
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
+
+        if (theme::AccentButton("Delete")) {
+            delete_mapping_by_id(pending_delete_id_);
+            pending_delete_id_.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (theme::SecondaryButton("Cancel")) {
+            pending_delete_id_.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 }
 
 // ============================================================================
-// Create View — 5-step wizard
+// Create View — horizontal stepper + step content
 // ============================================================================
 
 void DataMappingScreen::render_create_view(float w, float h) {
-    // Step indicator bar
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-    ImGui::Text("Step %d/%d: %s", static_cast<int>(current_step_) + 1, NUM_STEPS,
-                create_step_label(current_step_));
-    ImGui::PopStyleColor();
+    // Horizontal step progress bar
+    render_step_progress_bar(w);
+
+    ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
+    // Step content
     switch (current_step_) {
         case CreateStep::api_config:     render_step_api_config(w, h); break;
         case CreateStep::schema_select:  render_step_schema_select(w, h); break;
@@ -419,159 +655,232 @@ void DataMappingScreen::render_create_view(float w, float h) {
 }
 
 // ============================================================================
-// Step 1: API Configuration
+// Horizontal step progress bar — circles connected by lines
+// ============================================================================
+
+void DataMappingScreen::render_step_progress_bar(float w) {
+    const float step_area_w = w - 40;
+    const float step_spacing = step_area_w / (NUM_STEPS);
+    const float circle_r = 12.0f;
+    const float start_x = ImGui::GetCursorScreenPos().x + 20;
+    const float center_y = ImGui::GetCursorScreenPos().y + circle_r + 2;
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    for (int i = 0; i < NUM_STEPS; ++i) {
+        const float cx = start_x + step_spacing * i + step_spacing * 0.5f;
+        const bool is_current = (ALL_STEPS[i] == current_step_);
+        const bool is_past = (i < static_cast<int>(current_step_));
+        const bool is_future = (i > static_cast<int>(current_step_));
+
+        // Connecting line to next step
+        if (i < NUM_STEPS - 1) {
+            const float nx = start_x + step_spacing * (i + 1) + step_spacing * 0.5f;
+            const ImU32 line_col = is_past
+                ? ImGui::ColorConvertFloat4ToU32(SUCCESS)
+                : ImGui::ColorConvertFloat4ToU32(BORDER_DIM);
+            dl->AddLine({cx + circle_r + 4, center_y}, {nx - circle_r - 4, center_y}, line_col, 2.0f);
+        }
+
+        // Circle
+        if (is_current) {
+            // Active: filled orange with glow
+            dl->AddCircleFilled({cx, center_y}, circle_r + 2,
+                ImGui::ColorConvertFloat4ToU32({ACCENT.x, ACCENT.y, ACCENT.z, 0.2f}));
+            dl->AddCircleFilled({cx, center_y}, circle_r,
+                ImGui::ColorConvertFloat4ToU32(ACCENT));
+            dl->AddCircle({cx, center_y}, circle_r,
+                ImGui::ColorConvertFloat4ToU32({1, 1, 1, 0.3f}), 0, 2.0f);
+        } else if (is_past) {
+            // Completed: green filled with checkmark
+            dl->AddCircleFilled({cx, center_y}, circle_r,
+                ImGui::ColorConvertFloat4ToU32(SUCCESS));
+            // Checkmark
+            dl->AddLine({cx - 4, center_y}, {cx - 1, center_y + 3},
+                ImGui::ColorConvertFloat4ToU32({1, 1, 1, 1}), 2.0f);
+            dl->AddLine({cx - 1, center_y + 3}, {cx + 5, center_y - 4},
+                ImGui::ColorConvertFloat4ToU32({1, 1, 1, 1}), 2.0f);
+        } else {
+            // Future: dim border only
+            dl->AddCircle({cx, center_y}, circle_r,
+                ImGui::ColorConvertFloat4ToU32(BORDER), 0, 2.0f);
+        }
+
+        // Step number in circle
+        if (is_current || is_future) {
+            char num[4];
+            std::snprintf(num, sizeof(num), "%d", i + 1);
+            const ImVec2 text_size = ImGui::CalcTextSize(num);
+            const ImU32 text_col = is_current
+                ? ImGui::ColorConvertFloat4ToU32({1, 1, 1, 1})
+                : ImGui::ColorConvertFloat4ToU32(TEXT_DISABLED);
+            dl->AddText({cx - text_size.x * 0.5f, center_y - text_size.y * 0.5f}, text_col, num);
+        }
+
+        // Label below circle (clickable)
+        const char* step_label = create_step_label(ALL_STEPS[i]);
+        const ImVec2 label_size = ImGui::CalcTextSize(step_label);
+        const float label_x = cx - label_size.x * 0.5f;
+        const float label_y = center_y + circle_r + 6;
+
+        ImU32 label_col;
+        if (is_current) label_col = ImGui::ColorConvertFloat4ToU32(ACCENT);
+        else if (is_past) label_col = ImGui::ColorConvertFloat4ToU32(TEXT_SECONDARY);
+        else label_col = ImGui::ColorConvertFloat4ToU32(TEXT_DISABLED);
+
+        dl->AddText({label_x, label_y}, label_col, step_label);
+
+        // Invisible button for clicking
+        ImGui::SetCursorScreenPos({cx - circle_r - 4, center_y - circle_r - 4});
+        ImGui::PushID(i);
+        if (ImGui::InvisibleButton("##step", {circle_r * 2 + 8, circle_r * 2 + label_size.y + 14})) {
+            current_step_ = ALL_STEPS[i];
+        }
+        ImGui::PopID();
+    }
+
+    // Reserve vertical space for the stepper
+    ImGui::SetCursorScreenPos({ImGui::GetCursorScreenPos().x,
+                                center_y + circle_r + 26});
+    ImGui::Dummy({0, 0});
+}
+
+// ============================================================================
+// Step 1: API Configuration — grouped into cards
 // ============================================================================
 
 void DataMappingScreen::render_step_api_config(float w, float /*h*/) {
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("API CONNECTION");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
+    const float input_w = std::min(w * 0.55f, 500.0f);
+    const float label_w = 90.0f;
 
-    // Name & Description
-    ImGui::Text("Name:");
-    ImGui::SameLine(80);
-    ImGui::PushItemWidth(w * 0.5f);
+    // === Connection Card ===
+    card_begin("##card_conn", "API CONNECTION");
+
+    inline_label("Name", label_w);
+    ImGui::PushItemWidth(input_w);
     ImGui::InputText("##api_name", api_name_buf_, sizeof(api_name_buf_));
     ImGui::PopItemWidth();
 
-    ImGui::Text("Desc:");
-    ImGui::SameLine(80);
-    ImGui::PushItemWidth(w * 0.5f);
+    inline_label("Description", label_w);
+    ImGui::PushItemWidth(input_w);
     ImGui::InputText("##api_desc", api_desc_buf_, sizeof(api_desc_buf_));
     ImGui::PopItemWidth();
 
     ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
 
-    // URL & Method
+    // Method + URL on same visual row
     static const char* methods[] = {"GET", "POST", "PUT", "DELETE", "PATCH"};
-    ImGui::Text("Method:");
-    ImGui::SameLine(80);
-    ImGui::PushItemWidth(80);
+    inline_label("Method", label_w);
+    ImGui::PushItemWidth(90);
     ImGui::Combo("##method", &api_method_idx_, methods, 5);
     ImGui::PopItemWidth();
 
-    ImGui::Text("Base URL:");
-    ImGui::SameLine(80);
-    ImGui::PushItemWidth(w * 0.5f);
-    ImGui::InputText("##base_url", api_base_url_buf_, sizeof(api_base_url_buf_));
+    inline_label("Base URL", label_w);
+    ImGui::PushItemWidth(input_w);
+    ImGui::InputTextWithHint("##base_url", "https://api.example.com/v1", api_base_url_buf_, sizeof(api_base_url_buf_));
     ImGui::PopItemWidth();
 
-    ImGui::Text("Endpoint:");
-    ImGui::SameLine(80);
-    ImGui::PushItemWidth(w * 0.5f);
-    ImGui::InputText("##endpoint", api_endpoint_buf_, sizeof(api_endpoint_buf_));
+    inline_label("Endpoint", label_w);
+    ImGui::PushItemWidth(input_w);
+    ImGui::InputTextWithHint("##endpoint", "/ticker/{symbol}/candles", api_endpoint_buf_, sizeof(api_endpoint_buf_));
     ImGui::PopItemWidth();
 
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_DIM);
-    ImGui::Text("  Use {placeholders} for runtime parameters, e.g. /ticker/{symbol}");
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
+    ImGui::Text("          Use {placeholders} for runtime parameters");
     ImGui::PopStyleColor();
 
-    // Body (for POST/PUT/PATCH)
-    if (api_method_idx_ >= 1 && api_method_idx_ <= 3) {
+    // Body for POST/PUT/PATCH
+    if (api_method_idx_ >= 1 && api_method_idx_ <= 4) {
         ImGui::Spacing();
-        ImGui::Text("Body (JSON):");
+        inline_label("Body", label_w);
         ImGui::InputTextMultiline("##body", api_body_buf_, sizeof(api_body_buf_),
-            {w * 0.6f, 80});
+            {input_w, 80});
     }
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // Authentication
-    render_auth_config();
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // Headers
-    render_headers_editor();
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // Query params
-    render_query_params_editor();
-
-    // Fetch sample button
-    ImGui::Spacing();
+    // Fetch button
     ImGui::Spacing();
     if (fetching_) {
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-        ImGui::Text("Fetching...");
-        ImGui::PopStyleColor();
+        theme::LoadingSpinner("Fetching sample data...");
     } else {
-        if (ImGui::Button("Fetch Sample Data")) {
+        if (theme::AccentButton("Fetch Sample Data")) {
             fetch_sample_data();
         }
+        if (!sample_data_json_.empty()) {
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, SUCCESS);
+            ImGui::Text("Sample data loaded (%d bytes)",
+                static_cast<int>(sample_data_json_.size()));
+            ImGui::PopStyleColor();
+        }
     }
+
+    card_end();
+
+    // === Authentication Card ===
+    render_auth_config(w);
+
+    // === Headers Card ===
+    render_headers_editor(w);
+
+    // === Query Params Card ===
+    render_query_params_editor(w);
 }
 
 // ============================================================================
-// Auth config section
+// Auth config card
 // ============================================================================
 
-void DataMappingScreen::render_auth_config() {
+void DataMappingScreen::render_auth_config(float w) {
+    card_begin("##card_auth", "AUTHENTICATION");
+
+    const float input_w = std::min(w * 0.45f, 400.0f);
+    const float label_w = 90.0f;
     static const char* auth_types[] = {"None", "API Key", "Bearer Token", "Basic Auth", "OAuth2"};
 
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("AUTHENTICATION");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
-
-    ImGui::Text("Type:");
-    ImGui::SameLine(80);
-    ImGui::PushItemWidth(150);
+    inline_label("Type", label_w);
+    ImGui::PushItemWidth(160);
     ImGui::Combo("##auth_type", &api_auth_type_idx_, auth_types, 5);
     ImGui::PopItemWidth();
 
     switch (api_auth_type_idx_) {
         case 1: { // API Key
             static const char* locations[] = {"Header", "Query Param"};
-            ImGui::Text("Location:");
-            ImGui::SameLine(80);
-            ImGui::PushItemWidth(120);
+            ImGui::Spacing();
+            inline_label("Location", label_w);
+            ImGui::PushItemWidth(130);
             ImGui::Combo("##key_loc", &auth_key_location_idx_, locations, 2);
             ImGui::PopItemWidth();
 
-            ImGui::Text("Key Name:");
-            ImGui::SameLine(80);
-            ImGui::PushItemWidth(200);
-            ImGui::InputText("##key_name", auth_key_name_buf_, sizeof(auth_key_name_buf_));
+            inline_label("Key Name", label_w);
+            ImGui::PushItemWidth(input_w * 0.6f);
+            ImGui::InputTextWithHint("##key_name", "X-API-Key", auth_key_name_buf_, sizeof(auth_key_name_buf_));
             ImGui::PopItemWidth();
 
-            ImGui::Text("Value:");
-            ImGui::SameLine(80);
-            ImGui::PushItemWidth(300);
+            inline_label("Value", label_w);
+            ImGui::PushItemWidth(input_w);
             ImGui::InputText("##key_val", auth_key_value_buf_, sizeof(auth_key_value_buf_),
                 ImGuiInputTextFlags_Password);
             ImGui::PopItemWidth();
             break;
         }
         case 2: { // Bearer
-            ImGui::Text("Token:");
-            ImGui::SameLine(80);
-            ImGui::PushItemWidth(400);
+            ImGui::Spacing();
+            inline_label("Token", label_w);
+            ImGui::PushItemWidth(input_w);
             ImGui::InputText("##bearer", auth_bearer_buf_, sizeof(auth_bearer_buf_),
                 ImGuiInputTextFlags_Password);
             ImGui::PopItemWidth();
             break;
         }
         case 3: { // Basic
-            ImGui::Text("Username:");
-            ImGui::SameLine(80);
-            ImGui::PushItemWidth(200);
+            ImGui::Spacing();
+            inline_label("Username", label_w);
+            ImGui::PushItemWidth(input_w * 0.6f);
             ImGui::InputText("##basic_user", auth_basic_user_buf_, sizeof(auth_basic_user_buf_));
             ImGui::PopItemWidth();
 
-            ImGui::Text("Password:");
-            ImGui::SameLine(80);
-            ImGui::PushItemWidth(200);
+            inline_label("Password", label_w);
+            ImGui::PushItemWidth(input_w * 0.6f);
             ImGui::InputText("##basic_pass", auth_basic_pass_buf_, sizeof(auth_basic_pass_buf_),
                 ImGuiInputTextFlags_Password);
             ImGui::PopItemWidth();
@@ -579,37 +888,41 @@ void DataMappingScreen::render_auth_config() {
         }
         default: break;
     }
+
+    card_end();
 }
 
 // ============================================================================
-// Headers editor
+// Headers editor card
 // ============================================================================
 
-void DataMappingScreen::render_headers_editor() {
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("HEADERS");
-    ImGui::PopStyleColor();
+void DataMappingScreen::render_headers_editor(float /*w*/) {
+    card_begin("##card_headers", "CUSTOM HEADERS");
 
-    // Show existing headers
     auto& hdrs = current_mapping_.api_config.headers;
     std::string to_remove;
+
+    // Existing headers as mini-rows
     for (const auto& [k, v] : hdrs) {
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_WHITE);
-        ImGui::Text("  %s:", k.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        ImGui::Text("%s", k.c_str());
         ImGui::PopStyleColor();
-        ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_GRAY);
+        ImGui::SameLine(150);
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
         ImGui::Text("%s", v.c_str());
         ImGui::PopStyleColor();
-        ImGui::SameLine();
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - 20);
         ImGui::PushID(k.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
         if (ImGui::SmallButton("x")) to_remove = k;
+        ImGui::PopStyleColor();
         ImGui::PopID();
     }
     if (!to_remove.empty()) hdrs.erase(to_remove);
 
-    // Add new header
-    ImGui::PushItemWidth(120);
+    // Add new
+    ImGui::Spacing();
+    ImGui::PushItemWidth(130);
     ImGui::InputTextWithHint("##hdr_key", "Key", header_key_buf_, sizeof(header_key_buf_));
     ImGui::PopItemWidth();
     ImGui::SameLine();
@@ -617,42 +930,46 @@ void DataMappingScreen::render_headers_editor() {
     ImGui::InputTextWithHint("##hdr_val", "Value", header_val_buf_, sizeof(header_val_buf_));
     ImGui::PopItemWidth();
     ImGui::SameLine();
-    if (ImGui::SmallButton("+ Add Header")) {
+    if (theme::SecondaryButton("+ Add")) {
         if (std::strlen(header_key_buf_) > 0) {
             hdrs[header_key_buf_] = header_val_buf_;
             header_key_buf_[0] = '\0';
             header_val_buf_[0] = '\0';
         }
     }
+
+    card_end();
 }
 
 // ============================================================================
-// Query params editor
+// Query params editor card
 // ============================================================================
 
-void DataMappingScreen::render_query_params_editor() {
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("QUERY PARAMETERS");
-    ImGui::PopStyleColor();
+void DataMappingScreen::render_query_params_editor(float /*w*/) {
+    card_begin("##card_qparams", "QUERY PARAMETERS");
 
     auto& qparams = current_mapping_.api_config.query_params;
     std::string to_remove;
+
     for (const auto& [k, v] : qparams) {
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_WHITE);
-        ImGui::Text("  %s:", k.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        ImGui::Text("%s", k.c_str());
         ImGui::PopStyleColor();
-        ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_GRAY);
+        ImGui::SameLine(150);
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
         ImGui::Text("%s", v.c_str());
         ImGui::PopStyleColor();
-        ImGui::SameLine();
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - 20);
         ImGui::PushID(("qp_" + k).c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
         if (ImGui::SmallButton("x")) to_remove = k;
+        ImGui::PopStyleColor();
         ImGui::PopID();
     }
     if (!to_remove.empty()) qparams.erase(to_remove);
 
-    ImGui::PushItemWidth(120);
+    ImGui::Spacing();
+    ImGui::PushItemWidth(130);
     ImGui::InputTextWithHint("##qp_key", "Key", qparam_key_buf_, sizeof(qparam_key_buf_));
     ImGui::PopItemWidth();
     ImGui::SameLine();
@@ -660,13 +977,15 @@ void DataMappingScreen::render_query_params_editor() {
     ImGui::InputTextWithHint("##qp_val", "Value", qparam_val_buf_, sizeof(qparam_val_buf_));
     ImGui::PopItemWidth();
     ImGui::SameLine();
-    if (ImGui::SmallButton("+ Add Param")) {
+    if (theme::SecondaryButton("+ Add")) {
         if (std::strlen(qparam_key_buf_) > 0) {
             qparams[qparam_key_buf_] = qparam_val_buf_;
             qparam_key_buf_[0] = '\0';
             qparam_val_buf_[0] = '\0';
         }
     }
+
+    card_end();
 }
 
 // ============================================================================
@@ -674,10 +993,11 @@ void DataMappingScreen::render_query_params_editor() {
 // ============================================================================
 
 void DataMappingScreen::render_step_schema_select(float w, float /*h*/) {
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("TARGET SCHEMA");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
+    const float input_w = std::min(w * 0.55f, 500.0f);
+    const float label_w = 100.0f;
+
+    // === Schema Card ===
+    card_begin("##card_schema", "TARGET SCHEMA");
 
     ImGui::Checkbox("Use predefined schema", &current_mapping_.is_predefined_schema);
     is_custom_schema_ = !current_mapping_.is_predefined_schema;
@@ -685,52 +1005,63 @@ void DataMappingScreen::render_step_schema_select(float w, float /*h*/) {
     ImGui::Spacing();
 
     if (current_mapping_.is_predefined_schema) {
-        const auto names = get_schema_type_names();
         static const char* schema_items[] = {"OHLCV", "QUOTE", "TICK", "ORDER", "POSITION", "PORTFOLIO", "INSTRUMENT"};
-        ImGui::Text("Schema:");
-        ImGui::SameLine(80);
+        inline_label("Schema", label_w);
         ImGui::PushItemWidth(200);
         if (ImGui::Combo("##schema_type", &schema_type_idx_, schema_items, 7)) {
             current_mapping_.schema_type = static_cast<SchemaType>(schema_type_idx_);
         }
         ImGui::PopItemWidth();
+        ImGui::SameLine();
+        schema_badge(current_mapping_.schema_type);
 
-        // Show schema fields
+        // Schema fields table
         const auto* schema = get_schema_for_type(current_mapping_.schema_type);
         if (schema) {
             ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-            ImGui::Text("Fields in %s:", schema->name.c_str());
+            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
+            ImGui::Text("%s — %s", schema->name.c_str(), schema->description.c_str());
             ImGui::PopStyleColor();
+            ImGui::Spacing();
 
-            if (ImGui::BeginTable("##schema_fields", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders)) {
-                ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_None, w * 0.25f);
-                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None, w * 0.12f);
-                ImGui::TableSetupColumn("Required", ImGuiTableColumnFlags_None, w * 0.1f);
-                ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_None, w * 0.4f);
-                ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, BB_HEADER_BG);
+            if (ImGui::BeginTable("##schema_fields", 4,
+                    ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+                    ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+                    {0, std::min(250.0f, schema->fields.size() * 26.0f + 30.0f)})) {
+
+                ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_None, input_w * 0.28f);
+                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None, input_w * 0.14f);
+                ImGui::TableSetupColumn("Required", ImGuiTableColumnFlags_None, input_w * 0.12f);
+                ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_None, input_w * 0.46f);
+                ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, BG_WIDGET);
                 ImGui::TableHeadersRow();
                 ImGui::PopStyleColor();
 
                 for (const auto& f : schema->fields) {
                     ImGui::TableNextRow();
+
                     ImGui::TableNextColumn();
-                    ImGui::PushStyleColor(ImGuiCol_Text, BB_WHITE);
+                    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
                     ImGui::Text("%s", f.name.c_str());
                     ImGui::PopStyleColor();
 
                     ImGui::TableNextColumn();
-                    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
+                    ImGui::PushStyleColor(ImGuiCol_Text, INFO);
                     ImGui::Text("%s", field_type_label(f.type));
                     ImGui::PopStyleColor();
 
                     ImGui::TableNextColumn();
-                    ImGui::PushStyleColor(ImGuiCol_Text, f.required ? BB_AMBER : BB_DIM);
-                    ImGui::Text("%s", f.required ? "YES" : "no");
+                    if (f.required) {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ACCENT);
+                        ImGui::Text("YES");
+                    } else {
+                        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
+                        ImGui::Text("no");
+                    }
                     ImGui::PopStyleColor();
 
                     ImGui::TableNextColumn();
-                    ImGui::PushStyleColor(ImGuiCol_Text, BB_GRAY);
+                    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
                     ImGui::Text("%s", f.description.c_str());
                     ImGui::PopStyleColor();
                 }
@@ -738,28 +1069,32 @@ void DataMappingScreen::render_step_schema_select(float w, float /*h*/) {
             }
         }
     } else {
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
         ImGui::Text("Custom schema fields are configured in the Field Mapping step.");
+        ImGui::PopStyleColor();
     }
 
-    // Extraction config
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    card_end();
 
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("DATA EXTRACTION");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
+    // === Extraction Card ===
+    card_begin("##card_extract", "DATA EXTRACTION");
 
-    ImGui::Text("Root Path:");
-    ImGui::SameLine(100);
+    inline_label("Root Path", label_w);
     ImGui::PushItemWidth(300);
-    ImGui::InputTextWithHint("##root_path", "e.g. data.candles", root_path_buf_, sizeof(root_path_buf_));
+    ImGui::InputTextWithHint("##root_path", "e.g. data.candles or results",
+        root_path_buf_, sizeof(root_path_buf_));
     ImGui::PopItemWidth();
 
-    ImGui::Checkbox("Source is array", &current_mapping_.extraction.is_array);
-    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
+    ImGui::Text("          JSON path to the data array in the API response");
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+    ImGui::Checkbox("Source data is an array", &current_mapping_.extraction.is_array);
+    ImGui::SameLine(0, 20);
     ImGui::Checkbox("Array of arrays", &current_mapping_.extraction.is_array_of_arrays);
+
+    card_end();
 }
 
 // ============================================================================
@@ -767,11 +1102,6 @@ void DataMappingScreen::render_step_schema_select(float w, float /*h*/) {
 // ============================================================================
 
 void DataMappingScreen::render_step_field_mapping(float w, float /*h*/) {
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("FIELD MAPPINGS");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
-
     // Auto-populate from schema if empty
     if (current_mapping_.field_mappings.empty() && current_mapping_.is_predefined_schema) {
         const auto* schema = get_schema_for_type(current_mapping_.schema_type);
@@ -786,8 +1116,14 @@ void DataMappingScreen::render_step_field_mapping(float w, float /*h*/) {
         }
     }
 
-    // Add mapping button
-    if (ImGui::Button("+ Add Field Mapping")) {
+    card_begin("##card_fieldmap", "FIELD MAPPINGS");
+
+    // Header row with add button
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
+    ImGui::Text("Map source data fields to target schema fields.");
+    ImGui::PopStyleColor();
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - 140);
+    if (theme::AccentButton("+ Add Field")) {
         current_mapping_.field_mappings.push_back({});
     }
 
@@ -796,15 +1132,17 @@ void DataMappingScreen::render_step_field_mapping(float w, float /*h*/) {
     // Field mapping table
     if (!current_mapping_.field_mappings.empty() &&
         ImGui::BeginTable("##field_map_table", 6,
-            ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY)) {
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+            ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+            {0, std::min(400.0f, current_mapping_.field_mappings.size() * 30.0f + 35.0f)})) {
 
         ImGui::TableSetupColumn("Target Field", ImGuiTableColumnFlags_None, w * 0.18f);
-        ImGui::TableSetupColumn("Source Path", ImGuiTableColumnFlags_None, w * 0.25f);
+        ImGui::TableSetupColumn("Source Path", ImGuiTableColumnFlags_None, w * 0.22f);
         ImGui::TableSetupColumn("Parser", ImGuiTableColumnFlags_None, w * 0.10f);
-        ImGui::TableSetupColumn("Transform", ImGuiTableColumnFlags_None, w * 0.15f);
-        ImGui::TableSetupColumn("Req?", ImGuiTableColumnFlags_None, w * 0.06f);
-        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_None, w * 0.06f);
-        ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, BB_HEADER_BG);
+        ImGui::TableSetupColumn("Transform", ImGuiTableColumnFlags_None, w * 0.18f);
+        ImGui::TableSetupColumn("Req", ImGuiTableColumnFlags_None, w * 0.06f);
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_NoResize, 30.0f);
+        ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, BG_WIDGET);
         ImGui::TableHeadersRow();
         ImGui::PopStyleColor();
 
@@ -844,14 +1182,14 @@ void DataMappingScreen::render_step_field_mapping(float w, float /*h*/) {
             }
             ImGui::PopItemWidth();
 
-            // Transform (first one)
+            // Transform
             ImGui::TableNextColumn();
             ImGui::PushItemWidth(-1);
             char xform_buf[64] = {};
             if (!fm.transforms.empty()) {
                 std::strncpy(xform_buf, fm.transforms[0].c_str(), sizeof(xform_buf) - 1);
             }
-            if (ImGui::InputText("##xform", xform_buf, sizeof(xform_buf))) {
+            if (ImGui::InputTextWithHint("##xform", "e.g. toNumber", xform_buf, sizeof(xform_buf))) {
                 if (std::strlen(xform_buf) > 0) {
                     if (fm.transforms.empty()) fm.transforms.push_back(xform_buf);
                     else fm.transforms[0] = xform_buf;
@@ -861,13 +1199,13 @@ void DataMappingScreen::render_step_field_mapping(float w, float /*h*/) {
             }
             ImGui::PopItemWidth();
 
-            // Required
+            // Required checkbox
             ImGui::TableNextColumn();
             ImGui::Checkbox("##req", &fm.required);
 
-            // Delete
+            // Delete button
             ImGui::TableNextColumn();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_RED);
+            ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
             if (ImGui::SmallButton("X")) to_delete = static_cast<int>(i);
             ImGui::PopStyleColor();
 
@@ -881,69 +1219,147 @@ void DataMappingScreen::render_step_field_mapping(float w, float /*h*/) {
 
         ImGui::EndTable();
     }
+
+    // Available transforms reference
+    ImGui::Spacing();
+    if (ImGui::TreeNodeEx("Available Transforms", ImGuiTreeNodeFlags_None)) {
+        const auto transforms = TransformRegistry::all_transforms();
+        if (ImGui::BeginTable("##transforms_ref", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders)) {
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None, 140);
+            ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_None, 280);
+            ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_None, 80);
+            ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, BG_WIDGET);
+            ImGui::TableHeadersRow();
+            ImGui::PopStyleColor();
+
+            for (const auto& t : transforms) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::PushStyleColor(ImGuiCol_Text, ACCENT);
+                ImGui::Text("%s", t.name);
+                ImGui::PopStyleColor();
+                ImGui::TableNextColumn();
+                ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+                ImGui::Text("%s", t.description);
+                ImGui::PopStyleColor();
+                ImGui::TableNextColumn();
+                tag_pill(transform_category_label(t.category), TEXT_SECONDARY);
+            }
+            ImGui::EndTable();
+        }
+        ImGui::TreePop();
+    }
+
+    card_end();
 }
 
 // ============================================================================
-// Step 4: Cache Settings
+// Step 4: Cache & Validation Settings
 // ============================================================================
 
 void DataMappingScreen::render_step_cache_settings(float /*w*/, float /*h*/) {
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("CACHE SETTINGS");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
+    // === Cache Card ===
+    card_begin("##card_cache", "RESPONSE CACHING");
 
     ImGui::Checkbox("Enable caching", &current_mapping_.api_config.cache_enabled);
 
     if (current_mapping_.api_config.cache_enabled) {
-        ImGui::Text("TTL (seconds):");
-        ImGui::SameLine(120);
+        ImGui::Spacing();
+        inline_label("TTL (seconds)", 110);
         ImGui::PushItemWidth(100);
         ImGui::InputInt("##cache_ttl", &current_mapping_.api_config.cache_ttl_seconds);
         ImGui::PopItemWidth();
 
-        if (current_mapping_.api_config.cache_ttl_seconds < 0) {
+        if (current_mapping_.api_config.cache_ttl_seconds < 0)
             current_mapping_.api_config.cache_ttl_seconds = 0;
+
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
+        if (current_mapping_.api_config.cache_ttl_seconds > 0) {
+            const int mins = current_mapping_.api_config.cache_ttl_seconds / 60;
+            if (mins > 0) ImGui::Text("              = %d min %d sec", mins,
+                current_mapping_.api_config.cache_ttl_seconds % 60);
+        } else {
+            ImGui::Text("              0 = no caching");
         }
+        ImGui::PopStyleColor();
     }
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    card_end();
 
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("VALIDATION");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
+    // === Validation Card ===
+    card_begin("##card_validation", "DATA VALIDATION");
 
     ImGui::Checkbox("Enable validation", &current_mapping_.validation.enabled);
     if (current_mapping_.validation.enabled) {
-        ImGui::Checkbox("Strict mode (fail on errors)", &current_mapping_.validation.strict_mode);
+        ImGui::Spacing();
+        ImGui::Checkbox("Strict mode (reject records with errors)", &current_mapping_.validation.strict_mode);
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::Text("Validates transformed data against the target schema.");
+        ImGui::Text("Checks required fields, data types, and value ranges.");
+        ImGui::PopStyleColor();
     }
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    card_end();
 
-    // Post-processing
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("POST-PROCESSING");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
+    // === Post-Processing Card ===
+    card_begin("##card_postproc", "POST-PROCESSING");
 
     // Limit
     int limit_val = current_mapping_.post_processing.limit.value_or(0);
-    ImGui::Text("Limit:");
-    ImGui::SameLine(80);
+    inline_label("Record limit", 110);
     ImGui::PushItemWidth(100);
     if (ImGui::InputInt("##pp_limit", &limit_val)) {
-        current_mapping_.post_processing.limit = (limit_val > 0) ? std::optional<int>(limit_val) : std::nullopt;
+        current_mapping_.post_processing.limit =
+            (limit_val > 0) ? std::optional<int>(limit_val) : std::nullopt;
     }
     ImGui::PopItemWidth();
 
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_DIM);
-    ImGui::Text("  0 = no limit");
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
+    ImGui::Text("              0 = no limit");
     ImGui::PopStyleColor();
+
+    // Sort
+    ImGui::Spacing();
+    bool has_sort = current_mapping_.post_processing.sort.has_value();
+    if (ImGui::Checkbox("Enable sorting", &has_sort)) {
+        if (has_sort) current_mapping_.post_processing.sort = SortConfig{"timestamp", false};
+        else current_mapping_.post_processing.sort = std::nullopt;
+    }
+    if (current_mapping_.post_processing.sort) {
+        char sort_buf[64] = {};
+        std::strncpy(sort_buf, current_mapping_.post_processing.sort->field.c_str(),
+            sizeof(sort_buf) - 1);
+        inline_label("Sort field", 110);
+        ImGui::PushItemWidth(160);
+        if (ImGui::InputText("##sort_field", sort_buf, sizeof(sort_buf))) {
+            current_mapping_.post_processing.sort->field = sort_buf;
+        }
+        ImGui::PopItemWidth();
+        ImGui::SameLine(0, 10);
+        ImGui::Checkbox("Descending", &current_mapping_.post_processing.sort->descending);
+    }
+
+    // Deduplicate
+    ImGui::Spacing();
+    bool has_dedup = current_mapping_.post_processing.deduplicate_field.has_value();
+    if (ImGui::Checkbox("Deduplicate", &has_dedup)) {
+        if (has_dedup) current_mapping_.post_processing.deduplicate_field = "symbol";
+        else current_mapping_.post_processing.deduplicate_field = std::nullopt;
+    }
+    if (current_mapping_.post_processing.deduplicate_field) {
+        char dedup_buf[64] = {};
+        std::strncpy(dedup_buf, current_mapping_.post_processing.deduplicate_field->c_str(),
+            sizeof(dedup_buf) - 1);
+        inline_label("Dedup field", 110);
+        ImGui::PushItemWidth(160);
+        if (ImGui::InputText("##dedup_field", dedup_buf, sizeof(dedup_buf))) {
+            current_mapping_.post_processing.deduplicate_field = dedup_buf;
+        }
+        ImGui::PopItemWidth();
+    }
+
+    card_end();
 }
 
 // ============================================================================
@@ -951,52 +1367,50 @@ void DataMappingScreen::render_step_cache_settings(float /*w*/, float /*h*/) {
 // ============================================================================
 
 void DataMappingScreen::render_step_test_save(float w, float h) {
-    // Mapping name/description
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("MAPPING DETAILS");
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
+    const float input_w = std::min(w * 0.55f, 500.0f);
+    const float label_w = 90.0f;
 
-    ImGui::Text("Name:");
-    ImGui::SameLine(80);
-    ImGui::PushItemWidth(w * 0.4f);
-    ImGui::InputText("##map_name", mapping_name_buf_, sizeof(mapping_name_buf_));
+    // === Details Card ===
+    card_begin("##card_details", "MAPPING DETAILS");
+
+    inline_label("Name", label_w);
+    ImGui::PushItemWidth(input_w);
+    ImGui::InputTextWithHint("##map_name", "My API Mapping", mapping_name_buf_, sizeof(mapping_name_buf_));
     ImGui::PopItemWidth();
 
-    ImGui::Text("Desc:");
-    ImGui::SameLine(80);
-    ImGui::PushItemWidth(w * 0.4f);
+    inline_label("Description", label_w);
+    ImGui::PushItemWidth(input_w);
     ImGui::InputText("##map_desc", mapping_desc_buf_, sizeof(mapping_desc_buf_));
     ImGui::PopItemWidth();
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    card_end();
 
-    // Test section
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-    ImGui::Text("TEST MAPPING");
+    // === Test Card ===
+    card_begin("##card_test", "TEST MAPPING");
+
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+    ImGui::Text("Paste sample JSON data to test the transformation pipeline:");
     ImGui::PopStyleColor();
     ImGui::Spacing();
 
     // Sample data input
-    ImGui::Text("Sample JSON Data:");
     static char sample_buf[8192] = {};
     if (!sample_data_json_.empty() && sample_buf[0] == '\0') {
         std::strncpy(sample_buf, sample_data_json_.c_str(),
             std::min<size_t>(sizeof(sample_buf) - 1, sample_data_json_.size()));
     }
+
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
     ImGui::InputTextMultiline("##sample_json", sample_buf, sizeof(sample_buf),
-        {w * 0.7f, 120});
+        {std::min(w * 0.75f, 700.0f), 120});
+    ImGui::PopStyleColor();
 
     ImGui::Spacing();
 
     if (testing_) {
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-        ImGui::Text("Testing...");
-        ImGui::PopStyleColor();
+        theme::LoadingSpinner("Running test...");
     } else {
-        if (ImGui::Button("Run Test")) {
+        if (theme::AccentButton("Run Test")) {
             sample_data_json_ = sample_buf;
             start_test();
         }
@@ -1009,20 +1423,26 @@ void DataMappingScreen::render_step_test_save(float w, float h) {
         ImGui::Spacing();
 
         if (test_result_->success) {
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_GREEN);
-            ImGui::Text("SUCCESS - %d records in %lldms",
-                test_result_->records_returned, static_cast<long long>(test_result_->duration_ms));
+            ImGui::PushStyleColor(ImGuiCol_Text, SUCCESS);
+            ImGui::Text("SUCCESS");
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
+            ImGui::Text("— %d records processed, %d returned in %lldms",
+                test_result_->records_processed, test_result_->records_returned,
+                static_cast<long long>(test_result_->duration_ms));
             ImGui::PopStyleColor();
 
-            // Show preview
-            render_json_preview("Transformed Data", test_result_->data_json, 200);
+            ImGui::Spacing();
+            render_json_preview("Transformed Output", test_result_->data_json, 180);
         } else {
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_RED);
+            ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
             ImGui::Text("FAILED");
             ImGui::PopStyleColor();
             for (const auto& err : test_result_->errors) {
-                ImGui::PushStyleColor(ImGuiCol_Text, BB_RED);
-                ImGui::Text("  - %s", err.c_str());
+                ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
+                ImGui::Bullet();
+                ImGui::Text("%s", err.c_str());
                 ImGui::PopStyleColor();
             }
         }
@@ -1030,190 +1450,128 @@ void DataMappingScreen::render_step_test_save(float w, float h) {
         render_validation_results();
     }
 
-    // Save button
+    card_end();
+
+    // Save button (prominent, bottom)
     ImGui::Spacing();
     ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.0f, 0.5f, 0.2f, 1.0f});
-    if (ImGui::Button("Save Mapping", {140, 30})) {
+    if (theme::AccentButton(editing_existing_ ? "Update Mapping" : "Save Mapping",
+            {180, 36})) {
         save_current_mapping();
     }
-    ImGui::PopStyleColor();
+    ImGui::SameLine(0, 12);
+    if (theme::SecondaryButton("Cancel", {100, 36})) {
+        view_ = MappingView::list;
+        load_mappings();
+    }
 }
 
 // ============================================================================
-// Templates view
+// Templates view — card grid with category badges and tag pills
 // ============================================================================
 
 void DataMappingScreen::render_templates_view(float w, float /*h*/) {
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-    ImGui::Text("MAPPING TEMPLATES");
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_SECONDARY);
+    ImGui::Text("Pre-built mapping configurations for popular brokers and data providers.");
     ImGui::PopStyleColor();
     ImGui::Spacing();
 
     if (templates_.empty()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_DIM);
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
         ImGui::Text("No templates available.");
         ImGui::PopStyleColor();
         return;
     }
 
-    if (ImGui::BeginTable("##templates_table", 5,
-            ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY)) {
+    for (size_t i = 0; i < templates_.size(); ++i) {
+        const auto& t = templates_[i];
 
-        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None, w * 0.25f);
-        ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_None, w * 0.12f);
-        ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_None, w * 0.35f);
-        ImGui::TableSetupColumn("Tags", ImGuiTableColumnFlags_None, w * 0.15f);
-        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_None, w * 0.1f);
-        ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, BB_HEADER_BG);
-        ImGui::TableHeadersRow();
+        ImGui::PushID(static_cast<int>(i));
+
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
+        ImGui::PushStyleColor(ImGuiCol_Border, BORDER_DIM);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 3.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {12, 8});
+        ImGui::BeginChild("##tmpl_card", {0, 0}, ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+
+        // Row 1: Name + category badge + verified indicator
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        ImGui::Text("%s", t.name.c_str());
         ImGui::PopStyleColor();
 
-        for (size_t i = 0; i < templates_.size(); ++i) {
-            const auto& t = templates_[i];
-            ImGui::TableNextRow();
+        ImGui::SameLine(w * 0.45f);
+        tag_pill(t.category.c_str(), INFO);
 
-            ImGui::TableNextColumn();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_WHITE);
-            ImGui::Text("%s", t.name.c_str());
-            ImGui::PopStyleColor();
+        if (t.verified) {
+            ImGui::SameLine();
+            tag_pill("verified", SUCCESS);
+        }
+        if (t.official) {
+            ImGui::SameLine();
+            tag_pill("official", ACCENT);
+        }
 
-            ImGui::TableNextColumn();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-            ImGui::Text("%s", t.category.c_str());
-            ImGui::PopStyleColor();
+        // Use button (right-aligned)
+        ImGui::SameLine(w * 0.80f);
+        if (theme::AccentButton("Use Template")) {
+            load_template(t);
+        }
 
-            ImGui::TableNextColumn();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_GRAY);
-            ImGui::Text("%s", t.description.c_str());
-            ImGui::PopStyleColor();
+        // Row 2: Description
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::Text("%s", t.description.c_str());
+        ImGui::PopStyleColor();
 
-            ImGui::TableNextColumn();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_DIM);
-            std::string tags_str;
+        // Row 3: Tags
+        if (!t.tags.empty()) {
             for (const auto& tag : t.tags) {
-                if (!tags_str.empty()) tags_str += ", ";
-                tags_str += tag;
+                tag_pill(tag.c_str(), TEXT_SECONDARY);
+                ImGui::SameLine(0, 4);
             }
-            ImGui::Text("%s", tags_str.c_str());
-            ImGui::PopStyleColor();
-
-            ImGui::TableNextColumn();
-            ImGui::PushID(static_cast<int>(i));
-            if (ImGui::SmallButton("Use")) {
-                load_template(t);
-            }
-            ImGui::PopID();
+            ImGui::NewLine();
         }
-        ImGui::EndTable();
+
+        // Instructions if available
+        if (!t.instructions.empty()) {
+            ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
+            ImGui::Text("Tip: %s", t.instructions.c_str());
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
+
+        ImGui::PopID();
     }
 }
 
 // ============================================================================
-// Status panel (right side)
-// ============================================================================
-
-void DataMappingScreen::render_status_panel(float x, float y, float w, float h) {
-    ImGui::SetNextWindowPos({x, y});
-    ImGui::SetNextWindowSize({w, h});
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, BB_PANEL);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8, 8});
-
-    ImGui::Begin("##dm_status", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoDocking);
-
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
-    ImGui::Text("STATUS");
-    ImGui::PopStyleColor();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // Current view
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_GRAY);
-    ImGui::Text("View:");
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_WHITE);
-    switch (view_) {
-        case MappingView::list:      ImGui::Text("List"); break;
-        case MappingView::create:    ImGui::Text("Create/Edit"); break;
-        case MappingView::templates: ImGui::Text("Templates"); break;
-    }
-    ImGui::PopStyleColor();
-
-    ImGui::Spacing();
-
-    // Mapping count
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_GRAY);
-    ImGui::Text("Saved:");
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_GREEN);
-    ImGui::Text("%d", static_cast<int>(saved_mappings_.size()));
-    ImGui::PopStyleColor();
-
-    // If in create mode, show current config summary
-    if (view_ == MappingView::create) {
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_CYAN);
-        ImGui::Text("CURRENT CONFIG");
-        ImGui::PopStyleColor();
-        ImGui::Spacing();
-
-        if (api_base_url_buf_[0] != '\0') {
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_GRAY);
-            ImGui::Text("URL:");
-            ImGui::PopStyleColor();
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_DIM);
-            ImGui::TextWrapped("%s%s", api_base_url_buf_, api_endpoint_buf_);
-            ImGui::PopStyleColor();
-        }
-
-        ImGui::Spacing();
-
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_GRAY);
-        ImGui::Text("Fields: %d", static_cast<int>(current_mapping_.field_mappings.size()));
-        ImGui::PopStyleColor();
-
-        // Sample data status
-        ImGui::Spacing();
-        if (!sample_data_json_.empty()) {
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_GREEN);
-            ImGui::Text("Sample data loaded");
-            ImGui::PopStyleColor();
-        } else {
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_DIM);
-            ImGui::Text("No sample data");
-            ImGui::PopStyleColor();
-        }
-    }
-
-    ImGui::End();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
-}
-
-// ============================================================================
-// Footer
+// Footer — stats + keyboard hints
 // ============================================================================
 
 void DataMappingScreen::render_footer(float w, float footer_h) {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos({vp->WorkPos.x, vp->WorkPos.y + vp->WorkSize.y - footer_h});
+    const float chrome_top = ImGui::GetFrameHeight() + 4.0f;
+    const float chrome_bot = ImGui::GetFrameHeight();
+    const float screen_bottom = vp->WorkPos.y + chrome_top + (vp->WorkSize.y - chrome_top - chrome_bot);
+    ImGui::SetNextWindowPos({vp->WorkPos.x, screen_bottom - footer_h});
     ImGui::SetNextWindowSize({w, footer_h});
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, BB_CMD_BG);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8, 2});
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, BG_DARK);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {12, 3});
 
     ImGui::Begin("##dm_footer", nullptr,
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking);
 
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_DIM);
-    ImGui::Text("DATA MAPPING  |  %d mappings  |  %d templates",
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DISABLED);
+    ImGui::Text("DATA MAPPING");
+    ImGui::PopStyleColor();
+
+    ImGui::SameLine(160);
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+    ImGui::Text("%d mappings  |  %d templates  |  7 schemas  |  19 transforms",
         static_cast<int>(saved_mappings_.size()),
         static_cast<int>(templates_.size()));
     ImGui::PopStyleColor();
@@ -1224,19 +1582,18 @@ void DataMappingScreen::render_footer(float w, float footer_h) {
 }
 
 // ============================================================================
-// JSON Preview helper
+// JSON Preview — syntax-colored read-only display
 // ============================================================================
 
 void DataMappingScreen::render_json_preview(const std::string& label,
                                              const std::string& json_str,
                                              float height) {
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_AMBER);
+    ImGui::PushStyleColor(ImGuiCol_Text, ACCENT);
     ImGui::Text("%s:", label.c_str());
     ImGui::PopStyleColor();
 
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, BB_PANEL);
-    ImGui::PushStyleColor(ImGuiCol_Text, BB_WHITE);
-    // Truncate for display
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
     const std::string display = (json_str.size() > 4000)
         ? json_str.substr(0, 4000) + "\n... (truncated)"
         : json_str;
@@ -1249,30 +1606,32 @@ void DataMappingScreen::render_json_preview(const std::string& label,
 }
 
 // ============================================================================
-// Validation results display
+// Validation results — inline colored indicators
 // ============================================================================
 
 void DataMappingScreen::render_validation_results() {
-    if (!test_result_ || !test_result_->validation.valid) return;
+    if (!test_result_) return;
 
+    ImGui::Spacing();
     if (test_result_->validation.errors.empty()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_GREEN);
+        ImGui::PushStyleColor(ImGuiCol_Text, SUCCESS);
         ImGui::Text("Validation: PASSED");
         ImGui::PopStyleColor();
     } else {
-        ImGui::PushStyleColor(ImGuiCol_Text, BB_RED);
-        ImGui::Text("Validation: %d errors", static_cast<int>(test_result_->validation.errors.size()));
+        ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
+        ImGui::Text("Validation: %d error(s)", static_cast<int>(test_result_->validation.errors.size()));
         ImGui::PopStyleColor();
         for (const auto& e : test_result_->validation.errors) {
-            ImGui::PushStyleColor(ImGuiCol_Text, BB_RED);
-            ImGui::Text("  [%s] %s: %s", e.rule.c_str(), e.field.c_str(), e.message.c_str());
+            ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
+            ImGui::Bullet();
+            ImGui::Text("[%s] %s: %s", e.rule.c_str(), e.field.c_str(), e.message.c_str());
             ImGui::PopStyleColor();
         }
     }
 }
 
 // ============================================================================
-// Actions
+// Actions — load, save, delete, test, fetch, edit, template, reset
 // ============================================================================
 
 void DataMappingScreen::load_mappings() {
@@ -1345,6 +1704,7 @@ void DataMappingScreen::save_current_mapping() {
 
     mapping_ops::save_mapping(current_mapping_);
     load_mappings();
+    editing_existing_ = false;
     view_ = MappingView::list;
 }
 
@@ -1354,7 +1714,6 @@ void DataMappingScreen::delete_mapping_by_id(const std::string& id) {
 }
 
 void DataMappingScreen::start_test() {
-    // Sync form to mapping
     current_mapping_.extraction.root_path = root_path_buf_;
 
     json sample_json;
@@ -1375,7 +1734,6 @@ void DataMappingScreen::start_test() {
 }
 
 void DataMappingScreen::fetch_sample_data() {
-    // Sync buffers
     current_mapping_.api_config.base_url = api_base_url_buf_;
     current_mapping_.api_config.endpoint = api_endpoint_buf_;
     current_mapping_.api_config.method = static_cast<HttpMethod>(api_method_idx_);
@@ -1393,6 +1751,7 @@ void DataMappingScreen::reset_create_form() {
     current_step_ = CreateStep::api_config;
     test_result_ = std::nullopt;
     sample_data_json_.clear();
+    editing_existing_ = false;
 
     std::memset(api_name_buf_, 0, sizeof(api_name_buf_));
     std::memset(api_desc_buf_, 0, sizeof(api_desc_buf_));
@@ -1418,6 +1777,7 @@ void DataMappingScreen::edit_mapping(const MappingConfig& config) {
     current_mapping_ = config;
     view_ = MappingView::create;
     current_step_ = CreateStep::api_config;
+    editing_existing_ = true;
 
     std::strncpy(api_name_buf_, config.api_config.name.c_str(), sizeof(api_name_buf_) - 1);
     std::strncpy(api_desc_buf_, config.api_config.description.c_str(), sizeof(api_desc_buf_) - 1);
@@ -1460,7 +1820,6 @@ void DataMappingScreen::load_template(const MappingTemplate& tmpl) {
     current_mapping_.id = db::generate_uuid();
     current_mapping_.api_config.id = db::generate_uuid();
 
-    // Populate form buffers
     std::strncpy(mapping_name_buf_, tmpl.config.name.c_str(), sizeof(mapping_name_buf_) - 1);
     std::strncpy(mapping_desc_buf_, tmpl.config.description.c_str(), sizeof(mapping_desc_buf_) - 1);
     std::strncpy(api_name_buf_, tmpl.config.api_config.name.c_str(), sizeof(api_name_buf_) - 1);
@@ -1476,7 +1835,7 @@ void DataMappingScreen::load_template(const MappingTemplate& tmpl) {
 }
 
 // ============================================================================
-// Template loader — built-in Indian broker templates
+// Template loader — built-in broker templates
 // ============================================================================
 
 void DataMappingScreen::load_templates() {

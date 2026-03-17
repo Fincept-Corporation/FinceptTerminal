@@ -4,7 +4,7 @@
 
 ## Overview
 
-This directory contains Python scripts powering the backend analytics, data integrations, and AI capabilities of Fincept Terminal. All scripts are executed through Tauri's Rust backend via IPC commands.
+This directory contains Python scripts powering the backend analytics, data integrations, and AI capabilities of Fincept Terminal. All scripts are executed by the C++ application via the Python bridge (python_runner.cpp).
 
 ## Directory Structure
 
@@ -75,10 +75,10 @@ scripts/
 
 ## Usage Pattern
 
-Scripts are invoked from the frontend via Tauri commands:
+Scripts are invoked from the frontend via C++ commands:
 
 ```typescript
-import { invoke } from '@tauri-apps/api/core';
+// Scripts are called via python_runner.cpp
 
 // Example: Fetch market data
 const data = await invoke('execute_python_command', {
@@ -93,7 +93,7 @@ const data = await invoke('execute_python_command', {
 ### Adding New Data Sources
 1. Create `{source}_data.py` in scripts root
 2. Implement standardized response format
-3. Add Rust command in `src-tauri/src/commands/`
+3. Add Rust command in `src/screens/ (or relevant module)`
 4. Update [DATA_SOURCES.md](./DATA_SOURCES.md)
 
 ### Adding Analytics Modules
@@ -112,15 +112,15 @@ const data = await invoke('execute_python_command', {
 
 - **Python Version**: 3.11+
 - **Execution**: Embedded Python runtime bundled with app
-- **IPC**: Tauri command bridge (Rust ↔ Python)
+- **IPC**: C++ command bridge (Rust ↔ Python)
 - **Output Format**: JSON responses
 - **Error Handling**: Structured error objects
 
 ## Project Context
 
 Part of **Fincept Terminal** - a Fincept financial intelligence platform built with:
-- **Frontend**: React 19 + TypeScript + Tauri
-- **Backend**: Rust (Tauri 2.x)
+- **Frontend**: C++20 + Dear ImGui
+- **Backend: C++20)
 - **Analytics**: Python (embedded runtime)
 - **AI**: Ollama (local LLM), Langchain
 

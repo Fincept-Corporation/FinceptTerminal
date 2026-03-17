@@ -15,12 +15,15 @@
 #include <imgui_impl_opengl3.h>
 #include <implot.h>
 #include <GLFW/glfw3.h>
+#include <chrono>
+#include <thread>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <objbase.h>
 #include <cstdio>
 #endif
 
@@ -33,15 +36,35 @@ void request_exit() {
     fincept::core::Window::instance().request_exit();
 }
 
+#ifdef _WIN32
+static LONG WINAPI crash_handler(EXCEPTION_POINTERS* ep) {
+    FILE* f = nullptr;
+    fopen_s(&f, "fincept_crash.log", "a");
+    if (f) {
+        DWORD code = ep && ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionCode : 0;
+        void* addr = ep && ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionAddress : nullptr;
+        fprintf(f, "SEH Exception: code=0x%08lX addr=%p\n", code, addr);
+        fclose(f);
+    }
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
+
 int main(int /*argc*/, char** /*argv*/) {
     using namespace fincept;
 
 #ifdef _WIN32
-    // Allocate debug console so stderr logging is visible during development
-    if (AllocConsole()) {
+    SetUnhandledExceptionFilter(crash_handler);
+    // Initialize COM for SAPI5 text-to-speech
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    // Redirect stdout/stderr to a log file so output survives crashes
+    {
         FILE* dummy = nullptr;
-        freopen_s(&dummy, "CONOUT$", "w", stderr);
-        freopen_s(&dummy, "CONOUT$", "w", stdout);
+        freopen_s(&dummy, "fincept_stdout.log", "w", stdout);
+        freopen_s(&dummy, "fincept_stderr.log", "w", stderr);
+        // Disable buffering so output is flushed immediately
+        if (stdout) setvbuf(stdout, nullptr, _IONBF, 0);
+        if (stderr) setvbuf(stderr, nullptr, _IONBF, 0);
     }
 #endif
 
@@ -113,7 +136,15 @@ int main(int /*argc*/, char** /*argv*/) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        app.render();
+        try {
+            app.render();
+        } catch (const std::exception& e) {
+            LOG_INFO("Main", "CRASH: std::exception in render: %s", e.what());
+            fprintf(stderr, "CRASH: %s\n", e.what());
+        } catch (...) {
+            LOG_INFO("Main", "CRASH: unknown exception in render");
+            fprintf(stderr, "CRASH: unknown exception\n");
+        }
 
         // Render
         ImGui::Render();
@@ -133,6 +164,21 @@ int main(int /*argc*/, char** /*argv*/) {
         }
 
         window.swap_buffers();
+
+        // Frame rate limiter — cap at ~60 FPS to prevent 100% CPU usage
+        // on low-end devices.  A financial terminal doesn't need 300+ FPS;
+        // this reduces power draw, heat, and fan noise significantly.
+        // Uses sleep rather than vsync to stay responsive to input events.
+        {
+            static auto last_frame = std::chrono::steady_clock::now();
+            auto now = std::chrono::steady_clock::now();
+            auto frame_time = std::chrono::duration_cast<std::chrono::microseconds>(now - last_frame);
+            constexpr auto target_frame_us = std::chrono::microseconds(16000); // ~60 FPS
+            if (frame_time < target_frame_us) {
+                std::this_thread::sleep_for(target_frame_us - frame_time);
+            }
+            last_frame = std::chrono::steady_clock::now();
+        }
     }
 
     // Cleanup
@@ -145,5 +191,10 @@ int main(int /*argc*/, char** /*argv*/) {
     window.destroy();
 
     LOG_INFO("Main", "Shutdown complete");
+
+#ifdef _WIN32
+    CoUninitialize();
+#endif
+
     return 0;
 }

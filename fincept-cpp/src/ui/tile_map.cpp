@@ -3,6 +3,7 @@
 
 #include "tile_map.h"
 #include "core/logger.h"
+#include "core/raii.h"
 #include <curl/curl.h>
 #include <thread>
 #include <cstring>
@@ -38,35 +39,34 @@ static size_t write_binary(char* ptr, size_t size, size_t nmemb, void* userdata)
 }
 
 static std::string fetch_tile_data(const std::string& url) {
-    CURL* curl = curl_easy_init();
+    core::CurlHandle curl;
     if (!curl) return {};
 
     std::string data;
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_binary);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 3L);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "FinceptTerminal/4.0.0");
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_binary);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &data);
+    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, 5L);
+    curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 3L);
+    curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, "FinceptTerminal/4.0.0");
 
-    struct curl_slist* headers = nullptr;
-    headers = curl_slist_append(headers, "Accept: image/png,*/*");
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    core::CurlSlist headers;
+    headers.append("Accept: image/png,*/*");
+    curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, headers.get());
 
-    CURLcode res = curl_easy_perform(curl);
-    curl_slist_free_all(headers);
+    CURLcode res = curl_easy_perform(curl.get());
+    // headers cleaned up automatically by CurlSlist destructor
 
     if (res != CURLE_OK) {
         LOG_WARN("TileMap", "Fetch failed: %s for %s", curl_easy_strerror(res), url.c_str());
-        curl_easy_cleanup(curl);
         return {};
     }
 
     long code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
-    curl_easy_cleanup(curl);
+    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &code);
+    // curl cleaned up automatically by CurlHandle destructor
 
     if (code != 200) {
         LOG_WARN("TileMap", "HTTP %ld for %s", code, url.c_str());

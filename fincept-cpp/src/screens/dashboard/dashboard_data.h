@@ -7,6 +7,7 @@
 #include <vector>
 #include <map>
 #include <mutex>
+#include <shared_mutex>
 #include <atomic>
 #include <chrono>
 #include <functional>
@@ -88,6 +89,10 @@ public:
     std::string get_error(DataCategory cat) const;
     float time_since_refresh(DataCategory cat) const;
 
+    // Data version — incremented on every data write (fetch completion)
+    // Consumers can compare against a cached version to skip redundant work.
+    uint64_t data_version() const noexcept { return data_version_.load(std::memory_order_acquire); }
+
     // Configuration
     void set_refresh_interval(float seconds);
     float get_refresh_interval() const { return refresh_interval_; }
@@ -110,7 +115,7 @@ private:
         std::chrono::steady_clock::time_point last_fetch{};
     };
 
-    mutable std::mutex mutex_;
+    mutable std::shared_mutex mutex_;
     CategoryState categories_[static_cast<int>(DataCategory::Count)];
 
     std::vector<NewsItem> news_;
@@ -120,10 +125,11 @@ private:
 
     float refresh_interval_ = 600.0f;  // 10 minutes default
     bool initialized_ = false;
+    std::atomic<uint64_t> data_version_{0};  // bumped on every data write
 
-    // Symbol lists (matching React originals)
-    static std::vector<std::string> symbols_for(DataCategory cat);
-    static std::map<std::string, std::string> labels_for(DataCategory cat);
+    // Symbol lists (matching React originals) — return const& to static data, zero allocation
+    static const std::vector<std::string>& symbols_for(DataCategory cat);
+    static const std::map<std::string, std::string>& labels_for(DataCategory cat);
 
     // Background fetch
     void fetch_category(DataCategory cat);

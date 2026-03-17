@@ -37,7 +37,7 @@ Key series IDs (verified):
   1178  — CDB 1-day rate
   7809  — Bovespa index (monthly avg)
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

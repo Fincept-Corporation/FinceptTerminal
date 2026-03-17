@@ -35,7 +35,7 @@ static std::string format_metric_name(const std::string& key) {
 }
 
 void FinancialsPanel::render(ResearchData& data) {
-    std::lock_guard<std::mutex> lock(data.mutex());
+    std::shared_lock<std::shared_mutex> lock(data.mutex());
     auto& fin = data.financials();
 
     // Statement selector tabs

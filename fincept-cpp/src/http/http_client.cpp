@@ -3,9 +3,11 @@
 
 #include "http_client.h"
 #include "core/logger.h"
+#include "core/raii.h"
 #include <curl/curl.h>
 #include <stdexcept>
 #include <cstring>
+#include <cstdlib>
 
 namespace fincept::http {
 
@@ -17,19 +19,25 @@ static size_t write_callback(char* ptr, size_t size, size_t nmemb, void* userdat
     return total;
 }
 
-// Global curl init/cleanup
-struct CurlGlobalInit {
-    CurlGlobalInit() { curl_global_init(CURL_GLOBAL_ALL); }
-    ~CurlGlobalInit() { curl_global_cleanup(); }
-};
-static CurlGlobalInit g_curl_init;
+// Lazy curl global init — called once on first HttpClient access.
+// Avoids static initialization order issues and DLL-load deadlocks on Windows.
+static void ensure_curl_initialized() {
+    static bool initialized = false;
+    if (!initialized) {
+        curl_global_init(CURL_GLOBAL_ALL);
+        std::atexit([] { curl_global_cleanup(); });
+        initialized = true;
+    }
+}
 
 HttpClient& HttpClient::instance() {
     static HttpClient client;
     return client;
 }
 
-HttpClient::HttpClient() = default;
+HttpClient::HttpClient() {
+    ensure_curl_initialized();
+}
 HttpClient::~HttpClient() = default;
 
 void HttpClient::set_timeout(long timeout_seconds) {
@@ -46,7 +54,7 @@ HttpResponse HttpClient::perform(const std::string& method, const std::string& u
                                   const std::string& body, const Headers& headers) {
     HttpResponse response;
 
-    CURL* curl = curl_easy_init();
+    core::CurlHandle curl;
     if (!curl) {
         response.error = "Failed to initialize CURL";
         return response;
@@ -55,62 +63,62 @@ HttpResponse HttpClient::perform(const std::string& method, const std::string& u
     std::string response_body;
 
     // URL
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
 
     // Method
     if (method == "POST") {
-        curl_easy_setopt(curl, CURLOPT_POST, 1L);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body.size());
+        curl_easy_setopt(curl.get(), CURLOPT_POST, 1L);
+        curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, body.c_str());
+        curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDSIZE, (long)body.size());
     } else if (method == "PUT") {
-        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT");
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body.size());
+        curl_easy_setopt(curl.get(), CURLOPT_CUSTOMREQUEST, "PUT");
+        curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, body.c_str());
+        curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDSIZE, (long)body.size());
     } else if (method == "DELETE") {
-        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+        curl_easy_setopt(curl.get(), CURLOPT_CUSTOMREQUEST, "DELETE");
         if (!body.empty()) {
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body.size());
+            curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, body.c_str());
+            curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDSIZE, (long)body.size());
         }
     }
     // GET is default
 
     // Headers
-    struct curl_slist* header_list = nullptr;
-    header_list = curl_slist_append(header_list, "Content-Type: application/json");
-    header_list = curl_slist_append(header_list, "Accept: application/json");
+    core::CurlSlist header_list;
+    header_list.append("Content-Type: application/json");
+    header_list.append("Accept: application/json");
     for (const auto& [key, value] : headers) {
         std::string header = key + ": " + value;
-        header_list = curl_slist_append(header_list, header.c_str());
+        header_list.append(header.c_str());
     }
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+    curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, header_list.get());
 
     // Response
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_body);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response_body);
 
     // Timeouts
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_seconds_);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, connect_timeout_seconds_);
+    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, timeout_seconds_);
+    curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, connect_timeout_seconds_);
 
     // SSL
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYHOST, 2L);
 
     // Follow redirects
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+    curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_MAXREDIRS, 5L);
 
     // Connection reuse
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_TCP_KEEPALIVE, 1L);
 
     // User agent — must look like a real browser or Cloudflare blocks with 1010
-    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT,
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) FinceptTerminal/4.0.0 Chrome/131.0.0.0 Safari/537.36");
 
     // Perform
-    CURLcode res = curl_easy_perform(curl);
+    CURLcode res = curl_easy_perform(curl.get());
 
     if (res != CURLE_OK) {
         response.error = curl_easy_strerror(res);
@@ -124,19 +132,17 @@ HttpResponse HttpClient::perform(const std::string& method, const std::string& u
         LOG_ERROR("HTTP", "%s %s failed: %s", method.c_str(), url.c_str(), response.error.c_str());
     } else {
         long http_code = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-        response.status_code = (int)http_code;
+        curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &http_code);
+        response.status_code = static_cast<int>(http_code);
         response.body = std::move(response_body);
         response.success = (http_code >= 200 && http_code < 300);
         if (!response.success) {
-            LOG_WARN("HTTP", "%s %s returned %d", method.c_str(), url.c_str(), (int)http_code);
+            LOG_WARN("HTTP", "%s %s returned %d", method.c_str(), url.c_str(), static_cast<int>(http_code));
         } else {
-            LOG_DEBUG("HTTP", "%s %s -> %d", method.c_str(), url.c_str(), (int)http_code);
+            LOG_DEBUG("HTTP", "%s %s -> %d", method.c_str(), url.c_str(), static_cast<int>(http_code));
         }
     }
-
-    curl_slist_free_all(header_list);
-    curl_easy_cleanup(curl);
+    // header_list and curl cleaned up automatically by destructors
 
     return response;
 }

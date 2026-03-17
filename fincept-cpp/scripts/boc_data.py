@@ -29,7 +29,7 @@ Key series IDs:
   A.BCPI                — Bank of Canada commodity price index
   A.ENER                — Energy commodity price sub-index
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

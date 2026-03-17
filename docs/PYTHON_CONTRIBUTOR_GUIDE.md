@@ -1,42 +1,30 @@
 # Python Contributor Guide
 
-This guide covers Python development for Fincept Terminal - 119 scripts including 34 Analytics modules and 80+ data fetchers.
+This guide covers Python development for Fincept Terminal — 100+ scripts including 34 Analytics modules and 80+ data fetchers.
 
 > **Prerequisites**: Read the [Contributing Guide](./CONTRIBUTING.md) first for setup and workflow.
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Project Structure](#project-structure)
-- [Analytics Modules](#analytics-modules)
-- [Data Fetcher Scripts](#data-fetcher-scripts)
-- [Script Standards](#script-standards)
-- [Integration with Rust](#integration-with-rust)
-- [Testing](#testing)
-- [Resources](#resources)
 
 ---
 
 ## Overview
 
 Python powers Fincept Terminal's analytics and data capabilities:
-- **34 Analytics modules** - Financial calculations, portfolio optimization, ML models
-- **80+ Data fetchers** - APIs for market data, economics, government sources
-- **AI Agents** - Geopolitical analysis, trading strategies
-- **Technical Analysis** - Indicators and chart patterns
+- **34 Analytics modules** — Financial calculations, portfolio optimization, ML models
+- **80+ Data fetchers** — APIs for market data, economics, government sources
+- **AI Agents** — Geopolitical analysis, trading strategies
+- **Technical Analysis** — Indicators and chart patterns
+
+Python scripts are executed by the C++ application via `python_runner.cpp` and communicate through JSON on stdout.
 
 **Related Guides:**
-- [Rust Guide](./RUST_CONTRIBUTOR_GUIDE.md) - How Rust executes Python
-- [TypeScript Guide](./TYPESCRIPT_CONTRIBUTOR_GUIDE.md) - Frontend that displays results
+- [C++ Guide](../fincept-cpp/CONTRIBUTING.md) — How C++ executes Python and renders results
 
 ---
 
 ## Project Structure
 
 ```
-src-tauri/resources/scripts/           # 119 Python scripts
+fincept-cpp/scripts/                   # 100+ Python scripts
 │
 ├── Analytics/                         # 34 analytics modules
 │   ├── equityInvestment/              # Stock valuation, DCF
@@ -63,9 +51,12 @@ src-tauri/resources/scripts/           # 119 Python scripts
 │   └── vnpy_wrapper/                  # VN.PY trading
 │
 ├── agents/                            # AI agents
-│   ├── geopolitics/                   # Geopolitical analysis
-│   └── trading/                       # Trading agents
+│   ├── GeopoliticsAgents/             # Geopolitical analysis
+│   ├── finagent_core/                 # Core agent framework
+│   └── ...
 │
+├── agno_trading/                      # Trading agents
+├── ai_quant_lab/                      # AI/ML analytics
 ├── strategies/                        # Trading strategies
 ├── technicals/                        # Technical analysis
 │
@@ -89,79 +80,33 @@ src-tauri/resources/scripts/           # 119 Python scripts
 
 ---
 
-## Analytics Modules
+## Integration with C++
 
-### Core Financial Modules
+Python scripts are called from C++ via `python_runner.cpp`:
 
-| Module | Purpose | Key Functions |
-|--------|---------|---------------|
-| `equityInvestment/` | Stock analysis | DCF, comparables, valuation |
-| `portfolioManagement/` | Portfolio optimization | Mean-variance, Black-Litterman |
-| `derivatives/` | Options & futures | Black-Scholes, Greeks, pricing |
-| `fixedIncome/` | Bond analytics | Duration, convexity, yields |
-| `corporateFinance/` | Corporate valuation | M&A, LBO, WACC |
-| `economics/` | Economic models | GDP, inflation, policy |
-| `quant/` | Quantitative analysis | Factor models, risk |
+```
+C++ Screen (e.g., research_screen.cpp)
+    ↓ calls data service
+C++ Data Service (research_data.cpp)
+    ↓ calls PythonRunner::run()
+python_runner.cpp
+    ↓ spawns: python script.py <args>
+Python Script
+    ↓ outputs JSON to stdout
+C++ parses JSON
+    ↓ returns data to screen
+Screen renders result
+```
 
-### Library Wrappers
+### Script Execution
 
-| Wrapper | Library | Purpose |
-|---------|---------|---------|
-| `pyportfolioopt_wrapper/` | PyPortfolioOpt | Portfolio optimization |
-| `quantstats_analytics.py` | QuantStats | Performance metrics |
-| `skfolio_wrapper.py` | Skfolio | Scikit-learn portfolios |
-| `riskfoliolib_wrapper.py` | Riskfolio-Lib | Risk management |
-| `talipp_wrapper/` | Talipp | Technical indicators |
-| `statsmodels_wrapper/` | Statsmodels | Statistical models |
-| `gluonts_wrapper/` | GluonTS | Time series forecasting |
-| `gs_quant_wrapper/` | GS Quant | Goldman Sachs library |
-| `finrl/` | FinRL | Reinforcement learning |
+```bash
+# Scripts are called as:
+python Analytics/portfolioManagement/optimize.py '{"symbols":["AAPL","MSFT"]}'
 
----
-
-## Data Fetcher Scripts
-
-### Market Data
-
-| Script | Source | Data Types |
-|--------|--------|------------|
-| `yfinance_data.py` | Yahoo Finance | Stocks, ETFs, options |
-| `databento_provider.py` | Databento | Real-time market data |
-| `nasdaq_data.py` | NASDAQ | US equities |
-| `fmp_data.py` | Financial Modeling Prep | Fundamentals |
-| `coingecko.py` | CoinGecko | Cryptocurrency |
-
-### Economic Data
-
-| Script | Source | Data Types |
-|--------|--------|------------|
-| `fred_data.py` | Federal Reserve | US economic indicators |
-| `imf_data.py` | IMF | Global economic data |
-| `worldbank_data.py` | World Bank | Development indicators |
-| `oecd_data.py` | OECD | OECD statistics |
-| `ecb_data.py` | ECB | European data |
-| `bis_data.py` | BIS | Banking statistics |
-| `bls_data.py` | Bureau of Labor | Employment, CPI |
-| `bea_data.py` | Bureau of Economic Analysis | GDP, trade |
-
-### Chinese Market (AkShare)
-
-20+ scripts for Chinese market data:
-- `akshare_stocks_*.py` - A-shares data
-- `akshare_futures.py` - Futures data
-- `akshare_funds_*.py` - Fund data
-- `akshare_macro.py` - Macro indicators
-- `akshare_index.py` - Index data
-
-### Government & Regulatory
-
-| Script | Source |
-|--------|--------|
-| `sec_data.py` | SEC filings |
-| `edgar_tools.py` | EDGAR database |
-| `congress_gov_data.py` | US Congress |
-| `cftc_data.py` | CFTC positions |
-| `government_us_data.py` | US government |
+# Expected output:
+{"success": true, "data": {"weights": [0.6, 0.4], "sharpe": 1.23}}
+```
 
 ---
 
@@ -224,41 +169,12 @@ def safe_fetch(symbol: str) -> Dict[str, Any]:
 
 ---
 
-## Integration with Rust
-
-Python scripts are called from Rust:
-
-```
-Frontend (React)
-    ↓ invoke('calculate_portfolio')
-Rust (Tauri Command)
-    ↓ Command::new("python").arg("script.py")
-Python Script
-    ↓ JSON to stdout
-Rust
-    ↓ parse JSON, return to frontend
-Frontend
-    ↓ display results
-```
-
-### Script Execution
-
-```bash
-# Scripts are called as:
-python Analytics/portfolioManagement/optimize.py '{"symbols":["AAPL","MSFT"]}'
-
-# Expected output:
-{"success": true, "data": {"weights": [0.6, 0.4], "sharpe": 1.23}}
-```
-
----
-
 ## Testing
 
 ### Manual Testing
 
 ```bash
-cd src-tauri/resources/scripts
+cd fincept-cpp/scripts
 
 # Test a data fetcher
 python yfinance_data.py quote AAPL
@@ -267,27 +183,9 @@ python yfinance_data.py quote AAPL
 python Analytics/quantstats_analytics.py metrics '{"returns":[0.01,0.02,-0.01]}'
 ```
 
-### Test Pattern
-
-```python
-def test_calculate_returns():
-    prices = [100, 102, 101, 105]
-    result = calculate_returns(prices)
-
-    assert result["success"] == True
-    assert "returns" in result["data"]
-    assert len(result["data"]["returns"]) == 3
-
-if __name__ == "__main__":
-    test_calculate_returns()
-    print("Tests passed!")
-```
-
 ---
 
-## Resources
-
-### Key Libraries
+## Key Libraries
 
 | Library | Purpose |
 |---------|---------|
@@ -302,20 +200,6 @@ if __name__ == "__main__":
 | `statsmodels` | Statistical models |
 | `scikit-learn` | Machine learning |
 | `langchain` | LLM integration |
-
-### Documentation
-
-- [Pandas Docs](https://pandas.pydata.org/docs/)
-- [NumPy Docs](https://numpy.org/doc/)
-- [PyPortfolioOpt](https://pyportfolioopt.readthedocs.io/)
-- [QuantStats](https://github.com/ranaroussi/quantstats)
-- [AkShare](https://akshare.readthedocs.io/)
-
-### Related Guides
-
-- [Contributing Guide](./CONTRIBUTING.md) - General workflow
-- [Rust Guide](./RUST_CONTRIBUTOR_GUIDE.md) - How Rust calls Python
-- [TypeScript Guide](./TYPESCRIPT_CONTRIBUTOR_GUIDE.md) - Frontend integration
 
 ---
 

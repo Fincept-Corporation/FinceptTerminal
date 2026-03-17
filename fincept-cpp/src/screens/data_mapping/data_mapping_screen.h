@@ -1,11 +1,12 @@
 #pragma once
-// Data Mapping Screen — Bloomberg Terminal-inspired API mapping configuration UI.
-// 3-panel layout: left sidebar | center content | right status panel.
-// Mirrors the Tauri desktop DataMappingTab with 5-step wizard.
+// Data Mapping Screen — Fincept-themed API mapping configuration UI.
+// 2-panel layout: left sidebar | center content with horizontal step wizard.
+// Full redesign using theme::colors, card-based sections, and rich visual hierarchy.
 
 #include "data_mapping_types.h"
 #include "data_mapping_engine.h"
 #include "data_mapping_db.h"
+#include <imgui.h>
 #include <string>
 #include <vector>
 #include <future>
@@ -21,11 +22,10 @@ public:
 private:
     void init();
 
-    // Top-level panels
+    // Top-level panels (2-panel: sidebar + content)
     void render_command_bar(float w);
     void render_sidebar(float x, float y, float w, float h);
     void render_content(float x, float y, float w, float h);
-    void render_status_panel(float x, float y, float w, float h);
     void render_footer(float w, float h);
 
     // Views
@@ -33,7 +33,8 @@ private:
     void render_create_view(float w, float h);
     void render_templates_view(float w, float h);
 
-    // Create wizard steps
+    // Wizard components
+    void render_step_progress_bar(float w);
     void render_step_api_config(float w, float h);
     void render_step_schema_select(float w, float h);
     void render_step_field_mapping(float w, float h);
@@ -41,12 +42,20 @@ private:
     void render_step_test_save(float w, float h);
 
     // Component renderers
-    void render_auth_config();
-    void render_headers_editor();
-    void render_query_params_editor();
+    void render_auth_config(float w);
+    void render_headers_editor(float w);
+    void render_query_params_editor(float w);
     void render_field_mapping_row(size_t index);
     void render_json_preview(const std::string& label, const std::string& json_str, float height);
     void render_validation_results();
+
+    // UI helpers
+    static bool card_begin(const char* id, const char* title, float w = 0);
+    static void card_end();
+    static void method_badge(HttpMethod method);
+    static void schema_badge(SchemaType type);
+    static void tag_pill(const char* text, const ImVec4& color);
+    static void inline_label(const char* label, float label_w = 100.0f);
 
     // Actions
     void load_mappings();
@@ -63,8 +72,9 @@ private:
     MappingView view_ = MappingView::list;
     CreateStep current_step_ = CreateStep::api_config;
 
-    // Search
+    // Search & filter
     char search_buf_[128] = {};
+    int filter_schema_idx_ = -1;  // -1 = all
 
     // Sidebar
     bool sidebar_minimized_ = false;
@@ -75,6 +85,7 @@ private:
 
     // Current mapping being created/edited
     MappingConfig current_mapping_;
+    bool editing_existing_ = false;
 
     // API config form buffers
     char api_name_buf_[128] = {};
@@ -124,6 +135,9 @@ private:
     // Template data
     std::vector<MappingTemplate> templates_;
     void load_templates();
+
+    // Delete confirmation
+    std::string pending_delete_id_;
 
     // Engine
     MappingEngine engine_;

@@ -29,7 +29,7 @@ NPR, PHP, PKR, SAR, THB, TWD, VND); the wrapper normalises to MYR per 1 unit.
                INR, JPY, KHR, KRW, MMK, NOK, NPR, NZD, PHP, PKR, SAR,
                SDR, SGD, THB, TWD, USD, VND
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

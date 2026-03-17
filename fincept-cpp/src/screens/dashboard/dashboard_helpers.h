@@ -32,12 +32,18 @@ inline const ImVec4 FC_PURPLE  = ImVec4(0.616f, 0.306f, 0.867f, 1.0f);
 // ============================================================================
 inline ImVec4 chg_col(double v) { return v > 0 ? FC_GREEN : (v < 0 ? FC_RED : FC_GRAY); }
 
+// Zero-allocation price formatter for hot render paths (writes to caller's buffer)
+inline const char* fmt_price_buf(char* buf, size_t sz, double v, int decimals = 2) {
+    if (v == 0) { buf[0] = '-'; buf[1] = '-'; buf[2] = '\0'; return buf; }
+    if (std::abs(v) >= 1e6) std::snprintf(buf, sz, "%.2fM", v / 1e6);
+    else if (std::abs(v) >= 1e4) std::snprintf(buf, sz, "%.*fK", decimals > 0 ? 1 : 0, v / 1e3);
+    else std::snprintf(buf, sz, "%.*f", decimals, v);
+    return buf;
+}
+
 inline std::string fmt_price(double v, int decimals = 2) {
     char b[32];
-    if (v == 0) return "--";
-    if (std::abs(v) >= 1e6) std::snprintf(b, sizeof(b), "%.2fM", v / 1e6);
-    else if (std::abs(v) >= 1e4) std::snprintf(b, sizeof(b), "%.*fK", decimals > 0 ? 1 : 0, v / 1e3);
-    else std::snprintf(b, sizeof(b), "%.*f", decimals, v);
+    fmt_price_buf(b, sizeof(b), v, decimals);
     return b;
 }
 

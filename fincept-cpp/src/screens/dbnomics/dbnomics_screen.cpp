@@ -3,6 +3,7 @@
 // navigation, global search, single/comparison views, ImPlot charts, data table
 
 #include "dbnomics_screen.h"
+#include "ui/yoga_helpers.h"
 #include "http/http_client.h"
 #include "storage/cache_service.h"
 #include "ui/theme.h"
@@ -503,7 +504,12 @@ void DBnomicsScreen::render() {
         load_providers();
     }
 
-    ImVec2 avail = ImGui::GetContentRegionAvail();
+    ui::ScreenFrame frame("##dbnomics_screen", ImVec2(0, 0),
+                          ImVec4(0.04f, 0.04f, 0.06f, 1.0f));
+    if (!frame.begin()) { frame.end(); return; }
+
+    const float w = frame.width();
+    const float h = frame.height();
 
     // Top bar
     render_top_bar();
@@ -512,7 +518,7 @@ void DBnomicsScreen::render() {
     float panel_w = 280.0f;
     float remaining_h = ImGui::GetContentRegionAvail().y - 24.0f; // reserve status bar
 
-    ImGui::BeginChild("##dbn_main", ImVec2(avail.x, remaining_h));
+    ImGui::BeginChild("##dbn_main", ImVec2(w, remaining_h));
     {
         // Left panel
         ImGui::BeginChild("##dbn_left", ImVec2(panel_w, 0), ImGuiChildFlags_Borders);
@@ -530,6 +536,8 @@ void DBnomicsScreen::render() {
 
     // Status bar
     render_status_bar();
+
+    frame.end();
 }
 
 // ============================================================================

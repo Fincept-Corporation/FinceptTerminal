@@ -25,7 +25,7 @@ Currencies available (22):
   USD, AUD, DKK, EUR, GBP, CHF, SEK, CAD, KWD, NOK, SAR,
   JPY (per 100), RON, RUB, CNY, PKR, QAR, KRW, AZN, AED, KZT, XDR
 
-Returns JSON output for Rust/Tauri integration.
+Returns JSON output for C++ integration.
 """
 
 import sys

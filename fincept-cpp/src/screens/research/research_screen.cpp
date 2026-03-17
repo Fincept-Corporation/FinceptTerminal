@@ -131,7 +131,7 @@ void ResearchScreen::render_header(float h) {
 
 // ============================================================================
 void ResearchScreen::render_ticker_bar(float h) {
-    std::lock_guard<std::mutex> lock(data_.mutex());
+    std::shared_lock<std::shared_mutex> lock(data_.mutex());
     auto& si = data_.stock_info();
     auto& q  = data_.quote_data();
 

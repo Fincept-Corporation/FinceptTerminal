@@ -82,25 +82,18 @@ protected:
     };
 
 // --- Indian Brokers ---
-DEFINE_STUB_BROKER(ZerodhaBroker,   BrokerId::Zerodha,   "Zerodha",    "https://api.kite.trade")
-DEFINE_STUB_BROKER(UpstoxBroker,    BrokerId::Upstox,    "Upstox",     "https://api.upstox.com/v2")
-DEFINE_STUB_BROKER(DhanBroker,      BrokerId::Dhan,      "Dhan",       "https://api.dhan.co/v2")
-DEFINE_STUB_BROKER(KotakBroker,     BrokerId::Kotak,     "Kotak",      "https://tradeapi.kotaksecurities.com")
-DEFINE_STUB_BROKER(GrowwBroker,     BrokerId::Groww,     "Groww",      "https://groww.in/api/v1")
-DEFINE_STUB_BROKER(AliceBlueBroker, BrokerId::AliceBlue, "AliceBlue",  "https://ant.aliceblueonline.com/rest/AliceBlueAPIService/api")
-DEFINE_STUB_BROKER(AngelOneBroker,  BrokerId::AngelOne,  "AngelOne",   "https://apiconnect.angelbroking.com")
-DEFINE_STUB_BROKER(FivePaisaBroker, BrokerId::FivePaisa, "5Paisa",     "https://openapi.5paisa.com")
-DEFINE_STUB_BROKER(IIFLBroker,      BrokerId::IIFL,      "IIFL",       "https://ttblaze.iifl.com/apimarketdata/instruments")
-DEFINE_STUB_BROKER(MotilalBroker,   BrokerId::Motilal,   "Motilal",    "https://openapi.motilaloswal.com/rest")
-DEFINE_STUB_BROKER(ShoonyaBroker,   BrokerId::Shoonya,   "Shoonya",    "https://api.shoonya.com/NorenWClientTP")
+// Full implementations: Fyers, Zerodha, AngelOne, Upstox, Dhan, Kotak, Groww, AliceBlue, 5Paisa, IIFL, Motilal, Shoonya
+// See their respective *_broker.h headers
 
 // --- US Brokers ---
-DEFINE_STUB_BROKER(AlpacaBroker,    BrokerId::Alpaca,    "Alpaca",     "https://paper-api.alpaca.markets/v2")
-DEFINE_STUB_BROKER(IBKRBroker,      BrokerId::IBKR,      "IBKR",       "https://localhost:5000/v1")
-DEFINE_STUB_BROKER(TradierBroker,   BrokerId::Tradier,   "Tradier",    "https://api.tradier.com/v1")
+// Full implementations: Alpaca, IBKR, Tradier
+// See their respective *_broker.h headers
 
 // --- EU Brokers ---
-DEFINE_STUB_BROKER(SaxoBankBroker,  BrokerId::SaxoBank,  "Saxo Bank",  "https://gateway.saxobank.com/openapi")
+// Full implementation: SaxoBank
+// See saxobank_broker.h
+
+// All 16 brokers are now fully implemented — no stubs remain.
 
 #undef DEFINE_STUB_BROKER
 

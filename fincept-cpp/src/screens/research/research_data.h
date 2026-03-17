@@ -5,6 +5,7 @@
 
 #include "research_types.h"
 #include <mutex>
+#include <shared_mutex>
 #include <atomic>
 #include <string>
 #include <vector>
@@ -20,7 +21,7 @@ public:
     void fetch_news(const std::string& symbol);
 
     // Access data (call under lock or copy)
-    std::mutex& mutex() { return mutex_; }
+    std::shared_mutex& mutex() { return mutex_; }
 
     bool is_loading() const { return loading_.load(); }
     bool is_news_loading() const { return news_loading_.load(); }
@@ -37,7 +38,7 @@ public:
     const std::string& current_symbol() const { return current_symbol_; }
 
 private:
-    std::mutex mutex_;
+    std::shared_mutex mutex_;
     std::atomic<bool> loading_{false};
     std::atomic<bool> news_loading_{false};
     bool has_data_ = false;

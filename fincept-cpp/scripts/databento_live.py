@@ -2,7 +2,7 @@
 Databento Live Streaming Provider
 ==================================
 Real-time market data streaming using Databento Live API.
-Streams data via stdout for Tauri to capture and forward as events.
+Streams data via stdout for C++ to capture and forward as events.
 
 Usage:
     python databento_live.py start <args_json>
@@ -35,7 +35,7 @@ except ImportError as e:
 class LiveStreamManager:
     """
     Manages Databento Live streaming connections.
-    Outputs data as JSON lines to stdout for Tauri event forwarding.
+    Outputs data as JSON lines to stdout for C++ event forwarding.
     """
 
     def __init__(self, api_key: str):

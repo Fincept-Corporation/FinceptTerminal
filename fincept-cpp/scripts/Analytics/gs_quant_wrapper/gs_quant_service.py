@@ -1,7 +1,7 @@
 """
 GS-Quant Wrapper Worker Handler
 ================================
-Dispatch router for Tauri Rust commands → Python gs_quant_wrapper operations.
+Dispatch router for C++ Rust commands → Python gs_quant_wrapper operations.
 Pattern: main(args) dispatches [operation, json_data].
 """
 

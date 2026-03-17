@@ -3,7 +3,9 @@
 #include "http/http_client.h"
 #include "storage/cache_service.h"
 #include <imgui.h>
+#include <nlohmann/json.hpp>
 #include <cmath>
+#include <cstring>
 #include <algorithm>
 #include <thread>
 #include <regex>
@@ -29,6 +31,7 @@ void DashboardScreen::render_quote_table(
     ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
                             ImGuiTableFlags_SizingStretchProp;
 
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
     if (ImGui::BeginTable(table_id, num_cols, flags,
                           ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn(col1, 0, 2.0f);
@@ -36,7 +39,6 @@ void DashboardScreen::render_quote_table(
         ImGui::TableSetupColumn(col3, 0, 1.0f);
         ImGui::TableSetupColumn("Range", 0, 1.2f);
         if (show_volume) ImGui::TableSetupColumn("Vol", 0, 1.0f);
-        ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
 
         for (auto& q : quotes) {
@@ -123,6 +125,7 @@ void DashboardScreen::render_quote_table(
         }
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar(); // ScrollbarSize
 }
 
 // ============================================================================
@@ -291,14 +294,12 @@ void DashboardScreen::widget_news(float w, float h) {
     ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
         ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_PadOuterX;
 
-    float avail_h = ImGui::GetContentRegionAvail().y;
-    if (avail_h < 20) avail_h = 20;
-
-    if (ImGui::BeginTable("##news_tbl", 3, flags, ImVec2(0, avail_h))) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
+    if (ImGui::BeginTable("##news_tbl", 3, flags,
+                          ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn("Time",     ImGuiTableColumnFlags_WidthFixed, 42.0f);
         ImGui::TableSetupColumn("Source",   ImGuiTableColumnFlags_WidthFixed, 70.0f);
         ImGui::TableSetupColumn("Headline", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
 
         for (size_t i = 0; i < news.size(); i++) {
@@ -322,16 +323,17 @@ void DashboardScreen::widget_news(float w, float h) {
         }
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar(); // ScrollbarSize (news)
 }
 
 void DashboardScreen::widget_economic(float w, float h) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
     if (ImGui::BeginTable("##eco", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
         ImGuiTableFlags_SizingStretchProp, ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn("Indicator", 0, 2.5f);
         ImGui::TableSetupColumn("Value", 0, 1.0f);
         ImGui::TableSetupColumn("Chg", 0, 1.0f);
         ImGui::TableSetupColumn("", 0, 1.2f);
-        ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
         for (auto& e : econ_data_) {
             ImGui::TableNextRow();
@@ -362,16 +364,17 @@ void DashboardScreen::widget_economic(float w, float h) {
         }
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar(); // eco ScrollbarSize
 }
 
 void DashboardScreen::widget_geopolitics(float w, float h) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
     if (ImGui::BeginTable("##geo", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
         ImGuiTableFlags_SizingStretchProp, ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn("Region", 0, 1.8f);
         ImGui::TableSetupColumn("Risk", 0, 0.7f);
         ImGui::TableSetupColumn("Level", 0, 1.4f);
         ImGui::TableSetupColumn("Trend", 0, 0.8f);
-        ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
         for (auto& g : geo_data_) {
             ImGui::TableNextRow();
@@ -412,15 +415,16 @@ void DashboardScreen::widget_geopolitics(float w, float h) {
         }
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar(); // geo ScrollbarSize
 }
 
 void DashboardScreen::widget_performance(float w, float h) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
     if (ImGui::BeginTable("##perf", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
         ImGuiTableFlags_SizingStretchProp, ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn("Metric", 0, 2.0f);
         ImGui::TableSetupColumn("Value", 0, 1.5f);
         ImGui::TableSetupColumn("", 0, 1.0f);
-        ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
         for (auto& p : perf_data_) {
             ImGui::TableNextRow();
@@ -454,6 +458,7 @@ void DashboardScreen::widget_performance(float w, float h) {
         }
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar(); // perf ScrollbarSize
 }
 
 void DashboardScreen::widget_top_movers(float w, float h) {
@@ -490,7 +495,8 @@ static void yt_open_url(const char* url) {
 
 static std::string extract_video_id(const std::string& url) {
     // Match youtube.com/watch?v=ID, youtu.be/ID, youtube.com/live/ID
-    std::regex patterns[] = {
+    // Regex compilation is expensive (~100us each) — compile once, reuse forever
+    static const std::regex patterns[] = {
         std::regex(R"((?:youtube\.com/watch\?.*v=)([a-zA-Z0-9_-]{11}))"),
         std::regex(R"((?:youtu\.be/)([a-zA-Z0-9_-]{11}))"),
         std::regex(R"((?:youtube\.com/live/)([a-zA-Z0-9_-]{11}))"),
@@ -544,6 +550,7 @@ void DashboardScreen::yt_fetch_metadata(int index) {
             }
             e.fetched = true;
             e.fetching = false;
+            save_yt_entries();
         }
     }).detach();
 }
@@ -674,6 +681,7 @@ void DashboardScreen::widget_youtube_stream(float w, float h) {
             yt_entries_.push_back(std::move(entry));
             yt_fetch_metadata((int)yt_entries_.size() - 1);
             yt_url_buf_[0] = '\0';
+            save_yt_entries();
         } else {
             std::strncpy(yt_url_buf_, "Invalid YouTube URL!", sizeof(yt_url_buf_) - 1);
         }
@@ -789,6 +797,7 @@ void DashboardScreen::widget_youtube_stream(float w, float h) {
             yt_active_player_--;
         }
         yt_entries_.erase(yt_entries_.begin() + remove_idx);
+        save_yt_entries();
     }
     ImGui::EndChild();
 }
@@ -873,9 +882,24 @@ void DashboardScreen::render_widget_frame(const char* title, const ImVec4& accen
         ImGui::TextColored(FC_YELLOW, "(...)");
     }
 
-    // Close button
+    // Edit (gear) button + Close button
     float close_x = w - 18;
-    if (close_x > ImGui::GetCursorPosX() + 20) {
+    float edit_x = close_x - 18;
+    if (edit_x > ImGui::GetCursorPosX() + 20) {
+        // Gear button
+        ImGui::SameLine(edit_x);
+        ImGui::SetCursorPosY(3);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 0.55f, 0, 0.3f));
+        ImGui::PushStyleColor(ImGuiCol_Text, FC_MUTED);
+        std::string gear_id = std::string("*##g_") + widget_id;
+        if (ImGui::SmallButton(gear_id.c_str())) {
+            editing_widget_id_ = widget_id;
+            edit_just_opened_ = true;
+        }
+        ImGui::PopStyleColor(3);
+
+        // Close button
         ImGui::SameLine(close_x);
         ImGui::SetCursorPosY(3);
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
@@ -894,7 +918,19 @@ void DashboardScreen::render_widget_frame(const char* title, const ImVec4& accen
     if (content_h < 10) content_h = 10;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 2));
-    ImGui::BeginChild((std::string("##wc_") + widget_id).c_str(), ImVec2(w - 2, content_h), false);
+    ImGui::BeginChild((std::string("##wc_") + widget_id).c_str(), ImVec2(w - 2, content_h), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    // Find the WidgetInstance for new widgets that need config
+    const WidgetInstance* wi_ptr = nullptr;
+    for (auto& wi : layout_.widgets) {
+        if (wi.id == widget_id) { wi_ptr = &wi; break; }
+    }
+    // Fallback instance for safety
+    WidgetInstance wi_fallback;
+    wi_fallback.id = widget_id;
+    wi_fallback.type = type;
+    if (!wi_ptr) wi_ptr = &wi_fallback;
 
     switch (type) {
         case WidgetType::GlobalIndices:      widget_global_indices(w, content_h); break;
@@ -908,7 +944,28 @@ void DashboardScreen::render_widget_frame(const char* title, const ImVec4& accen
         case WidgetType::Performance:        widget_performance(w, content_h); break;
         case WidgetType::TopMovers:          widget_top_movers(w, content_h); break;
         case WidgetType::MarketData:         widget_market_data(w, content_h); break;
-        case WidgetType::YouTubeStream:     widget_youtube_stream(w, content_h); break;
+        case WidgetType::VideoPlayer:        widget_youtube_stream(w, content_h); break;
+        // New widgets (pass WidgetInstance for config access)
+        case WidgetType::Watchlist:          widget_watchlist(w, content_h, *wi_ptr); break;
+        case WidgetType::Portfolio:          widget_portfolio(w, content_h, *wi_ptr); break;
+        case WidgetType::StockQuote:         widget_stock_quote(w, content_h, *wi_ptr); break;
+        case WidgetType::EconomicCalendar:   widget_economic_calendar(w, content_h, *wi_ptr); break;
+        case WidgetType::MarketSentiment:    widget_market_sentiment(w, content_h, *wi_ptr); break;
+        case WidgetType::QuickTrade:         widget_quick_trade(w, content_h, *wi_ptr); break;
+        case WidgetType::Notes:              widget_notes(w, content_h, *wi_ptr); break;
+        case WidgetType::Screener:           widget_screener(w, content_h, *wi_ptr); break;
+        case WidgetType::RiskMetrics:        widget_risk_metrics(w, content_h, *wi_ptr); break;
+        case WidgetType::AlgoStatus:         widget_algo_status(w, content_h, *wi_ptr); break;
+        case WidgetType::AlphaArena:         widget_alpha_arena(w, content_h, *wi_ptr); break;
+        case WidgetType::BacktestSummary:    widget_backtest_summary(w, content_h, *wi_ptr); break;
+        case WidgetType::WatchlistAlerts:    widget_watchlist_alerts(w, content_h, *wi_ptr); break;
+        case WidgetType::LiveSignals:        widget_live_signals(w, content_h, *wi_ptr); break;
+        case WidgetType::DBnomics:           widget_dbnomics(w, content_h, *wi_ptr); break;
+        case WidgetType::AkShare:            widget_akshare(w, content_h, *wi_ptr); break;
+        case WidgetType::Maritime:           widget_maritime(w, content_h, *wi_ptr); break;
+        case WidgetType::Polymarket:         widget_polymarket(w, content_h, *wi_ptr); break;
+        case WidgetType::Forum:              widget_forum(w, content_h, *wi_ptr); break;
+        case WidgetType::DataSource:         widget_datasource(w, content_h, *wi_ptr); break;
         default: ImGui::TextColored(FC_MUTED, "Unknown widget"); break;
     }
 
@@ -953,6 +1010,268 @@ void DashboardScreen::render_widget_frame(const char* title, const ImVec4& accen
 
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+}
+
+// ============================================================================
+// Widget Config Popup — per-widget editable settings
+// ============================================================================
+void DashboardScreen::render_widget_config_popup() {
+    if (editing_widget_id_.empty()) return;
+
+    // Find the widget being edited
+    WidgetInstance* wi = nullptr;
+    for (auto& w : layout_.widgets) {
+        if (w.id == editing_widget_id_) { wi = &w; break; }
+    }
+    if (!wi) { editing_widget_id_.clear(); return; }
+
+    // On first frame, populate buffers from current config
+    if (edit_just_opened_) {
+        edit_just_opened_ = false;
+        // Title buffer
+        std::strncpy(edit_buf2_, wi->title.c_str(), sizeof(edit_buf2_) - 1);
+        edit_buf2_[sizeof(edit_buf2_) - 1] = '\0';
+
+        // Type-specific buffer initialization
+        switch (wi->type) {
+            case WidgetType::StockQuote: {
+                auto s = wi->cfg_string("stockSymbol", "AAPL");
+                std::strncpy(edit_buf_, s.c_str(), sizeof(edit_buf_) - 1);
+                break;
+            }
+            case WidgetType::Watchlist: {
+                auto s = wi->cfg_string("watchlistName", "Default");
+                std::strncpy(edit_buf_, s.c_str(), sizeof(edit_buf_) - 1);
+                break;
+            }
+            case WidgetType::EconomicCalendar: {
+                auto s = wi->cfg_string("country", "US");
+                std::strncpy(edit_buf_, s.c_str(), sizeof(edit_buf_) - 1);
+                edit_int_ = wi->cfg_int("limit", 10);
+                break;
+            }
+            case WidgetType::Notes: {
+                auto s = wi->cfg_string("notesCategory", "all");
+                std::strncpy(edit_buf_, s.c_str(), sizeof(edit_buf_) - 1);
+                edit_int_ = wi->cfg_int("notesLimit", 10);
+                break;
+            }
+            case WidgetType::Screener: {
+                auto s = wi->cfg_string("screenerPreset", "value");
+                if (s == "value") edit_combo_idx_ = 0;
+                else if (s == "growth") edit_combo_idx_ = 1;
+                else if (s == "momentum") edit_combo_idx_ = 2;
+                else edit_combo_idx_ = 0;
+                break;
+            }
+            case WidgetType::WatchlistAlerts: {
+                edit_float_ = (float)wi->cfg_double("alertThreshold", 3.0);
+                break;
+            }
+            case WidgetType::DBnomics: {
+                auto s = wi->cfg_string("dbnomicsSeriesId", "FRED/UNRATE");
+                std::strncpy(edit_buf_, s.c_str(), sizeof(edit_buf_) - 1);
+                break;
+            }
+            default:
+                edit_buf_[0] = '\0';
+                break;
+        }
+        ImGui::OpenPopup("##widget_config_popup");
+    }
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(360, 0), ImGuiCond_Always);
+
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.08f, 0.08f, 0.08f, 0.97f));
+    ImGui::PushStyleColor(ImGuiCol_Border, FC_ORANGE);
+
+    bool open = true;
+    if (ImGui::BeginPopupModal("##widget_config_popup", &open,
+            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove)) {
+
+        ImGui::TextColored(FC_ORANGE, "Edit Widget: %s", widget_type_name(wi->type));
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // --- Title (all widgets) ---
+        ImGui::TextColored(FC_GRAY, "Title");
+        ImGui::SetNextItemWidth(-1);
+        ImGui::InputText("##cfg_title", edit_buf2_, sizeof(edit_buf2_));
+
+        ImGui::Spacing();
+
+        // --- Type-specific config ---
+        bool has_fields = true;
+        switch (wi->type) {
+            case WidgetType::StockQuote: {
+                ImGui::TextColored(FC_GRAY, "Stock Symbol");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##cfg_sym", edit_buf_, sizeof(edit_buf_),
+                    ImGuiInputTextFlags_CharsUppercase | ImGuiInputTextFlags_CharsNoBlank);
+                ImGui::TextColored(FC_MUTED, "e.g. AAPL, MSFT, TSLA, GOOGL");
+                break;
+            }
+            case WidgetType::Watchlist: {
+                ImGui::TextColored(FC_GRAY, "Watchlist Name");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##cfg_wl", edit_buf_, sizeof(edit_buf_));
+                ImGui::TextColored(FC_MUTED, "Name of the watchlist to display");
+                break;
+            }
+            case WidgetType::EconomicCalendar: {
+                ImGui::TextColored(FC_GRAY, "Country Code");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##cfg_country", edit_buf_, sizeof(edit_buf_),
+                    ImGuiInputTextFlags_CharsUppercase | ImGuiInputTextFlags_CharsNoBlank);
+                ImGui::TextColored(FC_MUTED, "e.g. US, GB, JP, IN, DE, CN");
+
+                ImGui::Spacing();
+                ImGui::TextColored(FC_GRAY, "Max Events");
+                ImGui::SetNextItemWidth(100);
+                ImGui::SliderInt("##cfg_limit", &edit_int_, 5, 50);
+                break;
+            }
+            case WidgetType::Notes: {
+                ImGui::TextColored(FC_GRAY, "Category Filter");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##cfg_cat", edit_buf_, sizeof(edit_buf_));
+                ImGui::TextColored(FC_MUTED, "all, RESEARCH, TRADE_IDEA, MARKET_ANALYSIS, EARNINGS, ECONOMIC, PORTFOLIO, GENERAL");
+
+                ImGui::Spacing();
+                ImGui::TextColored(FC_GRAY, "Max Notes");
+                ImGui::SetNextItemWidth(100);
+                ImGui::SliderInt("##cfg_nlimit", &edit_int_, 3, 50);
+                break;
+            }
+            case WidgetType::Screener: {
+                ImGui::TextColored(FC_GRAY, "Screener Preset");
+                ImGui::SetNextItemWidth(-1);
+                static const char* presets[] = {"value", "growth", "momentum"};
+                ImGui::Combo("##cfg_preset", &edit_combo_idx_, presets, 3);
+                break;
+            }
+            case WidgetType::WatchlistAlerts: {
+                ImGui::TextColored(FC_GRAY, "Alert Threshold (%%)");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::SliderFloat("##cfg_thresh", &edit_float_, 0.5f, 20.0f, "%.1f%%");
+                ImGui::TextColored(FC_MUTED, "Stocks moving more than this %% trigger alerts");
+                break;
+            }
+            case WidgetType::DBnomics: {
+                ImGui::TextColored(FC_GRAY, "Series ID");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##cfg_dbn", edit_buf_, sizeof(edit_buf_));
+                ImGui::TextColored(FC_MUTED, "e.g. FRED/UNRATE, FRED/GDP, ECB/EXR/M.USD.EUR");
+                break;
+            }
+            // Widgets with no special config — just title editing
+            case WidgetType::GlobalIndices:
+            case WidgetType::Forex:
+            case WidgetType::Commodities:
+            case WidgetType::Crypto:
+            case WidgetType::SectorHeatmap:
+            case WidgetType::News:
+            case WidgetType::EconomicIndicators:
+            case WidgetType::GeopoliticalRisk:
+            case WidgetType::Performance:
+            case WidgetType::TopMovers:
+            case WidgetType::MarketData:
+            case WidgetType::VideoPlayer:
+            case WidgetType::Portfolio:
+            case WidgetType::MarketSentiment:
+            case WidgetType::QuickTrade:
+            case WidgetType::RiskMetrics:
+            case WidgetType::AlgoStatus:
+            case WidgetType::AlphaArena:
+            case WidgetType::BacktestSummary:
+            case WidgetType::LiveSignals:
+            case WidgetType::AkShare:
+            case WidgetType::Maritime:
+            case WidgetType::Polymarket:
+            case WidgetType::Forum:
+            case WidgetType::DataSource:
+                has_fields = false;
+                ImGui::TextColored(FC_MUTED, "This widget has no additional settings.");
+                break;
+            default:
+                has_fields = false;
+                break;
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // --- Save / Cancel buttons ---
+        float btn_w = 100;
+        float total = btn_w * 2 + 8;
+        ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - total) * 0.5f + ImGui::GetCursorPosX());
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.45f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.6f, 0.0f, 1.0f));
+        if (ImGui::Button("Save", ImVec2(btn_w, 0))) {
+            // Apply title
+            std::string new_title(edit_buf2_);
+            if (!new_title.empty()) wi->title = new_title;
+
+            // Apply type-specific config
+            if (!wi->config.is_object()) wi->config = nlohmann::json::object();
+
+            switch (wi->type) {
+                case WidgetType::StockQuote:
+                    wi->config["stockSymbol"] = std::string(edit_buf_);
+                    break;
+                case WidgetType::Watchlist:
+                    wi->config["watchlistName"] = std::string(edit_buf_);
+                    break;
+                case WidgetType::EconomicCalendar:
+                    wi->config["country"] = std::string(edit_buf_);
+                    wi->config["limit"] = edit_int_;
+                    break;
+                case WidgetType::Notes:
+                    wi->config["notesCategory"] = std::string(edit_buf_);
+                    wi->config["notesLimit"] = edit_int_;
+                    break;
+                case WidgetType::Screener: {
+                    static const char* presets[] = {"value", "growth", "momentum"};
+                    wi->config["screenerPreset"] = presets[edit_combo_idx_];
+                    break;
+                }
+                case WidgetType::WatchlistAlerts:
+                    wi->config["alertThreshold"] = (double)edit_float_;
+                    break;
+                case WidgetType::DBnomics:
+                    wi->config["dbnomicsSeriesId"] = std::string(edit_buf_);
+                    break;
+                default: break;
+            }
+
+            save_layout();
+            editing_widget_id_.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor(2);
+
+        ImGui::SameLine(0, 8);
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.0f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.5f, 0.0f, 0.0f, 1.0f));
+        if (ImGui::Button("Cancel", ImVec2(btn_w, 0))) {
+            editing_widget_id_.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor(2);
+
+        ImGui::EndPopup();
+    } else {
+        // Popup was closed externally (e.g. clicking outside)
+        editing_widget_id_.clear();
+    }
+
     ImGui::PopStyleColor(2);
 }
 

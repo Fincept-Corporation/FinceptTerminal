@@ -7,7 +7,7 @@ Provides approval mechanisms for:
 - Large position sizes
 - Strategy changes
 
-Integrates with frontend via Tauri events.
+Integrates with frontend via C++ events.
 """
 
 import asyncio
@@ -371,7 +371,7 @@ def reset_hitl_manager():
     _hitl_manager = None
 
 
-# Convenience functions for Tauri integration
+# Convenience functions for C++ integration
 def check_decision_approval(
     decision_dict: Dict[str, Any],
     context: Dict[str, Any],
@@ -379,7 +379,7 @@ def check_decision_approval(
     """
     Check if a decision requires approval.
 
-    Used by Tauri commands.
+    Used by C++ commands.
     """
     manager = get_hitl_manager()
 
