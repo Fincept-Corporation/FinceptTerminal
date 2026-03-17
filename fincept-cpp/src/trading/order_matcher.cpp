@@ -289,4 +289,81 @@ void OrderMatcher::check_orders(const std::string& symbol, const PriceData& pric
     }
 }
 
+// ============================================================================
+// SL/TP trigger engine
+// ============================================================================
+
+void OrderMatcher::set_sl_tp(const std::string& portfolio_id,
+                               const std::string& symbol,
+                               const std::string& order_id,
+                               double sl_price,
+                               double tp_price) {
+    std::lock_guard<std::mutex> lock(sl_tp_mutex_);
+    // Remove any existing trigger for this portfolio+symbol (one trigger per position)
+    sl_tp_triggers_.erase(
+        std::remove_if(sl_tp_triggers_.begin(), sl_tp_triggers_.end(),
+                       [&](const SLTPTrigger& t) {
+                           return t.portfolio_id == portfolio_id && t.symbol == symbol;
+                       }),
+        sl_tp_triggers_.end());
+
+    if (sl_price > 0.0 || tp_price > 0.0) {
+        sl_tp_triggers_.push_back({portfolio_id, symbol, order_id, "",
+                                    sl_price, tp_price, false});
+        LOG_INFO("OrderMatcher", "SL/TP registered: portfolio=%s symbol=%s sl=%.4f tp=%.4f",
+                 portfolio_id.c_str(), symbol.c_str(), sl_price, tp_price);
+    }
+}
+
+void OrderMatcher::check_sl_tp_triggers(const std::string& portfolio_id,
+                                         const std::string& symbol,
+                                         double current_price) {
+    if (current_price <= 0.0) return;
+
+    std::lock_guard<std::mutex> lock(sl_tp_mutex_);
+    for (auto& trigger : sl_tp_triggers_) {
+        if (trigger.triggered) continue;
+        if (trigger.portfolio_id != portfolio_id || trigger.symbol != symbol) continue;
+
+        const bool hit_sl = (trigger.sl_price > 0.0 && current_price <= trigger.sl_price);
+        const bool hit_tp = (trigger.tp_price > 0.0 && current_price >= trigger.tp_price);
+
+        if (!hit_sl && !hit_tp) continue;
+
+        trigger.triggered = true;
+        const char* reason = hit_sl ? "SL" : "TP";
+        const double trig_price = hit_sl ? trigger.sl_price : trigger.tp_price;
+        LOG_INFO("OrderMatcher", "%s triggered: symbol=%s price=%.4f level=%.4f",
+                 reason, symbol.c_str(), current_price, trig_price);
+
+        // Place a closing market order (opposite side, full remaining quantity)
+        try {
+            // Get current position to find side and quantity
+            const auto positions = pt_get_positions(portfolio_id);
+            for (const auto& pos : positions) {
+                if (pos.symbol != symbol) continue;
+                if (pos.quantity <= 0.0) continue;
+
+                // Closing side is opposite of position side
+                const std::string close_side = (pos.side == "long") ? "sell" : "buy";
+                auto close_order = pt_place_order(
+                    portfolio_id, symbol, close_side, "market",
+                    pos.quantity, std::nullopt, std::nullopt, false);
+                pt_fill_order(close_order.id, current_price);
+                LOG_INFO("OrderMatcher", "%s close filled: side=%s qty=%.6f at %.4f",
+                         reason, close_side.c_str(), pos.quantity, current_price);
+                break;
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("OrderMatcher", "SL/TP close failed: %s", e.what());
+        }
+    }
+
+    // Prune triggered entries
+    sl_tp_triggers_.erase(
+        std::remove_if(sl_tp_triggers_.begin(), sl_tp_triggers_.end(),
+                       [](const SLTPTrigger& t) { return t.triggered; }),
+        sl_tp_triggers_.end());
+}
+
 } // namespace fincept::trading

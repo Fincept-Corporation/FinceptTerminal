@@ -53,6 +53,12 @@ private:
     void render_orderbook(float w, float h);
     void render_status_bar(float w, float h);
 
+    // Order book mode renderers
+    void render_ob_mode_book(float w);
+    void render_ob_mode_volume(float w);
+    void render_ob_mode_imbalance(float w);
+    void render_ob_mode_signals(float w);
+
     // Bottom sub-tabs
     void render_positions_tab();
     void render_orders_tab();
@@ -101,6 +107,11 @@ private:
     double ob_spread_pct_ = 0.0;
     std::atomic<bool> ob_loading_{true};
     std::atomic<bool> ob_fetching_{false};
+
+    // --- Order book view mode & tick history ---
+    ObViewMode ob_view_mode_ = ObViewMode::Book;
+    std::vector<TickSnapshot> tick_history_;  // capped at OB_MAX_TICK_HISTORY
+    int64_t last_tick_capture_ms_ = 0;        // epoch ms — throttle to 1 capture/sec
 
     // --- Watchlist prices ---
     std::atomic<bool> wl_fetching_{false};

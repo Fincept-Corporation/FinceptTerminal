@@ -50,6 +50,24 @@ public:
 
     int pending_order_count() const;
 
+    // --- SL/TP trigger engine ---
+    // Register stop-loss / take-profit levels for an open position.
+    // Replaces any existing trigger for the same portfolio+symbol pair.
+    // sl_price=0 or tp_price=0 means "not set".
+    void set_sl_tp(const std::string& portfolio_id,
+                   const std::string& symbol,
+                   const std::string& order_id,
+                   double sl_price,
+                   double tp_price);
+
+    // Called from the portfolio refresh cycle every PORTFOLIO_REFRESH_INTERVAL.
+    // If current_price crosses a registered SL or TP level the trigger fires,
+    // a closing market order is placed via pt_place_order + pt_fill_order,
+    // and the trigger is removed.
+    void check_sl_tp_triggers(const std::string& portfolio_id,
+                               const std::string& symbol,
+                               double current_price);
+
     OrderMatcher(const OrderMatcher&) = delete;
     OrderMatcher& operator=(const OrderMatcher&) = delete;
 
@@ -62,6 +80,19 @@ private:
     std::unordered_map<int, OrderFillCallback> fill_callbacks_;
     int next_callback_id_ = 1;
     mutable std::mutex mutex_;
+
+    // SL/TP trigger storage
+    struct SLTPTrigger {
+        std::string portfolio_id;
+        std::string symbol;
+        std::string order_id;
+        std::string position_side; // "buy" or "sell" — determines which direction triggers
+        double sl_price = 0.0;
+        double tp_price = 0.0;
+        bool triggered  = false;
+    };
+    std::vector<SLTPTrigger> sl_tp_triggers_;
+    std::mutex sl_tp_mutex_;
 
     std::string scoped_key(const std::string& portfolio_id, const std::string& symbol) const;
 

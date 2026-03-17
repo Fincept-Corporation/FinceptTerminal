@@ -32,6 +32,15 @@ static constexpr int    WS_MAX_WATCHLIST_SYMBOLS       = 10;   // cap WS subscri
 static constexpr int    MAX_CANDLE_BUFFER              = 500;  // rolling candle window
 static constexpr int    PORTFOLIO_CLEANUP_TRADE_LIMIT  = 1;   // min trades to keep portfolio
 
+// Order book analytics constants (ported from Tauri CryptoOrderBook.tsx)
+static constexpr double OB_IMBALANCE_BUY_THRESHOLD  =  0.30; // signal=BUY  if imbalance > this
+static constexpr double OB_IMBALANCE_SELL_THRESHOLD = -0.30; // signal=SELL if imbalance < this
+static constexpr double OB_RISE_BUY_THRESHOLD       =  0.15; // % 60s rise required for BUY signal
+static constexpr double OB_RISE_SELL_THRESHOLD      = -0.15; // % 60s rise required for SELL signal
+static constexpr int    OB_MAX_TICK_HISTORY         = 3600;  // 1 hour at 1 snapshot/sec
+static constexpr int    OB_TICK_CAPTURE_MS          = 1000;  // ms between tick snapshots
+static constexpr int    OB_MAX_OB_DISPLAY_LEVELS    = 12;    // visible rows per side
+
 // ============================================================================
 // Default watchlist — top crypto pairs
 // ============================================================================
@@ -302,22 +311,68 @@ void CryptoTradingScreen::restart_ws_stream() {
     ws_ob_cb_id_ = svc.on_orderbook_update([this](const std::string& symbol, const trading::OrderBookData& ob) {
         if (symbol != selected_symbol_) return;
         std::lock_guard<std::mutex> lock(data_mutex_);
+
+        // Parse bids/asks into cumulative levels
         ob_bids_.clear();
         ob_asks_.clear();
-        double cum = 0;
-        for (auto& [price, amount] : ob.bids) {
-            cum += amount;
-            ob_bids_.push_back({price, amount, cum});
+        {
+            double cum = 0;
+            for (const auto& [price, amount] : ob.bids) {
+                cum += amount;
+                ob_bids_.push_back({price, amount, cum});
+            }
         }
-        cum = 0;
-        for (auto& [price, amount] : ob.asks) {
-            cum += amount;
-            ob_asks_.push_back({price, amount, cum});
+        {
+            double cum = 0;
+            for (const auto& [price, amount] : ob.asks) {
+                cum += amount;
+                ob_asks_.push_back({price, amount, cum});
+            }
         }
         ob_spread_ = ob.spread;
         ob_spread_pct_ = ob.spread_pct;
         ob_loading_ = false;
         last_data_update_ = time(nullptr);
+
+        // --- Tick history capture (throttled to OB_TICK_CAPTURE_MS) ---
+        // Feeds Imbalance and Signals view modes with computed analytics.
+        const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+
+        if (now_ms - last_tick_capture_ms_ >= static_cast<int64_t>(OB_TICK_CAPTURE_MS)) {
+            last_tick_capture_ms_ = now_ms;
+
+            TickSnapshot snap;
+            snap.timestamp = now_ms;
+            snap.best_bid  = ob.best_bid;
+            snap.best_ask  = ob.best_ask;
+
+            // Top-3 quantities from each side for weighted imbalance
+            for (int i = 0; i < 3 && i < static_cast<int>(ob_bids_.size()); ++i)
+                snap.bid_qty[i] = ob_bids_[i].amount;
+            for (int i = 0; i < 3 && i < static_cast<int>(ob_asks_.size()); ++i)
+                snap.ask_qty[i] = ob_asks_[i].amount;
+
+            // Weighted imbalance: 50/30/20 top-3 levels (SGX formula, from Tauri impl)
+            const double wBid = 50.0 * snap.bid_qty[0] + 30.0 * snap.bid_qty[1] + 20.0 * snap.bid_qty[2];
+            const double wAsk = 50.0 * snap.ask_qty[0] + 30.0 * snap.ask_qty[1] + 20.0 * snap.ask_qty[2];
+            snap.imbalance = (wBid + wAsk > 0.0) ? (wBid - wAsk) / (wBid + wAsk) : 0.0;
+
+            // 60-second rise ratio: find oldest tick within 60s window
+            const int64_t cutoff_60 = now_ms - 60000;
+            snap.rise_ratio_60 = 0.0;
+            for (int i = static_cast<int>(tick_history_.size()) - 1; i >= 0; --i) {
+                if (tick_history_[i].timestamp <= cutoff_60 && tick_history_[i].best_ask > 0.0) {
+                    snap.rise_ratio_60 = ((ob.best_ask - tick_history_[i].best_ask)
+                                          / tick_history_[i].best_ask) * 100.0;
+                    break;
+                }
+            }
+
+            tick_history_.push_back(snap);
+            if (static_cast<int>(tick_history_.size()) > OB_MAX_TICK_HISTORY)
+                tick_history_.erase(tick_history_.begin());
+        }
     });
 
     ws_candle_cb_id_ = svc.on_candle_update([this](const std::string& symbol, const trading::Candle& candle) {
@@ -686,6 +741,19 @@ void CryptoTradingScreen::refresh_portfolio_data() {
             auto cached = svc.get_cached_price(pos.symbol);
             if (cached.last > 0) {
                 trading::pt_update_position_price(portfolio_id_, pos.symbol, cached.last);
+            }
+        }
+
+        // Check SL/TP triggers for all open positions
+        {
+            auto& matcher = trading::OrderMatcher::instance();
+            if (last_price > 0)
+                matcher.check_sl_tp_triggers(portfolio_id_, selected_symbol_, last_price);
+            for (const auto& pos : positions_) {
+                if (pos.symbol == selected_symbol_) continue;
+                const auto cached = svc.get_cached_price(pos.symbol);
+                if (cached.last > 0)
+                    matcher.check_sl_tp_triggers(portfolio_id_, pos.symbol, cached.last);
             }
         }
 
@@ -2254,10 +2322,73 @@ void CryptoTradingScreen::render_order_entry(float w, float h) {
         ImGui::PopItemWidth();
     }
 
+    // Stop Loss / Take Profit — optional risk management, non-Market orders only
+    if (order_form_.type_idx != 0) {
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+        ImGui::Text("-- Risk Mgmt (optional) --");
+        ImGui::PopStyleColor();
+
+        ImGui::TextColored(TEXT_DIM, "Stop Loss");
+        ImGui::PushItemWidth(input_w);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
+        ImGui::InputText("##sl_price", order_form_.sl_price_buf, sizeof(order_form_.sl_price_buf),
+                         ImGuiInputTextFlags_CharsDecimal);
+        ImGui::PopStyleColor();
+        ImGui::PopItemWidth();
+
+        ImGui::TextColored(TEXT_DIM, "Take Profit");
+        ImGui::PushItemWidth(input_w);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, BG_INPUT);
+        ImGui::InputText("##tp_price", order_form_.tp_price_buf, sizeof(order_form_.tp_price_buf),
+                         ImGuiInputTextFlags_CharsDecimal);
+        ImGui::PopStyleColor();
+        ImGui::PopItemWidth();
+    }
+
     ImGui::Spacing();
 
     // Reduce only checkbox
     ImGui::Checkbox("Reduce Only", &order_form_.reduce_only);
+
+    ImGui::Spacing();
+
+    // --- Fee Estimation (shown when market info has loaded and notional > 0) ---
+    if (market_info_.has_data) {
+        const double qty   = std::atof(order_form_.quantity_buf);
+        // Market orders use last ticker price; limit/stop orders use entered price
+        const double price = (order_form_.type_idx == 0)
+                             ? current_ticker_.last
+                             : std::atof(order_form_.price_buf);
+
+        if (qty > 0.0 && price > 0.0) {
+            // Limit orders go on the book → maker fee; all others fill immediately → taker fee
+            const bool   is_maker      = (order_form_.type_idx == 1);
+            const double effective_fee = is_maker ? market_info_.maker_fee : market_info_.taker_fee;
+            const double notional      = qty * price;
+            const double fee_amount    = notional * effective_fee;
+            const double total_incl    = notional + fee_amount;
+
+            ImGui::Separator();
+            {
+                char buf[64];
+                std::snprintf(buf, sizeof(buf), "Fee(%.2f%% %s)",
+                              effective_fee * 100.0, is_maker ? "mkr" : "tkr");
+                ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+                ImGui::Text("%s", buf);
+                ImGui::SameLine(input_w - 72);
+                std::snprintf(buf, sizeof(buf), "%.4f", fee_amount);
+                ImGui::Text("%s", buf);
+
+                ImGui::Text("Total w/fee");
+                ImGui::SameLine(input_w - 72);
+                std::snprintf(buf, sizeof(buf), "%.2f", total_incl);
+                ImGui::Text("%s", buf);
+                ImGui::PopStyleColor();
+            }
+            ImGui::Separator();
+        }
+    }
 
     ImGui::Spacing();
 
@@ -2317,71 +2448,109 @@ void CryptoTradingScreen::render_orderbook(float w, float h) {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
     ImGui::BeginChild("##crypto_orderbook", ImVec2(w, h), true);
 
+    // Title + spread
     ImGui::TextColored(ACCENT, "ORDER BOOK");
-
-    std::lock_guard<std::mutex> lock(data_mutex_);
-
-    if (ob_spread_ > 0) {
-        ImGui::SameLine();
-        char spread_buf[32];
-        std::snprintf(spread_buf, sizeof(spread_buf), "Spread: %.2f (%.3f%%)", ob_spread_, ob_spread_pct_);
-        ImGui::TextColored(TEXT_DIM, "%s", spread_buf);
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        if (ob_spread_ > 0) {
+            ImGui::SameLine();
+            char spread_buf[32];
+            std::snprintf(spread_buf, sizeof(spread_buf), "Spread:%.2f(%.3f%%)", ob_spread_, ob_spread_pct_);
+            ImGui::TextColored(TEXT_DIM, "%s", spread_buf);
+        }
     }
-
     if (ob_fetching_) {
         ImGui::SameLine();
         ImGui::TextColored(WARNING, "[*]");
     }
 
-    ImGui::Separator();
-
-    if (ob_asks_.empty() && ob_bids_.empty()) {
-        if (ob_loading_) {
-            theme::LoadingSpinner("Loading order book...");
-        } else {
-            ImGui::TextColored(TEXT_DIM, "No order book data");
+    // Mode switcher — 4 segmented buttons
+    {
+        struct ModeBtn { const char* label; ObViewMode mode; };
+        static constexpr ModeBtn k_modes[] = {
+            {"OB",    ObViewMode::Book},
+            {"VOL",   ObViewMode::Volume},
+            {"IMBAL", ObViewMode::Imbalance},
+            {"SIG",   ObViewMode::Signals},
+        };
+        const float btn_w = (w - 28.0f) / 4.0f;
+        ImGui::SameLine(0, 6);
+        for (int i = 0; i < 4; ++i) {
+            if (i > 0) ImGui::SameLine(0, 2);
+            const bool active = (ob_view_mode_ == k_modes[i].mode);
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                active ? ImVec4(0.2f, 0.4f, 0.7f, 1.0f) : BG_WIDGET);
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                active ? TEXT_PRIMARY : TEXT_DIM);
+            if (ImGui::SmallButton(k_modes[i].label))
+                ob_view_mode_ = k_modes[i].mode;
+            ImGui::PopStyleColor(2);
         }
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
-        return;
     }
 
-    float avail_h = ImGui::GetContentRegionAvail().y;
-    float half_h = avail_h / 2.0f;
-    float col_w = (w - 24) / 3.0f;
+    ImGui::Separator();
 
-    // Find max cumulative for depth bar scaling
+    // Empty state guard
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        if (ob_asks_.empty() && ob_bids_.empty()) {
+            if (ob_loading_) {
+                theme::LoadingSpinner("Loading order book...");
+            } else {
+                ImGui::TextColored(TEXT_DIM, "No order book data");
+            }
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+            return;
+        }
+    }
+
+    // Dispatch to active mode renderer
+    switch (ob_view_mode_) {
+        case ObViewMode::Book:      render_ob_mode_book(w);      break;
+        case ObViewMode::Volume:    render_ob_mode_volume(w);    break;
+        case ObViewMode::Imbalance: render_ob_mode_imbalance(w); break;
+        case ObViewMode::Signals:   render_ob_mode_signals(w);   break;
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
+// ----------------------------------------------------------------------------
+// OB Mode: Book — price / amount / cumulative depth bars (default view)
+// ----------------------------------------------------------------------------
+void CryptoTradingScreen::render_ob_mode_book(float w) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    const float avail_h = ImGui::GetContentRegionAvail().y;
+    const float half_h  = avail_h / 2.0f;
+    const float col_w   = (w - 24.0f) / 3.0f;
+
     double max_cum = 1.0;
     if (!ob_bids_.empty()) max_cum = std::max(max_cum, ob_bids_.back().cumulative);
     if (!ob_asks_.empty()) max_cum = std::max(max_cum, ob_asks_.back().cumulative);
 
-    // Header
     ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
     ImGui::Text("PRICE");
-    ImGui::SameLine(col_w + 4);
-    ImGui::Text("AMOUNT");
-    ImGui::SameLine(col_w * 2 + 8);
-    ImGui::Text("TOTAL");
+    ImGui::SameLine(col_w + 4); ImGui::Text("AMOUNT");
+    ImGui::SameLine(col_w * 2 + 8); ImGui::Text("TOTAL");
     ImGui::PopStyleColor();
 
-    // Asks (sell side) — reversed so lowest ask is near the spread
-    ImGui::BeginChild("##ob_asks", ImVec2(0, half_h - 12), false);
+    // Asks — lowest ask nearest spread
+    ImGui::BeginChild("##ob_asks_book", ImVec2(0, half_h - 12), false);
     {
         char buf[32];
-        int start = std::max(0, (int)ob_asks_.size() - 12);
-        for (int i = start; i < (int)ob_asks_.size(); i++) {
-            auto& lvl = ob_asks_[i];
+        const int start = std::max(0, static_cast<int>(ob_asks_.size()) - OB_MAX_OB_DISPLAY_LEVELS);
+        for (int i = start; i < static_cast<int>(ob_asks_.size()); ++i) {
+            const auto& lvl = ob_asks_[i];
             ImVec2 p = ImGui::GetCursorScreenPos();
-            float row_w = ImGui::GetContentRegionAvail().x;
-
-            float bar_w = (float)(lvl.cumulative / max_cum) * row_w;
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            dl->AddRectFilled(
+            const float row_w = ImGui::GetContentRegionAvail().x;
+            const float bar_w = static_cast<float>(lvl.cumulative / max_cum) * row_w;
+            ImGui::GetWindowDrawList()->AddRectFilled(
                 ImVec2(p.x + row_w - bar_w, p.y),
                 ImVec2(p.x + row_w, p.y + ImGui::GetTextLineHeight()),
-                ImGui::ColorConvertFloat4ToU32(ImVec4(0.6f, 0.1f, 0.1f, 0.15f))
-            );
-
+                ImGui::ColorConvertFloat4ToU32(ImVec4(0.6f, 0.1f, 0.1f, 0.15f)));
             std::snprintf(buf, sizeof(buf), "%.2f", lvl.price);
             ImGui::TextColored(MARKET_RED, "%s", buf);
             ImGui::SameLine(col_w + 4);
@@ -2394,29 +2563,24 @@ void CryptoTradingScreen::render_orderbook(float w, float h) {
     }
     ImGui::EndChild();
 
-    // Spread line
     ImGui::PushStyleColor(ImGuiCol_Separator, BORDER_BRIGHT);
     ImGui::Separator();
     ImGui::PopStyleColor();
 
-    // Bids (buy side) — top to bottom (highest to lowest)
-    ImGui::BeginChild("##ob_bids", ImVec2(0, 0), false);
+    // Bids — highest to lowest
+    ImGui::BeginChild("##ob_bids_book", ImVec2(0, 0), false);
     {
         char buf[32];
-        int count = std::min((int)ob_bids_.size(), 12);
-        for (int i = 0; i < count; i++) {
-            auto& lvl = ob_bids_[i];
+        const int count = std::min(static_cast<int>(ob_bids_.size()), OB_MAX_OB_DISPLAY_LEVELS);
+        for (int i = 0; i < count; ++i) {
+            const auto& lvl = ob_bids_[i];
             ImVec2 p = ImGui::GetCursorScreenPos();
-            float row_w = ImGui::GetContentRegionAvail().x;
-
-            float bar_w = (float)(lvl.cumulative / max_cum) * row_w;
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            dl->AddRectFilled(
+            const float row_w = ImGui::GetContentRegionAvail().x;
+            const float bar_w = static_cast<float>(lvl.cumulative / max_cum) * row_w;
+            ImGui::GetWindowDrawList()->AddRectFilled(
                 ImVec2(p.x + row_w - bar_w, p.y),
                 ImVec2(p.x + row_w, p.y + ImGui::GetTextLineHeight()),
-                ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.5f, 0.2f, 0.15f))
-            );
-
+                ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.5f, 0.2f, 0.15f)));
             std::snprintf(buf, sizeof(buf), "%.2f", lvl.price);
             ImGui::TextColored(MARKET_GREEN, "%s", buf);
             ImGui::SameLine(col_w + 4);
@@ -2428,9 +2592,222 @@ void CryptoTradingScreen::render_orderbook(float w, float h) {
         }
     }
     ImGui::EndChild();
+}
 
-    ImGui::EndChild();
+// ----------------------------------------------------------------------------
+// OB Mode: Volume — price / amount / % share of total book
+// ----------------------------------------------------------------------------
+void CryptoTradingScreen::render_ob_mode_volume(float w) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    const float col_w = (w - 24.0f) / 3.0f;
+
+    double total_vol = 0.0;
+    for (const auto& lvl : ob_asks_) total_vol += lvl.amount;
+    for (const auto& lvl : ob_bids_) total_vol += lvl.amount;
+    if (total_vol <= 0.0) total_vol = 1.0;
+
+    // Normaliser: each bar fills to its share of the avg-level volume
+    const double avg_lvl_vol = total_vol / static_cast<double>(OB_MAX_OB_DISPLAY_LEVELS * 2);
+
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+    ImGui::Text("PRICE");
+    ImGui::SameLine(col_w + 4); ImGui::Text("AMOUNT");
+    ImGui::SameLine(col_w * 2 + 8); ImGui::Text("VOL%");
     ImGui::PopStyleColor();
+
+    const float avail_h = ImGui::GetContentRegionAvail().y;
+    const float half_h  = avail_h / 2.0f;
+
+    ImGui::BeginChild("##ob_asks_vol", ImVec2(0, half_h - 12), false);
+    {
+        char buf[32];
+        const int start = std::max(0, static_cast<int>(ob_asks_.size()) - OB_MAX_OB_DISPLAY_LEVELS);
+        for (int i = start; i < static_cast<int>(ob_asks_.size()); ++i) {
+            const auto& lvl = ob_asks_[i];
+            const double vol_pct = (lvl.amount / total_vol) * 100.0;
+            ImVec2 p = ImGui::GetCursorScreenPos();
+            const float row_w = ImGui::GetContentRegionAvail().x;
+            const float bar_w = std::min(static_cast<float>(lvl.amount / (avg_lvl_vol * 2.0)) * row_w, row_w);
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImVec2(p.x, p.y),
+                ImVec2(p.x + bar_w, p.y + ImGui::GetTextLineHeight()),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(0.6f, 0.1f, 0.1f, 0.20f)));
+            std::snprintf(buf, sizeof(buf), "%.2f", lvl.price);
+            ImGui::TextColored(MARKET_RED, "%s", buf);
+            ImGui::SameLine(col_w + 4);
+            std::snprintf(buf, sizeof(buf), "%.4f", lvl.amount);
+            ImGui::TextColored(TEXT_SECONDARY, "%s", buf);
+            ImGui::SameLine(col_w * 2 + 8);
+            std::snprintf(buf, sizeof(buf), "%.2f%%", vol_pct);
+            ImGui::TextColored(TEXT_DIM, "%s", buf);
+        }
+    }
+    ImGui::EndChild();
+
+    ImGui::PushStyleColor(ImGuiCol_Separator, BORDER_BRIGHT);
+    ImGui::Separator();
+    ImGui::PopStyleColor();
+
+    ImGui::BeginChild("##ob_bids_vol", ImVec2(0, 0), false);
+    {
+        char buf[32];
+        const int count = std::min(static_cast<int>(ob_bids_.size()), OB_MAX_OB_DISPLAY_LEVELS);
+        for (int i = 0; i < count; ++i) {
+            const auto& lvl = ob_bids_[i];
+            const double vol_pct = (lvl.amount / total_vol) * 100.0;
+            ImVec2 p = ImGui::GetCursorScreenPos();
+            const float row_w = ImGui::GetContentRegionAvail().x;
+            const float bar_w = std::min(static_cast<float>(lvl.amount / (avg_lvl_vol * 2.0)) * row_w, row_w);
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImVec2(p.x, p.y),
+                ImVec2(p.x + bar_w, p.y + ImGui::GetTextLineHeight()),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.5f, 0.2f, 0.20f)));
+            std::snprintf(buf, sizeof(buf), "%.2f", lvl.price);
+            ImGui::TextColored(MARKET_GREEN, "%s", buf);
+            ImGui::SameLine(col_w + 4);
+            std::snprintf(buf, sizeof(buf), "%.4f", lvl.amount);
+            ImGui::TextColored(TEXT_SECONDARY, "%s", buf);
+            ImGui::SameLine(col_w * 2 + 8);
+            std::snprintf(buf, sizeof(buf), "%.2f%%", vol_pct);
+            ImGui::TextColored(TEXT_DIM, "%s", buf);
+        }
+    }
+    ImGui::EndChild();
+}
+
+// ----------------------------------------------------------------------------
+// OB Mode: Imbalance — weighted bid/ask ratio gauge + per-level table
+// ----------------------------------------------------------------------------
+void CryptoTradingScreen::render_ob_mode_imbalance(float w) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    if (tick_history_.empty()) {
+        ImGui::TextColored(TEXT_DIM, "Collecting data...");
+        return;
+    }
+
+    const auto& latest    = tick_history_.back();
+    const double imbalance = latest.imbalance;
+
+    // Imbalance value + colour
+    {
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), "Imbalance: %+.3f", imbalance);
+        const ImVec4 col = (imbalance > OB_IMBALANCE_BUY_THRESHOLD)  ? MARKET_GREEN :
+                           (imbalance < OB_IMBALANCE_SELL_THRESHOLD) ? MARKET_RED   :
+                           TEXT_SECONDARY;
+        ImGui::TextColored(col, "%s", buf);
+    }
+
+    // Horizontal bid/ask weight bar
+    {
+        const float bar_total_w = w - 24.0f;
+        const float bid_frac    = static_cast<float>((imbalance + 1.0) / 2.0);
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        constexpr float bar_h = 8.0f;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(p, ImVec2(p.x + bar_total_w * bid_frac, p.y + bar_h),
+                          ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.55f, 0.25f, 0.8f)));
+        dl->AddRectFilled(ImVec2(p.x + bar_total_w * bid_frac, p.y),
+                          ImVec2(p.x + bar_total_w, p.y + bar_h),
+                          ImGui::ColorConvertFloat4ToU32(ImVec4(0.65f, 0.1f, 0.1f, 0.8f)));
+        ImGui::Dummy(ImVec2(bar_total_w, bar_h + 2.0f));
+    }
+
+    ImGui::Spacing();
+
+    // Per-level breakdown
+    static constexpr float k_weights[3] = {50.0f, 30.0f, 20.0f};
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+    ImGui::Text("LVL  WT   BID QTY    ASK QTY    IMBAL");
+    ImGui::PopStyleColor();
+    ImGui::Separator();
+
+    for (int i = 0; i < 3; ++i) {
+        const double bq        = latest.bid_qty[i];
+        const double aq        = latest.ask_qty[i];
+        const double wB        = k_weights[i] * bq;
+        const double wA        = k_weights[i] * aq;
+        const double lvl_imbal = (wB + wA > 0.0) ? (wB - wA) / (wB + wA) : 0.0;
+        const ImVec4 col       = (lvl_imbal > 0.1)  ? MARKET_GREEN :
+                                 (lvl_imbal < -0.1) ? MARKET_RED   : TEXT_SECONDARY;
+        char row[96];
+        std::snprintf(row, sizeof(row), "  L%d  %3.0f%%  %9.4f  %9.4f  %+.3f",
+                      i + 1, k_weights[i], bq, aq, lvl_imbal);
+        ImGui::TextColored(col, "%s", row);
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+
+    {
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), "60s rise: %+.3f%%", latest.rise_ratio_60);
+        ImGui::TextColored(latest.rise_ratio_60 >= 0.0 ? MARKET_GREEN : MARKET_RED, "%s", buf);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// OB Mode: Signals — BUY/SELL/NEUTRAL badge from imbalance + rise ratio
+// ----------------------------------------------------------------------------
+void CryptoTradingScreen::render_ob_mode_signals(float w) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    if (tick_history_.empty()) {
+        ImGui::TextColored(TEXT_DIM, "Collecting data... (~5s)");
+        return;
+    }
+
+    const auto& latest    = tick_history_.back();
+    const double imbalance = latest.imbalance;
+    const double rise_60   = latest.rise_ratio_60;
+
+    const bool is_buy  = (imbalance > OB_IMBALANCE_BUY_THRESHOLD  && rise_60 > OB_RISE_BUY_THRESHOLD);
+    const bool is_sell = (imbalance < OB_IMBALANCE_SELL_THRESHOLD && rise_60 < OB_RISE_SELL_THRESHOLD);
+
+    // Signal badge (styled as non-interactive button for visual weight)
+    {
+        const char* label  = is_buy ? "  BUY  " : (is_sell ? "  SELL  " : " NEUTRAL ");
+        const ImVec4 bg    = is_buy  ? ImVec4(0.0f, 0.55f, 0.25f, 1.0f) :
+                             is_sell ? ImVec4(0.65f, 0.1f, 0.1f, 1.0f) :
+                                       ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, bg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bg);
+        ImGui::PushStyleColor(ImGuiCol_Text, TEXT_PRIMARY);
+        ImGui::Button(label, ImVec2(w - 24.0f, 28.0f));
+        ImGui::PopStyleColor(3);
+    }
+
+    ImGui::Spacing();
+
+    // Metrics table
+    ImGui::PushStyleColor(ImGuiCol_Text, TEXT_DIM);
+    ImGui::Text("Imbalance    Rise 60s    Thresholds");
+    ImGui::PopStyleColor();
+    ImGui::Separator();
+
+    {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "%+.3f", imbalance);
+        ImGui::TextColored(imbalance >= 0.0 ? MARKET_GREEN : MARKET_RED, "%s", buf);
+        ImGui::SameLine(80);
+        std::snprintf(buf, sizeof(buf), "%+.3f%%", rise_60);
+        ImGui::TextColored(rise_60 >= 0.0 ? MARKET_GREEN : MARKET_RED, "%s", buf);
+        ImGui::SameLine(160);
+        ImGui::TextColored(TEXT_DIM, "B>%.2f|S<%.2f",
+                           OB_IMBALANCE_BUY_THRESHOLD, OB_IMBALANCE_SELL_THRESHOLD);
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+
+    {
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), "History: %d/%d ticks",
+                      static_cast<int>(tick_history_.size()), OB_MAX_TICK_HISTORY);
+        ImGui::TextColored(TEXT_DIM, "%s", buf);
+    }
 }
 
 // ============================================================================
@@ -2605,6 +2982,25 @@ void CryptoTradingScreen::submit_order() {
         }
     }
 
+    // Fee-inclusive balance check for paper BUY orders (ES.45: named values not magic)
+    if (trading_mode_ == TradingMode::Paper && side == "buy" && price.has_value()) {
+        const bool   is_maker      = (order_form_.type_idx == 1); // limit → maker
+        const double effective_fee = market_info_.has_data
+                                     ? (is_maker ? market_info_.maker_fee : market_info_.taker_fee)
+                                     : 0.001; // fallback 0.1% if fees not yet loaded
+        const double notional      = qty * price.value();
+        const double total_incl    = notional * (1.0 + effective_fee);
+        if (total_incl > portfolio_.balance) {
+            char buf[128];
+            std::snprintf(buf, sizeof(buf),
+                          "Insufficient balance ($%.2f avail, $%.2f needed incl. fee)",
+                          portfolio_.balance, total_incl);
+            order_form_.error = buf;
+            order_form_.msg_timer = 5.0f;
+            return;
+        }
+    }
+
     try {
         if (trading_mode_ == TradingMode::Live) {
             // Live trading — route through exchange API on background thread
@@ -2633,9 +3029,11 @@ void CryptoTradingScreen::submit_order() {
                 order_submitting_.store(false);
             }));
             // Clear form immediately
-            order_form_.quantity_buf[0] = '\0';
-            order_form_.price_buf[0] = '\0';
+            order_form_.quantity_buf[0]   = '\0';
+            order_form_.price_buf[0]      = '\0';
             order_form_.stop_price_buf[0] = '\0';
+            order_form_.sl_price_buf[0]   = '\0';
+            order_form_.tp_price_buf[0]   = '\0';
             return; // skip the rest — thread handles result
         } else {
             // Paper trading
@@ -2657,6 +3055,18 @@ void CryptoTradingScreen::submit_order() {
                 LOG_INFO(TAG, "Order added to matcher");
             }
 
+            // Register SL/TP triggers if provided
+            {
+                const double sl = (order_form_.sl_price_buf[0] != '\0')
+                                  ? std::atof(order_form_.sl_price_buf) : 0.0;
+                const double tp = (order_form_.tp_price_buf[0] != '\0')
+                                  ? std::atof(order_form_.tp_price_buf) : 0.0;
+                if ((sl > 0.0 || tp > 0.0) && !order.id.empty()) {
+                    trading::OrderMatcher::instance().set_sl_tp(
+                        portfolio_id_, selected_symbol_, order.id, sl, tp);
+                }
+            }
+
             order_form_.success = "Order placed: " + order.id.substr(0, 8);
             order_form_.msg_timer = 3.0f;
         }
@@ -2665,9 +3075,11 @@ void CryptoTradingScreen::submit_order() {
         trading::ExchangeService::instance().watch_symbol(selected_symbol_, portfolio_id_);
 
         // Clear form
-        order_form_.quantity_buf[0] = '\0';
-        order_form_.price_buf[0] = '\0';
+        order_form_.quantity_buf[0]   = '\0';
+        order_form_.price_buf[0]      = '\0';
         order_form_.stop_price_buf[0] = '\0';
+        order_form_.sl_price_buf[0]   = '\0';
+        order_form_.tp_price_buf[0]   = '\0';
 
         // Refresh portfolio data immediately
         refresh_portfolio_data();

@@ -25,13 +25,31 @@ struct OBLevel {
     double cumulative = 0.0; // running total for depth bar
 };
 
+// Order book view mode (ES.45: named enum, not magic ints)
+enum class ObViewMode { Book, Volume, Imbalance, Signals };
+
+// Tick snapshot — captured once per second from WS orderbook callback.
+// Stores the top-3 bid/ask quantities needed for weighted imbalance,
+// plus a 60-second price rise ratio for signal detection.
+struct TickSnapshot {
+    int64_t timestamp     = 0;
+    double  best_bid      = 0.0;
+    double  best_ask      = 0.0;
+    double  bid_qty[3]    = {};  // top-3 bid quantities (50/30/20 weight)
+    double  ask_qty[3]    = {};  // top-3 ask quantities (50/30/20 weight)
+    double  imbalance     = 0.0; // (wBid-wAsk)/(wBid+wAsk), range [-1, +1]
+    double  rise_ratio_60 = 0.0; // % price change over last 60 seconds
+};
+
 // Order entry form state
 struct OrderFormState {
-    int side_idx = 0;           // 0=Buy, 1=Sell
-    int type_idx = 0;           // 0=Market, 1=Limit, 2=Stop, 3=StopLimit
-    char quantity_buf[32] = "";
-    char price_buf[32] = "";
+    int  side_idx = 0;              // 0=Buy, 1=Sell
+    int  type_idx = 0;              // 0=Market, 1=Limit, 2=Stop, 3=StopLimit
+    char quantity_buf[32]   = "";
+    char price_buf[32]      = "";
     char stop_price_buf[32] = "";
+    char sl_price_buf[32]   = "";   // Stop Loss  (optional, non-Market orders)
+    char tp_price_buf[32]   = "";   // Take Profit (optional, non-Market orders)
     bool reduce_only = false;
     std::string error;
     std::string success;
