@@ -160,6 +160,14 @@ set(SOURCES
 
     # Screens — Crypto Trading
     src/screens/crypto_trading/crypto_trading_screen.cpp
+    src/screens/crypto_trading/crypto_lifecycle.cpp
+    src/screens/crypto_trading/crypto_screen.cpp
+    src/screens/crypto_trading/crypto_watchlist.cpp
+    src/screens/crypto_trading/crypto_chart.cpp
+    src/screens/crypto_trading/crypto_bottom_tabs.cpp
+    src/screens/crypto_trading/crypto_order_entry.cpp
+    src/screens/crypto_trading/crypto_order_actions.cpp
+    src/screens/crypto_trading/crypto_credentials.cpp
 
     # Screens — Node Editor
     src/screens/node_editor/node_registry.cpp
