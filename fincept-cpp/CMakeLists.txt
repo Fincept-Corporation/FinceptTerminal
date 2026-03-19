@@ -327,6 +327,9 @@ set(SOURCES
     # Screens — AI Quant Lab
     src/screens/ai_quant_lab/ai_quant_lab_api.cpp
     src/screens/ai_quant_lab/ai_quant_lab_screen.cpp
+    src/screens/ai_quant_lab/aql_screen.cpp
+    src/screens/ai_quant_lab/aql_panels_1.cpp
+    src/screens/ai_quant_lab/aql_panels_2.cpp
 
     # Screens — Code Editor
     src/screens/code_editor/notebook_io.cpp
@@ -368,6 +371,8 @@ set(SOURCES
     src/screens/data_mapping/data_mapping_engine.cpp
     src/screens/data_mapping/data_mapping_db.cpp
     src/screens/data_mapping/data_mapping_screen.cpp
+    src/screens/data_mapping/dm_screen.cpp
+    src/screens/data_mapping/dm_create.cpp
 
     # Screens — Screener (FRED Economic Data)
     src/screens/screener/screener_screen.cpp
