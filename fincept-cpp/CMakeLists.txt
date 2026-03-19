@@ -145,6 +145,8 @@ set(SOURCES
     src/screens/surface_analytics/panels_risk.cpp
     src/screens/surface_analytics/panels_macro.cpp
     src/screens/surface_analytics/tables_extended.cpp
+    src/screens/surface_analytics/csv_importer.cpp
+    src/screens/surface_analytics/import_dialog.cpp
 
     # UI — Tile Map
     src/ui/tile_map.cpp
@@ -305,6 +307,14 @@ set(SOURCES
     # Screens — Code Editor
     src/screens/code_editor/notebook_io.cpp
     src/screens/code_editor/code_editor_screen.cpp
+    src/screens/code_editor/syntax_highlight.cpp
+    src/screens/code_editor/cell_render.cpp
+    src/screens/code_editor/toolbar_panels.cpp
+    src/screens/code_editor/cell_ops.cpp
+    src/screens/code_editor/execution.cpp
+    src/screens/code_editor/file_ops.cpp
+    src/screens/code_editor/search_ops.cpp
+    src/screens/code_editor/editor_utils.cpp
 
     # Media — mpv video player
     src/media/mpv_player.cpp
@@ -438,6 +448,8 @@ set_source_files_properties(
     src/screens/surface_analytics/panels_risk.cpp
     src/screens/surface_analytics/panels_macro.cpp
     src/screens/surface_analytics/tables_extended.cpp
+    src/screens/surface_analytics/csv_importer.cpp
+    src/screens/surface_analytics/import_dialog.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
 )
 
