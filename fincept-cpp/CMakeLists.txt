@@ -308,6 +308,10 @@ set(SOURCES
     # Screens — Backtesting
     src/screens/backtesting/backtesting_data.cpp
     src/screens/backtesting/backtesting_screen.cpp
+    src/screens/backtesting/bt_screen.cpp
+    src/screens/backtesting/bt_config.cpp
+    src/screens/backtesting/bt_results.cpp
+    src/screens/backtesting/bt_exec.cpp
 
     # Screens — Algo Trading
     src/screens/algo_trading/algo_trading_screen.cpp
