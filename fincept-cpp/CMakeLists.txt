@@ -83,6 +83,14 @@ set(SOURCES
     # HTTP & Storage
     src/http/http_client.cpp
     src/storage/database.cpp
+    src/storage/db_core.cpp
+    src/storage/db_cache.cpp
+    src/storage/db_ops_settings.cpp
+    src/storage/db_ops_chat.cpp
+    src/storage/db_ops_watchlist.cpp
+    src/storage/db_ops_cache.cpp
+    src/storage/db_ops_sessions.cpp
+    src/storage/db_ops_notes_algo.cpp
     src/storage/crypto.cpp
     src/storage/cache_service.cpp
 
@@ -681,6 +689,21 @@ install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/fonts DESTINATION bin/fonts)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/resources DESTINATION bin/resources)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts DESTINATION bin/scripts)
+
+# =============================================================================
+# Test: standalone equity trading UI test (AngelOne broker auth)
+# =============================================================================
+add_executable(TestEquityUI tests/test_equity_ui.cpp)
+set_target_properties(TestEquityUI PROPERTIES CXX_STANDARD 20)
+target_link_libraries(TestEquityUI PRIVATE
+    glfw
+    OpenGL::GL
+    imgui::imgui
+)
+if(WIN32)
+    target_link_libraries(TestEquityUI PRIVATE ws2_32)
+    target_compile_definitions(TestEquityUI PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
 
 # =============================================================================
 # Lint targets (on-demand — run without rebuilding the whole project)
