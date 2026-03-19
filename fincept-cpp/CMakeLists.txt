@@ -154,6 +154,10 @@ set(SOURCES
     src/screens/surface_analytics/panels_macro.cpp
     src/screens/surface_analytics/tables_extended.cpp
     src/screens/surface_analytics/csv_importer.cpp
+    src/screens/surface_analytics/csv_importer_core.cpp
+    src/screens/surface_analytics/csv_importer_rates.cpp
+    src/screens/surface_analytics/csv_importer_commodities_risk.cpp
+    src/screens/surface_analytics/csv_importer_macro.cpp
     src/screens/surface_analytics/import_dialog.cpp
 
     # UI — Tile Map
@@ -469,6 +473,10 @@ set_source_files_properties(
     src/screens/surface_analytics/panels_macro.cpp
     src/screens/surface_analytics/tables_extended.cpp
     src/screens/surface_analytics/csv_importer.cpp
+    src/screens/surface_analytics/csv_importer_core.cpp
+    src/screens/surface_analytics/csv_importer_rates.cpp
+    src/screens/surface_analytics/csv_importer_commodities_risk.cpp
+    src/screens/surface_analytics/csv_importer_macro.cpp
     src/screens/surface_analytics/import_dialog.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
 )
