@@ -2,7 +2,9 @@
 #include "ui/theme.h"
 #include "ui/yoga_helpers.h"
 #include "core/logger.h"
+#include "core/font_loader.h"
 #include <imgui.h>
+#include <implot.h>
 #include <cstdio>
 #include <cstring>
 #include <cmath>
@@ -171,88 +173,80 @@ void ReportBuilderScreen::render_toolbar(float w) {
 // Component List (left sidebar) — palette + document structure
 // ============================================================================
 
+// ============================================================================
+// Component type color helper (shared by palette and structure list)
+// ============================================================================
+
+static ImU32 comp_type_color(ComponentType t) {
+    switch (t) {
+        case ComponentType::heading:    return IM_COL32(255,115, 13,255);
+        case ComponentType::subheading: return IM_COL32(255,199, 20,255);
+        case ComponentType::text:       return IM_COL32( 85,136,255,255);
+        case ComponentType::table:      return IM_COL32( 34,211,238,255);
+        case ComponentType::chart:      return IM_COL32(168, 85,247,255);
+        case ComponentType::kpi:        return IM_COL32( 13,217,107,255);
+        case ComponentType::code_block: return IM_COL32(125,211,168,255);
+        case ComponentType::list:       return IM_COL32(249,115, 22,255);
+        case ComponentType::quote:      return IM_COL32(148,163,184,255);
+        default:                        return IM_COL32( 58, 58, 68,255);
+    }
+}
+
 void ReportBuilderScreen::render_component_list(float x, float y, float w, float h) {
     ImGui::SetCursorPos(ImVec2(x, y));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
-    ImGui::BeginChild("##rb_complist", ImVec2(w, h), true);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARKEST);
+    ImGui::BeginChild("##rb_complist", ImVec2(w, h), false);
 
-    ImGui::TextColored(ACCENT, "COMPONENTS");
-    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0, 4.0f));
+    ImGui::SetCursorPosX(10.0f);
+    ImGui::TextColored(TEXT_DIM, "COMPONENTS");
+    ImGui::SetCursorPosX(10.0f);
+    ImGui::TextColored(ImVec4(0.3f,0.3f,0.32f,1.0f), "drag to canvas");
+    ImGui::Spacing();
 
-    // Quick-add buttons
-    static constexpr struct { ComponentType type; const char* label; } quick_add[] = {
+    const float btn_w = (w - 24.0f) * 0.5f;
+    static constexpr struct {
+        ComponentType type;
+        const char* label;
+    } palette[] = {
         {ComponentType::heading,    "H1 Heading"},
         {ComponentType::subheading, "H2 Subhead"},
-        {ComponentType::text,       "Text Block"},
+        {ComponentType::text,       "Text"},
         {ComponentType::table,      "Table"},
         {ComponentType::chart,      "Chart"},
         {ComponentType::kpi,        "KPI Cards"},
-        {ComponentType::divider,    "Divider"},
         {ComponentType::code_block, "Code"},
         {ComponentType::list,       "List"},
         {ComponentType::quote,      "Quote"},
+        {ComponentType::divider,    "Divider"},
     };
+    static constexpr int PALETTE_COUNT = static_cast<int>(sizeof(palette)/sizeof(palette[0]));
 
-    for (const auto& qa : quick_add) {
-        char label[128];
-        std::snprintf(label, sizeof(label), "%s %s", component_type_icon(qa.type), qa.label);
-        if (ImGui::Button(label, ImVec2(w - 16.0f, COMPONENT_BTN_H))) {
-            add_component(qa.type);
-        }
+    for (int i = 0; i < PALETTE_COUNT; ++i) {
+        if (i % 2 == 1) ImGui::SameLine(0.0f, 4.0f);
+        else ImGui::SetCursorPosX(8.0f);
+        render_palette_item(palette[i].type, btn_w);
     }
 
     ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.12f,0.12f,0.14f,1.0f));
     ImGui::Separator();
-    ImGui::TextColored(ACCENT, "DOCUMENT STRUCTURE");
-    ImGui::Separator();
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
 
-    // List existing components with selection
+    ImGui::SetCursorPosX(10.0f);
+    char struct_hdr[64];
+    std::snprintf(struct_hdr, sizeof(struct_hdr), "STRUCTURE  %d",
+                  static_cast<int>(document_.components.size()));
+    ImGui::TextColored(TEXT_DIM, "%s", struct_hdr);
+    ImGui::Spacing();
+
     if (document_.components.empty()) {
-        ImGui::TextColored(TEXT_DIM, "No components yet.");
-        ImGui::TextColored(TEXT_DIM, "Click buttons above");
-        ImGui::TextColored(TEXT_DIM, "to add content.");
+        ImGui::SetCursorPosX(10.0f);
+        ImGui::TextColored(ImVec4(0.3f,0.3f,0.32f,1.0f), "No blocks yet.");
     } else {
         for (size_t i = 0; i < document_.components.size(); ++i) {
-            const auto& comp = document_.components[i];
-            const bool selected = (comp.id == selected_component_id_);
-
-            char label[256];
-            // Show a preview snippet
-            char snippet[40] = {};
-            if (comp.content[0] != '\0') {
-                std::strncpy(snippet, comp.content, sizeof(snippet) - 1);
-                if (std::strlen(comp.content) >= sizeof(snippet) - 1) {
-                    snippet[sizeof(snippet) - 4] = '.';
-                    snippet[sizeof(snippet) - 3] = '.';
-                    snippet[sizeof(snippet) - 2] = '.';
-                }
-            }
-            std::snprintf(label, sizeof(label), "%s %s##comp_%d",
-                          component_type_icon(comp.type),
-                          snippet[0] ? snippet : component_type_label(comp.type),
-                          comp.id);
-
-            if (ImGui::Selectable(label, selected)) {
-                selected_component_id_ = comp.id;
-            }
-
-            // Context menu for each component
-            if (ImGui::BeginPopupContextItem()) {
-                if (ImGui::MenuItem("Move Up") && i > 0) {
-                    move_component(comp.id, -1);
-                }
-                if (ImGui::MenuItem("Move Down") && i + 1 < document_.components.size()) {
-                    move_component(comp.id, 1);
-                }
-                ImGui::Separator();
-                if (ImGui::MenuItem("Duplicate")) {
-                    duplicate_component(comp.id);
-                }
-                if (ImGui::MenuItem("Delete")) {
-                    delete_component(comp.id);
-                }
-                ImGui::EndPopup();
-            }
+            render_struct_item(i);
         }
     }
 
@@ -260,90 +254,307 @@ void ReportBuilderScreen::render_component_list(float x, float y, float w, float
     ImGui::PopStyleColor();
 }
 
+void ReportBuilderScreen::render_palette_item(ComponentType type, float btn_w) {
+    const ImU32 col  = comp_type_color(type);
+    const ImVec4 col4 = ImGui::ColorConvertU32ToFloat4(col);
+    const ImVec4 bg   = ImVec4(col4.x*0.12f, col4.y*0.12f, col4.z*0.12f, 1.0f);
+
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImGui::ColorConvertFloat4ToU32(bg));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(34,34,40,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(40,40,48,255));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 6.0f));
+
+    char label[64];
+    std::snprintf(label, sizeof(label), "%s\n%s##pal_%d",
+                  component_type_icon(type),
+                  component_type_label(type),
+                  static_cast<int>(type));
+
+    if (ImGui::Button(label, ImVec2(btn_w, 36.0f))) {
+        add_component(type);
+    }
+
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+        int t = static_cast<int>(type);
+        ImGui::SetDragDropPayload("RB_COMP_TYPE", &t, sizeof(int));
+        ImGui::TextColored(col4, "%s %s", component_type_icon(type), component_type_label(type));
+        ImGui::EndDragDropSource();
+    }
+
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(3);
+}
+
+void ReportBuilderScreen::render_struct_item(size_t i) {
+    auto& comp       = document_.components[i];
+    const bool sel   = (comp.id == selected_component_id_);
+    const ImU32 dcol = comp_type_color(comp.type);
+
+    ImGui::PushID(comp.id);
+
+    const ImVec2 row_min = ImGui::GetCursorScreenPos();
+    const float  row_w   = ImGui::GetContentRegionAvail().x;
+    constexpr float ROW_H = 24.0f;
+
+    if (sel) {
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            row_min, ImVec2(row_min.x + row_w, row_min.y + ROW_H),
+            IM_COL32(255,115,13,20), 3.0f);
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            row_min, ImVec2(row_min.x + 2.0f, row_min.y + ROW_H),
+            IM_COL32(255,115,13,255));
+    }
+
+    ImGui::SetCursorPosX(6.0f);
+    ImGui::TextColored(ImVec4(0.22f,0.22f,0.24f,1.0f), "=");
+    ImGui::SameLine(0.0f, 4.0f);
+
+    ImVec2 dot_p = ImGui::GetCursorScreenPos();
+    dot_p.x += 2.0f; dot_p.y += 8.0f;
+    ImGui::GetWindowDrawList()->AddCircleFilled(dot_p, 4.0f, dcol);
+    ImGui::Dummy(ImVec2(10.0f, 0.0f));
+    ImGui::SameLine(0.0f, 4.0f);
+
+    char snippet[32] = {};
+    if (comp.content[0]) std::strncpy(snippet, comp.content, sizeof(snippet) - 1);
+    char row_label[128];
+    std::snprintf(row_label, sizeof(row_label), "%s##struct_%d",
+                  snippet[0] ? snippet : component_type_label(comp.type), comp.id);
+
+    if (ImGui::Selectable(row_label, sel,
+                          ImGuiSelectableFlags_None,
+                          ImVec2(row_w - 60.0f, ROW_H - 2.0f))) {
+        selected_component_id_ = comp.id;
+    }
+
+    // Drag source for reordering
+    if (ImGui::BeginDragDropSource()) {
+        ImGui::SetDragDropPayload("RB_REORDER", &comp.id, sizeof(int));
+        ImGui::TextUnformatted(component_type_label(comp.type));
+        ImGui::EndDragDropSource();
+    }
+    // Drop target for reordering
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("RB_REORDER")) {
+            const int drag_id = *static_cast<const int*>(payload->Data);
+            auto it = std::find_if(document_.components.begin(), document_.components.end(),
+                [drag_id](const ReportComponent& c){ return c.id == drag_id; });
+            if (it != document_.components.end()) {
+                const size_t from = static_cast<size_t>(it - document_.components.begin());
+                if (from != i) {
+                    std::swap(document_.components[from], document_.components[i]);
+                    is_dirty_ = true;
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
+    // Hover actions
+    ImGui::SameLine();
+    if (ImGui::IsItemHovered() || sel) {
+        if (i > 0 && ImGui::SmallButton("^")) { move_component(comp.id, -1); }
+        ImGui::SameLine();
+        if (i + 1 < document_.components.size() && ImGui::SmallButton("v")) { move_component(comp.id, 1); }
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f,0.3f,0.3f,1.0f));
+        if (ImGui::SmallButton("x")) { delete_component(comp.id); }
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::PopID();
+}
+
 // ============================================================================
-// Canvas — document preview area
+// Canvas — white page preview
 // ============================================================================
+
+void ReportBuilderScreen::render_page_shadow(ImVec2 pos, float pw, float ph) {
+    auto* dl = ImGui::GetWindowDrawList();
+    static constexpr int LAYERS = 6;
+    for (int i = LAYERS; i >= 1; --i) {
+        const float  off   = static_cast<float>(i) * 2.0f;
+        const ImU32  alpha = static_cast<ImU32>(18 - i * 2);
+        dl->AddRectFilled(
+            ImVec2(pos.x + off, pos.y + off),
+            ImVec2(pos.x + pw + off, pos.y + ph + off),
+            IM_COL32(0, 0, 0, alpha), 4.0f);
+    }
+}
 
 void ReportBuilderScreen::render_canvas(float x, float y, float w, float h) {
     ImGui::SetCursorPos(ImVec2(x, y));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARK);
-    ImGui::BeginChild("##rb_canvas", ImVec2(w, h), true);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
+    ImGui::BeginChild("##rb_canvas", ImVec2(w, h), false);
 
-    // Page-like area centered in canvas
-    const float page_w = std::min(w - 40.0f, 600.0f);
-    const float page_x = (w - page_w) * 0.5f;
+    const float page_w    = std::min(w - 48.0f, 680.0f);
+    const float page_x    = (w - page_w) * 0.5f;
+    constexpr float PAD_V = 28.0f;
 
+    ImGui::Dummy(ImVec2(0, PAD_V));
     ImGui::SetCursorPosX(page_x);
 
-    // Document header
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.14f, 0.14f, 0.15f, 1.0f));
-    ImGui::BeginChild("##rb_page", ImVec2(page_w, h - 20.0f), true);
+    if (ImGui::BeginChild("##rb_page_wrap", ImVec2(page_w, h - PAD_V * 2.0f), false)) {
 
-    // Title area
-    if (document_.name[0] != '\0') {
-        ImGui::Dummy(ImVec2(0, 8.0f));
-        ImGui::SetCursorPosX(16.0f);
-        ImGui::TextColored(ACCENT, "%s", document_.name);
+        render_page_shadow(ImGui::GetCursorScreenPos(), page_w,
+                           std::max(h - PAD_V * 2.0f - 20.0f, 400.0f));
 
-        if (document_.author[0] != '\0' || document_.company[0] != '\0') {
-            ImGui::SetCursorPosX(16.0f);
-            ImGui::TextColored(TEXT_DIM, "%s%s%s  |  %s",
-                               document_.author,
-                               (document_.author[0] && document_.company[0]) ? " - " : "",
-                               document_.company,
-                               document_.date);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.973f, 0.973f, 0.980f, 1.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+        if (ImGui::BeginChild("##rb_page", ImVec2(page_w, 0), false)) {
+
+            // Accept palette drops onto the page
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("RB_COMP_TYPE")) {
+                    add_component(static_cast<ComponentType>(*static_cast<const int*>(p->Data)));
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            // Page header
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::BeginChild("##rb_page_hdr", ImVec2(page_w, 70.0f), false);
+            ImGui::SetCursorPos(ImVec2(28.0f, 18.0f));
+
+            const auto& fonts = fincept::core::get_fonts();
+            if (fonts.heading) ImGui::PushFont(fonts.heading);
+            ImGui::TextColored(ImVec4(0.067f, 0.067f, 0.075f, 1.0f), "%s", document_.name);
+            if (fonts.heading) ImGui::PopFont();
+
+            ImGui::SetCursorPosX(28.0f);
+            if (fonts.caption) ImGui::PushFont(fonts.caption);
+            char meta[256] = {};
+            if (document_.author[0] || document_.company[0] || document_.date[0]) {
+                std::snprintf(meta, sizeof(meta), "%s%s%s%s%s",
+                    document_.author,
+                    (document_.author[0] && document_.company[0]) ? "  \xc2\xb7  " : "",
+                    document_.company,
+                    (document_.date[0] && (document_.author[0] || document_.company[0])) ? "  \xc2\xb7  " : "",
+                    document_.date);
+            }
+            ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.58f, 1.0f), "%s", meta);
+            if (fonts.caption) ImGui::PopFont();
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+
+            // Orange accent line under header
+            ImVec2 line_p = ImGui::GetCursorScreenPos();
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                line_p, ImVec2(line_p.x + page_w, line_p.y + 2.0f),
+                IM_COL32(255, 115, 13, 255));
+            ImGui::Dummy(ImVec2(0, 6.0f));
+
+            // Render each component
+            if (document_.components.empty()) {
+                ImGui::Dummy(ImVec2(0, 60.0f));
+                // Dashed drop zone
+                ImVec2 dz_min = ImGui::GetCursorScreenPos();
+                dz_min.x += 28.0f;
+                const float dz_w = page_w - 56.0f;
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    dz_min, ImVec2(dz_min.x + dz_w, dz_min.y + 60.0f),
+                    IM_COL32(245,245,248,255), 6.0f);
+                for (float dx = 0; dx < dz_w; dx += 10.0f) {
+                    ImGui::GetWindowDrawList()->AddLine(
+                        ImVec2(dz_min.x + dx, dz_min.y),
+                        ImVec2(std::min(dz_min.x + dx + 6.0f, dz_min.x + dz_w), dz_min.y),
+                        IM_COL32(200,200,210,255), 1.5f);
+                    ImGui::GetWindowDrawList()->AddLine(
+                        ImVec2(dz_min.x + dx, dz_min.y + 60.0f),
+                        ImVec2(std::min(dz_min.x + dx + 6.0f, dz_min.x + dz_w), dz_min.y + 60.0f),
+                        IM_COL32(200,200,210,255), 1.5f);
+                }
+                ImGui::SetCursorPosX(28.0f);
+                ImGui::InvisibleButton("##dz_empty", ImVec2(dz_w, 60.0f));
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("RB_COMP_TYPE")) {
+                        add_component(static_cast<ComponentType>(*static_cast<const int*>(p->Data)));
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+                ImGui::SetCursorPosX(28.0f);
+                ImGui::TextColored(ImVec4(0.6f,0.6f,0.65f,1.0f),
+                                   "+ Drag a component here or click Add Block");
+            } else {
+                for (const auto& comp : document_.components) {
+                    render_comp_block(comp, page_w);
+                }
+                // Bottom drop zone
+                ImGui::SetCursorPosX(28.0f);
+                ImGui::Dummy(ImVec2(0, 8.0f));
+                ImGui::SetCursorPosX(28.0f);
+                ImGui::InvisibleButton("##drop_bottom", ImVec2(page_w - 56.0f, 32.0f));
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("RB_COMP_TYPE")) {
+                        add_component(static_cast<ComponentType>(*static_cast<const int*>(p->Data)));
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+                ImVec2 dz = ImGui::GetItemRectMin();
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    dz, ImVec2(dz.x + page_w - 56.0f, dz.y + 32.0f),
+                    IM_COL32(240,240,245,255), 4.0f);
+                ImGui::GetWindowDrawList()->AddText(
+                    ImVec2(dz.x + 12.0f, dz.y + 9.0f),
+                    IM_COL32(180,180,190,255), "+ Drop block here");
+            }
+
+            ImGui::Dummy(ImVec2(0, 32.0f));
+            ImGui::EndChild(); // ##rb_page
         }
-        ImGui::Separator();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
     }
+    ImGui::EndChild(); // ##rb_page_wrap
 
-    // Render each component
-    if (document_.components.empty()) {
-        ImGui::Dummy(ImVec2(0, h * 0.3f));
-        const float tw = ImGui::CalcTextSize("Empty Report").x;
-        ImGui::SetCursorPosX((page_w - tw) * 0.5f);
-        ImGui::TextColored(TEXT_DIM, "Empty Report");
+    ImGui::EndChild(); // ##rb_canvas
+    ImGui::PopStyleColor();
+}
 
-        const float tw2 = ImGui::CalcTextSize("Add components from the left panel").x;
-        ImGui::SetCursorPosX((page_w - tw2) * 0.5f);
-        ImGui::TextColored(TEXT_DISABLED, "Add components from the left panel");
-    } else {
-        for (const auto& comp : document_.components) {
-            ImGui::PushID(comp.id);
+// ============================================================================
+// Component block card (white card with border on the white page)
+// ============================================================================
 
-            // Highlight selected
-            const bool selected = (comp.id == selected_component_id_);
-            if (selected) {
-                ImGui::PushStyleColor(ImGuiCol_ChildBg, ACCENT_BG);
-            }
+void ReportBuilderScreen::render_comp_block(const ReportComponent& comp, float page_w) {
+    const bool selected = (comp.id == selected_component_id_);
+    const float block_w = page_w - 56.0f;
 
-            // Click to select
-            const ImVec2 cursor = ImGui::GetCursorPos();
-            render_component_preview(comp, page_w - 32.0f);
+    ImGui::SetCursorPosX(28.0f);
+    ImGui::PushID(comp.id);
 
-            // Invisible button overlaid for selection
-            const ImVec2 after = ImGui::GetCursorPos();
-            const float comp_h = after.y - cursor.y;
-            ImGui::SetCursorPos(cursor);
-            char sel_id[32];
-            std::snprintf(sel_id, sizeof(sel_id), "##sel_%d", comp.id);
-            if (ImGui::InvisibleButton(sel_id, ImVec2(page_w - 32.0f, std::max(comp_h, 4.0f)))) {
-                selected_component_id_ = comp.id;
-            }
-            ImGui::SetCursorPos(after);
+    const ImVec2 card_min = ImGui::GetCursorScreenPos();
+    auto* dl = ImGui::GetWindowDrawList();
 
-            if (selected) {
-                ImGui::PopStyleColor();
-            }
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
 
-            ImGui::PopID();
+    char child_id[32];
+    std::snprintf(child_id, sizeof(child_id), "##block_%d", comp.id);
+    if (ImGui::BeginChild(child_id, ImVec2(block_w, 0.0f), true,
+                          ImGuiWindowFlags_NoScrollbar)) {
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            selected_component_id_ = comp.id;
         }
+        ImGui::SetCursorPos(ImVec2(12.0f, 10.0f));
+        render_component_preview(comp, block_w - 24.0f);
+        ImGui::Dummy(ImVec2(0, 4.0f));
     }
-
     ImGui::EndChild();
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor();
 
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
+    // Draw border overlay
+    const ImVec2 card_max = ImGui::GetItemRectMax();
+    const ImU32 border_col = selected ? IM_COL32(255,115,13,200) : IM_COL32(220,220,228,255);
+    if (selected) {
+        dl->AddRect(card_min, card_max, IM_COL32(255,115,13,50), 4.0f, 0, 4.0f);
+    }
+    dl->AddRect(card_min, card_max, border_col, 4.0f, 0, 1.0f);
+
+    ImGui::Dummy(ImVec2(0, 8.0f));
+    ImGui::PopID();
 }
 
 // ============================================================================
@@ -397,12 +608,22 @@ void ReportBuilderScreen::render_component_preview(const ReportComponent& comp, 
 
 void ReportBuilderScreen::render_heading_preview(const ReportComponent& comp, float w) {
     const bool is_h1 = (comp.type == ComponentType::heading);
-    const ImVec4& col = is_h1 ? TEXT_PRIMARY : ACCENT;
     const char* text = comp.content[0] ? comp.content : (is_h1 ? "Heading" : "Subheading");
 
-    ImGui::Dummy(ImVec2(0, is_h1 ? 8.0f : 4.0f));
-    ImGui::TextColored(col, "%s", text);
-    if (is_h1) ImGui::Separator();
+    const auto& fonts = fincept::core::get_fonts();
+    ImFont* f = is_h1 ? fonts.heading : fonts.subheading;
+    if (f) ImGui::PushFont(f);
+
+    ImGui::Dummy(ImVec2(0, is_h1 ? 4.0f : 2.0f));
+    ImGui::TextColored(ImVec4(0.07f, 0.07f, 0.08f, 1.0f), "%s", text);
+    if (is_h1) {
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            p, ImVec2(p.x + w, p.y + 1.5f), IM_COL32(255, 115, 13, 120));
+        ImGui::Dummy(ImVec2(0, 4.0f));
+    }
+
+    if (f) ImGui::PopFont();
     ImGui::Spacing();
 }
 
@@ -455,39 +676,40 @@ void ReportBuilderScreen::render_table_preview(const ReportComponent& comp, floa
 }
 
 void ReportBuilderScreen::render_chart_preview(const ReportComponent& comp, float w) {
-    const float chart_h = 100.0f;
-    const ImVec2 p = ImGui::GetCursorScreenPos();
-    auto* draw = ImGui::GetWindowDrawList();
-
-    draw->AddRectFilled(p, ImVec2(p.x + w, p.y + chart_h), IM_COL32(20, 20, 22, 255));
-    draw->AddRect(p, ImVec2(p.x + w, p.y + chart_h), IM_COL32(70, 70, 75, 200));
-
     if (comp.chart_data.empty()) {
-        // Placeholder
-        const char* text = "[Chart - No data]";
-        const ImVec2 ts = ImGui::CalcTextSize(text);
-        draw->AddText(ImVec2(p.x + (w - ts.x) * 0.5f, p.y + (chart_h - ts.y) * 0.5f),
-                      IM_COL32(136, 136, 145, 200), text);
-    } else {
-        // Simple bar chart
-        const int n = static_cast<int>(comp.chart_data.size());
-        double max_val = 1.0;
-        for (const auto v : comp.chart_data) max_val = std::max(max_val, std::abs(v));
+        ImGui::TextColored(ImVec4(0.6f,0.6f,0.65f,1.0f), "[Chart - no data]");
+        ImGui::Spacing();
+        return;
+    }
+    render_implot_chart(comp, w);
+}
 
-        const float bar_w = std::max(4.0f, (w - 20.0f) / static_cast<float>(n) - 2.0f);
-        for (int i = 0; i < n; ++i) {
-            const float bar_h = static_cast<float>(comp.chart_data[i] / max_val) * (chart_h - 20.0f);
-            const float bx = p.x + 10.0f + static_cast<float>(i) * (bar_w + 2.0f);
-            const float by = p.y + chart_h - 10.0f;
-            const ImU32 col = (comp.chart_data[i] >= 0)
-                ? IM_COL32(13, 217, 107, 200)
-                : IM_COL32(245, 64, 64, 200);
-            draw->AddRectFilled(ImVec2(bx, by - std::abs(bar_h)),
-                                ImVec2(bx + bar_w, by), col);
-        }
+void ReportBuilderScreen::render_implot_chart(const ReportComponent& comp, float w) {
+    const int n = static_cast<int>(comp.chart_data.size());
+    std::vector<double> xs(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) xs[static_cast<size_t>(i)] = static_cast<double>(i);
+
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg,   ImVec4(0.97f,0.97f,0.98f,1.0f));
+    ImPlot::PushStyleColor(ImPlotCol_FrameBg,  ImVec4(0.97f,0.97f,0.98f,1.0f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisGrid, ImVec4(0.88f,0.88f,0.90f,1.0f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisTick, ImVec4(0.70f,0.70f,0.73f,1.0f));
+
+    char plot_id[32];
+    std::snprintf(plot_id, sizeof(plot_id), "##chart_%d", comp.id);
+
+    if (ImPlot::BeginPlot(plot_id, ImVec2(w, 110.0f),
+                          ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
+                          ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect)) {
+        ImPlot::SetupAxes(nullptr, nullptr,
+                          ImPlotAxisFlags_NoTickLabels,
+                          ImPlotAxisFlags_NoTickLabels);
+        ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.45f, 0.05f, 0.85f));
+        ImPlot::PlotBars(chart_type_label(comp.chart_type),
+                         xs.data(), comp.chart_data.data(), n, 0.67);
+        ImPlot::EndPlot();
     }
 
-    ImGui::Dummy(ImVec2(w, chart_h));
+    ImPlot::PopStyleColor(4);
     ImGui::Spacing();
 }
 
@@ -561,37 +783,28 @@ void ReportBuilderScreen::render_list_preview(const ReportComponent& comp, float
 
 void ReportBuilderScreen::render_properties_panel(float x, float y, float w, float h) {
     ImGui::SetCursorPos(ImVec2(x, y));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_PANEL);
-    ImGui::BeginChild("##rb_props", ImVec2(w, h), true);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, BG_DARKEST);
+    ImGui::BeginChild("##rb_props", ImVec2(w, h), false);
 
     const float input_w = w - 24.0f;
 
-    // Document metadata section (always visible)
-    ImGui::TextColored(ACCENT, "DOCUMENT");
-    ImGui::Separator();
+    // Tab bar
+    ImGui::PushStyleColor(ImGuiCol_Tab,         ImVec4(0.067f,0.067f,0.071f,1.0f));
+    ImGui::PushStyleColor(ImGuiCol_TabSelected, ImVec4(0.067f,0.067f,0.071f,1.0f));
+    ImGui::PushStyleColor(ImGuiCol_TabHovered,  ImVec4(0.12f,0.12f,0.13f,1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 0.0f);
 
-    ImGui::TextColored(TEXT_DIM, "Author");
-    ImGui::SetNextItemWidth(input_w);
-    if (ImGui::InputText("##doc_author", document_.author, sizeof(document_.author))) {
-        is_dirty_ = true;
+    if (ImGui::BeginTabBar("##rb_prop_tabs")) {
+        if (ImGui::BeginTabItem("COMPONENT")) { props_tab_ = 0; ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("DOCUMENT"))  { props_tab_ = 1; ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("STYLE"))     { props_tab_ = 2; ImGui::EndTabItem(); }
+        ImGui::EndTabBar();
     }
-
-    ImGui::TextColored(TEXT_DIM, "Company");
-    ImGui::SetNextItemWidth(input_w);
-    if (ImGui::InputText("##doc_company", document_.company, sizeof(document_.company))) {
-        is_dirty_ = true;
-    }
-
-    ImGui::TextColored(TEXT_DIM, "Date");
-    ImGui::SetNextItemWidth(input_w);
-    if (ImGui::InputText("##doc_date", document_.date, sizeof(document_.date))) {
-        is_dirty_ = true;
-    }
-
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
     ImGui::Spacing();
-    ImGui::Separator();
 
-    // Selected component properties
+    // Find selected component
     ReportComponent* sel = nullptr;
     for (auto& comp : document_.components) {
         if (comp.id == selected_component_id_) {
@@ -600,29 +813,55 @@ void ReportBuilderScreen::render_properties_panel(float x, float y, float w, flo
         }
     }
 
+    if (props_tab_ == 0)      render_props_tab_component(sel, input_w);
+    else if (props_tab_ == 1) render_props_tab_document(input_w);
+    else                      render_props_tab_style(sel, input_w);
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
+// ============================================================================
+// Properties tab: Component
+// ============================================================================
+
+void ReportBuilderScreen::render_props_tab_component(ReportComponent* sel, float input_w) {
     if (!sel) {
-        ImGui::TextColored(TEXT_DIM, "Select a component");
-        ImGui::TextColored(TEXT_DIM, "to edit properties");
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
+        ImGui::Dummy(ImVec2(0, 20.0f));
+        const float tw = ImGui::CalcTextSize("Select a block to edit").x;
+        ImGui::SetCursorPosX((input_w - tw) * 0.5f + 12.0f);
+        ImGui::TextColored(TEXT_DIM, "Select a block to edit");
         return;
     }
 
-    ImGui::TextColored(ACCENT, "PROPERTIES");
-    ImGui::TextColored(TEXT_DIM, "Type: %s", component_type_label(sel->type));
-    ImGui::Separator();
+    // Type badge
+    const ImU32  tcol   = comp_type_color(sel->type);
+    const ImVec4 tcol4  = ImGui::ColorConvertU32ToFloat4(tcol);
+    const ImVec4 badge_bg = ImVec4(tcol4.x*0.12f, tcol4.y*0.12f, tcol4.z*0.12f, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, badge_bg);
+    ImGui::BeginChild("##type_badge", ImVec2(input_w, 26.0f), false);
+    ImGui::SetCursorPos(ImVec2(10.0f, 5.0f));
+    ImVec2 dot_p = ImGui::GetCursorScreenPos();
+    dot_p.y += 6.0f;
+    ImGui::GetWindowDrawList()->AddCircleFilled(dot_p, 4.0f, tcol);
+    ImGui::Dummy(ImVec2(14.0f, 0.0f));
+    ImGui::SameLine();
+    ImGui::TextColored(tcol4, "%s", component_type_label(sel->type));
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
 
-    // Content editing (for text-based components)
+    // Content
     if (sel->type == ComponentType::heading || sel->type == ComponentType::subheading ||
-        sel->type == ComponentType::text || sel->type == ComponentType::quote ||
+        sel->type == ComponentType::text    || sel->type == ComponentType::quote      ||
         sel->type == ComponentType::disclaimer || sel->type == ComponentType::code_block) {
-
         ImGui::TextColored(TEXT_DIM, "Content");
         ImGui::SetNextItemWidth(input_w);
         if (ImGui::InputTextMultiline("##comp_content", sel->content, sizeof(sel->content),
-                ImVec2(input_w, 120.0f))) {
+                                      ImVec2(input_w, 100.0f))) {
             is_dirty_ = true;
         }
+        ImGui::Spacing();
     }
 
     // Alignment
@@ -630,182 +869,209 @@ void ReportBuilderScreen::render_properties_panel(float x, float y, float w, flo
         sel->type == ComponentType::text) {
         ImGui::TextColored(TEXT_DIM, "Alignment");
         ImGui::SetNextItemWidth(input_w);
-        static constexpr const char* align_labels[] = {"Left", "Center", "Right"};
-        int align_idx = static_cast<int>(sel->alignment);
-        if (ImGui::Combo("##comp_align", &align_idx, align_labels, 3)) {
-            sel->alignment = static_cast<Alignment>(align_idx);
-            is_dirty_ = true;
+        static constexpr const char* align_labels[] = {"Left","Center","Right"};
+        int ai = static_cast<int>(sel->alignment);
+        if (ImGui::Combo("##comp_align", &ai, align_labels, 3)) {
+            sel->alignment = static_cast<Alignment>(ai); is_dirty_ = true;
         }
+        ImGui::Spacing();
     }
 
     // Font size
     if (sel->type != ComponentType::divider && sel->type != ComponentType::page_break) {
-        ImGui::TextColored(TEXT_DIM, "Font Size");
+        ImGui::TextColored(TEXT_DIM, "Font Size: %dpx", sel->font_size);
         ImGui::SetNextItemWidth(input_w);
-        if (ImGui::SliderInt("##comp_fs", &sel->font_size, 8, 36)) {
-            is_dirty_ = true;
-        }
+        if (ImGui::SliderInt("##comp_fs", &sel->font_size, 8, 36)) { is_dirty_ = true; }
+        ImGui::Spacing();
     }
 
     // Bold / Italic
     if (sel->type == ComponentType::text || sel->type == ComponentType::heading) {
-        if (ImGui::Checkbox("Bold", &sel->bold)) is_dirty_ = true;
-        ImGui::SameLine();
-        if (ImGui::Checkbox("Italic", &sel->italic)) is_dirty_ = true;
+        if (ImGui::Checkbox("Bold",   &sel->bold))   { is_dirty_ = true; }
+        ImGui::SameLine(0.0f, 16.0f);
+        if (ImGui::Checkbox("Italic", &sel->italic)) { is_dirty_ = true; }
+        ImGui::Spacing();
     }
 
-    // Table config
+    // Table
     if (sel->type == ComponentType::table) {
-        ImGui::Spacing();
         ImGui::TextColored(TEXT_DIM, "Rows");
         ImGui::SetNextItemWidth(input_w);
-        if (ImGui::SliderInt("##tbl_rows", &sel->table_rows, 1, 50)) {
-            is_dirty_ = true;
-        }
-
+        if (ImGui::SliderInt("##tbl_rows", &sel->table_rows, 1, 50)) { is_dirty_ = true; }
         ImGui::TextColored(TEXT_DIM, "Columns");
         ImGui::SetNextItemWidth(input_w);
-        if (ImGui::SliderInt("##tbl_cols", &sel->table_cols, 1, 10)) {
-            is_dirty_ = true;
-        }
-
-        // Resize cells vector
+        if (ImGui::SliderInt("##tbl_cols", &sel->table_cols, 1, 10)) { is_dirty_ = true; }
         const int needed = sel->table_rows * sel->table_cols;
         if (static_cast<int>(sel->table_cells.size()) < needed) {
-            sel->table_cells.resize(needed);
+            sel->table_cells.resize(static_cast<size_t>(needed));
         }
-
-        // Edit cells (show up to 6 rows inline)
         const int show_rows = std::min(sel->table_rows, 6);
         for (int r = 0; r < show_rows; ++r) {
             for (int c = 0; c < sel->table_cols; ++c) {
                 const int idx = r * sel->table_cols + c;
-                char cell_id[32];
-                std::snprintf(cell_id, sizeof(cell_id), "##cell_%d_%d", r, c);
+                char cid[32]; std::snprintf(cid, sizeof(cid), "##cell_%d_%d", r, c);
                 ImGui::SetNextItemWidth(input_w / static_cast<float>(sel->table_cols) - 4.0f);
-                if (c > 0) ImGui::SameLine();
-
-                // Use a temp buffer for editing
+                if (c > 0) { ImGui::SameLine(); }
                 char buf[128] = {};
-                std::strncpy(buf, sel->table_cells[idx].c_str(), sizeof(buf) - 1);
-                if (ImGui::InputText(cell_id, buf, sizeof(buf))) {
-                    sel->table_cells[idx] = buf;
-                    is_dirty_ = true;
+                std::strncpy(buf, sel->table_cells[static_cast<size_t>(idx)].c_str(), sizeof(buf)-1);
+                if (ImGui::InputText(cid, buf, sizeof(buf))) {
+                    sel->table_cells[static_cast<size_t>(idx)] = buf; is_dirty_ = true;
                 }
             }
         }
     }
 
-    // Chart config
+    // Chart
     if (sel->type == ComponentType::chart) {
-        ImGui::TextColored(TEXT_DIM, "Chart Type");
+        static constexpr const char* ct[] = {"Bar","Line","Pie","Area"};
+        int ci = static_cast<int>(sel->chart_type);
         ImGui::SetNextItemWidth(input_w);
-        static constexpr const char* ct_labels[] = {"Bar", "Line", "Pie", "Area"};
-        int ct_idx = static_cast<int>(sel->chart_type);
-        if (ImGui::Combo("##chart_type", &ct_idx, ct_labels, 4)) {
-            sel->chart_type = static_cast<ChartType>(ct_idx);
-            is_dirty_ = true;
+        if (ImGui::Combo("##chart_t", &ci, ct, 4)) {
+            sel->chart_type = static_cast<ChartType>(ci); is_dirty_ = true;
         }
-
-        // Data points
-        ImGui::TextColored(TEXT_DIM, "Data Points (comma-sep)");
+        ImGui::TextColored(TEXT_DIM, "Data (comma-separated)");
         ImGui::SetNextItemWidth(input_w);
-        // Use content field for raw data input
         if (ImGui::InputText("##chart_data", sel->content, sizeof(sel->content))) {
-            // Parse comma-separated values
             sel->chart_data.clear();
             const char* p = sel->content;
             while (*p) {
-                char* end = nullptr;
-                const double val = std::strtod(p, &end);
-                if (end != p) {
-                    sel->chart_data.push_back(val);
-                    p = end;
-                    while (*p == ',' || *p == ' ') ++p;
-                } else {
-                    break;
-                }
+                char* e = nullptr; const double v = std::strtod(p, &e);
+                if (e != p) { sel->chart_data.push_back(v); p = e; while (*p==',' || *p==' ') { ++p; } }
+                else { break; }
             }
             is_dirty_ = true;
         }
     }
 
-    // KPI config
+    // KPI
     if (sel->type == ComponentType::kpi) {
         if (ImGui::SmallButton("+ Add KPI")) {
             KPIEntry k;
-            std::strncpy(k.label, "Metric", sizeof(k.label) - 1);
-            std::strncpy(k.value, "0", sizeof(k.value) - 1);
-            sel->kpis.push_back(k);
-            is_dirty_ = true;
+            std::strncpy(k.label, "Metric", sizeof(k.label)-1);
+            std::strncpy(k.value, "0", sizeof(k.value)-1);
+            sel->kpis.push_back(k); is_dirty_ = true;
         }
-
         for (size_t i = 0; i < sel->kpis.size(); ++i) {
-            ImGui::PushID(static_cast<int>(i));
-            ImGui::Separator();
-            ImGui::SetNextItemWidth(input_w * 0.5f);
-            if (ImGui::InputText("##kpi_label", sel->kpis[i].label, sizeof(sel->kpis[i].label)))
-                is_dirty_ = true;
+            ImGui::PushID(static_cast<int>(i)); ImGui::Separator();
+            ImGui::SetNextItemWidth(input_w*0.5f);
+            if (ImGui::InputText("##kl", sel->kpis[i].label, sizeof(sel->kpis[i].label))) { is_dirty_=true; }
+            ImGui::SameLine(); ImGui::SetNextItemWidth(input_w*0.4f);
+            if (ImGui::InputText("##kv", sel->kpis[i].value, sizeof(sel->kpis[i].value))) { is_dirty_=true; }
+            ImGui::SetNextItemWidth(input_w*0.5f);
+            if (ImGui::InputDouble("##kc", &sel->kpis[i].change, 0.1, 1.0, "%.1f%%")) { is_dirty_=true; }
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(input_w * 0.4f);
-            if (ImGui::InputText("##kpi_val", sel->kpis[i].value, sizeof(sel->kpis[i].value)))
-                is_dirty_ = true;
-            ImGui::SetNextItemWidth(input_w * 0.5f);
-            if (ImGui::InputDouble("##kpi_chg", &sel->kpis[i].change, 0.1, 1.0, "%.1f%%"))
-                is_dirty_ = true;
-            ImGui::SameLine();
-            if (ImGui::Checkbox("Up", &sel->kpis[i].trend_up))
-                is_dirty_ = true;
+            if (ImGui::Checkbox("Up", &sel->kpis[i].trend_up)) { is_dirty_=true; }
             ImGui::PopID();
         }
     }
 
-    // List config
+    // List
     if (sel->type == ComponentType::list) {
-        if (ImGui::Checkbox("Ordered", &sel->ordered)) is_dirty_ = true;
-        if (ImGui::SmallButton("+ Add Item")) {
-            sel->list_items.emplace_back("New item");
-            is_dirty_ = true;
-        }
+        if (ImGui::Checkbox("Ordered", &sel->ordered)) { is_dirty_=true; }
+        if (ImGui::SmallButton("+ Item")) { sel->list_items.emplace_back("New item"); is_dirty_=true; }
         for (size_t i = 0; i < sel->list_items.size(); ++i) {
-            char li_id[32];
-            std::snprintf(li_id, sizeof(li_id), "##li_%d", static_cast<int>(i));
-            ImGui::SetNextItemWidth(input_w - 30.0f);
-            char buf[256] = {};
-            std::strncpy(buf, sel->list_items[i].c_str(), sizeof(buf) - 1);
-            if (ImGui::InputText(li_id, buf, sizeof(buf))) {
-                sel->list_items[i] = buf;
-                is_dirty_ = true;
-            }
+            char li[32]; std::snprintf(li, sizeof(li), "##li_%d", static_cast<int>(i));
+            ImGui::SetNextItemWidth(input_w-30.0f);
+            char buf[256]={};
+            std::strncpy(buf, sel->list_items[i].c_str(), sizeof(buf)-1);
+            if (ImGui::InputText(li, buf, sizeof(buf))) { sel->list_items[i]=buf; is_dirty_=true; }
         }
     }
 
-    // Code block language
+    // Code language
     if (sel->type == ComponentType::code_block) {
         ImGui::TextColored(TEXT_DIM, "Language");
         ImGui::SetNextItemWidth(input_w);
-        if (ImGui::InputText("##code_lang", sel->language, sizeof(sel->language))) {
-            is_dirty_ = true;
-        }
+        if (ImGui::InputText("##code_lang", sel->language, sizeof(sel->language))) { is_dirty_=true; }
     }
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
 
-    // Actions for selected component
-    if (ImGui::SmallButton("Duplicate")) {
-        duplicate_component(sel->id);
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.11f,0.11f,0.13f,1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.13f,0.16f,0.26f,1.0f));
+    if (ImGui::Button("Duplicate", ImVec2((input_w-8.0f)*0.5f, 28.0f))) { duplicate_component(sel->id); }
+    ImGui::PopStyleColor(2);
+    ImGui::SameLine(0.0f, 8.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.16f,0.06f,0.06f,1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f,0.08f,0.08f,1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.95f,0.45f,0.45f,1.0f));
+    if (ImGui::Button("Delete", ImVec2((input_w-8.0f)*0.5f, 28.0f)))    { delete_component(sel->id); }
+    ImGui::PopStyleColor(3);
+}
+
+// ============================================================================
+// Properties tab: Document
+// ============================================================================
+
+void ReportBuilderScreen::render_props_tab_document(float input_w) {
+    ImGui::TextColored(TEXT_DIM, "Title");
+    ImGui::SetNextItemWidth(input_w);
+    if (ImGui::InputText("##doc_name", document_.name, sizeof(document_.name))) { is_dirty_=true; }
+
+    ImGui::TextColored(TEXT_DIM, "Author");
+    ImGui::SetNextItemWidth(input_w);
+    if (ImGui::InputText("##doc_author", document_.author, sizeof(document_.author))) { is_dirty_=true; }
+
+    ImGui::TextColored(TEXT_DIM, "Company");
+    ImGui::SetNextItemWidth(input_w);
+    if (ImGui::InputText("##doc_company", document_.company, sizeof(document_.company))) { is_dirty_=true; }
+
+    ImGui::TextColored(TEXT_DIM, "Date");
+    ImGui::SetNextItemWidth(input_w);
+    if (ImGui::InputText("##doc_date", document_.date, sizeof(document_.date))) { is_dirty_=true; }
+
+    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+
+    ImGui::TextColored(TEXT_DIM, "Page Size");
+    ImGui::SetNextItemWidth(input_w);
+    static constexpr const char* ps[] = {"A4","Letter","Legal"};
+    int psi = static_cast<int>(document_.page_size);
+    if (ImGui::Combo("##page_sz", &psi, ps, 3)) {
+        document_.page_size = static_cast<PageSize>(psi); is_dirty_=true;
     }
+
+    ImGui::TextColored(TEXT_DIM, "Orientation");
+    const bool portrait = (document_.orientation == PageOrientation::portrait);
+    if (ImGui::RadioButton("Portrait",  portrait))  { document_.orientation = PageOrientation::portrait;  is_dirty_=true; }
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.1f, 0.1f, 1.0f));
-    if (ImGui::SmallButton("Delete")) {
-        delete_component(sel->id);
-    }
-    ImGui::PopStyleColor();
+    if (ImGui::RadioButton("Landscape", !portrait)) { document_.orientation = PageOrientation::landscape; is_dirty_=true; }
+}
 
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
+// ============================================================================
+// Properties tab: Style
+// ============================================================================
+
+void ReportBuilderScreen::render_props_tab_style(ReportComponent* sel, float input_w) {
+    if (!sel) {
+        ImGui::TextColored(TEXT_DIM, "Select a block to style");
+        return;
+    }
+
+    CompStyle& cs = comp_styles_[sel->id];
+
+    ImGui::TextColored(TEXT_DIM, "Text Color");
+    ImVec4 tc = ImGui::ColorConvertU32ToFloat4(cs.text_color);
+    if (ImGui::ColorEdit3("##tc", &tc.x, ImGuiColorEditFlags_DisplayHex)) {
+        cs.text_color = ImGui::ColorConvertFloat4ToU32(tc); is_dirty_=true;
+    }
+
+    ImGui::TextColored(TEXT_DIM, "Background");
+    ImVec4 bc = ImGui::ColorConvertU32ToFloat4(cs.bg_color);
+    if (ImGui::ColorEdit4("##bc", &bc.x, ImGuiColorEditFlags_DisplayHex)) {
+        cs.bg_color = ImGui::ColorConvertFloat4ToU32(bc); is_dirty_=true;
+    }
+
+    ImGui::Spacing();
+    ImGui::TextColored(TEXT_DIM, "Padding: %dpx", cs.padding);
+    ImGui::SetNextItemWidth(input_w);
+    if (ImGui::SliderInt("##cs_pad", &cs.padding, 0, 40)) { is_dirty_=true; }
+
+    ImGui::TextColored(TEXT_DIM, "Margin Bottom: %dpx", cs.margin_bottom);
+    ImGui::SetNextItemWidth(input_w);
+    if (ImGui::SliderInt("##cs_mb", &cs.margin_bottom, 0, 40)) { is_dirty_=true; }
+
+    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+    if (ImGui::SmallButton("Reset to defaults")) { comp_styles_.erase(sel->id); is_dirty_=true; }
 }
 
 // ============================================================================

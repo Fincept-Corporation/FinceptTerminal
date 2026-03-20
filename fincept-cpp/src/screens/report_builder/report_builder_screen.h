@@ -5,6 +5,9 @@
 #include "report_builder_types.h"
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <imgui.h>
+#include <implot.h>
 
 namespace fincept::report_builder {
 
@@ -68,6 +71,29 @@ private:
     char export_status_[256] = {};
     bool export_success_ = false;
     float export_status_timer_ = 0.0f;
+
+    // --- Visual redesign state ---
+    int props_tab_ = 0;  // 0=Component, 1=Document, 2=Style
+
+    struct CompStyle {
+        ImU32 text_color    = IM_COL32(17, 17, 17, 255);
+        ImU32 bg_color      = IM_COL32(255, 255, 255, 0);
+        int   padding       = 12;
+        int   margin_bottom = 12;
+    };
+    std::unordered_map<int, CompStyle> comp_styles_;
+
+    // New helpers
+    void render_palette_item(ComponentType type, float btn_w);
+    void render_struct_item(size_t idx);
+    void render_page_shadow(ImVec2 page_pos, float page_w, float page_h);
+    void render_comp_block(const ReportComponent& comp, float page_w);
+    void render_implot_chart(const ReportComponent& comp, float w);
+
+    // Right panel tabs
+    void render_props_tab_component(ReportComponent* sel, float input_w);
+    void render_props_tab_document(float input_w);
+    void render_props_tab_style(ReportComponent* sel, float input_w);
 };
 
 } // namespace fincept::report_builder

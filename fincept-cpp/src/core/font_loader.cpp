@@ -8,6 +8,10 @@
 
 namespace fincept::core {
 
+static FontSizes s_fonts;
+
+const FontSizes& get_fonts() { return s_fonts; }
+
 void load_fonts(float dpi_scale) {
     ImGuiIO& io = ImGui::GetIO();
     io.Fonts->Clear();
@@ -58,6 +62,27 @@ void load_fonts(float dpi_scale) {
         io.FontDefault = io.Fonts->AddFontDefault(&fallback_config);
         LOG_WARN("Font", "Using ImGui default font at %.0fpx", font_size);
     }
+
+    // ── Multi-size fonts for rich screens ──
+    s_fonts.body = io.FontDefault;
+
+    auto load_size = [&](float px) -> ImFont* {
+        ImFontConfig cfg;
+        cfg.OversampleH = 3; cfg.OversampleV = 3;
+        cfg.PixelSnapH = true;
+        cfg.RasterizerDensity = dpi_scale;
+        for (const char* path : font_candidates) {
+            if (std::filesystem::exists(path)) {
+                ImFont* f = io.Fonts->AddFontFromFileTTF(path, px * dpi_scale, &cfg);
+                if (f) return f;
+            }
+        }
+        return io.FontDefault;
+    };
+
+    s_fonts.heading    = load_size(20.0f);
+    s_fonts.subheading = load_size(15.0f);
+    s_fonts.caption    = load_size(9.0f);
 
     // ── Merge color emoji font ──
     // With IMGUI_USE_WCHAR32, ImWchar is 32-bit so we can address emoji codepoints.
