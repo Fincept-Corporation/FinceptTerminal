@@ -73,9 +73,26 @@ void SurfaceScreen::render_3d_surface(
     if (grid.empty() || grid[0].empty()) return;
 
     ImVec2 avail = ImGui::GetContentRegionAvail();
+    // Reserve 20px bottom for status strip and 32px top for overlay
+    avail.y -= 20.0f;
     ImVec2 origin = ImGui::GetCursorScreenPos();
+    origin.y += 32.0f; // push below the top overlay
+
     ImVec2 center(origin.x + avail.x * 0.46f, origin.y + avail.y * 0.52f);
     float sc = std::min(avail.x, avail.y) * 0.34f;
+
+    // Subtle gradient background for the 3D canvas
+    {
+        ImDrawList* bg_dl = ImGui::GetWindowDrawList();
+        ImVec2 bg_min = ImGui::GetWindowPos();
+        bg_min.y += 32.0f;
+        ImVec2 bg_max = ImVec2(bg_min.x + ImGui::GetWindowWidth(), bg_min.y + avail.y);
+        bg_dl->AddRectFilledMultiColor(bg_min, bg_max,
+            ImGui::GetColorU32(ImVec4(0.07f, 0.08f, 0.10f, 1.0f)),
+            ImGui::GetColorU32(ImVec4(0.07f, 0.08f, 0.10f, 1.0f)),
+            ImGui::GetColorU32(ImVec4(0.05f, 0.06f, 0.07f, 1.0f)),
+            ImGui::GetColorU32(ImVec4(0.05f, 0.06f, 0.07f, 1.0f)));
+    }
 
     ImGui::InvisibleButton("##3d_interact", avail);
     bool hovered = ImGui::IsItemHovered();
@@ -146,11 +163,19 @@ void SurfaceScreen::render_3d_surface(
         dl->AddLine(project(v3(-1,-1,gt), center, sc), project(v3(-1,1,gt), center, sc), wall_col);
     }
 
-    // ---- Axis labels ----
+    // ---- Axis labels — styled with background pill ----
     ImU32 label_col = ImGui::GetColorU32(ImVec4(0.40f, 0.85f, 0.95f, 1.0f));
-    dl->AddText(project(v3(0.0f, -1.35f, -1.0f), center, sc), label_col, x_label);
-    dl->AddText(project(v3(-1.35f, 0.0f, -1.0f), center, sc), label_col, y_label);
-    dl->AddText(project(v3(-1.0f, -1.35f, 0.0f), center, sc), label_col, z_label);
+    ImU32 label_bg  = ImGui::GetColorU32(ImVec4(0.10f, 0.22f, 0.28f, 0.82f));
+    auto draw_axis_label = [&](Vec3 pos, const char* text) {
+        ImVec2 tp = project(pos, center, sc);
+        float tw = ImGui::CalcTextSize(text).x;
+        float th = ImGui::GetTextLineHeight();
+        dl->AddRectFilled(ImVec2(tp.x-3, tp.y-2), ImVec2(tp.x+tw+3, tp.y+th+2), label_bg, 2.0f);
+        dl->AddText(tp, label_col, text);
+    };
+    draw_axis_label(v3( 0.0f, -1.45f, -1.0f), x_label);
+    draw_axis_label(v3(-1.50f,  0.0f, -1.0f), y_label);
+    draw_axis_label(v3(-1.0f, -1.45f,  0.0f), z_label);
 
     // ---- Tick labels ----
     ImU32 tick_col = ImGui::GetColorU32(ImVec4(0.50f, 0.58f, 0.65f, 0.8f));
@@ -323,32 +348,52 @@ void SurfaceScreen::render_3d_surface(
         ImGui::PopStyleColor(2);
     }
 
-    // ---- Color bar ----
-    float bar_x = origin.x + avail.x - 40;
-    float bar_top = origin.y + 30;
-    float bar_h = avail.y - 60;
-    float bar_w = 16.0f;
+    // ---- Color bar — wider, with gradient border and clean ticks ----
+    float bar_w   = 18.0f;
+    float bar_x   = origin.x + avail.x - bar_w - 52.0f;
+    float bar_top = origin.y + 36.0f;
+    float bar_h   = avail.y - 72.0f;
 
+    // Draw gradient bar pixel by pixel
     for (int ci = 0; ci < (int)bar_h; ci++) {
         float ct = 1.0f - (float)ci / bar_h;
         ImVec4 cc = surface_color(ct, diverging);
-        dl->AddRectFilled(ImVec2(bar_x, bar_top + ci), ImVec2(bar_x + bar_w, bar_top + ci + 1),
-                          ImGui::GetColorU32(cc));
+        dl->AddRectFilled(
+            ImVec2(bar_x, bar_top + (float)ci),
+            ImVec2(bar_x + bar_w, bar_top + (float)ci + 1.5f),
+            ImGui::GetColorU32(cc));
     }
-    dl->AddRect(ImVec2(bar_x, bar_top), ImVec2(bar_x + bar_w, bar_top + bar_h),
-                ImGui::GetColorU32(ImVec4(0.4f, 0.5f, 0.6f, 0.6f)), 0, 0, 1.0f);
+    // Border
+    dl->AddRect(ImVec2(bar_x - 1, bar_top - 1),
+                ImVec2(bar_x + bar_w + 1, bar_top + bar_h + 1),
+                ImGui::GetColorU32(ImVec4(0.35f, 0.45f, 0.55f, 0.7f)), 0, 0, 1.0f);
 
+    // Tick marks + labels
+    ImU32 tick_col2 = ImGui::GetColorU32(ImVec4(0.55f, 0.65f, 0.75f, 0.9f));
     constexpr int bar_ticks = 6;
     for (int bi = 0; bi <= bar_ticks; bi++) {
         float frac = (float)bi / (float)bar_ticks;
-        float val = max_val - frac * range;
-        float py = bar_top + frac * bar_h;
-        char bl[16]; std::snprintf(bl, 16, "%.1f", val);
-        dl->AddLine(ImVec2(bar_x + bar_w, py), ImVec2(bar_x + bar_w + 4, py),
-                    ImGui::GetColorU32(ImVec4(0.5f, 0.6f, 0.7f, 0.7f)));
-        dl->AddText(ImVec2(bar_x + bar_w + 6, py - 6), ImGui::GetColorU32(ImVec4(0.55f, 0.65f, 0.75f, 0.9f)), bl);
+        float val  = max_val - frac * range;
+        float py   = bar_top + frac * bar_h;
+        char bl[16]; std::snprintf(bl, 16, "%.2f", val);
+        dl->AddLine(ImVec2(bar_x + bar_w, py),
+                    ImVec2(bar_x + bar_w + 5, py),
+                    tick_col2, 1.2f);
+        dl->AddText(ImVec2(bar_x + bar_w + 7, py - 6), tick_col2, bl);
     }
-    dl->AddText(ImVec2(bar_x - 4, bar_top - 16), ImGui::GetColorU32(ImVec4(0.40f, 0.85f, 0.95f, 1.0f)), y_label);
+
+    // Y-axis label above bar
+    ImU32 bar_label_col = ImGui::GetColorU32(ImVec4(0.40f, 0.85f, 0.95f, 1.0f));
+    float yl_tw = ImGui::CalcTextSize(y_label).x;
+    dl->AddText(ImVec2(bar_x + (bar_w - yl_tw) * 0.5f, bar_top - 18.0f), bar_label_col, y_label);
+
+    // Min/Max caps
+    char cap_max[16], cap_min[16];
+    std::snprintf(cap_max, 16, "MAX"); std::snprintf(cap_min, 16, "MIN");
+    dl->AddText(ImVec2(bar_x + bar_w + 7, bar_top - 6),
+                ImGui::GetColorU32(ImVec4(0.40f, 0.85f, 0.95f, 0.7f)), cap_max);
+    dl->AddText(ImVec2(bar_x + bar_w + 7, bar_top + bar_h - 6),
+                ImGui::GetColorU32(ImVec4(0.40f, 0.85f, 0.95f, 0.7f)), cap_min);
 }
 
 } // namespace fincept::surface

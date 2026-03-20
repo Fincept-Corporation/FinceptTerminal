@@ -46,6 +46,11 @@ public:
                                                                 const std::string& from_date,
                                                                 const std::string& to_date) = 0;
 
+    // --- WebSocket streaming (optional — default = not supported) ---
+    // Returns the broker name used to look up the openalgo streaming adapter.
+    // Empty string means no native WS support — fall back to REST polling.
+    virtual const char* ws_adapter_name() const { return ""; }
+
     // --- Credential helpers ---
     // Load credentials from DB for this broker
     BrokerCredentials load_credentials() const;

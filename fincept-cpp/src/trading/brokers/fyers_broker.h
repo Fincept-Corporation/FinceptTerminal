@@ -12,6 +12,7 @@ public:
     BrokerId id() const override { return BrokerId::Fyers; }
     const char* name() const override { return "Fyers"; }
     const char* base_url() const override { return "https://api-t1.fyers.in"; }
+    const char* ws_adapter_name() const override { return "fyers"; }
 
     TokenExchangeResponse exchange_token(const std::string& api_key,
                                           const std::string& api_secret,

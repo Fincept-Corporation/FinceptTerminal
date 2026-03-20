@@ -9,8 +9,14 @@ namespace fincept::surface {
 using namespace theme::colors;
 
 void SurfaceScreen::render_metrics_risk() {
-    float metric_label_w = ImGui::GetContentRegionAvail().x * 0.45f;
-    auto row = [metric_label_w](const char* lbl, const char* val, ImVec4 col) {
+    float w = ImGui::GetContentRegionAvail().x;
+    float metric_label_w = w * 0.52f;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    auto row = [&](const char* lbl, const char* val, ImVec4 col) {
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        dl->AddCircleFilled(ImVec2(p.x + 4.0f, p.y + ImGui::GetTextLineHeight() * 0.5f + 1.0f),
+                            3.0f, ImGui::GetColorU32(ImVec4(col.x, col.y, col.z, 0.7f)));
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 12.0f);
         ImGui::TextColored(TEXT_DIM, "%s", lbl);
         ImGui::SameLine(metric_label_w);
         ImGui::TextColored(col, "%s", val);

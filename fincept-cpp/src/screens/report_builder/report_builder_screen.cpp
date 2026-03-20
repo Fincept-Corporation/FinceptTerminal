@@ -8,6 +8,17 @@
 #include <cmath>
 #include <ctime>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <filesystem>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <commdlg.h>
+#include <shlobj.h>
+#endif
+
+namespace fs = std::filesystem;
 
 namespace fincept::report_builder {
 
@@ -876,14 +887,23 @@ void ReportBuilderScreen::render_export_dialog() {
 
         if (ImGui::Button("Export", ImVec2(120, 0))) {
             export_report(export_format_);
-            show_export_dialog_ = false;
-            ImGui::CloseCurrentPopup();
+            if (export_success_) {
+                show_export_dialog_ = false;
+                ImGui::CloseCurrentPopup();
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
             show_export_dialog_ = false;
             ImGui::CloseCurrentPopup();
         }
+
+        if (export_status_[0] != '\0') {
+            ImGui::Spacing();
+            const ImVec4& col = export_success_ ? theme::colors::SUCCESS : theme::colors::MARKET_RED;
+            ImGui::TextColored(col, "%s", export_status_);
+        }
+
         ImGui::EndPopup();
     }
 }
@@ -1031,12 +1051,862 @@ void ReportBuilderScreen::apply_template_preset(int preset_idx) {
     LOG_INFO(TAG, "Applied template: %s", TEMPLATE_PRESETS[preset_idx].name);
 }
 
+// ============================================================================
+// Native Save Dialog
+// ============================================================================
+
+std::string ReportBuilderScreen::native_save_dialog(const char* filter,
+                                                     const char* title,
+                                                     const char* default_ext) {
+#ifdef _WIN32
+    char filename[MAX_PATH] = {};
+    // Pre-fill with document name
+    std::snprintf(filename, MAX_PATH - 1, "%s", document_.name);
+    // Replace spaces with underscores for a safe filename
+    for (char* p = filename; *p; ++p) {
+        if (*p == ' ') *p = '_';
+    }
+
+    OPENFILENAMEA ofn = {};
+    ofn.lStructSize  = sizeof(ofn);
+    ofn.hwndOwner    = nullptr;
+    ofn.lpstrFilter  = filter;
+    ofn.lpstrFile    = filename;
+    ofn.nMaxFile     = MAX_PATH;
+    ofn.lpstrTitle   = title;
+    ofn.lpstrDefExt  = default_ext;
+    ofn.Flags        = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
+    if (GetSaveFileNameA(&ofn)) return std::string(filename);
+    return "";
+#else
+    // Fallback: save to Documents or home directory
+    const char* home = std::getenv("HOME");
+    if (!home) home = ".";
+    std::string path = std::string(home) + "/" + document_.name + "." + default_ext;
+    // Replace spaces
+    for (char& c : path) if (c == ' ') c = '_';
+    return path;
+#endif
+}
+
+// ============================================================================
+// HTML Export
+// ============================================================================
+
+static std::string html_escape(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        switch (c) {
+            case '&':  out += "&amp;";  break;
+            case '<':  out += "&lt;";   break;
+            case '>':  out += "&gt;";   break;
+            case '"':  out += "&quot;"; break;
+            case '\'': out += "&#39;";  break;
+            default:   out += c;        break;
+        }
+    }
+    return out;
+}
+
+bool ReportBuilderScreen::export_as_html(const std::string& path) {
+    std::ofstream f(path);
+    if (!f.is_open()) return false;
+
+    f << "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n"
+      << "<meta charset=\"UTF-8\">\n"
+      << "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+      << "<title>" << html_escape(document_.name) << "</title>\n"
+      << "<style>\n"
+      << "body{font-family:'Segoe UI',Arial,sans-serif;background:#1a1a1c;color:#e8e8ec;"
+         "max-width:860px;margin:40px auto;padding:0 32px;line-height:1.6}\n"
+      << "h1{font-size:2em;color:#ff730d;border-bottom:2px solid #ff730d;padding-bottom:8px;margin-top:32px}\n"
+      << "h2{font-size:1.4em;color:#c8c8d0;margin-top:24px}\n"
+      << "p{color:#b8b8bf;margin:8px 0}\n"
+      << "blockquote{border-left:4px solid #ff730d;margin:12px 0;padding:8px 16px;"
+         "background:#26262a;color:#b8b8bf}\n"
+      << ".disclaimer{background:#2a2208;border:1px solid #ffc714;padding:10px 16px;"
+         "border-radius:4px;color:#ffc714;font-size:0.85em;margin:12px 0}\n"
+      << "table{border-collapse:collapse;width:100%;margin:12px 0}\n"
+      << "th{background:#2a2a2e;color:#ff730d;padding:8px 12px;text-align:left;"
+         "border:1px solid #3a3a3e}\n"
+      << "td{padding:7px 12px;border:1px solid #2e2e32;color:#b8b8bf}\n"
+      << "tr:nth-child(even) td{background:#1e1e22}\n"
+      << ".kpi-row{display:flex;gap:12px;margin:12px 0;flex-wrap:wrap}\n"
+      << ".kpi{background:#26262a;border:1px solid #3a3a3e;border-radius:6px;"
+         "padding:14px 20px;min-width:120px;flex:1}\n"
+      << ".kpi-label{font-size:0.8em;color:#888891;margin-bottom:4px}\n"
+      << ".kpi-value{font-size:1.5em;font-weight:700;color:#f3f3f5}\n"
+      << ".kpi-change.up{color:#0dd96b}.kpi-change.down{color:#f54040}\n"
+      << ".chart{background:#141416;border:1px solid #3a3a3e;border-radius:4px;"
+         "padding:12px;margin:12px 0;overflow:hidden}\n"
+      << ".bar-chart{display:flex;align-items:flex-end;gap:4px;height:140px;padding:8px 0}\n"
+      << ".bar{background:#ff730d;border-radius:3px 3px 0 0;min-width:20px;"
+         "transition:opacity 0.2s;flex:1}\n"
+      << ".bar.neg{background:#f54040}\n"
+      << ".bar-label{font-size:0.7em;color:#888891;text-align:center;margin-top:4px}\n"
+      << "pre{background:#0e0e10;border:1px solid #2a2a2e;border-radius:4px;"
+         "padding:14px;overflow-x:auto;color:#0dd96b;font-size:0.9em}\n"
+      << ".lang-tag{font-size:0.75em;color:#888891;margin-bottom:4px}\n"
+      << "ul,ol{color:#b8b8bf;padding-left:24px;margin:8px 0}\n"
+      << "li{margin:4px 0}\n"
+      << "hr{border:none;border-top:1px solid #2e2e32;margin:20px 0}\n"
+      << ".page-break{text-align:center;color:#444;font-size:0.8em;margin:20px 0;"
+         "border-top:1px dashed #333;padding-top:8px}\n"
+      << ".header{margin-bottom:32px;padding-bottom:16px;border-bottom:1px solid #2e2e32}\n"
+      << ".meta{color:#888891;font-size:0.85em;margin-top:6px}\n"
+      << "</style>\n</head>\n<body>\n";
+
+    // Document header
+    f << "<div class=\"header\">\n"
+      << "<h1 style=\"border:none;margin:0\">" << html_escape(document_.name) << "</h1>\n";
+    if (document_.author[0] || document_.company[0] || document_.date[0]) {
+        f << "<div class=\"meta\">";
+        if (document_.author[0])  f << html_escape(document_.author);
+        if (document_.author[0] && document_.company[0]) f << " &mdash; ";
+        if (document_.company[0]) f << html_escape(document_.company);
+        if (document_.date[0])    f << " &nbsp;|&nbsp; " << html_escape(document_.date);
+        f << "</div>\n";
+    }
+    f << "</div>\n";
+
+    // Components
+    for (const auto& comp : document_.components) {
+        switch (comp.type) {
+            case ComponentType::heading:
+                f << "<h1>" << html_escape(comp.content) << "</h1>\n";
+                break;
+            case ComponentType::subheading:
+                f << "<h2>" << html_escape(comp.content) << "</h2>\n";
+                break;
+            case ComponentType::text:
+                f << "<p>" << html_escape(comp.content) << "</p>\n";
+                break;
+            case ComponentType::quote:
+                f << "<blockquote>" << html_escape(comp.content) << "</blockquote>\n";
+                break;
+            case ComponentType::disclaimer:
+                f << "<div class=\"disclaimer\">&#9888; " << html_escape(comp.content) << "</div>\n";
+                break;
+            case ComponentType::divider:
+                f << "<hr>\n";
+                break;
+            case ComponentType::page_break:
+                f << "<div class=\"page-break\" style=\"page-break-after:always\">"
+                  << "&#8212; Page Break &#8212;</div>\n";
+                break;
+            case ComponentType::table: {
+                const int rows = std::max(1, comp.table_rows);
+                const int cols = std::max(1, comp.table_cols);
+                f << "<table>\n";
+                for (int r = 0; r < rows; ++r) {
+                    f << "<tr>";
+                    for (int c = 0; c < cols; ++c) {
+                        const int idx = r * cols + c;
+                        std::string cell;
+                        if (idx < static_cast<int>(comp.table_cells.size()))
+                            cell = comp.table_cells[idx];
+                        if (r == 0)
+                            f << "<th>" << html_escape(cell.empty() ? "Header" : cell) << "</th>";
+                        else
+                            f << "<td>" << html_escape(cell.empty() ? "" : cell) << "</td>";
+                    }
+                    f << "</tr>\n";
+                }
+                f << "</table>\n";
+                break;
+            }
+            case ComponentType::chart: {
+                f << "<div class=\"chart\">\n";
+                const char* ct = chart_type_label(comp.chart_type);
+                f << "<div style=\"color:#888891;font-size:0.8em;margin-bottom:8px\">"
+                  << ct << " Chart</div>\n";
+                if (!comp.chart_data.empty()) {
+                    double max_val = 1.0;
+                    for (double v : comp.chart_data) max_val = std::max(max_val, std::abs(v));
+                    f << "<div class=\"bar-chart\">\n";
+                    for (size_t i = 0; i < comp.chart_data.size(); ++i) {
+                        const double v = comp.chart_data[i];
+                        const int pct = static_cast<int>(std::abs(v) / max_val * 100.0);
+                        const char* cls = (v >= 0) ? "bar" : "bar neg";
+                        f << "<div style=\"display:flex;flex-direction:column;align-items:center;flex:1\">"
+                          << "<div class=\"" << cls << "\" style=\"height:" << pct << "%\"></div>"
+                          << "<div class=\"bar-label\">";
+                        if (i < comp.chart_labels.size() && !comp.chart_labels[i].empty())
+                            f << html_escape(comp.chart_labels[i]);
+                        else
+                            f << v;
+                        f << "</div></div>\n";
+                    }
+                    f << "</div>\n";
+                } else {
+                    f << "<div style=\"color:#555;text-align:center;padding:40px 0\">No data</div>\n";
+                }
+                f << "</div>\n";
+                break;
+            }
+            case ComponentType::kpi: {
+                if (!comp.kpis.empty()) {
+                    f << "<div class=\"kpi-row\">\n";
+                    for (const auto& k : comp.kpis) {
+                        const char* dir = k.trend_up ? "up" : "down";
+                        const char* arrow = k.trend_up ? "&#8593;" : "&#8595;";
+                        f << "<div class=\"kpi\">"
+                          << "<div class=\"kpi-label\">" << html_escape(k.label) << "</div>"
+                          << "<div class=\"kpi-value\">" << html_escape(k.value) << "</div>"
+                          << "<div class=\"kpi-change " << dir << "\">"
+                          << arrow << " ";
+                        char chg[32];
+                        std::snprintf(chg, sizeof(chg), "%.1f%%", std::abs(k.change));
+                        f << chg << "</div></div>\n";
+                    }
+                    f << "</div>\n";
+                }
+                break;
+            }
+            case ComponentType::code_block:
+                f << "<div class=\"lang-tag\">" << html_escape(comp.language) << "</div>\n"
+                  << "<pre>" << html_escape(comp.content) << "</pre>\n";
+                break;
+            case ComponentType::list: {
+                const char* tag = comp.ordered ? "ol" : "ul";
+                f << "<" << tag << ">\n";
+                for (const auto& item : comp.list_items)
+                    f << "<li>" << html_escape(item) << "</li>\n";
+                f << "</" << tag << ">\n";
+                break;
+            }
+            case ComponentType::cover_page:
+                f << "<div style=\"text-align:center;padding:60px 0\">"
+                  << "<h1 style=\"font-size:2.5em\">" << html_escape(comp.content[0] ? comp.content : document_.name) << "</h1>"
+                  << "</div>\n";
+                break;
+            case ComponentType::image:
+                f << "<div style=\"text-align:center;padding:20px;border:1px dashed #444\">"
+                  << "[Image: " << html_escape(comp.content) << "]</div>\n";
+                break;
+        }
+    }
+
+    f << "\n</body>\n</html>\n";
+    return f.good();
+}
+
+// ============================================================================
+// Markdown Export
+// ============================================================================
+
+bool ReportBuilderScreen::export_as_markdown(const std::string& path) {
+    std::ofstream f(path);
+    if (!f.is_open()) return false;
+
+    // YAML front matter
+    f << "---\n"
+      << "title: " << document_.name << "\n";
+    if (document_.author[0])  f << "author: " << document_.author << "\n";
+    if (document_.company[0]) f << "company: " << document_.company << "\n";
+    if (document_.date[0])    f << "date: " << document_.date << "\n";
+    f << "---\n\n";
+
+    f << "# " << document_.name << "\n\n";
+
+    for (const auto& comp : document_.components) {
+        switch (comp.type) {
+            case ComponentType::heading:
+                f << "# " << comp.content << "\n\n";
+                break;
+            case ComponentType::subheading:
+                f << "## " << comp.content << "\n\n";
+                break;
+            case ComponentType::text:
+                f << comp.content << "\n\n";
+                break;
+            case ComponentType::quote:
+                f << "> " << comp.content << "\n\n";
+                break;
+            case ComponentType::disclaimer:
+                f << "> **Disclaimer:** " << comp.content << "\n\n";
+                break;
+            case ComponentType::divider:
+                f << "---\n\n";
+                break;
+            case ComponentType::page_break:
+                f << "\n<!-- page break -->\n\n";
+                break;
+            case ComponentType::table: {
+                const int rows = std::max(1, comp.table_rows);
+                const int cols = std::max(1, comp.table_cols);
+                // Header row
+                for (int c = 0; c < cols; ++c) {
+                    const int idx = c;
+                    std::string cell;
+                    if (idx < static_cast<int>(comp.table_cells.size()))
+                        cell = comp.table_cells[idx];
+                    f << "| " << (cell.empty() ? "Header" : cell) << " ";
+                }
+                f << "|\n";
+                // Separator
+                for (int c = 0; c < cols; ++c) f << "| --- ";
+                f << "|\n";
+                // Data rows
+                for (int r = 1; r < rows; ++r) {
+                    for (int c = 0; c < cols; ++c) {
+                        const int idx = r * cols + c;
+                        std::string cell;
+                        if (idx < static_cast<int>(comp.table_cells.size()))
+                            cell = comp.table_cells[idx];
+                        f << "| " << cell << " ";
+                    }
+                    f << "|\n";
+                }
+                f << "\n";
+                break;
+            }
+            case ComponentType::chart: {
+                f << "**" << chart_type_label(comp.chart_type) << " Chart**\n\n";
+                if (!comp.chart_data.empty()) {
+                    f << "| Index | Value |\n| --- | --- |\n";
+                    for (size_t i = 0; i < comp.chart_data.size(); ++i) {
+                        std::string label = (i < comp.chart_labels.size()) ? comp.chart_labels[i] : std::to_string(i + 1);
+                        f << "| " << label << " | " << comp.chart_data[i] << " |\n";
+                    }
+                    f << "\n";
+                }
+                break;
+            }
+            case ComponentType::kpi: {
+                if (!comp.kpis.empty()) {
+                    f << "| Metric | Value | Change |\n| --- | --- | --- |\n";
+                    for (const auto& k : comp.kpis) {
+                        char chg[32];
+                        std::snprintf(chg, sizeof(chg), "%+.1f%%", k.change);
+                        f << "| " << k.label << " | " << k.value << " | " << chg << " |\n";
+                    }
+                    f << "\n";
+                }
+                break;
+            }
+            case ComponentType::code_block:
+                f << "```" << comp.language << "\n"
+                  << comp.content << "\n```\n\n";
+                break;
+            case ComponentType::list:
+                for (size_t i = 0; i < comp.list_items.size(); ++i) {
+                    if (comp.ordered)
+                        f << (i + 1) << ". " << comp.list_items[i] << "\n";
+                    else
+                        f << "- " << comp.list_items[i] << "\n";
+                }
+                f << "\n";
+                break;
+            case ComponentType::cover_page:
+                f << "# " << (comp.content[0] ? comp.content : document_.name) << "\n\n";
+                break;
+            case ComponentType::image:
+                f << "![image](" << comp.content << ")\n\n";
+                break;
+        }
+    }
+
+    return f.good();
+}
+
+// ============================================================================
+// CSV Export — flattens all table components; other blocks as comment rows
+// ============================================================================
+
+bool ReportBuilderScreen::export_as_csv(const std::string& path) {
+    std::ofstream f(path);
+    if (!f.is_open()) return false;
+
+    f << "\"Report\",\"" << document_.name << "\"\n";
+    if (document_.author[0])  f << "\"Author\",\"" << document_.author << "\"\n";
+    if (document_.date[0])    f << "\"Date\",\"" << document_.date << "\"\n";
+    f << "\n";
+
+    // Lambda to quote a CSV field
+    auto csv_cell = [](const std::string& s) -> std::string {
+        std::string out = "\"";
+        for (char c : s) {
+            if (c == '"') out += "\"\"";
+            else          out += c;
+        }
+        out += '"';
+        return out;
+    };
+
+    for (const auto& comp : document_.components) {
+        switch (comp.type) {
+            case ComponentType::heading:
+                f << csv_cell(std::string("## ") + comp.content) << "\n\n";
+                break;
+            case ComponentType::subheading:
+                f << csv_cell(std::string("### ") + comp.content) << "\n\n";
+                break;
+            case ComponentType::text:
+            case ComponentType::quote:
+            case ComponentType::disclaimer:
+                f << csv_cell(comp.content) << "\n\n";
+                break;
+            case ComponentType::table: {
+                const int rows = std::max(1, comp.table_rows);
+                const int cols = std::max(1, comp.table_cols);
+                for (int r = 0; r < rows; ++r) {
+                    for (int c = 0; c < cols; ++c) {
+                        if (c > 0) f << ",";
+                        const int idx = r * cols + c;
+                        std::string cell;
+                        if (idx < static_cast<int>(comp.table_cells.size()))
+                            cell = comp.table_cells[idx];
+                        f << csv_cell(cell);
+                    }
+                    f << "\n";
+                }
+                f << "\n";
+                break;
+            }
+            case ComponentType::chart: {
+                f << csv_cell(std::string(chart_type_label(comp.chart_type)) + " Chart") << "\n";
+                f << "\"Label\",\"Value\"\n";
+                for (size_t i = 0; i < comp.chart_data.size(); ++i) {
+                    std::string label = (i < comp.chart_labels.size()) ? comp.chart_labels[i] : std::to_string(i + 1);
+                    f << csv_cell(label) << "," << comp.chart_data[i] << "\n";
+                }
+                f << "\n";
+                break;
+            }
+            case ComponentType::kpi: {
+                f << "\"Metric\",\"Value\",\"Change\"\n";
+                for (const auto& k : comp.kpis) {
+                    char chg[32];
+                    std::snprintf(chg, sizeof(chg), "%+.1f%%", k.change);
+                    f << csv_cell(k.label) << "," << csv_cell(k.value) << "," << csv_cell(chg) << "\n";
+                }
+                f << "\n";
+                break;
+            }
+            case ComponentType::list:
+                for (size_t i = 0; i < comp.list_items.size(); ++i) {
+                    if (comp.ordered)
+                        f << (i + 1) << "," << csv_cell(comp.list_items[i]) << "\n";
+                    else
+                        f << csv_cell(comp.list_items[i]) << "\n";
+                }
+                f << "\n";
+                break;
+            default:
+                break;
+        }
+    }
+
+    return f.good();
+}
+
+// ============================================================================
+// PDF Export — minimal valid PDF using stdlib only (no external libs)
+// Generates text-based PDF with basic formatting for all component types
+// ============================================================================
+
+bool ReportBuilderScreen::export_as_pdf(const std::string& path) {
+    // PDF uses points (72pt = 1 inch). A4 = 595 x 842 pt.
+    static constexpr float PAGE_W = 595.0f;
+    static constexpr float PAGE_H = 842.0f;
+    static constexpr float MARGIN = 60.0f;
+    static constexpr float TEXT_W = PAGE_W - 2.0f * MARGIN;
+
+    // We build the PDF in memory so we can compute byte offsets for xref
+    std::vector<std::string> objects;  // PDF objects (1-indexed, obj 0 unused)
+    objects.emplace_back("");          // placeholder for obj 0
+
+    // Helper: add object and return its 1-based id
+    auto add_obj = [&](std::string s) -> int {
+        objects.push_back(std::move(s));
+        return static_cast<int>(objects.size()) - 1;
+    };
+
+    // Accumulate page content streams per page
+    // We'll do simple text layout: cursor_y starts at top margin and decrements
+    struct PageContent { std::string stream; };
+    std::vector<PageContent> pages;
+    pages.push_back({});
+
+    float cursor_y = PAGE_H - MARGIN;
+    const float line_h_normal = 14.0f;
+    const float line_h_heading = 22.0f;
+    const float line_h_sub = 18.0f;
+
+    // Escape a string for PDF text (parentheses, backslash, non-ASCII)
+    auto pdf_str = [](const std::string& in) -> std::string {
+        std::string out;
+        out.reserve(in.size() + 16);
+        for (unsigned char c : in) {
+            if (c == '(' || c == ')' || c == '\\') { out += '\\'; out += static_cast<char>(c); }
+            else if (c >= 32 && c < 127)            { out += static_cast<char>(c); }
+            else                                    { /* skip non-printable */ }
+        }
+        return out;
+    };
+
+    // Emit text at position (x, y in PDF coordinates — origin bottom-left)
+    auto emit_text = [&](const std::string& text, float x, float y,
+                         float font_size, bool bold) -> std::string {
+        std::ostringstream s;
+        s << "BT\n"
+          << "/" << (bold ? "F2" : "F1") << " " << font_size << " Tf\n"
+          << x << " " << y << " Td\n"
+          << "(" << pdf_str(text) << ") Tj\n"
+          << "ET\n";
+        return s.str();
+    };
+
+    // Wrap text into lines of approximately max_chars characters
+    auto wrap_text = [](const std::string& text, int max_chars) -> std::vector<std::string> {
+        std::vector<std::string> lines;
+        if (text.empty()) { lines.emplace_back(""); return lines; }
+        size_t pos = 0;
+        while (pos < text.size()) {
+            size_t end = std::min(pos + static_cast<size_t>(max_chars), text.size());
+            // Try to break at last space
+            if (end < text.size()) {
+                size_t sp = text.rfind(' ', end);
+                if (sp != std::string::npos && sp > pos) end = sp + 1;
+            }
+            lines.push_back(text.substr(pos, end - pos));
+            pos = end;
+        }
+        return lines;
+    };
+
+    // Ensure space on page; start new page if needed
+    auto ensure_space = [&](float needed) {
+        if (cursor_y - needed < MARGIN) {
+            pages.push_back({});
+            cursor_y = PAGE_H - MARGIN;
+        }
+    };
+
+    // Add a line of text to current page
+    auto add_line = [&](const std::string& text, float font_size, bool bold,
+                        float indent = 0.0f, float extra_above = 0.0f) {
+        ensure_space(font_size + extra_above + 4.0f);
+        cursor_y -= extra_above;
+        pages.back().stream += emit_text(text, MARGIN + indent, cursor_y, font_size, bold);
+        cursor_y -= (font_size + 2.0f);
+    };
+
+    // Draw a horizontal line
+    auto add_rule = [&]() {
+        ensure_space(10.0f);
+        cursor_y -= 4.0f;
+        std::ostringstream s;
+        s << MARGIN << " " << cursor_y << " m "
+          << (PAGE_W - MARGIN) << " " << cursor_y << " l S\n";
+        pages.back().stream += s.str();
+        cursor_y -= 6.0f;
+    };
+
+    // --- Render document title ---
+    add_line(document_.name, 20.0f, true, 0.0f, 8.0f);
+    if (document_.author[0] || document_.company[0] || document_.date[0]) {
+        std::string meta;
+        if (document_.author[0])  { meta += document_.author; }
+        if (document_.author[0] && document_.company[0]) meta += " - ";
+        if (document_.company[0]) meta += document_.company;
+        if (document_.date[0])    { if (!meta.empty()) meta += "  |  "; meta += document_.date; }
+        add_line(meta, 9.0f, false);
+    }
+    add_rule();
+
+    // --- Render each component ---
+    for (const auto& comp : document_.components) {
+        switch (comp.type) {
+            case ComponentType::heading:
+                add_line(comp.content[0] ? comp.content : "Heading", line_h_heading, true, 0.0f, 8.0f);
+                add_rule();
+                break;
+            case ComponentType::subheading:
+                add_line(comp.content[0] ? comp.content : "Subheading", line_h_sub, true, 0.0f, 6.0f);
+                break;
+            case ComponentType::text:
+            case ComponentType::disclaimer: {
+                const auto lines = wrap_text(comp.content[0] ? comp.content : "", 85);
+                for (const auto& ln : lines) add_line(ln, line_h_normal, false);
+                cursor_y -= 4.0f;
+                break;
+            }
+            case ComponentType::quote: {
+                const auto lines = wrap_text(comp.content[0] ? comp.content : "", 78);
+                for (const auto& ln : lines) add_line("    " + ln, line_h_normal, false, 8.0f);
+                cursor_y -= 4.0f;
+                break;
+            }
+            case ComponentType::divider:
+                add_rule();
+                break;
+            case ComponentType::page_break:
+                pages.push_back({});
+                cursor_y = PAGE_H - MARGIN;
+                break;
+            case ComponentType::table: {
+                const int rows = std::max(1, comp.table_rows);
+                const int cols = std::max(1, comp.table_cols);
+                const float col_w = TEXT_W / static_cast<float>(cols);
+                const float row_h = 14.0f;
+                ensure_space(static_cast<float>(rows) * row_h + 8.0f);
+                cursor_y -= 4.0f;
+                for (int r = 0; r < rows; ++r) {
+                    for (int c = 0; c < cols; ++c) {
+                        const int idx = r * cols + c;
+                        std::string cell;
+                        if (idx < static_cast<int>(comp.table_cells.size()))
+                            cell = comp.table_cells[idx];
+                        if (cell.empty()) cell = (r == 0) ? "Header" : "";
+                        // Truncate to fit column
+                        if (cell.size() > 20) cell = cell.substr(0, 17) + "...";
+                        const float cx = MARGIN + static_cast<float>(c) * col_w;
+                        pages.back().stream += emit_text(cell, cx, cursor_y,
+                                                         line_h_normal - 2.0f, r == 0);
+                    }
+                    cursor_y -= row_h;
+                    // Draw row separator
+                    std::ostringstream s;
+                    s << MARGIN << " " << cursor_y << " m "
+                      << (PAGE_W - MARGIN) << " " << cursor_y << " l S\n";
+                    pages.back().stream += s.str();
+                }
+                cursor_y -= 6.0f;
+                break;
+            }
+            case ComponentType::kpi: {
+                if (!comp.kpis.empty()) {
+                    add_line("Key Performance Indicators", 11.0f, true, 0.0f, 4.0f);
+                    for (const auto& k : comp.kpis) {
+                        char buf[128];
+                        std::snprintf(buf, sizeof(buf), "  %s: %s  (%+.1f%%)",
+                                      k.label, k.value, k.change);
+                        add_line(buf, line_h_normal, false);
+                    }
+                    cursor_y -= 4.0f;
+                }
+                break;
+            }
+            case ComponentType::chart: {
+                add_line(std::string(chart_type_label(comp.chart_type)) + " Chart",
+                         11.0f, true, 0.0f, 4.0f);
+                if (!comp.chart_data.empty()) {
+                    // ASCII bar representation
+                    double max_val = 1.0;
+                    for (double v : comp.chart_data) max_val = std::max(max_val, std::abs(v));
+                    for (size_t i = 0; i < comp.chart_data.size(); ++i) {
+                        const double v = comp.chart_data[i];
+                        const int bars = static_cast<int>(std::abs(v) / max_val * 20.0);
+                        std::string bar_str(static_cast<size_t>(bars), '#');
+                        char buf[64];
+                        std::snprintf(buf, sizeof(buf), "  [%2d] %-20s %.2f",
+                                      static_cast<int>(i + 1), bar_str.c_str(), v);
+                        add_line(buf, 9.0f, false);
+                    }
+                }
+                cursor_y -= 4.0f;
+                break;
+            }
+            case ComponentType::code_block: {
+                add_line(std::string("[") + comp.language + "]", 9.0f, false, 0.0f, 4.0f);
+                const auto lines = wrap_text(comp.content[0] ? comp.content : "", 80);
+                for (const auto& ln : lines) add_line(ln, 9.0f, false, 8.0f);
+                cursor_y -= 4.0f;
+                break;
+            }
+            case ComponentType::list:
+                for (size_t i = 0; i < comp.list_items.size(); ++i) {
+                    std::string prefix = comp.ordered
+                        ? std::to_string(i + 1) + ". "
+                        : "* ";
+                    add_line(prefix + comp.list_items[i], line_h_normal, false, 8.0f);
+                }
+                cursor_y -= 4.0f;
+                break;
+            case ComponentType::cover_page:
+                add_line(comp.content[0] ? comp.content : document_.name,
+                         24.0f, true, 0.0f, 40.0f);
+                break;
+            case ComponentType::image:
+                add_line(std::string("[Image: ") + comp.content + "]",
+                         line_h_normal, false, 0.0f, 4.0f);
+                break;
+        }
+    }
+
+    // --- Build PDF objects ---
+    // Obj 1: Catalog
+    add_obj("<< /Type /Catalog /Pages 2 0 R >>");
+    const int catalog_id = static_cast<int>(objects.size()) - 1;
+
+    // Build page content stream objects and collect page ids
+    std::vector<int> page_ids;
+    std::vector<int> content_ids;
+    for (const auto& pg : pages) {
+        const std::string& stream = pg.stream;
+        std::ostringstream content_obj;
+        content_obj << "<< /Length " << stream.size() << " >>\nstream\n"
+                    << stream << "\nendstream";
+        content_ids.push_back(add_obj(content_obj.str()));
+    }
+
+    // Obj 2: Pages dictionary (will be updated once we know page count)
+    // We'll write it after building page objects
+    // First build each page object
+    for (int i = 0; i < static_cast<int>(pages.size()); ++i) {
+        std::ostringstream page_obj;
+        page_obj << "<< /Type /Page /Parent 2 0 R "
+                 << "/MediaBox [0 0 " << PAGE_W << " " << PAGE_H << "] "
+                 << "/Contents " << content_ids[i] << " 0 R "
+                 << "/Resources << /Font << "
+                 << "/F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> "
+                 << "/F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> "
+                 << ">> >> >>";
+        page_ids.push_back(add_obj(page_obj.str()));
+    }
+
+    // Pages dictionary
+    std::ostringstream pages_dict;
+    pages_dict << "<< /Type /Pages /Count " << page_ids.size() << " /Kids [";
+    for (int id : page_ids) pages_dict << id << " 0 R ";
+    pages_dict << "] >>";
+    // Insert at position 2 (0-indexed 2 = obj id 2)
+    // We need obj 2 to be the pages dict, but objects are appended.
+    // Simpler: re-number by just placing it correctly.
+    // Actually let's rebuild using sequential numbering:
+    // Reset and build properly with fixed numbering.
+    objects.clear();
+    objects.emplace_back("");  // obj 0 unused
+
+    // Build all content streams first (they don't reference other objects)
+    struct PdfObj { std::string body; };
+    std::vector<PdfObj> pdf_objs;
+    pdf_objs.push_back({""}); // 0 unused
+
+    // Obj 1 = Catalog (references Pages = obj 2)
+    pdf_objs.push_back({"<< /Type /Catalog /Pages 2 0 R >>"});
+
+    // Obj 2 = Pages (placeholder; filled below)
+    pdf_objs.push_back({"PAGES_PLACEHOLDER"});
+
+    // Obj 3..N = content streams
+    int first_content = static_cast<int>(pdf_objs.size());
+    for (const auto& pg : pages) {
+        const std::string& st = pg.stream;
+        std::ostringstream o;
+        o << "<< /Length " << st.size() << " >>\nstream\n" << st << "\nendstream";
+        pdf_objs.push_back({o.str()});
+    }
+
+    // Obj (3+num_pages)..M = page objects
+    int first_page = static_cast<int>(pdf_objs.size());
+    for (int i = 0; i < static_cast<int>(pages.size()); ++i) {
+        const int content_obj_id = first_content + i;
+        std::ostringstream o;
+        o << "<< /Type /Page /Parent 2 0 R "
+          << "/MediaBox [0 0 " << PAGE_W << " " << PAGE_H << "] "
+          << "/Contents " << content_obj_id << " 0 R "
+          << "/Resources << /Font << "
+          << "/F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> "
+          << "/F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> "
+          << ">> >> >>";
+        pdf_objs.push_back({o.str()});
+    }
+
+    // Fill in Pages dict (obj 2)
+    {
+        std::ostringstream o;
+        o << "<< /Type /Pages /Count " << pages.size() << " /Kids [";
+        for (int i = 0; i < static_cast<int>(pages.size()); ++i)
+            o << (first_page + i) << " 0 R ";
+        o << "] >>";
+        pdf_objs[2].body = o.str();
+    }
+
+    // Write PDF to file
+    std::ofstream out(path, std::ios::binary);
+    if (!out.is_open()) return false;
+
+    const int num_objs = static_cast<int>(pdf_objs.size());
+    std::vector<size_t> offsets(static_cast<size_t>(num_objs), 0);
+
+    out << "%PDF-1.4\n";
+    size_t pos = 9; // length of "%PDF-1.4\n"
+
+    for (int i = 1; i < num_objs; ++i) {
+        offsets[static_cast<size_t>(i)] = pos;
+        std::ostringstream obj_str;
+        obj_str << i << " 0 obj\n" << pdf_objs[static_cast<size_t>(i)].body << "\nendobj\n";
+        const std::string s = obj_str.str();
+        out << s;
+        pos += s.size();
+    }
+
+    // xref table
+    const size_t xref_offset = pos;
+    out << "xref\n0 " << num_objs << "\n";
+    out << "0000000000 65535 f \n";
+    for (int i = 1; i < num_objs; ++i) {
+        char entry[21];
+        std::snprintf(entry, sizeof(entry), "%010zu 00000 n \n",
+                      offsets[static_cast<size_t>(i)]);
+        out << entry;
+    }
+
+    out << "trailer\n<< /Size " << num_objs
+        << " /Root 1 0 R >>\nstartxref\n" << xref_offset << "\n%%EOF\n";
+
+    return out.good();
+}
+
+// ============================================================================
+// Export dispatcher
+// ============================================================================
+
 void ReportBuilderScreen::export_report(ExportFormat format) {
-    LOG_INFO(TAG, "Exporting report as %s: %s (%d components)",
-             export_format_label(format), document_.name,
-             static_cast<int>(document_.components.size()));
-    // Export implementation would generate the file here
-    // For now, just log the action
+    export_status_[0] = '\0';
+    export_success_   = false;
+
+    const char* filter = nullptr;
+    const char* title  = nullptr;
+    const char* ext    = nullptr;
+
+    switch (format) {
+        case ExportFormat::pdf:      filter = "PDF Files\0*.pdf\0All Files\0*.*\0"; title = "Save PDF";      ext = "pdf";  break;
+        case ExportFormat::html:     filter = "HTML Files\0*.html\0All Files\0*.*\0"; title = "Save HTML";   ext = "html"; break;
+        case ExportFormat::csv:      filter = "CSV Files\0*.csv\0All Files\0*.*\0";  title = "Save CSV";     ext = "csv";  break;
+        case ExportFormat::markdown: filter = "Markdown Files\0*.md\0All Files\0*.*\0"; title = "Save Markdown"; ext = "md"; break;
+    }
+
+    const std::string save_path = native_save_dialog(filter, title, ext);
+    if (save_path.empty()) {
+        // User cancelled — no error message needed
+        return;
+    }
+
+    bool ok = false;
+    switch (format) {
+        case ExportFormat::pdf:      ok = export_as_pdf(save_path);      break;
+        case ExportFormat::html:     ok = export_as_html(save_path);     break;
+        case ExportFormat::csv:      ok = export_as_csv(save_path);      break;
+        case ExportFormat::markdown: ok = export_as_markdown(save_path); break;
+    }
+
+    if (ok) {
+        export_success_ = true;
+        std::snprintf(export_status_, sizeof(export_status_),
+                      "Saved: %s", save_path.c_str());
+        is_dirty_ = false;
+        LOG_INFO(TAG, "Exported report as %s -> %s", export_format_label(format), save_path.c_str());
+    } else {
+        export_success_ = false;
+        std::snprintf(export_status_, sizeof(export_status_),
+                      "Error: could not write to %s", save_path.c_str());
+        LOG_ERROR(TAG, "Export failed: %s", save_path.c_str());
+    }
 }
 
 } // namespace fincept::report_builder

@@ -48,8 +48,13 @@ private:
     void render_model_library();
 
     void save_provider_config();
+    void delete_provider_config(const std::string& provider);
     void save_global_settings();
     void ensure_fincept_config();
+
+    // Confirmation modal state
+    bool confirm_delete_open_ = false;
+    std::string confirm_delete_provider_;
 };
 
 } // namespace fincept::settings

@@ -15,6 +15,7 @@ public:
     BrokerId id() const override { return BrokerId::FivePaisa; }
     const char* name() const override { return "5Paisa"; }
     const char* base_url() const override { return "https://Openapi.5paisa.com"; }
+    const char* ws_adapter_name() const override { return "fivepaisa"; }
 
     // 5Paisa uses 2-step auth:
     // Step 1: TOTP login to get request_token (api_key = app key, api_secret = enc_key, auth_code = "email:pin:totp")

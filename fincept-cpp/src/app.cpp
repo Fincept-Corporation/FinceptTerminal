@@ -491,7 +491,11 @@ void App::render_command_bar() {
     using namespace theme::colors;
 
     // Only show when focused and has text
-    if (!cmd_focused_ || cmd_buf_[0] == '\0') return;
+    if (!cmd_focused_ || cmd_buf_[0] == '\0') {
+        // If buffer is empty but focus flag is stuck, clear it
+        if (cmd_focused_ && cmd_buf_[0] == '\0') cmd_focused_ = false;
+        return;
+    }
 
     // Navigation command registry
     struct CmdEntry {

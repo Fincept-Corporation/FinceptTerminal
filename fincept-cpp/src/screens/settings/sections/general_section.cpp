@@ -2,8 +2,13 @@
 #include "storage/database.h"
 #include "ui/theme.h"
 #include "core/config.h"
+#include "core/logger.h"
 #include <imgui.h>
 #include <cstdio>
+#include <fstream>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 namespace fincept::settings {
 
@@ -111,12 +116,37 @@ void GeneralSection::render() {
     ImGui::Spacing();
 
     if (theme::SecondaryButton("Export Settings")) {
-        status_ = "Export not yet implemented";
+        try {
+            auto all = db::ops::get_all_settings();
+            json j;
+            for (auto& s : all) j[s.key] = s.value;
+            std::ofstream f("fincept_settings_export.json");
+            f << j.dump(2);
+            status_ = "Settings exported to fincept_settings_export.json";
+        } catch (const std::exception& e) {
+            status_ = std::string("Export failed: ") + e.what();
+        }
         status_time_ = ImGui::GetTime();
     }
     ImGui::SameLine();
     if (theme::SecondaryButton("Import Settings")) {
-        status_ = "Import not yet implemented";
+        try {
+            std::ifstream f("fincept_settings_export.json");
+            if (!f.is_open()) {
+                status_ = "Import failed: fincept_settings_export.json not found";
+            } else {
+                json j = json::parse(f);
+                std::vector<std::pair<std::string, std::string>> pairs;
+                for (auto& [k, v] : j.items()) {
+                    if (v.is_string()) pairs.emplace_back(k, v.get<std::string>());
+                }
+                db::ops::storage_set_many(pairs);
+                initialized_ = false; // re-init to pick up imported language
+                status_ = "Settings imported (" + std::to_string(pairs.size()) + " keys)";
+            }
+        } catch (const std::exception& e) {
+            status_ = std::string("Import failed: ") + e.what();
+        }
         status_time_ = ImGui::GetTime();
     }
     ImGui::SameLine(0, 40);
@@ -125,13 +155,59 @@ void GeneralSection::render() {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ERROR_RED);
     ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
     if (ImGui::Button("Reset All Settings")) {
-        // TODO: confirmation dialog
-        status_ = "Reset requires confirmation (not yet implemented)";
-        status_time_ = ImGui::GetTime();
+        confirm_reset_open_ = true;
     }
     ImGui::PopStyleColor(3);
 
     ImGui::EndChild();
+
+    // ── Reset confirmation modal ───────────────────────────────────────────
+    if (confirm_reset_open_) {
+        ImGui::OpenPopup("Reset All Settings");
+        confirm_reset_open_ = false;
+    }
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Reset All Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextColored(ERROR_RED, "Reset all application settings?");
+        ImGui::Spacing();
+        ImGui::TextColored(TEXT_DIM, "This will clear all settings, credentials,");
+        ImGui::TextColored(TEXT_DIM, "LLM configs, and cached data.");
+        ImGui::TextColored(TEXT_DIM, "This action cannot be undone.");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(ERROR_RED.x, ERROR_RED.y, ERROR_RED.z, 0.8f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ERROR_RED);
+        if (ImGui::Button("Yes, Reset Everything")) {
+            try {
+                db::ops::cache_cleanup();
+                db::ops::storage_set_many({});  // no-op but signals intent
+                // Clear settings, LLM configs, credentials via direct DB exec
+                auto& dbref = db::Database::instance();
+                dbref.exec("DELETE FROM settings");
+                dbref.exec("DELETE FROM key_value_storage");
+                dbref.exec("DELETE FROM llm_configs");
+                dbref.exec("DELETE FROM credentials");
+                dbref.exec("UPDATE llm_global_settings SET temperature=0.7, max_tokens=2048, system_prompt='' WHERE id=1");
+                initialized_ = false;
+                selected_language_ = 0;
+                status_ = "All settings have been reset";
+                status_time_ = ImGui::GetTime();
+                LOG_INFO("Settings", "User performed full settings reset");
+            } catch (const std::exception& e) {
+                status_ = std::string("Reset failed: ") + e.what();
+                status_time_ = ImGui::GetTime();
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor(2);
+        ImGui::SameLine();
+        if (theme::SecondaryButton("Cancel")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 } // namespace fincept::settings

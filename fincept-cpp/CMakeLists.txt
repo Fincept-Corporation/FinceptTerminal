@@ -230,6 +230,7 @@ set(SOURCES
     src/trading/paper_trading.cpp
     src/trading/order_matcher.cpp
     src/trading/exchange_service.cpp
+    src/trading/equity_stream.cpp
     src/trading/broker_registry.cpp
     src/trading/brokers/fyers_broker.cpp
     src/trading/brokers/zerodha_broker.cpp

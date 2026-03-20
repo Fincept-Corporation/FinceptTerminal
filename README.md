@@ -78,14 +78,86 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 ---
 
+## Quick Start (One-Click Setup)
+
+Clone and run the setup script — it installs all dependencies and builds the app automatically:
+
+```bash
+# Linux / macOS
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+chmod +x setup.sh && ./setup.sh
+```
+
+```bat
+# Windows — run from Developer Command Prompt for VS 2022
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+setup.bat
+```
+
+The script handles: compiler check, CMake, Ninja, Python, vcpkg, all C++ dependencies, build, and launch.
+
+---
+
+## Download & Run (No Build Required)
+
+Pre-built binaries are available on the [Releases page](https://github.com/Fincept-Corporation/FinceptTerminal/releases).
+
+| Platform | Download | Run |
+|----------|----------|-----|
+| **Windows x64** | `FinceptTerminal-Windows-x64.zip` | Extract → `FinceptTerminal.exe` |
+| **Linux x64** | `FinceptTerminal-Linux-x64.tar.gz` | Extract → `./FinceptTerminal` |
+| **macOS (Apple Silicon)** | `FinceptTerminal-macOS-arm64.tar.gz` | Extract → `./FinceptTerminal` |
+| **macOS (Intel)** | `FinceptTerminal-macOS-x64.tar.gz` | Extract → `./FinceptTerminal` |
+| **macOS (Universal)** | `FinceptTerminal-macOS-universal.tar.gz` | Extract → `./FinceptTerminal` |
+
+No installation required — just extract and run.
+
+---
+
 ## Build from Source
 
 ### Prerequisites
 
-- **CMake** 3.20+
-- **vcpkg** (for dependency management)
-- **C++20 compiler** (MSVC 2022, GCC 12+, or Clang 15+)
-- **Python** 3.11+ (for analytics scripts)
+| Tool | Version | Windows | Linux | macOS |
+|------|---------|---------|-------|-------|
+| **Git** | latest | `winget install Git.Git` | `apt install git` | `brew install git` |
+| **CMake** | 3.20+ | `winget install Kitware.CMake` | `apt install cmake` | `brew install cmake` |
+| **Ninja** | latest | `winget install Ninja-build.Ninja` | `apt install ninja-build` | `brew install ninja` |
+| **C++ compiler** | C++20 | MSVC 2022 ([Visual Studio](https://visualstudio.microsoft.com/)) | `apt install g++` | Xcode CLT: `xcode-select --install` |
+| **vcpkg** | latest | See below | See below | See below |
+| **Python** | 3.11+ | [python.org](https://www.python.org/downloads/) | `apt install python3` | `brew install python` |
+
+#### Install vcpkg
+
+```bash
+git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh       # Linux / macOS
+# or
+git clone https://github.com/microsoft/vcpkg.git %USERPROFILE%\vcpkg
+%USERPROFILE%\vcpkg\bootstrap-vcpkg.bat   # Windows
+```
+
+Then set `VCPKG_ROOT` permanently:
+
+```bash
+# Linux / macOS — add to ~/.bashrc or ~/.zshrc
+export VCPKG_ROOT=~/vcpkg
+
+# Windows (PowerShell — run once)
+[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT","$env:USERPROFILE\vcpkg","User")
+```
+
+#### Linux system dependencies
+
+```bash
+sudo apt install -y \
+  libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
+  libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
+  libwayland-dev libxkbcommon-dev \
+  pkg-config
+```
 
 ### Build
 
@@ -93,24 +165,21 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-cpp
 
-# Windows (MSVC)
+# All platforms (requires VCPKG_ROOT set)
 cmake --preset=default
 cmake --build build --config Release
-
-# Linux / macOS
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
 ```
 
 ### Run
 
 ```bash
 ./build/FinceptTerminal          # Linux / macOS
-.\build\Release\FinceptTerminal  # Windows
+.\build\Release\FinceptTerminal.exe  # Windows
 ```
 
 ### vcpkg Dependencies
 
+All dependencies are installed automatically by vcpkg:
 glfw3, curl, nlohmann-json, sqlite3, openssl, imgui (docking + freetype), yoga, stb, implot, spdlog, miniaudio
 
 ---

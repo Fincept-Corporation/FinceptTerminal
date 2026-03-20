@@ -5,6 +5,8 @@
 #include "surface_types.h"
 #include "ui/theme.h"
 #include <imgui.h>
+#include <cstdio>
+#include <string>
 
 namespace fincept::surface {
 
@@ -118,6 +120,15 @@ private:
 
     // ---- Extended table renderer (in tables_extended.cpp) ----
     void render_table_for(ChartType type);
+
+    // ---- CSV Import state ----
+    bool show_import_dialog_ = false;
+    char import_path_buf_[512] = {};
+    std::string import_error_;
+    bool import_success_ = false;
+
+    void render_csv_import_dialog();
+    bool dispatch_csv_load(const std::string& path, std::string& err);
 
     // ---- 3D projection helpers ----
     struct Vec3 { float x, y, z; };

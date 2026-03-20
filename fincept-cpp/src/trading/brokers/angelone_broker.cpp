@@ -2,14 +2,68 @@
 #include "http/http_client.h"
 #include "core/logger.h"
 #include <chrono>
+#include <mutex>
+#include <unordered_map>
 
 namespace fincept::trading {
 
 using namespace fincept::http;
+using json = nlohmann::json;
 
 // ============================================================================
-// Helpers
+// Instrument token cache — lazily loaded from AngelOne's public master JSON
+// Key: "EXCHANGE:SYMBOL" (e.g. "NSE:RELIANCE") → instrument token string
 // ============================================================================
+static std::unordered_map<std::string, std::string> s_token_cache;
+static std::once_flag s_token_cache_flag;
+
+static void ensure_token_cache() {
+    std::call_once(s_token_cache_flag, []() {
+        try {
+            auto resp = http::HttpClient::instance().get(
+                "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json");
+            if (!resp.success || resp.body.empty()) {
+                LOG_ERROR("AngelOne", "Failed to download instrument master: %s", resp.error.c_str());
+                return;
+            }
+            auto instruments = json::parse(resp.body);
+            for (const auto& inst : instruments) {
+                std::string sym   = inst.value("symbol", inst.value("name", ""));
+                std::string exch  = inst.value("exch_seg", inst.value("exchange", ""));
+                std::string token = inst.value("token", inst.value("symboltoken", ""));
+                if (!sym.empty() && !exch.empty() && !token.empty()) {
+                    // Uppercase keys
+                    for (auto& c : sym)  c = (char)toupper((unsigned char)c);
+                    for (auto& c : exch) c = (char)toupper((unsigned char)c);
+                    s_token_cache[exch + ":" + sym] = token;
+                }
+            }
+            LOG_INFO("AngelOne", "Loaded %zu instrument tokens", s_token_cache.size());
+        } catch (const std::exception& e) {
+            LOG_ERROR("AngelOne", "Instrument master parse error: %s", e.what());
+        }
+    });
+}
+
+// Resolve "EXCHANGE:SYMBOL" or "EXCHANGE:TOKEN" → "EXCHANGE:TOKEN"
+// If the part after colon is already numeric, pass through unchanged.
+static std::string resolve_angel_token(const std::string& instrument) {
+    ensure_token_cache();
+    const auto colon = instrument.find(':');
+    if (colon == std::string::npos) return instrument;
+    const std::string part = instrument.substr(colon + 1);
+    // Already a numeric token
+    if (!part.empty() && std::all_of(part.begin(), part.end(), ::isdigit))
+        return instrument;
+    // Look up symbol → token
+    std::string key = instrument;
+    for (auto& c : key) c = (char)toupper((unsigned char)c);
+    auto it = s_token_cache.find(key);
+    if (it != s_token_cache.end())
+        return instrument.substr(0, colon + 1) + it->second;
+    LOG_ERROR("AngelOne", "Token not found for %s", instrument.c_str());
+    return instrument;  // return as-is, API will reject it
+}
 
 static int64_t angelone_now_ts() {
     const auto now = std::chrono::system_clock::now().time_since_epoch();
@@ -191,15 +245,14 @@ TokenExchangeResponse AngelOneBroker::exchange_token(const std::string& api_key,
     const auto jwt_token = data.value("jwtToken", "");
 
     if (!jwt_token.empty()) {
-        result.success = true;
+        result.success      = true;
         result.access_token = jwt_token;
-        result.user_id = client_code;
-        // Store feed_token and refresh_token in additional_data for later use
+        result.user_id      = client_code;
         json extra = {
-            {"feed_token", data.value("feedToken", "")},
+            {"feed_token",    data.value("feedToken",    "")},
             {"refresh_token", data.value("refreshToken", "")}
         };
-        // Caller can read these from the TokenExchangeResponse
+        result.additional_data = extra.dump();
     } else {
         result.error = body.value("message", "Authentication failed");
     }
@@ -544,7 +597,8 @@ ApiResponse<std::vector<BrokerQuote>> AngelOneBroker::get_quotes(
     // The tokens vector should contain "EXCHANGE:TOKEN" pairs
     // Group tokens by exchange
     std::map<std::string, json> exchange_tokens;
-    for (const auto& token : tokens) {
+    for (const auto& raw_token : tokens) {
+        const std::string token = resolve_angel_token(raw_token);
         const auto colon = token.find(':');
         std::string exchange = "NSE";
         std::string symbol_token = token;

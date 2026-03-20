@@ -16,6 +16,7 @@ public:
     const char* base_url() const override {
         return "https://ant.aliceblueonline.com/rest/AliceBlueAPIService/api";
     }
+    const char* ws_adapter_name() const override { return "aliceblue"; }
 
     // AliceBlue uses SHA256 checksum session:
     // api_key = user_id, api_secret = api_secret, auth_code = enc_key

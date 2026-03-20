@@ -37,13 +37,47 @@ Fincept Terminal is an **open-source financial analysis platform** — a free, o
 
 ### Prerequisites
 
-| Tool | Version | Install |
-|------|---------|---------|
-| CMake | 3.20+ | [cmake.org](https://cmake.org/download/) |
-| vcpkg | latest | [vcpkg.io](https://vcpkg.io/) |
-| C++ Compiler | C++20 | MSVC 2022 / GCC 12+ / Clang 15+ |
-| Python | 3.11+ | [python.org](https://www.python.org/downloads/) |
-| Git | latest | [git-scm.com](https://git-scm.com/downloads) |
+#### 1. Install a C++20 compiler
+
+- **Windows**: Install [Visual Studio 2022](https://visualstudio.microsoft.com/) with "Desktop development with C++" workload
+- **Linux**: `sudo apt install -y g++ cmake ninja-build`
+- **macOS**: `xcode-select --install && brew install cmake ninja`
+
+#### 2. Install CMake 3.20+ and Ninja
+
+- **Windows**: `winget install Kitware.CMake Ninja-build.Ninja`
+- **Linux/macOS**: included in step above
+
+#### 3. Install vcpkg and set VCPKG_ROOT
+
+```bash
+# Linux / macOS
+git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh
+echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc  # or ~/.zshrc
+source ~/.bashrc
+
+# Windows (PowerShell)
+git clone https://github.com/microsoft/vcpkg.git "$env:USERPROFILE\vcpkg"
+& "$env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat"
+[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT","$env:USERPROFILE\vcpkg","User")
+# Restart your terminal after this
+```
+
+#### 4. Linux only — install system dependencies
+
+```bash
+sudo apt install -y \
+  libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
+  libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
+  libwayland-dev libxkbcommon-dev pkg-config
+```
+
+#### 5. Install Python 3.11+
+
+- **Windows**: [python.org](https://www.python.org/downloads/) (check "Add to PATH")
+- **Linux**: `sudo apt install python3`
+- **macOS**: `brew install python`
 
 ### Setup in 4 Steps
 
@@ -52,15 +86,15 @@ Fincept Terminal is an **open-source financial analysis platform** — a free, o
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-cpp
 
-# 2. Configure (vcpkg will install dependencies)
+# 2. Configure — vcpkg installs all C++ dependencies automatically
 cmake --preset=default
 
 # 3. Build
 cmake --build build --config Release
 
 # 4. Run
-./build/FinceptTerminal          # Linux / macOS
-.\build\Release\FinceptTerminal  # Windows
+./build/FinceptTerminal              # Linux / macOS
+.\build\Release\FinceptTerminal.exe  # Windows
 ```
 
 **Expected Result:** Fincept Terminal window should open, showing the login screen.
@@ -228,9 +262,10 @@ git push origin fix/issue-123-description
 ### Build fails — missing vcpkg packages
 ```bash
 # Ensure VCPKG_ROOT is set
-echo $VCPKG_ROOT
+echo $VCPKG_ROOT          # Linux / macOS (should print the vcpkg path)
+echo %VCPKG_ROOT%         # Windows CMD
 
-# Reconfigure
+# If empty, set it (see Prerequisites step 3 above), then reconfigure
 cmake --preset=default --fresh
 cmake --build build --config Release
 ```

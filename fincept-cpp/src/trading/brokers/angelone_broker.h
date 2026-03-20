@@ -13,6 +13,7 @@ public:
     BrokerId id() const override { return BrokerId::AngelOne; }
     const char* name() const override { return "AngelOne"; }
     const char* base_url() const override { return "https://apiconnect.angelone.in"; }
+    const char* ws_adapter_name() const override { return "angelone"; }
 
     // AngelOne uses TOTP-based login, not standard OAuth token exchange.
     // api_key = API key, api_secret = password (PIN), auth_code = TOTP secret/code

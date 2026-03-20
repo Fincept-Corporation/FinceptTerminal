@@ -14,6 +14,7 @@ public:
     BrokerId id() const override { return BrokerId::Zerodha; }
     const char* name() const override { return "Zerodha"; }
     const char* base_url() const override { return "https://api.kite.trade"; }
+    const char* ws_adapter_name() const override { return "zerodha"; }
 
     TokenExchangeResponse exchange_token(const std::string& api_key,
                                           const std::string& api_secret,

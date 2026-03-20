@@ -28,6 +28,7 @@ struct TokenExchangeResponse {
     bool success = false;
     std::string access_token;
     std::string user_id;
+    std::string additional_data;  // JSON: feed_token, refresh_token, etc.
     std::string error;
 };
 
@@ -100,6 +101,7 @@ struct UnifiedOrder {
     std::string validity = "DAY";
     double stop_loss = 0;
     double take_profit = 0;
+    bool amo = false;
 };
 
 // ============================================================================

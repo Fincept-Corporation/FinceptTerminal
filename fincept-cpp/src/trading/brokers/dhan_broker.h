@@ -14,6 +14,7 @@ public:
     BrokerId id() const override { return BrokerId::Dhan; }
     const char* name() const override { return "Dhan"; }
     const char* base_url() const override { return "https://api.dhan.co"; }
+    const char* ws_adapter_name() const override { return "dhan"; }
 
     // Dhan uses consent-based OAuth
     // api_key = app_id, api_secret = app_secret, auth_code = token_id from consent flow

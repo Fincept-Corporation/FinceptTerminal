@@ -41,6 +41,13 @@ private:
     void apply_template_preset(int preset_idx);
     void export_report(ExportFormat format);
 
+    // Export implementation
+    std::string native_save_dialog(const char* filter, const char* title, const char* default_ext);
+    bool export_as_html(const std::string& path);
+    bool export_as_markdown(const std::string& path);
+    bool export_as_csv(const std::string& path);
+    bool export_as_pdf(const std::string& path);
+
     // State
     bool initialized_ = false;
 
@@ -56,6 +63,11 @@ private:
 
     // Component palette filter
     char component_search_[64] = {};
+
+    // Export status feedback
+    char export_status_[256] = {};
+    bool export_success_ = false;
+    float export_status_timer_ = 0.0f;
 };
 
 } // namespace fincept::report_builder

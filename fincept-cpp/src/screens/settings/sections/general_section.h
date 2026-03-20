@@ -19,6 +19,9 @@ private:
     std::string status_;
     double status_time_ = 0;
 
+    // Confirmation modal
+    bool confirm_reset_open_ = false;
+
     void init();
 };
 

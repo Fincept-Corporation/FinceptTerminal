@@ -15,6 +15,7 @@ public:
     BrokerId id() const override { return BrokerId::Kotak; }
     const char* name() const override { return "Kotak"; }
     const char* base_url() const override { return "https://mis.kotaksecurities.com"; }
+    const char* ws_adapter_name() const override { return "kotak"; }
 
     // Kotak uses a 2-step auth: TOTP login + MPIN validate
     // For the unified interface, we combine both steps:

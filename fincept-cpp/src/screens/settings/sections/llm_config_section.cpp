@@ -68,6 +68,17 @@ void LLMConfigSection::populate_edit_buffers() {
     }
 }
 
+void LLMConfigSection::delete_provider_config(const std::string& provider) {
+    db::ops::delete_llm_config(provider);
+    load_configs();
+    // If deleted provider was selected, reset selection
+    const auto& providers = llm_providers();
+    if (selected_provider_ >= (int)providers.size())
+        selected_provider_ = 0;
+    status_ = provider + " config deleted";
+    status_time_ = ImGui::GetTime();
+}
+
 void LLMConfigSection::save_provider_config() {
     const auto& providers = llm_providers();
     if (selected_provider_ < 0 || selected_provider_ >= (int)providers.size())
@@ -429,8 +440,8 @@ void LLMConfigSection::render_model_library() {
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, BG_HOVER);
             ImGui::PushStyleColor(ImGuiCol_Text, ERROR_RED);
             if (ImGui::SmallButton("Delete")) {
-                // Delete by saving empty config — or just remove from DB
-                // For now, re-save with empty values
+                confirm_delete_provider_ = cfg.provider;
+                confirm_delete_open_ = true;
             }
             ImGui::PopStyleColor(3);
             ImGui::PopID();
@@ -467,6 +478,32 @@ void LLMConfigSection::render() {
         case SubPanel::Providers:      render_providers(); break;
         case SubPanel::GlobalSettings: render_global_settings(); break;
         case SubPanel::ModelLibrary:   render_model_library(); break;
+    }
+
+    // ── Delete confirmation modal ──────────────────────────────────────────
+    if (confirm_delete_open_) {
+        ImGui::OpenPopup("Delete LLM Config");
+        confirm_delete_open_ = false;
+    }
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Delete LLM Config", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextColored(theme::colors::WARNING, "Delete provider config?");
+        ImGui::Spacing();
+        ImGui::Text("Provider: %s", confirm_delete_provider_.c_str());
+        ImGui::TextColored(theme::colors::TEXT_DIM, "This will remove the API key and model settings.");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        if (theme::AccentButton("Delete")) {
+            delete_provider_config(confirm_delete_provider_);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (theme::SecondaryButton("Cancel")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 }
 

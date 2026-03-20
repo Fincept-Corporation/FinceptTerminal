@@ -14,6 +14,7 @@ public:
     BrokerId id() const override { return BrokerId::Motilal; }
     const char* name() const override { return "Motilal"; }
     const char* base_url() const override { return "https://openapi.motilaloswal.com/rest"; }
+    const char* ws_adapter_name() const override { return "motilal"; }
 
     TokenExchangeResponse exchange_token(const std::string& api_key,
                                           const std::string& api_secret,

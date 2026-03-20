@@ -14,6 +14,7 @@ public:
     BrokerId id() const override { return BrokerId::IIFL; }
     const char* name() const override { return "IIFL"; }
     const char* base_url() const override { return "https://ttblaze.iifl.com"; }
+    const char* ws_adapter_name() const override { return "iifl"; }
 
     TokenExchangeResponse exchange_token(const std::string& api_key,
                                           const std::string& api_secret,

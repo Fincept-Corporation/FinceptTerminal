@@ -378,6 +378,7 @@ void delete_credential(int64_t id);
 // --- LLM Config ---
 std::vector<LLMConfig> get_llm_configs();
 void save_llm_config(const LLMConfig& config);
+void delete_llm_config(const std::string& provider);
 LLMGlobalSettings get_llm_global_settings();
 void save_llm_global_settings(const LLMGlobalSettings& settings);
 void set_active_llm_provider(const std::string& provider);

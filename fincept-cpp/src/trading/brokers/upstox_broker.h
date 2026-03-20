@@ -14,6 +14,7 @@ public:
     BrokerId id() const override { return BrokerId::Upstox; }
     const char* name() const override { return "Upstox"; }
     const char* base_url() const override { return "https://api.upstox.com/v2"; }
+    const char* ws_adapter_name() const override { return "upstox"; }
 
     // Upstox uses OAuth2 authorization_code flow
     // api_key = client_id, api_secret = client_secret, auth_code = authorization code

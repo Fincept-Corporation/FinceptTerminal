@@ -13,6 +13,7 @@ public:
     BrokerId id() const override { return BrokerId::Groww; }
     const char* name() const override { return "Groww"; }
     const char* base_url() const override { return "https://api.groww.in"; }
+    const char* ws_adapter_name() const override { return "groww"; }
 
     // Groww uses TOTP-based token exchange
     // api_key = bearer key for TOTP request, api_secret = TOTP secret (base32), auth_code = unused

@@ -2,6 +2,9 @@ name: Build C++ Terminal — All Platforms
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 env:
   BUILD_TYPE: Release
@@ -311,9 +314,9 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: cpp-v${{ github.run_number }}
-          name: "Fincept Terminal C++ Build #${{ github.run_number }}"
-          make_latest: false
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('cpp-build-{0}', github.run_number) }}
+          name: ${{ github.ref_type == 'tag' && format('Fincept Terminal {0}', github.ref_name) || format('Fincept Terminal C++ Build #{0}', github.run_number) }}
+          make_latest: ${{ github.ref_type == 'tag' }}
           body: |
             Automated C++ build from commit ${{ github.sha }}
 
@@ -339,4 +342,4 @@ jobs:
             FinceptTerminal-macOS-universal.tar.gz
           fail_on_unmatched_files: false
           draft: false
-          prerelease: true
+          prerelease: ${{ github.ref_type != 'tag' }}
