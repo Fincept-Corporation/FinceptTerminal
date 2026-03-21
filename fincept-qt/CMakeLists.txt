@@ -193,6 +193,7 @@ set(SCREEN_SOURCES
     src/screens/dbnomics/DBnomicsDataTable.cpp
     src/screens/dbnomics/DBnomicsChartWidget.cpp
     src/screens/dbnomics/DBnomicsSelectionPanel.cpp
+    src/screens/dbnomics/DBnomicsScreen.cpp
 )
 
 # App
