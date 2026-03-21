@@ -98,8 +98,10 @@ fincept-cpp/
 node_modules/
 dist-ssr/
 
-# ── Claude Code local config — never commit ──────────────────
+# ── Claude Code — never commit ───────────────────────────────
 .claude/settings.local.json
+CLAUDE.md
+fincept-qt/DESIGN_SYSTEM.md
 
 # ── Build output (uitest) ─────────────────────────────────────
 fincept-qt/uitest/build/
