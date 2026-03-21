@@ -61,13 +61,30 @@ jobs:
           LANG: hi
           COMMIT: false
 
-      - name: Move translated files to docs/translations and commit
+      - name: Move translations and clean up root
         run: |
-          mkdir -p docs/translations
-          mv README.es.md README.zh-CN.md README.ja.md README.fr.md README.ko.md README.de.md README.hi.md docs/translations/ 2>/dev/null || true
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+
+          # Pull any commits the action made to root despite COMMIT: false
+          git pull --rebase origin main || true
+
+          # Move any translated files from root to docs/translations/
+          mkdir -p docs/translations
+          for lang in es zh-CN ja fr ko de hi; do
+            if [ -f "README.${lang}.md" ]; then
+              mv "README.${lang}.md" "docs/translations/README.${lang}.md"
+            fi
+          done
+
+          # Remove any root-level translated READMEs from git tracking
+          for lang in es zh-CN ja fr ko de hi; do
+            git rm --cached "README.${lang}.md" 2>/dev/null || true
+          done
+
+          # Stage the correct location
           git add docs/translations/
+
+          # Commit only if there are changes
           git diff --staged --quiet || git commit -m "chore: update translated READMEs in docs/translations/"
           git push || echo "No changes to push"
-
