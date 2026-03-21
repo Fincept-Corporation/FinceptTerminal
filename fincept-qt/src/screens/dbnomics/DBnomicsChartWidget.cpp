@@ -15,6 +15,9 @@
 #include <QLegend>
 
 #include <QVBoxLayout>
+#include <QStackedWidget>
+#include <QLabel>
+#include <QTimer>
 #include <QSet>
 #include <algorithm>
 #include <limits>
@@ -30,9 +33,24 @@ void DBnomicsChartWidget::build_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    chart_view_ = new QChartView(this);
-    chart_view_->setRenderHint(QPainter::Antialiasing, false);
+    stack_ = new QStackedWidget(this);
 
+    // ── Page 0: loading spinner ───────────────────────────────────────────────
+    auto* loading_page = new QWidget(stack_);
+    loading_page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    auto* loading_vl = new QVBoxLayout(loading_page);
+    spin_label_ = new QLabel(loading_page);
+    spin_label_->setAlignment(Qt::AlignCenter);
+    spin_label_->setStyleSheet(
+        QString("color:%1; font-family:%2; font-size:16px; background:transparent;")
+            .arg(ui::colors::AMBER)
+            .arg(ui::fonts::DATA_FAMILY));
+    loading_vl->addWidget(spin_label_);
+    stack_->addWidget(loading_page);   // index 0
+
+    // ── Page 1: chart view ────────────────────────────────────────────────────
+    chart_view_ = new QChartView(stack_);
+    chart_view_->setRenderHint(QPainter::Antialiasing, false);
     auto* chart = new QChart();
     chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
     chart->setPlotAreaBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
@@ -44,8 +62,31 @@ void DBnomicsChartWidget::build_ui() {
     chart->setTitleBrush(QBrush(QColor(ui::colors::AMBER)));
     chart_view_->setChart(chart);
     chart_view_->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
+    stack_->addWidget(chart_view_);    // index 1
 
-    root->addWidget(chart_view_);
+    stack_->setCurrentIndex(1);
+    root->addWidget(stack_);
+
+    // ── Animation timer ───────────────────────────────────────────────────────
+    spin_timer_ = new QTimer(this);
+    spin_timer_->setInterval(120);
+    connect(spin_timer_, &QTimer::timeout, this, [this]() {
+        static const QString frames[] = {"⣾","⣽","⣻","⢿","⡿","⣟","⣯","⣷"};
+        spin_label_->setText(QString("%1  FETCHING DATA...").arg(frames[frame_ % 8]));
+        ++frame_;
+    });
+}
+
+void DBnomicsChartWidget::set_loading(bool on) {
+    if (on) {
+        frame_ = 0;
+        spin_label_->setText("⣾  FETCHING DATA...");
+        stack_->setCurrentIndex(0);
+        spin_timer_->start();
+    } else {
+        spin_timer_->stop();
+        stack_->setCurrentIndex(1);
+    }
 }
 
 void DBnomicsChartWidget::clear() {

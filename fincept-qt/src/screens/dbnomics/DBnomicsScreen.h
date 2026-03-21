@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QStackedWidget>
+#include <QVBoxLayout>
 
 namespace fincept::screens {
 
@@ -45,6 +46,8 @@ private slots:
     void on_clear_all();
     void on_add_slot();
     void on_add_to_slot(int slot_index);
+    void on_remove_from_slot(int slot_index, const QString& series_id);
+    void on_remove_slot(int slot_index);
 
 private:
     void build_ui();
@@ -52,6 +55,13 @@ private:
     void set_status(const QString& message);
     void render_single_view();
     void assign_series_colors();
+    void rebuild_comparison_view();
+
+    struct SlotCard {
+        DBnomicsChartWidget* chart       = nullptr;
+        DBnomicsDataTable*   table       = nullptr;
+        QComboBox*           chart_combo = nullptr;
+    };
 
     DBnomicsSelectionPanel* selection_panel_    = nullptr;
     DBnomicsChartWidget*    chart_widget_       = nullptr;
@@ -70,6 +80,10 @@ private:
     services::DbnDataPoint  last_loaded_data_;
     bool                    has_pending_data_   = false;
     int                     provider_count_     = 0;
+
+    QWidget*     comparison_content_ = nullptr;
+    QVBoxLayout* comparison_layout_  = nullptr;
+    QVector<SlotCard> slot_cards_;
 };
 
 } // namespace fincept::screens

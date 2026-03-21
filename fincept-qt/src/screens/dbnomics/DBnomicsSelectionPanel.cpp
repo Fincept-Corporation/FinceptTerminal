@@ -9,6 +9,21 @@
 
 namespace fincept::screens {
 
+// ── Shared constants ─────────────────────────────────────────────────────────
+
+static const QString kSpinStyle =
+    "QLabel { color: #525252; font-family: 'Consolas','Courier New',monospace;"
+    " font-size: 11px; background: transparent; }";
+
+static QLabel* make_spin_label(const QString& text, QWidget* parent) {
+    auto* lbl = new QLabel(text, parent);
+    lbl->setFixedHeight(80);
+    lbl->setAlignment(Qt::AlignCenter);
+    lbl->setStyleSheet(kSpinStyle);
+    lbl->hide();
+    return lbl;
+}
+
 // ── Style constants ─────────────────────────────────────────────────────────
 
 static const QString kListStyle = R"(
@@ -45,6 +60,10 @@ static const QString kLoadMoreStyle = R"(
 
 DBnomicsSelectionPanel::DBnomicsSelectionPanel(QWidget* parent) : QWidget(parent) {
     build_ui();
+
+    anim_timer_ = new QTimer(this);
+    anim_timer_->setInterval(120);
+    connect(anim_timer_, &QTimer::timeout, this, &DBnomicsSelectionPanel::tick_anim);
 }
 
 // ── Helper builders ──────────────────────────────────────────────────────────
@@ -88,25 +107,39 @@ QWidget* DBnomicsSelectionPanel::build_search_section() {
 
     layout->addWidget(make_section_label("GLOBAL SEARCH"));
 
-    global_search_input_ = new QLineEdit();
+    global_search_input_ = new QLineEdit(w);
     global_search_input_->setStyleSheet(kInputStyle);
     global_search_input_->setFixedHeight(28);
     global_search_input_->setPlaceholderText("Search providers, datasets...");
     layout->addWidget(global_search_input_);
 
+    // Loading spinner (hidden by default, appears between input and results)
+    search_spin_ = make_spin_label("⣾  SEARCHING...", w);
+    layout->addWidget(search_spin_);
+
+    // Search results content
+    search_content_ = new QWidget(w);
+    auto* sc_layout = new QVBoxLayout(search_content_);
+    sc_layout->setContentsMargins(0, 0, 0, 0);
+    sc_layout->setSpacing(0);
+
     search_results_list_ = make_styled_list(120);
     search_results_list_->hide();
-    layout->addWidget(search_results_list_);
+    sc_layout->addWidget(search_results_list_);
 
     search_load_more_btn_ = make_load_more_button();
-    layout->addWidget(search_load_more_btn_);
+    sc_layout->addWidget(search_load_more_btn_);
+
+    layout->addWidget(search_content_);
 
     // Connect global search input
     connect(global_search_input_, &QLineEdit::textChanged, this, [this](const QString& q) {
         const QString trimmed = q.trimmed();
         if (!trimmed.isEmpty()) {
+            set_search_loading(true);
             emit global_search_changed(trimmed);
         } else {
+            set_search_loading(false);
             search_results_list_->hide();
             search_load_more_btn_->hide();
         }
@@ -139,14 +172,24 @@ QWidget* DBnomicsSelectionPanel::build_provider_section() {
 
     layout->addWidget(make_section_label("PROVIDERS"));
 
-    provider_filter_input_ = new QLineEdit();
+    prov_spin_ = make_spin_label("⣾  LOADING PROVIDERS...", w);
+    layout->addWidget(prov_spin_);
+
+    prov_content_ = new QWidget(w);
+    auto* pc_layout = new QVBoxLayout(prov_content_);
+    pc_layout->setContentsMargins(0, 0, 0, 0);
+    pc_layout->setSpacing(0);
+
+    provider_filter_input_ = new QLineEdit(prov_content_);
     provider_filter_input_->setStyleSheet(kInputStyle);
     provider_filter_input_->setFixedHeight(26);
     provider_filter_input_->setPlaceholderText("Filter providers...");
-    layout->addWidget(provider_filter_input_);
+    pc_layout->addWidget(provider_filter_input_);
 
     provider_list_ = make_styled_list(130);
-    layout->addWidget(provider_list_);
+    pc_layout->addWidget(provider_list_);
+
+    layout->addWidget(prov_content_);
 
     // Filter providers by code or name
     connect(provider_filter_input_, &QLineEdit::textChanged, this, [this](const QString& q) {
@@ -182,11 +225,21 @@ QWidget* DBnomicsSelectionPanel::build_dataset_section() {
 
     layout->addWidget(make_section_label("DATASETS"));
 
+    ds_spin_ = make_spin_label("⣾  LOADING DATASETS...", w);
+    layout->addWidget(ds_spin_);
+
+    ds_content_ = new QWidget(w);
+    auto* dc_layout = new QVBoxLayout(ds_content_);
+    dc_layout->setContentsMargins(0, 0, 0, 0);
+    dc_layout->setSpacing(0);
+
     dataset_list_ = make_styled_list(130);
-    layout->addWidget(dataset_list_);
+    dc_layout->addWidget(dataset_list_);
 
     dataset_load_more_btn_ = make_load_more_button();
-    layout->addWidget(dataset_load_more_btn_);
+    dc_layout->addWidget(dataset_load_more_btn_);
+
+    layout->addWidget(ds_content_);
 
     // Handle dataset selection
     connect(dataset_list_, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
@@ -214,17 +267,27 @@ QWidget* DBnomicsSelectionPanel::build_series_section() {
 
     layout->addWidget(make_section_label("SERIES"));
 
-    series_search_input_ = new QLineEdit();
+    series_spin_ = make_spin_label("⣾  LOADING SERIES...", w);
+    layout->addWidget(series_spin_);
+
+    series_content_ = new QWidget(w);
+    auto* sc_layout = new QVBoxLayout(series_content_);
+    sc_layout->setContentsMargins(0, 0, 0, 0);
+    sc_layout->setSpacing(0);
+
+    series_search_input_ = new QLineEdit(series_content_);
     series_search_input_->setStyleSheet(kInputStyle);
     series_search_input_->setFixedHeight(26);
     series_search_input_->setPlaceholderText("Search series...");
-    layout->addWidget(series_search_input_);
+    sc_layout->addWidget(series_search_input_);
 
     series_list_ = make_styled_list(130);
-    layout->addWidget(series_list_);
+    sc_layout->addWidget(series_list_);
 
     series_load_more_btn_ = make_load_more_button();
-    layout->addWidget(series_load_more_btn_);
+    sc_layout->addWidget(series_load_more_btn_);
+
+    layout->addWidget(series_content_);
 
     // Search series when typing
     connect(series_search_input_, &QLineEdit::textChanged, this, [this](const QString& q) {
@@ -431,21 +494,32 @@ void DBnomicsSelectionPanel::add_comparison_slot() {
 }
 
 void DBnomicsSelectionPanel::remove_comparison_slot(int index) {
-    Q_UNUSED(index)
-    // Remove the last slot widget
-    const int count = slots_layout_->count();
-    if (count > 0) {
-        QLayoutItem* item = slots_layout_->takeAt(count - 1);
+    if (index < 0 || index >= slots_layout_->count()) {
+        // Fall back: remove the last slot
+        index = slots_layout_->count() - 1;
+    }
+    if (index < 0) return;
+
+    QLayoutItem* item = slots_layout_->takeAt(index);
+    if (item) {
+        if (item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
+    if (slot_count_ > 0)
+        --slot_count_;
+}
+
+void DBnomicsSelectionPanel::clear_slots() {
+    while (slots_layout_->count() > 0) {
+        QLayoutItem* item = slots_layout_->takeAt(0);
         if (item) {
-            if (item->widget()) {
+            if (item->widget())
                 item->widget()->deleteLater();
-            }
             delete item;
         }
     }
-    if (slot_count_ > 0) {
-        --slot_count_;
-    }
+    slot_count_ = 0;
 }
 
 // ── Public data population methods ──────────────────────────────────────────
@@ -546,6 +620,52 @@ void DBnomicsSelectionPanel::set_loading(bool loading) {
 
 void DBnomicsSelectionPanel::set_status(const QString& message) {
     status_label_->setText(message);
+}
+
+// ── Loading state ─────────────────────────────────────────────────────────────
+
+void DBnomicsSelectionPanel::tick_anim() {
+    static const QString frames[] = {"⣾","⣽","⣻","⢿","⡿","⣟","⣯","⣷"};
+    const QString f = frames[anim_frame_ % 8];
+    ++anim_frame_;
+    if (prov_loading_   && prov_spin_)   prov_spin_->setText(f + "  LOADING PROVIDERS...");
+    if (ds_loading_     && ds_spin_)     ds_spin_->setText(f + "  LOADING DATASETS...");
+    if (series_loading_ && series_spin_) series_spin_->setText(f + "  LOADING SERIES...");
+    if (search_loading_ && search_spin_) search_spin_->setText(f + "  SEARCHING...");
+}
+
+static void apply_loading(bool on, bool& flag, QLabel* spin, QWidget* content,
+                          QTimer* timer, int& frame) {
+    flag = on;
+    if (on) {
+        if (content) content->hide();
+        if (spin)    spin->show();
+        if (!timer->isActive()) { frame = 0; timer->start(); }
+    } else {
+        if (spin)    spin->hide();
+        if (content) content->show();
+        // timer stopped only when all flags are false — caller handles that
+    }
+}
+
+void DBnomicsSelectionPanel::set_providers_loading(bool on) {
+    apply_loading(on, prov_loading_, prov_spin_, prov_content_, anim_timer_, anim_frame_);
+    if (!on && !ds_loading_ && !series_loading_ && !search_loading_) anim_timer_->stop();
+}
+
+void DBnomicsSelectionPanel::set_datasets_loading(bool on) {
+    apply_loading(on, ds_loading_, ds_spin_, ds_content_, anim_timer_, anim_frame_);
+    if (!on && !prov_loading_ && !series_loading_ && !search_loading_) anim_timer_->stop();
+}
+
+void DBnomicsSelectionPanel::set_series_loading(bool on) {
+    apply_loading(on, series_loading_, series_spin_, series_content_, anim_timer_, anim_frame_);
+    if (!on && !prov_loading_ && !ds_loading_ && !search_loading_) anim_timer_->stop();
+}
+
+void DBnomicsSelectionPanel::set_search_loading(bool on) {
+    apply_loading(on, search_loading_, search_spin_, search_content_, anim_timer_, anim_frame_);
+    if (!on && !prov_loading_ && !ds_loading_ && !series_loading_) anim_timer_->stop();
 }
 
 void DBnomicsSelectionPanel::update_slot_series(int slot_index,

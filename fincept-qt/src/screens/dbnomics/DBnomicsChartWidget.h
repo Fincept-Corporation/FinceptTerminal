@@ -2,6 +2,9 @@
 #pragma once
 #include "services/dbnomics/DBnomicsModels.h"
 #include <QWidget>
+#include <QStackedWidget>
+#include <QLabel>
+#include <QTimer>
 #include <QtCharts/QChartView>
 
 namespace fincept::screens {
@@ -14,6 +17,7 @@ public:
     void set_data(const QVector<services::DbnDataPoint>& series,
                   services::DbnChartType chart_type);
     void clear();
+    void set_loading(bool on);
 
 private:
     void build_ui();
@@ -22,7 +26,11 @@ private:
     void render_bar(const QVector<services::DbnDataPoint>& series);
     void render_scatter(const QVector<services::DbnDataPoint>& series);
 
-    QChartView* chart_view_ = nullptr;
+    QStackedWidget* stack_      = nullptr;
+    QLabel*         spin_label_ = nullptr;
+    QTimer*         spin_timer_ = nullptr;
+    QChartView*     chart_view_ = nullptr;
+    int             frame_      = 0;
 };
 
 } // namespace fincept::screens

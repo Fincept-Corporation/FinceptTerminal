@@ -6,6 +6,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QLabel>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -47,12 +48,20 @@ signals:
     void remove_slot_clicked(int slot_index);
     void search_result_selected(const QString& provider_code, const QString& dataset_code);
 
+public:
+    void set_providers_loading(bool on);
+    void set_datasets_loading(bool on);
+    void set_series_loading(bool on);
+    void set_search_loading(bool on);
+
 public slots:
     void add_comparison_slot();
     void remove_comparison_slot(int index);
+    void clear_slots();
 
 private:
     void build_ui();
+    void tick_anim();
     QWidget* build_search_section();
     QWidget* build_provider_section();
     QWidget* build_dataset_section();
@@ -86,6 +95,22 @@ private:
     int search_next_offset_    = 0;
 
     QVector<services::DbnProvider> all_providers_;
+
+    // ── Loading state ──────────────────────────────────────────────────────
+    QWidget* prov_content_   = nullptr;
+    QWidget* ds_content_     = nullptr;
+    QWidget* series_content_ = nullptr;
+    QWidget* search_content_ = nullptr;
+    QLabel*  prov_spin_      = nullptr;
+    QLabel*  ds_spin_        = nullptr;
+    QLabel*  series_spin_    = nullptr;
+    QLabel*  search_spin_    = nullptr;
+    QTimer*  anim_timer_     = nullptr;
+    int      anim_frame_     = 0;
+    bool     prov_loading_   = false;
+    bool     ds_loading_     = false;
+    bool     series_loading_ = false;
+    bool     search_loading_ = false;
 };
 
 } // namespace fincept::screens

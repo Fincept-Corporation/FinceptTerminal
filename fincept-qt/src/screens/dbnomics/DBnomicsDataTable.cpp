@@ -2,6 +2,8 @@
 #include "screens/dbnomics/DBnomicsDataTable.h"
 #include "ui/theme/Theme.h"
 #include <QVBoxLayout>
+#include <QStackedWidget>
+#include <QTimer>
 #include <QHeaderView>
 #include <QTableWidgetItem>
 #include <QLabel>
@@ -19,9 +21,9 @@ void DBnomicsDataTable::build_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    auto* label = new QLabel("OBSERVATION DATA");
-    label->setObjectName("tableTitle");
-    label->setStyleSheet(QString(
+    // ── Section header (always visible) ──────────────────────────────────────
+    auto* header_label = new QLabel("OBSERVATION DATA", this);
+    header_label->setStyleSheet(QString(
         "color: %1; font-size: 11px; font-weight: 700; "
         "font-family: 'Consolas','Courier New',monospace; "
         "padding: 6px 12px; background: %2; "
@@ -29,32 +31,83 @@ void DBnomicsDataTable::build_ui() {
         .arg(ui::colors::AMBER)
         .arg(ui::colors::BG_RAISED)
         .arg(ui::colors::BORDER_DIM));
-    root->addWidget(label);
+    root->addWidget(header_label);
 
-    table_ = new QTableWidget(this);
+    stack_ = new QStackedWidget(this);
+
+    // ── Page 0: loading spinner ───────────────────────────────────────────────
+    auto* loading_page = new QWidget(stack_);
+    loading_page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    auto* loading_vl = new QVBoxLayout(loading_page);
+    spin_label_ = new QLabel(loading_page);
+    spin_label_->setAlignment(Qt::AlignCenter);
+    spin_label_->setStyleSheet(
+        QString("color:%1; font-family:%2; font-size:13px; background:transparent;")
+            .arg(ui::colors::TEXT_TERTIARY)
+            .arg(ui::fonts::DATA_FAMILY));
+    loading_vl->addWidget(spin_label_);
+    stack_->addWidget(loading_page);   // index 0
+
+    // ── Page 1: table ─────────────────────────────────────────────────────────
+    table_ = new QTableWidget(stack_);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    table_->setAlternatingRowColors(false);
+    table_->setAlternatingRowColors(true);
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->horizontalHeader()->setDefaultAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    table_->horizontalHeader()->setMinimumSectionSize(70);
     table_->verticalHeader()->setVisible(false);
-    table_->setShowGrid(false);
+    table_->verticalHeader()->setDefaultSectionSize(28);
+    table_->setShowGrid(true);
+    table_->setWordWrap(false);
     table_->setStyleSheet(QString(
-        "QTableWidget { background: %1; color: %2; "
-        "  font-family: 'Consolas','Courier New',monospace; font-size: 12px; "
-        "  border: none; gridline-color: %3; }"
-        "QTableWidget::item { padding: 3px 8px; border-bottom: 1px solid %3; }"
+        "QTableWidget { background: %1; alternate-background-color: %7;"
+        "  color: %2; font-family: 'Consolas','Courier New',monospace; font-size: 12px;"
+        "  border: none; gridline-color: %3; selection-background-color: %4; }"
+        "QTableWidget::item { padding: 4px 10px; border: none; }"
         "QTableWidget::item:selected { background: %4; color: %2; }"
-        "QHeaderView::section { background: %5; color: %6; "
-        "  font-size: 11px; font-weight: 700; padding: 4px 8px; "
-        "  border: none; border-bottom: 1px solid %3; }")
-        .arg(ui::colors::BG_BASE)
-        .arg(ui::colors::TEXT_PRIMARY)
-        .arg(ui::colors::BORDER_DIM)
-        .arg(ui::colors::BG_HOVER)
-        .arg(ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY));
-    root->addWidget(table_);
+        "QHeaderView::section { background: %5; color: %6;"
+        "  font-family: 'Consolas','Courier New',monospace;"
+        "  font-size: 11px; font-weight: 700; padding: 6px 10px;"
+        "  border: none; border-bottom: 2px solid %3; border-right: 1px solid %3; }"
+        "QScrollBar:vertical { background: %1; width: 8px; border: none; }"
+        "QScrollBar::handle:vertical { background: %3; border-radius: 4px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        "QScrollBar:horizontal { background: %1; height: 8px; border: none; }"
+        "QScrollBar::handle:horizontal { background: %3; border-radius: 4px; }"
+        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }")
+        .arg(ui::colors::BG_BASE)          // %1
+        .arg(ui::colors::TEXT_PRIMARY)     // %2
+        .arg(ui::colors::BORDER_DIM)       // %3
+        .arg(ui::colors::BG_HOVER)         // %4
+        .arg(ui::colors::BG_RAISED)        // %5
+        .arg(ui::colors::TEXT_SECONDARY)   // %6
+        .arg("#0a0a0a"));                  // %7 alternate row
+    stack_->addWidget(table_);         // index 1
+
+    stack_->setCurrentIndex(1);
+    root->addWidget(stack_);
+
+    // ── Animation timer ───────────────────────────────────────────────────────
+    spin_timer_ = new QTimer(this);
+    spin_timer_->setInterval(120);
+    connect(spin_timer_, &QTimer::timeout, this, [this]() {
+        static const QString frames[] = {"⣾","⣽","⣻","⢿","⡿","⣟","⣯","⣷"};
+        spin_label_->setText(QString("%1  LOADING OBSERVATIONS...").arg(frames[frame_ % 8]));
+        ++frame_;
+    });
+}
+
+void DBnomicsDataTable::set_loading(bool on) {
+    if (on) {
+        frame_ = 0;
+        spin_label_->setText("⣾  LOADING OBSERVATIONS...");
+        stack_->setCurrentIndex(0);
+        spin_timer_->start();
+    } else {
+        spin_timer_->stop();
+        stack_->setCurrentIndex(1);
+    }
 }
 
 void DBnomicsDataTable::clear() {

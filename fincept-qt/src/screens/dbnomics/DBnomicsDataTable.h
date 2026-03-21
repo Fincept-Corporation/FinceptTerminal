@@ -2,6 +2,9 @@
 #pragma once
 #include "services/dbnomics/DBnomicsModels.h"
 #include <QWidget>
+#include <QStackedWidget>
+#include <QLabel>
+#include <QTimer>
 #include <QTableWidget>
 
 namespace fincept::screens {
@@ -11,14 +14,18 @@ class DBnomicsDataTable : public QWidget {
 public:
     explicit DBnomicsDataTable(QWidget* parent = nullptr);
 
-    // Replace the entire table with a new set of series
     void set_data(const QVector<services::DbnDataPoint>& series);
     void clear();
+    void set_loading(bool on);
 
 private:
     void build_ui();
 
-    QTableWidget* table_ = nullptr;
+    QStackedWidget* stack_      = nullptr;
+    QLabel*         spin_label_ = nullptr;
+    QTimer*         spin_timer_ = nullptr;
+    QTableWidget*   table_      = nullptr;
+    int             frame_      = 0;
 };
 
 } // namespace fincept::screens
