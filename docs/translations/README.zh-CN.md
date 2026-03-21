@@ -74,14 +74,86 @@
 
 * * *
 
+## 快速启动（一键设置）
+
+克隆并运行安装脚本 - 它会安装所有依赖项并自动构建应用程序：
+
+```bash
+# Linux / macOS
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+chmod +x setup.sh && ./setup.sh
+```
+
+```bat
+# Windows — run from Developer Command Prompt for VS 2022
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+setup.bat
+```
+
+该脚本处理：编译器检查、CMake、Ninja、Python、vcpkg、所有 C++ 依赖项、构建和启动。
+
+* * *
+
+## 下载并运行（无需构建）
+
+预构建的二进制文件可在[发布页面](https://github.com/Fincept-Corporation/FinceptTerminal/releases).
+
+| 平台              | 下载                                       | 跑步                        |
+| --------------- | ---------------------------------------- | ------------------------- |
+| **Windows x64** | `FinceptTerminal-Windows-x64.zip`        | 提取 →`FinceptTerminal.exe` |
+| **Linux x64**   | `FinceptTerminal-Linux-x64.tar.gz`       | 提取 →`./FinceptTerminal`   |
+| **macOS（苹果芯片）** | `FinceptTerminal-macOS-arm64.tar.gz`     | 提取 →`./FinceptTerminal`   |
+| **macOS（英特尔）**  | `FinceptTerminal-macOS-x64.tar.gz`       | 提取 →`./FinceptTerminal`   |
+| **macOS（通用）**   | `FinceptTerminal-macOS-universal.tar.gz` | 提取 →`./FinceptTerminal`   |
+
+无需安装——只需解压并运行即可。
+
+* * *
+
 ## 从源代码构建
 
 ### 先决条件
 
--   **CMake**3.20+
--   **氯苯酚**（用于依赖管理）
--   **C++20编译器**（MSVC 2022、GCC 12+ 或 Clang 15+）
--   **Python**3.11+（用于分析脚本）
+| 工具         | 版本    | 视窗                                                       | Linux                     | macOS                              |
+| ---------- | ----- | -------------------------------------------------------- | ------------------------- | ---------------------------------- |
+| **git**    | 最新的   | `winget install Git.Git`                                 | `apt install git`         | `brew install git`                 |
+| **CMake**  | 3.20+ | `winget install Kitware.CMake`                           | `apt install cmake`       | `brew install cmake`               |
+| **忍者**     | 最新的   | `winget install Ninja-build.Ninja`                       | `apt install ninja-build` | `brew install ninja`               |
+| **C++编译器** | C++20 | MSVC 2022 ([视觉工作室](https://visualstudio.microsoft.com/)) | `apt install g++`         | Xcode CLT：`xcode-select --install` |
+| **氯苯酚**    | 最新的   | 见下文                                                      | 见下文                       | 见下文                                |
+| **Python** | 3.11+ | [python.org](https://www.python.org/downloads/)          | `apt install python3`     | `brew install python`              |
+
+#### 安装vcpkg
+
+```bash
+git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh       # Linux / macOS
+# or
+git clone https://github.com/microsoft/vcpkg.git %USERPROFILE%\vcpkg
+%USERPROFILE%\vcpkg\bootstrap-vcpkg.bat   # Windows
+```
+
+然后设置`VCPKG_ROOT`永久：
+
+```bash
+# Linux / macOS — add to ~/.bashrc or ~/.zshrc
+export VCPKG_ROOT=~/vcpkg
+
+# Windows (PowerShell — run once)
+[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT","$env:USERPROFILE\vcpkg","User")
+```
+
+#### Linux系统依赖
+
+```bash
+sudo apt install -y \
+  libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
+  libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
+  libwayland-dev libxkbcommon-dev \
+  pkg-config
+```
 
 ### 建造
 
@@ -89,24 +161,21 @@
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-cpp
 
-# Windows (MSVC)
+# All platforms (requires VCPKG_ROOT set)
 cmake --preset=default
 cmake --build build --config Release
-
-# Linux / macOS
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
 ```
 
 ### 跑步
 
 ```bash
 ./build/FinceptTerminal          # Linux / macOS
-.\build\Release\FinceptTerminal  # Windows
+.\build\Release\FinceptTerminal.exe  # Windows
 ```
 
 ### vcpkg 依赖项
 
+所有依赖项均由 vcpkg 自动安装：
 glfw3、curl、nlohmann-json、sqlite3、openssl、imgui（对接 + freetype）、yoga、stb、implot、spdlog、miniaudio
 
 * * *

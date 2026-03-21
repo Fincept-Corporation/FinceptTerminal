@@ -70,7 +70,45 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 | **Économie**     | Économie, DBnomics, AkShare, marchés asiatiques                                                                                                                                                      |
 | **Géopolitique** | Géopolitique, données gouvernementales, carte des relations, maritime, polymarché                                                                                                                    |
 | **Outils**       | Éditeur de code, éditeur de nœuds, Excel, générateur de rapports, notes, sources de données, mappage de données, serveurs MCP                                                                        |
-| **Communauté**   | Forum, Profil, Paramètres, Assistance, Docs, À propos                                                                                                                                                |
+| **Communauté**   | Forum, Profil, Paramètres, Assistance, Documents, À propos                                                                                                                                           |
+
+* * *
+
+## Démarrage rapide (installation en un clic)
+
+Clonez et exécutez le script d'installation : il installe toutes les dépendances et crée automatiquement l'application :
+
+```bash
+# Linux / macOS
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+chmod +x setup.sh && ./setup.sh
+```
+
+```bat
+# Windows — run from Developer Command Prompt for VS 2022
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+setup.bat
+```
+
+Le script gère : la vérification du compilateur, CMake, Ninja, Python, vcpkg, toutes les dépendances C++, la construction et le lancement.
+
+* * *
+
+## Téléchargez et exécutez (aucune construction requise)
+
+Des binaires prédéfinis sont disponibles sur le[Page des versions](https://github.com/Fincept-Corporation/FinceptTerminal/releases).
+
+| Plate-forme                | Télécharger                              | Courir                          |
+| -------------------------- | ---------------------------------------- | ------------------------------- |
+| **Windows x64**            | `FinceptTerminal-Windows-x64.zip`        | Extraire →`FinceptTerminal.exe` |
+| **Linuxx64**               | `FinceptTerminal-Linux-x64.tar.gz`       | Extraire →`./FinceptTerminal`   |
+| **macOS (Apple Silicium)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extraire →`./FinceptTerminal`   |
+| **macOS (Intel)**          | `FinceptTerminal-macOS-x64.tar.gz`       | Extraire →`./FinceptTerminal`   |
+| **macOS (universel)**      | `FinceptTerminal-macOS-universal.tar.gz` | Extraire →`./FinceptTerminal`   |
+
+Aucune installation requise : il suffit d'extraire et d'exécuter.
 
 * * *
 
@@ -78,10 +116,44 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 ### Conditions préalables
 
--   **CMake**3.20+
--   **vcpkg** (for dependency management)
--   **Compilateur C++20**(MSVC 2022, GCC 12+ ou Clang 15+)
--   **Python**3.11+ (pour les scripts d'analyse)
+| Outil               | Version | Fenêtres                                                        | Linux                     | macOS                              |
+| ------------------- | ------- | --------------------------------------------------------------- | ------------------------- | ---------------------------------- |
+| **Git**             | dernier | `winget install Git.Git`                                        | `apt install git`         | `brew install git`                 |
+| **CMake**           | 3.20+   | `winget install Kitware.CMake`                                  | `apt install cmake`       | `brew install cmake`               |
+| **Ninja**           | dernier | `winget install Ninja-build.Ninja`                              | `apt install ninja-build` | `brew install ninja`               |
+| **Compilateur C++** | C++20   | MSVC2022 ([Studio visuel](https://visualstudio.microsoft.com/)) | `apt install g++`         | XcodeCLT :`xcode-select --install` |
+| **vcpkg**           | dernier | Voir ci-dessous                                                 | Voir ci-dessous           | Voir ci-dessous                    |
+| **Python**          | 3.11+   | [python.org](https://www.python.org/downloads/)                 | `apt install python3`     | `brew install python`              |
+
+#### Installer vcpkg
+
+```bash
+git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh       # Linux / macOS
+# or
+git clone https://github.com/microsoft/vcpkg.git %USERPROFILE%\vcpkg
+%USERPROFILE%\vcpkg\bootstrap-vcpkg.bat   # Windows
+```
+
+Puis réglez`VCPKG_ROOT`en permanence:
+
+```bash
+# Linux / macOS — add to ~/.bashrc or ~/.zshrc
+export VCPKG_ROOT=~/vcpkg
+
+# Windows (PowerShell — run once)
+[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT","$env:USERPROFILE\vcpkg","User")
+```
+
+#### Dépendances du système Linux
+
+```bash
+sudo apt install -y \
+  libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
+  libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
+  libwayland-dev libxkbcommon-dev \
+  pkg-config
+```
 
 ### Construire
 
@@ -89,24 +161,21 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-cpp
 
-# Windows (MSVC)
+# All platforms (requires VCPKG_ROOT set)
 cmake --preset=default
 cmake --build build --config Release
-
-# Linux / macOS
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
 ```
 
 ### Courir
 
 ```bash
 ./build/FinceptTerminal          # Linux / macOS
-.\build\Release\FinceptTerminal  # Windows
+.\build\Release\FinceptTerminal.exe  # Windows
 ```
 
 ### Dépendances vcpkg
 
+Toutes les dépendances sont installées automatiquement par vcpkg :
 glfw3, curl, nlohmann-json, sqlite3, openssl, imgui (docking + freetype), yoga, stb, implot, spdlog, miniaudio
 
 * * *
@@ -116,7 +185,7 @@ glfw3, curl, nlohmann-json, sqlite3, openssl, imgui (docking + freetype), yoga, 
 **Terminal Fincept**est une plateforme financière open source conçue pour ceux qui refusent d'être limités par les logiciels traditionnels. Nous sommes en compétition sur**profondeur d'analyse**et**accessibilité des données**– pas sur les informations privilégiées ou les flux exclusifs.
 
 -   **Performances natives**— C++ avec ImGui accéléré par GPU, pas de surcharge Electron/Web
--   **Binaire simple**- pas de Node.js, pas d'exécution de navigateur, pas de bundle JavaScript
+-   **Binaire unique**- pas de Node.js, pas d'exécution de navigateur, pas de bundle JavaScript
 -   **Analyses de niveau CFA**— couverture complète du programme via les modules Python
 -   **Plus de 100 connecteurs de données**— de Yahoo Finance aux bases de données gouvernementales
 -   **Gratuit et open source**(AGPL-3.0) avec licences commerciales disponibles

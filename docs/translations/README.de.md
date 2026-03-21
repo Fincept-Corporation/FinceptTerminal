@@ -10,7 +10,7 @@
 
 Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Automatisierung und unbegrenzter Datenkonnektivität.
 
-[📥 Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 Dokumente](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 Diskussionen](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 Zwietracht](https://discord.gg/ae87a8ygbN)·[🤝 Partner](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+[📥 Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 Dokumente](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 Diskussionen](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 Zwietracht](https://discord.gg/ae87a8ygbN)·[🤝Partner](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
 
@@ -26,20 +26,20 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 ## Technologie-Stack
 
-| Schicht                | Technologien                          |
-| ---------------------- | ------------------------------------- |
-| **Sprache**            | C++20 (MSVC / GCC / Clang)            |
-| **Benutzeroberfläche** | Lieber ImGui (Docking-Zweig) + ImPlot |
-| **Layout**             | Yoga (Flexbox-Engine)                 |
-| **Rendern**            | GLFW 3 + OpenGL 3.3+                  |
-| **Vernetzung**         | libcurl + OpenSSL                     |
-| **Datenbank**          | SQLite 3                              |
-| **Serialisierung**     | nlohmann/json                         |
-| **Protokollierung**    | spdlog                                |
-| **Audio**              | Miniaudio                             |
-| **Video**              | libmpv (optional)                     |
-| **Analytik**           | Embedded Python 3.11+ (100+ scripts)  |
-| **Bauen**              | CMake 3.20+ / vcpkg                   |
+| Schicht                | Technologien                                  |
+| ---------------------- | --------------------------------------------- |
+| **Sprache**            | C++20 (MSVC / GCC / Clang)                    |
+| **Benutzeroberfläche** | Sehr geehrte ImGui (Docking-Zweig) + ImPlot   |
+| **Layout**             | Yoga (Flexbox-Engine)                         |
+| **Rendern**            | GLFW 3 + OpenGL 3.3+                          |
+| **Vernetzung**         | libcurl + OpenSSL                             |
+| **Datenbank**          | SQLite 3                                      |
+| **Serialisierung**     | nlohmann/json                                 |
+| **Protokollierung**    | spdlog                                        |
+| **Audio**              | Miniaudio                                     |
+| **Video**              | libmpv (optional)                             |
+| **Analytik**           | Eingebettetes Python 3.11+ (über 100 Skripte) |
+| **Bauen**              | CMake 3.20+ / vcpkg                           |
 
 * * *
 
@@ -66,7 +66,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 | **Handel**       | Krypto-Handel, Aktienhandel, Algo-Handel, Backtesting, Handelsvisualisierung                                                                                                               |
 | **Forschung**    | Aktienanalyse, Screener, Portfolio, Oberflächenanalyse, M&A-Analyse, Derivate, Altinvestitionen                                                                                            |
 | **QuantLib**     | Kern, Analyse, Kurven, Wirtschaft, Instrumente, ML, Modelle, Numerisch, Physik, Portfolio, Preisgestaltung, Regulierung, Risiko, Terminplanung, Solver, Statistik, Stochastik, Volatilität |
-| **AI/ML**        | AI Quant Lab, Agent Studio, AI Chat, Alpha Arena                                                                                                                                           |
+| **KI/ML**        | AI Quant Lab, Agent Studio, AI Chat, Alpha Arena                                                                                                                                           |
 | **Wirtschaft**   | Wirtschaft, DBnomics, AkShare, Asiatische Märkte                                                                                                                                           |
 | **Geopolitik**   | Geopolitik, Regierungsdaten, Beziehungskarte, Maritim, Polymarket                                                                                                                          |
 | **Werkzeuge**    | Code-Editor, Knoten-Editor, Excel, Report Builder, Notizen, Datenquellen, Datenzuordnung, MCP-Server                                                                                       |
@@ -74,14 +74,86 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 * * *
 
+## Schnellstart (One-Click-Setup)
+
+Klonen Sie das Setup-Skript und führen Sie es aus – es installiert alle Abhängigkeiten und erstellt die App automatisch:
+
+```bash
+# Linux / macOS
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+chmod +x setup.sh && ./setup.sh
+```
+
+```bat
+# Windows — run from Developer Command Prompt for VS 2022
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+setup.bat
+```
+
+Das Skript verarbeitet: Compilerprüfung, CMake, Ninja, Python, vcpkg, alle C++-Abhängigkeiten, Build und Start.
+
+* * *
+
+## Herunterladen und ausführen (kein Build erforderlich)
+
+Vorgefertigte Binärdateien sind auf der verfügbar[Seite „Veröffentlichungen“.](https://github.com/Fincept-Corporation/FinceptTerminal/releases).
+
+| Plattform                 | Herunterladen                            | Laufen                             |
+| ------------------------- | ---------------------------------------- | ---------------------------------- |
+| **Windows x64**           | `FinceptTerminal-Windows-x64.zip`        | Extrahieren →`FinceptTerminal.exe` |
+| **Linux x64**             | `FinceptTerminal-Linux-x64.tar.gz`       | Extrahieren →`./FinceptTerminal`   |
+| **macOS (Apple Silicon)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extrahieren →`./FinceptTerminal`   |
+| **macOS (Intel)**         | `FinceptTerminal-macOS-x64.tar.gz`       | Extrahieren →`./FinceptTerminal`   |
+| **macOS (universell)**    | `FinceptTerminal-macOS-universal.tar.gz` | Extrahieren →`./FinceptTerminal`   |
+
+Keine Installation erforderlich – einfach extrahieren und ausführen.
+
+* * *
+
 ## Aus der Quelle erstellen
 
 ### Voraussetzungen
 
--   **CMake**3.20+
--   **vcpkg**(für das Abhängigkeitsmanagement)
--   **C++20 compiler**(MSVC 2022, GCC 12+ oder Clang 15+)
--   **Python**3.11+ (für Analyseskripte)
+| Werkzeug         | Version | Windows                                                          | Linux                     | macOS                              |
+| ---------------- | ------- | ---------------------------------------------------------------- | ------------------------- | ---------------------------------- |
+| **Git**          | letzte  | `winget install Git.Git`                                         | `apt install git`         | `brew install git`                 |
+| **CMake**        | 3.20+   | `winget install Kitware.CMake`                                   | `apt install cmake`       | `brew install cmake`               |
+| **Ninja**        | letzte  | `winget install Ninja-build.Ninja`                               | `apt install ninja-build` | `brew install ninja`               |
+| **C++-Compiler** | C++20   | MSVC 2022 ([Visual Studio](https://visualstudio.microsoft.com/)) | `apt install g++`         | Xcode-CLT:`xcode-select --install` |
+| **vcpkg**        | letzte  | Siehe unten                                                      | Siehe unten               | Siehe unten                        |
+| **Python**       | 3.11+   | [python.org](https://www.python.org/downloads/)                  | `apt install python3`     | `brew install python`              |
+
+#### Installieren Sie vcpkg
+
+```bash
+git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh       # Linux / macOS
+# or
+git clone https://github.com/microsoft/vcpkg.git %USERPROFILE%\vcpkg
+%USERPROFILE%\vcpkg\bootstrap-vcpkg.bat   # Windows
+```
+
+Dann einstellen`VCPKG_ROOT`permanent:
+
+```bash
+# Linux / macOS — add to ~/.bashrc or ~/.zshrc
+export VCPKG_ROOT=~/vcpkg
+
+# Windows (PowerShell — run once)
+[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT","$env:USERPROFILE\vcpkg","User")
+```
+
+#### Linux-Systemabhängigkeiten
+
+```bash
+sudo apt install -y \
+  libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
+  libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
+  libwayland-dev libxkbcommon-dev \
+  pkg-config
+```
 
 ### Bauen
 
@@ -89,24 +161,21 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-cpp
 
-# Windows (MSVC)
+# All platforms (requires VCPKG_ROOT set)
 cmake --preset=default
 cmake --build build --config Release
-
-# Linux / macOS
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
 ```
 
 ### Laufen
 
 ```bash
 ./build/FinceptTerminal          # Linux / macOS
-.\build\Release\FinceptTerminal  # Windows
+.\build\Release\FinceptTerminal.exe  # Windows
 ```
 
 ### vcpkg-Abhängigkeiten
 
+Alle Abhängigkeiten werden automatisch von vcpkg installiert:
 glfw3, Curl, nlohmann-json, sqlite3, openssl, imgui (Docking + Freetype), Yoga, stb, implot, spdlog, miniaudio
 
 * * *

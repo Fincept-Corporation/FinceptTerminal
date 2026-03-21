@@ -74,14 +74,86 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 * * *
 
+## Inicio rápido (configuración con un clic)
+
+Clona y ejecuta el script de instalación: instala todas las dependencias y crea la aplicación automáticamente:
+
+```bash
+# Linux / macOS
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+chmod +x setup.sh && ./setup.sh
+```
+
+```bat
+# Windows — run from Developer Command Prompt for VS 2022
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+setup.bat
+```
+
+El script maneja: verificación del compilador, CMake, Ninja, Python, vcpkg, todas las dependencias de C++, compilación y lanzamiento.
+
+* * *
+
+## Descargar y ejecutar (no se requiere compilación)
+
+Los archivos binarios prediseñados están disponibles en[Página de lanzamientos](https://github.com/Fincept-Corporation/FinceptTerminal/releases).
+
+| Plataforma                | Descargar                                | Correr                         |
+| ------------------------- | ---------------------------------------- | ------------------------------ |
+| **Ventanas x64**          | `FinceptTerminal-Windows-x64.zip`        | Extraer →`FinceptTerminal.exe` |
+| **Linuxx64**              | `FinceptTerminal-Linux-x64.tar.gz`       | Extraer →`./FinceptTerminal`   |
+| **macOS (Apple Silicio)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extraer →`./FinceptTerminal`   |
+| **MacOS (Intel)**         | `FinceptTerminal-macOS-x64.tar.gz`       | Extraer →`./FinceptTerminal`   |
+| **macOS (universal)**     | `FinceptTerminal-macOS-universal.tar.gz` | Extraer →`./FinceptTerminal`   |
+
+No requiere instalación: simplemente extraiga y ejecute.
+
+* * *
+
 ## Construir desde la fuente
 
 ### Requisitos previos
 
--   **Chacer**3.20+
--   **vcpkg**(para gestión de dependencia)
--   **Compilador C++20**(MSVC 2022, GCC 12+ o Clang 15+)
--   **Pitón**3.11+ (para scripts de análisis)
+| Herramienta            | Versión   | ventanas                                                          | linux                     | macos                              |
+| ---------------------- | --------- | ----------------------------------------------------------------- | ------------------------- | ---------------------------------- |
+| **git**                | el último | `winget install Git.Git`                                          | `apt install git`         | `brew install git`                 |
+| **Chacer**             | 3.20+     | `winget install Kitware.CMake`                                    | `apt install cmake`       | `brew install cmake`               |
+| **ninja**              | el último | `winget install Ninja-build.Ninja`                                | `apt install ninja-build` | `brew install ninja`               |
+| **compilador de C ++** | C++20     | MSVC 2022 ([estudio visual](https://visualstudio.microsoft.com/)) | `apt install g++`         | Xcode CLT:`xcode-select --install` |
+| **vcpkg**              | el último | Vea abajo                                                         | Vea abajo                 | Vea abajo                          |
+| **Pitón**              | 3.11+     | [python.org](https://www.python.org/downloads/)                   | `apt install python3`     | `brew install python`              |
+
+#### Instalar vcpkg
+
+```bash
+git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh       # Linux / macOS
+# or
+git clone https://github.com/microsoft/vcpkg.git %USERPROFILE%\vcpkg
+%USERPROFILE%\vcpkg\bootstrap-vcpkg.bat   # Windows
+```
+
+Luego establezca`VCPKG_ROOT`permanentemente:
+
+```bash
+# Linux / macOS — add to ~/.bashrc or ~/.zshrc
+export VCPKG_ROOT=~/vcpkg
+
+# Windows (PowerShell — run once)
+[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT","$env:USERPROFILE\vcpkg","User")
+```
+
+#### Dependencias del sistema Linux
+
+```bash
+sudo apt install -y \
+  libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
+  libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
+  libwayland-dev libxkbcommon-dev \
+  pkg-config
+```
 
 ### Construir
 
@@ -89,24 +161,21 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-cpp
 
-# Windows (MSVC)
+# All platforms (requires VCPKG_ROOT set)
 cmake --preset=default
 cmake --build build --config Release
-
-# Linux / macOS
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
 ```
 
 ### Correr
 
 ```bash
 ./build/FinceptTerminal          # Linux / macOS
-.\build\Release\FinceptTerminal  # Windows
+.\build\Release\FinceptTerminal.exe  # Windows
 ```
 
 ### Dependencias de vcpkg
 
+Todas las dependencias se instalan automáticamente mediante vcpkg:
 glfw3, curl, nlohmann-json, sqlite3, openssl, imgui (acoplamiento + tipo libre), yoga, stb, implot, spdlog, miniaudio
 
 * * *
@@ -154,7 +223,7 @@ Estamos construyendo juntos el futuro del análisis financiero.
 
 **¿Interesado?**Correo electrónico**[support@fincept.in](mailto:support@fincept.in)**con el nombre de su institución.
 
-[Detalles de la licencia universitaria](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+[University Licensing Details](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 * * *
 
