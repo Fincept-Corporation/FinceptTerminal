@@ -2,6 +2,9 @@ name: Build Qt Terminal — All Platforms
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 env:
   BUILD_TYPE: Release
