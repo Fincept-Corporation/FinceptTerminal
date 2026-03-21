@@ -101,9 +101,6 @@ dist-ssr/
 # ── Claude Code local config — never commit ──────────────────
 .claude/settings.local.json
 
-# ── Internal planning docs ────────────────────────────────────
-docs/superpowers/
-
 # ── Build output (uitest) ─────────────────────────────────────
 fincept-qt/uitest/build/
 
@@ -117,3 +114,6 @@ lightning_logs/
 
 # ── Duplicate nested agents folder ───────────────────────────
 fincept-qt/scripts/agents/agents/
+
+# ── Translated READMEs (only allowed in docs/translations/) ──
+/README.*.md

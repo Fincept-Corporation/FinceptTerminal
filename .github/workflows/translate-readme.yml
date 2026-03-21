@@ -23,44 +23,51 @@ jobs:
         uses: dephraiim/translate-readme@main
         with:
           LANG: es
+          COMMIT: false
 
       - name: Translate to Chinese
         uses: dephraiim/translate-readme@main
         with:
           LANG: zh-CN
+          COMMIT: false
 
       - name: Translate to Japanese
         uses: dephraiim/translate-readme@main
         with:
           LANG: ja
+          COMMIT: false
 
       - name: Translate to French
         uses: dephraiim/translate-readme@main
         with:
           LANG: fr
+          COMMIT: false
 
       - name: Translate to Korean
         uses: dephraiim/translate-readme@main
         with:
           LANG: ko
+          COMMIT: false
 
       - name: Translate to German
         uses: dephraiim/translate-readme@main
         with:
           LANG: de
+          COMMIT: false
 
       - name: Translate to Hindi
         uses: dephraiim/translate-readme@main
         with:
           LANG: hi
+          COMMIT: false
 
-      - name: Move translated files to docs/translations
+      - name: Move translated files to docs/translations and commit
         run: |
           mkdir -p docs/translations
-          mv README.*.md docs/translations/ 2>/dev/null || true
+          mv README.es.md README.zh-CN.md README.ja.md README.fr.md README.ko.md README.de.md README.hi.md docs/translations/ 2>/dev/null || true
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add docs/translations/
-          git commit -m "📝 Move translated READMEs to docs/translations/" || echo "No changes to commit"
+          git diff --staged --quiet || git commit -m "chore: update translated READMEs in docs/translations/"
           git push || echo "No changes to push"
 
