@@ -1,8 +1,6 @@
 #include "screens/support/SupportScreen.h"
 #include "auth/UserApi.h"
 #include "ui/theme/Theme.h"
-#include "ui/widgets/TabHeader.h"
-#include "ui/widgets/TabFooter.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -109,26 +107,37 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // ── TabHeader ─────────────────────────────────────────────────────────────
-    tab_header_ = new ui::TabHeader("Support Center");
+    // ── Header bar ───────────────────────────────────────────────────────────
     {
-        // Stats in the header actions area
-        auto* al = tab_header_->actions_layout();
-        al->addWidget(mono_label("TICKETS:", ui::colors::TEXT_TERTIARY, 11));
+        auto* hdr = new QWidget;
+        hdr->setFixedHeight(44);
+        hdr->setStyleSheet("background: #1a1a1a; border-bottom: 2px solid #ea580c;");
+        auto* hl = new QHBoxLayout(hdr);
+        hl->setContentsMargins(16, 8, 16, 8);
+        hl->setSpacing(12);
+
+        auto* title = new QLabel("Support Center");
+        title->setStyleSheet("color: #ffffff; font-size: 16px; font-weight: bold;"
+                             " background: transparent; font-family: 'Consolas','Courier New',monospace;");
+        hl->addWidget(title);
+        hl->addStretch();
+
+        hl->addWidget(mono_label("TICKETS:", ui::colors::TEXT_TERTIARY, 11));
         stat_total_ = mono_label("0", ui::colors::CYAN, 11, true);
-        al->addWidget(stat_total_);
+        hl->addWidget(stat_total_);
 
-        al->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
-        al->addWidget(mono_label("OPEN:", ui::colors::TEXT_TERTIARY, 11));
+        hl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
+        hl->addWidget(mono_label("OPEN:", ui::colors::TEXT_TERTIARY, 11));
         stat_open_ = mono_label("0", "#ca8a04", 11, true);
-        al->addWidget(stat_open_);
+        hl->addWidget(stat_open_);
 
-        al->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
-        al->addWidget(mono_label("RESOLVED:", ui::colors::TEXT_TERTIARY, 11));
+        hl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
+        hl->addWidget(mono_label("RESOLVED:", ui::colors::TEXT_TERTIARY, 11));
         stat_resolved_ = mono_label("0", ui::colors::POSITIVE, 11, true);
-        al->addWidget(stat_resolved_);
+        hl->addWidget(stat_resolved_);
+
+        root->addWidget(hdr);
     }
-    root->addWidget(tab_header_);
 
     // ── Toolbar ──────────────────────────────────────────────────────────────
     {
@@ -180,15 +189,6 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
     pages_->addWidget(build_detail_page()); // 2
     root->addWidget(pages_, 1);
 
-    // ── TabFooter ─────────────────────────────────────────────────────────────
-    tab_footer_ = new ui::TabFooter("SUPPORT CENTER");
-    tab_footer_->set_left_info({
-        {"View", "LIST", "#6b7280"},
-        {"Tickets", "0", "#6b7280"},
-    });
-    tab_footer_->set_status(
-        "Response Time: < 24 hours  |  24/7 Customer Service  |  READY");
-    root->addWidget(tab_footer_);
 
     load_tickets();
 }
@@ -461,10 +461,6 @@ void SupportScreen::switch_to(int idx) {
 
     // Update footer view label
     const char* view_name = on_list ? "LIST" : on_create ? "CREATE" : "DETAILS";
-    tab_footer_->set_left_info({
-        {"View", view_name, "#6b7280"},
-        {"Tickets", stat_total_->text(), "#6b7280"},
-    });
 }
 
 // ── set_busy ──────────────────────────────────────────────────────────────────
@@ -482,9 +478,6 @@ void SupportScreen::set_busy(bool busy) {
     send_btn_->setEnabled(!busy);
 
     // Update footer status
-    tab_footer_->set_status(
-        QString("Response Time: < 24 hours  |  24/7 Customer Service  |  %1")
-        .arg(busy ? "UPDATING" : "READY"));
 }
 
 // ── load_tickets ──────────────────────────────────────────────────────────────

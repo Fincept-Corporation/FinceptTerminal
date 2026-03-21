@@ -8,8 +8,6 @@
 #include <QLabel>
 #include <QScrollArea>
 
-namespace fincept::ui { class TabHeader; class TabFooter; }
-
 namespace fincept::screens {
 
 /// Support ticket system — list / create / detail views matching Tauri UX.
@@ -21,10 +19,6 @@ public:
 private:
     // ── Views ─────────────────────────────────────────────────────────────────
     QStackedWidget* pages_       = nullptr;
-
-    // Header / Footer
-    ui::TabHeader* tab_header_   = nullptr;
-    ui::TabFooter* tab_footer_   = nullptr;
 
     // Header stats
     QLabel* stat_total_  = nullptr;

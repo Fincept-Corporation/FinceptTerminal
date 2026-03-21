@@ -119,8 +119,6 @@ set(UI_SOURCES
     src/ui/widgets/StatusBadge.cpp
     src/ui/widgets/SearchBar.cpp
     src/ui/widgets/GeometricBackground.cpp
-    src/ui/widgets/TabHeader.cpp
-    src/ui/widgets/TabFooter.cpp
     src/ui/tables/DataTable.cpp
     src/ui/charts/ChartFactory.cpp
     src/ui/navigation/NavigationBar.cpp
