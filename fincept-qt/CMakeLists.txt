@@ -109,6 +109,7 @@ set(SERVICE_SOURCES
     src/services/news/NewsClusterService.cpp
     src/services/news/NewsMonitorService.cpp
     src/services/databento/DatabentoService.cpp
+    src/services/dbnomics/DBnomicsService.cpp
 )
 
 # UI framework
