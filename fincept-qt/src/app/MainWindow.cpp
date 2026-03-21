@@ -24,6 +24,7 @@
 #include "screens/notes/NotesScreen.h"
 #include "screens/watchlist/WatchlistScreen.h"
 #include "screens/surface_analytics/SurfaceAnalyticsScreen.h"
+#include "screens/dbnomics/DBnomicsScreen.h"
 #include <QVBoxLayout>
 #include <QScreen>
 #include <QApplication>
@@ -165,7 +166,7 @@ void MainWindow::setup_app_screens() {
     router_->register_screen("screener",        new screens::ComingSoonScreen("Stock Screener"));
     router_->register_screen("economics",       new screens::ComingSoonScreen("Economics"));
     router_->register_screen("gov_data",        new screens::ComingSoonScreen("Government Data"));
-    router_->register_screen("dbnomics",        new screens::ComingSoonScreen("DBnomics"));
+    router_->register_factory("dbnomics",        []() { return new screens::DBnomicsScreen; });
     router_->register_screen("akshare",         new screens::ComingSoonScreen("AKShare Data"));
     router_->register_screen("asia_markets",    new screens::ComingSoonScreen("Asia Markets"));
     router_->register_screen("relationship_map",new screens::ComingSoonScreen("Relationship Map"));
