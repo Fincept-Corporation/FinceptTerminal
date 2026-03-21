@@ -86,6 +86,7 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
              .arg(provider_code).arg(offset));
     fincept::HttpClient::instance().get(url, [this, provider_code, offset](fincept::Result<QJsonDocument> result) {
         if (result.is_err()) {
+            LOG_ERROR("DBnomicsService", QString("datasets fetch failed: %1").arg(QString::fromStdString(result.error())));
             emit error_occurred("datasets", QString::fromStdString(result.error()));
             return;
         }
@@ -134,7 +135,7 @@ void DBnomicsService::fetch_series(const QString& provider_code,
     QString path = QString("/series/%1/%2?limit=50&offset=%3&observations=false")
                    .arg(provider_code).arg(dataset_code).arg(offset);
     if (!query.isEmpty())
-        path += "&q=" + QString(QUrl::toPercentEncoding(query));
+        path += "&q=" + QString::fromUtf8(QUrl::toPercentEncoding(query));
 
     LOG_INFO("DBnomicsService", QString("Fetching series %1 q='%2' offset=%3")
              .arg(cache_key).arg(query).arg(offset));
@@ -142,6 +143,7 @@ void DBnomicsService::fetch_series(const QString& provider_code,
     fincept::HttpClient::instance().get(build_url(path),
         [this, cache_key, offset, no_query, first_page](fincept::Result<QJsonDocument> result) {
         if (result.is_err()) {
+            LOG_ERROR("DBnomicsService", QString("series fetch failed: %1").arg(QString::fromStdString(result.error())));
             emit error_occurred("series", QString::fromStdString(result.error()));
             return;
         }
@@ -222,7 +224,7 @@ void DBnomicsService::fetch_observations(const QString& provider_code,
 void DBnomicsService::global_search(const QString& query, int offset) {
     if (query.trimmed().isEmpty()) return;
     const QString path = QString("/search?q=%1&limit=20&offset=%2")
-                         .arg(QString(QUrl::toPercentEncoding(query.trimmed()))).arg(offset);
+                         .arg(QString::fromUtf8(QUrl::toPercentEncoding(query.trimmed()))).arg(offset);
     LOG_INFO("DBnomicsService", QString("Searching: '%1' offset=%2").arg(query).arg(offset));
 
     fincept::HttpClient::instance().get(build_url(path), [this, offset](fincept::Result<QJsonDocument> result) {

@@ -4,7 +4,7 @@
 #include <QObject>
 #include <QMap>
 #include <QTimer>
-#include <functional>
+#include <QJsonDocument>
 
 namespace fincept::services {
 
@@ -44,6 +44,7 @@ signals:
 
 private:
     explicit DBnomicsService(QObject* parent = nullptr);
+    Q_DISABLE_COPY(DBnomicsService)
 
     static constexpr const char* kBaseUrl  = "https://api.db.nomics.world/v22";
     static constexpr int kProviderCacheMs  = 10 * 60 * 1000; // 10 min
