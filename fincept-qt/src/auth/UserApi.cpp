@@ -16,10 +16,34 @@ void UserApi::request(const QString& method, const QString& endpoint,
 
     auto handle = [cb](fincept::Result<QJsonDocument> result) {
         if (result.is_err()) {
-            cb({false, {}, QString::fromStdString(result.error()), 500});
+            QString err = QString::fromStdString(result.error());
+            int status = 0;
+            if (err.startsWith("HTTP_"))
+                status = err.mid(5).toInt();
+            QString msg;
+            switch (status) {
+                case 401: msg = "Session expired. Please log in again."; break;
+                case 403: msg = "Access denied."; break;
+                case 404: msg = "Resource not found."; break;
+                case 422: msg = "Invalid request data."; break;
+                case 500: msg = "Server error. Please try again."; break;
+                default:  msg = status > 0
+                              ? QString("Request failed (HTTP %1)").arg(status)
+                              : "Network error. Check your connection.";
+            }
+            cb({false, {}, msg, status});
             return;
         }
-        cb({true, result.value().object(), {}, 200});
+
+        auto obj = result.value().object();
+        if (obj.contains("success") && !obj["success"].toBool()) {
+            QString msg = obj.value("message").toString(
+                          obj.value("detail").toString("Request failed"));
+            cb({false, obj, msg, 200});
+            return;
+        }
+
+        cb({true, obj, {}, 200});
     };
 
     if (method == "GET")         http.get(endpoint, handle);
@@ -86,7 +110,7 @@ void UserApi::subscribe_to_database(const QString& db_name, Callback cb) {
 
 // ── Payment ──────────────────────────────────────────────────────────────────
 
-void UserApi::get_user_subscription(Callback cb) { request("GET", "/cashfree/subscription", {}, cb); }
+void UserApi::get_user_subscription(Callback cb) { request("GET", "/user/subscriptions", {}, cb); }
 
 void UserApi::get_payment_history(int page, int limit, Callback cb) {
     request("GET", QString("/user/transactions?page=%1&limit=%2").arg(page).arg(limit), {}, cb);

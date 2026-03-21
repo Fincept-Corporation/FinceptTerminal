@@ -107,38 +107,6 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // ── Header bar ───────────────────────────────────────────────────────────
-    {
-        auto* hdr = new QWidget;
-        hdr->setFixedHeight(44);
-        hdr->setStyleSheet("background: #1a1a1a; border-bottom: 2px solid #ea580c;");
-        auto* hl = new QHBoxLayout(hdr);
-        hl->setContentsMargins(16, 8, 16, 8);
-        hl->setSpacing(12);
-
-        auto* title = new QLabel("Support Center");
-        title->setStyleSheet("color: #ffffff; font-size: 16px; font-weight: bold;"
-                             " background: transparent; font-family: 'Consolas','Courier New',monospace;");
-        hl->addWidget(title);
-        hl->addStretch();
-
-        hl->addWidget(mono_label("TICKETS:", ui::colors::TEXT_TERTIARY, 11));
-        stat_total_ = mono_label("0", ui::colors::CYAN, 11, true);
-        hl->addWidget(stat_total_);
-
-        hl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
-        hl->addWidget(mono_label("OPEN:", ui::colors::TEXT_TERTIARY, 11));
-        stat_open_ = mono_label("0", "#ca8a04", 11, true);
-        hl->addWidget(stat_open_);
-
-        hl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
-        hl->addWidget(mono_label("RESOLVED:", ui::colors::TEXT_TERTIARY, 11));
-        stat_resolved_ = mono_label("0", ui::colors::POSITIVE, 11, true);
-        hl->addWidget(stat_resolved_);
-
-        root->addWidget(hdr);
-    }
-
     // ── Toolbar ──────────────────────────────────────────────────────────────
     {
         auto* bar = new QWidget;
@@ -170,6 +138,19 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
         bl->addWidget(back_btn_);
 
         bl->addStretch();
+
+        bl->addWidget(mono_label("TICKETS:", ui::colors::TEXT_TERTIARY, 11));
+        stat_total_ = mono_label("0", ui::colors::CYAN, 11, true);
+        bl->addWidget(stat_total_);
+        bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
+        bl->addWidget(mono_label("OPEN:", ui::colors::TEXT_TERTIARY, 11));
+        stat_open_ = mono_label("0", "#ca8a04", 11, true);
+        bl->addWidget(stat_open_);
+        bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
+        bl->addWidget(mono_label("RESOLVED:", ui::colors::TEXT_TERTIARY, 11));
+        stat_resolved_ = mono_label("0", ui::colors::POSITIVE, 11, true);
+        bl->addWidget(stat_resolved_);
+        bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
 
         status_dot_ = new QLabel("●");
         status_dot_->setStyleSheet(QString(

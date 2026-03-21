@@ -27,7 +27,6 @@ private:
     void update_clock();
 
     QLabel* clock_label_      = nullptr;
-    QLabel* status_dot_       = nullptr;
     QLabel* status_text_      = nullptr;
     QLabel* widget_count_     = nullptr;
     QPushButton* pulse_btn_   = nullptr;

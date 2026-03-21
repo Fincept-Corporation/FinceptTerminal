@@ -35,20 +35,15 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback) {
         QByteArray data = reply->readAll();
         int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
-        // Try to parse JSON even on HTTP errors (API returns JSON error bodies)
         QJsonParseError parse_err;
         QJsonDocument doc = QJsonDocument::fromJson(data, &parse_err);
 
         if (reply->error() != QNetworkReply::NoError) {
-            // If we got valid JSON, return it as success=true so callers can inspect
-            if (parse_err.error == QJsonParseError::NoError) {
-                LOG_WARN("HTTP", QString("HTTP %1: %2").arg(status).arg(reply->url().toString()));
-                cb(Result<QJsonDocument>::ok(doc));
-            } else {
-                LOG_ERROR("HTTP", QString("HTTP %1 error: %2 — %3")
-                    .arg(status).arg(reply->url().toString()).arg(reply->errorString()));
-                cb(Result<QJsonDocument>::err(reply->errorString().toStdString()));
-            }
+            LOG_WARN("HTTP", QString("HTTP %1: %2 — %3")
+                .arg(status).arg(reply->url().toString()).arg(reply->errorString()));
+            // Return error so callers can distinguish HTTP failures from success
+            cb(Result<QJsonDocument>::err(
+                QString("HTTP_%1").arg(status).toStdString()));
             return;
         }
 

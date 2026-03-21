@@ -63,12 +63,24 @@ echo   OK
 echo [4/5] Checking C++ compiler (MSVC)...
 where cl >nul 2>&1
 if errorlevel 1 (
-    echo   ERROR: MSVC compiler not found in PATH.
-    echo   Install Visual Studio 2022 with "Desktop development with C++" workload:
-    echo   https://visualstudio.microsoft.com/
-    echo   Then re-run from "Developer Command Prompt for VS 2022".
-    if "!CI_MODE!"=="false" pause
-    exit /b 1
+    :: Try to activate VS 2022 environment automatically
+    set "VCVARS="
+    if exist "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" (
+        set "VCVARS=C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+    ) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" (
+        set "VCVARS=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+    ) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat" (
+        set "VCVARS=C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat"
+    )
+    if defined VCVARS (
+        echo   Activating VS 2022 environment...
+        call "!VCVARS!"
+    ) else (
+        echo   MSVC not found. Install Visual Studio 2022 with "Desktop development with C++":
+        echo   https://visualstudio.microsoft.com/
+        if "!CI_MODE!"=="false" pause
+        exit /b 1
+    )
 )
 echo   OK
 

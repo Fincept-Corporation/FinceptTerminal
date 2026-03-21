@@ -15,6 +15,9 @@ public:
     void start();
     void stop();
 
+signals:
+    void session_expired();
+
 private slots:
     void check_pulse();
 

@@ -14,12 +14,42 @@ void AuthApi::request(const QString& method, const QString& endpoint,
                        const QJsonObject& body, Callback cb) {
     auto& http = fincept::HttpClient::instance();
 
-    auto handle = [cb](fincept::Result<QJsonDocument> result) {
+    auto handle = [cb, endpoint](fincept::Result<QJsonDocument> result) {
         if (result.is_err()) {
-            cb({false, {}, QString::fromStdString(result.error()), 0});
+            QString err = QString::fromStdString(result.error());
+            // Extract HTTP status from "HTTP_NNN" sentinel set by HttpClient
+            int status = 0;
+            if (err.startsWith("HTTP_")) {
+                status = err.mid(5).toInt();
+            }
+            // Build a meaningful error message from the status
+            QString msg;
+            switch (status) {
+                case 401: msg = "Session expired. Please log in again."; break;
+                case 403: msg = "Access denied."; break;
+                case 404: msg = "Resource not found."; break;
+                case 422: msg = "Invalid request data."; break;
+                case 500: msg = "Server error. Please try again."; break;
+                default:  msg = status > 0
+                              ? QString("Request failed (HTTP %1)").arg(status)
+                              : "Network error. Check your connection.";
+            }
+            cb({false, {}, msg, status});
             return;
         }
-        cb({true, result.value().object(), {}, 200});
+
+        auto doc = result.value();
+        auto obj = doc.object();
+
+        // Detect API-level failures: {success: false, message: "..."}
+        if (obj.contains("success") && !obj["success"].toBool()) {
+            QString msg = obj.value("message").toString(
+                          obj.value("detail").toString("Request failed"));
+            cb({false, obj, msg, 200});
+            return;
+        }
+
+        cb({true, obj, {}, 200});
     };
 
     if (method == "GET")         http.get(endpoint, handle);

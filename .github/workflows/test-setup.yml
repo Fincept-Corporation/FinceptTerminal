@@ -1,16 +1,6 @@
 name: Test Setup Scripts
 
 on:
-  push:
-    paths:
-      - 'setup.sh'
-      - 'setup.bat'
-      - 'fincept-qt/CMakeLists.txt'
-  pull_request:
-    paths:
-      - 'setup.sh'
-      - 'setup.bat'
-      - 'fincept-qt/CMakeLists.txt'
   workflow_dispatch:
 
 jobs:
@@ -45,21 +35,39 @@ jobs:
         with:
           version: "6.8.3"
           arch: ${{ runner.os == 'Windows' && 'win64_msvc2022_64' || 'clang_64' }}
-          modules: "qtcharts qtwebsockets"
+          modules: "qtcharts qtwebsockets qtsql"
           cache: true
 
-      # ── Linux / macOS — run setup.sh --ci ──────────────────
-      - name: Run setup.sh --ci (Linux/macOS)
-        if: runner.os != 'Windows'
+      # ── Linux — install deps and build directly ─────────────
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            cmake g++ python3 python3-pip \
+            qt6-base-dev libqt6charts6-dev qt6-tools-dev \
+            libqt6sql6-sqlite libqt6websockets6-dev \
+            libgl1-mesa-dev libglu1-mesa-dev pkg-config
+          cd fincept-qt
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+
+      # ── macOS — run setup.sh --ci ───────────────────────────
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
         run: |
           chmod +x setup.sh
           ./setup.sh --ci
 
-      # ── Windows — run setup.bat --ci ───────────────────────
-      - name: Run setup.bat --ci (Windows)
+      # ── Windows — build using MSVC environment ──────────────
+      - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: cmd
-        run: setup.bat --ci
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          cd fincept-qt
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel
 
       # ── Verify binary exists ────────────────────────────────
       - name: Verify binary

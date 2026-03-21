@@ -87,24 +87,6 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // ── Header bar ───────────────────────────────────────────────────────────
-    {
-        auto* hdr = new QWidget;
-        hdr->setFixedHeight(56);
-        hdr->setStyleSheet("background: #1a1a1a; border-bottom: 2px solid #ea580c;");
-        auto* hl = new QVBoxLayout(hdr);
-        hl->setContentsMargins(16, 8, 16, 8);
-        hl->setSpacing(4);
-        auto* title = new QLabel("About & Legal Information");
-        title->setStyleSheet("color: #ffffff; font-size: 16px; font-weight: bold;"
-                             " background: transparent; font-family: 'Consolas','Courier New',monospace;");
-        auto* sub = new QLabel("Version details, license terms, and contact information");
-        sub->setStyleSheet("color: #6b7280; font-size: 11px; background: transparent;"
-                           " font-family: 'Consolas','Courier New',monospace;");
-        hl->addWidget(title);
-        hl->addWidget(sub);
-        root->addWidget(hdr);
-    }
 
     // ── Scrollable content ────────────────────────────────────────────────────
     auto* scroll = new QScrollArea;

@@ -112,24 +112,36 @@ void AuthManager::initialize() {
 void AuthManager::validate_saved_session(const SessionData& saved) {
     Q_UNUSED(saved);
     AuthApi::instance().validate_session_server([this](ApiResponse r) {
-        if (!r.success) {
-            LOG_WARN("Auth", "Session validation failed — clearing");
+        // 401/403 → session truly expired, must re-login
+        if (!r.success && (r.status_code == 401 || r.status_code == 403)) {
+            LOG_WARN("Auth", "Session expired (HTTP " + QString::number(r.status_code) + ") — clearing");
             clear_session();
             set_loading(false);
             emit auth_state_changed();
             return;
         }
 
+        // Network/server error (500, 0) → treat as transient, keep session alive
+        // and proceed to dashboard; worst case the next API call will fail
+        if (!r.success) {
+            LOG_WARN("Auth", "Session validation network error — restoring session anyway");
+            session_.authenticated = true;
+            set_loading(false);
+            emit auth_state_changed();
+            return;
+        }
+
+        // Success — also check explicit valid=false from response body
         auto data = unwrap_data(r.data);
         if (data.contains("valid") && !data["valid"].toBool()) {
-            LOG_WARN("Auth", "Session invalid (valid=false)");
+            LOG_WARN("Auth", "Session invalid (valid=false) — clearing");
             clear_session();
             set_loading(false);
             emit auth_state_changed();
             return;
         }
 
-        // Session valid — refresh profile
+        // Session valid — refresh profile then proceed
         fetch_user_profile(session_.api_key);
     });
 }

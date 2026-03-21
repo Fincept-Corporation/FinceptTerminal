@@ -43,7 +43,7 @@ if [ "$PLATFORM" = "linux" ]; then
     sudo apt-get update -qq
     sudo apt-get install -y \
         git cmake g++ python3 python3-pip \
-        qt6-base-dev qt6-charts-dev qt6-tools-dev \
+        qt6-base-dev libqt6charts6-dev qt6-tools-dev \
         libqt6sql6-sqlite libqt6websockets6-dev \
         libgl1-mesa-dev libglu1-mesa-dev \
         pkg-config

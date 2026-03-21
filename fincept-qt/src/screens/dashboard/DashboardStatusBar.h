@@ -16,7 +16,6 @@ public:
 
 private:
     void update_uptime();
-    QWidget* build_feed_indicator(const QString& label, const QString& color);
 
     QLabel* uptime_label_   = nullptr;
     QLabel* layout_label_   = nullptr;
