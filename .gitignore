@@ -97,3 +97,23 @@ fincept-cpp/
 *.rmeta
 node_modules/
 dist-ssr/
+
+# ── Claude Code local config — never commit ──────────────────
+.claude/settings.local.json
+
+# ── Internal planning docs ────────────────────────────────────
+docs/superpowers/
+
+# ── Build output (uitest) ─────────────────────────────────────
+fincept-qt/uitest/build/
+
+# ── ML training artifacts ─────────────────────────────────────
+lightning_logs/
+*.ckpt
+*.yaml
+
+# ── Shell tree output files ───────────────────────────────────
+**/tree
+
+# ── Duplicate nested agents folder ───────────────────────────
+fincept-qt/scripts/agents/agents/
