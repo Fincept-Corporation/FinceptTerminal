@@ -114,6 +114,3 @@ lightning_logs/
 
 # ── Duplicate nested agents folder ───────────────────────────
 fincept-qt/scripts/agents/agents/
-
-# ── Translated READMEs (only allowed in docs/translations/) ──
-/README.*.md
