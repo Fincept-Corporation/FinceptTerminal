@@ -1,4 +1,4 @@
-name: Build Qt Terminal — All Platforms
+name: Build Qt Terminal - All Platforms
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
             qt_version: "6.8.3"
             cmake_extra: ""
 
-          # ---- Windows ARM64 (cross-compile from x64) ----
+          # ---- Windows ARM64 ----
           - os: windows-2022
             arch: arm64
             platform: Windows
@@ -75,16 +75,13 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Debug — environment info
+      - name: Environment info
         shell: bash
         run: |
-          echo "::group::Environment"
           echo "OS: ${{ matrix.os }}"
           echo "Platform: ${{ matrix.platform }}"
           echo "Arch: ${{ matrix.arch }}"
-          echo "Workspace: ${{ github.workspace }}"
           cmake --version || echo "CMake not found"
-          echo "::endgroup::"
 
       # ---- System dependencies (Linux) ----
       - name: Install system dependencies (Linux)
@@ -98,7 +95,7 @@ jobs:
             libgl1-mesa-dev libglu1-mesa-dev \
             pkg-config
 
-      # ---- Qt6 (Windows + macOS via installer action) ----
+      # ---- Qt6 (Windows + macOS) ----
       - name: Install Qt6 (Windows/macOS)
         if: runner.os != 'Linux'
         uses: jurplel/install-qt-action@v4
@@ -113,34 +110,21 @@ jobs:
         shell: bash
         working-directory: fincept-qt
         run: |
-          echo "::group::CMake Configure"
-
-          CMAKE_ARGS="-B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}"
-
-          # On Linux Qt6 is found automatically via system install
-          # On Windows/macOS CMAKE_PREFIX_PATH is set by install-qt-action
-          CMAKE_ARGS="$CMAKE_ARGS ${{ matrix.cmake_extra }}"
-
+          CMAKE_ARGS="-B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} ${{ matrix.cmake_extra }}"
           echo "Running: cmake $CMAKE_ARGS"
           cmake $CMAKE_ARGS
-          echo "::endgroup::"
-
           if [ ! -f build/CMakeCache.txt ]; then
-            echo "::error::CMake configure failed — CMakeCache.txt not found"
+            echo "::error::CMake configure failed"
             exit 1
           fi
-          echo "CMake configure succeeded"
 
       # ---- Build ----
       - name: Build
         shell: bash
         working-directory: fincept-qt
-        run: |
-          echo "::group::CMake Build"
-          cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
-          echo "::endgroup::"
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
 
-      # ---- Verify build output ----
+      # ---- Verify ----
       - name: Verify build output
         shell: bash
         working-directory: fincept-qt
@@ -151,12 +135,10 @@ jobs:
             BINARY="build/${{ matrix.exe }}"
           fi
           if [ ! -f "$BINARY" ]; then
-            echo "::error::Build output not found at $BINARY"
-            ls -la build/ 2>/dev/null || true
-            ls -la build/Release/ 2>/dev/null || true
+            echo "::error::Binary not found at $BINARY"
             exit 1
           fi
-          echo "Build output verified: $BINARY"
+          echo "Binary verified: $BINARY"
           ls -lh "$BINARY"
 
       # ---- Collect artifacts (Windows) ----
@@ -166,13 +148,9 @@ jobs:
         working-directory: fincept-qt
         run: |
           mkdir -p dist
-          # Copy entire Release dir (windeployqt runs POST_BUILD and copies Qt DLLs there)
           cp -r build/Release/. dist/
           cp -r resources dist/resources 2>/dev/null || true
           cp -r scripts dist/scripts 2>/dev/null || true
-          echo "Bundled $(find dist/scripts -name '*.py' 2>/dev/null | wc -l) Python scripts"
-          echo "=== Collected artifacts ==="
-          ls -lh dist/
 
       # ---- Collect artifacts (Linux/macOS) ----
       - name: Collect artifacts (Linux/macOS)
@@ -185,9 +163,6 @@ jobs:
           chmod +x dist/${{ matrix.exe }}
           cp -r resources dist/resources 2>/dev/null || true
           cp -r scripts dist/scripts 2>/dev/null || true
-          echo "Bundled $(find dist/scripts -name '*.py' 2>/dev/null | wc -l) Python scripts"
-          echo "=== Collected artifacts ==="
-          ls -lh dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -201,9 +176,7 @@ jobs:
     needs: build
     runs-on: macos-14
     name: macOS Universal
-    if: |
-      !cancelled() &&
-      needs.build.result == 'success'
+    if: "!cancelled() && needs.build.result == 'success'"
 
     steps:
       - name: Download macOS arm64
@@ -218,15 +191,6 @@ jobs:
           name: FinceptTerminal-macOS-x64
           path: x64
 
-      - name: Verify downloads
-        run: |
-          echo "=== arm64 ==="
-          ls -lh arm64/
-          file arm64/FinceptTerminal || { echo "::error::arm64 binary missing"; exit 1; }
-          echo "=== x64 ==="
-          ls -lh x64/
-          file x64/FinceptTerminal || { echo "::error::x64 binary missing"; exit 1; }
-
       - name: Create Universal Binary
         run: |
           mkdir -p dist
@@ -234,7 +198,6 @@ jobs:
           chmod +x dist/FinceptTerminal
           cp -r arm64/resources dist/resources 2>/dev/null || true
           cp -r arm64/scripts dist/scripts 2>/dev/null || true
-          echo "=== Universal Binary ==="
           file dist/FinceptTerminal
           ls -lh dist/FinceptTerminal
 
@@ -249,9 +212,7 @@ jobs:
   release:
     needs: [build, macos-universal]
     runs-on: ubuntu-latest
-    if: |
-      !cancelled() &&
-      needs.build.result == 'success'
+    if: "!cancelled() && needs.build.result == 'success'"
     permissions:
       contents: write
 
@@ -260,13 +221,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-
-      - name: Debug — list artifacts
-        run: |
-          echo "=== Downloaded artifacts ==="
-          find artifacts -type f | sort
-          echo "=== Disk usage ==="
-          du -sh artifacts/*/
 
       - name: Package releases
         shell: bash
@@ -277,39 +231,34 @@ jobs:
             cd "$name"
             if [[ "$name" == *"Windows"* ]]; then
               zip -r "../../${name}.zip" .
-              echo "Packaged: ${name}.zip"
             else
               tar -czf "../../${name}.tar.gz" .
-              echo "Packaged: ${name}.tar.gz"
             fi
             cd ..
           done
-          cd ..
-          echo "=== Release packages ==="
-          ls -lh FinceptTerminal-*.{zip,tar.gz} 2>/dev/null || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}"
-          name: "${{ github.ref_type == 'tag' && format('Fincept Terminal {0}', github.ref_name) || format('Fincept Terminal Build {0}', github.run_number) }}"
-          make_latest: "${{ github.ref_type == 'tag' }}"
+          tag_name: ${{ github.ref_name }}
+          name: Fincept Terminal ${{ github.ref_name }}
+          make_latest: true
           body: |
-            Automated build from commit ${{ github.sha }}
+            Fincept Terminal ${{ github.ref_name }}
 
             ## Downloads
 
             ### Windows
-            - `FinceptTerminal-Windows-x64.zip` — Windows x86_64
-            - `FinceptTerminal-Windows-arm64.zip` — Windows ARM64
+            - `FinceptTerminal-Windows-x64.zip` - Windows x86_64
+            - `FinceptTerminal-Windows-arm64.zip` - Windows ARM64
 
             ### Linux
-            - `FinceptTerminal-Linux-x64.tar.gz` — Linux x86_64
+            - `FinceptTerminal-Linux-x64.tar.gz` - Linux x86_64
 
             ### macOS
-            - `FinceptTerminal-macOS-arm64.tar.gz` — macOS Apple Silicon (M1/M2/M3/M4)
-            - `FinceptTerminal-macOS-x64.tar.gz` — macOS Intel
-            - `FinceptTerminal-macOS-universal.tar.gz` — macOS Universal (both architectures)
+            - `FinceptTerminal-macOS-arm64.tar.gz` - macOS Apple Silicon (M1/M2/M3/M4)
+            - `FinceptTerminal-macOS-x64.tar.gz` - macOS Intel
+            - `FinceptTerminal-macOS-universal.tar.gz` - macOS Universal
           files: |
             FinceptTerminal-Windows-x64.zip
             FinceptTerminal-Windows-arm64.zip
@@ -319,4 +268,4 @@ jobs:
             FinceptTerminal-macOS-universal.tar.gz
           fail_on_unmatched_files: false
           draft: false
-          prerelease: "${{ github.ref_type != 'tag' }}"
+          prerelease: false
