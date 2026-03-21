@@ -190,6 +190,7 @@ set(SCREEN_SOURCES
     src/screens/surface_analytics/SurfaceMetricsPanel.cpp
     src/screens/surface_analytics/SurfaceDatabentoPanel.cpp
     src/screens/surface_analytics/SurfaceAnalyticsScreen.cpp
+    src/screens/dbnomics/DBnomicsDataTable.cpp
 )
 
 # App
