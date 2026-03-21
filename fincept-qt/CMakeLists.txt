@@ -192,6 +192,7 @@ set(SCREEN_SOURCES
     src/screens/surface_analytics/SurfaceAnalyticsScreen.cpp
     src/screens/dbnomics/DBnomicsDataTable.cpp
     src/screens/dbnomics/DBnomicsChartWidget.cpp
+    src/screens/dbnomics/DBnomicsSelectionPanel.cpp
 )
 
 # App
