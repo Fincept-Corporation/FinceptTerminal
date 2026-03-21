@@ -1,18 +1,18 @@
 ---
-name: 🌟 Feature Request
-about: Suggest a new feature or enhancement for Fincept Terminal
+name: Feature Request
+about: Suggest a new feature or screen for Fincept Terminal
 title: "[FEATURE] "
 labels: "type:feature, status:triage"
 assignees: ""
 ---
 
 ## What feature would you like?
-<!-- Describe the feature you want to see -->
+<!-- Describe the feature clearly -->
 
 
-## What problem does this solve?
-<!-- Explain the use case and who would benefit -->
+## What problem does it solve?
+<!-- Who benefits from this and how? -->
 
 
-## Any alternatives or additional context?
-<!-- Optional: alternatives considered, examples, mockups, etc. -->
+## Additional context
+<!-- Mockups, examples, or alternatives considered -->

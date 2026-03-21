@@ -1,69 +1,43 @@
-# Contribute to Fincept Terminal
+# Contributing to Fincept Terminal
 
-Want to make Fincept Terminal even better? We'd love your help!
+Fincept Terminal is a native C++20/Qt6 desktop financial terminal. All contributions are welcome!
 
-## Where We Need You
+## Ways to Contribute
 
-**C++ Development**
-   - Build new screens and features using Qt6 Widgets
-   - Improve core infrastructure, performance, and stability
+- **C++ / Qt6** — new screens, performance fixes, core infrastructure
+- **Python Analytics** — data scripts, AI agents, quant modules
+- **Data Sources** — connect APIs, brokers, government financial databases
+- **Bug Reports & Feature Requests** — open an issue
 
-**Data Source Integration**
-   - Connect government financial databases (e.g., data.gov.in, data.gov)
-   - Write Python data fetcher scripts for new APIs
+## Getting Started
 
-**Analytics & AI**
-   - Build Python analytics modules (portfolio, derivatives, risk)
-   - Implement new AI agent frameworks
+```bash
+# Fork & clone
+git clone https://github.com/your-username/FinceptTerminal.git
+cd FinceptTerminal/fincept-qt
 
-**Brokerage API Integration**
-   - Connect stock brokers so users can trade directly from the terminal
-   - Work on country-specific broker adapters in C++
+# Build — Linux/macOS
+cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel
 
-**Documentation**
-   - Create and maintain comprehensive documentation
-   - Cover build setup, architecture, and developer guides
+# Build — Windows (VS 2022 Developer Command Prompt)
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
+cmake --build build --config Release
 
----
+# Create a branch
+git checkout -b feature/your-feature
+```
 
-## How to Get Started
+## Code Guidelines
 
-1. **Fork** this repo & clone it:
-   ```bash
-   git clone https://github.com/your-username/FinceptTerminal.git
-   ```
+- C++20, `snake_case` for functions/variables, `PascalCase` for types
+- Screens render UI only — no business logic or direct HTTP calls
+- Never block the UI thread (`waitForFinished()` forbidden on main thread)
+- Use `Result<T>` for error handling, `LOG_INFO`/`LOG_ERROR` for logging
 
-2. **Build** the project:
-   ```bash
-   cd FinceptTerminal/fincept-qt
+## Submitting a PR
 
-   # Linux / macOS
-   cmake -B build -DCMAKE_BUILD_TYPE=Release
-   cmake --build build --parallel
+1. Push your branch and open a Pull Request against `main`
+2. Link any related issues
+3. Keep changes focused — one feature or fix per PR
 
-   # Windows (Developer Command Prompt for VS 2022)
-   cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
-   cmake --build build --config Release --parallel
-   ```
-
-3. **Create a new branch** for your feature:
-   ```bash
-   git checkout -b feature/awesome-feature
-   ```
-
-4. **Code**, follow the [C++ Contributing Guide](../fincept-qt/CONTRIBUTING.md) or [Python Guide](../docs/PYTHON_CONTRIBUTOR_GUIDE.md), and document your changes.
-
-5. **Push your changes** and open a **pull request**:
-   ```bash
-   git push origin feature/awesome-feature
-   ```
-
----
-
-## Guidelines
-
-- **Bug Reports:** [File an issue](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new)
-- **Feature Requests:** Open a [GitHub Discussion](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
-- **Code Contributions:** Keep it clean & simple. Well-documented code is appreciated.
-
-**Join the movement!** Let's build the future of finance together. Questions? Ping us at [support@fincept.in](mailto:support@fincept.in).
+Questions? [support@fincept.in](mailto:support@fincept.in) · [Discord](https://discord.gg/ae87a8ygbN)

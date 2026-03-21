@@ -1,5 +1,5 @@
 ---
-name: 🐛 Bug Report
+name: Bug Report
 about: Report a bug or unexpected behavior in Fincept Terminal
 title: "[BUG] "
 labels: "type:bug, status:triage"
@@ -7,19 +7,23 @@ assignees: ""
 ---
 
 ## What happened?
-<!-- Describe the bug and what you expected to happen -->
+<!-- Describe the bug and what you expected instead -->
 
 
-## How to reproduce?
-<!-- Steps to reproduce the issue -->
+## Steps to Reproduce
 1.
 2.
 3.
 
 ## Environment
-- **OS:**
-- **Version:**
-- **Error logs (if any):**
+- **OS:** (Windows / macOS / Linux)
+- **Fincept Terminal Version:**
+- **Qt Version:**
+
+## Error Logs
 ```
-Paste error messages here
+Paste any error messages or crash logs here
 ```
+
+## Screenshots
+<!-- If applicable, add screenshots to help explain the issue -->
