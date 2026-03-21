@@ -193,6 +193,8 @@ QWidget* DBnomicsSelectionPanel::build_dataset_section() {
         selected_dataset_ = item->data(Qt::UserRole).toString();
         selected_series_.clear();
         series_list_->clear();
+        series_search_input_->clear();
+        series_load_more_btn_->hide();
         emit dataset_selected(selected_dataset_);
     });
 
