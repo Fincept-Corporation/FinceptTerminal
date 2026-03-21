@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)](https://isocpp.org/)[![ImGui](https://img.shields.io/badge/ImGui-Docking-blue)](https://github.com/ocornut/imgui)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)](https://isocpp.org/)[![Qt6](https://img.shields.io/badge/Qt-6-41CD52?logo=qt&logoColor=white)](https://www.qt.io/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
@@ -20,41 +20,36 @@
 
 ## के बारे में
 
-**फिनसेप्ट टर्मिनल वीसीएच**एक शुद्ध देशी C++20 डेस्कटॉप एप्लिकेशन है - पिछले टॉरी/रिएक्ट/रस्ट स्टैक से एक पूर्ण पुनर्लेखन। यह उपयोगकर्ता है**प्रिय इमगुई**GPU-त्वरित यूआई के लिए,**जीएलएफडब्ल्यू + ओपनजीएल**प्रतिपादन के लिए, एम्बेडेड**अजगर**एनालिटिक्स के लिए, और एकल देशी बाइनरी में ब्लूमबर्ग-टर्मिनल-क्लास प्रदर्शन प्रदान करता है।
+**Fincept Terminal v4**एक शुद्ध देशी C++20 डेस्कटॉप एप्लिकेशन है - पिछले टॉरी/रिएक्ट/रस्ट स्टैक से एक पूर्ण पुनर्लेखन। यह उपयोगकर्ता है**Qt6**यूआई और रेंडरिंग के लिए, एंबेडेड**अजगर**एनालिटिक्स के लिए, और एकल देशी बाइनरी में ब्लूमबर्ग-टर्मिनल-क्लास प्रदर्शन प्रदान करता है।
 
 * * *
 
 ## प्रौद्योगिकी ढेर
 
-| परत            | प्रौद्योगिकियों                      |
-| -------------- | ------------------------------------ |
-| **भाषा**       | सी++20 (एमएसवीसी/जीसीसी/क्लैंग)      |
-| **यूआई**       | प्रिय ImGui (डॉकिंग शाखा) + ImPlot   |
-| **लेआउट**      | योग (फ्लेक्सबॉक्स इंजन)              |
-| **प्रतिपादन**  | जीएलएफडब्ल्यू 3 + ओपनजीएल 3.3+       |
-| **नेटवर्किंग** | libcurl + ओपनएसएसएल                  |
-| **डेटाबेस**    | SQLite 3                             |
-| **क्रमबद्धता** | nlohmann/json                        |
-| **लॉगिंग**     | spdlog                               |
-| **ऑडियो**      | मिनीऑडियो                            |
-| **Video**      | libmpv (वैकल्पिक)                    |
-| **एनालिटिक्स** | एंबेडेड पायथन 3.11+ (100+ स्क्रिप्ट) |
-| **निर्माण**    | सीएमके 3.20+ / वीसीपीकेजी            |
+| परत                | प्रौद्योगिकियों                      |
+| ------------------ | ------------------------------------ |
+| **भाषा**           | सी++20 (एमएसवीसी/जीसीसी/क्लैंग)      |
+| **यूआई फ्रेमवर्क** | Qt6 विजेट                            |
+| **चार्ट**          | Qt6 चार्ट                            |
+| **नेटवर्किंग**     | Qt6 नेटवर्क + Qt6 वेबसॉकेट           |
+| **डेटाबेस**        | Qt6 एसक्यूएल (एसक्यूलाइट)            |
+| **एनालिटिक्स**     | एंबेडेड पायथन 3.11+ (100+ स्क्रिप्ट) |
+| **निर्माण**        | सीएमके 3.20+                         |
 
 * * *
 
 ## विशेषताएँ
 
-| **विशेषता**               | **विवरण**                                                                                                              |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 📊**CFA-Level Analytics** | डीसीएफ मॉडल, पोर्टफोलियो अनुकूलन, जोखिम मेट्रिक्स (वीएआर, शार्प), एम्बेडेड पायथन के माध्यम से डेरिवेटिव मूल्य निर्धारण |
-| 🤖**एआई एजेंट**           | 20+ निवेशक व्यक्तित्व (बफेट, डेलियो, ग्राहम), हेज फंड रणनीतियाँ, स्थानीय एलएलएम समर्थन                                 |
-| 🌐**100+ डेटा कनेक्टर**   | डीबीनॉमिक्स, पॉलीगॉन, क्रैकेन, याहू फाइनेंस, एफआरईडी, आईएमएफ, विश्व बैंक, अक्शेयर, सरकारी एपीआई                        |
-| 📈**रीयल-टाइम ट्रेडिंग**  | क्रिप्टो (क्रैकेन/हाइपरलिक्विड वेबसॉकेट), इक्विटी, एल्गो ट्रेडिंग, पेपर ट्रेडिंग इंजन                                  |
-| 🔬**क्वांटलिब सुइट**      | 18 मात्रात्मक विश्लेषण मॉड्यूल - मूल्य निर्धारण, जोखिम, स्टोकेस्टिक, अस्थिरता, निश्चित आय                              |
-| 🚢**ग्लोबल इंटेलिजेंस**   | समुद्री ट्रैकिंग, भू-राजनीतिक विश्लेषण, संबंध मानचित्रण, उपग्रह डेटा                                                   |
-| 🎨**विज़ुअल वर्कफ़्लोज़** | स्वचालन पाइपलाइनों के लिए नोड संपादक, एमसीपी उपकरण एकीकरण                                                              |
-| 🧠**एआई क्वांट लैब**      | एमएल मॉडल, कारक खोज, एचएफटी, सुदृढीकरण शिक्षण ट्रेडिंग                                                                 |
+| **विशेषता**                 | **विवरण**                                                                                                              |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 📊**सीएफए-स्तर विश्लेषिकी** | डीसीएफ मॉडल, पोर्टफोलियो अनुकूलन, जोखिम मेट्रिक्स (वीएआर, शार्प), एम्बेडेड पायथन के माध्यम से डेरिवेटिव मूल्य निर्धारण |
+| 🤖**एआई एजेंट**             | 20+ निवेशक व्यक्तित्व (बफेट, डेलियो, ग्राहम), हेज फंड रणनीतियाँ, स्थानीय एलएलएम समर्थन                                 |
+| 🌐**100+ डेटा कनेक्टर**     | डीबीनॉमिक्स, पॉलीगॉन, क्रैकेन, याहू फाइनेंस, एफआरईडी, आईएमएफ, विश्व बैंक, अक्शेयर, सरकारी एपीआई                        |
+| 📈**रीयल-टाइम ट्रेडिंग**    | क्रिप्टो (क्रैकेन/हाइपरलिक्विड वेबसॉकेट), इक्विटी, एल्गो ट्रेडिंग, पेपर ट्रेडिंग इंजन                                  |
+| 🔬**क्वांटलिब सुइट**        | 18 मात्रात्मक विश्लेषण मॉड्यूल - मूल्य निर्धारण, जोखिम, स्टोकेस्टिक, अस्थिरता, निश्चित आय                              |
+| 🚢**ग्लोबल इंटेलिजेंस**     | समुद्री ट्रैकिंग, भू-राजनीतिक विश्लेषण, संबंध मानचित्रण, उपग्रह डेटा                                                   |
+| 🎨**विज़ुअल वर्कफ़्लोज़**   | स्वचालन पाइपलाइनों के लिए नोड संपादक, एमसीपी उपकरण एकीकरण                                                              |
+| 🧠**एआई क्वांट लैब**        | एमएल मॉडल, कारक खोज, एचएफटी, सुदृढीकरण शिक्षण ट्रेडिंग                                                                 |
 
 * * *
 
@@ -74,7 +69,23 @@
 
 * * *
 
-## त्वरित प्रारंभ (एक-क्लिक सेटअप)
+## इंस्टालेशन
+
+### विकल्प 1 - पूर्व-निर्मित बाइनरी डाउनलोड करें (अनुशंसित)
+
+पूर्व-निर्मित बायनेरिज़ पर उपलब्ध हैं[पेज जारी करता है](https://github.com/Fincept-Corporation/FinceptTerminal/releases). किसी निर्माण उपकरण की आवश्यकता नहीं है - बस निकालें और चलाएं।
+
+| प्लैटफ़ॉर्म               | Download                                 | दौड़ना                         |
+| ------------------------- | ---------------------------------------- | ------------------------------ |
+| **विंडोज़ x64**           | `FinceptTerminal-Windows-x64.zip`        | निकालें →`FinceptTerminal.exe` |
+| **लिनक्स x64**            | `FinceptTerminal-Linux-x64.tar.gz`       | निकालें →`./FinceptTerminal`   |
+| **macOS (एप्पल सिलिकॉन)** | `FinceptTerminal-macOS-arm64.tar.gz`     | निकालें →`./FinceptTerminal`   |
+| **मैकओएस (इंटेल)**        | `FinceptTerminal-macOS-x64.tar.gz`       | निकालें →`./FinceptTerminal`   |
+| **मैकओएस (यूनिवर्सल)**    | `FinceptTerminal-macOS-universal.tar.gz` | निकालें →`./FinceptTerminal`   |
+
+* * *
+
+### विकल्प 2 - त्वरित प्रारंभ (एक-क्लिक निर्माण)
 
 सेटअप स्क्रिप्ट को क्लोन करें और चलाएँ - यह सभी निर्भरताएँ स्थापित करता है और स्वचालित रूप से ऐप बनाता है:
 
@@ -92,99 +103,98 @@ cd FinceptTerminal
 setup.bat
 ```
 
-स्क्रिप्ट संभालती है: कंपाइलर चेक, सीएमके, निंजा, पायथन, वीसीपीकेजी, सभी सी++ निर्भरताएं, निर्माण और लॉन्च।
+स्क्रिप्ट हैंडल करती है: कंपाइलर चेक, सीएमके, क्यूटी6, पायथन, बिल्ड और लॉन्च।
 
 * * *
 
-## डाउनलोड करें और चलाएं (कोई निर्माण आवश्यक नहीं)
+### विकल्प 3 - डॉकर
 
-पूर्व-निर्मित बायनेरिज़ पर उपलब्ध हैं[पेज जारी करता है](https://github.com/Fincept-Corporation/FinceptTerminal/releases).
+```bash
+# Pull and run
+docker pull ghcr.io/fincept-corporation/fincept-terminal:latest
+docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
+    ghcr.io/fincept-corporation/fincept-terminal:latest
 
-| प्लैटफ़ॉर्म               | Download                                 | दौड़ना                         |
-| ------------------------- | ---------------------------------------- | ------------------------------ |
-| **विंडोज़ x64**           | `FinceptTerminal-Windows-x64.zip`        | निकालें →`FinceptTerminal.exe` |
-| **लिनक्स x64**            | `FinceptTerminal-Linux-x64.tar.gz`       | निकालें →`./FinceptTerminal`   |
-| **macOS (एप्पल सिलिकॉन)** | `FinceptTerminal-macOS-arm64.tar.gz`     | निकालें →`./FinceptTerminal`   |
-| **मैकओएस (इंटेल)**        | `FinceptTerminal-macOS-x64.tar.gz`       | निकालें →`./FinceptTerminal`   |
-| **मैकओएस (यूनिवर्सल)**    | `FinceptTerminal-macOS-universal.tar.gz` | निकालें →`./FinceptTerminal`   |
+# Or build from source
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+docker build -t fincept-terminal .
+docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-terminal
+```
 
-किसी इंस्टॉलेशन की आवश्यकता नहीं है - बस निकालें और चलाएं।
+> **टिप्पणी:**डॉकर मुख्य रूप से लिनक्स के लिए है। macOS और Windows को अतिरिक्त XServer कॉन्फ़िगरेशन की आवश्यकता होती है।
 
 * * *
 
-## स्रोत से निर्माण करें
+### विकल्प 4 - स्रोत से निर्माण (मैनुअल)
 
-### आवश्यक शर्तें
+#### आवश्यक शर्तें
 
-| औजार             | संस्करण | खिड़कियाँ                                                              | लिनक्स                    | मैक ओएस                                 |
-| ---------------- | ------- | ---------------------------------------------------------------------- | ------------------------- | --------------------------------------- |
-| **गिट**          | नवीनतम  | `winget install Git.Git`                                               | `apt install git`         | `brew install git`                      |
-| **सीएमके**       | 3.20+   | `winget install Kitware.CMake`                                         | `apt install cmake`       | `brew install cmake`                    |
-| **निंजा**        | नवीनतम  | `winget install Ninja-build.Ninja`                                     | `apt install ninja-build` | `brew install ninja`                    |
-| **सी++ कंपाइलर** | सी++20  | एमएसवीसी 2022 ([विजुअल स्टूडियो](https://visualstudio.microsoft.com/)) | `apt install g++`         | एक्सकोड सीएलटी:`xcode-select --install` |
-| **वीसीपीकेजी**   | नवीनतम  | नीचे देखें                                                             | नीचे देखें                | नीचे देखें                              |
-| **अजगर**         | 3.11+   | [python.org](https://www.python.org/downloads/)                        | `apt install python3`     | `brew install python`                   |
+| औजार             | संस्करण | खिड़कियाँ                                                              | लिनक्स                | मैक ओएस                                 |
+| ---------------- | ------- | ---------------------------------------------------------------------- | --------------------- | --------------------------------------- |
+| **गिट**          | नवीनतम  | `winget install Git.Git`                                               | `apt install git`     | `brew install git`                      |
+| **सीएमके**       | 3.20+   | `winget install Kitware.CMake`                                         | `apt install cmake`   | `brew install cmake`                    |
+| **सी++ कंपाइलर** | सी++20  | एमएसवीसी 2022 ([विजुअल स्टूडियो](https://visualstudio.microsoft.com/)) | `apt install g++`     | एक्सकोड सीएलटी:`xcode-select --install` |
+| **Qt6**          | 6.5+    | नीचे देखें                                                             | नीचे देखें            | नीचे देखें                              |
+| **अजगर**         | 3.11+   | [python.org](https://www.python.org/downloads/)                        | `apt install python3` | `brew install python`                   |
 
-#### वीसीपीकेजी स्थापित करें
+#### Qt6 स्थापित करें
 
-```bash
-git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
-~/vcpkg/bootstrap-vcpkg.sh       # Linux / macOS
-# or
-git clone https://github.com/microsoft/vcpkg.git %USERPROFILE%\vcpkg
-%USERPROFILE%\vcpkg\bootstrap-vcpkg.bat   # Windows
+**खिड़कियाँ:**
+
+```powershell
+# Via Qt online installer (recommended — includes windeployqt)
+# Download from https://www.qt.io/download-qt-installer
+# Select: Qt 6.x > MSVC 2022 64-bit
+
+# Or via winget
+winget install Qt.QtCreator
 ```
 
-फिर सेट करें`VCPKG_ROOT`स्थायी रूप से:
-
-```bash
-# Linux / macOS — add to ~/.bashrc or ~/.zshrc
-export VCPKG_ROOT=~/vcpkg
-
-# Windows (PowerShell — run once)
-[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT","$env:USERPROFILE\vcpkg","User")
-```
-
-#### लिनक्स सिस्टम निर्भरताएँ
+**लिनक्स (उबंटू/डेबियन):**
 
 ```bash
 sudo apt install -y \
-  libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
-  libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
-  libwayland-dev libxkbcommon-dev \
-  pkg-config
+  qt6-base-dev qt6-charts-dev qt6-tools-dev \
+  libqt6sql6-sqlite libqt6websockets6-dev \
+  libgl1-mesa-dev libglu1-mesa-dev
 ```
 
-### निर्माण
+**मैक ओएस:**
+
+```bash
+brew install qt
+```
+
+#### निर्माण
 
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-cpp
+cd FinceptTerminal/fincept-qt
 
-# All platforms (requires VCPKG_ROOT set)
-cmake --preset=default
-cmake --build build --config Release
+# Linux / macOS
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+
+# Windows (from Developer Command Prompt for VS 2022)
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
+cmake --build build --config Release --parallel
 ```
 
-### दौड़ना
+#### दौड़ना
 
 ```bash
-./build/FinceptTerminal          # Linux / macOS
+./build/FinceptTerminal              # Linux / macOS
 .\build\Release\FinceptTerminal.exe  # Windows
 ```
-
-### वीसीपीकेजी निर्भरताएँ
-
-सभी निर्भरताएँ vcpkg द्वारा स्वचालित रूप से स्थापित की जाती हैं:
-जीएलएफडब्ल्यू3, कर्ल, एनलोहमैन-जेसन, एसक्लाइट3, ओपनएसएल, आईएमगुई (डॉकिंग + फ्रीटाइप), योग, एसटीबी, इंप्लॉट, एसपीडीलॉग, मिनीऑडियो
 
 * * *
 
 ## जो हमें अलग करता है
 
-**फिनसेप्ट टर्मिनल**एक खुला स्रोत वित्तीय मंच है जो उन लोगों के लिए बनाया गया है जो पारंपरिक सॉफ्टवेयर तक सीमित होने से इनकार करते हैं। हम प्रतिस्पर्धा करते हैं**विश्लेषणात्मक गहराई**और**डेटा पहुंच**- अंदरूनी जानकारी या विशेष फ़ीड पर नहीं।
+**फिनसेप्ट टर्मिनल**एक ओपन-सोर्स वित्तीय मंच है जो उन लोगों के लिए बनाया गया है जो पारंपरिक सॉफ्टवेयर तक सीमित होने से इनकार करते हैं। हम प्रतिस्पर्धा करते हैं**विश्लेषणात्मक गहराई**और**डेटा पहुंच**- अंदरूनी जानकारी या विशेष फ़ीड पर नहीं।
 
--   **मूल प्रदर्शन**- GPU-त्वरित ImGui के साथ C++, कोई इलेक्ट्रॉन/वेब ओवरहेड नहीं
+-   **मूल प्रदर्शन**- Qt6 के साथ C++20, कोई इलेक्ट्रॉन/वेब ओवरहेड नहीं
 -   **एकल बाइनरी**- कोई Node.js नहीं, कोई ब्राउज़र रनटाइम नहीं, कोई जावास्क्रिप्ट बंडलर नहीं
 -   **सीएफए स्तर का विश्लेषण**- पायथन मॉड्यूल के माध्यम से संपूर्ण पाठ्यक्रम कवरेज
 -   **100+ डेटा कनेक्टर**- याहू फाइनेंस से लेकर सरकारी डेटाबेस तक
@@ -194,18 +204,18 @@ cmake --build build --config Release
 
 ## रोडमैप
 
-**Q1 2026:**C++ माइग्रेशन पूर्ण, उन्नत रीयल-टाइम स्ट्रीमिंग, उन्नत बैकटेस्टिंग**2026:**विकल्प रणनीति बिल्डर, मल्टी-पोर्टफोलियो प्रबंधन, 50+ एआई एजेंट**भविष्य:**मोबाइल साथी, संस्थागत सुविधाएँ, प्रोग्रामेटिक एपीआई, एमएल प्रशिक्षण यूआई
+**Q1 2026:**Qt6 माइग्रेशन पूर्ण, उन्नत वास्तविक समय स्ट्रीमिंग, उन्नत बैकटेस्टिंग**मई 2026:**विकल्प रणनीति बिल्डर, मल्टी-पोर्टफोलियो प्रबंधन, 50+ एआई एजेंट**भविष्य:**मोबाइल साथी, संस्थागत सुविधाएँ, प्रोग्रामेटिक एपीआई, एमएल प्रशिक्षण यूआई
 
 * * *
 
-## योगदान
+## Contributing
 
 हम वित्तीय विश्लेषण का भविष्य एक साथ मिलकर बना रहे हैं।
 
 **योगदान देना:**नए डेटा कनेक्टर, एआई एजेंट, एनालिटिक्स मॉड्यूल, सी++ स्क्रीन, दस्तावेज़ीकरण
 
 -   [योगदान मार्गदर्शिका](docs/CONTRIBUTING.md)
--   [C++ योगदान मार्गदर्शिका](fincept-cpp/CONTRIBUTING.md)
+-   [C++ योगदान मार्गदर्शिका](fincept-qt/CONTRIBUTING.md)
 -   [पायथन योगदानकर्ता गाइड](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
 -   [रिपोर्ट बग](https://github.com/Fincept-Corporation/FinceptTerminal/issues)
 -   [फ़ीचर का अनुरोध करें](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)

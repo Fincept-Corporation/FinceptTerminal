@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)](https://isocpp.org/)[![ImGui](https://img.shields.io/badge/ImGui-Docking-blue)](https://github.com/ocornut/imgui)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)](https://isocpp.org/)[![Qt6](https://img.shields.io/badge/Qt-6-41CD52?logo=qt&logoColor=white)](https://www.qt.io/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
@@ -20,26 +20,21 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 ## À propos
 
-**Fincept Terminal vch**est une application de bureau C++20 purement native – une réécriture complète de la précédente pile Tauri/React/Rust. Il utilise**Cher ImGui**pour l'interface utilisateur accélérée par GPU,**GLFW + OpenGL**pour le rendu, intégré**Python**pour l'analyse et offre des performances de classe terminal Bloomberg dans un seul binaire natif.
+**Fincept Terminal vch**est une application de bureau C++20 purement native – une réécriture complète de la précédente pile Tauri/React/Rust. Il utilise**Qt6**pour l'interface utilisateur et le rendu, intégré**Python** for analytics, and delivers Bloomberg-terminal-class performance in a single native binary.
 
 * * *
 
 ## Pile technologique
 
-| Couche                    | Technologies                               |
-| ------------------------- | ------------------------------------------ |
-| **Langue**                | C++20 (MSVC/GCC/Clang)                     |
-| **Interface utilisateur** | Cher ImGui (branche d'accueil) + ImPlot    |
-| **Mise en page**          | Yoga (moteur Flexbox)                      |
-| **Rendu**                 | GLFW 3 + OpenGL 3.3+                       |
-| **Réseautage**            | libcurl + OpenSSL                          |
-| **Base de données**       | SQLite 3                                   |
-| **Sérialisation**         | nlohmann/json                              |
-| **Enregistrement**        | journal spd                                |
-| **Audio**                 | mini-audio                                 |
-| **Vidéo**                 | libmpv (facultatif)                        |
-| **Analytique**            | Python intégré 3.11+ (plus de 100 scripts) |
-| **Construire**            | CMake 3.20+ / vcpkg                        |
+| Couche                            | Technologies                               |
+| --------------------------------- | ------------------------------------------ |
+| **Langue**                        | C++20 (MSVC/GCC/Clang)                     |
+| **Cadre d'interface utilisateur** | Widget Qt6                                 |
+| **Graphiques**                    | Graphiques Qt6                             |
+| **Réseautage**                    | Réseau Qt6 + WebSockets Qt6                |
+| **Base de données**               | Qt6 SQL (SQLite)                           |
+| **Analytique**                    | Python intégré 3.11+ (plus de 100 scripts) |
+| **Construire**                    | CMake 3.20+                                |
 
 * * *
 
@@ -70,11 +65,27 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 | **Économie**     | Économie, DBnomics, AkShare, marchés asiatiques                                                                                                                                                      |
 | **Géopolitique** | Géopolitique, données gouvernementales, carte des relations, maritime, polymarché                                                                                                                    |
 | **Outils**       | Éditeur de code, éditeur de nœuds, Excel, générateur de rapports, notes, sources de données, mappage de données, serveurs MCP                                                                        |
-| **Communauté**   | Forum, Profil, Paramètres, Assistance, Documents, À propos                                                                                                                                           |
+| **Communauté**   | Forum, Profil, Paramètres, Assistance, Docs, À propos                                                                                                                                                |
 
 * * *
 
-## Démarrage rapide (installation en un clic)
+## Installation
+
+### Option 1 — Télécharger le binaire prédéfini (recommandé)
+
+Des binaires prédéfinis sont disponibles sur le[Page des versions](https://github.com/Fincept-Corporation/FinceptTerminal/releases). Aucun outil de construction requis : il suffit d'extraire et d'exécuter.
+
+| Plate-forme                | Télécharger                              | Courir                          |
+| -------------------------- | ---------------------------------------- | ------------------------------- |
+| **Windows x64**            | `FinceptTerminal-Windows-x64.zip`        | Extraire →`FinceptTerminal.exe` |
+| **Linuxx64**               | `FinceptTerminal-Linux-x64.tar.gz`       | Extraire →`./FinceptTerminal`   |
+| **macOS (Apple Silicium)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extraire →`./FinceptTerminal`   |
+| **macOS (Intel)**          | `FinceptTerminal-macOS-x64.tar.gz`       | Extraire →`./FinceptTerminal`   |
+| **macOS (universel)**      | `FinceptTerminal-macOS-universal.tar.gz` | Extraire →`./FinceptTerminal`   |
+
+* * *
+
+### Option 2 — Démarrage rapide (construction en un clic)
 
 Clonez et exécutez le script d'installation : il installe toutes les dépendances et crée automatiquement l'application :
 
@@ -92,91 +103,90 @@ cd FinceptTerminal
 setup.bat
 ```
 
-Le script gère : la vérification du compilateur, CMake, Ninja, Python, vcpkg, toutes les dépendances C++, la construction et le lancement.
+Le script gère : la vérification du compilateur, CMake, Qt6, Python, la construction et le lancement.
 
 * * *
 
-## Téléchargez et exécutez (aucune construction requise)
+### Option 3 — Docker
 
-Des binaires prédéfinis sont disponibles sur le[Page des versions](https://github.com/Fincept-Corporation/FinceptTerminal/releases).
+```bash
+# Pull and run
+docker pull ghcr.io/fincept-corporation/fincept-terminal:latest
+docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
+    ghcr.io/fincept-corporation/fincept-terminal:latest
 
-| Plate-forme                | Télécharger                              | Courir                          |
-| -------------------------- | ---------------------------------------- | ------------------------------- |
-| **Windows x64**            | `FinceptTerminal-Windows-x64.zip`        | Extraire →`FinceptTerminal.exe` |
-| **Linuxx64**               | `FinceptTerminal-Linux-x64.tar.gz`       | Extraire →`./FinceptTerminal`   |
-| **macOS (Apple Silicium)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extraire →`./FinceptTerminal`   |
-| **macOS (Intel)**          | `FinceptTerminal-macOS-x64.tar.gz`       | Extraire →`./FinceptTerminal`   |
-| **macOS (universel)**      | `FinceptTerminal-macOS-universal.tar.gz` | Extraire →`./FinceptTerminal`   |
+# Or build from source
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+docker build -t fincept-terminal .
+docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-terminal
+```
 
-Aucune installation requise : il suffit d'extraire et d'exécuter.
+> **Note:**Docker est principalement destiné à Linux. macOS et Windows nécessitent une configuration XServer supplémentaire.
 
 * * *
 
-## Construire à partir de la source
+### Option 4 — Construire à partir de la source (manuel)
 
-### Conditions préalables
+#### Conditions préalables
 
-| Outil               | Version | Fenêtres                                                        | Linux                     | macOS                              |
-| ------------------- | ------- | --------------------------------------------------------------- | ------------------------- | ---------------------------------- |
-| **Git**             | dernier | `winget install Git.Git`                                        | `apt install git`         | `brew install git`                 |
-| **CMake**           | 3.20+   | `winget install Kitware.CMake`                                  | `apt install cmake`       | `brew install cmake`               |
-| **Ninja**           | dernier | `winget install Ninja-build.Ninja`                              | `apt install ninja-build` | `brew install ninja`               |
-| **Compilateur C++** | C++20   | MSVC2022 ([Studio visuel](https://visualstudio.microsoft.com/)) | `apt install g++`         | XcodeCLT :`xcode-select --install` |
-| **vcpkg**           | dernier | Voir ci-dessous                                                 | Voir ci-dessous           | Voir ci-dessous                    |
-| **Python**          | 3.11+   | [python.org](https://www.python.org/downloads/)                 | `apt install python3`     | `brew install python`              |
+| Outil               | Version | Fenêtres                                                        | Linux                 | macOS                              |
+| ------------------- | ------- | --------------------------------------------------------------- | --------------------- | ---------------------------------- |
+| **Git**             | dernier | `winget install Git.Git`                                        | `apt install git`     | `brew install git`                 |
+| **CMake**           | 3.20+   | `winget install Kitware.CMake`                                  | `apt install cmake`   | `brew install cmake`               |
+| **Compilateur C++** | C++20   | MSVC2022 ([Studio visuel](https://visualstudio.microsoft.com/)) | `apt install g++`     | XcodeCLT :`xcode-select --install` |
+| **Qt6**             | 6.5+    | Voir ci-dessous                                                 | Voir ci-dessous       | Voir ci-dessous                    |
+| **Python**          | 3.11+   | [python.org](https://www.python.org/downloads/)                 | `apt install python3` | `brew install python`              |
 
-#### Installer vcpkg
+#### Installer Qt6
 
-```bash
-git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
-~/vcpkg/bootstrap-vcpkg.sh       # Linux / macOS
-# or
-git clone https://github.com/microsoft/vcpkg.git %USERPROFILE%\vcpkg
-%USERPROFILE%\vcpkg\bootstrap-vcpkg.bat   # Windows
+**Fenêtres :**
+
+```powershell
+# Via Qt online installer (recommended — includes windeployqt)
+# Download from https://www.qt.io/download-qt-installer
+# Select: Qt 6.x > MSVC 2022 64-bit
+
+# Or via winget
+winget install Qt.QtCreator
 ```
 
-Puis réglez`VCPKG_ROOT`en permanence:
-
-```bash
-# Linux / macOS — add to ~/.bashrc or ~/.zshrc
-export VCPKG_ROOT=~/vcpkg
-
-# Windows (PowerShell — run once)
-[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT","$env:USERPROFILE\vcpkg","User")
-```
-
-#### Dépendances du système Linux
+**Linux (Ubuntu/Debian) :**
 
 ```bash
 sudo apt install -y \
-  libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
-  libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
-  libwayland-dev libxkbcommon-dev \
-  pkg-config
+  qt6-base-dev qt6-charts-dev qt6-tools-dev \
+  libqt6sql6-sqlite libqt6websockets6-dev \
+  libgl1-mesa-dev libglu1-mesa-dev
 ```
 
-### Construire
+**macOS :**
+
+```bash
+brew install qt
+```
+
+#### Construire
 
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-cpp
+cd FinceptTerminal/fincept-qt
 
-# All platforms (requires VCPKG_ROOT set)
-cmake --preset=default
-cmake --build build --config Release
+# Linux / macOS
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+
+# Windows (from Developer Command Prompt for VS 2022)
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
+cmake --build build --config Release --parallel
 ```
 
-### Courir
+#### Courir
 
 ```bash
-./build/FinceptTerminal          # Linux / macOS
+./build/FinceptTerminal              # Linux / macOS
 .\build\Release\FinceptTerminal.exe  # Windows
 ```
-
-### Dépendances vcpkg
-
-Toutes les dépendances sont installées automatiquement par vcpkg :
-glfw3, curl, nlohmann-json, sqlite3, openssl, imgui (docking + freetype), yoga, stb, implot, spdlog, miniaudio
 
 * * *
 
@@ -184,8 +194,8 @@ glfw3, curl, nlohmann-json, sqlite3, openssl, imgui (docking + freetype), yoga, 
 
 **Terminal Fincept**est une plateforme financière open source conçue pour ceux qui refusent d'être limités par les logiciels traditionnels. Nous sommes en compétition sur**profondeur d'analyse**et**accessibilité des données**– pas sur les informations privilégiées ou les flux exclusifs.
 
--   **Performances natives**— C++ avec ImGui accéléré par GPU, pas de surcharge Electron/Web
--   **Binaire unique**- pas de Node.js, pas d'exécution de navigateur, pas de bundle JavaScript
+-   **Performances natives**— C++20 avec Qt6, pas de surcharge Electron/Web
+-   **Binaire simple**- pas de Node.js, pas d'exécution de navigateur, pas de bundle JavaScript
 -   **Analyses de niveau CFA**— couverture complète du programme via les modules Python
 -   **Plus de 100 connecteurs de données**— de Yahoo Finance aux bases de données gouvernementales
 -   **Gratuit et open source**(AGPL-3.0) avec licences commerciales disponibles
@@ -194,18 +204,18 @@ glfw3, curl, nlohmann-json, sqlite3, openssl, imgui (docking + freetype), yoga, 
 
 ## Feuille de route
 
-**T1 2026 :**Migration C++ terminée, streaming en temps réel amélioré, backtesting avancé**2026 :**Constructeur de stratégie d'options, gestion multi-portefeuilles, plus de 50 agents IA**Avenir:**Compagnon mobile, fonctionnalités institutionnelles, API programmatique, interface utilisateur de formation ML
+**T1 2026 :**Migration Qt6 terminée, streaming en temps réel amélioré, backtesting avancé**Mai 2026 :**Constructeur de stratégie d'options, gestion multi-portefeuilles, plus de 50 agents IA**Avenir:**Compagnon mobile, fonctionnalités institutionnelles, API programmatique, interface utilisateur de formation ML
 
 * * *
 
-## Contribuer
+## Contributing
 
 Nous construisons l’avenir de l’analyse financière – ensemble.
 
 **Contribuer:**Nouveaux connecteurs de données, agents IA, modules d'analyse, écrans C++, documentation
 
 -   [Guide de contribution](docs/CONTRIBUTING.md)
--   [Guide de contribution C++](fincept-cpp/CONTRIBUTING.md)
+-   [Guide de contribution C++](fincept-qt/CONTRIBUTING.md)
 -   [Guide du contributeur Python](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
 -   [Signaler un bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues)
 -   [Fonctionnalité de demande](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
@@ -233,7 +243,7 @@ Nous construisons l’avenir de l’analyse financière – ensemble.
 
 ### Source ouverte (AGPL-3.0)
 
--   Gratuit pour un usage personnel, éducatif et non commercial
+-   Free for personal, educational, and non-commercial use
 -   Nécessite des modifications de partage lorsqu'il est distribué ou utilisé comme service réseau
 -   Transparence totale du code source
 
