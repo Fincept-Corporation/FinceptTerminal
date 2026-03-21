@@ -105,7 +105,7 @@ jobs:
         with:
           version: ${{ matrix.qt_version }}
           arch: ${{ matrix.qt_arch }}
-          modules: "qtcharts qtwebsockets"
+          modules: "qtcharts qtwebsockets qtsql"
           cache: true
 
       # ---- Configure ----
@@ -319,4 +319,4 @@ jobs:
             FinceptTerminal-macOS-universal.tar.gz
           fail_on_unmatched_files: false
           draft: false
-          prerelease: ${{ github.ref_type != 'tag' }}
+          prerelease: "${{ github.ref_type != 'tag' }}"
