@@ -5,7 +5,7 @@ Want to make Fincept Terminal even better? We'd love your help!
 ## Where We Need You
 
 **C++ Development**
-   - Build new screens and features in Dear ImGui
+   - Build new screens and features using Qt6 Widgets
    - Improve core infrastructure, performance, and stability
 
 **Data Source Integration**
@@ -35,9 +35,15 @@ Want to make Fincept Terminal even better? We'd love your help!
 
 2. **Build** the project:
    ```bash
-   cd FinceptTerminal/fincept-cpp
-   cmake --preset=default
-   cmake --build build --config Release
+   cd FinceptTerminal/fincept-qt
+
+   # Linux / macOS
+   cmake -B build -DCMAKE_BUILD_TYPE=Release
+   cmake --build build --parallel
+
+   # Windows (Developer Command Prompt for VS 2022)
+   cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
+   cmake --build build --config Release --parallel
    ```
 
 3. **Create a new branch** for your feature:
@@ -45,7 +51,7 @@ Want to make Fincept Terminal even better? We'd love your help!
    git checkout -b feature/awesome-feature
    ```
 
-4. **Code**, follow the [C++ Contributing Guide](../fincept-cpp/CONTRIBUTING.md) or [Python Guide](../docs/PYTHON_CONTRIBUTOR_GUIDE.md), and document your changes.
+4. **Code**, follow the [C++ Contributing Guide](../fincept-qt/CONTRIBUTING.md) or [Python Guide](../docs/PYTHON_CONTRIBUTOR_GUIDE.md), and document your changes.
 
 5. **Push your changes** and open a **pull request**:
    ```bash

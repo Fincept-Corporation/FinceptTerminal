@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\CMakeFiles\ea563e5ac5227a8b7f0fa52fbf49668f\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{2EDE8928-3A81-3378-A82D-092E55CF4D5A}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

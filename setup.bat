@@ -16,7 +16,7 @@ echo ================================================
 echo.
 
 :: ── Check: Git ──────────────────────────────────────────────
-echo [1/6] Checking Git...
+echo [1/5] Checking Git...
 where git >nul 2>&1
 if errorlevel 1 (
     echo   ERROR: Git not found. Install from https://git-scm.com/downloads
@@ -26,7 +26,7 @@ if errorlevel 1 (
 echo   OK
 
 :: ── Check: CMake ────────────────────────────────────────────
-echo [2/6] Checking CMake...
+echo [2/5] Checking CMake...
 where cmake >nul 2>&1
 if errorlevel 1 (
     if "!CI_MODE!"=="true" (
@@ -42,25 +42,8 @@ if errorlevel 1 (
 )
 echo   OK
 
-:: ── Check: Ninja ────────────────────────────────────────────
-echo [3/6] Checking Ninja...
-where ninja >nul 2>&1
-if errorlevel 1 (
-    if "!CI_MODE!"=="true" (
-        echo   ERROR: Ninja not found in CI environment.
-        exit /b 1
-    )
-    echo   Ninja not found. Installing via winget...
-    winget install --id Ninja-build.Ninja -e --silent
-    if errorlevel 1 (
-        echo   ERROR: Ninja install failed. Install manually from https://ninja-build.org/
-        pause & exit /b 1
-    )
-)
-echo   OK
-
 :: ── Check: Python ───────────────────────────────────────────
-echo [4/6] Checking Python...
+echo [3/5] Checking Python...
 where python >nul 2>&1
 if errorlevel 1 (
     if "!CI_MODE!"=="true" (
@@ -77,7 +60,7 @@ if errorlevel 1 (
 echo   OK
 
 :: ── Check: MSVC ─────────────────────────────────────────────
-echo [5/6] Checking C++ compiler (MSVC)...
+echo [4/5] Checking C++ compiler (MSVC)...
 where cl >nul 2>&1
 if errorlevel 1 (
     echo   MSVC compiler not found in PATH.
@@ -89,32 +72,47 @@ if errorlevel 1 (
 )
 echo   OK
 
-:: ── vcpkg ───────────────────────────────────────────────────
-echo [6/6] Setting up vcpkg and building...
-if not defined VCPKG_ROOT (
-    set "VCPKG_ROOT=%USERPROFILE%\vcpkg"
+:: ── Locate Qt6 ──────────────────────────────────────────────
+echo [5/5] Locating Qt6 and building...
+
+:: Try to auto-detect Qt6 install (common paths)
+set "QT_PREFIX="
+if exist "C:\Qt\6.8.3\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake" (
+    set "QT_PREFIX=C:\Qt\6.8.3\msvc2022_64"
+) else if exist "C:\Qt\6.7.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake" (
+    set "QT_PREFIX=C:\Qt\6.7.0\msvc2022_64"
+) else if exist "C:\Qt\6.6.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake" (
+    set "QT_PREFIX=C:\Qt\6.6.0\msvc2022_64"
 )
-if not exist "%VCPKG_ROOT%\vcpkg.exe" (
-    echo   vcpkg not found. Cloning into %VCPKG_ROOT%...
-    git clone https://github.com/microsoft/vcpkg.git "%VCPKG_ROOT%"
-    if errorlevel 1 ( echo   ERROR: Failed to clone vcpkg. & exit /b 1 )
-    call "%VCPKG_ROOT%\bootstrap-vcpkg.bat" -disableMetrics
-    if errorlevel 1 ( echo   ERROR: vcpkg bootstrap failed. & exit /b 1 )
-    echo   vcpkg installed at %VCPKG_ROOT%
-    :: Persist for future sessions (skip in CI — env var already set)
-    if "!CI_MODE!"=="false" (
-        setx VCPKG_ROOT "%VCPKG_ROOT%" >nul
+
+:: Allow override via environment variable
+if defined Qt6_DIR (
+    set "QT_PREFIX=!Qt6_DIR!"
+)
+
+if "!QT_PREFIX!"=="" (
+    if "!CI_MODE!"=="true" (
+        echo   ERROR: Qt6 not found. Set Qt6_DIR environment variable to your Qt6 install path.
+        exit /b 1
     )
-) else (
-    echo   vcpkg already installed at %VCPKG_ROOT%
+    echo.
+    echo   Qt6 not found in common locations.
+    echo   Please install Qt6 from https://www.qt.io/download-qt-installer
+    echo   (Select: Qt 6.x ^> MSVC 2022 64-bit)
+    echo.
+    echo   After installing, set the Qt6_DIR environment variable:
+    echo     set Qt6_DIR=C:\Qt\6.x.x\msvc2022_64
+    echo   Then re-run this script.
+    pause & exit /b 1
 )
+echo   Qt6 found at !QT_PREFIX!
 echo   OK
 
 :: ── Build ────────────────────────────────────────────────────
 echo.
-echo Configuring (vcpkg downloads dependencies -- may take 10-20 min on first run)...
-cd /d "%~dp0fincept-cpp"
-cmake --preset=default -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake"
+echo Configuring...
+cd /d "%~dp0fincept-qt"
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="!QT_PREFIX!"
 if errorlevel 1 ( echo   ERROR: CMake configure failed. & exit /b 1 )
 
 echo Compiling...

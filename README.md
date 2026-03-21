@@ -4,7 +4,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)](https://isocpp.org/)
-[![ImGui](https://img.shields.io/badge/ImGui-Docking-blue)](https://github.com/ocornut/imgui)
+[![Qt6](https://img.shields.io/badge/Qt-6-41CD52?logo=qt&logoColor=white)](https://www.qt.io/)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 
@@ -24,7 +24,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 ## About
 
-**Fincept Terminal v4** is a pure native C++20 desktop application — a complete rewrite from the previous Tauri/React/Rust stack. It uses **Dear ImGui** for GPU-accelerated UI, **GLFW + OpenGL** for rendering, embedded **Python** for analytics, and delivers Bloomberg-terminal-class performance in a single native binary.
+**Fincept Terminal v4** is a pure native C++20 desktop application — a complete rewrite from the previous Tauri/React/Rust stack. It uses **Qt6** for UI and rendering, embedded **Python** for analytics, and delivers Bloomberg-terminal-class performance in a single native binary.
 
 ---
 
@@ -33,17 +33,12 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 | Layer | Technologies |
 |-------|-------------|
 | **Language** | C++20 (MSVC / GCC / Clang) |
-| **UI** | Dear ImGui (docking branch) + ImPlot |
-| **Layout** | Yoga (Flexbox engine) |
-| **Rendering** | GLFW 3 + OpenGL 3.3+ |
-| **Networking** | libcurl + OpenSSL |
-| **Database** | SQLite 3 |
-| **Serialization** | nlohmann/json |
-| **Logging** | spdlog |
-| **Audio** | miniaudio |
-| **Video** | libmpv (optional) |
+| **UI Framework** | Qt6 Widgets |
+| **Charts** | Qt6 Charts |
+| **Networking** | Qt6 Network + Qt6 WebSockets |
+| **Database** | Qt6 Sql (SQLite) |
 | **Analytics** | Embedded Python 3.11+ (100+ scripts) |
-| **Build** | CMake 3.20+ / vcpkg |
+| **Build** | CMake 3.20+ |
 
 ---
 
@@ -78,7 +73,23 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 ---
 
-## Quick Start (One-Click Setup)
+## Installation
+
+### Option 1 — Download Pre-built Binary (Recommended)
+
+Pre-built binaries are available on the [Releases page](https://github.com/Fincept-Corporation/FinceptTerminal/releases). No build tools required — just extract and run.
+
+| Platform | Download | Run |
+|----------|----------|-----|
+| **Windows x64** | `FinceptTerminal-Windows-x64.zip` | Extract → `FinceptTerminal.exe` |
+| **Linux x64** | `FinceptTerminal-Linux-x64.tar.gz` | Extract → `./FinceptTerminal` |
+| **macOS (Apple Silicon)** | `FinceptTerminal-macOS-arm64.tar.gz` | Extract → `./FinceptTerminal` |
+| **macOS (Intel)** | `FinceptTerminal-macOS-x64.tar.gz` | Extract → `./FinceptTerminal` |
+| **macOS (Universal)** | `FinceptTerminal-macOS-universal.tar.gz` | Extract → `./FinceptTerminal` |
+
+---
+
+### Option 2 — Quick Start (One-Click Build)
 
 Clone and run the setup script — it installs all dependencies and builds the app automatically:
 
@@ -96,91 +107,87 @@ cd FinceptTerminal
 setup.bat
 ```
 
-The script handles: compiler check, CMake, Ninja, Python, vcpkg, all C++ dependencies, build, and launch.
+The script handles: compiler check, CMake, Qt6, Python, build, and launch.
 
 ---
 
-## Download & Run (No Build Required)
+### Option 3 — Docker
 
-Pre-built binaries are available on the [Releases page](https://github.com/Fincept-Corporation/FinceptTerminal/releases).
+```bash
+# Pull and run
+docker pull ghcr.io/fincept-corporation/fincept-terminal:latest
+docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
+    ghcr.io/fincept-corporation/fincept-terminal:latest
 
-| Platform | Download | Run |
-|----------|----------|-----|
-| **Windows x64** | `FinceptTerminal-Windows-x64.zip` | Extract → `FinceptTerminal.exe` |
-| **Linux x64** | `FinceptTerminal-Linux-x64.tar.gz` | Extract → `./FinceptTerminal` |
-| **macOS (Apple Silicon)** | `FinceptTerminal-macOS-arm64.tar.gz` | Extract → `./FinceptTerminal` |
-| **macOS (Intel)** | `FinceptTerminal-macOS-x64.tar.gz` | Extract → `./FinceptTerminal` |
-| **macOS (Universal)** | `FinceptTerminal-macOS-universal.tar.gz` | Extract → `./FinceptTerminal` |
+# Or build from source
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+docker build -t fincept-terminal .
+docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-terminal
+```
 
-No installation required — just extract and run.
+> **Note:** Docker is primarily intended for Linux. macOS and Windows require additional XServer configuration.
 
 ---
 
-## Build from Source
+### Option 4 — Build from Source (Manual)
 
-### Prerequisites
+#### Prerequisites
 
 | Tool | Version | Windows | Linux | macOS |
 |------|---------|---------|-------|-------|
 | **Git** | latest | `winget install Git.Git` | `apt install git` | `brew install git` |
 | **CMake** | 3.20+ | `winget install Kitware.CMake` | `apt install cmake` | `brew install cmake` |
-| **Ninja** | latest | `winget install Ninja-build.Ninja` | `apt install ninja-build` | `brew install ninja` |
 | **C++ compiler** | C++20 | MSVC 2022 ([Visual Studio](https://visualstudio.microsoft.com/)) | `apt install g++` | Xcode CLT: `xcode-select --install` |
-| **vcpkg** | latest | See below | See below | See below |
+| **Qt6** | 6.5+ | See below | See below | See below |
 | **Python** | 3.11+ | [python.org](https://www.python.org/downloads/) | `apt install python3` | `brew install python` |
 
-#### Install vcpkg
+#### Install Qt6
 
-```bash
-git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
-~/vcpkg/bootstrap-vcpkg.sh       # Linux / macOS
-# or
-git clone https://github.com/microsoft/vcpkg.git %USERPROFILE%\vcpkg
-%USERPROFILE%\vcpkg\bootstrap-vcpkg.bat   # Windows
+**Windows:**
+```powershell
+# Via Qt online installer (recommended — includes windeployqt)
+# Download from https://www.qt.io/download-qt-installer
+# Select: Qt 6.x > MSVC 2022 64-bit
+
+# Or via winget
+winget install Qt.QtCreator
 ```
 
-Then set `VCPKG_ROOT` permanently:
-
-```bash
-# Linux / macOS — add to ~/.bashrc or ~/.zshrc
-export VCPKG_ROOT=~/vcpkg
-
-# Windows (PowerShell — run once)
-[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT","$env:USERPROFILE\vcpkg","User")
-```
-
-#### Linux system dependencies
-
+**Linux (Ubuntu/Debian):**
 ```bash
 sudo apt install -y \
-  libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
-  libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
-  libwayland-dev libxkbcommon-dev \
-  pkg-config
+  qt6-base-dev qt6-charts-dev qt6-tools-dev \
+  libqt6sql6-sqlite libqt6websockets6-dev \
+  libgl1-mesa-dev libglu1-mesa-dev
 ```
 
-### Build
+**macOS:**
+```bash
+brew install qt
+```
+
+#### Build
 
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-cpp
+cd FinceptTerminal/fincept-qt
 
-# All platforms (requires VCPKG_ROOT set)
-cmake --preset=default
-cmake --build build --config Release
+# Linux / macOS
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+
+# Windows (from Developer Command Prompt for VS 2022)
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
+cmake --build build --config Release --parallel
 ```
 
-### Run
+#### Run
 
 ```bash
-./build/FinceptTerminal          # Linux / macOS
+./build/FinceptTerminal              # Linux / macOS
 .\build\Release\FinceptTerminal.exe  # Windows
 ```
-
-### vcpkg Dependencies
-
-All dependencies are installed automatically by vcpkg:
-glfw3, curl, nlohmann-json, sqlite3, openssl, imgui (docking + freetype), yoga, stb, implot, spdlog, miniaudio
 
 ---
 
@@ -188,7 +195,7 @@ glfw3, curl, nlohmann-json, sqlite3, openssl, imgui (docking + freetype), yoga, 
 
 **Fincept Terminal** is an open-source financial platform built for those who refuse to be limited by traditional software. We compete on **analytics depth** and **data accessibility** — not on insider info or exclusive feeds.
 
-- **Native performance** — C++ with GPU-accelerated ImGui, no Electron/web overhead
+- **Native performance** — C++20 with Qt6, no Electron/web overhead
 - **Single binary** — no Node.js, no browser runtime, no JavaScript bundler
 - **CFA-level analytics** — complete curriculum coverage via Python modules
 - **100+ data connectors** — from Yahoo Finance to government databases
@@ -198,7 +205,7 @@ glfw3, curl, nlohmann-json, sqlite3, openssl, imgui (docking + freetype), yoga, 
 
 ## Roadmap
 
-**Q1 2026:** C++ migration complete, enhanced real-time streaming, advanced backtesting
+**Q1 2026:** Qt6 migration complete, enhanced real-time streaming, advanced backtesting
 **Q2 2026:** Options strategy builder, multi-portfolio management, 50+ AI agents
 **Future:** Mobile companion, institutional features, programmatic API, ML training UI
 
@@ -211,7 +218,7 @@ We're building the future of financial analysis — together.
 **Contribute:** New data connectors, AI agents, analytics modules, C++ screens, documentation
 
 - [Contributing Guide](docs/CONTRIBUTING.md)
-- [C++ Contributing Guide](fincept-cpp/CONTRIBUTING.md)
+- [C++ Contributing Guide](fincept-qt/CONTRIBUTING.md)
 - [Python Contributor Guide](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
 - [Report Bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues)
 - [Request Feature](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)

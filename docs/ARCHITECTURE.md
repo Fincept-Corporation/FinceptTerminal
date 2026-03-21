@@ -13,10 +13,10 @@ This document provides a comprehensive overview of Fincept Terminal v4's archite
 ┌───────────────────────────────────────────────────────────────────┐
 │                         User Interface Layer                       │
 │  ┌─────────────────────────────────────────────────────────────┐  │
-│  │  Dear ImGui (Docking) + ImPlot + Yoga Layout                │  │
-│  │  - Bloomberg-style Terminal UI                              │  │
-│  │  - Real-time Data Visualization                             │  │
-│  │  - GPU-accelerated Rendering (OpenGL 3.3+)                  │  │
+│  │  Qt6 Widgets + Qt6 Charts                                   │  │
+│  │  - Obsidian design system (Bloomberg-style terminal UI)     │  │
+│  │  - Real-time data visualization                             │  │
+│  │  - Native platform rendering                                │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 ├───────────────────────────────────────────────────────────────────┤
 │                       Application Layer                            │
@@ -28,13 +28,13 @@ This document provides a comprehensive overview of Fincept Terminal v4's archite
 │                      Infrastructure Layer                          │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐ │
 │  │  HTTP     │  │  SQLite  │  │ WebSocket│  │  Python Bridge   │ │
-│  │  (curl)   │  │  Storage │  │  Streams │  │  (100+ scripts)  │ │
+│  │  (Qt Net) │  │(Qt Sql)  │  │ (Qt WS)  │  │  (100+ scripts)  │ │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘ │
 ├───────────────────────────────────────────────────────────────────┤
 │                       Platform Layer                               │
 │  ┌─────────────────────────────────────────────────────────────┐  │
-│  │  GLFW 3 + OpenGL 3.3+ + OpenSSL                             │  │
-│  │  Windows (MSVC) / macOS / Linux                             │  │
+│  │  Qt6 Platform Abstraction                                   │  │
+│  │  Windows (MSVC) / macOS (Clang) / Linux (GCC)              │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
 ```
@@ -46,119 +46,119 @@ This document provides a comprehensive overview of Fincept Terminal v4's archite
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
 | Language | C++20 | Core application |
-| UI Framework | Dear ImGui (docking) | Immediate-mode GUI |
-| Charts | ImPlot | Financial charts & plots |
-| Layout | Yoga | Flexbox-based layout engine |
-| Window/Input | GLFW 3 | Cross-platform windowing |
-| Graphics | OpenGL 3.3+ | GPU rendering |
-| HTTP | libcurl + OpenSSL | API calls, TLS |
-| Database | SQLite 3 | Local storage, caching |
-| JSON | nlohmann/json | Serialization |
-| Logging | spdlog | Structured logging |
-| Audio | miniaudio | Sound notifications |
-| Video | libmpv (optional) | Inline video playback |
+| UI Framework | Qt6 Widgets | Native retained-mode GUI |
+| Charts | Qt6 Charts | Financial charts & plots |
+| Networking | Qt6 Network | HTTP API calls, TLS |
+| WebSockets | Qt6 WebSockets | Real-time streaming feeds |
+| Database | Qt6 Sql (SQLite) | Local storage, caching |
+| JSON | QJsonDocument | Serialization |
+| Logging | Custom Logger (QFile) | Structured logging |
 | Analytics | Python 3.11+ | Embedded runtime for scripts |
 | Build | CMake 3.20+ | Build system |
-| Dependencies | vcpkg | Package management |
 
 ---
 
 ## Source Architecture
 
 ```
-fincept-cpp/src/
-├── main.cpp                    # Entry point, GLFW/OpenGL setup
-├── app.cpp/h                   # App state machine, routing, tab bar
+fincept-qt/src/
+├── app/
+│   ├── main.cpp                    # Entry point, QApplication setup
+│   ├── MainWindow.cpp/h            # Main window, layout, screen hosting
+│   └── ScreenRouter.cpp/h          # QStackedWidget-based navigation
 │
-├── core/                       # Shared infrastructure
-│   ├── config.h                # App-wide constants (URLs, timeouts, versions)
-│   ├── event_bus.h             # Pub/sub for decoupled module communication
-│   ├── logger.h                # Structured logging (LOG_INFO, LOG_ERROR)
-│   ├── result.h                # Result<T> error handling type
-│   ├── notification.h/cpp      # Desktop notifications
-│   ├── raii.h                  # RAII resource wrappers
-│   ├── hot_reload.cpp          # Live config reload
-│   ├── font_loader.cpp         # Font management
-│   └── window.cpp              # Window management
+├── core/                           # Shared infrastructure
+│   ├── config/AppConfig.cpp/h      # App-wide constants (URLs, versions)
+│   ├── events/EventBus.cpp/h       # Pub/sub for decoupled communication
+│   ├── logging/Logger.cpp/h        # Structured logging (LOG_INFO, LOG_ERROR)
+│   ├── result/Result.h             # Result<T> error handling type
+│   └── session/SessionManager.cpp/h
 │
-├── ui/                         # Reusable ImGui widgets
-│   ├── widgets/                # Card, Table, Modal, SearchBar, etc.
-│   └── tile_map.cpp            # Tile-based layout system
+├── ui/                             # Reusable Qt widgets (Obsidian design system)
+│   ├── theme/
+│   │   ├── Theme.cpp/h             # Color tokens, font constants
+│   │   └── StyleSheets.cpp/h       # Qt stylesheets for all components
+│   ├── widgets/
+│   │   ├── Card.cpp/h              # Panel container
+│   │   ├── SearchBar.cpp/h
+│   │   ├── StatusBadge.cpp/h
+│   │   ├── GeometricBackground.cpp/h
+│   │   ├── TabHeader.cpp/h
+│   │   └── TabFooter.cpp/h
+│   ├── tables/DataTable.cpp/h      # Reusable data table
+│   ├── charts/ChartFactory.cpp/h   # Qt6 Charts factory
+│   └── navigation/
+│       ├── NavigationBar.cpp/h     # Left sidebar navigation
+│       ├── FKeyBar.cpp/h           # Function key shortcuts bar
+│       ├── StatusBar.cpp/h         # Bottom status bar
+│       └── ToolBar.cpp/h           # Top toolbar
 │
-├── http/                       # HTTP client + API types
-│   └── http_client.cpp         # libcurl wrapper
+├── network/
+│   ├── http/HttpClient.cpp/h       # QNetworkAccessManager wrapper
+│   └── websocket/WebSocketClient.cpp/h  # Qt6 WebSocket wrapper
 │
-├── storage/                    # SQLite + encrypted storage
-│   └── database.cpp            # Database operations
+├── storage/
+│   ├── sqlite/
+│   │   ├── Database.cpp/h          # Main database
+│   │   ├── CacheDatabase.cpp/h     # Cache database
+│   │   └── migrations/             # Versioned schema migrations
+│   ├── cache/
+│   │   ├── CacheManager.cpp/h
+│   │   └── TabSessionStore.cpp/h
+│   ├── secure/SecureStorage.cpp/h  # Encrypted credential storage
+│   └── repositories/               # Data access objects (13 repositories)
+│       ├── SettingsRepository.cpp/h
+│       ├── WatchlistRepository.cpp/h
+│       ├── ChatRepository.cpp/h
+│       └── ...
 │
-├── auth/                       # Authentication
-│   └── auth_manager.cpp        # Login, JWT, guest mode
+├── auth/
+│   ├── AuthManager.cpp/h           # Login, JWT, guest mode
+│   ├── AuthApi.cpp/h               # Auth API calls
+│   ├── UserApi.cpp/h               # User API calls
+│   ├── SessionGuard.cpp/h          # Auto-logout on 401
+│   └── AuthTypes.h                 # Shared auth types
 │
-├── python/                     # Python runtime bridge
-│   ├── python_runner.cpp       # Execute Python scripts
-│   └── setup_manager.cpp       # Python environment setup
+├── python/
+│   └── PythonRunner.cpp/h          # Execute Python scripts, capture stdout
 │
-├── mcp/                        # Model Context Protocol
-│   ├── mcp_client.h            # MCP client
-│   ├── mcp_provider.cpp        # MCP provider management
-│   └── mcp_service.cpp         # MCP service layer
+├── trading/
+│   ├── BrokerInterface.h           # Abstract broker interface
+│   ├── BrokerRegistry.cpp/h        # Broker registration
+│   ├── ExchangeService.cpp/h       # Exchange connectivity
+│   ├── OrderMatcher.cpp/h          # Order matching engine
+│   ├── PaperTrading.cpp/h          # Paper trading engine
+│   ├── UnifiedTrading.cpp/h        # Unified trading facade
+│   └── brokers/                    # 20+ broker implementations
+│       ├── ZerodhaBroker.h
+│       ├── FyersBroker.cpp/h
+│       ├── UpstoxBroker.h
+│       ├── IBKRBroker.h
+│       ├── AlpacaBroker.h
+│       ├── SaxoBankBroker.h
+│       └── ...
 │
-├── trading/                    # Trading infrastructure
-│   ├── broker_interface.h      # Abstract broker interface
-│   ├── broker_registry.cpp     # Broker registration
-│   ├── exchange_service.cpp    # Exchange connectivity
-│   ├── order_matcher.cpp       # Order matching engine
-│   └── brokers/                # Broker implementations
-│       ├── generic_broker.h
-│       ├── alpaca_broker.cpp
-│       ├── zerodha_broker.cpp
-│       ├── ibkr_broker.cpp
-│       └── ...                 # 15+ broker adapters
+├── services/
+│   ├── markets/MarketDataService.cpp/h
+│   └── news/
+│       ├── NewsService.cpp/h
+│       ├── NewsClusterService.cpp/h
+│       └── NewsMonitorService.cpp/h
 │
-├── portfolio/                  # Portfolio management
-├── media/                      # Media playback
-├── voice/                      # Voice features
-├── vendor/                     # Vendored third-party code
-│
-└── screens/                    # 40+ terminal screens
-    ├── dashboard/              # Main dashboard + widgets
-    ├── markets/                # Market data display
-    ├── news/                   # News aggregation
-    ├── watchlist/              # Watchlist management
-    ├── crypto_trading/         # Crypto trading
-    ├── equity_trading/         # Equity trading
-    ├── algo_trading/           # Algorithmic trading
-    ├── backtesting/            # Strategy backtesting
-    ├── research/               # Equity research panels
-    ├── screener/               # Stock screener
-    ├── quantlib/               # 18 quant modules
-    ├── ai_chat/                # AI chat interface
-    ├── ai_quant_lab/           # ML/AI analytics
-    ├── agent_studio/           # AI agent management
-    ├── alpha_arena/            # Alpha Arena
-    ├── economics/              # Economic data
-    ├── dbnomics/               # DBnomics data
-    ├── akshare/                # Chinese market data
-    ├── asia_markets/           # Asia markets
-    ├── geopolitics/            # Geopolitical analysis
-    ├── gov_data/               # Government data
-    ├── maritime/               # Maritime tracking
-    ├── polymarket/             # Prediction markets
-    ├── relationship_map/       # Entity relationships
-    ├── code_editor/            # Code editor
-    ├── node_editor/            # Visual workflows
-    ├── excel/                  # Spreadsheet
-    ├── report_builder/         # Report generation
-    ├── notes/                  # Notes
-    ├── data_sources/           # Data source management
-    ├── data_mapping/           # Data mapping
-    ├── mcp_servers/            # MCP server management
-    ├── settings/               # App settings
-    ├── profile/                # User profile
-    ├── docs/                   # In-app documentation
-    ├── forum/                  # Community forum
-    ├── support/                # Support
-    └── about/                  # About screen
+└── screens/                        # Terminal screens
+    ├── auth/                       # Login, Register, ForgotPassword, Pricing
+    ├── dashboard/                  # Dashboard + 13 widgets
+    ├── markets/                    # Market data
+    ├── news/                       # News aggregation + clustering
+    ├── watchlist/                  # Watchlist management
+    ├── crypto_trading/             # Crypto trading (7 components)
+    ├── report_builder/             # Report generation (4 components)
+    ├── notes/                      # Notes
+    ├── profile/                    # User profile
+    ├── settings/                   # App settings
+    ├── support/                    # Support
+    ├── about/                      # About screen
+    └── ComingSoonScreen.cpp/h      # Placeholder for upcoming screens
 ```
 
 ---
@@ -169,37 +169,37 @@ fincept-cpp/src/
 
 Every screen follows a strict separation:
 
-- **Screens** (`*_screen.cpp`) — render UI only, no HTTP calls, no business logic
-- **Data/Service** classes (`*_data.cpp`) — handle fetching, caching, processing
-- Screens call data services, never `HttpClient` directly
+- **Screens** (`*Screen.cpp`) — render UI only, no HTTP calls, no business logic
+- **Services** (`*Service.cpp`) — handle fetching, caching, processing
+- Screens connect to services via Qt signals/slots, never call `HttpClient` directly
 
 ```
 User Interaction
       │
       ▼
-Screen (*_screen.cpp)        ← UI rendering only
-      │
+Screen (*Screen.cpp)         ← UI rendering only (QWidget subclass)
+      │  signals/slots
       ▼
-Data Service (*_data.cpp)    ← Fetching, caching, processing
+Service (*Service.cpp)       ← Fetching, caching, processing
       │
-      ├─── HTTP Client       ← API calls
-      ├─── Python Runner     ← Analytics
-      └─── SQLite            ← Local storage
+      ├─── HttpClient        ← API calls (QNetworkAccessManager)
+      ├─── PythonRunner      ← Analytics scripts
+      └─── Database          ← Local storage (Qt Sql / SQLite)
 ```
 
 ### Core Infrastructure
 
-- **`Result<T>`** for error handling instead of raw error codes
+- **`Result<T>`** for error handling instead of raw error codes or exceptions
 - **`LOG_INFO("tag", "msg")`** for structured logging
 - **`EventBus::instance().publish("event", data)`** for cross-module communication
-- **`config::API_BASE_URL`** for constants — no magic strings
+- **`AppConfig::instance().api_base_url()`** for constants — no magic strings
 
 ### Threading Model
 
-- UI code runs on main thread only (ImGui requirement)
-- Background work via `std::async` / `std::thread`
-- Shared state protected with `std::mutex`
-- Simple flags use `std::atomic`
+- UI code runs on the main thread only (Qt requirement)
+- Background work via `QThread` or `QtConcurrent`
+- Results posted back to UI thread via `QMetaObject::invokeMethod` or signal/slot across threads
+- Shared state protected with `QMutex`
 
 ---
 
@@ -211,85 +211,84 @@ Data Service (*_data.cpp)    ← Fetching, caching, processing
 User clicks "Get AAPL quote"
         │
         ▼
-Screen (markets_screen.cpp)
+Screen (MarketsScreen.cpp)
         │
         ▼
-Data Service (markets_data.cpp)
+Service (MarketDataService.cpp)
         │
-        ├─── Option A: HTTP API call (libcurl)
+        ├─── Option A: HTTP API call (HttpClient / QNetworkAccessManager)
         │         │
         │         ▼
-        │    Parse JSON (nlohmann/json)
+        │    Parse JSON (QJsonDocument)
         │
-        └─── Option B: Python Script
+        └─── Option B: Python Script (PythonRunner)
                   │
                   ▼
-             Python Runner executes script
+             Spawns Python process
                   │
                   ▼
-             Returns JSON to C++
+             Script outputs JSON to stdout
+                  │
+                  ▼
+             C++ parses JSON response
         │
         ▼
-UI updates with data
+Signal emitted → Screen slot updates UI
 ```
 
 ### Python Integration
 
 ```
-C++ (python_runner.cpp)
+C++ (PythonRunner.cpp)
     │
     ▼
-Spawns Python process
+QProcess spawns Python interpreter
     │
     ▼
-Executes script (scripts/Analytics/...)
+Executes script (scripts/Analytics/... or scripts/*.py)
     │
     ▼
 Script outputs JSON to stdout
     │
     ▼
-C++ parses JSON response
+C++ reads stdout, parses QJsonDocument
     │
     ▼
-Data returned to calling screen
+Data returned to calling service/screen
 ```
 
 ---
 
 ## Security Architecture
 
-- **AES-256-GCM** encrypted credential storage
+- **Encrypted credential storage** via `SecureStorage` (platform keychain or AES)
 - **Input sanitization** at system boundaries
-- **OpenSSL** for all TLS connections
+- **Qt TLS** for all HTTPS connections
 - **No secrets in source** — environment-based configuration
+- **SessionGuard** automatically logs out on 401 responses
 
 ---
 
 ## Build System
 
-### CMake + vcpkg
+### CMake + Qt6
 
-```bash
-# vcpkg dependencies (vcpkg.json)
-glfw3, curl, nlohmann-json, sqlite3, openssl,
-imgui (docking + freetype), yoga, stb, implot,
-spdlog, miniaudio
-
-# Optional
-libmpv (video playback)
+```cmake
+find_package(Qt6 REQUIRED COMPONENTS
+    Widgets Charts PrintSupport Network Sql
+)
+find_package(Qt6 QUIET COMPONENTS WebSockets)
 ```
 
-### Unity Builds
-
-Unity (jumbo) builds are enabled by default for faster compilation — CMake merges `.cpp` files into batches of 12.
+No external package manager required — Qt6 provides all core dependencies.
 
 ### Platform Targets
 
-| Platform | Compiler | Output |
-|----------|----------|--------|
-| Windows | MSVC 2022 | `.exe` |
-| macOS | Clang 15+ | native binary |
-| Linux | GCC 12+ | native binary |
+| Platform | Compiler | Output | Qt DLL bundling |
+|----------|----------|--------|-----------------|
+| Windows | MSVC 2022 | `.exe` | `windeployqt` (automatic POST_BUILD) |
+| macOS | Clang 15+ | native binary | `macdeployqt` |
+| Linux | GCC 12+ | native binary | system Qt packages |
 
 ---
 

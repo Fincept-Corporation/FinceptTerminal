@@ -5,18 +5,13 @@ on:
     paths:
       - 'setup.sh'
       - 'setup.bat'
-      - 'fincept-cpp/CMakeLists.txt'
-      - 'fincept-cpp/vcpkg.json'
+      - 'fincept-qt/CMakeLists.txt'
   pull_request:
     paths:
       - 'setup.sh'
       - 'setup.bat'
-      - 'fincept-cpp/CMakeLists.txt'
-      - 'fincept-cpp/vcpkg.json'
+      - 'fincept-qt/CMakeLists.txt'
   workflow_dispatch:
-
-env:
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
 jobs:
   test-setup:
@@ -26,15 +21,15 @@ jobs:
         include:
           - os: ubuntu-22.04
             platform: Linux
-            binary: fincept-cpp/build/FinceptTerminal
+            binary: fincept-qt/build/FinceptTerminal
 
           - os: macos-14
             platform: macOS
-            binary: fincept-cpp/build/FinceptTerminal
+            binary: fincept-qt/build/FinceptTerminal
 
           - os: windows-2022
             platform: Windows
-            binary: fincept-cpp/build/Release/FinceptTerminal.exe
+            binary: fincept-qt/build/Release/FinceptTerminal.exe
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.platform }}
@@ -43,18 +38,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup vcpkg caching
-        uses: actions/github-script@v7
+      # ── Qt6 (Windows/macOS via installer action) ────────────
+      - name: Install Qt6 (Windows/macOS)
+        if: runner.os != 'Linux'
+        uses: jurplel/install-qt-action@v4
         with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+          version: "6.8.3"
+          arch: ${{ runner.os == 'Windows' && 'win64_msvc2022_64' || 'clang_64' }}
+          modules: "qtcharts qtwebsockets"
+          cache: true
 
       # ── Linux / macOS — run setup.sh --ci ──────────────────
       - name: Run setup.sh --ci (Linux/macOS)
         if: runner.os != 'Windows'
-        env:
-          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
         run: |
           chmod +x setup.sh
           ./setup.sh --ci
@@ -63,8 +59,6 @@ jobs:
       - name: Run setup.bat --ci (Windows)
         if: runner.os == 'Windows'
         shell: cmd
-        env:
-          VCPKG_ROOT: ${{ github.workspace }}\vcpkg
         run: setup.bat --ci
 
       # ── Verify binary exists ────────────────────────────────
@@ -73,8 +67,8 @@ jobs:
         run: |
           if [ ! -f "${{ matrix.binary }}" ]; then
             echo "ERROR: Binary not found at ${{ matrix.binary }}"
-            ls -la fincept-cpp/build/ 2>/dev/null || true
-            ls -la fincept-cpp/build/Release/ 2>/dev/null || true
+            ls -la fincept-qt/build/ 2>/dev/null || true
+            ls -la fincept-qt/build/Release/ 2>/dev/null || true
             exit 1
           fi
           echo "Binary verified: ${{ matrix.binary }}"

@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\x64\Release\ZERO_CHECK</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\Release\theme01_obsidian.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\Release\theme02_matrix.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\Release\theme03_arctic.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\Release\theme04_carbon.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\Release\theme05_midnight.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\Release\theme06_neon.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\Release\theme07_slate.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\Release\theme08_bloomberg.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\Release\theme09_ember.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\Release\theme10_titanium.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\x64\Release\ALL_BUILD</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>

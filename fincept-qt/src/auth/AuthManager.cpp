@@ -1,0 +1,437 @@
+#include "auth/AuthManager.h"
+#include "auth/AuthApi.h"
+#include "auth/UserApi.h"
+#include "core/config/AppConfig.h"
+#include "core/logging/Logger.h"
+#include "storage/repositories/SettingsRepository.h"
+#include "network/http/HttpClient.h"
+#include <QJsonDocument>
+#include <QSysInfo>
+#include <QDateTime>
+#include <QRandomGenerator>
+#include <QCryptographicHash>
+
+namespace fincept::auth {
+
+AuthManager& AuthManager::instance() {
+    static AuthManager s;
+    return s;
+}
+
+AuthManager::AuthManager() {}
+
+void AuthManager::set_loading(bool v) {
+    if (is_loading_ != v) {
+        is_loading_ = v;
+        emit loading_changed(v);
+    }
+}
+
+QJsonObject AuthManager::unwrap_data(const QJsonObject& raw) const {
+    if (raw.contains("data") && raw["data"].isObject()) {
+        auto inner = raw["data"].toObject();
+        if (inner.contains("data") && inner["data"].isObject()) {
+            return inner["data"].toObject();
+        }
+        return inner;
+    }
+    return raw;
+}
+
+QString AuthManager::generate_device_id() const {
+    QString info = QSysInfo::machineHostName() + "|" +
+                   QSysInfo::productType() + "|" +
+                   QSysInfo::currentCpuArchitecture();
+    QByteArray hash = QCryptographicHash::hash(info.toUtf8(), QCryptographicHash::Sha256).toHex();
+    QString timestamp = QString::number(QDateTime::currentMSecsSinceEpoch(), 36);
+    quint32 random = QRandomGenerator::global()->generate();
+    return QString("fincept_desktop_%1_%2_%3")
+        .arg(QString::fromUtf8(hash.left(16)), timestamp, QString::number(random, 36));
+}
+
+// ── Token helper — single place to set/clear tokens on HttpClient ────────────
+
+static void apply_tokens(const QString& api_key, const QString& session_token) {
+    auto& http = fincept::HttpClient::instance();
+    http.set_auth_header(api_key);
+    http.set_session_token(session_token);
+}
+
+static void clear_tokens() {
+    apply_tokens({}, {});
+}
+
+// ── Session persistence (SQLite via SettingsRepository) ──────────────────────
+
+void AuthManager::save_session() {
+    QJsonDocument doc(session_.to_json());
+    QString json = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    auto r = fincept::SettingsRepository::instance().set("fincept_session", json, "auth");
+    if (r.is_err()) {
+        LOG_ERROR("Auth", "Failed to save session: " + QString::fromStdString(r.error()));
+    }
+}
+
+void AuthManager::load_session() {
+    auto r = fincept::SettingsRepository::instance().get("fincept_session");
+    if (r.is_err()) return;
+
+    QString json = r.value();
+    if (json.isEmpty()) return;
+
+    auto doc = QJsonDocument::fromJson(json.toUtf8());
+    if (doc.isNull()) return;
+
+    session_ = SessionData::from_json(doc.object());
+}
+
+void AuthManager::clear_session() {
+    session_ = SessionData{};
+    clear_tokens();
+    fincept::SettingsRepository::instance().remove("fincept_session");
+    fincept::SettingsRepository::instance().remove("fincept_api_key");
+}
+
+// ── Initialize ───────────────────────────────────────────────────────────────
+
+void AuthManager::initialize() {
+    set_loading(true);
+    load_session();
+
+    if (!session_.api_key.isEmpty()) {
+        // Restore tokens on HttpClient so API calls work
+        apply_tokens(session_.api_key, session_.session_token);
+        validate_saved_session(session_);
+        return;
+    }
+
+    set_loading(false);
+    emit auth_state_changed();
+}
+
+void AuthManager::validate_saved_session(const SessionData& saved) {
+    Q_UNUSED(saved);
+    AuthApi::instance().validate_session_server([this](ApiResponse r) {
+        if (!r.success) {
+            LOG_WARN("Auth", "Session validation failed — clearing");
+            clear_session();
+            set_loading(false);
+            emit auth_state_changed();
+            return;
+        }
+
+        auto data = unwrap_data(r.data);
+        if (data.contains("valid") && !data["valid"].toBool()) {
+            LOG_WARN("Auth", "Session invalid (valid=false)");
+            clear_session();
+            set_loading(false);
+            emit auth_state_changed();
+            return;
+        }
+
+        // Session valid — refresh profile
+        fetch_user_profile(session_.api_key);
+    });
+}
+
+void AuthManager::fetch_user_profile(const QString& api_key) {
+    Q_UNUSED(api_key);
+    AuthApi::instance().get_user_profile([this](ApiResponse r) {
+        if (r.success) {
+            auto data = unwrap_data(r.data);
+            session_.user_info = UserProfile::from_json(data);
+        }
+        // Chain subscription fetch
+        fetch_user_subscription();
+    });
+}
+
+void AuthManager::fetch_user_subscription() {
+    UserApi::instance().get_user_subscription([this](ApiResponse r) {
+        if (r.success) {
+            auto data = unwrap_data(r.data);
+            session_.subscription = UserSubscription::from_json(data);
+            session_.has_subscription = !session_.subscription.account_type.isEmpty();
+        }
+        // Fallback: use account_type from profile
+        if (session_.subscription.account_type.isEmpty() && !session_.user_info.account_type.isEmpty()) {
+            session_.subscription.account_type = session_.user_info.account_type;
+            session_.subscription.credit_balance = session_.user_info.credit_balance;
+            session_.has_subscription = true;
+        }
+        save_session();
+        set_loading(false);
+        emit subscription_fetched();
+        emit auth_state_changed();
+    });
+}
+
+// ── Login ────────────────────────────────────────────────────────────────────
+
+void AuthManager::login(const QString& email, const QString& password, bool force_login) {
+    set_loading(true);
+
+    LoginRequest req;
+    req.email = sanitize_input(email).toLower();
+    req.password = password;
+    req.force_login = force_login;
+
+    AuthApi::instance().login(req, [this, email](ApiResponse r) {
+        if (!r.success) {
+            set_loading(false);
+            emit login_failed(r.error.isEmpty() ? "Login failed" : r.error);
+            return;
+        }
+
+        auto data = unwrap_data(r.data);
+
+        if (data["active_session"].toBool()) {
+            set_loading(false);
+            emit login_active_session(data["message"].toString(
+                "You are already logged in on another device."));
+            return;
+        }
+
+        if (data["mfa_required"].toBool()) {
+            set_loading(false);
+            emit login_mfa_required();
+            return;
+        }
+
+        QString api_key = data["api_key"].toString();
+        if (api_key.isEmpty()) {
+            set_loading(false);
+            emit login_failed("No API key returned from server");
+            return;
+        }
+
+        QString session_token = data["session_token"].toString();
+
+        // Set tokens on HttpClient — all subsequent API calls will use them
+        apply_tokens(api_key, session_token);
+
+        session_.authenticated = true;
+        session_.api_key = api_key;
+        session_.session_token = session_token;
+        session_.device_id = generate_device_id();
+        session_.user_info.email = email;
+
+        // Fetch profile, then subscription (HttpClient already has tokens set)
+        AuthApi::instance().get_user_profile([this](ApiResponse pr) {
+            if (pr.success) {
+                session_.user_info = UserProfile::from_json(unwrap_data(pr.data));
+            }
+            // Chain subscription fetch before emitting success
+            UserApi::instance().get_user_subscription([this](ApiResponse sr) {
+                if (sr.success) {
+                    auto sub_data = unwrap_data(sr.data);
+                    session_.subscription = UserSubscription::from_json(sub_data);
+                    session_.has_subscription = !session_.subscription.account_type.isEmpty();
+                }
+                if (session_.subscription.account_type.isEmpty() && !session_.user_info.account_type.isEmpty()) {
+                    session_.subscription.account_type = session_.user_info.account_type;
+                    session_.subscription.credit_balance = session_.user_info.credit_balance;
+                    session_.has_subscription = true;
+                }
+                save_session();
+                set_loading(false);
+                emit login_succeeded();
+                emit auth_state_changed();
+            });
+        });
+    });
+}
+
+// ── Signup ───────────────────────────────────────────────────────────────────
+
+void AuthManager::signup(const QString& username, const QString& email,
+                          const QString& password, const QString& phone,
+                          const QString& country, const QString& country_code) {
+    set_loading(true);
+
+    RegisterRequest req;
+    req.username = sanitize_input(username).toLower();
+    req.email = sanitize_input(email).toLower();
+    req.password = password;
+    req.phone = phone;
+    req.country = country;
+    req.country_code = country_code;
+
+    AuthApi::instance().register_user(req, [this](ApiResponse r) {
+        set_loading(false);
+        if (r.success) emit signup_succeeded();
+        else emit signup_failed(r.error.isEmpty() ? "Registration failed" : r.error);
+    });
+}
+
+// ── OTP verification ─────────────────────────────────────────────────────────
+
+void AuthManager::verify_otp(const QString& email, const QString& otp) {
+    set_loading(true);
+
+    VerifyOtpRequest req;
+    req.email = sanitize_input(email).toLower();
+    req.otp = sanitize_input(otp);
+
+    AuthApi::instance().verify_otp(req, [this, email](ApiResponse r) {
+        if (!r.success) {
+            set_loading(false);
+            emit otp_failed(r.error.isEmpty() ? "Verification failed" : r.error);
+            return;
+        }
+
+        auto data = unwrap_data(r.data);
+        QString api_key = data["api_key"].toString();
+        if (api_key.isEmpty()) {
+            set_loading(false);
+            emit otp_failed("No API key returned");
+            return;
+        }
+
+        QString session_token = data["session_token"].toString();
+        apply_tokens(api_key, session_token);
+
+        session_.authenticated = true;
+        session_.api_key = api_key;
+        session_.session_token = session_token;
+        session_.device_id = generate_device_id();
+        session_.user_info.email = email;
+
+        AuthApi::instance().get_user_profile([this](ApiResponse pr) {
+            if (pr.success) {
+                session_.user_info = UserProfile::from_json(unwrap_data(pr.data));
+            }
+            UserApi::instance().get_user_subscription([this](ApiResponse sr) {
+                if (sr.success) {
+                    auto sub_data = unwrap_data(sr.data);
+                    session_.subscription = UserSubscription::from_json(sub_data);
+                    session_.has_subscription = !session_.subscription.account_type.isEmpty();
+                }
+                if (session_.subscription.account_type.isEmpty() && !session_.user_info.account_type.isEmpty()) {
+                    session_.subscription.account_type = session_.user_info.account_type;
+                    session_.subscription.credit_balance = session_.user_info.credit_balance;
+                    session_.has_subscription = true;
+                }
+                save_session();
+                set_loading(false);
+                emit otp_verified();
+                emit auth_state_changed();
+            });
+        });
+    });
+}
+
+// ── MFA verification ─────────────────────────────────────────────────────────
+
+void AuthManager::verify_mfa(const QString& email, const QString& otp) {
+    set_loading(true);
+
+    AuthApi::instance().verify_mfa(sanitize_input(email).toLower(),
+                                    sanitize_input(otp),
+                                    [this, email](ApiResponse r) {
+        if (!r.success) {
+            set_loading(false);
+            emit mfa_failed(r.error.isEmpty() ? "MFA verification failed" : r.error);
+            return;
+        }
+
+        auto data = unwrap_data(r.data);
+        QString api_key = data["api_key"].toString();
+        if (api_key.isEmpty()) {
+            set_loading(false);
+            emit mfa_failed("No API key returned");
+            return;
+        }
+
+        QString session_token = data["session_token"].toString();
+        apply_tokens(api_key, session_token);
+
+        session_.authenticated = true;
+        session_.api_key = api_key;
+        session_.session_token = session_token;
+        session_.device_id = generate_device_id();
+        session_.user_info.email = email;
+
+        AuthApi::instance().get_user_profile([this](ApiResponse pr) {
+            if (pr.success) {
+                session_.user_info = UserProfile::from_json(unwrap_data(pr.data));
+            }
+            UserApi::instance().get_user_subscription([this](ApiResponse sr) {
+                if (sr.success) {
+                    auto sub_data = unwrap_data(sr.data);
+                    session_.subscription = UserSubscription::from_json(sub_data);
+                    session_.has_subscription = !session_.subscription.account_type.isEmpty();
+                }
+                if (session_.subscription.account_type.isEmpty() && !session_.user_info.account_type.isEmpty()) {
+                    session_.subscription.account_type = session_.user_info.account_type;
+                    session_.subscription.credit_balance = session_.user_info.credit_balance;
+                    session_.has_subscription = true;
+                }
+                save_session();
+                set_loading(false);
+                emit mfa_verified();
+                emit auth_state_changed();
+            });
+        });
+    });
+}
+
+// ── Forgot password ──────────────────────────────────────────────────────────
+
+void AuthManager::forgot_password(const QString& email) {
+    set_loading(true);
+
+    ForgotPasswordRequest req;
+    req.email = sanitize_input(email).toLower();
+
+    AuthApi::instance().forgot_password(req, [this](ApiResponse r) {
+        set_loading(false);
+        if (r.success) emit forgot_password_sent();
+        else emit forgot_password_failed(r.error.isEmpty() ? "Failed to send reset code" : r.error);
+    });
+}
+
+// ── Reset password ───────────────────────────────────────────────────────────
+
+void AuthManager::reset_password(const QString& email, const QString& otp,
+                                  const QString& new_password) {
+    set_loading(true);
+
+    ResetPasswordRequest req;
+    req.email = sanitize_input(email).toLower();
+    req.otp = sanitize_input(otp);
+    req.new_password = new_password;
+
+    AuthApi::instance().reset_password(req, [this](ApiResponse r) {
+        set_loading(false);
+        if (r.success) emit password_reset_succeeded();
+        else emit password_reset_failed(r.error.isEmpty() ? "Password reset failed" : r.error);
+    });
+}
+
+// ── Logout ───────────────────────────────────────────────────────────────────
+
+void AuthManager::logout() {
+    if (is_logging_out_) return;
+    is_logging_out_ = true;
+
+    if (!session_.api_key.isEmpty()) {
+        AuthApi::instance().logout([](ApiResponse) {});
+    }
+
+    clear_session();
+    is_logging_out_ = false;
+
+    emit logged_out();
+    emit auth_state_changed();
+}
+
+// ── Refresh user data ────────────────────────────────────────────────────────
+
+void AuthManager::refresh_user_data() {
+    if (!session_.authenticated || session_.api_key.isEmpty()) return;
+    // fetch_user_profile chains into fetch_user_subscription automatically
+    fetch_user_profile(session_.api_key);
+}
+
+} // namespace fincept::auth

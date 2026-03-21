@@ -44,18 +44,17 @@ if [ "$PLATFORM" = "linux" ]; then
     fi
     sudo apt-get update -qq
     sudo apt-get install -y \
-        git cmake ninja-build g++ python3 python3-pip \
-        libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
-        libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
-        libwayland-dev libxkbcommon-dev pkg-config \
-        autoconf automake libtool
+        git cmake g++ python3 python3-pip \
+        qt6-base-dev qt6-charts-dev qt6-tools-dev \
+        libqt6sql6-sqlite libqt6websockets6-dev \
+        libgl1-mesa-dev libglu1-mesa-dev \
+        pkg-config
 elif [ "$PLATFORM" = "macos" ]; then
     if [ "$CI_MODE" = false ] && ! command -v brew &>/dev/null; then
         info "Homebrew not found. Installing..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
-    # In CI, brew is pre-installed on macOS runners
-    brew install cmake ninja pkg-config autoconf automake libtool python
+    brew install cmake qt python
 fi
 ok
 
@@ -68,50 +67,35 @@ elif [ "$PLATFORM" = "macos" ]; then
 fi
 ok
 
-# ── Step 3: vcpkg ───────────────────────────────────────────
-echo "[3/5] Setting up vcpkg..."
-VCPKG_ROOT="${VCPKG_ROOT:-$HOME/vcpkg}"
-
-if [ ! -f "$VCPKG_ROOT/vcpkg" ]; then
-    info "vcpkg not found. Cloning into $VCPKG_ROOT..."
-    git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-    "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
-    info "vcpkg installed at $VCPKG_ROOT"
-else
-    info "vcpkg already installed at $VCPKG_ROOT"
-fi
-
-export VCPKG_ROOT
-
-# Persist VCPKG_ROOT in shell profile (skip in CI — env var is already set)
-if [ "$CI_MODE" = false ]; then
-    SHELL_PROFILE=""
-    if [ -f "$HOME/.zshrc" ]; then
-        SHELL_PROFILE="$HOME/.zshrc"
-    elif [ -f "$HOME/.bashrc" ]; then
-        SHELL_PROFILE="$HOME/.bashrc"
-    elif [ -f "$HOME/.bash_profile" ]; then
-        SHELL_PROFILE="$HOME/.bash_profile"
+# ── Step 3: Locate Qt6 ──────────────────────────────────────
+echo "[3/5] Locating Qt6..."
+if [ "$PLATFORM" = "linux" ]; then
+    QT_PREFIX="/usr"
+    command -v qmake6 &>/dev/null || command -v qmake &>/dev/null || \
+        fail "Qt6 not found. Run: sudo apt install qt6-base-dev"
+elif [ "$PLATFORM" = "macos" ]; then
+    QT_BREW_PREFIX="$(brew --prefix qt 2>/dev/null || true)"
+    if [ -z "$QT_BREW_PREFIX" ]; then
+        fail "Qt6 not found. Run: brew install qt"
     fi
-    if [ -n "$SHELL_PROFILE" ]; then
-        if ! grep -q "VCPKG_ROOT" "$SHELL_PROFILE"; then
-            echo "" >> "$SHELL_PROFILE"
-            echo "export VCPKG_ROOT=\"$VCPKG_ROOT\"" >> "$SHELL_PROFILE"
-            info "Added VCPKG_ROOT to $SHELL_PROFILE"
-        fi
-    fi
+    QT_PREFIX="$QT_BREW_PREFIX"
+    info "Qt6 found at $QT_PREFIX"
 fi
 ok
 
 # ── Step 4: Configure ────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_DIR="$SCRIPT_DIR/fincept-cpp"
-[ -d "$APP_DIR" ] || fail "fincept-cpp directory not found. Make sure you cloned the full repository."
+APP_DIR="$SCRIPT_DIR/fincept-qt"
+[ -d "$APP_DIR" ] || fail "fincept-qt directory not found. Make sure you cloned the full repository."
 cd "$APP_DIR"
 
-echo "[4/5] Configuring (vcpkg downloads dependencies — may take 10-20 min on first run)..."
-cmake --preset=default \
-    -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+echo "[4/5] Configuring..."
+if [ "$PLATFORM" = "macos" ]; then
+    cmake -B build -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_PREFIX_PATH="$QT_PREFIX"
+else
+    cmake -B build -DCMAKE_BUILD_TYPE=Release
+fi
 ok
 
 # ── Step 5: Build ────────────────────────────────────────────

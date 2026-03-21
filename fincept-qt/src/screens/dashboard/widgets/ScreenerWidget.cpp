@@ -1,0 +1,201 @@
+#include "screens/dashboard/widgets/ScreenerWidget.h"
+#include "ui/theme/Theme.h"
+#include <QHBoxLayout>
+#include <QFrame>
+#include <algorithm>
+
+namespace fincept::screens::widgets {
+
+// Broad basket: large-caps across sectors for screening
+static const QStringList kScreenerSymbols = {
+    "AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","NFLX","AMD","INTC",
+    "JPM","GS","BAC","WFC","MS","BRK-B","V","MA",
+    "WMT","COST","TGT","HD","AMGN","PFE","JNJ","MRK",
+    "XOM","CVX","SLB","NEE","DUK","SO",
+    "CAT","GE","HON","RTX","PLTR","COIN","SOFI","PYPL","SNAP","UBER"
+};
+
+ScreenerWidget::ScreenerWidget(QWidget* parent)
+    : BaseWidget("STOCK SCREENER", parent, ui::colors::INFO)
+{
+    auto* vl = content_layout();
+    vl->setContentsMargins(0, 0, 0, 0);
+    vl->setSpacing(0);
+
+    // Filter bar
+    auto* filter_bar = new QWidget;
+    filter_bar->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED));
+    auto* fl = new QHBoxLayout(filter_bar);
+    fl->setContentsMargins(8, 6, 8, 6);
+    fl->setSpacing(8);
+
+    auto* filter_lbl = new QLabel("SORT BY");
+    filter_lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+        .arg(ui::colors::TEXT_TERTIARY));
+    fl->addWidget(filter_lbl);
+
+    filter_combo_ = new QComboBox;
+    filter_combo_->addItems({"% CHANGE ↑", "% CHANGE ↓", "VOLUME ↓", "PRICE ↓", "PRICE ↑"});
+    filter_combo_->setStyleSheet(QString(
+        "QComboBox { background: %1; color: %2; border: 1px solid %3; font-size: 10px; padding: 2px 6px; }"
+        "QComboBox::drop-down { border: none; }"
+        "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3; }")
+        .arg(ui::colors::BG_BASE).arg(ui::colors::TEXT_PRIMARY).arg(ui::colors::BORDER_MED));
+    fl->addWidget(filter_combo_);
+    fl->addStretch();
+
+    auto* count_lbl = new QLabel(QString("%1 symbols").arg(kScreenerSymbols.size()));
+    count_lbl->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;")
+        .arg(ui::colors::TEXT_TERTIARY));
+    fl->addWidget(count_lbl);
+
+    vl->addWidget(filter_bar);
+
+    // Column headers
+    auto* header = new QWidget;
+    header->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
+        .arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_DIM));
+    auto* hl = new QHBoxLayout(header);
+    hl->setContentsMargins(8, 3, 8, 3);
+
+    auto make_hdr = [&](const QString& t, int s, Qt::Alignment a = Qt::AlignLeft) {
+        auto* l = new QLabel(t);
+        l->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::TEXT_TERTIARY));
+        l->setAlignment(a);
+        hl->addWidget(l, s);
+    };
+    make_hdr("SYMBOL",    2);
+    make_hdr("PRICE",     2, Qt::AlignRight);
+    make_hdr("CHG%",      1, Qt::AlignRight);
+    make_hdr("VOLUME",    2, Qt::AlignRight);
+    vl->addWidget(header);
+
+    // Scrollable list
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setStyleSheet(
+        "QScrollArea { border: none; background: transparent; }"
+        "QScrollBar:vertical { width: 4px; background: transparent; }"
+        "QScrollBar::handle:vertical { background: #222222; border-radius: 2px; min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+
+    auto* list_widget = new QWidget;
+    list_widget->setStyleSheet("background: transparent;");
+    list_layout_ = new QVBoxLayout(list_widget);
+    list_layout_->setContentsMargins(0, 0, 0, 0);
+    list_layout_->setSpacing(0);
+    list_layout_->addStretch();
+
+    scroll->setWidget(list_widget);
+    vl->addWidget(scroll, 1);
+
+    connect(filter_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &ScreenerWidget::apply_filter);
+    connect(this, &BaseWidget::refresh_requested, this, &ScreenerWidget::refresh_data);
+
+    set_loading(true);
+    refresh_data();
+}
+
+void ScreenerWidget::refresh_data() {
+    set_loading(true);
+    services::MarketDataService::instance().fetch_quotes(kScreenerSymbols,
+        [this](bool ok, QVector<services::QuoteData> quotes) {
+            set_loading(false);
+            if (!ok || quotes.isEmpty()) return;
+            all_quotes_ = std::move(quotes);
+            apply_filter();
+        });
+}
+
+void ScreenerWidget::apply_filter() {
+    if (all_quotes_.isEmpty()) return;
+
+    QVector<services::QuoteData> sorted = all_quotes_;
+    int idx = filter_combo_ ? filter_combo_->currentIndex() : 0;
+
+    switch (idx) {
+        case 0: // % change asc (top gainers first)
+            std::sort(sorted.begin(), sorted.end(),
+                [](const auto& a, const auto& b){ return a.change_pct > b.change_pct; });
+            break;
+        case 1: // % change desc (top losers first)
+            std::sort(sorted.begin(), sorted.end(),
+                [](const auto& a, const auto& b){ return a.change_pct < b.change_pct; });
+            break;
+        case 2: // volume desc
+            std::sort(sorted.begin(), sorted.end(),
+                [](const auto& a, const auto& b){ return a.volume > b.volume; });
+            break;
+        case 3: // price desc
+            std::sort(sorted.begin(), sorted.end(),
+                [](const auto& a, const auto& b){ return a.price > b.price; });
+            break;
+        case 4: // price asc
+            std::sort(sorted.begin(), sorted.end(),
+                [](const auto& a, const auto& b){ return a.price < b.price; });
+            break;
+    }
+
+    // Show top 20
+    if (sorted.size() > 20) sorted.resize(20);
+    render_rows(sorted);
+}
+
+void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
+    while (list_layout_->count() > 0) {
+        auto* item = list_layout_->takeAt(0);
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
+    }
+
+    bool alt = false;
+    for (const auto& q : rows) {
+        auto* row = new QWidget;
+        row->setStyleSheet(QString("background: %1;")
+            .arg(alt ? ui::colors::BG_RAISED : "transparent"));
+        auto* rl = new QHBoxLayout(row);
+        rl->setContentsMargins(8, 4, 8, 4);
+
+        auto* sym = new QLabel(q.symbol);
+        sym->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+            .arg(ui::colors::INFO));
+        rl->addWidget(sym, 2);
+
+        auto* price = new QLabel(QString("$%1").arg(q.price, 0, 'f', 2));
+        price->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        price->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;")
+            .arg(ui::colors::TEXT_PRIMARY));
+        rl->addWidget(price, 2);
+
+        QString chg_str = QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2);
+        QString chg_col = q.change_pct > 0 ? ui::colors::POSITIVE
+                        : q.change_pct < 0 ? ui::colors::NEGATIVE
+                        : ui::colors::TEXT_PRIMARY;
+        auto* chg = new QLabel(chg_str);
+        chg->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        chg->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(chg_col));
+        rl->addWidget(chg, 1);
+
+        // Format volume: e.g. 45.2M
+        QString vol_str;
+        if (q.volume >= 1e9)      vol_str = QString("%1B").arg(q.volume / 1e9, 0, 'f', 1);
+        else if (q.volume >= 1e6) vol_str = QString("%1M").arg(q.volume / 1e6, 0, 'f', 1);
+        else if (q.volume >= 1e3) vol_str = QString("%1K").arg(q.volume / 1e3, 0, 'f', 0);
+        else                       vol_str = QString::number(static_cast<long long>(q.volume));
+
+        auto* vol = new QLabel(vol_str);
+        vol->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        vol->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;")
+            .arg(ui::colors::TEXT_SECONDARY));
+        rl->addWidget(vol, 2);
+
+        list_layout_->addWidget(row);
+        alt = !alt;
+    }
+
+    list_layout_->addStretch();
+}
+
+} // namespace fincept::screens::widgets

@@ -1,0 +1,125 @@
+#include "auth/UserApi.h"
+#include "network/http/HttpClient.h"
+#include "core/logging/Logger.h"
+#include <QJsonDocument>
+
+namespace fincept::auth {
+
+UserApi& UserApi::instance() {
+    static UserApi s;
+    return s;
+}
+
+void UserApi::request(const QString& method, const QString& endpoint,
+                       const QJsonObject& body, Callback cb) {
+    auto& http = fincept::HttpClient::instance();
+
+    auto handle = [cb](fincept::Result<QJsonDocument> result) {
+        if (result.is_err()) {
+            cb({false, {}, QString::fromStdString(result.error()), 500});
+            return;
+        }
+        cb({true, result.value().object(), {}, 200});
+    };
+
+    if (method == "GET")         http.get(endpoint, handle);
+    else if (method == "POST")   http.post(endpoint, body, handle);
+    else if (method == "PUT")    http.put(endpoint, body, handle);
+    else if (method == "DELETE") http.del(endpoint, handle);
+}
+
+// ── Profile ──────────────────────────────────────────────────────────────────
+
+void UserApi::get_user_profile(Callback cb)                              { request("GET", "/user/profile", {}, cb); }
+void UserApi::update_user_profile(const QJsonObject& data, Callback cb)  { request("PUT", "/user/profile", data, cb); }
+void UserApi::regenerate_api_key(Callback cb)                            { request("POST", "/user/regenerate-api-key", {}, cb); }
+void UserApi::get_user_credits(Callback cb)                              { request("GET", "/user/credits", {}, cb); }
+void UserApi::delete_user_account(Callback cb)                           { request("DELETE", "/user/account", {}, cb); }
+
+void UserApi::get_user_usage(int days, Callback cb) {
+    request("GET", QString("/user/usage?days=%1").arg(days), {}, cb);
+}
+
+// ── Session ──────────────────────────────────────────────────────────────────
+
+void UserApi::logout(Callback cb)           { request("POST", "/user/logout", {}, cb); }
+void UserApi::validate_session(Callback cb) { request("POST", "/user/validate-session", {}, cb); }
+
+// ── Login history ────────────────────────────────────────────────────────────
+
+void UserApi::get_login_history(int limit, int offset, Callback cb) {
+    request("GET", QString("/user/login-history?limit=%1&offset=%2").arg(limit).arg(offset), {}, cb);
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+void UserApi::get_notifications(int limit, int offset, bool unread_only, Callback cb) {
+    request("GET", QString("/user/notifications?limit=%1&offset=%2&unread_only=%3")
+        .arg(limit).arg(offset).arg(unread_only ? "true" : "false"), {}, cb);
+}
+
+void UserApi::mark_notification_read(int id, Callback cb) {
+    request("PUT", QString("/user/notifications/%1/read").arg(id), {}, cb);
+}
+
+void UserApi::mark_all_notifications_read(Callback cb) { request("PUT", "/user/notifications/read-all", {}, cb); }
+
+void UserApi::delete_notification(int id, Callback cb) {
+    request("DELETE", QString("/user/notifications/%1").arg(id), {}, cb);
+}
+
+// ── MFA ──────────────────────────────────────────────────────────────────────
+
+void UserApi::enable_mfa(Callback cb)  { request("POST", "/user/mfa/enable", {}, cb); }
+void UserApi::disable_mfa(Callback cb) { request("POST", "/user/mfa/disable", {}, cb); }
+
+// ── Subscriptions ────────────────────────────────────────────────────────────
+
+void UserApi::get_user_subscriptions(Callback cb) { request("GET", "/user/subscriptions", {}, cb); }
+void UserApi::get_user_transactions(Callback cb)  { request("GET", "/user/transactions", {}, cb); }
+
+void UserApi::subscribe_to_database(const QString& db_name, Callback cb) {
+    QJsonObject body;
+    body["database_name"] = db_name;
+    request("POST", "/user/subscribe", body, cb);
+}
+
+// ── Payment ──────────────────────────────────────────────────────────────────
+
+void UserApi::get_user_subscription(Callback cb) { request("GET", "/cashfree/subscription", {}, cb); }
+
+void UserApi::get_payment_history(int page, int limit, Callback cb) {
+    request("GET", QString("/user/transactions?page=%1&limit=%2").arg(page).arg(limit), {}, cb);
+}
+
+// ── Support ──────────────────────────────────────────────────────────────────
+
+void UserApi::get_tickets(Callback cb) { request("GET", "/support/tickets", {}, cb); }
+
+void UserApi::get_ticket_details(int ticket_id, Callback cb) {
+    request("GET", QString("/support/tickets/%1").arg(ticket_id), {}, cb);
+}
+
+void UserApi::create_ticket(const QString& subject, const QString& description,
+                             const QString& category, const QString& priority, Callback cb) {
+    QJsonObject body;
+    body["subject"]     = subject;
+    body["description"] = description;
+    body["category"]    = category;
+    body["priority"]    = priority;
+    request("POST", "/support/tickets", body, cb);
+}
+
+void UserApi::add_ticket_message(int ticket_id, const QString& message, Callback cb) {
+    QJsonObject body;
+    body["message"] = message;
+    request("POST", QString("/support/tickets/%1/messages").arg(ticket_id), body, cb);
+}
+
+void UserApi::update_ticket_status(int ticket_id, const QString& status, Callback cb) {
+    QJsonObject body;
+    body["status"] = status;
+    request("PUT", QString("/support/tickets/%1").arg(ticket_id), body, cb);
+}
+
+} // namespace fincept::auth

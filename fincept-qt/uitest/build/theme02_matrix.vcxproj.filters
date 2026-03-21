@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\theme02_matrix_autogen\mocs_compilation_Debug.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\windowsdisk\finceptTerminal\fincept-qt\uitest\theme02_matrix.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\theme02_matrix_autogen\mocs_compilation_Release.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\theme02_matrix_autogen\mocs_compilation_MinSizeRel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\windowsdisk\finceptTerminal\fincept-qt\uitest\build\theme02_matrix_autogen\mocs_compilation_RelWithDebInfo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\windowsdisk\finceptTerminal\fincept-qt\uitest\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{1ECF8C08-9074-385E-8EC6-21A815B3810C}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

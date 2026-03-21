@@ -1,0 +1,23 @@
+Method 1: Automated Bump (Recommended)
+
+  # Bump patch: 3.3.1 → 3.3.2
+  bun run bump-version patch
+
+  # Bump minor: 3.3.1 → 3.4.0
+  bun run bump-version minor
+
+  # Bump major: 3.3.1 → 4.0.0
+  bun run bump-version major
+
+  This will:
+  1. Update package.json
+  2. Auto-sync to src/constants/version.ts
+  3. Auto-sync to src-tauri/tauri.conf.json
+  4. Auto-sync to src-tauri/Cargo.toml
+
+  Method 2: Manual Update
+
+  1. Edit package.json - Change the version number:
+  "version": "3.3.1"
+  2. Run sync:
+  bun run sync-version

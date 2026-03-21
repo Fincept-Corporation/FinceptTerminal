@@ -1,139 +1,76 @@
-# .gitignore - Root level for entire finceptTerminal project
+# .gitignore — Fincept Terminal (Qt6 / C++20)
 # ============================================================
 
-# Version management notes
-versionterminal.txt
+# ── CMake build output ───────────────────────────────────────
+fincept-qt/build/
+fincept-qt/tmpqt/
+tmpqt/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+_deps/
 
-# Python artifacts
-*.egg-info/
+# ── Compiled binaries & libraries ───────────────────────────
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.pyd
+
+# ── Qt generated files ───────────────────────────────────────
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qm
+
+# ── Python artifacts ─────────────────────────────────────────
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
 .pdm-python
 .pdm-build
-fincept_terminal.egg-info
-fincept_env
-.venv
-*.pyc
-get-pip.py
 
-# Build artifacts
-dist
-build
-build/cli/cli.pkg
-finscript/target
-build.txt
-Output
-FinceptTerminal.spec
-FinceptTerminal.exe
-
-# IDE and Editor
+# ── IDE and editor ───────────────────────────────────────────
 .idea/
 .vscode/
-fincept-terminal-desktop/.vscode
-fincept-terminal-desktop/.claude
-**/.claude/
+*.suo
+*.user
+*.sln.docstates
+*.ntvs*
+*.njsproj
+*.sw?
+.DS_Store
+Thumbs.db
 
-# Documentation (except specific files)
-*.md
-!README.md
-!docs/**/*.md
-!.github/**/*.md
-fincept-terminal-desktop/CLAUDE.md
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/
 
-# Database files
+# ── Database files (runtime, not source) ─────────────────────
 *.db
+*.db-shm
+*.db-wal
 
-# Environment and Config files with secrets
+# ── Environment & secrets — NEVER commit ─────────────────────
 .env
 .env.local
 .env.*.local
-# Exclude app config settings but allow i18n translation files
-/settings.json
-/watchlist_settings.json
-fincept_terminal/settings.json
-fincept_terminal/watchlist_settings.json
-fincept_terminal/fyers_session_config.json
-fincept-terminal-desktop/settings.json
-fincept-terminal-desktop/watchlist_settings.json
-# Allow i18n translation files
-!fincept-terminal-desktop/public/locales/**/settings.json
-
-# Tauri signing keys - NEVER commit these!
 *.key
 *.pub
-fincept-terminal-desktop/tauri-signing.key
-fincept-terminal-desktop/tauri-signing.key.pub
 
-# ============================================================
-# fincept-terminal-desktop specific ignores
-# ============================================================
-
-# Node.js
-fincept-terminal-desktop/node_modules
-node_modules
-
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# Build outputs
-dist-ssr
-*.local
-
-# Editor directories and files
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Tauri specific
-fincept-terminal-desktop/src/services/node_modules
-fincept-terminal-desktop/src-tauri/target
-fincept-terminal-desktop/src-tauri/build/
-
-# Old PyOxidizer files (removed - using first-run setup now)
-fincept-terminal-desktop/src-tauri/binaries/
-fincept-terminal-desktop/src-tauri/python-interpreter-*.tar.gz
-
-# Python and Bun installed during setup (not bundled)
-fincept-terminal-desktop/src-tauri/resources/python/
-fincept-terminal-desktop/src-tauri/resources/bun/
-
-# Scripts should always be included (negation)
-!fincept-terminal-desktop/src-tauri/resources/scripts/
-
-# Python/Bun now installed on first run (not in git)
-
-# Bun now installed on first run (not in git)
-
-# Exclude large executables and binaries EXCEPT for resources
-*.exe
-!fincept-terminal-desktop/src-tauri/resources/**/*.exe
-*.dll
-!fincept-terminal-desktop/src-tauri/resources/**/*.dll
-!fincept-terminal-desktop/src-tauri/resources/**/*.pyd
-*.so
-!fincept-terminal-desktop/src-tauri/resources/**/*.so
-*.dylib
-!fincept-terminal-desktop/src-tauri/resources/**/*.dylib
-
-# ============================================================
-# Large files that should NEVER be in git
-# ============================================================
-
-# Rust build artifacts (any target folder)
-**/target/
-*.rlib
-*.rmeta
-*.pdb
-
-# Large data files
+# ── Large data / ML model files ──────────────────────────────
 *.csv
 *.bin
 *.pt
@@ -141,9 +78,10 @@ fincept-terminal-desktop/src-tauri/resources/bun/
 *.h5
 *.pkl
 *.pickle
+*.model
+*.weights
 
-# Large binary/media files
-*.pdf
+# ── Archives ─────────────────────────────────────────────────
 *.zip
 *.tar
 *.tar.gz
@@ -151,29 +89,11 @@ fincept-terminal-desktop/src-tauri/resources/bun/
 *.rar
 *.7z
 
-# ML models
-*.model
-*.weights
-
-# ============================================================
-# Legacy and deprecated
-# ============================================================
-/legacy-python-depreciated
-/legacy-python-depreciated/python
-/python
-/cmder
-/reqgen.py
-/treeview.py
-/testing
-/fincept_terminal/backup_20250730_072611
-/fincept_terminal_structure.txt
-/launcher.cpp
-/te
-/fincept.bat
-/pdm.lock
-/upx.exe
-/fincept_icon.ico
-/setup.iss
-/temp
-/tempdist
-/nul
+# ── Legacy (Tauri / React / Rust era — no longer in repo) ────
+fincept-terminal-desktop/
+fincept-cpp/
+**/target/
+*.rlib
+*.rmeta
+node_modules/
+dist-ssr/

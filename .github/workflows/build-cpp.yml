@@ -1,4 +1,4 @@
-name: Build C++ Terminal — All Platforms
+name: Build Qt Terminal — All Platforms
 
 on:
   workflow_dispatch:
@@ -8,7 +8,6 @@ on:
 
 env:
   BUILD_TYPE: Release
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -19,52 +18,52 @@ jobs:
         include:
           # ---- Windows x64 ----
           - os: windows-2022
-            triplet: x64-windows
-            host_triplet: x64-windows
             arch: x64
             platform: Windows
             artifact: FinceptTerminal-Windows-x64
             exe: FinceptTerminal.exe
+            qt_arch: win64_msvc2022_64
+            qt_version: "6.8.3"
             cmake_extra: ""
 
           # ---- Windows ARM64 (cross-compile from x64) ----
           - os: windows-2022
-            triplet: arm64-windows
-            host_triplet: x64-windows
             arch: arm64
             platform: Windows
             artifact: FinceptTerminal-Windows-arm64
             exe: FinceptTerminal.exe
+            qt_arch: win64_msvc2022_arm64
+            qt_version: "6.8.3"
             cmake_extra: "-A ARM64"
 
           # ---- Linux x64 ----
           - os: ubuntu-22.04
-            triplet: x64-linux
-            host_triplet: x64-linux
             arch: x64
             platform: Linux
             artifact: FinceptTerminal-Linux-x64
             exe: FinceptTerminal
+            qt_arch: ""
+            qt_version: ""
             cmake_extra: ""
 
           # ---- macOS ARM64 (Apple Silicon) ----
           - os: macos-14
-            triplet: arm64-osx
-            host_triplet: arm64-osx
             arch: arm64
             platform: macOS
             artifact: FinceptTerminal-macOS-arm64
             exe: FinceptTerminal
+            qt_arch: clang_64
+            qt_version: "6.8.3"
             cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=arm64"
 
           # ---- macOS x64 (Intel) ----
           - os: macos-15-intel
-            triplet: x64-osx
-            host_triplet: x64-osx
             arch: x64
             platform: macOS
             artifact: FinceptTerminal-macOS-x64
             exe: FinceptTerminal
+            qt_arch: clang_64
+            qt_version: "6.8.3"
             cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
 
     runs-on: ${{ matrix.os }}
@@ -83,68 +82,49 @@ jobs:
           echo "OS: ${{ matrix.os }}"
           echo "Platform: ${{ matrix.platform }}"
           echo "Arch: ${{ matrix.arch }}"
-          echo "Triplet: ${{ matrix.triplet }}"
-          echo "Host Triplet: ${{ matrix.host_triplet }}"
           echo "Workspace: ${{ github.workspace }}"
           cmake --version || echo "CMake not found"
           echo "::endgroup::"
 
-      - name: Setup vcpkg caching
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
-      # ---- System dependencies ----
+      # ---- System dependencies (Linux) ----
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
-            libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
-            libwayland-dev libxkbcommon-dev \
-            pkg-config autoconf automake libtool \
-            python3 python3-pip
+            cmake g++ python3 python3-pip \
+            qt6-base-dev qt6-charts-dev qt6-tools-dev \
+            libqt6sql6-sqlite libqt6websockets6-dev \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            pkg-config
 
-      - name: Install system dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install pkg-config autoconf automake libtool
-
-      # ---- vcpkg ----
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+      # ---- Qt6 (Windows + macOS via installer action) ----
+      - name: Install Qt6 (Windows/macOS)
+        if: runner.os != 'Linux'
+        uses: jurplel/install-qt-action@v4
         with:
-          vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-          vcpkgGitCommitId: '23dc124705fcac41cf35c33dd9541f5094a9c19f'
+          version: ${{ matrix.qt_version }}
+          arch: ${{ matrix.qt_arch }}
+          modules: "qtcharts qtwebsockets"
+          cache: true
 
       # ---- Configure ----
       - name: Configure CMake
         shell: bash
-        working-directory: fincept-cpp
+        working-directory: fincept-qt
         run: |
-          # Normalize workspace path for cross-platform compatibility
-          WORKSPACE_DIR="${{ github.workspace }}"
-          WORKSPACE_DIR="${WORKSPACE_DIR//\\//}"
-
           echo "::group::CMake Configure"
-          echo "Toolchain: ${WORKSPACE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-          echo "Triplet: ${{ matrix.triplet }}"
-          echo "Host Triplet: ${{ matrix.host_triplet }}"
-          echo "Extra args: ${{ matrix.cmake_extra }}"
 
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-            -DCMAKE_TOOLCHAIN_FILE="${WORKSPACE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
-            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
-            -DVCPKG_HOST_TRIPLET=${{ matrix.host_triplet }} \
-            ${{ matrix.cmake_extra }}
+          CMAKE_ARGS="-B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}"
 
+          # On Linux Qt6 is found automatically via system install
+          # On Windows/macOS CMAKE_PREFIX_PATH is set by install-qt-action
+          CMAKE_ARGS="$CMAKE_ARGS ${{ matrix.cmake_extra }}"
+
+          echo "Running: cmake $CMAKE_ARGS"
+          cmake $CMAKE_ARGS
           echo "::endgroup::"
 
-          # Verify configure succeeded
           if [ ! -f build/CMakeCache.txt ]; then
             echo "::error::CMake configure failed — CMakeCache.txt not found"
             exit 1
@@ -154,16 +134,16 @@ jobs:
       # ---- Build ----
       - name: Build
         shell: bash
-        working-directory: fincept-cpp
+        working-directory: fincept-qt
         run: |
           echo "::group::CMake Build"
           cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
           echo "::endgroup::"
 
-      # ---- Verify build output exists ----
+      # ---- Verify build output ----
       - name: Verify build output
         shell: bash
-        working-directory: fincept-cpp
+        working-directory: fincept-qt
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
             BINARY="build/Release/${{ matrix.exe }}"
@@ -179,31 +159,30 @@ jobs:
           echo "Build output verified: $BINARY"
           ls -lh "$BINARY"
 
-      # ---- Collect artifacts ----
+      # ---- Collect artifacts (Windows) ----
       - name: Collect artifacts (Windows)
         if: runner.os == 'Windows'
         shell: bash
-        working-directory: fincept-cpp
+        working-directory: fincept-qt
         run: |
           mkdir -p dist
-          cp build/Release/${{ matrix.exe }} dist/
-          cp build/Release/*.dll dist/ 2>/dev/null || true
-          cp -r fonts dist/fonts 2>/dev/null || true
+          # Copy entire Release dir (windeployqt runs POST_BUILD and copies Qt DLLs there)
+          cp -r build/Release/. dist/
           cp -r resources dist/resources 2>/dev/null || true
           cp -r scripts dist/scripts 2>/dev/null || true
           echo "Bundled $(find dist/scripts -name '*.py' 2>/dev/null | wc -l) Python scripts"
           echo "=== Collected artifacts ==="
           ls -lh dist/
 
+      # ---- Collect artifacts (Linux/macOS) ----
       - name: Collect artifacts (Linux/macOS)
         if: runner.os != 'Windows'
         shell: bash
-        working-directory: fincept-cpp
+        working-directory: fincept-qt
         run: |
           mkdir -p dist
           cp build/${{ matrix.exe }} dist/
           chmod +x dist/${{ matrix.exe }}
-          cp -r fonts dist/fonts 2>/dev/null || true
           cp -r resources dist/resources 2>/dev/null || true
           cp -r scripts dist/scripts 2>/dev/null || true
           echo "Bundled $(find dist/scripts -name '*.py' 2>/dev/null | wc -l) Python scripts"
@@ -214,7 +193,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: fincept-cpp/dist/
+          path: fincept-qt/dist/
           retention-days: 30
 
   # ---- macOS Universal Binary ----
@@ -222,7 +201,6 @@ jobs:
     needs: build
     runs-on: macos-14
     name: macOS Universal
-    # Only run if both macOS builds succeeded
     if: |
       !cancelled() &&
       needs.build.result == 'success'
@@ -254,7 +232,6 @@ jobs:
           mkdir -p dist
           lipo -create arm64/FinceptTerminal x64/FinceptTerminal -output dist/FinceptTerminal
           chmod +x dist/FinceptTerminal
-          cp -r arm64/fonts dist/fonts 2>/dev/null || true
           cp -r arm64/resources dist/resources 2>/dev/null || true
           cp -r arm64/scripts dist/scripts 2>/dev/null || true
           echo "=== Universal Binary ==="
@@ -314,11 +291,11 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('cpp-build-{0}', github.run_number) }}
-          name: ${{ github.ref_type == 'tag' && format('Fincept Terminal {0}', github.ref_name) || format('Fincept Terminal C++ Build #{0}', github.run_number) }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}
+          name: ${{ github.ref_type == 'tag' && format('Fincept Terminal {0}', github.ref_name) || format('Fincept Terminal Build #{0}', github.run_number) }}
           make_latest: ${{ github.ref_type == 'tag' }}
           body: |
-            Automated C++ build from commit ${{ github.sha }}
+            Automated build from commit ${{ github.sha }}
 
             ## Downloads
 

@@ -7,7 +7,7 @@ Welcome to Fincept Terminal! This guide will get you from zero to your first con
 
 ## What is Fincept Terminal?
 
-Fincept Terminal is an **open-source financial analysis platform** — a free, open-source alternative to Bloomberg Terminal. Version 4 is a native C++20 application using Dear ImGui for GPU-accelerated UI.
+Fincept Terminal is an **open-source financial analysis platform** — a free, open-source alternative to Bloomberg Terminal. Version 4 is a native C++20 application built with Qt6.
 
 ### The Big Picture
 
@@ -25,11 +25,11 @@ Fincept Terminal is an **open-source financial analysis platform** — a free, o
 
 ### Technology Decisions (and Why)
 
-- **C++20 + ImGui** — Native performance, GPU-accelerated UI, single binary (~15MB)
-- **GLFW + OpenGL** — Cross-platform rendering, mature and stable
+- **C++20 + Qt6** — Native performance, polished UI, single binary
+- **Qt6 Network + WebSockets** — Cross-platform networking, TLS built-in
+- **Qt6 Charts** — Financial charting without extra dependencies
+- **Qt6 Sql (SQLite)** — Local data caching for speed
 - **Embedded Python** — Access to vast ecosystem of financial libraries (yfinance, pandas, etc.)
-- **SQLite** — Local data caching for speed
-- **vcpkg** — Reproducible dependency management
 
 ---
 
@@ -40,40 +40,34 @@ Fincept Terminal is an **open-source financial analysis platform** — a free, o
 #### 1. Install a C++20 compiler
 
 - **Windows**: Install [Visual Studio 2022](https://visualstudio.microsoft.com/) with "Desktop development with C++" workload
-- **Linux**: `sudo apt install -y g++ cmake ninja-build`
-- **macOS**: `xcode-select --install && brew install cmake ninja`
+- **Linux**: `sudo apt install -y g++ cmake`
+- **macOS**: `xcode-select --install && brew install cmake`
 
-#### 2. Install CMake 3.20+ and Ninja
+#### 2. Install CMake 3.20+
 
-- **Windows**: `winget install Kitware.CMake Ninja-build.Ninja`
+- **Windows**: `winget install Kitware.CMake`
 - **Linux/macOS**: included in step above
 
-#### 3. Install vcpkg and set VCPKG_ROOT
+#### 3. Install Qt6
 
-```bash
-# Linux / macOS
-git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
-~/vcpkg/bootstrap-vcpkg.sh
-echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc  # or ~/.zshrc
-source ~/.bashrc
+**Windows** — Qt online installer (recommended, includes `windeployqt`):
+- Download from https://www.qt.io/download-qt-installer
+- Select: Qt 6.x → MSVC 2022 64-bit
 
-# Windows (PowerShell)
-git clone https://github.com/microsoft/vcpkg.git "$env:USERPROFILE\vcpkg"
-& "$env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat"
-[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT","$env:USERPROFILE\vcpkg","User")
-# Restart your terminal after this
-```
-
-#### 4. Linux only — install system dependencies
-
+**Linux (Ubuntu/Debian):**
 ```bash
 sudo apt install -y \
-  libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev \
-  libxrandr-dev libxi-dev libxext-dev libxfixes-dev \
-  libwayland-dev libxkbcommon-dev pkg-config
+  qt6-base-dev qt6-charts-dev qt6-tools-dev \
+  libqt6sql6-sqlite libqt6websockets6-dev \
+  libgl1-mesa-dev libglu1-mesa-dev
 ```
 
-#### 5. Install Python 3.11+
+**macOS:**
+```bash
+brew install qt
+```
+
+#### 4. Install Python 3.11+
 
 - **Windows**: [python.org](https://www.python.org/downloads/) (check "Add to PATH")
 - **Linux**: `sudo apt install python3`
@@ -84,13 +78,16 @@ sudo apt install -y \
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-cpp
+cd FinceptTerminal/fincept-qt
 
-# 2. Configure — vcpkg installs all C++ dependencies automatically
-cmake --preset=default
+# 2. Configure
+# Linux / macOS:
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+# Windows (Developer Command Prompt for VS 2022):
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
 
 # 3. Build
-cmake --build build --config Release
+cmake --build build --config Release --parallel
 
 # 4. Run
 ./build/FinceptTerminal              # Linux / macOS
@@ -116,34 +113,43 @@ Once the app opens:
 ```
 FinceptTerminal/
 │
-├── fincept-cpp/                    ← Main application (you'll work here)
+├── fincept-qt/                     ← Main application (you'll work here)
 │   ├── src/                        ← C++ source code
-│   │   ├── main.cpp                ← Entry point, GLFW/OpenGL setup
-│   │   ├── app.cpp/h               ← App state machine, routing
+│   │   ├── app/                    ← Entry point, MainWindow, ScreenRouter
 │   │   ├── core/                   ← Shared infrastructure
-│   │   │   ├── config.h            ← Constants
-│   │   │   ├── event_bus.h         ← Pub/sub messaging
-│   │   │   ├── logger.h            ← Logging
-│   │   │   └── result.h            ← Error handling
-│   │   ├── ui/                     ← Reusable ImGui widgets
-│   │   ├── http/                   ← HTTP client (libcurl)
-│   │   ├── storage/                ← SQLite database
-│   │   ├── auth/                   ← Authentication
+│   │   │   ├── config/             ← App-wide constants
+│   │   │   ├── events/             ← Pub/sub messaging (EventBus)
+│   │   │   ├── logging/            ← Structured logging (Logger)
+│   │   │   ├── result/             ← Result<T> error handling
+│   │   │   └── session/            ← Session management
+│   │   ├── ui/                     ← Reusable Qt widgets
+│   │   │   ├── theme/              ← Obsidian design system (StyleSheets)
+│   │   │   ├── widgets/            ← Card, SearchBar, StatusBadge, etc.
+│   │   │   ├── charts/             ← ChartFactory (Qt6 Charts)
+│   │   │   ├── tables/             ← DataTable
+│   │   │   └── navigation/         ← NavigationBar, StatusBar, FKeyBar
+│   │   ├── network/                ← HTTP client, WebSocket client
+│   │   ├── storage/                ← SQLite databases + repositories
+│   │   ├── auth/                   ← Authentication (JWT, guest mode)
 │   │   ├── python/                 ← Python runtime bridge
-│   │   ├── trading/                ← Trading engine + brokers
-│   │   └── screens/                ← 40+ terminal screens
+│   │   ├── trading/                ← Trading engine + 20+ brokers
+│   │   ├── services/               ← Market data, news services
+│   │   └── screens/                ← Terminal screens
 │   │       ├── dashboard/
 │   │       ├── markets/
 │   │       ├── crypto_trading/
+│   │       ├── news/
+│   │       ├── watchlist/
+│   │       ├── report_builder/
 │   │       └── ...
 │   │
 │   ├── scripts/                    ← Python analytics scripts
-│   │   ├── Analytics/              ← 34 analytics modules
-│   │   ├── agents/                 ← AI agents
-│   │   └── *.py                    ← 80+ data fetchers
+│   │   ├── Analytics/              ← CFA-level analytics modules
+│   │   ├── agents/                 ← AI agent frameworks
+│   │   └── *.py                    ← 100+ data fetchers
 │   │
 │   ├── CMakeLists.txt              ← Build configuration
-│   └── vcpkg.json                  ← Dependencies
+│   └── DESIGN_SYSTEM.md           ← Obsidian UI/UX spec
 │
 └── docs/                           ← Documentation
 ```
@@ -154,20 +160,20 @@ FinceptTerminal/
 User clicks "Get AAPL quote"
         │
         ▼
-Screen (markets_screen.cpp)         ← UI rendering only
+Screen (MarketsScreen.cpp)          ← UI rendering only
         │
         ▼
-Data Service (markets_data.cpp)     ← Fetching + caching
+Data Service (MarketDataService)    ← Fetching + caching
         │
-        ├─── HTTP API call (libcurl)
+        ├─── HTTP API call (QNetworkAccessManager)
         │         │
         │         ▼
-        │    Parse JSON (nlohmann/json)
+        │    Parse JSON (QJsonDocument)
         │
         └─── Python Script (optional)
                   │
                   ▼
-             Python fetches from API
+             PythonRunner executes script
                   │
                   ▼
              Returns JSON to C++
@@ -183,10 +189,11 @@ UI updates with data
 | Add a new screen | `src/screens/dashboard/` (as template) |
 | Add a data fetcher | `scripts/yfinance_data.py` (as template) |
 | Use UI widgets | `src/ui/widgets/` |
-| Make HTTP calls | `src/http/http_client.cpp` |
-| Store data locally | `src/storage/database.cpp` |
+| Make HTTP calls | `src/network/http/HttpClient.cpp` |
+| Store data locally | `src/storage/sqlite/Database.cpp` |
 | Add a Python analytics module | `scripts/Analytics/` |
 | Add a broker | `src/trading/brokers/` |
+| Style a screen | `src/ui/theme/StyleSheets.cpp` + `DESIGN_SYSTEM.md` |
 
 ---
 
@@ -199,10 +206,10 @@ UI updates with data
 **Add a Python Data Fetcher** — Follow the pattern in `scripts/yfinance_data.py` to create a wrapper for a new free API.
 
 ### Path C: Medium (1-2 hours)
-**Add a New Screen** — Follow `fincept-cpp/CONTRIBUTING.md` to add a new ImGui screen.
+**Add a New Screen** — Follow the patterns in `src/screens/` to add a new Qt6 screen.
 
 ### Path D: Advanced (2-4 hours)
-**Add a Broker Integration** — Follow the `BrokerInterface` pattern in `src/trading/`.
+**Add a Broker Integration** — Follow the `BrokerInterface` pattern in `src/trading/brokers/`.
 
 ---
 
@@ -211,7 +218,7 @@ UI updates with data
 ### Workflow 1: Add a New Python Script
 
 ```bash
-cd fincept-cpp/scripts
+cd fincept-qt/scripts
 
 # Create the script
 # Follow yfinance_data.py pattern: CLI args → JSON stdout
@@ -227,10 +234,10 @@ cmake --build build --config Release
 ### Workflow 2: Add a New Screen
 
 1. Create folder: `src/screens/your_feature/`
-2. Create files: `your_screen.h/.cpp`, `your_data.h/.cpp` (if needed)
-3. Add `.cpp` files to `CMakeLists.txt` `SOURCES` list
-4. Add screen instance in `app.cpp`
-5. Add tab entry in `render_tab_bar()`
+2. Create files: `YourScreen.h/.cpp` (subclass `QWidget`)
+3. Add `.cpp` file to `CMakeLists.txt` `SCREEN_SOURCES` list
+4. Register screen in `src/app/MainWindow.cpp` via `ScreenRouter`
+5. Add navigation entry in `NavigationBar`
 6. Build and test
 
 ### Workflow 3: Fix a Bug
@@ -253,21 +260,20 @@ git push origin fix/issue-123-description
 - `snake_case` for functions/variables, `PascalCase` for types/classes
 - Trailing underscore for member variables: `data_`, `loading_`
 - No `using namespace std;` — use explicit `std::` prefix
-- Run `clang-format -i` before committing
+- Use `Q_OBJECT` macro in all QObject subclasses
+- Connect signals/slots with the new pointer-to-member syntax
 
 ---
 
 ## Troubleshooting
 
-### Build fails — missing vcpkg packages
+### CMake can't find Qt6
 ```bash
-# Ensure VCPKG_ROOT is set
-echo $VCPKG_ROOT          # Linux / macOS (should print the vcpkg path)
-echo %VCPKG_ROOT%         # Windows CMD
+# Set CMAKE_PREFIX_PATH to your Qt install
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="/path/to/Qt/6.x.x/platform"
 
-# If empty, set it (see Prerequisites step 3 above), then reconfigure
-cmake --preset=default --fresh
-cmake --build build --config Release
+# Linux: verify Qt6 dev packages are installed
+dpkg -l | grep qt6
 ```
 
 ### Python script not found
@@ -281,7 +287,7 @@ python scripts/yfinance_data.py quote AAPL
 
 ### OpenGL errors on Linux
 ```bash
-# Install OpenGL dev packages
+# Install OpenGL dev packages (required by Qt6 rendering)
 sudo apt install libgl1-mesa-dev libglu1-mesa-dev
 ```
 
@@ -300,5 +306,5 @@ sudo apt install libgl1-mesa-dev libglu1-mesa-dev
 
 **Ready to contribute?**
 - Pick an issue: https://github.com/Fincept-Corporation/FinceptTerminal/issues
-- Read the C++ guide: [fincept-cpp/CONTRIBUTING.md](../fincept-cpp/CONTRIBUTING.md)
+- Read the C++ guide: [fincept-qt/CONTRIBUTING.md](../fincept-qt/CONTRIBUTING.md)
 - Read the Python guide: [PYTHON_CONTRIBUTOR_GUIDE.md](./PYTHON_CONTRIBUTOR_GUIDE.md)

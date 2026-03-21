@@ -1,6 +1,6 @@
 # C++ Contributor Guide
 
-This guide covers C++ development for Fincept Terminal — 40+ screens, core infrastructure, trading engine, and ImGui UI.
+This guide covers C++ development for Fincept Terminal — 40+ screens, core infrastructure, trading engine, and Qt6 UI.
 
 > **Prerequisites**: Read the [Contributing Guide](./CONTRIBUTING.md) first for setup and workflow.
 
@@ -23,41 +23,54 @@ The C++ codebase handles:
 ## Project Structure
 
 ```
-fincept-cpp/src/
-├── main.cpp                    # Entry point, GLFW/OpenGL setup
-├── app.cpp/h                   # App state machine, routing, tab bar
+fincept-qt/src/
+├── app/
+│   ├── main.cpp                    # Entry point, QApplication setup
+│   ├── MainWindow.cpp/h            # Main window, layout, screen hosting
+│   └── ScreenRouter.cpp/h          # QStackedWidget-based navigation
 │
-├── core/                       # Shared infrastructure
-│   ├── config.h                # App-wide constants
-│   ├── event_bus.h             # Pub/sub messaging
-│   ├── logger.h                # Structured logging
-│   ├── result.h                # Result<T> error handling
-│   ├── notification.h/cpp      # Desktop notifications
-│   └── raii.h                  # RAII resource wrappers
+├── core/                           # Shared infrastructure
+│   ├── config/AppConfig.cpp/h      # App-wide constants (URLs, versions)
+│   ├── events/EventBus.cpp/h       # Pub/sub messaging
+│   ├── logging/Logger.cpp/h        # Structured logging (LOG_INFO, LOG_ERROR)
+│   ├── result/Result.h             # Result<T> error handling
+│   └── session/SessionManager.cpp/h
 │
-├── ui/                         # Reusable ImGui widgets
-│   └── widgets/                # Card, Table, Modal, SearchBar, etc.
+├── ui/                             # Reusable Qt widgets (Obsidian design system)
+│   ├── theme/                      # StyleSheets, color tokens, fonts
+│   ├── widgets/                    # Card, SearchBar, StatusBadge, TabHeader, etc.
+│   ├── tables/DataTable.cpp/h      # Reusable data table
+│   ├── charts/ChartFactory.cpp/h   # Qt6 Charts factory
+│   └── navigation/                 # NavigationBar, StatusBar, FKeyBar, ToolBar
 │
-├── http/                       # HTTP client (libcurl wrapper)
-├── storage/                    # SQLite database
-├── auth/                       # Authentication (JWT, guest mode)
-├── python/                     # Python runtime bridge
-├── mcp/                        # Model Context Protocol
-├── trading/                    # Trading engine + 15+ brokers
-├── portfolio/                  # Portfolio management
+├── network/
+│   ├── http/HttpClient.cpp/h       # QNetworkAccessManager wrapper
+│   └── websocket/WebSocketClient.cpp/h
 │
-└── screens/                    # 40+ terminal screens
-    ├── dashboard/              # Main dashboard + widgets
-    ├── markets/                # Market data
-    ├── crypto_trading/         # Crypto trading
-    ├── equity_trading/         # Equity trading
-    ├── algo_trading/           # Algorithmic trading
-    ├── research/               # Equity research panels
-    ├── quantlib/               # 18 quant modules
-    ├── ai_chat/                # AI chat
-    ├── economics/              # Economic data
-    ├── geopolitics/            # Geopolitical analysis
-    └── ...                     # 30+ more screens
+├── storage/
+│   ├── sqlite/                     # Database + migrations
+│   ├── cache/                      # CacheManager, TabSessionStore
+│   ├── secure/SecureStorage.cpp/h  # Encrypted credential storage
+│   └── repositories/              # 13 data access objects
+│
+├── auth/                           # AuthManager, AuthApi, SessionGuard
+├── python/PythonRunner.cpp/h       # Execute Python scripts
+├── trading/                        # Trading engine + 20+ broker adapters
+├── services/                       # MarketDataService, NewsService
+│
+└── screens/                        # Terminal screens
+    ├── dashboard/                  # Main dashboard + 13 widgets
+    ├── markets/
+    ├── news/
+    ├── watchlist/
+    ├── crypto_trading/
+    ├── report_builder/
+    ├── auth/                       # Login, Register, ForgotPassword, Pricing
+    ├── profile/
+    ├── settings/
+    ├── support/
+    ├── about/
+    └── ComingSoonScreen.cpp/h      # Placeholder for upcoming screens
 ```
 
 ---
@@ -65,34 +78,43 @@ fincept-cpp/src/
 ## Key Rules
 
 ### 1. Separation: Screens vs Services
-- **Screens** (`*_screen.cpp`) render UI only — no HTTP calls, no business logic
-- **Data/Service** classes (`*_data.cpp`) handle fetching, caching, processing
-- Screens call data services, never `HttpClient` directly
+- **Screens** (`*Screen.cpp`) render UI only — no HTTP calls, no business logic
+- **Services** (`*Service.cpp`) handle fetching, caching, processing
+- Screens connect to services via Qt signals/slots, never call `HttpClient` directly
 
 ### 2. Use Core Infrastructure
 - `Result<T>` for error handling instead of raw error codes
-- `LOG_INFO("tag", "message %s", arg)` for logging
+- `LOG_INFO("tag", "message")` / `LOG_ERROR("tag", "message")` for logging
 - `EventBus::instance().publish("event.type", data)` for cross-module communication
-- `config::API_BASE_URL` for constants — no magic strings
+- `AppConfig::instance().api_base_url()` for constants — no magic strings
 
 ### 3. Use UI Widgets
-- `ui::BeginCard()` / `ui::EndCard()` for panels
-- `ui::BeginDataTable()` / `ui::EndDataTable()` for tables
-- `ui::MetricCard()` for value displays
-- `theme::AccentButton()` for primary buttons
+- `fincept::ui::Card` for panel containers
+- `fincept::ui::DataTable` for tabular data
+- `fincept::ui::SearchBar` for search inputs
+- `fincept::ui::StatusBadge` for status indicators
+- Apply stylesheets via `fincept::ui::apply_global_stylesheet()`
+- Follow `DESIGN_SYSTEM.md` (Obsidian) — color tokens, spacing, typography
 
 ### 4. Namespace Convention
 ```cpp
-namespace fincept::module_name {
-    // All code in a module namespace
+namespace fincept {         // top-level
+namespace fincept::ui {     // UI components
+namespace fincept::auth {   // auth module
+// etc.
 }
 ```
 
-### 5. Threading
-- UI code runs on main thread only (ImGui requirement)
-- Background work via `std::async` / `std::thread`
-- Protect shared state with `std::mutex`
-- Use `std::atomic` for simple flags
+### 5. Qt Signals & Slots
+- Use the new pointer-to-member syntax: `connect(src, &Src::signal, dst, &Dst::slot)`
+- Never use old string-based `SIGNAL()`/`SLOT()` macros
+- All QObject subclasses must have `Q_OBJECT` in the class body
+
+### 6. Threading
+- UI code runs on the main thread only (Qt requirement)
+- Background work via `QThread` or `QtConcurrent::run`
+- Post results back to UI thread via signals across threads (Qt handles marshalling automatically)
+- Protect shared non-Qt state with `QMutex`
 
 ---
 
@@ -100,23 +122,58 @@ namespace fincept::module_name {
 
 1. Create folder: `src/screens/your_feature/`
 2. Create files:
-   - `your_screen.h/.cpp` — UI rendering
-   - `your_data.h/.cpp` — data fetching/processing (if needed)
-   - `your_types.h` — data types (if needed)
-3. Add `.cpp` files to `CMakeLists.txt` `SOURCES` list
-4. Add screen instance in `app.cpp`
-5. Add tab entry in `render_tab_bar()`
-6. Add navigation in `render_top_bar()` Navigate menu
+   - `YourScreen.h/.cpp` — subclass `QWidget`, add `Q_OBJECT`
+   - `YourService.h/.cpp` — data fetching/processing (if needed)
+   - `YourTypes.h` — shared data types (if needed)
+3. Add `.cpp` files to `CMakeLists.txt` `SCREEN_SOURCES` list
+4. Register the screen in `src/app/MainWindow.cpp` via `ScreenRouter`
+5. Add navigation entry in `src/ui/navigation/NavigationBar.cpp`
+6. Build and test
+
+### Minimal Screen Template
+
+```cpp
+// YourScreen.h
+#pragma once
+#include <QWidget>
+
+namespace fincept {
+
+class YourScreen : public QWidget {
+    Q_OBJECT
+public:
+    explicit YourScreen(QWidget* parent = nullptr);
+};
+
+} // namespace fincept
+```
+
+```cpp
+// YourScreen.cpp
+#include "YourScreen.h"
+#include "ui/theme/StyleSheets.h"
+#include <QVBoxLayout>
+#include <QLabel>
+
+namespace fincept {
+
+YourScreen::YourScreen(QWidget* parent) : QWidget(parent) {
+    auto* layout = new QVBoxLayout(this);
+    layout->addWidget(new QLabel("Your Screen", this));
+}
+
+} // namespace fincept
+```
 
 ---
 
 ## Code Style
 
-- `.clang-format` enforces style — run `clang-format -i src/**/*.cpp src/**/*.h`
 - 4-space indentation, 120 column limit
-- `snake_case` for functions/variables, `PascalCase` for types/classes
+- `snake_case` for functions/variables, `PascalCase` for classes/types
 - Trailing underscore for member variables: `data_`, `loading_`
 - No `using namespace std;` — use explicit `std::` prefix
+- No `using namespace Qt` — use explicit `Qt::` prefix where needed
 
 ---
 
@@ -137,8 +194,10 @@ perf: optimize order book rendering
 - [ ] Code compiles without warnings (`-Wall -Wextra`)
 - [ ] No duplicated code — use `core/` and `ui/widgets/`
 - [ ] Screens don't call HTTP directly
-- [ ] New files added to `CMakeLists.txt`
-- [ ] `.clang-format` applied
+- [ ] New `.cpp` files added to `CMakeLists.txt`
+- [ ] `Q_OBJECT` present in all QObject subclasses
+- [ ] Signals/slots use pointer-to-member syntax
+- [ ] Follows Obsidian design system (`DESIGN_SYSTEM.md`)
 
 ---
 
