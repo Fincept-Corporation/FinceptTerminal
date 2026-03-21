@@ -10,7 +10,7 @@ for %%A in (%*) do (
 
 echo.
 echo ================================================
-echo   Fincept Terminal — Windows Setup
+echo   Fincept Terminal v4.0.0 — Windows Setup
 if "!CI_MODE!"=="true" echo   (CI mode -- skipping interactive steps)
 echo ================================================
 echo.
@@ -63,10 +63,10 @@ echo   OK
 echo [4/5] Checking C++ compiler (MSVC)...
 where cl >nul 2>&1
 if errorlevel 1 (
-    echo   MSVC compiler not found in PATH.
-    echo   Please install Visual Studio 2022 with "Desktop development with C++" workload:
+    echo   ERROR: MSVC compiler not found in PATH.
+    echo   Install Visual Studio 2022 with "Desktop development with C++" workload:
     echo   https://visualstudio.microsoft.com/
-    echo   Then re-run from a "Developer Command Prompt for VS 2022".
+    echo   Then re-run from "Developer Command Prompt for VS 2022".
     if "!CI_MODE!"=="false" pause
     exit /b 1
 )
@@ -75,34 +75,35 @@ echo   OK
 :: ── Locate Qt6 ──────────────────────────────────────────────
 echo [5/5] Locating Qt6 and building...
 
-:: Try to auto-detect Qt6 install (common paths)
 set "QT_PREFIX="
-if exist "C:\Qt\6.8.3\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake" (
-    set "QT_PREFIX=C:\Qt\6.8.3\msvc2022_64"
-) else if exist "C:\Qt\6.7.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake" (
-    set "QT_PREFIX=C:\Qt\6.7.0\msvc2022_64"
-) else if exist "C:\Qt\6.6.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake" (
-    set "QT_PREFIX=C:\Qt\6.6.0\msvc2022_64"
-)
 
-:: Allow override via environment variable
+:: Allow override via environment variable first
 if defined Qt6_DIR (
     set "QT_PREFIX=!Qt6_DIR!"
 )
 
+:: Auto-detect common Qt6 install paths
+if "!QT_PREFIX!"=="" (
+    for %%V in (6.9.0 6.8.3 6.8.0 6.7.0 6.6.0) do (
+        if exist "C:\Qt\%%V\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake" (
+            set "QT_PREFIX=C:\Qt\%%V\msvc2022_64"
+            goto :qt_found
+        )
+    )
+)
+
+:qt_found
 if "!QT_PREFIX!"=="" (
     if "!CI_MODE!"=="true" (
-        echo   ERROR: Qt6 not found. Set Qt6_DIR environment variable to your Qt6 install path.
+        echo   ERROR: Qt6 not found. Set Qt6_DIR to your Qt6 install path.
         exit /b 1
     )
     echo.
-    echo   Qt6 not found in common locations.
-    echo   Please install Qt6 from https://www.qt.io/download-qt-installer
-    echo   (Select: Qt 6.x ^> MSVC 2022 64-bit)
+    echo   Qt6 not found. Install from https://www.qt.io/download-qt-installer
+    echo   Select: Qt 6.x ^> MSVC 2022 64-bit
     echo.
-    echo   After installing, set the Qt6_DIR environment variable:
+    echo   Then set the environment variable and re-run:
     echo     set Qt6_DIR=C:\Qt\6.x.x\msvc2022_64
-    echo   Then re-run this script.
     pause & exit /b 1
 )
 echo   Qt6 found at !QT_PREFIX!
@@ -122,13 +123,10 @@ if errorlevel 1 ( echo   ERROR: Build failed. & exit /b 1 )
 echo.
 echo ================================================
 echo   Build complete!
+echo   Run: build\Release\FinceptTerminal.exe
 echo ================================================
 echo.
-echo   Run the terminal:
-echo     build\Release\FinceptTerminal.exe
-echo.
 
-:: Skip launch prompt in CI
 if "!CI_MODE!"=="true" goto :done
 
 set /p LAUNCH="Launch now? (y/n): "

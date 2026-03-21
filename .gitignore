@@ -98,6 +98,9 @@ fincept-cpp/
 node_modules/
 dist-ssr/
 
+# ── Legacy files — no longer relevant ────────────────────────
+versionterminal.txt
+
 # ── Claude Code — never commit ───────────────────────────────
 .claude/settings.local.json
 CLAUDE.md
