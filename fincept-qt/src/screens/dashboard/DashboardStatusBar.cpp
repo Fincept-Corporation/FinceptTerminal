@@ -1,14 +1,16 @@
 #include "screens/dashboard/DashboardStatusBar.h"
+
 #include "ui/theme/Theme.h"
-#include <QHBoxLayout>
+
 #include <QDateTime>
+#include <QHBoxLayout>
 
 namespace fincept::screens {
 
 DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(24);
-    setStyleSheet(QString("background: %1; border-top: 1px solid %2;")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    setStyleSheet(
+        QString("background: %1; border-top: 1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     start_time_ = QDateTime::currentMSecsSinceEpoch();
 
@@ -18,15 +20,12 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
 
     static const auto lbl = [](const QString& text, const char* color, bool bold = false) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(QString(
-            "color: %1; font-size: 11px; %2 background: transparent; "
-            "font-family: 'Consolas','Courier New',monospace;")
-            .arg(color, bold ? "font-weight: bold; " : ""));
+        l->setStyleSheet(QString("color: %1; font-size: 11px; %2 background: transparent; "
+                                 "font-family: 'Consolas','Courier New',monospace;")
+                             .arg(color, bold ? "font-weight: bold; " : ""));
         return l;
     };
-    static const auto sep = [&]() {
-        return lbl("|", ui::colors::BORDER_MED);
-    };
+    static const auto sep = [&]() { return lbl("|", ui::colors::BORDER_MED); };
 
     // ── Left: version, session, layout, feeds ──
     auto* left = new QWidget;
@@ -38,11 +37,13 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     ll->addWidget(lbl("v4.0.0", ui::colors::TEXT_SECONDARY, true));
     ll->addWidget(sep());
 
-    struct Feed { const char* label; const char* color; };
+    struct Feed {
+        const char* label;
+        const char* color;
+    };
     constexpr Feed feeds[] = {
-        {"EQ", ui::colors::POSITIVE}, {"FX", ui::colors::POSITIVE},
-        {"CM", ui::colors::WARNING},  {"FI", ui::colors::POSITIVE},
-        {"CR", ui::colors::POSITIVE},
+        {"EQ", ui::colors::POSITIVE}, {"FX", ui::colors::POSITIVE}, {"CM", ui::colors::WARNING},
+        {"FI", ui::colors::POSITIVE}, {"CR", ui::colors::POSITIVE},
     };
     for (auto& f : feeds) {
         ll->addWidget(lbl(f.label, f.color, true));
@@ -51,25 +52,25 @@ DashboardStatusBar::DashboardStatusBar(QWidget* parent) : QWidget(parent) {
     ll->addWidget(sep());
     ll->addWidget(lbl("SESSION:", ui::colors::TEXT_SECONDARY));
     uptime_label_ = new QLabel("00:00:00");
-    uptime_label_->setStyleSheet(QString(
-        "color: %1; font-size: 11px; font-weight: bold; background: transparent; "
-        "font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::CYAN));
+    uptime_label_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; "
+                                         "font-family: 'Consolas','Courier New',monospace;")
+                                     .arg(ui::colors::CYAN));
     ll->addWidget(uptime_label_);
 
     ll->addWidget(sep());
     ll->addWidget(lbl("LAYOUT:", ui::colors::TEXT_SECONDARY));
     layout_label_ = new QLabel("ACTIVE");
-    layout_label_->setStyleSheet(QString(
-        "color: %1; font-size: 11px; font-weight: bold; background: transparent; "
-        "font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::POSITIVE));
+    layout_label_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; "
+                                         "font-family: 'Consolas','Courier New',monospace;")
+                                     .arg(ui::colors::POSITIVE));
     ll->addWidget(layout_label_);
 
     ll->addWidget(sep());
     ll->addWidget(lbl("FEEDS:", ui::colors::TEXT_SECONDARY));
     feeds_label_ = new QLabel("CONNECTED");
-    feeds_label_->setStyleSheet(QString(
-        "color: %1; font-size: 11px; font-weight: bold; background: transparent; "
-        "font-family: 'Consolas','Courier New',monospace;").arg(ui::colors::POSITIVE));
+    feeds_label_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; "
+                                        "font-family: 'Consolas','Courier New',monospace;")
+                                    .arg(ui::colors::POSITIVE));
     ll->addWidget(feeds_label_);
 
     hl->addWidget(left);
@@ -100,27 +101,23 @@ void DashboardStatusBar::update_uptime() {
     int h = static_cast<int>(elapsed / 3600);
     int m = static_cast<int>((elapsed % 3600) / 60);
     int s = static_cast<int>(elapsed % 60);
-    uptime_label_->setText(QString("%1:%2:%3")
-        .arg(h, 2, 10, QChar('0'))
-        .arg(m, 2, 10, QChar('0'))
-        .arg(s, 2, 10, QChar('0')));
+    uptime_label_->setText(
+        QString("%1:%2:%3").arg(h, 2, 10, QChar('0')).arg(m, 2, 10, QChar('0')).arg(s, 2, 10, QChar('0')));
 }
 
 void DashboardStatusBar::set_widget_count(int count) {
     layout_label_->setText(count > 0 ? "ACTIVE" : "EMPTY");
-    layout_label_->setStyleSheet(QString(
-        "color: %1; font-size: 11px; font-weight: bold; background: transparent; "
-        "font-family: 'Consolas','Courier New',monospace;")
-        .arg(count > 0 ? ui::colors::POSITIVE : ui::colors::TEXT_SECONDARY));
+    layout_label_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; "
+                                         "font-family: 'Consolas','Courier New',monospace;")
+                                     .arg(count > 0 ? ui::colors::POSITIVE : ui::colors::TEXT_SECONDARY));
 }
 
 void DashboardStatusBar::set_connected(bool connected) {
     connected_ = connected;
     feeds_label_->setText(connected ? "CONNECTED" : "DISCONNECTED");
-    feeds_label_->setStyleSheet(QString(
-        "color: %1; font-size: 11px; font-weight: bold; background: transparent; "
-        "font-family: 'Consolas','Courier New',monospace;")
-        .arg(connected ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+    feeds_label_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent; "
+                                        "font-family: 'Consolas','Courier New',monospace;")
+                                    .arg(connected ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
 }
 
 } // namespace fincept::screens

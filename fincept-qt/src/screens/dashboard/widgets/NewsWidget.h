@@ -1,5 +1,6 @@
 #pragma once
 #include "screens/dashboard/widgets/BaseWidget.h"
+
 #include <QScrollArea>
 
 namespace fincept::screens::widgets {
@@ -7,10 +8,10 @@ namespace fincept::screens::widgets {
 /// Market news widget — fetches real news via yfinance for major tickers.
 class NewsWidget : public BaseWidget {
     Q_OBJECT
-public:
+  public:
     explicit NewsWidget(QWidget* parent = nullptr);
 
-private:
+  private:
     void refresh_data();
     void populate(const QJsonArray& articles);
 

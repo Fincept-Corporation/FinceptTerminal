@@ -1,7 +1,7 @@
 #pragma once
-#include <QWidget>
 #include <QGridLayout>
 #include <QScrollArea>
+#include <QWidget>
 
 namespace fincept::screens {
 
@@ -9,12 +9,12 @@ namespace fincept::screens {
 /// All widgets source real data from yfinance via MarketDataService.
 class WidgetGrid : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit WidgetGrid(QWidget* parent = nullptr);
 
     int widget_count() const { return widget_count_; }
 
-private:
+  private:
     QGridLayout* grid_ = nullptr;
     int widget_count_ = 0;
 };

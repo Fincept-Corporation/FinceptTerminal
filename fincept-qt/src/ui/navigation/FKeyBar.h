@@ -1,8 +1,8 @@
 #pragma once
-#include <QWidget>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QWidget>
 
 namespace fincept::ui {
 
@@ -11,16 +11,16 @@ namespace fincept::ui {
 ///       Settings, Profile, About, Support
 class TabBar : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit TabBar(QWidget* parent = nullptr);
 
     void set_active(const QString& tab_id);
     QString active_tab() const { return active_id_; }
 
-signals:
+  signals:
     void tab_changed(const QString& tab_id);
 
-private:
+  private:
     struct TabDef {
         QString id;
         QString label;

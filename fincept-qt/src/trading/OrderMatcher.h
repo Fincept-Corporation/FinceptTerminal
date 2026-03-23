@@ -3,10 +3,12 @@
 // Qt-adapted port from order_matcher.h/.cpp
 
 #include "trading/TradingTypes.h"
-#include <QVector>
+
 #include <QHash>
-#include <QSet>
 #include <QMutex>
+#include <QSet>
+#include <QVector>
+
 #include <functional>
 
 namespace fincept::trading {
@@ -24,16 +26,14 @@ struct OrderFillEvent {
 using OrderFillCallback = std::function<void(const OrderFillEvent&)>;
 
 class OrderMatcher {
-public:
+  public:
     static OrderMatcher& instance();
 
     void add_order(const PtOrder& order);
     void remove_order(const QString& order_id);
-    QVector<PtOrder> get_pending_orders(const QString& symbol = "",
-                                         const QString& portfolio_id = "");
+    QVector<PtOrder> get_pending_orders(const QString& symbol = "", const QString& portfolio_id = "");
 
-    void check_orders(const QString& symbol, const PriceData& price,
-                      const QString& portfolio_id);
+    void check_orders(const QString& symbol, const PriceData& price, const QString& portfolio_id);
 
     void load_orders(const QVector<PtOrder>& orders);
     void clear_portfolio_orders(const QString& portfolio_id);
@@ -44,20 +44,15 @@ public:
     int pending_order_count() const;
 
     // SL/TP trigger engine
-    void set_sl_tp(const QString& portfolio_id,
-                   const QString& symbol,
-                   const QString& order_id,
-                   double sl_price,
+    void set_sl_tp(const QString& portfolio_id, const QString& symbol, const QString& order_id, double sl_price,
                    double tp_price);
 
-    void check_sl_tp_triggers(const QString& portfolio_id,
-                               const QString& symbol,
-                               double current_price);
+    void check_sl_tp_triggers(const QString& portfolio_id, const QString& symbol, double current_price);
 
     OrderMatcher(const OrderMatcher&) = delete;
     OrderMatcher& operator=(const OrderMatcher&) = delete;
 
-private:
+  private:
     OrderMatcher() = default;
 
     QHash<QString, QVector<PtOrder>> pending_orders_;
@@ -73,7 +68,7 @@ private:
         QString position_side;
         double sl_price = 0.0;
         double tp_price = 0.0;
-        bool triggered  = false;
+        bool triggered = false;
     };
     QVector<SLTPTrigger> sl_tp_triggers_;
     QMutex sl_tp_mutex_;

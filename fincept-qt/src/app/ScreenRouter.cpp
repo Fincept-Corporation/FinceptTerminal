@@ -1,11 +1,11 @@
 #include "app/ScreenRouter.h"
-#include "core/session/SessionManager.h"
+
 #include "core/logging/Logger.h"
+#include "core/session/SessionManager.h"
 
 namespace fincept {
 
-ScreenRouter::ScreenRouter(QStackedWidget* stack, QObject* parent)
-    : QObject(parent), stack_(stack) {}
+ScreenRouter::ScreenRouter(QStackedWidget* stack, QObject* parent) : QObject(parent), stack_(stack) {}
 
 void ScreenRouter::register_screen(const QString& id, QWidget* screen) {
     screens_[id] = screen;
@@ -35,7 +35,7 @@ void ScreenRouter::navigate(const QString& id) {
         QWidget* screen = fit.value()();
         factories_.remove(id);
         register_screen(id, screen);
-        navigate(id);  // now it exists in screens_
+        navigate(id); // now it exists in screens_
         return;
     }
 

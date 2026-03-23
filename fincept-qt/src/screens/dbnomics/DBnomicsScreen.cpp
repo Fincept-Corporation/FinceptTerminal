@@ -1,26 +1,28 @@
 // src/screens/dbnomics/DBnomicsScreen.cpp
 #include "screens/dbnomics/DBnomicsScreen.h"
-#include "screens/dbnomics/DBnomicsSelectionPanel.h"
+
+#include "core/logging/Logger.h"
 #include "screens/dbnomics/DBnomicsChartWidget.h"
 #include "screens/dbnomics/DBnomicsDataTable.h"
+#include "screens/dbnomics/DBnomicsSelectionPanel.h"
 #include "services/dbnomics/DBnomicsService.h"
-#include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
 
-#include <QVBoxLayout>
-#include <QHBoxLayout>
+#include <QComboBox>
+#include <QDateTime>
+#include <QFile>
+#include <QFileDialog>
 #include <QGridLayout>
-#include <QSplitter>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
-#include <QComboBox>
-#include <QStackedWidget>
 #include <QScrollArea>
-#include <QFileDialog>
-#include <QDateTime>
-#include <QTextStream>
-#include <QFile>
 #include <QSet>
+#include <QSplitter>
+#include <QStackedWidget>
+#include <QTextStream>
+#include <QVBoxLayout>
+
 #include <algorithm>
 
 namespace fincept::screens {
@@ -33,64 +35,45 @@ DBnomicsScreen::DBnomicsScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Connect service signals ───────────────────────────────────────────────
     auto& svc = services::DBnomicsService::instance();
-    connect(&svc, &services::DBnomicsService::providers_loaded,
-            this, &DBnomicsScreen::on_providers_loaded);
-    connect(&svc, &services::DBnomicsService::datasets_loaded,
-            this, &DBnomicsScreen::on_datasets_loaded);
-    connect(&svc, &services::DBnomicsService::series_loaded,
-            this, &DBnomicsScreen::on_series_loaded);
-    connect(&svc, &services::DBnomicsService::observations_loaded,
-            this, &DBnomicsScreen::on_observations_loaded);
-    connect(&svc, &services::DBnomicsService::search_results_loaded,
-            this, &DBnomicsScreen::on_search_results_loaded);
-    connect(&svc, &services::DBnomicsService::error_occurred,
-            this, &DBnomicsScreen::on_service_error);
+    connect(&svc, &services::DBnomicsService::providers_loaded, this, &DBnomicsScreen::on_providers_loaded);
+    connect(&svc, &services::DBnomicsService::datasets_loaded, this, &DBnomicsScreen::on_datasets_loaded);
+    connect(&svc, &services::DBnomicsService::series_loaded, this, &DBnomicsScreen::on_series_loaded);
+    connect(&svc, &services::DBnomicsService::observations_loaded, this, &DBnomicsScreen::on_observations_loaded);
+    connect(&svc, &services::DBnomicsService::search_results_loaded, this, &DBnomicsScreen::on_search_results_loaded);
+    connect(&svc, &services::DBnomicsService::error_occurred, this, &DBnomicsScreen::on_service_error);
 
     // ── Connect selection_panel_ signals ──────────────────────────────────────
-    connect(selection_panel_, &DBnomicsSelectionPanel::provider_selected,
-            this, &DBnomicsScreen::on_provider_selected);
-    connect(selection_panel_, &DBnomicsSelectionPanel::dataset_selected,
-            this, &DBnomicsScreen::on_dataset_selected);
-    connect(selection_panel_, &DBnomicsSelectionPanel::series_selected,
-            this, &DBnomicsScreen::on_series_selected);
+    connect(selection_panel_, &DBnomicsSelectionPanel::provider_selected, this, &DBnomicsScreen::on_provider_selected);
+    connect(selection_panel_, &DBnomicsSelectionPanel::dataset_selected, this, &DBnomicsScreen::on_dataset_selected);
+    connect(selection_panel_, &DBnomicsSelectionPanel::series_selected, this, &DBnomicsScreen::on_series_selected);
 
-    connect(selection_panel_, &DBnomicsSelectionPanel::global_search_changed,
-            this, [](const QString& q) {
-                if (!q.isEmpty())
-                    services::DBnomicsService::instance().schedule_global_search(q);
-            });
+    connect(selection_panel_, &DBnomicsSelectionPanel::global_search_changed, this, [](const QString& q) {
+        if (!q.isEmpty())
+            services::DBnomicsService::instance().schedule_global_search(q);
+    });
 
-    connect(selection_panel_, &DBnomicsSelectionPanel::series_search_changed,
-            this, [](const QString& prov, const QString& ds, const QString& q) {
+    connect(selection_panel_, &DBnomicsSelectionPanel::series_search_changed, this,
+            [](const QString& prov, const QString& ds, const QString& q) {
                 services::DBnomicsService::instance().schedule_series_search(prov, ds, q);
             });
 
-    connect(selection_panel_, &DBnomicsSelectionPanel::load_more_datasets_requested,
-            this, [this](int offset) {
-                services::DBnomicsService::instance().fetch_datasets(
-                    selection_panel_->selected_provider(), offset);
-            });
+    connect(selection_panel_, &DBnomicsSelectionPanel::load_more_datasets_requested, this, [this](int offset) {
+        services::DBnomicsService::instance().fetch_datasets(selection_panel_->selected_provider(), offset);
+    });
 
-    connect(selection_panel_, &DBnomicsSelectionPanel::load_more_series_requested,
-            this, [this](int offset) {
-                services::DBnomicsService::instance().fetch_series(
-                    selection_panel_->selected_provider(),
-                    selection_panel_->selected_dataset(),
-                    {}, offset);
-            });
+    connect(selection_panel_, &DBnomicsSelectionPanel::load_more_series_requested, this, [this](int offset) {
+        services::DBnomicsService::instance().fetch_series(selection_panel_->selected_provider(),
+                                                           selection_panel_->selected_dataset(), {}, offset);
+    });
 
-    connect(selection_panel_, &DBnomicsSelectionPanel::add_to_single_view_clicked,
-            this, &DBnomicsScreen::on_add_to_single_view);
-    connect(selection_panel_, &DBnomicsSelectionPanel::clear_all_clicked,
-            this, &DBnomicsScreen::on_clear_all);
-    connect(selection_panel_, &DBnomicsSelectionPanel::add_slot_clicked,
-            this, &DBnomicsScreen::on_add_slot);
-    connect(selection_panel_, &DBnomicsSelectionPanel::add_to_slot_clicked,
-            this, &DBnomicsScreen::on_add_to_slot);
-    connect(selection_panel_, &DBnomicsSelectionPanel::remove_from_slot_clicked,
-            this, &DBnomicsScreen::on_remove_from_slot);
-    connect(selection_panel_, &DBnomicsSelectionPanel::remove_slot_clicked,
-            this, &DBnomicsScreen::on_remove_slot);
+    connect(selection_panel_, &DBnomicsSelectionPanel::add_to_single_view_clicked, this,
+            &DBnomicsScreen::on_add_to_single_view);
+    connect(selection_panel_, &DBnomicsSelectionPanel::clear_all_clicked, this, &DBnomicsScreen::on_clear_all);
+    connect(selection_panel_, &DBnomicsSelectionPanel::add_slot_clicked, this, &DBnomicsScreen::on_add_slot);
+    connect(selection_panel_, &DBnomicsSelectionPanel::add_to_slot_clicked, this, &DBnomicsScreen::on_add_to_slot);
+    connect(selection_panel_, &DBnomicsSelectionPanel::remove_from_slot_clicked, this,
+            &DBnomicsScreen::on_remove_from_slot);
+    connect(selection_panel_, &DBnomicsSelectionPanel::remove_slot_clicked, this, &DBnomicsScreen::on_remove_slot);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,9 +98,8 @@ void DBnomicsScreen::hideEvent(QHideEvent* event) {
 // build_ui
 // ─────────────────────────────────────────────────────────────────────────────
 void DBnomicsScreen::build_ui() {
-    setStyleSheet(QString("QWidget { background:%1; color:%2; }")
-                      .arg(ui::colors::BG_BASE)
-                      .arg(ui::colors::TEXT_PRIMARY));
+    setStyleSheet(
+        QString("QWidget { background:%1; color:%2; }").arg(ui::colors::BG_BASE).arg(ui::colors::TEXT_PRIMARY));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -146,30 +128,28 @@ void DBnomicsScreen::build_ui() {
     // View toggle bar (36px)
     auto* toggle_bar = new QWidget(right_widget);
     toggle_bar->setFixedHeight(36);
-    toggle_bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
-                                  .arg(ui::colors::BG_RAISED)
-                                  .arg(ui::colors::BORDER_MED));
+    toggle_bar->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_MED));
 
     auto* toggle_hl = new QHBoxLayout(toggle_bar);
     toggle_hl->setContentsMargins(8, 0, 8, 0);
     toggle_hl->setSpacing(4);
 
-    auto btn_style_checked = QString(
-        "QPushButton { background:rgba(217,119,6,0.15); color:%1; border:1px solid %2;"
-        " font-family:%3; font-size:12px; font-weight:700; padding:0 12px; height:26px; }"
-        "QPushButton:hover { background:rgba(217,119,6,0.25); }")
-        .arg(ui::colors::AMBER)
-        .arg(ui::colors::AMBER_DIM)
-        .arg(ui::fonts::DATA_FAMILY);
+    auto btn_style_checked = QString("QPushButton { background:rgba(217,119,6,0.15); color:%1; border:1px solid %2;"
+                                     " font-family:%3; font-size:12px; font-weight:700; padding:0 12px; height:26px; }"
+                                     "QPushButton:hover { background:rgba(217,119,6,0.25); }")
+                                 .arg(ui::colors::AMBER)
+                                 .arg(ui::colors::AMBER_DIM)
+                                 .arg(ui::fonts::DATA_FAMILY);
 
-    auto btn_style_unchecked = QString(
-        "QPushButton { background:transparent; color:%1; border:1px solid %2;"
-        " font-family:%3; font-size:12px; font-weight:700; padding:0 12px; height:26px; }"
-        "QPushButton:hover { background:%4; }")
-        .arg(ui::colors::TEXT_SECONDARY)
-        .arg(ui::colors::BORDER_DIM)
-        .arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::colors::BG_HOVER);
+    auto btn_style_unchecked =
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                " font-family:%3; font-size:12px; font-weight:700; padding:0 12px; height:26px; }"
+                "QPushButton:hover { background:%4; }")
+            .arg(ui::colors::TEXT_SECONDARY)
+            .arg(ui::colors::BORDER_DIM)
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::colors::BG_HOVER);
 
     single_btn_ = new QPushButton("SINGLE", toggle_bar);
     single_btn_->setCheckable(true);
@@ -181,9 +161,7 @@ void DBnomicsScreen::build_ui() {
     compare_btn_->setChecked(false);
     compare_btn_->setStyleSheet(btn_style_unchecked);
 
-    connect(single_btn_, &QPushButton::clicked, this, [this,
-                                                        btn_style_checked,
-                                                        btn_style_unchecked]() {
+    connect(single_btn_, &QPushButton::clicked, this, [this, btn_style_checked, btn_style_unchecked]() {
         single_btn_->setChecked(true);
         compare_btn_->setChecked(false);
         single_btn_->setStyleSheet(btn_style_checked);
@@ -192,9 +170,7 @@ void DBnomicsScreen::build_ui() {
         view_stack_->setCurrentIndex(0);
     });
 
-    connect(compare_btn_, &QPushButton::clicked, this, [this,
-                                                         btn_style_checked,
-                                                         btn_style_unchecked]() {
+    connect(compare_btn_, &QPushButton::clicked, this, [this, btn_style_checked, btn_style_unchecked]() {
         compare_btn_->setChecked(true);
         single_btn_->setChecked(false);
         compare_btn_->setStyleSheet(btn_style_checked);
@@ -208,10 +184,9 @@ void DBnomicsScreen::build_ui() {
     toggle_hl->addStretch();
 
     auto* chart_type_label = new QLabel("CHART:", toggle_bar);
-    chart_type_label->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:11px; font-weight:600;")
-            .arg(ui::colors::TEXT_TERTIARY)
-            .arg(ui::fonts::DATA_FAMILY));
+    chart_type_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:600;")
+                                        .arg(ui::colors::TEXT_TERTIARY)
+                                        .arg(ui::fonts::DATA_FAMILY));
 
     chart_type_combo_ = new QComboBox(toggle_bar);
     chart_type_combo_->addItems({"LINE", "AREA", "BAR", "SCATTER"});
@@ -226,8 +201,8 @@ void DBnomicsScreen::build_ui() {
             .arg(ui::colors::BORDER_MED)
             .arg(ui::fonts::DATA_FAMILY));
 
-    connect(chart_type_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &DBnomicsScreen::on_chart_type_changed);
+    connect(chart_type_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &DBnomicsScreen::on_chart_type_changed);
 
     toggle_hl->addWidget(chart_type_label);
     toggle_hl->addWidget(chart_type_combo_);
@@ -246,25 +221,24 @@ void DBnomicsScreen::build_ui() {
     auto* single_splitter = new QSplitter(Qt::Vertical, single_page);
     single_splitter->setHandleWidth(5);
     single_splitter->setChildrenCollapsible(false);
-    single_splitter->setStyleSheet(
-        "QSplitter::handle:vertical {"
-        "  background: #1a1a1a; height: 5px;"
-        "  border-top: 1px solid #222; border-bottom: 1px solid #222; }"
-        "QSplitter::handle:vertical:hover { background: #d97706; }");
+    single_splitter->setStyleSheet("QSplitter::handle:vertical {"
+                                   "  background: #1a1a1a; height: 5px;"
+                                   "  border-top: 1px solid #222; border-bottom: 1px solid #222; }"
+                                   "QSplitter::handle:vertical:hover { background: #d97706; }");
 
     chart_widget_ = new DBnomicsChartWidget(single_splitter);
-    data_table_   = new DBnomicsDataTable(single_splitter);
+    data_table_ = new DBnomicsDataTable(single_splitter);
     chart_widget_->setMinimumHeight(120);
     data_table_->setMinimumHeight(150);
 
     single_splitter->addWidget(chart_widget_);
     single_splitter->addWidget(data_table_);
-    single_splitter->setStretchFactor(0, 3);   // chart ~65 %
-    single_splitter->setStretchFactor(1, 2);   // table ~35 %
+    single_splitter->setStretchFactor(0, 3); // chart ~65 %
+    single_splitter->setStretchFactor(1, 2); // table ~35 %
 
     single_vl->addWidget(single_splitter);
 
-    view_stack_->addWidget(single_page);   // index 0
+    view_stack_->addWidget(single_page); // index 0
 
     // Page 1: comparison view (scrollable slot cards)
     auto* compare_page = new QWidget(view_stack_);
@@ -276,13 +250,12 @@ void DBnomicsScreen::build_ui() {
     auto* compare_scroll = new QScrollArea(compare_page);
     compare_scroll->setWidgetResizable(true);
     compare_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    compare_scroll->setStyleSheet(QString(
-        "QScrollArea { border: none; background: %1; }"
-        "QScrollBar:vertical { background: %1; width: 6px; }"
-        "QScrollBar::handle:vertical { background: %2; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(ui::colors::BG_BASE)
-        .arg(ui::colors::BORDER_DIM));
+    compare_scroll->setStyleSheet(QString("QScrollArea { border: none; background: %1; }"
+                                          "QScrollBar:vertical { background: %1; width: 6px; }"
+                                          "QScrollBar::handle:vertical { background: %2; }"
+                                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                                      .arg(ui::colors::BG_BASE)
+                                      .arg(ui::colors::BORDER_DIM));
 
     comparison_content_ = new QWidget(compare_scroll);
     comparison_content_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
@@ -291,22 +264,20 @@ void DBnomicsScreen::build_ui() {
     comparison_layout_->setSpacing(8);
 
     // Initial placeholder
-    auto* init_placeholder = new QLabel(
-        "NO COMPARISON SLOTS\nClick  + ADD SLOT  in the left panel to begin",
-        comparison_content_);
+    auto* init_placeholder =
+        new QLabel("NO COMPARISON SLOTS\nClick  + ADD SLOT  in the left panel to begin", comparison_content_);
     init_placeholder->setAlignment(Qt::AlignCenter);
     init_placeholder->setWordWrap(true);
-    init_placeholder->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:13px;")
-            .arg(ui::colors::TEXT_TERTIARY)
-            .arg(ui::fonts::DATA_FAMILY));
+    init_placeholder->setStyleSheet(QString("color:%1; font-family:%2; font-size:13px;")
+                                        .arg(ui::colors::TEXT_TERTIARY)
+                                        .arg(ui::fonts::DATA_FAMILY));
     comparison_layout_->addWidget(init_placeholder);
     comparison_layout_->addStretch();
 
     compare_scroll->setWidget(comparison_content_);
     compare_vl->addWidget(compare_scroll);
 
-    view_stack_->addWidget(compare_page);  // index 1
+    view_stack_->addWidget(compare_page); // index 1
     view_stack_->setCurrentIndex(0);
 
     right_vl->addWidget(view_stack_, 1);
@@ -316,25 +287,22 @@ void DBnomicsScreen::build_ui() {
     // ── Status bar (28px) ─────────────────────────────────────────────────────
     auto* status_bar = new QWidget(this);
     status_bar->setFixedHeight(28);
-    status_bar->setStyleSheet(QString("background:%1; border-top:1px solid %2;")
-                                  .arg(ui::colors::BG_RAISED)
-                                  .arg(ui::colors::BORDER_DIM));
+    status_bar->setStyleSheet(
+        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_DIM));
 
     auto* status_hl = new QHBoxLayout(status_bar);
     status_hl->setContentsMargins(12, 0, 12, 0);
     status_hl->setSpacing(0);
 
     status_label_ = new QLabel("Ready", status_bar);
-    status_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:11px;")
-            .arg(ui::colors::TEXT_SECONDARY)
-            .arg(ui::fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px;")
+                                     .arg(ui::colors::TEXT_SECONDARY)
+                                     .arg(ui::fonts::DATA_FAMILY));
 
     stats_label_ = new QLabel("", status_bar);
-    stats_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:11px;")
-            .arg(ui::colors::TEXT_TERTIARY)
-            .arg(ui::fonts::DATA_FAMILY));
+    stats_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px;")
+                                    .arg(ui::colors::TEXT_TERTIARY)
+                                    .arg(ui::fonts::DATA_FAMILY));
     stats_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     status_hl->addWidget(status_label_);
@@ -350,32 +318,29 @@ void DBnomicsScreen::build_ui() {
 QWidget* DBnomicsScreen::build_toolbar() {
     auto* toolbar = new QWidget(this);
     toolbar->setFixedHeight(44);
-    toolbar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
-                               .arg(ui::colors::BG_RAISED)
-                               .arg(ui::colors::BORDER_MED));
+    toolbar->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_MED));
 
     auto* hl = new QHBoxLayout(toolbar);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
 
     auto* title = new QLabel("DBNOMICS TERMINAL", toolbar);
-    title->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:14px; font-weight:700;")
-            .arg(ui::colors::AMBER)
-            .arg(ui::fonts::DATA_FAMILY));
+    title->setStyleSheet(QString("color:%1; font-family:%2; font-size:14px; font-weight:700;")
+                             .arg(ui::colors::AMBER)
+                             .arg(ui::fonts::DATA_FAMILY));
 
     hl->addWidget(title);
     hl->addStretch();
 
-    const QString btn_style = QString(
-        "QPushButton { background:rgba(217,119,6,0.1); color:%1;"
-        " border:1px solid %2; font-family:%3; font-size:12px; font-weight:600;"
-        " padding:0 10px; height:28px; }"
-        "QPushButton:hover { background:rgba(217,119,6,0.2); }"
-        "QPushButton:pressed { background:rgba(217,119,6,0.3); }")
-        .arg(ui::colors::AMBER)
-        .arg(ui::colors::AMBER_DIM)
-        .arg(ui::fonts::DATA_FAMILY);
+    const QString btn_style = QString("QPushButton { background:rgba(217,119,6,0.1); color:%1;"
+                                      " border:1px solid %2; font-family:%3; font-size:12px; font-weight:600;"
+                                      " padding:0 10px; height:28px; }"
+                                      "QPushButton:hover { background:rgba(217,119,6,0.2); }"
+                                      "QPushButton:pressed { background:rgba(217,119,6,0.3); }")
+                                  .arg(ui::colors::AMBER)
+                                  .arg(ui::colors::AMBER_DIM)
+                                  .arg(ui::fonts::DATA_FAMILY);
 
     auto* fetch_btn = new QPushButton("FETCH", toolbar);
     fetch_btn->setStyleSheet(btn_style);
@@ -438,14 +403,14 @@ void DBnomicsScreen::on_providers_loaded(const QVector<services::DbnProvider>& p
 }
 
 void DBnomicsScreen::on_datasets_loaded(const QVector<services::DbnDataset>& datasets,
-                                         const services::DbnPagination& page, bool append) {
+                                        const services::DbnPagination& page, bool append) {
     if (!append)
         selection_panel_->set_datasets_loading(false);
     selection_panel_->populate_datasets(datasets, page, append);
 }
 
 void DBnomicsScreen::on_series_loaded(const QVector<services::DbnSeriesInfo>& series,
-                                       const services::DbnPagination& page, bool append) {
+                                      const services::DbnPagination& page, bool append) {
     if (!append)
         selection_panel_->set_series_loading(false);
     selection_panel_->populate_series(series, page, append);
@@ -464,7 +429,7 @@ void DBnomicsScreen::on_observations_loaded(const services::DbnDataPoint& data) 
     for (auto& s : single_series_) {
         if (s.series_id == data.series_id) {
             s.observations = data.observations;
-            s.series_name  = data.series_name;
+            s.series_name = data.series_name;
             render_single_view();
             return;
         }
@@ -476,7 +441,7 @@ void DBnomicsScreen::on_observations_loaded(const services::DbnDataPoint& data) 
 }
 
 void DBnomicsScreen::on_search_results_loaded(const QVector<services::DbnSearchResult>& results,
-                                               const services::DbnPagination& page, bool append) {
+                                              const services::DbnPagination& page, bool append) {
     selection_panel_->set_search_loading(false);
     selection_panel_->populate_search_results(results, page, append);
 }
@@ -522,11 +487,9 @@ void DBnomicsScreen::on_export_csv() {
     }
 
     const QString default_name =
-        QString("dbnomics_%1.csv")
-            .arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
+        QString("dbnomics_%1.csv").arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
 
-    const QString path = QFileDialog::getSaveFileName(
-        this, "Export CSV", default_name, "CSV Files (*.csv)");
+    const QString path = QFileDialog::getSaveFileName(this, "Export CSV", default_name, "CSV Files (*.csv)");
 
     if (path.isEmpty())
         return;
@@ -597,12 +560,10 @@ void DBnomicsScreen::on_provider_selected(const QString& code) {
 void DBnomicsScreen::on_dataset_selected(const QString& code) {
     set_status(QString("Loading series for %1...").arg(code));
     selection_panel_->set_series_loading(true);
-    services::DBnomicsService::instance().fetch_series(
-        selection_panel_->selected_provider(), code, {}, 0);
+    services::DBnomicsService::instance().fetch_series(selection_panel_->selected_provider(), code, {}, 0);
 }
 
-void DBnomicsScreen::on_series_selected(const QString& prov, const QString& ds,
-                                         const QString& code) {
+void DBnomicsScreen::on_series_selected(const QString& prov, const QString& ds, const QString& code) {
     set_status("Fetching observations...");
     chart_widget_->set_loading(true);
     data_table_->set_loading(true);
@@ -614,11 +575,21 @@ void DBnomicsScreen::on_series_selected(const QString& prov, const QString& ds,
 // ─────────────────────────────────────────────────────────────────────────────
 void DBnomicsScreen::on_chart_type_changed(int index) {
     switch (index) {
-        case 0: single_chart_type_ = services::DbnChartType::Line;    break;
-        case 1: single_chart_type_ = services::DbnChartType::Area;    break;
-        case 2: single_chart_type_ = services::DbnChartType::Bar;     break;
-        case 3: single_chart_type_ = services::DbnChartType::Scatter; break;
-        default: single_chart_type_ = services::DbnChartType::Line;   break;
+        case 0:
+            single_chart_type_ = services::DbnChartType::Line;
+            break;
+        case 1:
+            single_chart_type_ = services::DbnChartType::Area;
+            break;
+        case 2:
+            single_chart_type_ = services::DbnChartType::Bar;
+            break;
+        case 3:
+            single_chart_type_ = services::DbnChartType::Scatter;
+            break;
+        default:
+            single_chart_type_ = services::DbnChartType::Line;
+            break;
     }
     render_single_view();
 }
@@ -651,8 +622,7 @@ void DBnomicsScreen::on_add_to_single_view() {
     view_stack_->setCurrentIndex(0);
 
     set_status(QString("Added: %1").arg(last_loaded_data_.series_name));
-    LOG_INFO("DBnomicsScreen",
-             QString("Series added to single view: %1").arg(last_loaded_data_.series_id));
+    LOG_INFO("DBnomicsScreen", QString("Series added to single view: %1").arg(last_loaded_data_.series_id));
 }
 
 void DBnomicsScreen::on_clear_all() {
@@ -699,22 +669,20 @@ void DBnomicsScreen::on_add_to_slot(int slot_index) {
     rebuild_comparison_view();
 
     set_status(QString("Added %1 to slot %2").arg(last_loaded_data_.series_name).arg(slot_index + 1));
-    LOG_INFO("DBnomicsScreen",
-             QString("Series added to slot %1: %2").arg(slot_index).arg(last_loaded_data_.series_id));
+    LOG_INFO("DBnomicsScreen", QString("Series added to slot %1: %2").arg(slot_index).arg(last_loaded_data_.series_id));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Comparison view slot management
 // ─────────────────────────────────────────────────────────────────────────────
 void DBnomicsScreen::on_remove_from_slot(int slot_index, const QString& series_id) {
-    if (slot_index < 0 || slot_index >= slots_.size()) return;
+    if (slot_index < 0 || slot_index >= slots_.size())
+        return;
 
     auto& slot = slots_[slot_index];
     slot.series.erase(
         std::remove_if(slot.series.begin(), slot.series.end(),
-            [&series_id](const services::DbnDataPoint& dp) {
-                return dp.series_id == series_id;
-            }),
+                       [&series_id](const services::DbnDataPoint& dp) { return dp.series_id == series_id; }),
         slot.series.end());
 
     // Re-assign colors after removal
@@ -725,25 +693,25 @@ void DBnomicsScreen::on_remove_from_slot(int slot_index, const QString& series_i
     rebuild_comparison_view();
 
     set_status(QString("Removed series from slot %1").arg(slot_index + 1));
-    LOG_INFO("DBnomicsScreen",
-             QString("Removed %1 from slot %2").arg(series_id).arg(slot_index));
+    LOG_INFO("DBnomicsScreen", QString("Removed %1 from slot %2").arg(series_id).arg(slot_index));
 }
 
 void DBnomicsScreen::on_remove_slot(int slot_index) {
-    if (slot_index < 0 || slot_index >= slots_.size()) return;
+    if (slot_index < 0 || slot_index >= slots_.size())
+        return;
     slots_.removeAt(slot_index);
     selection_panel_->remove_comparison_slot(slot_index);
     rebuild_comparison_view();
     set_status(QString("Slot removed. %1 slot(s) remaining").arg(slots_.size()));
-    LOG_INFO("DBnomicsScreen",
-             QString("Slot %1 removed. Remaining: %2").arg(slot_index + 1).arg(slots_.size()));
+    LOG_INFO("DBnomicsScreen", QString("Slot %1 removed. Remaining: %2").arg(slot_index + 1).arg(slots_.size()));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // rebuild_comparison_view — 2-column grid, 4 charts visible at once
 // ─────────────────────────────────────────────────────────────────────────────
 void DBnomicsScreen::rebuild_comparison_view() {
-    if (!comparison_layout_) return;
+    if (!comparison_layout_)
+        return;
 
     // Clear every item
     while (comparison_layout_->count() > 0) {
@@ -757,15 +725,13 @@ void DBnomicsScreen::rebuild_comparison_view() {
     slot_cards_.clear();
 
     if (slots_.isEmpty()) {
-        auto* placeholder = new QLabel(
-            "NO COMPARISON SLOTS\nClick  + ADD SLOT  in the left panel to begin",
-            comparison_content_);
+        auto* placeholder =
+            new QLabel("NO COMPARISON SLOTS\nClick  + ADD SLOT  in the left panel to begin", comparison_content_);
         placeholder->setAlignment(Qt::AlignCenter);
         placeholder->setWordWrap(true);
-        placeholder->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:13px;")
-                .arg(ui::colors::TEXT_TERTIARY)
-                .arg(ui::fonts::DATA_FAMILY));
+        placeholder->setStyleSheet(QString("color:%1; font-family:%2; font-size:13px;")
+                                       .arg(ui::colors::TEXT_TERTIARY)
+                                       .arg(ui::fonts::DATA_FAMILY));
         comparison_layout_->addWidget(placeholder);
         comparison_layout_->addStretch();
         return;
@@ -783,17 +749,17 @@ void DBnomicsScreen::rebuild_comparison_view() {
     const int n = slots_.size();
     for (int i = 0; i < n; ++i) {
         const auto& slot = slots_[i];
-        const int row     = i / 2;
-        const int col     = i % 2;
+        const int row = i / 2;
+        const int col = i % 2;
         // Odd last card spans both columns for visual balance
         const int col_span = (i == n - 1 && n % 2 == 1) ? 2 : 1;
 
         // ── Card ─────────────────────────────────────────────────────────────
         auto* card = new QWidget(grid_widget);
-        card->setMinimumHeight(240);
+        card->setMinimumHeight(260);
+        card->setMinimumWidth(320); // ensure Y-axis labels always have room
         card->setObjectName("slotCard");
-        card->setStyleSheet(
-            "QWidget#slotCard { background:#0d0d0d; border:1px solid #1f1f1f; }");
+        card->setStyleSheet("QWidget#slotCard { background:#0d0d0d; border:1px solid #1f1f1f; }");
 
         auto* card_vl = new QVBoxLayout(card);
         card_vl->setContentsMargins(0, 0, 0, 0);
@@ -803,28 +769,24 @@ void DBnomicsScreen::rebuild_comparison_view() {
         auto* header = new QWidget(card);
         header->setFixedHeight(32);
         header->setObjectName("cardHeader");
-        header->setStyleSheet(
-            "QWidget#cardHeader { background:#111; border-bottom:1px solid #1f1f1f; }");
+        header->setStyleSheet("QWidget#cardHeader { background:#111; border-bottom:1px solid #1f1f1f; }");
 
         auto* header_hl = new QHBoxLayout(header);
         header_hl->setContentsMargins(10, 0, 8, 0);
         header_hl->setSpacing(8);
 
         auto* slot_label = new QLabel(QString("SLOT %1").arg(i + 1), header);
-        slot_label->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:12px; font-weight:700;"
-                    " background:transparent; border:none;")
-                .arg(ui::colors::AMBER)
-                .arg(ui::fonts::DATA_FAMILY));
+        slot_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:12px; font-weight:700;"
+                                          " background:transparent; border:none;")
+                                      .arg(ui::colors::AMBER)
+                                      .arg(ui::fonts::DATA_FAMILY));
         header_hl->addWidget(slot_label);
 
-        auto* count_label = new QLabel(
-            QString("(%1 series)").arg(slot.series.size()), header);
-        count_label->setStyleSheet(
-            QString("color:%1; font-family:%2; font-size:10px;"
-                    " background:transparent; border:none;")
-                .arg(ui::colors::TEXT_TERTIARY)
-                .arg(ui::fonts::DATA_FAMILY));
+        auto* count_label = new QLabel(QString("(%1 series)").arg(slot.series.size()), header);
+        count_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px;"
+                                           " background:transparent; border:none;")
+                                       .arg(ui::colors::TEXT_TERTIARY)
+                                       .arg(ui::fonts::DATA_FAMILY));
         header_hl->addWidget(count_label);
         header_hl->addStretch();
 
@@ -848,11 +810,11 @@ void DBnomicsScreen::rebuild_comparison_view() {
         auto* card_splitter = new QSplitter(Qt::Vertical, card);
         card_splitter->setHandleWidth(4);
         card_splitter->setChildrenCollapsible(false);
-        card_splitter->setStyleSheet(
-            "QSplitter::handle:vertical { background:#1a1a1a; height:4px; }"
-            "QSplitter::handle:vertical:hover { background:#d97706; }");
+        card_splitter->setStyleSheet("QSplitter::handle:vertical { background:#1a1a1a; height:4px; }"
+                                     "QSplitter::handle:vertical:hover { background:#d97706; }");
 
         auto* chart = new DBnomicsChartWidget(card_splitter);
+        chart->set_compact(true); // tighter margins + no legend for grid slots
         auto* table = new DBnomicsDataTable(card_splitter);
         chart->setMinimumHeight(80);
         table->setMinimumHeight(80);
@@ -874,20 +836,28 @@ void DBnomicsScreen::rebuild_comparison_view() {
 
         // Connect chart type combo
         const int slot_i = i;
-        connect(chart_combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-                this, [this, slot_i, chart](int idx) {
-                    if (slot_i >= slots_.size()) return;
-                    services::DbnChartType ct;
-                    switch (idx) {
-                        case 1:  ct = services::DbnChartType::Area;    break;
-                        case 2:  ct = services::DbnChartType::Bar;     break;
-                        case 3:  ct = services::DbnChartType::Scatter; break;
-                        default: ct = services::DbnChartType::Line;    break;
-                    }
-                    slots_[slot_i].chart_type = ct;
-                    if (!slots_[slot_i].series.isEmpty())
-                        chart->set_data(slots_[slot_i].series, ct);
-                });
+        connect(chart_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, slot_i, chart](int idx) {
+            if (slot_i >= slots_.size())
+                return;
+            services::DbnChartType ct;
+            switch (idx) {
+                case 1:
+                    ct = services::DbnChartType::Area;
+                    break;
+                case 2:
+                    ct = services::DbnChartType::Bar;
+                    break;
+                case 3:
+                    ct = services::DbnChartType::Scatter;
+                    break;
+                default:
+                    ct = services::DbnChartType::Line;
+                    break;
+            }
+            slots_[slot_i].chart_type = ct;
+            if (!slots_[slot_i].series.isEmpty())
+                chart->set_data(slots_[slot_i].series, ct);
+        });
 
         slot_cards_.append({chart, table, chart_combo});
         grid->addWidget(card, row, col, 1, col_span);

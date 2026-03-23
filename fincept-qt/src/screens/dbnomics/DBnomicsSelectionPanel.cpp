@@ -1,28 +1,20 @@
 // src/screens/dbnomics/DBnomicsSelectionPanel.cpp
 #include "screens/dbnomics/DBnomicsSelectionPanel.h"
+
 #include "ui/theme/Theme.h"
-#include <QScrollArea>
+
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QListWidgetItem>
+#include <QScrollArea>
 #include <QSizePolicy>
-#include <QFrame>
-
-namespace fincept::screens {
 
 // ── Shared constants ─────────────────────────────────────────────────────────
 
-static const QString kSpinStyle =
-    "QLabel { color: #525252; font-family: 'Consolas','Courier New',monospace;"
-    " font-size: 11px; background: transparent; }";
+namespace {
 
-static QLabel* make_spin_label(const QString& text, QWidget* parent) {
-    auto* lbl = new QLabel(text, parent);
-    lbl->setFixedHeight(80);
-    lbl->setAlignment(Qt::AlignCenter);
-    lbl->setStyleSheet(kSpinStyle);
-    lbl->hide();
-    return lbl;
-}
+static const QString kSpinStyle = "QLabel { color: #525252; font-family: 'Consolas','Courier New',monospace;"
+                                  " font-size: 11px; background: transparent; }";
 
 // ── Style constants ─────────────────────────────────────────────────────────
 
@@ -56,6 +48,19 @@ static const QString kLoadMoreStyle = R"(
     QPushButton:hover { color: #d97706; border-color: #d97706; }
 )";
 
+} // namespace
+
+namespace fincept::screens {
+
+static QLabel* make_spin_label(const QString& text, QWidget* parent) {
+    auto* lbl = new QLabel(text, parent);
+    lbl->setFixedHeight(80);
+    lbl->setAlignment(Qt::AlignCenter);
+    lbl->setStyleSheet(kSpinStyle);
+    lbl->hide();
+    return lbl;
+}
+
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 DBnomicsSelectionPanel::DBnomicsSelectionPanel(QWidget* parent) : QWidget(parent) {
@@ -70,14 +75,13 @@ DBnomicsSelectionPanel::DBnomicsSelectionPanel(QWidget* parent) : QWidget(parent
 
 QLabel* DBnomicsSelectionPanel::make_section_label(const QString& text) {
     auto* label = new QLabel(text);
-    label->setStyleSheet(QString(
-        "color: %1; font-size: 10px; font-weight: 700; "
-        "font-family: 'Consolas','Courier New',monospace; "
-        "padding: 5px 8px; background: %2; "
-        "border-bottom: 1px solid %3;")
-        .arg(ui::colors::AMBER)
-        .arg(ui::colors::BG_RAISED)
-        .arg(ui::colors::BORDER_DIM));
+    label->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700; "
+                                 "font-family: 'Consolas','Courier New',monospace; "
+                                 "padding: 5px 8px; background: %2; "
+                                 "border-bottom: 1px solid %3;")
+                             .arg(ui::colors::AMBER)
+                             .arg(ui::colors::BG_RAISED)
+                             .arg(ui::colors::BORDER_DIM));
     return label;
 }
 
@@ -148,18 +152,17 @@ QWidget* DBnomicsSelectionPanel::build_search_section() {
     // Connect search results selection
     connect(search_results_list_, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
         const QString provider_code = item->data(Qt::UserRole).toString();
-        const QString dataset_code  = item->data(Qt::UserRole + 1).toString();
+        const QString dataset_code = item->data(Qt::UserRole + 1).toString();
         selected_provider_ = provider_code;
-        selected_dataset_  = dataset_code;
+        selected_dataset_ = dataset_code;
         emit search_result_selected(provider_code, dataset_code);
         emit provider_selected(provider_code);
         emit dataset_selected(dataset_code);
     });
 
     // Connect load more search
-    connect(search_load_more_btn_, &QPushButton::clicked, this, [this]() {
-        emit load_more_search_requested(search_next_offset_);
-    });
+    connect(search_load_more_btn_, &QPushButton::clicked, this,
+            [this]() { emit load_more_search_requested(search_next_offset_); });
 
     return w;
 }
@@ -252,9 +255,8 @@ QWidget* DBnomicsSelectionPanel::build_dataset_section() {
     });
 
     // Load more datasets
-    connect(dataset_load_more_btn_, &QPushButton::clicked, this, [this]() {
-        emit load_more_datasets_requested(datasets_next_offset_);
-    });
+    connect(dataset_load_more_btn_, &QPushButton::clicked, this,
+            [this]() { emit load_more_datasets_requested(datasets_next_offset_); });
 
     return w;
 }
@@ -303,9 +305,8 @@ QWidget* DBnomicsSelectionPanel::build_series_section() {
     });
 
     // Load more series
-    connect(series_load_more_btn_, &QPushButton::clicked, this, [this]() {
-        emit load_more_series_requested(series_next_offset_);
-    });
+    connect(series_load_more_btn_, &QPushButton::clicked, this,
+            [this]() { emit load_more_series_requested(series_next_offset_); });
 
     return w;
 }
@@ -319,31 +320,27 @@ QWidget* DBnomicsSelectionPanel::build_action_buttons() {
     // "ADD TO SINGLE VIEW" button — amber style
     auto* add_btn = new QPushButton("ADD TO SINGLE VIEW");
     add_btn->setFixedHeight(26);
-    add_btn->setStyleSheet(QString(
-        "QPushButton { background: rgba(217,119,6,0.1); color: %1; "
-        "border: 1px solid %2; padding: 3px 8px; "
-        "font-family: 'Consolas','Courier New',monospace; font-size: 10px; font-weight: 700; }"
-        "QPushButton:hover { background: rgba(217,119,6,0.2); }")
-        .arg(ui::colors::AMBER)
-        .arg(ui::colors::AMBER_DIM));
-    connect(add_btn, &QPushButton::clicked, this, [this]() {
-        emit add_to_single_view_clicked();
-    });
+    add_btn->setStyleSheet(
+        QString("QPushButton { background: rgba(217,119,6,0.1); color: %1; "
+                "border: 1px solid %2; padding: 3px 8px; "
+                "font-family: 'Consolas','Courier New',monospace; font-size: 10px; font-weight: 700; }"
+                "QPushButton:hover { background: rgba(217,119,6,0.2); }")
+            .arg(ui::colors::AMBER)
+            .arg(ui::colors::AMBER_DIM));
+    connect(add_btn, &QPushButton::clicked, this, [this]() { emit add_to_single_view_clicked(); });
     layout->addWidget(add_btn);
 
     // "CLEAR ALL" button — red style
     auto* clear_btn = new QPushButton("CLEAR ALL");
     clear_btn->setFixedHeight(26);
-    clear_btn->setStyleSheet(QString(
-        "QPushButton { background: rgba(220,38,38,0.1); color: %1; "
-        "border: 1px solid %2; padding: 3px 8px; "
-        "font-family: 'Consolas','Courier New',monospace; font-size: 10px; font-weight: 700; }"
-        "QPushButton:hover { background: rgba(220,38,38,0.2); }")
-        .arg(ui::colors::NEGATIVE)
-        .arg("#7f1d1d"));
-    connect(clear_btn, &QPushButton::clicked, this, [this]() {
-        emit clear_all_clicked();
-    });
+    clear_btn->setStyleSheet(
+        QString("QPushButton { background: rgba(220,38,38,0.1); color: %1; "
+                "border: 1px solid %2; padding: 3px 8px; "
+                "font-family: 'Consolas','Courier New',monospace; font-size: 10px; font-weight: 700; }"
+                "QPushButton:hover { background: rgba(220,38,38,0.2); }")
+            .arg(ui::colors::NEGATIVE)
+            .arg("#7f1d1d"));
+    connect(clear_btn, &QPushButton::clicked, this, [this]() { emit clear_all_clicked(); });
     layout->addWidget(clear_btn);
 
     return w;
@@ -360,15 +357,13 @@ QWidget* DBnomicsSelectionPanel::build_comparison_slots_section() {
     // "+ ADD SLOT" button — green style
     auto* add_slot_btn = new QPushButton("+ ADD SLOT");
     add_slot_btn->setFixedHeight(24);
-    add_slot_btn->setStyleSheet(QString(
-        "QPushButton { background: rgba(22,163,74,0.1); color: %1; "
-        "border: 1px solid rgba(22,163,74,0.4); padding: 3px 8px; "
-        "font-family: 'Consolas','Courier New',monospace; font-size: 10px; font-weight: 700; }"
-        "QPushButton:hover { background: rgba(22,163,74,0.2); }")
-        .arg(ui::colors::POSITIVE));
-    connect(add_slot_btn, &QPushButton::clicked, this, [this]() {
-        emit add_slot_clicked();
-    });
+    add_slot_btn->setStyleSheet(
+        QString("QPushButton { background: rgba(22,163,74,0.1); color: %1; "
+                "border: 1px solid rgba(22,163,74,0.4); padding: 3px 8px; "
+                "font-family: 'Consolas','Courier New',monospace; font-size: 10px; font-weight: 700; }"
+                "QPushButton:hover { background: rgba(22,163,74,0.2); }")
+            .arg(ui::colors::POSITIVE));
+    connect(add_slot_btn, &QPushButton::clicked, this, [this]() { emit add_slot_clicked(); });
     layout->addWidget(add_slot_btn);
 
     // Container for slots
@@ -395,13 +390,12 @@ void DBnomicsSelectionPanel::build_ui() {
     auto* scroll = new QScrollArea();
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(QString(
-        "QScrollArea { border: none; background: %1; }"
-        "QScrollBar:vertical { background: %1; width: 6px; }"
-        "QScrollBar::handle:vertical { background: %2; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(ui::colors::BG_BASE)
-        .arg(ui::colors::BORDER_DIM));
+    scroll->setStyleSheet(QString("QScrollArea { border: none; background: %1; }"
+                                  "QScrollBar:vertical { background: %1; width: 6px; }"
+                                  "QScrollBar::handle:vertical { background: %2; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                              .arg(ui::colors::BG_BASE)
+                              .arg(ui::colors::BORDER_DIM));
 
     auto* content = new QWidget();
     auto* content_layout = new QVBoxLayout(content);
@@ -421,14 +415,13 @@ void DBnomicsSelectionPanel::build_ui() {
 
     // Status label — fixed outside scroll at bottom
     status_label_ = new QLabel("Ready");
-    status_label_->setStyleSheet(QString(
-        "color: %1; font-size: 10px; "
-        "font-family: 'Consolas','Courier New',monospace; "
-        "padding: 3px 8px; background: %2; "
-        "border-top: 1px solid %3;")
-        .arg(ui::colors::TEXT_TERTIARY)
-        .arg(ui::colors::BG_RAISED)
-        .arg(ui::colors::BORDER_DIM));
+    status_label_->setStyleSheet(QString("color: %1; font-size: 10px; "
+                                         "font-family: 'Consolas','Courier New',monospace; "
+                                         "padding: 3px 8px; background: %2; "
+                                         "border-top: 1px solid %3;")
+                                     .arg(ui::colors::TEXT_TERTIARY)
+                                     .arg(ui::colors::BG_RAISED)
+                                     .arg(ui::colors::BORDER_DIM));
     root_layout->addWidget(status_label_);
 }
 
@@ -438,10 +431,9 @@ void DBnomicsSelectionPanel::add_comparison_slot() {
     const int slot_idx = slot_count_++;
 
     auto* slot_widget = new QWidget();
-    slot_widget->setStyleSheet(QString(
-        "QWidget { background: %1; border: 1px solid %2; }")
-        .arg(ui::colors::BG_SURFACE)
-        .arg(ui::colors::BORDER_DIM));
+    slot_widget->setStyleSheet(QString("QWidget { background: %1; border: 1px solid %2; }")
+                                   .arg(ui::colors::BG_SURFACE)
+                                   .arg(ui::colors::BORDER_DIM));
 
     auto* slot_layout = new QVBoxLayout(slot_widget);
     slot_layout->setContentsMargins(4, 4, 4, 4);
@@ -454,40 +446,33 @@ void DBnomicsSelectionPanel::add_comparison_slot() {
     header_layout->setSpacing(4);
 
     auto* slot_label = new QLabel(QString("SLOT %1").arg(slot_idx + 1));
-    slot_label->setStyleSheet(QString(
-        "color: %1; font-size: 10px; font-weight: 700; "
-        "font-family: 'Consolas','Courier New',monospace;")
-        .arg(ui::colors::AMBER));
+    slot_label->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700; "
+                                      "font-family: 'Consolas','Courier New',monospace;")
+                                  .arg(ui::colors::AMBER));
     header_layout->addWidget(slot_label);
     header_layout->addStretch();
 
     auto* remove_btn = new QPushButton("−");
     remove_btn->setFixedSize(18, 18);
-    remove_btn->setStyleSheet(QString(
-        "QPushButton { background: rgba(220,38,38,0.1); color: %1; "
-        "border: 1px solid rgba(220,38,38,0.3); font-size: 11px; font-weight: 700; }"
-        "QPushButton:hover { background: rgba(220,38,38,0.25); }")
-        .arg(ui::colors::NEGATIVE));
-    connect(remove_btn, &QPushButton::clicked, this, [this, slot_idx]() {
-        emit remove_slot_clicked(slot_idx);
-    });
+    remove_btn->setStyleSheet(QString("QPushButton { background: rgba(220,38,38,0.1); color: %1; "
+                                      "border: 1px solid rgba(220,38,38,0.3); font-size: 11px; font-weight: 700; }"
+                                      "QPushButton:hover { background: rgba(220,38,38,0.25); }")
+                                  .arg(ui::colors::NEGATIVE));
+    connect(remove_btn, &QPushButton::clicked, this, [this, slot_idx]() { emit remove_slot_clicked(slot_idx); });
     header_layout->addWidget(remove_btn);
     slot_layout->addWidget(header_row);
 
     // "+ ADD CURRENT SERIES" button
     auto* add_series_btn = new QPushButton("+ ADD CURRENT SERIES");
     add_series_btn->setFixedHeight(20);
-    add_series_btn->setStyleSheet(QString(
-        "QPushButton { background: transparent; color: %1; "
-        "border: 1px solid %2; "
-        "font-family: 'Consolas','Courier New',monospace; font-size: 9px; }"
-        "QPushButton:hover { color: %3; border-color: %3; }")
-        .arg(ui::colors::TEXT_TERTIARY)
-        .arg(ui::colors::BORDER_DIM)
-        .arg(ui::colors::AMBER));
-    connect(add_series_btn, &QPushButton::clicked, this, [this, slot_idx]() {
-        emit add_to_slot_clicked(slot_idx);
-    });
+    add_series_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; "
+                                          "border: 1px solid %2; "
+                                          "font-family: 'Consolas','Courier New',monospace; font-size: 9px; }"
+                                          "QPushButton:hover { color: %3; border-color: %3; }")
+                                      .arg(ui::colors::TEXT_TERTIARY)
+                                      .arg(ui::colors::BORDER_DIM)
+                                      .arg(ui::colors::AMBER));
+    connect(add_series_btn, &QPushButton::clicked, this, [this, slot_idx]() { emit add_to_slot_clicked(slot_idx); });
     slot_layout->addWidget(add_series_btn);
 
     slots_layout_->addWidget(slot_widget);
@@ -498,7 +483,8 @@ void DBnomicsSelectionPanel::remove_comparison_slot(int index) {
         // Fall back: remove the last slot
         index = slots_layout_->count() - 1;
     }
-    if (index < 0) return;
+    if (index < 0)
+        return;
 
     QLayoutItem* item = slots_layout_->takeAt(index);
     if (item) {
@@ -585,7 +571,7 @@ void DBnomicsSelectionPanel::populate_series(const QVector<services::DbnSeriesIn
 }
 
 void DBnomicsSelectionPanel::populate_search_results(const QVector<services::DbnSearchResult>& results,
-                                                      const services::DbnPagination& page, bool append) {
+                                                     const services::DbnPagination& page, bool append) {
     if (!append) {
         search_results_list_->clear();
     }
@@ -593,10 +579,9 @@ void DBnomicsSelectionPanel::populate_search_results(const QVector<services::Dbn
     for (const auto& r : results) {
         const QString display = "[" + r.provider_code + "] " + r.dataset_name;
         auto* item = new QListWidgetItem(display);
-        item->setData(Qt::UserRole,      r.provider_code);
-        item->setData(Qt::UserRole + 1,  r.dataset_code);
-        item->setToolTip(r.provider_code + "/" + r.dataset_code +
-                         " (" + QString::number(r.nb_series) + " series)");
+        item->setData(Qt::UserRole, r.provider_code);
+        item->setData(Qt::UserRole + 1, r.dataset_code);
+        item->setToolTip(r.provider_code + "/" + r.dataset_code + " (" + QString::number(r.nb_series) + " series)");
         search_results_list_->addItem(item);
     }
 
@@ -625,57 +610,72 @@ void DBnomicsSelectionPanel::set_status(const QString& message) {
 // ── Loading state ─────────────────────────────────────────────────────────────
 
 void DBnomicsSelectionPanel::tick_anim() {
-    static const QString frames[] = {"⣾","⣽","⣻","⢿","⡿","⣟","⣯","⣷"};
+    static const QString frames[] = {"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"};
     const QString f = frames[anim_frame_ % 8];
     ++anim_frame_;
-    if (prov_loading_   && prov_spin_)   prov_spin_->setText(f + "  LOADING PROVIDERS...");
-    if (ds_loading_     && ds_spin_)     ds_spin_->setText(f + "  LOADING DATASETS...");
-    if (series_loading_ && series_spin_) series_spin_->setText(f + "  LOADING SERIES...");
-    if (search_loading_ && search_spin_) search_spin_->setText(f + "  SEARCHING...");
+    if (prov_loading_ && prov_spin_)
+        prov_spin_->setText(f + "  LOADING PROVIDERS...");
+    if (ds_loading_ && ds_spin_)
+        ds_spin_->setText(f + "  LOADING DATASETS...");
+    if (series_loading_ && series_spin_)
+        series_spin_->setText(f + "  LOADING SERIES...");
+    if (search_loading_ && search_spin_)
+        search_spin_->setText(f + "  SEARCHING...");
 }
 
-static void apply_loading(bool on, bool& flag, QLabel* spin, QWidget* content,
-                          QTimer* timer, int& frame) {
+static void apply_loading(bool on, bool& flag, QLabel* spin, QWidget* content, QTimer* timer, int& frame) {
     flag = on;
     if (on) {
-        if (content) content->hide();
-        if (spin)    spin->show();
-        if (!timer->isActive()) { frame = 0; timer->start(); }
+        if (content)
+            content->hide();
+        if (spin)
+            spin->show();
+        if (!timer->isActive()) {
+            frame = 0;
+            timer->start();
+        }
     } else {
-        if (spin)    spin->hide();
-        if (content) content->show();
+        if (spin)
+            spin->hide();
+        if (content)
+            content->show();
         // timer stopped only when all flags are false — caller handles that
     }
 }
 
 void DBnomicsSelectionPanel::set_providers_loading(bool on) {
     apply_loading(on, prov_loading_, prov_spin_, prov_content_, anim_timer_, anim_frame_);
-    if (!on && !ds_loading_ && !series_loading_ && !search_loading_) anim_timer_->stop();
+    if (!on && !ds_loading_ && !series_loading_ && !search_loading_)
+        anim_timer_->stop();
 }
 
 void DBnomicsSelectionPanel::set_datasets_loading(bool on) {
     apply_loading(on, ds_loading_, ds_spin_, ds_content_, anim_timer_, anim_frame_);
-    if (!on && !prov_loading_ && !series_loading_ && !search_loading_) anim_timer_->stop();
+    if (!on && !prov_loading_ && !series_loading_ && !search_loading_)
+        anim_timer_->stop();
 }
 
 void DBnomicsSelectionPanel::set_series_loading(bool on) {
     apply_loading(on, series_loading_, series_spin_, series_content_, anim_timer_, anim_frame_);
-    if (!on && !prov_loading_ && !ds_loading_ && !search_loading_) anim_timer_->stop();
+    if (!on && !prov_loading_ && !ds_loading_ && !search_loading_)
+        anim_timer_->stop();
 }
 
 void DBnomicsSelectionPanel::set_search_loading(bool on) {
     apply_loading(on, search_loading_, search_spin_, search_content_, anim_timer_, anim_frame_);
-    if (!on && !prov_loading_ && !ds_loading_ && !series_loading_) anim_timer_->stop();
+    if (!on && !prov_loading_ && !ds_loading_ && !series_loading_)
+        anim_timer_->stop();
 }
 
-void DBnomicsSelectionPanel::update_slot_series(int slot_index,
-                                                const QVector<services::DbnDataPoint>& series) {
+void DBnomicsSelectionPanel::update_slot_series(int slot_index, const QVector<services::DbnDataPoint>& series) {
     QLayoutItem* layout_item = slots_layout_->itemAt(slot_index);
-    if (!layout_item || !layout_item->widget()) return;
+    if (!layout_item || !layout_item->widget())
+        return;
 
     QWidget* slot_widget = layout_item->widget();
     auto* slot_layout = qobject_cast<QVBoxLayout*>(slot_widget->layout());
-    if (!slot_layout) return;
+    if (!slot_layout)
+        return;
 
     // Remove all items below index 2 (header row at 0, add button at 1)
     while (slot_layout->count() > 2) {
@@ -689,10 +689,8 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index,
     }
 
     // Dot colors for series rows
-    static const QStringList dot_colors = {
-        "#ea580c", "#d97706", "#16a34a", "#2563eb",
-        "#0891b2", "#9333ea", "#dc2626", "#ca8a04"
-    };
+    static const QStringList dot_colors = {"#ea580c", "#d97706", "#16a34a", "#2563eb",
+                                           "#0891b2", "#9333ea", "#dc2626", "#ca8a04"};
 
     for (int i = 0; i < series.size(); ++i) {
         const auto& dp = series[i];
@@ -715,10 +713,9 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index,
             name = name.left(19) + "...";
         }
         auto* name_label = new QLabel(name);
-        name_label->setStyleSheet(QString(
-            "color: %1; font-size: 10px; "
-            "font-family: 'Consolas','Courier New',monospace;")
-            .arg(ui::colors::TEXT_SECONDARY));
+        name_label->setStyleSheet(QString("color: %1; font-size: 10px; "
+                                          "font-family: 'Consolas','Courier New',monospace;")
+                                      .arg(ui::colors::TEXT_SECONDARY));
         name_label->setToolTip(dp.series_name);
         row_layout->addWidget(name_label, 1);
 
@@ -726,14 +723,13 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index,
         const QString series_id = dp.series_id;
         auto* remove_btn = new QPushButton("\u00D7");
         remove_btn->setFixedSize(14, 14);
-        remove_btn->setStyleSheet(QString(
-            "QPushButton { background: transparent; color: %1; border: none; font-size: 10px; }"
-            "QPushButton:hover { color: %2; }")
-            .arg(ui::colors::TEXT_TERTIARY)
-            .arg(ui::colors::NEGATIVE));
-        connect(remove_btn, &QPushButton::clicked, this, [this, slot_index, series_id]() {
-            emit remove_from_slot_clicked(slot_index, series_id);
-        });
+        remove_btn->setStyleSheet(
+            QString("QPushButton { background: transparent; color: %1; border: none; font-size: 10px; }"
+                    "QPushButton:hover { color: %2; }")
+                .arg(ui::colors::TEXT_TERTIARY)
+                .arg(ui::colors::NEGATIVE));
+        connect(remove_btn, &QPushButton::clicked, this,
+                [this, slot_index, series_id]() { emit remove_from_slot_clicked(slot_index, series_id); });
         row_layout->addWidget(remove_btn);
 
         slot_layout->addWidget(row);

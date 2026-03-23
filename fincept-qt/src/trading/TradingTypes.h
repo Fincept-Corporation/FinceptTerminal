@@ -2,13 +2,14 @@
 // Trading Types — shared data types for paper trading, brokers, and exchange services.
 // Qt-adapted port from the ImGui codebase (portfolio_types.h + broker_types.h + exchange_service types).
 
-#include <QString>
-#include <QJsonObject>
 #include <QJsonArray>
-#include <optional>
-#include <vector>
+#include <QJsonObject>
+#include <QString>
+
 #include <cstdint>
 #include <map>
+#include <optional>
+#include <vector>
 
 namespace fincept::trading {
 
@@ -33,8 +34,8 @@ struct PtOrder {
     QString id;
     QString portfolio_id;
     QString symbol;
-    QString side;        // "buy" | "sell"
-    QString order_type;  // "market" | "limit" | "stop" | "stop_limit"
+    QString side;       // "buy" | "sell"
+    QString order_type; // "market" | "limit" | "stop" | "stop_limit"
     double quantity = 0.0;
     std::optional<double> price;
     std::optional<double> stop_price;
@@ -50,7 +51,7 @@ struct PtPosition {
     QString id;
     QString portfolio_id;
     QString symbol;
-    QString side;        // "long" | "short"
+    QString side; // "long" | "short"
     double quantity = 0.0;
     double entry_price = 0.0;
     double current_price = 0.0;
@@ -100,7 +101,7 @@ struct PriceData {
 // Broker Types
 // ============================================================================
 
-template<typename T>
+template <typename T>
 struct ApiResponse {
     bool success = false;
     std::optional<T> data;
@@ -142,21 +143,30 @@ inline const char* order_side_str(OrderSide s) {
 
 inline const char* order_type_str(OrderType t) {
     switch (t) {
-        case OrderType::Market:        return "market";
-        case OrderType::Limit:         return "limit";
-        case OrderType::StopLoss:      return "stop_loss";
-        case OrderType::StopLossLimit: return "stop_loss_limit";
+        case OrderType::Market:
+            return "market";
+        case OrderType::Limit:
+            return "limit";
+        case OrderType::StopLoss:
+            return "stop_loss";
+        case OrderType::StopLossLimit:
+            return "stop_loss_limit";
     }
     return "market";
 }
 
 inline const char* product_type_str(ProductType p) {
     switch (p) {
-        case ProductType::Intraday:      return "intraday";
-        case ProductType::Delivery:      return "delivery";
-        case ProductType::Margin:        return "margin";
-        case ProductType::CoverOrder:    return "cover_order";
-        case ProductType::BracketOrder:  return "bracket_order";
+        case ProductType::Intraday:
+            return "intraday";
+        case ProductType::Delivery:
+            return "delivery";
+        case ProductType::Margin:
+            return "margin";
+        case ProductType::CoverOrder:
+            return "cover_order";
+        case ProductType::BracketOrder:
+            return "bracket_order";
     }
     return "intraday";
 }
@@ -250,51 +260,95 @@ struct BrokerFunds {
 };
 
 enum class BrokerId {
-    Fyers, Zerodha, Upstox, Dhan, Kotak, Groww, AliceBlue, AngelOne,
-    FivePaisa, IIFL, Motilal, Shoonya,
-    Alpaca, IBKR, Tradier,
+    Fyers,
+    Zerodha,
+    Upstox,
+    Dhan,
+    Kotak,
+    Groww,
+    AliceBlue,
+    AngelOne,
+    FivePaisa,
+    IIFL,
+    Motilal,
+    Shoonya,
+    Alpaca,
+    IBKR,
+    Tradier,
     SaxoBank
 };
 
 inline const char* broker_id_str(BrokerId id) {
     switch (id) {
-        case BrokerId::Fyers:     return "fyers";
-        case BrokerId::Zerodha:   return "zerodha";
-        case BrokerId::Upstox:    return "upstox";
-        case BrokerId::Dhan:      return "dhan";
-        case BrokerId::Kotak:     return "kotak";
-        case BrokerId::Groww:     return "groww";
-        case BrokerId::AliceBlue: return "aliceblue";
-        case BrokerId::AngelOne:  return "angelone";
-        case BrokerId::FivePaisa: return "fivepaisa";
-        case BrokerId::IIFL:      return "iifl";
-        case BrokerId::Motilal:   return "motilal";
-        case BrokerId::Shoonya:   return "shoonya";
-        case BrokerId::Alpaca:    return "alpaca";
-        case BrokerId::IBKR:      return "ibkr";
-        case BrokerId::Tradier:   return "tradier";
-        case BrokerId::SaxoBank:  return "saxobank";
+        case BrokerId::Fyers:
+            return "fyers";
+        case BrokerId::Zerodha:
+            return "zerodha";
+        case BrokerId::Upstox:
+            return "upstox";
+        case BrokerId::Dhan:
+            return "dhan";
+        case BrokerId::Kotak:
+            return "kotak";
+        case BrokerId::Groww:
+            return "groww";
+        case BrokerId::AliceBlue:
+            return "aliceblue";
+        case BrokerId::AngelOne:
+            return "angelone";
+        case BrokerId::FivePaisa:
+            return "fivepaisa";
+        case BrokerId::IIFL:
+            return "iifl";
+        case BrokerId::Motilal:
+            return "motilal";
+        case BrokerId::Shoonya:
+            return "shoonya";
+        case BrokerId::Alpaca:
+            return "alpaca";
+        case BrokerId::IBKR:
+            return "ibkr";
+        case BrokerId::Tradier:
+            return "tradier";
+        case BrokerId::SaxoBank:
+            return "saxobank";
     }
     return "unknown";
 }
 
 inline std::optional<BrokerId> parse_broker_id(const QString& s) {
-    if (s == "fyers")     return BrokerId::Fyers;
-    if (s == "zerodha")   return BrokerId::Zerodha;
-    if (s == "upstox")    return BrokerId::Upstox;
-    if (s == "dhan")      return BrokerId::Dhan;
-    if (s == "kotak")     return BrokerId::Kotak;
-    if (s == "groww")     return BrokerId::Groww;
-    if (s == "aliceblue") return BrokerId::AliceBlue;
-    if (s == "angelone")  return BrokerId::AngelOne;
-    if (s == "fivepaisa") return BrokerId::FivePaisa;
-    if (s == "iifl")      return BrokerId::IIFL;
-    if (s == "motilal")   return BrokerId::Motilal;
-    if (s == "shoonya")   return BrokerId::Shoonya;
-    if (s == "alpaca")    return BrokerId::Alpaca;
-    if (s == "ibkr")      return BrokerId::IBKR;
-    if (s == "tradier")   return BrokerId::Tradier;
-    if (s == "saxobank")  return BrokerId::SaxoBank;
+    if (s == "fyers")
+        return BrokerId::Fyers;
+    if (s == "zerodha")
+        return BrokerId::Zerodha;
+    if (s == "upstox")
+        return BrokerId::Upstox;
+    if (s == "dhan")
+        return BrokerId::Dhan;
+    if (s == "kotak")
+        return BrokerId::Kotak;
+    if (s == "groww")
+        return BrokerId::Groww;
+    if (s == "aliceblue")
+        return BrokerId::AliceBlue;
+    if (s == "angelone")
+        return BrokerId::AngelOne;
+    if (s == "fivepaisa")
+        return BrokerId::FivePaisa;
+    if (s == "iifl")
+        return BrokerId::IIFL;
+    if (s == "motilal")
+        return BrokerId::Motilal;
+    if (s == "shoonya")
+        return BrokerId::Shoonya;
+    if (s == "alpaca")
+        return BrokerId::Alpaca;
+    if (s == "ibkr")
+        return BrokerId::IBKR;
+    if (s == "tradier")
+        return BrokerId::Tradier;
+    if (s == "saxobank")
+        return BrokerId::SaxoBank;
     return std::nullopt;
 }
 
@@ -400,14 +454,14 @@ struct ExchangeCredentials {
 struct EquityTick {
     QString symbol;
     QString exchange;
-    double ltp      = 0.0;
-    double open     = 0.0;
-    double high     = 0.0;
-    double low      = 0.0;
-    double close    = 0.0;
-    double volume   = 0.0;
-    double bid      = 0.0;
-    double ask      = 0.0;
+    double ltp = 0.0;
+    double open = 0.0;
+    double high = 0.0;
+    double low = 0.0;
+    double close = 0.0;
+    double volume = 0.0;
+    double bid = 0.0;
+    double ask = 0.0;
     int64_t timestamp = 0;
 };
 
@@ -422,7 +476,7 @@ struct EquitySymbol {
 
 struct TradingSession {
     QString broker;
-    QString mode;                    // "live" or "paper"
+    QString mode; // "live" or "paper"
     QString paper_portfolio_id;
     bool is_connected = false;
 };

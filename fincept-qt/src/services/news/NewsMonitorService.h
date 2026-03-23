@@ -1,25 +1,26 @@
 #pragma once
-#include <QObject>
-#include <QVector>
-#include <QMap>
-#include <QString>
 #include "services/news/NewsService.h"
+
+#include <QMap>
+#include <QObject>
+#include <QString>
+#include <QVector>
 
 namespace fincept::services {
 
 struct NewsMonitor {
-    QString     id;
-    QString     label;
+    QString id;
+    QString label;
     QStringList keywords;
-    QString     color;
-    bool        enabled = true;
+    QString color;
+    bool enabled = true;
 };
 
 const QStringList& monitor_colors();
 
 class NewsMonitorService : public QObject {
     Q_OBJECT
-public:
+  public:
     static NewsMonitorService& instance();
 
     QVector<NewsMonitor> get_monitors() const;
@@ -29,11 +30,10 @@ public:
     void toggle_monitor(const QString& id);
 
     /// Scan articles against all enabled monitors; returns monitor_id → matching articles.
-    QMap<QString, QVector<NewsArticle>> scan_monitors(
-        const QVector<NewsMonitor>& monitors,
-        const QVector<NewsArticle>& articles) const;
+    QMap<QString, QVector<NewsArticle>> scan_monitors(const QVector<NewsMonitor>& monitors,
+                                                      const QVector<NewsArticle>& articles) const;
 
-private:
+  private:
     NewsMonitorService();
 
     QVector<NewsMonitor> monitors_;

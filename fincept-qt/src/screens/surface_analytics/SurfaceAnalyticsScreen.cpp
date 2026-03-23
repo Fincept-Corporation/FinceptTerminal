@@ -1,27 +1,104 @@
 #include "SurfaceAnalyticsScreen.h"
-#include "Surface3DWidget.h"
-#include "SurfaceTableWidget.h"
-#include "SurfaceMetricsPanel.h"
-#include "SurfaceDatabentoPanel.h"
-#include "SurfaceCsvImporter.h"
 
-#include <QVBoxLayout>
+#include "Surface3DWidget.h"
+#include "SurfaceCsvImporter.h"
+#include "SurfaceDatabentoPanel.h"
+#include "SurfaceMetricsPanel.h"
+#include "SurfaceTableWidget.h"
+
+#include <QComboBox>
+#include <QFileDialog>
+#include <QFrame>
 #include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
+#include <QScrollArea>
 #include <QSplitter>
 #include <QStackedWidget>
-#include <QPushButton>
-#include <QComboBox>
-#include <QLabel>
-#include <QFileDialog>
-#include <QMessageBox>
-#include <QFrame>
-#include <QScrollArea>
+#include <QVBoxLayout>
+
 #include <cstdlib>
 #include <ctime>
 
 namespace fincept::surface {
 
-// ============================================================================
+// ── Obsidian palette tokens ──────────────────────────────────────────────────
+static const char* BG_BASE = "#080808";
+static const char* BG_SURFACE = "#0a0a0a";
+static const char* BG_RAISED = "#111111";
+static const char* BG_HOVER = "#161616";
+static const char* BORDER_DIM = "#1a1a1a";
+static const char* BORDER_MED = "#222222";
+static const char* BORDER_BRT = "#333333";
+static const char* TEXT_PRI = "#e5e5e5";
+static const char* TEXT_SEC = "#808080";
+static const char* TEXT_TER = "#525252";
+static const char* AMBER = "#d97706";
+static const char* AMBER_DIM = "#78350f";
+static const char* POSITIVE = "#16a34a";
+static const char* NEGATIVE = "#dc2626";
+static const char* MONO = "'Consolas','Courier New',monospace";
+
+// ── Category accent colors (muted, functional only) ─────────────────────────
+// R,G,B kept but used as muted accent — no bright blobs
+static constexpr int CAT_ACCENT[][3] = {
+    {88, 166, 255},  // EQUITY DERIV
+    {63, 185, 80},   // FIXED INCOME
+    {217, 164, 6},   // FX
+    {220, 80, 80},   // CREDIT
+    {155, 114, 255}, // COMMODITIES
+    {217, 119, 6},   // RISK  → amber
+    {89, 196, 217},  // MACRO
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+static QString cat_hex(int i) {
+    return QString("rgb(%1,%2,%3)").arg(CAT_ACCENT[i][0]).arg(CAT_ACCENT[i][1]).arg(CAT_ACCENT[i][2]);
+}
+
+static QLabel* make_sep(QWidget* parent) {
+    auto* s = new QLabel("|", parent);
+    s->setStyleSheet(QString("color:%1; font-size:11px; background:transparent;"
+                             " font-family:%2;")
+                         .arg(BORDER_MED)
+                         .arg(MONO));
+    return s;
+}
+
+static QString btn_inactive() {
+    return QString("QPushButton { background:%1; border:1px solid %2; color:%3;"
+                   " font-size:11px; font-weight:bold; font-family:%4;"
+                   " padding:0 10px; }"
+                   "QPushButton:hover { background:%5; color:%6; border-color:%7; }")
+        .arg(BG_RAISED)
+        .arg(BORDER_DIM)
+        .arg(TEXT_SEC)
+        .arg(MONO)
+        .arg(BG_HOVER)
+        .arg(TEXT_PRI)
+        .arg(BORDER_BRT);
+}
+
+static QString btn_active_amber() {
+    return QString("QPushButton { background:rgba(217,119,6,0.12); border:1px solid %1; color:%2;"
+                   " font-size:11px; font-weight:bold; font-family:%3;"
+                   " padding:0 10px; }"
+                   "QPushButton:hover { background:%2; color:#080808; }")
+        .arg(AMBER_DIM)
+        .arg(AMBER)
+        .arg(MONO);
+}
+
+static QString btn_danger() {
+    return QString("QPushButton { background:rgba(220,38,38,0.08); border:1px solid #7f1d1d; color:%1;"
+                   " font-size:11px; font-weight:bold; font-family:%2;"
+                   " padding:0 10px; }"
+                   "QPushButton:hover { background:%1; color:#e5e5e5; }")
+        .arg(NEGATIVE)
+        .arg(MONO);
+}
+
+// ── Constructor ──────────────────────────────────────────────────────────────
 SurfaceAnalyticsScreen::SurfaceAnalyticsScreen(QWidget* parent) : QWidget(parent) {
     srand((unsigned)time(nullptr));
     setup_ui();
@@ -30,79 +107,91 @@ SurfaceAnalyticsScreen::SurfaceAnalyticsScreen(QWidget* parent) : QWidget(parent
     update_metrics();
 }
 
-// ============================================================================
+// ── Layout ───────────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::setup_ui() {
-    setStyleSheet("background:#0d1117; color:#c9d1d9;");
-    auto* main_layout = new QVBoxLayout(this);
-    main_layout->setContentsMargins(0,0,0,0);
-    main_layout->setSpacing(0);
+    setStyleSheet(QString("QWidget { background:%1; color:%2; font-family:%3; }").arg(BG_BASE).arg(TEXT_PRI).arg(MONO));
 
-    // ── Row 1: category tabs + controls ──────────────────────────────────────
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+
+    // Row 1 — category bar
     category_bar_ = build_category_bar();
-    main_layout->addWidget(category_bar_);
+    root->addWidget(category_bar_);
 
-    // ── Row 2: surface chips ──────────────────────────────────────────────────
+    // Row 2 — surface chip bar
     surface_bar_ = build_surface_bar();
-    main_layout->addWidget(surface_bar_);
+    root->addWidget(surface_bar_);
 
-    // ── Content: metrics + chart ──────────────────────────────────────────────
+    // Content — metrics panel | chart area
     auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setHandleWidth(1);
-    splitter->setStyleSheet("QSplitter::handle { background:#21262d; }");
+    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(BORDER_DIM));
 
     metrics_panel_ = new SurfaceMetricsPanel(splitter);
     splitter->addWidget(metrics_panel_);
 
-    // Right side: chart on top, Databento panel below
-    auto* right_widget = new QWidget(splitter);
-    auto* right_vl = new QVBoxLayout(right_widget);
-    right_vl->setContentsMargins(0,0,0,0);
-    right_vl->setSpacing(0);
+    // Right: view stack + databento panel
+    auto* right = new QWidget(splitter);
+    right->setStyleSheet(QString("background:%1;").arg(BG_BASE));
+    auto* rvl = new QVBoxLayout(right);
+    rvl->setContentsMargins(0, 0, 0, 0);
+    rvl->setSpacing(0);
 
-    // View stack: 3D widget or table widget
-    view_stack_ = new QStackedWidget(right_widget);
-
+    view_stack_ = new QStackedWidget(right);
     surface_3d_ = new Surface3DWidget(view_stack_);
-    view_stack_->addWidget(surface_3d_);   // index 0
-
     surface_table_ = new SurfaceTableWidget(view_stack_);
-    view_stack_->addWidget(surface_table_); // index 1
+    view_stack_->addWidget(surface_3d_);    // 0
+    view_stack_->addWidget(surface_table_); // 1
+    rvl->addWidget(view_stack_, 1);
 
-    right_vl->addWidget(view_stack_, 1);
+    databento_panel_ = new SurfaceDatabentoPanel(right);
+    databento_panel_->setFixedHeight(200);
+    rvl->addWidget(databento_panel_);
 
-    // Databento panel — collapsible strip at bottom of chart area
-    databento_panel_ = new SurfaceDatabentoPanel(right_widget);
-    databento_panel_->setFixedHeight(220);
-    right_vl->addWidget(databento_panel_);
-
-    splitter->addWidget(right_widget);
+    splitter->addWidget(right);
     splitter->setStretchFactor(0, 0);
     splitter->setStretchFactor(1, 1);
 
-    main_layout->addWidget(splitter, 1);
+    root->addWidget(splitter, 1);
 }
 
-// ── Category bar ─────────────────────────────────────────────────────────────
+// ── Category bar (32px, Obsidian tab style) ──────────────────────────────────
 QWidget* SurfaceAnalyticsScreen::build_category_bar() {
     auto* bar = new QWidget(this);
-    bar->setFixedHeight(36);
-    bar->setStyleSheet("background:#010409; border-bottom:1px solid #21262d;");
+    bar->setFixedHeight(32);
+    bar->setStyleSheet(
+        QString("QWidget { background:%1; border-bottom:1px solid %2; }").arg(BG_SURFACE).arg(BORDER_DIM));
+
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(8,0,8,0);
-    hl->setSpacing(2);
+    hl->setContentsMargins(8, 0, 8, 0);
+    hl->setSpacing(0);
 
     const auto categories = get_surface_categories();
     for (int i = 0; i < (int)categories.size(); i++) {
-        auto* btn = new QPushButton(categories[i].name, bar);
-        int r = CAT_COLORS[i][0], g = CAT_COLORS[i][1], b_c = CAT_COLORS[i][2];
         bool active = (i == active_category_);
-        btn->setStyleSheet(QString(
-            "QPushButton { background:%1; color:%2; border:none; padding:4px 12px; "
-            "font-size:10px; font-weight:bold; border-radius:2px; }"
-            "QPushButton:hover { background:%3; }")
-            .arg(active ? QString("rgba(%1,%2,%3,40)").arg(r).arg(g).arg(b_c) : "transparent")
-            .arg(active ? QString("rgb(%1,%2,%3)").arg(r).arg(g).arg(b_c) : "#8b949e")
-            .arg(QString("rgba(%1,%2,%3,20)").arg(r).arg(g).arg(b_c)));
+        auto* btn = new QPushButton(categories[i].name, bar);
+        btn->setFixedHeight(32);
+
+        if (active) {
+            btn->setStyleSheet(QString("QPushButton { background:#b45309; color:#e5e5e5;"
+                                       " border:none; border-bottom:2px solid %1;"
+                                       " padding:0 14px; font-size:11px; font-weight:bold;"
+                                       " font-family:%2; }"
+                                       "QPushButton:hover { background:#b45309; }")
+                                   .arg(cat_hex(i))
+                                   .arg(MONO));
+        } else {
+            btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1;"
+                                       " border:none; padding:0 14px; font-size:11px;"
+                                       " font-family:%2; }"
+                                       "QPushButton:hover { background:%3; color:%4; }")
+                                   .arg(TEXT_TER)
+                                   .arg(MONO)
+                                   .arg(BG_RAISED)
+                                   .arg(TEXT_SEC));
+        }
+
         btn->setProperty("cat_index", i);
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_category_clicked(i); });
         hl->addWidget(btn);
@@ -110,92 +199,128 @@ QWidget* SurfaceAnalyticsScreen::build_category_bar() {
 
     hl->addStretch();
 
-    // IMPORT button
+    // Right controls — flat Obsidian buttons
     auto* import_btn = new QPushButton("IMPORT CSV", bar);
-    import_btn->setStyleSheet(
-        "QPushButton { background:rgba(31,77,153,255); color:#88bbff; border:1px solid rgba(64,140,255,100);"
-        " padding:4px 12px; font-size:10px; border-radius:2px; }"
-        "QPushButton:hover { background:rgba(46,102,191,255); }");
+    import_btn->setFixedHeight(20);
+    import_btn->setStyleSheet(btn_inactive());
     connect(import_btn, &QPushButton::clicked, this, &SurfaceAnalyticsScreen::on_import_csv);
     hl->addWidget(import_btn);
 
-    // 3D/TABLE toggle
+    hl->addSpacing(4);
+    hl->addWidget(make_sep(bar));
+    hl->addSpacing(4);
+
     btn_3d_ = new QPushButton("3D", bar);
     btn_table_ = new QPushButton("TABLE", bar);
-    for (auto* b : {btn_3d_, btn_table_}) {
-        b->setCheckable(true);
-        b->setStyleSheet(
-            "QPushButton { background:#161b22; color:#8b949e; border:1px solid #30363d;"
-            " padding:4px 10px; font-size:10px; border-radius:2px; }"
-            "QPushButton:checked { background:rgba(51,153,255,30); color:#3399ff; border-color:rgba(51,153,255,100); }"
-            "QPushButton:hover { background:#21262d; }");
-    }
+    btn_3d_->setFixedHeight(20);
+    btn_table_->setFixedHeight(20);
+    btn_3d_->setCheckable(true);
+    btn_table_->setCheckable(true);
     btn_3d_->setChecked(true);
-    connect(btn_3d_,    &QPushButton::clicked, this, &SurfaceAnalyticsScreen::on_view_3d);
+
+    auto tab_style = [&](bool checked) { return checked ? btn_active_amber() : btn_inactive(); };
+    btn_3d_->setStyleSheet(tab_style(true));
+    btn_table_->setStyleSheet(tab_style(false));
+
+    connect(btn_3d_, &QPushButton::clicked, this, &SurfaceAnalyticsScreen::on_view_3d);
     connect(btn_table_, &QPushButton::clicked, this, &SurfaceAnalyticsScreen::on_view_table);
     hl->addWidget(btn_3d_);
     hl->addWidget(btn_table_);
 
-    // REFRESH
+    hl->addSpacing(4);
+    hl->addWidget(make_sep(bar));
+    hl->addSpacing(4);
+
     auto* ref_btn = new QPushButton("REFRESH", bar);
-    ref_btn->setStyleSheet(
-        "QPushButton { background:transparent; color:#3399ff; border:1px solid #30363d;"
-        " padding:4px 10px; font-size:10px; border-radius:2px; }"
-        "QPushButton:hover { background:#21262d; }");
+    ref_btn->setFixedHeight(20);
+    ref_btn->setStyleSheet(btn_inactive());
     connect(ref_btn, &QPushButton::clicked, this, &SurfaceAnalyticsScreen::on_refresh);
     hl->addWidget(ref_btn);
 
     return bar;
 }
 
-// ── Surface chip bar ──────────────────────────────────────────────────────────
+// ── Surface chip bar (26px, hairline) ────────────────────────────────────────
 QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
     auto* bar = new QWidget(this);
-    bar->setFixedHeight(32);
-    bar->setStyleSheet("background:#0d1117; border-bottom:1px solid #21262d;");
+    bar->setFixedHeight(26);
+    bar->setStyleSheet(
+        QString("QWidget { background:%1; border-bottom:1px solid %2; }").arg(BG_SURFACE).arg(BORDER_DIM));
+
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(8,0,8,0);
-    hl->setSpacing(3);
+    hl->setContentsMargins(8, 0, 8, 0);
+    hl->setSpacing(4);
 
     const auto categories = get_surface_categories();
-    if (active_category_ >= (int)categories.size()) return bar;
+    if (active_category_ >= (int)categories.size())
+        return bar;
 
     const auto& cat = categories[active_category_];
-    int r = CAT_COLORS[active_category_][0];
-    int g = CAT_COLORS[active_category_][1];
-    int b_c = CAT_COLORS[active_category_][2];
+    const QString acol = cat_hex(active_category_);
+
+    // Category label prefix
+    auto* cat_lbl = new QLabel(QString("■ %1").arg(categories[active_category_].name), bar);
+    cat_lbl->setStyleSheet(QString("color:%1; font-size:11px; font-weight:bold; background:transparent;"
+                                   " font-family:%2;")
+                               .arg(acol)
+                               .arg(MONO));
+    hl->addWidget(cat_lbl);
+    hl->addWidget(make_sep(bar));
 
     for (int i = 0; i < (int)cat.types.size(); i++) {
-        bool act = (cat.types[i] == active_chart_);
+        bool active = (cat.types[i] == active_chart_);
         const char* name = chart_type_name(cat.types[i]);
+
         auto* btn = new QPushButton(name, bar);
-        btn->setStyleSheet(QString(
-            "QPushButton { background:%1; color:%2; border:%3; padding:3px 10px;"
-            " font-size:9px; border-radius:3px; }"
-            "QPushButton:hover { background:rgba(%4,%5,%6,20); }")
-            .arg(act ? QString("rgba(%1,%2,%3,40)").arg(r).arg(g).arg(b_c) : "#161b22")
-            .arg(act ? QString("rgb(%1,%2,%3)").arg(r).arg(g).arg(b_c) : "#8b949e")
-            .arg(act ? QString("1px solid rgba(%1,%2,%3,120)").arg(r).arg(g).arg(b_c) : "1px solid #21262d")
-            .arg(r).arg(g).arg(b_c));
+        btn->setFixedHeight(18);
+
+        if (active) {
+            btn->setStyleSheet(QString("QPushButton { background:rgba(217,119,6,0.12); border:1px solid %1; color:%2;"
+                                       " font-size:11px; font-weight:bold; font-family:%3; padding:0 8px; }"
+                                       "QPushButton:hover { background:%2; color:#080808; }")
+                                   .arg(AMBER_DIM)
+                                   .arg(AMBER)
+                                   .arg(MONO));
+        } else {
+            btn->setStyleSheet(QString("QPushButton { background:transparent; border:none; color:%1;"
+                                       " font-size:11px; font-family:%2; padding:0 8px; }"
+                                       "QPushButton:hover { color:%3; border-bottom:1px solid %4; }")
+                                   .arg(TEXT_SEC)
+                                   .arg(MONO)
+                                   .arg(TEXT_PRI)
+                                   .arg(acol));
+        }
+
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_surface_clicked(active_category_, i); });
         hl->addWidget(btn);
     }
 
     hl->addStretch();
 
-    // Symbol selector (only for equity derivatives)
+    // Symbol selector — equity derivatives only
     if (active_category_ == 0) {
+        auto* sym_lbl = new QLabel("SYM:", bar);
+        sym_lbl->setStyleSheet(
+            QString("color:%1; font-size:11px; background:transparent; font-family:%2;").arg(TEXT_SEC).arg(MONO));
+        hl->addWidget(sym_lbl);
+
         symbol_combo_ = new QComboBox(bar);
         for (int s = 0; s < N_SYMBOLS; s++)
             symbol_combo_->addItem(VOL_SYMBOLS[s]);
         symbol_combo_->setCurrentIndex(selected_symbol_);
-        symbol_combo_->setStyleSheet(
-            "QComboBox { background:#161b22; color:#c9d1d9; border:1px solid #30363d;"
-            " padding:2px 6px; font-size:10px; border-radius:2px; }"
-            "QComboBox::drop-down { border:none; }"
-            "QComboBox QAbstractItemView { background:#161b22; color:#c9d1d9; selection-background-color:#21262d; }");
-        connect(symbol_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-                this, &SurfaceAnalyticsScreen::on_symbol_changed);
+        symbol_combo_->setFixedHeight(18);
+        symbol_combo_->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                             " padding:0 6px; font-size:11px; font-family:%4; }"
+                                             "QComboBox::drop-down { border:none; }"
+                                             "QComboBox QAbstractItemView { background:%1; color:%2;"
+                                             " border:1px solid %3; selection-background-color:%5; }")
+                                         .arg(BG_RAISED)
+                                         .arg(TEXT_PRI)
+                                         .arg(BORDER_DIM)
+                                         .arg(MONO)
+                                         .arg(BG_HOVER));
+        connect(symbol_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+                &SurfaceAnalyticsScreen::on_symbol_changed);
         hl->addWidget(symbol_combo_);
     }
 
@@ -203,436 +328,587 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
 }
 
 void SurfaceAnalyticsScreen::refresh_surface_bar() {
-    // Replace old surface bar with new one
     auto* main_layout = qobject_cast<QVBoxLayout*>(layout());
-    if (!main_layout) return;
+    if (!main_layout)
+        return;
     int idx = main_layout->indexOf(surface_bar_);
-    if (idx < 0) return;
+    if (idx < 0)
+        return;
     main_layout->removeWidget(surface_bar_);
     surface_bar_->deleteLater();
     surface_bar_ = build_surface_bar();
     main_layout->insertWidget(idx, surface_bar_);
 }
 
-// ============================================================================
+// ── Data loading ─────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::load_demo_data() {
     const char* sym = VOL_SYMBOLS[selected_symbol_];
     float spot = VOL_SPOTS[selected_symbol_];
 
-    vol_data_       = generate_vol_surface(sym, spot);
-    delta_data_     = generate_delta_surface(sym, spot);
-    gamma_data_     = generate_gamma_surface(sym, spot);
-    vega_data_      = generate_vega_surface(sym, spot);
-    theta_data_     = generate_theta_surface(sym, spot);
-    skew_data_      = generate_skew_surface(sym);
+    vol_data_ = generate_vol_surface(sym, spot);
+    delta_data_ = generate_delta_surface(sym, spot);
+    gamma_data_ = generate_gamma_surface(sym, spot);
+    vega_data_ = generate_vega_surface(sym, spot);
+    theta_data_ = generate_theta_surface(sym, spot);
+    skew_data_ = generate_skew_surface(sym);
     local_vol_data_ = generate_local_vol(sym, spot);
 
-    yield_data_       = generate_yield_curve();
-    swaption_data_    = generate_swaption_vol();
-    capfloor_data_    = generate_capfloor_vol();
+    yield_data_ = generate_yield_curve();
+    swaption_data_ = generate_swaption_vol();
+    capfloor_data_ = generate_capfloor_vol();
     bond_spread_data_ = generate_bond_spread();
-    ois_data_         = generate_ois_basis();
-    real_yield_data_  = generate_real_yield();
-    fwd_rate_data_    = generate_forward_rate();
+    ois_data_ = generate_ois_basis();
+    real_yield_data_ = generate_real_yield();
+    fwd_rate_data_ = generate_forward_rate();
 
-    fx_vol_data_  = generate_fx_vol();
-    fx_fwd_data_  = generate_fx_forward_points();
-    xccy_data_    = generate_xccy_basis();
+    fx_vol_data_ = generate_fx_vol();
+    fx_fwd_data_ = generate_fx_forward_points();
+    xccy_data_ = generate_xccy_basis();
 
-    cds_data_          = generate_cds_spread();
+    cds_data_ = generate_cds_spread();
     credit_trans_data_ = generate_credit_transition();
-    recovery_data_     = generate_recovery_rate();
+    recovery_data_ = generate_recovery_rate();
 
     cmdty_fwd_data_ = generate_commodity_forward();
     cmdty_vol_data_ = generate_commodity_vol();
-    crack_data_     = generate_crack_spread();
-    contango_data_  = generate_contango();
+    crack_data_ = generate_crack_spread();
+    contango_data_ = generate_contango();
 
-    corr_data_     = generate_correlation(corr_assets_);
-    pca_data_      = generate_pca(corr_assets_);
-    var_data_      = generate_var();
-    stress_data_   = generate_stress_test();
-    factor_data_   = generate_factor_exposure(corr_assets_);
-    liquidity_data_= generate_liquidity(sym, spot);
+    corr_data_ = generate_correlation(corr_assets_);
+    pca_data_ = generate_pca(corr_assets_);
+    var_data_ = generate_var();
+    stress_data_ = generate_stress_test();
+    factor_data_ = generate_factor_exposure(corr_assets_);
+    liquidity_data_ = generate_liquidity(sym, spot);
     drawdown_data_ = generate_drawdown(corr_assets_);
-    beta_data_     = generate_beta(corr_assets_);
+    beta_data_ = generate_beta(corr_assets_);
     impl_div_data_ = generate_implied_dividend(sym, spot);
 
     inflation_data_ = generate_inflation_expectations();
-    monetary_data_  = generate_monetary_policy();
+    monetary_data_ = generate_monetary_policy();
 }
 
-// ============================================================================
-// Dispatch active surface to 3D widget
+// ── Chart routing ─────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::update_chart() {
-    if (show_table_) {
-        view_stack_->setCurrentIndex(1);
-        // Route to table
-        float mn, mx;
-        auto minmax = [&](const std::vector<std::vector<float>>& z) {
-            mn=9999; mx=-9999;
-            for (const auto& r:z) for (float v:r){mn=std::min(mn,v);mx=std::max(mx,v);}
-        };
-        switch (active_chart_) {
-        case ChartType::Volatility:
-            surface_table_->show_vol(vol_data_); break;
-        case ChartType::DeltaSurface: surface_table_->show_greeks(delta_data_); break;
-        case ChartType::GammaSurface: surface_table_->show_greeks(gamma_data_); break;
-        case ChartType::VegaSurface:  surface_table_->show_greeks(vega_data_);  break;
-        case ChartType::ThetaSurface: surface_table_->show_greeks(theta_data_); break;
-        case ChartType::Correlation:  surface_table_->show_correlation(corr_data_); break;
-        case ChartType::YieldCurve:   surface_table_->show_yield(yield_data_); break;
-        case ChartType::PCA:          surface_table_->show_pca(pca_data_); break;
-        default: {
-            // Generic — build row/col label vectors
-            std::vector<std::string> r_labels, c_labels;
-            const std::vector<std::vector<float>>* zptr = nullptr;
-            bool div = false;
-            switch (active_chart_) {
-            case ChartType::SkewSurface:
-                for (int e:skew_data_.expirations) r_labels.push_back(std::to_string(e)+"D");
-                for (float d:skew_data_.deltas) c_labels.push_back(std::to_string((int)d)+"D");
-                zptr=&skew_data_.z; div=true; break;
-            case ChartType::SwaptionVol:
-                for (int e:swaption_data_.option_expiries) r_labels.push_back(std::to_string(e)+"M");
-                for (int t:swaption_data_.swap_tenors) c_labels.push_back(std::to_string(t)+"M");
-                zptr=&swaption_data_.z; break;
-            case ChartType::BondSpread:
-                r_labels=bond_spread_data_.ratings;
-                for (int m:bond_spread_data_.maturities) c_labels.push_back(std::to_string(m)+"M");
-                zptr=&bond_spread_data_.z; break;
-            case ChartType::CDSSpread:
-                r_labels=cds_data_.entities;
-                for (int t:cds_data_.tenors) c_labels.push_back(std::to_string(t)+"M");
-                zptr=&cds_data_.z; break;
-            case ChartType::CreditTransition:
-                r_labels=credit_trans_data_.ratings;
-                c_labels=credit_trans_data_.to_ratings;
-                zptr=&credit_trans_data_.z; div=true; break;
-            case ChartType::StressTestPnL:
-                r_labels=stress_data_.scenarios;
-                c_labels=stress_data_.portfolios;
-                zptr=&stress_data_.z; div=true; break;
-            case ChartType::FactorExposure:
-                r_labels=factor_data_.assets;
-                c_labels=factor_data_.factors;
-                zptr=&factor_data_.z; div=true; break;
-            case ChartType::Drawdown:
-                r_labels=drawdown_data_.assets;
-                for (int w:drawdown_data_.windows) c_labels.push_back(std::to_string(w)+"D");
-                zptr=&drawdown_data_.z; break;
-            case ChartType::BetaSurface:
-                r_labels=beta_data_.assets;
-                for (int h:beta_data_.horizons) c_labels.push_back(std::to_string(h)+"D");
-                zptr=&beta_data_.z; div=true; break;
-            case ChartType::CommodityForward:
-                r_labels=cmdty_fwd_data_.commodities;
-                for (int m:cmdty_fwd_data_.contract_months) c_labels.push_back("M"+std::to_string(m));
-                zptr=&cmdty_fwd_data_.z; break;
-            case ChartType::ContangoBackwardation:
-                r_labels=contango_data_.commodities;
-                for (int m:contango_data_.contract_months) c_labels.push_back("M"+std::to_string(m));
-                zptr=&contango_data_.z; div=true; break;
-            case ChartType::MonetaryPolicyPath:
-                r_labels=monetary_data_.central_banks;
-                for (int m:monetary_data_.meetings_ahead) c_labels.push_back("Mtg"+std::to_string(m));
-                zptr=&monetary_data_.z; break;
-            default: break;
+    auto minmax = [](const std::vector<std::vector<float>>& z, float& mn, float& mx) {
+        mn = 9999;
+        mx = -9999;
+        for (const auto& row : z)
+            for (float v : row) {
+                mn = std::min(mn, v);
+                mx = std::max(mx, v);
             }
-            if (zptr && !zptr->empty()) {
-                minmax(*zptr);
-                surface_table_->show_generic_matrix(r_labels, c_labels, *zptr, mn, mx, div);
-            }
-            break;
-        }
-        }
-        return;
-    }
+    };
 
-    // ---- 3D mode ----
-    view_stack_->setCurrentIndex(0);
-
-    char lb[32];
     auto fmt_strikes = [](const std::vector<float>& s) {
         std::vector<std::string> v;
-        for (float f : s) { char b[16]; std::snprintf(b,16,"$%.0f",f); v.push_back(b); }
+        for (float f : s) {
+            char b[16];
+            std::snprintf(b, 16, "$%.0f", f);
+            v.push_back(b);
+        }
         return v;
     };
     auto fmt_dtes = [](const std::vector<int>& s) {
         std::vector<std::string> v;
-        for (int i : s) { char b[16]; std::snprintf(b,16,"%dD",i); v.push_back(b); }
+        for (int i : s) {
+            char b[16];
+            std::snprintf(b, 16, "%dD", i);
+            v.push_back(b);
+        }
         return v;
     };
     auto fmt_months = [](const std::vector<int>& s) {
         std::vector<std::string> v;
-        for (int i : s) { char b[16]; std::snprintf(b,16,"%dM",i); v.push_back(b); }
+        for (int i : s) {
+            char b[16];
+            std::snprintf(b, 16, "%dM", i);
+            v.push_back(b);
+        }
         return v;
     };
-    auto minmax = [](const std::vector<std::vector<float>>& z, float& mn, float& mx) {
-        mn=9999; mx=-9999;
-        for (const auto& r:z) for (float v:r){mn=std::min(mn,v);mx=std::max(mx,v);}
-    };
-    float mn,mx;
+
+    float mn, mx;
+
+    if (show_table_) {
+        view_stack_->setCurrentIndex(1);
+
+        switch (active_chart_) {
+            case ChartType::Volatility:
+                surface_table_->show_vol(vol_data_);
+                return;
+            case ChartType::DeltaSurface:
+                surface_table_->show_greeks(delta_data_);
+                return;
+            case ChartType::GammaSurface:
+                surface_table_->show_greeks(gamma_data_);
+                return;
+            case ChartType::VegaSurface:
+                surface_table_->show_greeks(vega_data_);
+                return;
+            case ChartType::ThetaSurface:
+                surface_table_->show_greeks(theta_data_);
+                return;
+            case ChartType::Correlation:
+                surface_table_->show_correlation(corr_data_);
+                return;
+            case ChartType::YieldCurve:
+                surface_table_->show_yield(yield_data_);
+                return;
+            case ChartType::PCA:
+                surface_table_->show_pca(pca_data_);
+                return;
+            default:
+                break;
+        }
+
+        // Generic table fallback
+        std::vector<std::string> r_labels, c_labels;
+        const std::vector<std::vector<float>>* zptr = nullptr;
+        bool div = false;
+
+        switch (active_chart_) {
+            case ChartType::SkewSurface:
+                for (int e : skew_data_.expirations)
+                    r_labels.push_back(std::to_string(e) + "D");
+                for (float d : skew_data_.deltas)
+                    c_labels.push_back(std::to_string((int)d) + "D");
+                zptr = &skew_data_.z;
+                div = true;
+                break;
+            case ChartType::SwaptionVol:
+                for (int e : swaption_data_.option_expiries)
+                    r_labels.push_back(std::to_string(e) + "M");
+                for (int t : swaption_data_.swap_tenors)
+                    c_labels.push_back(std::to_string(t) + "M");
+                zptr = &swaption_data_.z;
+                break;
+            case ChartType::BondSpread:
+                r_labels = bond_spread_data_.ratings;
+                for (int m : bond_spread_data_.maturities)
+                    c_labels.push_back(std::to_string(m) + "M");
+                zptr = &bond_spread_data_.z;
+                break;
+            case ChartType::CDSSpread:
+                r_labels = cds_data_.entities;
+                for (int t : cds_data_.tenors)
+                    c_labels.push_back(std::to_string(t) + "M");
+                zptr = &cds_data_.z;
+                break;
+            case ChartType::CreditTransition:
+                r_labels = credit_trans_data_.ratings;
+                c_labels = credit_trans_data_.to_ratings;
+                zptr = &credit_trans_data_.z;
+                div = true;
+                break;
+            case ChartType::StressTestPnL:
+                r_labels = stress_data_.scenarios;
+                c_labels = stress_data_.portfolios;
+                zptr = &stress_data_.z;
+                div = true;
+                break;
+            case ChartType::FactorExposure:
+                r_labels = factor_data_.assets;
+                c_labels = factor_data_.factors;
+                zptr = &factor_data_.z;
+                div = true;
+                break;
+            case ChartType::Drawdown:
+                r_labels = drawdown_data_.assets;
+                for (int w : drawdown_data_.windows)
+                    c_labels.push_back(std::to_string(w) + "D");
+                zptr = &drawdown_data_.z;
+                break;
+            case ChartType::BetaSurface:
+                r_labels = beta_data_.assets;
+                for (int h : beta_data_.horizons)
+                    c_labels.push_back(std::to_string(h) + "D");
+                zptr = &beta_data_.z;
+                div = true;
+                break;
+            case ChartType::CommodityForward:
+                r_labels = cmdty_fwd_data_.commodities;
+                for (int m : cmdty_fwd_data_.contract_months)
+                    c_labels.push_back("M" + std::to_string(m));
+                zptr = &cmdty_fwd_data_.z;
+                break;
+            case ChartType::ContangoBackwardation:
+                r_labels = contango_data_.commodities;
+                for (int m : contango_data_.contract_months)
+                    c_labels.push_back("M" + std::to_string(m));
+                zptr = &contango_data_.z;
+                div = true;
+                break;
+            case ChartType::MonetaryPolicyPath:
+                r_labels = monetary_data_.central_banks;
+                for (int m : monetary_data_.meetings_ahead)
+                    c_labels.push_back("Mtg" + std::to_string(m));
+                zptr = &monetary_data_.z;
+                break;
+            default:
+                break;
+        }
+
+        if (zptr && !zptr->empty()) {
+            minmax(*zptr, mn, mx);
+            surface_table_->show_generic_matrix(r_labels, c_labels, *zptr, mn, mx, div);
+        }
+        return;
+    }
+
+    // ── 3D mode ───────────────────────────────────────────────────────────────
+    view_stack_->setCurrentIndex(0);
 
     switch (active_chart_) {
-    case ChartType::Volatility: {
-        minmax(vol_data_.z,mn,mx);
-        auto sl=fmt_strikes(vol_data_.strikes), dl=fmt_dtes(vol_data_.expirations);
-        surface_3d_->set_surface(vol_data_.z,"STRIKE","IV %","DTE",mn,mx,false,&sl,&dl); break;
-    }
-    case ChartType::DeltaSurface: {
-        minmax(delta_data_.z,mn,mx);
-        auto sl=fmt_strikes(delta_data_.strikes), dl=fmt_dtes(delta_data_.expirations);
-        surface_3d_->set_surface(delta_data_.z,"STRIKE","DELTA","DTE",mn,mx,false,&sl,&dl); break;
-    }
-    case ChartType::GammaSurface: {
-        minmax(gamma_data_.z,mn,mx);
-        auto sl=fmt_strikes(gamma_data_.strikes), dl=fmt_dtes(gamma_data_.expirations);
-        surface_3d_->set_surface(gamma_data_.z,"STRIKE","GAMMA","DTE",mn,mx,false,&sl,&dl); break;
-    }
-    case ChartType::VegaSurface: {
-        minmax(vega_data_.z,mn,mx);
-        auto sl=fmt_strikes(vega_data_.strikes), dl=fmt_dtes(vega_data_.expirations);
-        surface_3d_->set_surface(vega_data_.z,"STRIKE","VEGA","DTE",mn,mx,false,&sl,&dl); break;
-    }
-    case ChartType::ThetaSurface: {
-        minmax(theta_data_.z,mn,mx);
-        auto sl=fmt_strikes(theta_data_.strikes), dl=fmt_dtes(theta_data_.expirations);
-        surface_3d_->set_surface(theta_data_.z,"STRIKE","THETA","DTE",mn,mx,true,&sl,&dl); break;
-    }
-    case ChartType::SkewSurface: {
-        minmax(skew_data_.z,mn,mx);
-        std::vector<std::string> dl,sl;
-        for(float d:skew_data_.deltas){char b[16];std::snprintf(b,16,"%dD",(int)d);dl.push_back(b);}
-        for(int e:skew_data_.expirations){char b[16];std::snprintf(b,16,"%dD",e);sl.push_back(b);}
-        surface_3d_->set_surface(skew_data_.z,"DELTA","SKEW %","DTE",mn,mx,true,&dl,&sl); break;
-    }
-    case ChartType::LocalVolSurface: {
-        minmax(local_vol_data_.z,mn,mx);
-        auto sl=fmt_strikes(local_vol_data_.strikes), dl=fmt_dtes(local_vol_data_.expirations);
-        surface_3d_->set_surface(local_vol_data_.z,"STRIKE","LV %","DTE",mn,mx,false,&sl,&dl); break;
-    }
-    case ChartType::YieldCurve: {
-        minmax(yield_data_.z,mn,mx);
-        std::vector<std::string> ml;
-        for(int m:yield_data_.maturities){char b[16];std::snprintf(b,16,"%dM",m);ml.push_back(b);}
-        surface_3d_->set_surface(yield_data_.z,"MATURITY","YIELD %","TIME",mn,mx,false,&ml,nullptr); break;
-    }
-    case ChartType::SwaptionVol: {
-        minmax(swaption_data_.z,mn,mx);
-        auto tl=fmt_months(swaption_data_.swap_tenors), el=fmt_months(swaption_data_.option_expiries);
-        surface_3d_->set_surface(swaption_data_.z,"TENOR","VOL bp","EXPIRY",mn,mx,false,&tl,&el); break;
-    }
-    case ChartType::BondSpread: {
-        minmax(bond_spread_data_.z,mn,mx);
-        auto ml=fmt_months(bond_spread_data_.maturities);
-        surface_3d_->set_surface(bond_spread_data_.z,"MATURITY","SPREAD bp","RATING",mn,mx,false,&ml,nullptr); break;
-    }
-    case ChartType::FXVol: {
-        minmax(fx_vol_data_.z,mn,mx);
-        std::vector<std::string> dl,tl;
-        for(float d:fx_vol_data_.deltas){char b[16];std::snprintf(b,16,"%dD",(int)d);dl.push_back(b);}
-        for(int t:fx_vol_data_.tenors){char b[16];std::snprintf(b,16,"%dD",t);tl.push_back(b);}
-        surface_3d_->set_surface(fx_vol_data_.z,"TENOR","VOL %","DELTA",mn,mx,false,&dl,&tl); break;
-    }
-    case ChartType::CDSSpread: {
-        minmax(cds_data_.z,mn,mx);
-        auto tl=fmt_months(cds_data_.tenors);
-        surface_3d_->set_surface(cds_data_.z,"TENOR","SPREAD bp","ENTITY",mn,mx,false,&tl,nullptr); break;
-    }
-    case ChartType::CreditTransition: {
-        minmax(credit_trans_data_.z,mn,mx);
-        surface_3d_->set_surface(credit_trans_data_.z,"TO RATING","PROB %","FROM RATING",mn,mx,false); break;
-    }
-    case ChartType::Correlation: {
-        // Use last time-slice as a square matrix
-        int n = (int)corr_data_.assets.size();
-        if (!corr_data_.z.empty()) {
-            std::vector<std::vector<float>> mat(n, std::vector<float>(n));
-            const auto& last = corr_data_.z.back();
-            for(int i=0;i<n;i++) for(int j=0;j<n;j++) mat[i][j]=last[i*n+j];
-            surface_3d_->set_surface(mat,"ASSET j","CORR","ASSET i",-1.0f,1.0f,true);
+        case ChartType::Volatility: {
+            minmax(vol_data_.z, mn, mx);
+            auto sl = fmt_strikes(vol_data_.strikes), dl = fmt_dtes(vol_data_.expirations);
+            surface_3d_->set_surface(vol_data_.z, "STRIKE", "IV %", "DTE", mn, mx, false, &sl, &dl);
+            break;
         }
-        break;
-    }
-    case ChartType::PCA: {
-        minmax(pca_data_.z,mn,mx);
-        surface_3d_->set_surface(pca_data_.z,"FACTOR","LOADING","ASSET",mn,mx,true); break;
-    }
-    case ChartType::VaR: {
-        minmax(var_data_.z,mn,mx);
-        std::vector<std::string> hl2;
-        for(int h:var_data_.horizons){char b[16];std::snprintf(b,16,"%dD",h);hl2.push_back(b);}
-        surface_3d_->set_surface(var_data_.z,"HORIZON","VaR %","CONFIDENCE",mn,mx,false,&hl2,nullptr); break;
-    }
-    case ChartType::StressTestPnL: {
-        minmax(stress_data_.z,mn,mx);
-        surface_3d_->set_surface(stress_data_.z,"PORTFOLIO","P&L %","SCENARIO",mn,mx,true); break;
-    }
-    case ChartType::FactorExposure: {
-        minmax(factor_data_.z,mn,mx);
-        surface_3d_->set_surface(factor_data_.z,"FACTOR","EXPOSURE","ASSET",mn,mx,true); break;
-    }
-    case ChartType::LiquidityHeatmap: {
-        minmax(liquidity_data_.z,mn,mx);
-        auto sl=fmt_strikes(liquidity_data_.strikes), dl=fmt_dtes(liquidity_data_.expirations);
-        surface_3d_->set_surface(liquidity_data_.z,"STRIKE","SPREAD","DTE",mn,mx,false,&sl,&dl); break;
-    }
-    case ChartType::Drawdown: {
-        minmax(drawdown_data_.z,mn,mx);
-        std::vector<std::string> wl;
-        for(int w:drawdown_data_.windows){char b[16];std::snprintf(b,16,"%dD",w);wl.push_back(b);}
-        surface_3d_->set_surface(drawdown_data_.z,"WINDOW","DRAWDOWN %","ASSET",mn,mx,false,&wl,nullptr); break;
-    }
-    case ChartType::BetaSurface: {
-        minmax(beta_data_.z,mn,mx);
-        std::vector<std::string> hl2;
-        for(int h:beta_data_.horizons){char b[16];std::snprintf(b,16,"%dD",h);hl2.push_back(b);}
-        surface_3d_->set_surface(beta_data_.z,"HORIZON","BETA","ASSET",mn,mx,true,&hl2,nullptr); break;
-    }
-    case ChartType::ImpliedDividend: {
-        minmax(impl_div_data_.z,mn,mx);
-        auto sl=fmt_strikes(impl_div_data_.strikes), dl=fmt_dtes(impl_div_data_.expirations);
-        surface_3d_->set_surface(impl_div_data_.z,"STRIKE","DIV YIELD %","DTE",mn,mx,false,&sl,&dl); break;
-    }
-    case ChartType::CommodityForward: {
-        minmax(cmdty_fwd_data_.z,mn,mx);
-        std::vector<std::string> ml;
-        for(int m:cmdty_fwd_data_.contract_months){char b[16];std::snprintf(b,16,"M%d",m);ml.push_back(b);}
-        surface_3d_->set_surface(cmdty_fwd_data_.z,"CONTRACT","PRICE","COMMODITY",mn,mx,false,&ml,nullptr); break;
-    }
-    case ChartType::CommodityVol: {
-        minmax(cmdty_vol_data_.z,mn,mx);
-        auto sl=fmt_strikes(cmdty_vol_data_.strikes), dl=fmt_dtes(cmdty_vol_data_.expirations);
-        surface_3d_->set_surface(cmdty_vol_data_.z,"STRIKE","VOL %","DTE",mn,mx,false,&sl,&dl); break;
-    }
-    case ChartType::CrackSpread: {
-        minmax(crack_data_.z,mn,mx);
-        std::vector<std::string> ml;
-        for(int m:crack_data_.contract_months){char b[16];std::snprintf(b,16,"M%d",m);ml.push_back(b);}
-        surface_3d_->set_surface(crack_data_.z,"CONTRACT","SPREAD","TYPE",mn,mx,true,&ml,nullptr); break;
-    }
-    case ChartType::ContangoBackwardation: {
-        minmax(contango_data_.z,mn,mx);
-        std::vector<std::string> ml;
-        for(int m:contango_data_.contract_months){char b[16];std::snprintf(b,16,"M%d",m);ml.push_back(b);}
-        surface_3d_->set_surface(contango_data_.z,"CONTRACT","% FROM SPOT","COMMODITY",mn,mx,true,&ml,nullptr); break;
-    }
-    case ChartType::OISBasis: {
-        minmax(ois_data_.z,mn,mx);
-        auto tl=fmt_months(ois_data_.tenors);
-        surface_3d_->set_surface(ois_data_.z,"TENOR","BASIS bp","TIME",mn,mx,true,&tl,nullptr); break;
-    }
-    case ChartType::RealYield: {
-        minmax(real_yield_data_.z,mn,mx);
-        auto ml=fmt_months(real_yield_data_.maturities);
-        surface_3d_->set_surface(real_yield_data_.z,"MATURITY","REAL YIELD %","TIME",mn,mx,false,&ml,nullptr); break;
-    }
-    case ChartType::ForwardRate: {
-        minmax(fwd_rate_data_.z,mn,mx);
-        auto pl=fmt_months(fwd_rate_data_.forward_periods);
-        surface_3d_->set_surface(fwd_rate_data_.z,"FWD PERIOD","RATE %","START",mn,mx,false,&pl,nullptr); break;
-    }
-    case ChartType::FXForwardPoints: {
-        minmax(fx_fwd_data_.z,mn,mx);
-        auto tl=fmt_months(fx_fwd_data_.tenors);
-        surface_3d_->set_surface(fx_fwd_data_.z,"TENOR","FWD PTS","PAIR",mn,mx,true,&tl,nullptr); break;
-    }
-    case ChartType::CrossCurrencyBasis: {
-        minmax(xccy_data_.z,mn,mx);
-        auto tl=fmt_months(xccy_data_.tenors);
-        surface_3d_->set_surface(xccy_data_.z,"TENOR","BASIS bp","PAIR",mn,mx,true,&tl,nullptr); break;
-    }
-    case ChartType::RecoveryRate: {
-        minmax(recovery_data_.z,mn,mx);
-        surface_3d_->set_surface(recovery_data_.z,"SENIORITY","RECOVERY %","SECTOR",mn,mx,false); break;
-    }
-    case ChartType::CapFloorVol: {
-        minmax(capfloor_data_.z,mn,mx);
-        std::vector<std::string> sl2;
-        for(float s:capfloor_data_.strikes){char b[16];std::snprintf(b,16,"%.1f%%",s);sl2.push_back(b);}
-        auto ml2=fmt_months(capfloor_data_.maturities);
-        surface_3d_->set_surface(capfloor_data_.z,"STRIKE","VOL bp","MATURITY",mn,mx,false,&sl2,&ml2); break;
-    }
-    case ChartType::InflationExpectations: {
-        minmax(inflation_data_.z,mn,mx);
-        std::vector<std::string> hl2;
-        for(int h:inflation_data_.horizons){char b[16];std::snprintf(b,16,"%dY",h);hl2.push_back(b);}
-        surface_3d_->set_surface(inflation_data_.z,"HORIZON","BREAKEVEN %","TIME",mn,mx,false,&hl2,nullptr); break;
-    }
-    case ChartType::MonetaryPolicyPath: {
-        minmax(monetary_data_.z,mn,mx);
-        std::vector<std::string> ml;
-        for(int m:monetary_data_.meetings_ahead){char b[16];std::snprintf(b,16,"Mtg%d",m);ml.push_back(b);}
-        surface_3d_->set_surface(monetary_data_.z,"MEETING","RATE %","CENTRAL BANK",mn,mx,false,&ml,nullptr); break;
-    }
-    default:
-        surface_3d_->clear();
-        break;
+        case ChartType::DeltaSurface: {
+            minmax(delta_data_.z, mn, mx);
+            auto sl = fmt_strikes(delta_data_.strikes), dl = fmt_dtes(delta_data_.expirations);
+            surface_3d_->set_surface(delta_data_.z, "STRIKE", "DELTA", "DTE", mn, mx, false, &sl, &dl);
+            break;
+        }
+        case ChartType::GammaSurface: {
+            minmax(gamma_data_.z, mn, mx);
+            auto sl = fmt_strikes(gamma_data_.strikes), dl = fmt_dtes(gamma_data_.expirations);
+            surface_3d_->set_surface(gamma_data_.z, "STRIKE", "GAMMA", "DTE", mn, mx, false, &sl, &dl);
+            break;
+        }
+        case ChartType::VegaSurface: {
+            minmax(vega_data_.z, mn, mx);
+            auto sl = fmt_strikes(vega_data_.strikes), dl = fmt_dtes(vega_data_.expirations);
+            surface_3d_->set_surface(vega_data_.z, "STRIKE", "VEGA", "DTE", mn, mx, false, &sl, &dl);
+            break;
+        }
+        case ChartType::ThetaSurface: {
+            minmax(theta_data_.z, mn, mx);
+            auto sl = fmt_strikes(theta_data_.strikes), dl = fmt_dtes(theta_data_.expirations);
+            surface_3d_->set_surface(theta_data_.z, "STRIKE", "THETA", "DTE", mn, mx, true, &sl, &dl);
+            break;
+        }
+        case ChartType::SkewSurface: {
+            minmax(skew_data_.z, mn, mx);
+            std::vector<std::string> dl, sl;
+            for (float d : skew_data_.deltas) {
+                char b[16];
+                std::snprintf(b, 16, "%dD", (int)d);
+                dl.push_back(b);
+            }
+            for (int e : skew_data_.expirations) {
+                char b[16];
+                std::snprintf(b, 16, "%dD", e);
+                sl.push_back(b);
+            }
+            surface_3d_->set_surface(skew_data_.z, "DELTA", "SKEW %", "DTE", mn, mx, true, &dl, &sl);
+            break;
+        }
+        case ChartType::LocalVolSurface: {
+            minmax(local_vol_data_.z, mn, mx);
+            auto sl = fmt_strikes(local_vol_data_.strikes), dl = fmt_dtes(local_vol_data_.expirations);
+            surface_3d_->set_surface(local_vol_data_.z, "STRIKE", "LV %", "DTE", mn, mx, false, &sl, &dl);
+            break;
+        }
+        case ChartType::YieldCurve: {
+            minmax(yield_data_.z, mn, mx);
+            std::vector<std::string> ml;
+            for (int m : yield_data_.maturities) {
+                char b[16];
+                std::snprintf(b, 16, "%dM", m);
+                ml.push_back(b);
+            }
+            surface_3d_->set_surface(yield_data_.z, "MATURITY", "YIELD %", "TIME", mn, mx, false, &ml, nullptr);
+            break;
+        }
+        case ChartType::SwaptionVol: {
+            minmax(swaption_data_.z, mn, mx);
+            auto tl = fmt_months(swaption_data_.swap_tenors), el = fmt_months(swaption_data_.option_expiries);
+            surface_3d_->set_surface(swaption_data_.z, "TENOR", "VOL bp", "EXPIRY", mn, mx, false, &tl, &el);
+            break;
+        }
+        case ChartType::CapFloorVol: {
+            minmax(capfloor_data_.z, mn, mx);
+            auto tl = fmt_months(capfloor_data_.maturities);
+            auto sl = fmt_strikes(capfloor_data_.strikes);
+            surface_3d_->set_surface(capfloor_data_.z, "MATURITY", "VOL bp", "STRIKE", mn, mx, false, &tl, &sl);
+            break;
+        }
+        case ChartType::BondSpread: {
+            minmax(bond_spread_data_.z, mn, mx);
+            auto ml = fmt_months(bond_spread_data_.maturities);
+            surface_3d_->set_surface(bond_spread_data_.z, "MATURITY", "SPREAD bp", "RATING", mn, mx, false, &ml,
+                                     nullptr);
+            break;
+        }
+        case ChartType::OISBasis: {
+            minmax(ois_data_.z, mn, mx);
+            auto tl = fmt_months(ois_data_.tenors);
+            surface_3d_->set_surface(ois_data_.z, "TENOR", "BASIS bp", "TIME", mn, mx, true, &tl, nullptr);
+            break;
+        }
+        case ChartType::RealYield: {
+            minmax(real_yield_data_.z, mn, mx);
+            auto ml = fmt_months(real_yield_data_.maturities);
+            surface_3d_->set_surface(real_yield_data_.z, "MATURITY", "REAL YLD %", "TIME", mn, mx, true, &ml, nullptr);
+            break;
+        }
+        case ChartType::ForwardRate: {
+            minmax(fwd_rate_data_.z, mn, mx);
+            auto tl = fmt_months(fwd_rate_data_.start_tenors);
+            auto fl = fmt_months(fwd_rate_data_.forward_periods);
+            surface_3d_->set_surface(fwd_rate_data_.z, "START TENOR", "FWD RATE %", "FWD PERIOD", mn, mx, false, &tl,
+                                     &fl);
+            break;
+        }
+        case ChartType::FXVol: {
+            minmax(fx_vol_data_.z, mn, mx);
+            std::vector<std::string> dl, tl;
+            for (float d : fx_vol_data_.deltas) {
+                char b[16];
+                std::snprintf(b, 16, "%dD", (int)d);
+                dl.push_back(b);
+            }
+            for (int t : fx_vol_data_.tenors) {
+                char b[16];
+                std::snprintf(b, 16, "%dD", t);
+                tl.push_back(b);
+            }
+            surface_3d_->set_surface(fx_vol_data_.z, "TENOR", "VOL %", "DELTA", mn, mx, false, &dl, &tl);
+            break;
+        }
+        case ChartType::FXForwardPoints: {
+            minmax(fx_fwd_data_.z, mn, mx);
+            auto tl = fmt_months(fx_fwd_data_.tenors);
+            surface_3d_->set_surface(fx_fwd_data_.z, "TENOR", "FWD PTS", "PAIR", mn, mx, true, &tl, nullptr);
+            break;
+        }
+        case ChartType::CrossCurrencyBasis: {
+            minmax(xccy_data_.z, mn, mx);
+            auto tl = fmt_months(xccy_data_.tenors);
+            surface_3d_->set_surface(xccy_data_.z, "TENOR", "BASIS bp", "PAIR", mn, mx, true, &tl, nullptr);
+            break;
+        }
+        case ChartType::CDSSpread: {
+            minmax(cds_data_.z, mn, mx);
+            auto tl = fmt_months(cds_data_.tenors);
+            surface_3d_->set_surface(cds_data_.z, "TENOR", "SPREAD bp", "ENTITY", mn, mx, false, &tl, nullptr);
+            break;
+        }
+        case ChartType::CreditTransition: {
+            minmax(credit_trans_data_.z, mn, mx);
+            surface_3d_->set_surface(credit_trans_data_.z, "TO RATING", "PROB %", "FROM RATING", mn, mx, false);
+            break;
+        }
+        case ChartType::RecoveryRate: {
+            minmax(recovery_data_.z, mn, mx);
+            surface_3d_->set_surface(recovery_data_.z, "SECTOR", "RECOVERY %", "SENIORITY", mn, mx, false);
+            break;
+        }
+        case ChartType::CommodityForward: {
+            minmax(cmdty_fwd_data_.z, mn, mx);
+            std::vector<std::string> ml;
+            for (int m : cmdty_fwd_data_.contract_months) {
+                char b[8];
+                std::snprintf(b, 8, "M%d", m);
+                ml.push_back(b);
+            }
+            surface_3d_->set_surface(cmdty_fwd_data_.z, "CONTRACT", "PRICE", "COMMODITY", mn, mx, false, &ml, nullptr);
+            break;
+        }
+        case ChartType::CommodityVol: {
+            minmax(cmdty_vol_data_.z, mn, mx);
+            auto sl = fmt_strikes(cmdty_vol_data_.strikes);
+            auto el = fmt_dtes(cmdty_vol_data_.expirations);
+            surface_3d_->set_surface(cmdty_vol_data_.z, "STRIKE", "VOL %", "EXPIRY", mn, mx, false, &sl, &el);
+            break;
+        }
+        case ChartType::CrackSpread: {
+            minmax(crack_data_.z, mn, mx);
+            std::vector<std::string> ml;
+            for (int m : crack_data_.contract_months) {
+                char b[8];
+                std::snprintf(b, 8, "M%d", m);
+                ml.push_back(b);
+            }
+            surface_3d_->set_surface(crack_data_.z, "CONTRACT", "SPREAD $/bbl", "PRODUCT", mn, mx, true, &ml, nullptr);
+            break;
+        }
+        case ChartType::ContangoBackwardation: {
+            minmax(contango_data_.z, mn, mx);
+            std::vector<std::string> ml;
+            for (int m : contango_data_.contract_months) {
+                char b[8];
+                std::snprintf(b, 8, "M%d", m);
+                ml.push_back(b);
+            }
+            surface_3d_->set_surface(contango_data_.z, "CONTRACT", "ROLL %", "COMMODITY", mn, mx, true, &ml, nullptr);
+            break;
+        }
+        case ChartType::Correlation: {
+            int n = (int)corr_data_.assets.size();
+            if (corr_data_.z.empty() || (int)corr_data_.z.size() < n)
+                break;
+            std::vector<std::vector<float>> slice(n, std::vector<float>(n));
+            for (int r = 0; r < n; r++)
+                for (int c = 0; c < n; c++)
+                    slice[r][c] = corr_data_.z[r][c];
+            surface_3d_->set_surface(slice, "ASSET", "CORR", "ASSET", -1.f, 1.f, true);
+            break;
+        }
+        case ChartType::PCA: {
+            minmax(pca_data_.z, mn, mx);
+            surface_3d_->set_surface(pca_data_.z, "ASSET", "LOADING", "PC", mn, mx, true);
+            break;
+        }
+        case ChartType::VaR: {
+            minmax(var_data_.z, mn, mx);
+            surface_3d_->set_surface(var_data_.z, "HORIZON", "VaR %", "CONFIDENCE", mn, mx, false);
+            break;
+        }
+        case ChartType::StressTestPnL: {
+            minmax(stress_data_.z, mn, mx);
+            surface_3d_->set_surface(stress_data_.z, "PORTFOLIO", "P&L %", "SCENARIO", mn, mx, true);
+            break;
+        }
+        case ChartType::FactorExposure: {
+            minmax(factor_data_.z, mn, mx);
+            surface_3d_->set_surface(factor_data_.z, "FACTOR", "EXPOSURE", "ASSET", mn, mx, true);
+            break;
+        }
+        case ChartType::LiquidityHeatmap: {
+            minmax(liquidity_data_.z, mn, mx);
+            surface_3d_->set_surface(liquidity_data_.z, "TIME", "BID-ASK bp", "STRIKE", mn, mx, false);
+            break;
+        }
+        case ChartType::Drawdown: {
+            minmax(drawdown_data_.z, mn, mx);
+            std::vector<std::string> wl;
+            for (int w : drawdown_data_.windows) {
+                char b[8];
+                std::snprintf(b, 8, "%dD", w);
+                wl.push_back(b);
+            }
+            surface_3d_->set_surface(drawdown_data_.z, "WINDOW", "DRAWDOWN %", "ASSET", mn, mx, false, &wl, nullptr);
+            break;
+        }
+        case ChartType::BetaSurface: {
+            minmax(beta_data_.z, mn, mx);
+            std::vector<std::string> hl2;
+            for (int h : beta_data_.horizons) {
+                char b[8];
+                std::snprintf(b, 8, "%dD", h);
+                hl2.push_back(b);
+            }
+            surface_3d_->set_surface(beta_data_.z, "HORIZON", "BETA", "ASSET", mn, mx, true, &hl2, nullptr);
+            break;
+        }
+        case ChartType::ImpliedDividend: {
+            minmax(impl_div_data_.z, mn, mx);
+            auto el = fmt_dtes(impl_div_data_.expirations);
+            surface_3d_->set_surface(impl_div_data_.z, "EXPIRY", "DIV $", "SERIES", mn, mx, false, &el, nullptr);
+            break;
+        }
+        case ChartType::InflationExpectations: {
+            minmax(inflation_data_.z, mn, mx);
+            std::vector<std::string> hl;
+            for (int h : inflation_data_.horizons) {
+                char b[8];
+                std::snprintf(b, 8, "%dY", h);
+                hl.push_back(b);
+            }
+            surface_3d_->set_surface(inflation_data_.z, "HORIZON", "BREAKEVEN %", "TIME", mn, mx, false, &hl, nullptr);
+            break;
+        }
+        case ChartType::MonetaryPolicyPath: {
+            minmax(monetary_data_.z, mn, mx);
+            std::vector<std::string> ml;
+            for (int m : monetary_data_.meetings_ahead) {
+                char b[8];
+                std::snprintf(b, 8, "Mtg%d", m);
+                ml.push_back(b);
+            }
+            surface_3d_->set_surface(monetary_data_.z, "MEETING", "RATE %", "CENTRAL BANK", mn, mx, false, &ml,
+                                     nullptr);
+            break;
+        }
+        default:
+            surface_3d_->clear();
+            break;
     }
 }
 
+// ── Metrics routing ───────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::update_metrics() {
-    metrics_panel_->update_metrics(active_chart_,
-        vol_data_, delta_data_, gamma_data_, vega_data_, theta_data_,
-        skew_data_, local_vol_data_, yield_data_, swaption_data_, capfloor_data_,
-        bond_spread_data_, ois_data_, real_yield_data_, fwd_rate_data_,
-        fx_vol_data_, fx_fwd_data_, xccy_data_, cds_data_, credit_trans_data_,
-        recovery_data_, cmdty_fwd_data_, cmdty_vol_data_, crack_data_, contango_data_,
-        corr_data_, pca_data_, var_data_, stress_data_, factor_data_,
-        liquidity_data_, drawdown_data_, beta_data_, impl_div_data_,
-        inflation_data_, monetary_data_);
+    metrics_panel_->update_metrics(
+        active_chart_, vol_data_, delta_data_, gamma_data_, vega_data_, theta_data_, skew_data_, local_vol_data_,
+        yield_data_, swaption_data_, capfloor_data_, bond_spread_data_, ois_data_, real_yield_data_, fwd_rate_data_,
+        fx_vol_data_, fx_fwd_data_, xccy_data_, cds_data_, credit_trans_data_, recovery_data_, cmdty_fwd_data_,
+        cmdty_vol_data_, crack_data_, contango_data_, corr_data_, pca_data_, var_data_, stress_data_, factor_data_,
+        liquidity_data_, drawdown_data_, beta_data_, impl_div_data_, inflation_data_, monetary_data_);
 }
 
-// ============================================================================
-// Slot handlers
+// ── Slots ─────────────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::on_category_clicked(int index) {
-    if (index == active_category_) return;
     active_category_ = index;
     const auto cats = get_surface_categories();
-    active_chart_ = cats[index].types[0];
+    if (!cats.empty() && index < (int)cats.size())
+        active_chart_ = cats[index].types[0];
 
-    // Rebuild category bar to update active styling
+    // Rebuild both bars
     auto* main_layout = qobject_cast<QVBoxLayout*>(layout());
     if (main_layout) {
-        int idx = main_layout->indexOf(category_bar_);
-        main_layout->removeWidget(category_bar_);
-        category_bar_->deleteLater();
-        category_bar_ = build_category_bar();
-        main_layout->insertWidget(idx, category_bar_);
+        int ci = main_layout->indexOf(category_bar_);
+        int si = main_layout->indexOf(surface_bar_);
+        if (ci >= 0) {
+            main_layout->removeWidget(category_bar_);
+            category_bar_->deleteLater();
+            category_bar_ = build_category_bar();
+            main_layout->insertWidget(ci, category_bar_);
+        }
+        if (si >= 0) {
+            main_layout->removeWidget(surface_bar_);
+            surface_bar_->deleteLater();
+            surface_bar_ = build_surface_bar();
+            main_layout->insertWidget(si, surface_bar_);
+        }
     }
-    refresh_surface_bar();
-    databento_panel_->set_active_chart(active_chart_,
-        VOL_SYMBOLS[selected_symbol_], VOL_SPOTS[selected_symbol_]);
+
+    databento_panel_->set_active_chart(active_chart_, VOL_SYMBOLS[selected_symbol_], VOL_SPOTS[selected_symbol_]);
     update_chart();
     update_metrics();
 }
 
-void SurfaceAnalyticsScreen::on_surface_clicked(int /*cat*/, int surf_index) {
+void SurfaceAnalyticsScreen::on_surface_clicked(int cat, int surf_index) {
     const auto cats = get_surface_categories();
-    if (active_category_ >= (int)cats.size()) return;
-    const auto& cat = cats[active_category_];
-    if (surf_index >= (int)cat.types.size()) return;
-    active_chart_ = cat.types[surf_index];
+    if (cat < (int)cats.size() && surf_index < (int)cats[cat].types.size())
+        active_chart_ = cats[cat].types[surf_index];
     refresh_surface_bar();
-    databento_panel_->set_active_chart(active_chart_,
-        VOL_SYMBOLS[selected_symbol_], VOL_SPOTS[selected_symbol_]);
+    databento_panel_->set_active_chart(active_chart_, VOL_SYMBOLS[selected_symbol_], VOL_SPOTS[selected_symbol_]);
     update_chart();
     update_metrics();
 }
 
 void SurfaceAnalyticsScreen::on_view_3d() {
     show_table_ = false;
-    btn_3d_->setChecked(true);
-    btn_table_->setChecked(false);
+    btn_3d_->setStyleSheet(btn_active_amber());
+    btn_table_->setStyleSheet(btn_inactive());
     update_chart();
 }
 
 void SurfaceAnalyticsScreen::on_view_table() {
     show_table_ = true;
-    btn_3d_->setChecked(false);
-    btn_table_->setChecked(true);
+    btn_3d_->setStyleSheet(btn_inactive());
+    btn_table_->setStyleSheet(btn_active_amber());
     update_chart();
+}
+
+void SurfaceAnalyticsScreen::on_import_csv() {
+    QString path = QFileDialog::getOpenFileName(this, "Import Surface CSV", {}, "CSV Files (*.csv)");
+    if (!path.isEmpty())
+        dispatch_csv(path);
 }
 
 void SurfaceAnalyticsScreen::on_refresh() {
@@ -642,130 +918,94 @@ void SurfaceAnalyticsScreen::on_refresh() {
 }
 
 void SurfaceAnalyticsScreen::on_symbol_changed(int index) {
-    if (index == selected_symbol_) return;
     selected_symbol_ = index;
     load_demo_data();
     update_chart();
     update_metrics();
-}
-
-void SurfaceAnalyticsScreen::on_import_csv() {
-    QString path = QFileDialog::getOpenFileName(this, "Import CSV", "",
-        "CSV Files (*.csv);;All Files (*)");
-    if (path.isEmpty()) return;
-    dispatch_csv(path);
+    databento_panel_->set_active_chart(active_chart_, VOL_SYMBOLS[selected_symbol_], VOL_SPOTS[selected_symbol_]);
 }
 
 void SurfaceAnalyticsScreen::dispatch_csv(const QString& path) {
     std::string err;
     auto rows = parse_csv_file(path, err);
-    if (rows.empty()) {
-        QMessageBox::warning(this, "Import Error", QString::fromStdString(err));
+    if (rows.empty())
         return;
-    }
-
-    bool ok = false;
     switch (active_chart_) {
-    case ChartType::Volatility:     ok=load_vol_surface(rows,vol_data_,err); break;
-    case ChartType::DeltaSurface:   ok=load_greeks_surface(rows,delta_data_,err,"Delta"); break;
-    case ChartType::GammaSurface:   ok=load_greeks_surface(rows,gamma_data_,err,"Gamma"); break;
-    case ChartType::VegaSurface:    ok=load_greeks_surface(rows,vega_data_,err,"Vega"); break;
-    case ChartType::ThetaSurface:   ok=load_greeks_surface(rows,theta_data_,err,"Theta"); break;
-    case ChartType::SkewSurface:    ok=load_skew_surface(rows,skew_data_,err); break;
-    case ChartType::LocalVolSurface:ok=load_local_vol(rows,local_vol_data_,err); break;
-    case ChartType::YieldCurve:     ok=load_yield_curve(rows,yield_data_,err); break;
-    case ChartType::SwaptionVol:    ok=load_swaption_vol(rows,swaption_data_,err); break;
-    case ChartType::CapFloorVol:    ok=load_capfloor_vol(rows,capfloor_data_,err); break;
-    case ChartType::BondSpread:     ok=load_bond_spread(rows,bond_spread_data_,err); break;
-    case ChartType::OISBasis:       ok=load_ois_basis(rows,ois_data_,err); break;
-    case ChartType::RealYield:      ok=load_real_yield(rows,real_yield_data_,err); break;
-    case ChartType::ForwardRate:    ok=load_forward_rate(rows,fwd_rate_data_,err); break;
-    case ChartType::FXVol:          ok=load_fx_vol(rows,fx_vol_data_,err); break;
-    case ChartType::FXForwardPoints:ok=load_fx_forward(rows,fx_fwd_data_,err); break;
-    case ChartType::CrossCurrencyBasis: ok=load_xccy_basis(rows,xccy_data_,err); break;
-    case ChartType::CDSSpread:      ok=load_cds_spread(rows,cds_data_,err); break;
-    case ChartType::CreditTransition:ok=load_credit_trans(rows,credit_trans_data_,err); break;
-    case ChartType::RecoveryRate:   ok=load_recovery_rate(rows,recovery_data_,err); break;
-    case ChartType::CommodityForward:ok=load_cmdty_forward(rows,cmdty_fwd_data_,err); break;
-    case ChartType::CommodityVol:   ok=load_cmdty_vol(rows,cmdty_vol_data_,err); break;
-    case ChartType::CrackSpread:    ok=load_crack_spread(rows,crack_data_,err); break;
-    case ChartType::ContangoBackwardation:ok=load_contango(rows,contango_data_,err); break;
-    case ChartType::Correlation:    ok=load_correlation(rows,corr_data_,err); break;
-    case ChartType::PCA:            ok=load_pca(rows,pca_data_,err); break;
-    case ChartType::VaR:            ok=load_var(rows,var_data_,err); break;
-    case ChartType::StressTestPnL:  ok=load_stress_test(rows,stress_data_,err); break;
-    case ChartType::FactorExposure: ok=load_factor_exposure(rows,factor_data_,err); break;
-    case ChartType::LiquidityHeatmap:ok=load_liquidity(rows,liquidity_data_,err); break;
-    case ChartType::Drawdown:       ok=load_drawdown(rows,drawdown_data_,err); break;
-    case ChartType::BetaSurface:    ok=load_beta(rows,beta_data_,err); break;
-    case ChartType::ImpliedDividend:ok=load_implied_div(rows,impl_div_data_,err); break;
-    case ChartType::InflationExpectations:ok=load_inflation(rows,inflation_data_,err); break;
-    case ChartType::MonetaryPolicyPath:ok=load_monetary(rows,monetary_data_,err); break;
-    default: err="Surface not supported for CSV import"; break;
-    }
-
-    if (!ok) {
-        QMessageBox::warning(this, "Import Error", QString::fromStdString(err));
-    } else {
-        update_chart();
-        update_metrics();
+        case ChartType::Volatility:
+            if (load_vol_surface(rows, vol_data_, err)) {
+                update_chart();
+                update_metrics();
+            }
+            break;
+        case ChartType::DeltaSurface:
+            if (load_greeks_surface(rows, delta_data_, err, "Delta")) {
+                update_chart();
+                update_metrics();
+            }
+            break;
+        case ChartType::GammaSurface:
+            if (load_greeks_surface(rows, gamma_data_, err, "Gamma")) {
+                update_chart();
+                update_metrics();
+            }
+            break;
+        case ChartType::VegaSurface:
+            if (load_greeks_surface(rows, vega_data_, err, "Vega")) {
+                update_chart();
+                update_metrics();
+            }
+            break;
+        case ChartType::ThetaSurface:
+            if (load_greeks_surface(rows, theta_data_, err, "Theta")) {
+                update_chart();
+                update_metrics();
+            }
+            break;
+        default:
+            break;
     }
 }
 
-// ── P3: connect Databento panel signals on show, disconnect on hide ───────────
+// ── Databento slots ───────────────────────────────────────────────────────────
+void SurfaceAnalyticsScreen::on_vol_surface_received(const fincept::DatabentoVolSurfaceResult& r) {
+    if (r.success && !r.vol.z.empty()) {
+        vol_data_ = r.vol;
+        vol_data_.underlying = VOL_SYMBOLS[selected_symbol_];
+        vol_data_.spot_price = VOL_SPOTS[selected_symbol_];
+    }
+    update_chart();
+    update_metrics();
+}
+
+void SurfaceAnalyticsScreen::on_ohlcv_received(const fincept::DatabentoOhlcvResult&) {
+    update_chart();
+    update_metrics();
+}
+
+void SurfaceAnalyticsScreen::on_futures_received(const fincept::DatabentoFuturesResult&) {
+    update_chart();
+    update_metrics();
+}
+
+// ── Show/hide event — P3 compliance ──────────────────────────────────────────
 void SurfaceAnalyticsScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    connect(databento_panel_, &SurfaceDatabentoPanel::vol_surface_received,
-            this, &SurfaceAnalyticsScreen::on_vol_surface_received, Qt::UniqueConnection);
-    connect(databento_panel_, &SurfaceDatabentoPanel::ohlcv_received,
-            this, &SurfaceAnalyticsScreen::on_ohlcv_received, Qt::UniqueConnection);
-    connect(databento_panel_, &SurfaceDatabentoPanel::futures_received,
-            this, &SurfaceAnalyticsScreen::on_futures_received, Qt::UniqueConnection);
+    connect(databento_panel_, &SurfaceDatabentoPanel::vol_surface_received, this,
+            &SurfaceAnalyticsScreen::on_vol_surface_received, Qt::UniqueConnection);
+    connect(databento_panel_, &SurfaceDatabentoPanel::ohlcv_received, this, &SurfaceAnalyticsScreen::on_ohlcv_received,
+            Qt::UniqueConnection);
+    connect(databento_panel_, &SurfaceDatabentoPanel::futures_received, this,
+            &SurfaceAnalyticsScreen::on_futures_received, Qt::UniqueConnection);
 }
 
 void SurfaceAnalyticsScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
-    disconnect(databento_panel_, nullptr, this, nullptr);
-}
-
-// ── Databento data slots ──────────────────────────────────────────────────────
-void SurfaceAnalyticsScreen::on_vol_surface_received(const fincept::DatabentoVolSurfaceResult& r) {
-    if (!r.success) return;
-    if (!r.vol.z.empty())   vol_data_       = r.vol;
-    if (!r.delta.z.empty()) delta_data_     = r.delta;
-    if (!r.gamma.z.empty()) gamma_data_     = r.gamma;
-    if (!r.vega.z.empty())  vega_data_      = r.vega;
-    if (!r.theta.z.empty()) theta_data_     = r.theta;
-    if (!r.skew.z.empty())  skew_data_      = r.skew;
-    update_chart();
-    update_metrics();
-}
-
-void SurfaceAnalyticsScreen::on_ohlcv_received(const fincept::DatabentoOhlcvResult& r) {
-    if (!r.success || r.data.isEmpty()) return;
-    // Rebuild correlation, PCA, drawdown, beta from OHLCV data
-    // Convert QHash to std::vector<std::string> asset list for demo generators
-    // (actual computation uses the demo data regenerated with live symbol names)
-    std::vector<std::string> assets;
-    for (const QString& sym : r.data.keys())
-        assets.push_back(sym.toStdString());
-    if (assets.empty()) return;
-    corr_assets_   = assets;
-    corr_data_     = generate_correlation(assets);
-    pca_data_      = generate_pca(assets);
-    drawdown_data_ = generate_drawdown(assets);
-    beta_data_     = generate_beta(assets);
-    factor_data_   = generate_factor_exposure(assets);
-    update_chart();
-    update_metrics();
-}
-
-void SurfaceAnalyticsScreen::on_futures_received(const fincept::DatabentoFuturesResult& r) {
-    if (!r.success) return;
-    if (!r.forward.z.empty())  cmdty_fwd_data_ = r.forward;
-    if (!r.contango.z.empty()) contango_data_  = r.contango;
-    update_chart();
-    update_metrics();
+    disconnect(databento_panel_, &SurfaceDatabentoPanel::vol_surface_received, this,
+               &SurfaceAnalyticsScreen::on_vol_surface_received);
+    disconnect(databento_panel_, &SurfaceDatabentoPanel::ohlcv_received, this,
+               &SurfaceAnalyticsScreen::on_ohlcv_received);
+    disconnect(databento_panel_, &SurfaceDatabentoPanel::futures_received, this,
+               &SurfaceAnalyticsScreen::on_futures_received);
 }
 
 } // namespace fincept::surface

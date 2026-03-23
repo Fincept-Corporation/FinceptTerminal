@@ -1,7 +1,9 @@
 #pragma once
-#include <QObject>
-#include <functional>
 #include "auth/AuthTypes.h"
+
+#include <QObject>
+
+#include <functional>
 
 namespace fincept::auth {
 
@@ -9,7 +11,7 @@ namespace fincept::auth {
 /// All methods use the api_key/session_token already set on HttpClient.
 class UserApi : public QObject {
     Q_OBJECT
-public:
+  public:
     using Callback = std::function<void(ApiResponse)>;
 
     static UserApi& instance();
@@ -51,16 +53,15 @@ public:
     // Support
     void get_tickets(Callback cb);
     void get_ticket_details(int ticket_id, Callback cb);
-    void create_ticket(const QString& subject, const QString& description,
-                       const QString& category, const QString& priority, Callback cb);
+    void create_ticket(const QString& subject, const QString& description, const QString& category,
+                       const QString& priority, Callback cb);
     void add_ticket_message(int ticket_id, const QString& message, Callback cb);
     void update_ticket_status(int ticket_id, const QString& status, Callback cb);
 
-private:
+  private:
     UserApi() = default;
 
-    void request(const QString& method, const QString& endpoint,
-                 const QJsonObject& body, Callback cb);
+    void request(const QString& method, const QString& endpoint, const QJsonObject& body, Callback cb);
 };
 
 } // namespace fincept::auth

@@ -1,8 +1,10 @@
 // Unified Trading — routes orders to live broker or paper trading engine
 
 #include "trading/UnifiedTrading.h"
-#include "trading/PaperTrading.h"
+
 #include "core/logging/Logger.h"
+#include "trading/PaperTrading.h"
+
 #include <QMutexLocker>
 
 namespace fincept::trading {
@@ -16,9 +18,8 @@ UnifiedTrading& UnifiedTrading::instance() {
 // Session Management
 // ============================================================================
 
-TradingSession UnifiedTrading::init_session(const QString& broker,
-                                              const QString& mode,
-                                              const QString& paper_portfolio_id) {
+TradingSession UnifiedTrading::init_session(const QString& broker, const QString& mode,
+                                            const QString& paper_portfolio_id) {
     QMutexLocker lock(&mutex_);
 
     TradingSession session;
@@ -30,9 +31,7 @@ TradingSession UnifiedTrading::init_session(const QString& broker,
         if (!paper_portfolio_id.isEmpty()) {
             session.paper_portfolio_id = paper_portfolio_id;
         } else {
-            auto portfolio = pt_create_portfolio(
-                broker + " Paper Trading",
-                1000000.0, "INR", 1.0, "cross", 0.0003);
+            auto portfolio = pt_create_portfolio(broker + " Paper Trading", 1000000.0, "INR", 1.0, "cross", 0.0003);
             session.paper_portfolio_id = portfolio.id;
         }
     }
@@ -57,9 +56,8 @@ TradingSession UnifiedTrading::switch_mode(const QString& mode) {
     session_->mode = (mode == "live") ? "live" : "paper";
 
     if (session_->mode == "paper" && session_->paper_portfolio_id.isEmpty()) {
-        auto portfolio = pt_create_portfolio(
-            session_->broker + " Paper Trading",
-            1000000.0, "INR", 1.0, "cross", 0.0003);
+        auto portfolio =
+            pt_create_portfolio(session_->broker + " Paper Trading", 1000000.0, "INR", 1.0, "cross", 0.0003);
         session_->paper_portfolio_id = portfolio.id;
     }
 
@@ -83,14 +81,12 @@ UnifiedOrderResponse UnifiedTrading::place_order(const UnifiedOrder& order) {
     return place_live_order(*session_, order);
 }
 
-UnifiedOrderResponse UnifiedTrading::place_paper_order(const TradingSession& session,
-                                                         const UnifiedOrder& order) {
+UnifiedOrderResponse UnifiedTrading::place_paper_order(const TradingSession& session, const UnifiedOrder& order) {
     if (session.paper_portfolio_id.isEmpty()) {
         return {false, "", "No paper portfolio configured", "paper"};
     }
 
-    QString symbol = order.exchange.isEmpty() ? order.symbol
-                     : order.exchange + ":" + order.symbol;
+    QString symbol = order.exchange.isEmpty() ? order.symbol : order.exchange + ":" + order.symbol;
 
     QString side_str = order_side_str(order.side);
     QString type_str = order_type_str(order.order_type);
@@ -103,13 +99,12 @@ UnifiedOrderResponse UnifiedTrading::place_paper_order(const TradingSession& ses
     }
 
     std::optional<double> stop_opt;
-    if (order.stop_price > 0) stop_opt = order.stop_price;
+    if (order.stop_price > 0)
+        stop_opt = order.stop_price;
 
     try {
-        auto paper_order = pt_place_order(
-            session.paper_portfolio_id,
-            symbol, side_str, type_str,
-            order.quantity, price_opt, stop_opt, false);
+        auto paper_order = pt_place_order(session.paper_portfolio_id, symbol, side_str, type_str, order.quantity,
+                                          price_opt, stop_opt, false);
 
         if (order.order_type == OrderType::Market) {
             double fill_price = order.price > 0 ? order.price : 1000.0;
@@ -122,8 +117,7 @@ UnifiedOrderResponse UnifiedTrading::place_paper_order(const TradingSession& ses
     }
 }
 
-UnifiedOrderResponse UnifiedTrading::place_live_order(const TradingSession& session,
-                                                        const UnifiedOrder& order) {
+UnifiedOrderResponse UnifiedTrading::place_live_order(const TradingSession& session, const UnifiedOrder& order) {
     auto* broker = BrokerRegistry::instance().get(session.broker);
     if (!broker) {
         return {false, "", "Broker not found: " + session.broker, "live"};
@@ -155,7 +149,8 @@ UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& order_id) {
     }
 
     auto* broker = BrokerRegistry::instance().get(session_->broker);
-    if (!broker) return {false, "", "Broker not found", "live"};
+    if (!broker)
+        return {false, "", "Broker not found", "live"};
 
     auto creds = broker->load_credentials();
     auto result = broker->cancel_order(creds, order_id);

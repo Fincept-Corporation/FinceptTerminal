@@ -1,8 +1,9 @@
 #pragma once
 #include "screens/dashboard/widgets/BaseWidget.h"
 #include "services/markets/MarketDataService.h"
-#include <QLabel>
+
 #include <QFrame>
+#include <QLabel>
 
 namespace fincept::screens::widgets {
 
@@ -11,22 +12,22 @@ namespace fincept::screens::widgets {
 /// All data sourced from yfinance.
 class MarketSentimentWidget : public BaseWidget {
     Q_OBJECT
-public:
+  public:
     explicit MarketSentimentWidget(QWidget* parent = nullptr);
 
-private:
+  private:
     void refresh_data();
     void populate(const QVector<services::QuoteData>& quotes);
 
-    QLabel* score_label_   = nullptr;
+    QLabel* score_label_ = nullptr;
     QLabel* verdict_label_ = nullptr;
-    QLabel* bull_label_    = nullptr;
-    QLabel* bear_label_    = nullptr;
+    QLabel* bull_label_ = nullptr;
+    QLabel* bear_label_ = nullptr;
     QLabel* neutral_label_ = nullptr;
-    QFrame* bull_bar_      = nullptr;
-    QFrame* bear_bar_      = nullptr;
-    QFrame* neutral_bar_   = nullptr;
-    QLabel* vix_label_     = nullptr;
+    QFrame* bull_bar_ = nullptr;
+    QFrame* bear_bar_ = nullptr;
+    QFrame* neutral_bar_ = nullptr;
+    QLabel* vix_label_ = nullptr;
     QLabel* breadth_label_ = nullptr;
 };
 

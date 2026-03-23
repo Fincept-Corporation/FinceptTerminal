@@ -1,7 +1,9 @@
 #include "screens/dashboard/TickerBar.h"
+
 #include "ui/theme/Theme.h"
-#include <QPainter>
+
 #include <QPaintEvent>
+#include <QPainter>
 
 namespace fincept::screens {
 
@@ -11,17 +13,16 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
 
     // Dummy data until service provides real data
     entries_ = {
-        {"AAPL", 189.84, 1.23}, {"MSFT", 378.91, -0.45}, {"GOOGL", 141.80, 0.67},
-        {"AMZN", 178.25, -1.12}, {"NVDA", 875.28, 2.34}, {"META", 485.39, 0.89},
-        {"TSLA", 175.21, -2.45}, {"JPM", 183.12, 0.56}, {"V", 275.45, -0.23},
-        {"BRK.B", 408.92, 1.05}, {"SPY", 511.34, 0.78}, {"QQQ", 435.67, 1.12},
+        {"AAPL", 189.84, 1.23}, {"MSFT", 378.91, -0.45}, {"GOOGL", 141.80, 0.67}, {"AMZN", 178.25, -1.12},
+        {"NVDA", 875.28, 2.34}, {"META", 485.39, 0.89},  {"TSLA", 175.21, -2.45}, {"JPM", 183.12, 0.56},
+        {"V", 275.45, -0.23},   {"BRK.B", 408.92, 1.05}, {"SPY", 511.34, 0.78},   {"QQQ", 435.67, 1.12},
     };
 
     connect(&scroll_timer_, &QTimer::timeout, this, [this]() {
         offset_ += 1.0;
         update();
     });
-    scroll_timer_.start(50);  // 20fps is plenty for scrolling text
+    scroll_timer_.setInterval(50); // 20fps — started by resume() / showEvent, not here (P3)
 }
 
 void TickerBar::set_data(const QVector<Entry>& entries) {
@@ -31,7 +32,8 @@ void TickerBar::set_data(const QVector<Entry>& entries) {
 }
 
 void TickerBar::paintEvent(QPaintEvent*) {
-    if (entries_.isEmpty()) return;
+    if (entries_.isEmpty())
+        return;
 
     QPainter p(this);
     p.setRenderHint(QPainter::TextAntialiasing);
@@ -45,10 +47,10 @@ void TickerBar::paintEvent(QPaintEvent*) {
     int total_width = 0;
     for (const auto& e : entries_) {
         QString text = QString("%1  %2  %3%4%")
-            .arg(e.symbol)
-            .arg(e.price, 0, 'f', 2)
-            .arg(e.change >= 0 ? "+" : "")
-            .arg(e.change, 0, 'f', 2);
+                           .arg(e.symbol)
+                           .arg(e.price, 0, 'f', 2)
+                           .arg(e.change >= 0 ? "+" : "")
+                           .arg(e.change, 0, 'f', 2);
         total_width += fm.horizontalAdvance(text) + item_spacing;
     }
 

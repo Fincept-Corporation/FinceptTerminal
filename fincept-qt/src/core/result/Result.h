@@ -1,14 +1,14 @@
 #pragma once
-#include <variant>
-#include <string>
 #include <functional>
+#include <string>
+#include <variant>
 
 namespace fincept {
 
 /// Lightweight Result<T> for error handling without exceptions.
 template <typename T>
 class Result {
-public:
+  public:
     static Result ok(T value) { return Result{std::move(value)}; }
     static Result err(std::string message) { return Result{Error{std::move(message)}}; }
 
@@ -22,12 +22,15 @@ public:
     template <typename F>
     auto map(F&& f) const -> Result<decltype(f(std::declval<T>()))> {
         using U = decltype(f(std::declval<T>()));
-        if (is_ok()) return Result<U>::ok(f(value()));
+        if (is_ok())
+            return Result<U>::ok(f(value()));
         return Result<U>::err(error());
     }
 
-private:
-    struct Error { std::string message; };
+  private:
+    struct Error {
+        std::string message;
+    };
     std::variant<T, Error> data_;
 
     explicit Result(T val) : data_(std::move(val)) {}
@@ -37,7 +40,7 @@ private:
 /// Specialization for void results.
 template <>
 class Result<void> {
-public:
+  public:
     static Result ok() { return Result{true}; }
     static Result err(std::string message) { return Result{std::move(message)}; }
 
@@ -45,7 +48,7 @@ public:
     bool is_err() const { return !ok_; }
     const std::string& error() const { return error_; }
 
-private:
+  private:
     bool ok_;
     std::string error_;
 

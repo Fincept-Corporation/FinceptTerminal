@@ -1,8 +1,10 @@
 #include "SurfaceDatabentoPanel.h"
+
 #include "core/logging/Logger.h"
-#include <QHBoxLayout>
-#include <QFrame>
+
 #include <QDateTime>
+#include <QFrame>
+#include <QHBoxLayout>
 
 namespace fincept::surface {
 
@@ -19,9 +21,8 @@ void SurfaceDatabentoPanel::setup_ui() {
 
     // ── Section title ─────────────────────────────────────────────────────
     auto* title = new QLabel("DATABENTO DATA SOURCE", this);
-    title->setStyleSheet(
-        "color:#3399ff; font-size:10px; font-weight:bold;"
-        "border-bottom:1px solid #21262d; padding-bottom:4px;");
+    title->setStyleSheet("color:#3399ff; font-size:10px; font-weight:bold;"
+                         "border-bottom:1px solid #21262d; padding-bottom:4px;");
     layout->addWidget(title);
 
     // ── API Key row ───────────────────────────────────────────────────────
@@ -33,27 +34,23 @@ void SurfaceDatabentoPanel::setup_ui() {
     api_key_input_ = new QLineEdit(key_row);
     api_key_input_->setPlaceholderText("Databento API key (db-...)");
     api_key_input_->setEchoMode(QLineEdit::Password);
-    api_key_input_->setStyleSheet(
-        "QLineEdit { background:#161b22; color:#c9d1d9; border:1px solid #30363d;"
-        " padding:4px 8px; font-size:10px; border-radius:2px; }"
-        "QLineEdit:focus { border-color:#3399ff; }");
+    api_key_input_->setStyleSheet("QLineEdit { background:#161b22; color:#c9d1d9; border:1px solid #30363d;"
+                                  " padding:4px 8px; font-size:10px; border-radius:2px; }"
+                                  "QLineEdit:focus { border-color:#3399ff; }");
     key_hl->addWidget(api_key_input_, 1);
 
     save_key_btn_ = new QPushButton("SAVE", key_row);
-    save_key_btn_->setStyleSheet(
-        "QPushButton { background:#21262d; color:#8b949e; border:1px solid #30363d;"
-        " padding:4px 8px; font-size:10px; border-radius:2px; }"
-        "QPushButton:hover { background:#30363d; color:#c9d1d9; }");
+    save_key_btn_->setStyleSheet("QPushButton { background:#21262d; color:#8b949e; border:1px solid #30363d;"
+                                 " padding:4px 8px; font-size:10px; border-radius:2px; }"
+                                 "QPushButton:hover { background:#30363d; color:#c9d1d9; }");
     connect(save_key_btn_, &QPushButton::clicked, this, &SurfaceDatabentoPanel::on_save_key_clicked);
     key_hl->addWidget(save_key_btn_);
 
     test_btn_ = new QPushButton("TEST", key_row);
-    test_btn_->setStyleSheet(
-        "QPushButton { background:#21262d; color:#8b949e; border:1px solid #30363d;"
-        " padding:4px 8px; font-size:10px; border-radius:2px; }"
-        "QPushButton:hover { background:#30363d; color:#c9d1d9; }");
-    connect(test_btn_, &QPushButton::clicked,
-            &DatabentoService::instance(), &DatabentoService::test_connection);
+    test_btn_->setStyleSheet("QPushButton { background:#21262d; color:#8b949e; border:1px solid #30363d;"
+                             " padding:4px 8px; font-size:10px; border-radius:2px; }"
+                             "QPushButton:hover { background:#30363d; color:#c9d1d9; }");
+    connect(test_btn_, &QPushButton::clicked, &DatabentoService::instance(), &DatabentoService::test_connection);
     key_hl->addWidget(test_btn_);
 
     layout->addWidget(key_row);
@@ -71,12 +68,11 @@ void SurfaceDatabentoPanel::setup_ui() {
 
     // ── Fetch button ──────────────────────────────────────────────────────
     fetch_btn_ = new QPushButton("FETCH LIVE DATA", this);
-    fetch_btn_->setStyleSheet(
-        "QPushButton { background:rgba(31,77,153,255); color:#88bbff;"
-        " border:1px solid rgba(64,140,255,100); padding:6px 12px;"
-        " font-size:10px; font-weight:bold; border-radius:2px; }"
-        "QPushButton:hover { background:rgba(46,102,191,255); }"
-        "QPushButton:disabled { background:#161b22; color:#484f58; border-color:#21262d; }");
+    fetch_btn_->setStyleSheet("QPushButton { background:rgba(31,77,153,255); color:#88bbff;"
+                              " border:1px solid rgba(64,140,255,100); padding:6px 12px;"
+                              " font-size:10px; font-weight:bold; border-radius:2px; }"
+                              "QPushButton:hover { background:rgba(46,102,191,255); }"
+                              "QPushButton:disabled { background:#161b22; color:#484f58; border-color:#21262d; }");
     connect(fetch_btn_, &QPushButton::clicked, this, &SurfaceDatabentoPanel::on_fetch_clicked);
     layout->addWidget(fetch_btn_);
 
@@ -94,9 +90,9 @@ void SurfaceDatabentoPanel::setup_ui() {
     layout->addStretch();
 
     // ── Info note ─────────────────────────────────────────────────────────
-    auto* note = new QLabel(
-        "Databento is a paid institutional data service.\n"
-        "Fetches options chains, OHLCV, and futures curves.", this);
+    auto* note = new QLabel("Databento is a paid institutional data service.\n"
+                            "Fetches options chains, OHLCV, and futures curves.",
+                            this);
     note->setWordWrap(true);
     note->setStyleSheet("font-size:9px; color:#484f58; font-style:italic;");
     layout->addWidget(note);
@@ -124,9 +120,9 @@ void SurfaceDatabentoPanel::update_key_status() {
 }
 
 void SurfaceDatabentoPanel::set_active_chart(ChartType type, const QString& symbol, float spot) {
-    active_chart_  = type;
+    active_chart_ = type;
     active_symbol_ = symbol;
-    active_spot_   = spot;
+    active_spot_ = spot;
 
     // Update fetch button label based on what data we'll request
     if (needs_vol_surface())
@@ -140,55 +136,43 @@ void SurfaceDatabentoPanel::set_active_chart(ChartType type, const QString& symb
 }
 
 bool SurfaceDatabentoPanel::needs_vol_surface() const {
-    return active_chart_ == ChartType::Volatility   ||
-           active_chart_ == ChartType::DeltaSurface  ||
-           active_chart_ == ChartType::GammaSurface  ||
-           active_chart_ == ChartType::VegaSurface   ||
-           active_chart_ == ChartType::ThetaSurface  ||
-           active_chart_ == ChartType::SkewSurface   ||
-           active_chart_ == ChartType::LocalVolSurface||
-           active_chart_ == ChartType::LiquidityHeatmap ||
+    return active_chart_ == ChartType::Volatility || active_chart_ == ChartType::DeltaSurface ||
+           active_chart_ == ChartType::GammaSurface || active_chart_ == ChartType::VegaSurface ||
+           active_chart_ == ChartType::ThetaSurface || active_chart_ == ChartType::SkewSurface ||
+           active_chart_ == ChartType::LocalVolSurface || active_chart_ == ChartType::LiquidityHeatmap ||
            active_chart_ == ChartType::ImpliedDividend;
 }
 
 bool SurfaceDatabentoPanel::needs_ohlcv() const {
-    return active_chart_ == ChartType::Correlation   ||
-           active_chart_ == ChartType::PCA           ||
-           active_chart_ == ChartType::Drawdown       ||
-           active_chart_ == ChartType::BetaSurface    ||
-           active_chart_ == ChartType::VaR           ||
-           active_chart_ == ChartType::FactorExposure;
+    return active_chart_ == ChartType::Correlation || active_chart_ == ChartType::PCA ||
+           active_chart_ == ChartType::Drawdown || active_chart_ == ChartType::BetaSurface ||
+           active_chart_ == ChartType::VaR || active_chart_ == ChartType::FactorExposure;
 }
 
 bool SurfaceDatabentoPanel::needs_futures() const {
-    return active_chart_ == ChartType::CommodityForward       ||
-           active_chart_ == ChartType::ContangoBackwardation  ||
-           active_chart_ == ChartType::CrackSpread            ||
-           active_chart_ == ChartType::CommodityVol;
+    return active_chart_ == ChartType::CommodityForward || active_chart_ == ChartType::ContangoBackwardation ||
+           active_chart_ == ChartType::CrackSpread || active_chart_ == ChartType::CommodityVol;
 }
 
 void SurfaceDatabentoPanel::set_status(const QString& msg, bool is_error) {
     status_lbl_->setText(msg);
-    status_lbl_->setStyleSheet(QString("font-size:9px; color:%1;")
-        .arg(is_error ? "#f85149" : "#8b949e"));
+    status_lbl_->setStyleSheet(QString("font-size:9px; color:%1;").arg(is_error ? "#f85149" : "#8b949e"));
 }
 
 // ── Show/Hide — P3 compliance (no timers here, but connect/disconnect signals) ─
 void SurfaceDatabentoPanel::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     auto& svc = DatabentoService::instance();
-    connect(&svc, &DatabentoService::connection_tested,
-            this, &SurfaceDatabentoPanel::on_connection_tested, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::fetch_started,
-            this, &SurfaceDatabentoPanel::on_fetch_started, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::fetch_failed,
-            this, &SurfaceDatabentoPanel::on_fetch_failed, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::ohlcv_ready,
-            this, &SurfaceDatabentoPanel::on_ohlcv_ready, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::vol_surface_ready,
-            this, &SurfaceDatabentoPanel::on_vol_ready, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::futures_ready,
-            this, &SurfaceDatabentoPanel::on_futures_ready, Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::connection_tested, this, &SurfaceDatabentoPanel::on_connection_tested,
+            Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::fetch_started, this, &SurfaceDatabentoPanel::on_fetch_started,
+            Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::fetch_failed, this, &SurfaceDatabentoPanel::on_fetch_failed, Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::ohlcv_ready, this, &SurfaceDatabentoPanel::on_ohlcv_ready, Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::vol_surface_ready, this, &SurfaceDatabentoPanel::on_vol_ready,
+            Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::futures_ready, this, &SurfaceDatabentoPanel::on_futures_ready,
+            Qt::UniqueConnection);
     update_key_status();
 }
 
@@ -222,7 +206,7 @@ void SurfaceDatabentoPanel::on_fetch_clicked() {
         DatabentoService::instance().fetch_futures_term_structure(commodities);
     } else {
         // Default: OHLCV for correlation assets
-        QStringList syms = {"SPY","QQQ","IWM","DIA","GLD","TLT","IEF","HYG"};
+        QStringList syms = {"SPY", "QQQ", "IWM", "DIA", "GLD", "TLT", "IEF", "HYG"};
         DatabentoService::instance().fetch_ohlcv(syms, 60);
     }
 }
@@ -248,30 +232,36 @@ void SurfaceDatabentoPanel::on_fetch_failed(const QString& err) {
 
 void SurfaceDatabentoPanel::on_ohlcv_ready(const fincept::DatabentoOhlcvResult& r) {
     fetch_btn_->setEnabled(true);
-    if (!r.success) { set_status(r.error, true); return; }
+    if (!r.success) {
+        set_status(r.error, true);
+        return;
+    }
     set_status(QString("OHLCV ready: %1 symbols").arg(r.data.size()));
-    last_fetch_lbl_->setText("Last fetch: " +
-        DatabentoService::instance().last_fetch_time().toString("hh:mm:ss"));
+    last_fetch_lbl_->setText("Last fetch: " + DatabentoService::instance().last_fetch_time().toString("hh:mm:ss"));
     emit ohlcv_received(r);
 }
 
 void SurfaceDatabentoPanel::on_vol_ready(const fincept::DatabentoVolSurfaceResult& r) {
     fetch_btn_->setEnabled(true);
-    if (!r.success) { set_status(r.error, true); return; }
+    if (!r.success) {
+        set_status(r.error, true);
+        return;
+    }
     set_status(QString("Options chain ready: %1 strikes x %2 expiries")
-        .arg(r.vol.strikes.size()).arg(r.vol.expirations.size()));
-    last_fetch_lbl_->setText("Last fetch: " +
-        DatabentoService::instance().last_fetch_time().toString("hh:mm:ss"));
+                   .arg(r.vol.strikes.size())
+                   .arg(r.vol.expirations.size()));
+    last_fetch_lbl_->setText("Last fetch: " + DatabentoService::instance().last_fetch_time().toString("hh:mm:ss"));
     emit vol_surface_received(r);
 }
 
 void SurfaceDatabentoPanel::on_futures_ready(const fincept::DatabentoFuturesResult& r) {
     fetch_btn_->setEnabled(true);
-    if (!r.success) { set_status(r.error, true); return; }
-    set_status(QString("Futures ready: %1 contracts")
-        .arg(r.forward.commodities.size()));
-    last_fetch_lbl_->setText("Last fetch: " +
-        DatabentoService::instance().last_fetch_time().toString("hh:mm:ss"));
+    if (!r.success) {
+        set_status(r.error, true);
+        return;
+    }
+    set_status(QString("Futures ready: %1 contracts").arg(r.forward.commodities.size()));
+    last_fetch_lbl_->setText("Last fetch: " + DatabentoService::instance().last_fetch_time().toString("hh:mm:ss"));
     emit futures_received(r);
 }
 

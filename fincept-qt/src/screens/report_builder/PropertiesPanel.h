@@ -1,7 +1,7 @@
 #pragma once
-#include <QWidget>
-#include <QVBoxLayout>
 #include <QStackedWidget>
+#include <QVBoxLayout>
+#include <QWidget>
 
 namespace fincept::screens {
 
@@ -10,19 +10,19 @@ struct ReportComponent;
 /// Right panel — context-sensitive property editor for selected component.
 class PropertiesPanel : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit PropertiesPanel(QWidget* parent = nullptr);
 
     void show_properties(const ReportComponent* component, int index);
     void show_empty();
 
-signals:
+  signals:
     void content_changed(int index, const QString& content);
     void config_changed(int index, const QString& key, const QString& value);
     void duplicate_requested(int index);
     void delete_requested(int index);
 
-private:
+  private:
     QStackedWidget* stack_ = nullptr;
     QWidget* empty_widget_ = nullptr;
     QWidget* editor_widget_ = nullptr;

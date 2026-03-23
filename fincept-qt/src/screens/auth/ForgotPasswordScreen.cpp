@@ -1,10 +1,12 @@
 #include "screens/auth/ForgotPasswordScreen.h"
+
 #include "auth/AuthManager.h"
 #include "auth/AuthTypes.h"
 #include "ui/theme/Theme.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
+
 #include <QFrame>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
 
 namespace fincept::screens {
 
@@ -25,16 +27,12 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
     root->addWidget(pages_);
 
     auto& auth = auth::AuthManager::instance();
-    connect(&auth, &auth::AuthManager::forgot_password_sent, this, [this]() {
-        pages_->setCurrentIndex(1);
-    });
+    connect(&auth, &auth::AuthManager::forgot_password_sent, this, [this]() { pages_->setCurrentIndex(1); });
     connect(&auth, &auth::AuthManager::forgot_password_failed, this, [this](const QString& err) {
         error_label_->setText(err);
         error_label_->show();
     });
-    connect(&auth, &auth::AuthManager::password_reset_succeeded, this, [this]() {
-        pages_->setCurrentIndex(3);
-    });
+    connect(&auth, &auth::AuthManager::password_reset_succeeded, this, [this]() { pages_->setCurrentIndex(3); });
     connect(&auth, &auth::AuthManager::password_reset_failed, this, [this](const QString& err) {
         error_label_->setText(err);
         error_label_->show();
@@ -44,7 +42,7 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
 void ForgotPasswordScreen::build_email_page() {
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 4px;")
-        .arg(ui::colors::PANEL, ui::colors::BORDER));
+                            .arg(ui::colors::PANEL, ui::colors::BORDER));
 
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
@@ -56,11 +54,13 @@ void ForgotPasswordScreen::build_email_page() {
     hl->setContentsMargins(0, 0, 0, 0);
     auto* back = new QPushButton("<");
     back->setFixedSize(28, 28);
-    back->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; font-size: 16px; }").arg(ui::colors::MUTED));
+    back->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; font-size: 16px; }")
+                            .arg(ui::colors::MUTED));
     connect(back, &QPushButton::clicked, this, &ForgotPasswordScreen::navigate_login);
     hl->addWidget(back);
     auto* title = new QLabel("Reset Password");
-    title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
+    title->setStyleSheet(
+        QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
     hl->addWidget(title);
     hl->addStretch();
     vl->addWidget(header);
@@ -81,8 +81,7 @@ void ForgotPasswordScreen::build_email_page() {
 
     error_label_ = new QLabel;
     error_label_->setWordWrap(true);
-    error_label_->setStyleSheet(
-        "color: #FF4444; font-size: 12px; background: rgba(255,0,0,0.1); padding: 6px;");
+    error_label_->setStyleSheet("color: #FF4444; font-size: 12px; background: rgba(255,0,0,0.1); padding: 6px;");
     error_label_->hide();
     vl->addWidget(error_label_);
 
@@ -98,7 +97,8 @@ void ForgotPasswordScreen::build_email_page() {
     vl->addWidget(sep);
 
     auto* back_login = new QPushButton("Remember your password? Sign In");
-    back_login->setStyleSheet("QPushButton { color: #4488FF; background: transparent; border: none; font-size: 12px; }");
+    back_login->setStyleSheet(
+        "QPushButton { color: #4488FF; background: transparent; border: none; font-size: 12px; }");
     connect(back_login, &QPushButton::clicked, this, &ForgotPasswordScreen::navigate_login);
     vl->addWidget(back_login, 0, Qt::AlignCenter);
 
@@ -110,7 +110,7 @@ void ForgotPasswordScreen::build_email_page() {
 void ForgotPasswordScreen::build_otp_sent_page() {
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 4px;")
-        .arg(ui::colors::PANEL, ui::colors::BORDER));
+                            .arg(ui::colors::PANEL, ui::colors::BORDER));
 
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
@@ -118,7 +118,8 @@ void ForgotPasswordScreen::build_otp_sent_page() {
     vl->setAlignment(Qt::AlignCenter);
 
     auto* title = new QLabel("Check Your Email");
-    title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
+    title->setStyleSheet(
+        QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
     title->setAlignment(Qt::AlignCenter);
     vl->addWidget(title);
 
@@ -144,14 +145,15 @@ void ForgotPasswordScreen::build_otp_sent_page() {
 void ForgotPasswordScreen::build_reset_page() {
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 4px;")
-        .arg(ui::colors::PANEL, ui::colors::BORDER));
+                            .arg(ui::colors::PANEL, ui::colors::BORDER));
 
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(10);
 
     auto* title = new QLabel("Reset Password");
-    title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
+    title->setStyleSheet(
+        QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
     vl->addWidget(title);
 
     auto add_field = [&](const QString& label, const QString& placeholder, bool is_password = false) -> QLineEdit* {
@@ -161,7 +163,8 @@ void ForgotPasswordScreen::build_reset_page() {
         auto* input = new QLineEdit;
         input->setPlaceholderText(placeholder);
         input->setFixedHeight(32);
-        if (is_password) input->setEchoMode(QLineEdit::Password);
+        if (is_password)
+            input->setEchoMode(QLineEdit::Password);
         vl->addWidget(input);
         return input;
     };
@@ -179,7 +182,8 @@ void ForgotPasswordScreen::build_reset_page() {
     // We'll use error_label_ for all pages (it's on page 0), but for this page we need a local one
     // So let's just connect the signal to show errors on this label too
     connect(&auth::AuthManager::instance(), &auth::AuthManager::password_reset_failed, this, [err](const QString& e) {
-        err->setText(e); err->show();
+        err->setText(e);
+        err->show();
     });
 
     auto* reset_btn = new QPushButton("Reset Password");
@@ -195,7 +199,7 @@ void ForgotPasswordScreen::build_reset_page() {
 void ForgotPasswordScreen::build_success_page() {
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 4px;")
-        .arg(ui::colors::PANEL, ui::colors::BORDER));
+                            .arg(ui::colors::PANEL, ui::colors::BORDER));
 
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
@@ -203,7 +207,8 @@ void ForgotPasswordScreen::build_success_page() {
     vl->setAlignment(Qt::AlignCenter);
 
     auto* title = new QLabel("Password Reset");
-    title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
+    title->setStyleSheet(
+        QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
     title->setAlignment(Qt::AlignCenter);
     vl->addWidget(title);
 
@@ -225,7 +230,11 @@ void ForgotPasswordScreen::on_send_code() {
     error_label_->hide();
     QString email = email_input_->text().trimmed();
     auto v = auth::validate_email(email);
-    if (!v.valid) { error_label_->setText(v.error); error_label_->show(); return; }
+    if (!v.valid) {
+        error_label_->setText(v.error);
+        error_label_->show();
+        return;
+    }
     auth::AuthManager::instance().forgot_password(email);
 }
 
@@ -234,9 +243,12 @@ void ForgotPasswordScreen::on_reset_password() {
     QString pw = new_password_->text();
     QString cpw = confirm_password_->text();
 
-    if (otp.isEmpty()) return;
-    if (pw.length() < 8) return;
-    if (pw != cpw) return;
+    if (otp.isEmpty())
+        return;
+    if (pw.length() < 8)
+        return;
+    if (pw != cpw)
+        return;
 
     auth::AuthManager::instance().reset_password(email_input_->text().trimmed(), otp, pw);
 }

@@ -1,0 +1,21 @@
+{
+  "format_version": "1.0",
+  "portfolio_name": "Demo Portfolio",
+  "owner": "Fincept User",
+  "currency": "USD",
+  "export_date": "2025-01-15T00:00:00Z",
+  "transactions": [
+    {"date": "2024-01-15", "symbol": "AAPL",  "type": "BUY", "quantity": 15, "price": 178.50, "total_value": 2677.50, "notes": "Core tech position"},
+    {"date": "2024-01-15", "symbol": "MSFT",  "type": "BUY", "quantity": 12, "price": 375.20, "total_value": 4502.40, "notes": "Cloud/AI leader"},
+    {"date": "2024-02-01", "symbol": "GOOGL", "type": "BUY", "quantity": 8,  "price": 141.80, "total_value": 1134.40, "notes": "Search + AI play"},
+    {"date": "2024-02-01", "symbol": "NVDA",  "type": "BUY", "quantity": 10, "price": 480.00, "total_value": 4800.00, "notes": "GPU/AI semiconductor"},
+    {"date": "2024-02-15", "symbol": "AMZN",  "type": "BUY", "quantity": 6,  "price": 178.25, "total_value": 1069.50, "notes": "E-commerce + AWS"},
+    {"date": "2024-03-01", "symbol": "TSLA",  "type": "BUY", "quantity": 5,  "price": 245.00, "total_value": 1225.00, "notes": "EV + Energy"},
+    {"date": "2024-03-01", "symbol": "JPM",   "type": "BUY", "quantity": 20, "price": 195.50, "total_value": 3910.00, "notes": "Financials anchor"},
+    {"date": "2024-03-15", "symbol": "JNJ",   "type": "BUY", "quantity": 15, "price": 155.75, "total_value": 2336.25, "notes": "Healthcare defensive"},
+    {"date": "2024-04-01", "symbol": "XOM",   "type": "BUY", "quantity": 25, "price": 105.30, "total_value": 2632.50, "notes": "Energy sector exposure"},
+    {"date": "2024-04-01", "symbol": "V",     "type": "BUY", "quantity": 10, "price": 280.00, "total_value": 2800.00, "notes": "Payment networks"},
+    {"date": "2024-04-15", "symbol": "UNH",   "type": "BUY", "quantity": 4,  "price": 525.60, "total_value": 2102.40, "notes": "Health insurance"},
+    {"date": "2024-05-01", "symbol": "PG",    "type": "BUY", "quantity": 12, "price": 158.90, "total_value": 1906.80, "notes": "Consumer staples"}
+  ]
+}

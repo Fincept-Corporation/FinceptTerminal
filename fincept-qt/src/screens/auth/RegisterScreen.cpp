@@ -1,10 +1,12 @@
 #include "screens/auth/RegisterScreen.h"
+
 #include "auth/AuthManager.h"
 #include "auth/AuthTypes.h"
 #include "ui/theme/Theme.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
+
 #include <QFrame>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
 
 namespace fincept::screens {
 
@@ -37,9 +39,7 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
         error_label_->setText(err);
         error_label_->show();
     });
-    connect(&auth, &auth::AuthManager::otp_verified, this, [this]() {
-        verify_btn_->setEnabled(true);
-    });
+    connect(&auth, &auth::AuthManager::otp_verified, this, [this]() { verify_btn_->setEnabled(true); });
     connect(&auth, &auth::AuthManager::otp_failed, this, [this](const QString& err) {
         verify_btn_->setEnabled(true);
         verify_btn_->setText("Verify");
@@ -50,9 +50,8 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
 
 void RegisterScreen::build_form_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(
-        QString("background: %1; border: 1px solid %2; border-radius: 4px;")
-            .arg(ui::colors::PANEL, ui::colors::BORDER));
+    page->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 4px;")
+                            .arg(ui::colors::PANEL, ui::colors::BORDER));
 
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 20, 24, 20);
@@ -66,12 +65,14 @@ void RegisterScreen::build_form_page() {
 
     auto* back = new QPushButton("<");
     back->setFixedSize(28, 28);
-    back->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; font-size: 16px; }").arg(ui::colors::MUTED));
+    back->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; font-size: 16px; }")
+                            .arg(ui::colors::MUTED));
     connect(back, &QPushButton::clicked, this, &RegisterScreen::navigate_login);
     hl->addWidget(back);
 
     auto* title = new QLabel("Create Account");
-    title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
+    title->setStyleSheet(
+        QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
     hl->addWidget(title);
     hl->addStretch();
     vl->addWidget(header);
@@ -93,11 +94,13 @@ void RegisterScreen::build_form_page() {
         parent->addWidget(field);
     };
 
-    auto* fn_col = new QVBoxLayout; fn_col->setSpacing(2);
+    auto* fn_col = new QVBoxLayout;
+    fn_col->setSpacing(2);
     add_field(first_name_, "First Name", "First", fn_col);
     nrl->addLayout(fn_col);
 
-    auto* ln_col = new QVBoxLayout; ln_col->setSpacing(2);
+    auto* ln_col = new QVBoxLayout;
+    ln_col->setSpacing(2);
     add_field(last_name_, "Last Name", "Last", ln_col);
     nrl->addLayout(ln_col);
     vl->addWidget(name_row);
@@ -126,9 +129,8 @@ void RegisterScreen::build_form_page() {
 
     error_label_ = new QLabel;
     error_label_->setWordWrap(true);
-    error_label_->setStyleSheet(
-        "color: #FF4444; font-size: 12px; background: rgba(255,0,0,0.1); "
-        "border: 1px solid rgba(255,0,0,0.3); border-radius: 2px; padding: 6px;");
+    error_label_->setStyleSheet("color: #FF4444; font-size: 12px; background: rgba(255,0,0,0.1); "
+                                "border: 1px solid rgba(255,0,0,0.3); border-radius: 2px; padding: 6px;");
     error_label_->hide();
     vl->addWidget(error_label_);
 
@@ -161,9 +163,8 @@ void RegisterScreen::build_form_page() {
 
 void RegisterScreen::build_otp_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(
-        QString("background: %1; border: 1px solid %2; border-radius: 4px;")
-            .arg(ui::colors::PANEL, ui::colors::BORDER));
+    page->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 4px;")
+                            .arg(ui::colors::PANEL, ui::colors::BORDER));
     page->setFixedHeight(320);
 
     auto* vl = new QVBoxLayout(page);
@@ -171,7 +172,8 @@ void RegisterScreen::build_otp_page() {
     vl->setSpacing(12);
 
     auto* title = new QLabel("Verify Email");
-    title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
+    title->setStyleSheet(
+        QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
     vl->addWidget(title);
 
     otp_email_ = new QLabel;
@@ -190,8 +192,7 @@ void RegisterScreen::build_otp_page() {
 
     otp_error_ = new QLabel;
     otp_error_->setWordWrap(true);
-    otp_error_->setStyleSheet(
-        "color: #FF4444; font-size: 12px; background: rgba(255,0,0,0.1); padding: 6px;");
+    otp_error_->setStyleSheet("color: #FF4444; font-size: 12px; background: rgba(255,0,0,0.1); padding: 6px;");
     otp_error_->hide();
     vl->addWidget(otp_error_);
 
@@ -206,7 +207,8 @@ void RegisterScreen::build_otp_page() {
     vl->addWidget(resend, 0, Qt::AlignCenter);
 
     auto* back2 = new QPushButton("Back to form");
-    back2->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; font-size: 12px; }").arg(ui::colors::MUTED));
+    back2->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; font-size: 12px; }")
+                             .arg(ui::colors::MUTED));
     connect(back2, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(0); });
     vl->addWidget(back2, 0, Qt::AlignCenter);
 
@@ -241,16 +243,32 @@ void RegisterScreen::on_register() {
     QString cpw = confirm_pw_->text();
 
     if (fn.isEmpty() || ln.isEmpty() || em.isEmpty() || pw.isEmpty() || cpw.isEmpty()) {
-        error_label_->setText("All fields are required"); error_label_->show(); return;
+        error_label_->setText("All fields are required");
+        error_label_->show();
+        return;
     }
     auto ev = auth::validate_email(em);
-    if (!ev.valid) { error_label_->setText(ev.error); error_label_->show(); return; }
-    if (pw != cpw) { error_label_->setText("Passwords do not match"); error_label_->show(); return; }
-    if (pw.length() < 8) { error_label_->setText("Password must be at least 8 characters"); error_label_->show(); return; }
+    if (!ev.valid) {
+        error_label_->setText(ev.error);
+        error_label_->show();
+        return;
+    }
+    if (pw != cpw) {
+        error_label_->setText("Passwords do not match");
+        error_label_->show();
+        return;
+    }
+    if (pw.length() < 8) {
+        error_label_->setText("Password must be at least 8 characters");
+        error_label_->show();
+        return;
+    }
 
     QString username = auth::sanitize_input(fn + ln).toLower();
     if (username.length() < 3 || username.length() > 50) {
-        error_label_->setText("Username must be 3–50 characters"); error_label_->show(); return;
+        error_label_->setText("Username must be 3–50 characters");
+        error_label_->show();
+        return;
     }
 
     register_btn_->setEnabled(false);
@@ -262,7 +280,11 @@ void RegisterScreen::on_register() {
 void RegisterScreen::on_verify_otp() {
     otp_error_->hide();
     QString code = otp_input_->text().trimmed();
-    if (code.isEmpty()) { otp_error_->setText("Enter the verification code"); otp_error_->show(); return; }
+    if (code.isEmpty()) {
+        otp_error_->setText("Enter the verification code");
+        otp_error_->show();
+        return;
+    }
 
     verify_btn_->setEnabled(false);
     verify_btn_->setText("Verifying...");
@@ -274,8 +296,8 @@ void RegisterScreen::on_resend_otp() {
     QString fn = first_name_->text().trimmed();
     QString ln = last_name_->text().trimmed();
     QString username = auth::sanitize_input(fn + ln).toLower();
-    auth::AuthManager::instance().signup(username, email_->text().trimmed(),
-                                          password_->text(), phone_->text().trimmed(), {}, {});
+    auth::AuthManager::instance().signup(username, email_->text().trimmed(), password_->text(),
+                                         phone_->text().trimmed(), {}, {});
 }
 
 } // namespace fincept::screens

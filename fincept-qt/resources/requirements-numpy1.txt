@@ -1,0 +1,37 @@
+# NumPy 1.x Environment - ONLY Libraries That REQUIRE NumPy 1.x
+# These libraries are incompatible with NumPy 2.x
+
+# Core dependencies
+numpy>=1.26.4,<2.0
+pandas>=2.0.0,<2.3.0
+
+# Backtesting and trading (NumPy 1.x dependent)
+vectorbt==0.28.2
+backtesting==0.6.5
+zipline-reloaded>=3.0
+exchange-calendars>=4.0
+bt>=1.1.2
+ffn>=1.1.2
+
+# peewee is a transitive dependency of zipline-reloaded (via empyrical-reloaded)
+# Pin it explicitly so UV can resolve it early; the PEEWEE_NO_SQLITE_EXTENSIONS=1
+# env var set during install prevents the C extension build that fails on
+# embedded Python (missing sqlite3.h header).
+peewee>=3.17.0
+
+# Time series and forecasting (NumPy 1.x dependent)
+gluonts[torch]==0.16.2
+functime==0.1.10
+
+# Financial modeling (requires old numba - incompatible with NumPy 2.x)
+llvmlite==0.43.0
+numba==0.60.0
+financepy==1.0.1
+
+# Portfolio optimization (requires plotly<6.0.0)
+PyPortfolioOpt==1.5.6
+plotly>=5.18.0,<6.0.0
+
+# Visualization (for PyPortfolioOpt compatibility)
+matplotlib>=3.8.0,<3.10.0
+

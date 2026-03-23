@@ -1,4 +1,5 @@
 #include "storage/sqlite/CacheDatabase.h"
+
 #include "core/logging/Logger.h"
 
 namespace fincept {
@@ -17,13 +18,15 @@ Result<void> CacheDatabase::open(const QString& path) {
     LOG_INFO("CacheDB", "Opened cache database: " + path);
 
     auto pr = apply_pragmas();
-    if (pr.is_err()) return pr;
+    if (pr.is_err())
+        return pr;
 
     return create_tables();
 }
 
 void CacheDatabase::close() {
-    if (db_.isOpen()) db_.close();
+    if (db_.isOpen())
+        db_.close();
 }
 
 bool CacheDatabase::is_open() const {
@@ -52,18 +55,13 @@ Result<void> CacheDatabase::exec(const QString& sql) {
 
 Result<void> CacheDatabase::apply_pragmas() {
     const char* pragmas[] = {
-        "PRAGMA journal_mode = WAL",
-        "PRAGMA synchronous = OFF",
-        "PRAGMA cache_size = -10000",
-        "PRAGMA temp_store = MEMORY",
-        "PRAGMA mmap_size = 134217728",
-        "PRAGMA busy_timeout = 3000",
+        "PRAGMA journal_mode = WAL",  "PRAGMA synchronous = OFF",     "PRAGMA cache_size = -10000",
+        "PRAGMA temp_store = MEMORY", "PRAGMA mmap_size = 134217728", "PRAGMA busy_timeout = 3000",
     };
     for (auto* p : pragmas) {
         auto r = exec(p);
         if (r.is_err()) {
-            LOG_WARN("CacheDB", QString("PRAGMA failed: %1 — %2")
-                .arg(p, QString::fromStdString(r.error())));
+            LOG_WARN("CacheDB", QString("PRAGMA failed: %1 — %2").arg(p, QString::fromStdString(r.error())));
         }
     }
     return Result<void>::ok();
@@ -71,41 +69,44 @@ Result<void> CacheDatabase::apply_pragmas() {
 
 Result<void> CacheDatabase::create_tables() {
     // Unified cache with TTL
-    auto r = exec(
-        "CREATE TABLE IF NOT EXISTS unified_cache ("
-        "  key TEXT PRIMARY KEY,"
-        "  value TEXT NOT NULL,"
-        "  category TEXT DEFAULT 'general',"
-        "  content_type TEXT DEFAULT 'json',"
-        "  ttl_seconds INTEGER DEFAULT 300,"
-        "  expires_at TEXT NOT NULL,"
-        "  created_at TEXT DEFAULT (datetime('now')),"
-        "  hit_count INTEGER DEFAULT 0,"
-        "  size_bytes INTEGER DEFAULT 0"
-        ")");
-    if (r.is_err()) return r;
+    auto r = exec("CREATE TABLE IF NOT EXISTS unified_cache ("
+                  "  key TEXT PRIMARY KEY,"
+                  "  value TEXT NOT NULL,"
+                  "  category TEXT DEFAULT 'general',"
+                  "  content_type TEXT DEFAULT 'json',"
+                  "  ttl_seconds INTEGER DEFAULT 300,"
+                  "  expires_at TEXT NOT NULL,"
+                  "  created_at TEXT DEFAULT (datetime('now')),"
+                  "  hit_count INTEGER DEFAULT 0,"
+                  "  size_bytes INTEGER DEFAULT 0"
+                  ")");
+    if (r.is_err())
+        return r;
 
     r = exec("CREATE INDEX IF NOT EXISTS idx_cache_expires ON unified_cache(expires_at)");
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     r = exec("CREATE INDEX IF NOT EXISTS idx_cache_category ON unified_cache(category)");
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     // Tab session state persistence
-    r = exec(
-        "CREATE TABLE IF NOT EXISTS tab_sessions ("
-        "  tab_id TEXT PRIMARY KEY,"
-        "  screen_name TEXT NOT NULL,"
-        "  scroll_position REAL DEFAULT 0,"
-        "  filters_json TEXT DEFAULT '{}',"
-        "  selections_json TEXT DEFAULT '{}',"
-        "  last_accessed TEXT DEFAULT (datetime('now')),"
-        "  updated_at TEXT DEFAULT (datetime('now'))"
-        ")");
-    if (r.is_err()) return r;
+    r = exec("CREATE TABLE IF NOT EXISTS tab_sessions ("
+             "  tab_id TEXT PRIMARY KEY,"
+             "  screen_name TEXT NOT NULL,"
+             "  scroll_position REAL DEFAULT 0,"
+             "  filters_json TEXT DEFAULT '{}',"
+             "  selections_json TEXT DEFAULT '{}',"
+             "  last_accessed TEXT DEFAULT (datetime('now')),"
+             "  updated_at TEXT DEFAULT (datetime('now'))"
+             ")");
+    if (r.is_err())
+        return r;
 
     r = exec("CREATE INDEX IF NOT EXISTS idx_tab_sessions_accessed ON tab_sessions(last_accessed)");
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     LOG_INFO("CacheDB", "Cache tables initialized");
     return Result<void>::ok();

@@ -1,5 +1,7 @@
 #include "network/http/HttpClient.h"
+
 #include "core/logging/Logger.h"
+
 #include <QUrl>
 
 namespace fincept {
@@ -39,11 +41,10 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback) {
         QJsonDocument doc = QJsonDocument::fromJson(data, &parse_err);
 
         if (reply->error() != QNetworkReply::NoError) {
-            LOG_WARN("HTTP", QString("HTTP %1: %2 — %3")
-                .arg(status).arg(reply->url().toString()).arg(reply->errorString()));
+            LOG_WARN("HTTP",
+                     QString("HTTP %1: %2 — %3").arg(status).arg(reply->url().toString()).arg(reply->errorString()));
             // Return error so callers can distinguish HTTP failures from success
-            cb(Result<QJsonDocument>::err(
-                QString("HTTP_%1").arg(status).toStdString()));
+            cb(Result<QJsonDocument>::err(QString("HTTP_%1").arg(status).toStdString()));
             return;
         }
 

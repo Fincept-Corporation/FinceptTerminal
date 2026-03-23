@@ -1,9 +1,10 @@
 #pragma once
-#include <QWidget>
+#include "services/markets/MarketDataService.h"
+
 #include <QLabel>
 #include <QTableWidget>
 #include <QTimer>
-#include "services/markets/MarketDataService.h"
+#include <QWidget>
 
 namespace fincept::screens {
 
@@ -11,23 +12,26 @@ namespace fincept::screens {
 /// Fetches quotes and displays symbol/price/change/high/low.
 class MarketPanel : public QWidget {
     Q_OBJECT
-public:
-    MarketPanel(const QString& title, const QStringList& symbols,
-                bool show_name = false, QWidget* parent = nullptr);
+  public:
+    MarketPanel(const QString& title, const QStringList& symbols, bool show_name = false, QWidget* parent = nullptr);
 
     void set_symbols(const QStringList& symbols);
     void refresh();
 
-private:
+  private:
+    void populate(const QVector<services::QuoteData>& quotes);
+    void show_skeleton();
+    void pulse_skeleton();
+
     QString title_;
     QStringList symbols_;
     bool show_name_;
 
-    QLabel* title_label_  = nullptr;
+    QLabel* title_label_ = nullptr;
     QLabel* status_label_ = nullptr;
-    QTableWidget* table_  = nullptr;
-
-    void populate(const QVector<services::QuoteData>& quotes);
+    QTableWidget* table_ = nullptr;
+    QTimer* skeleton_timer_ = nullptr;
+    int skeleton_offset_ = 0; // shimmer position 0..100
 };
 
 } // namespace fincept::screens

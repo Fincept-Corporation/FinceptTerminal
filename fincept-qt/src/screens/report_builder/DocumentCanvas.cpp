@@ -1,13 +1,15 @@
 #include "screens/report_builder/DocumentCanvas.h"
+
 #include "screens/report_builder/ReportBuilderScreen.h"
 #include "ui/theme/Theme.h"
-#include <QVBoxLayout>
-#include <QTextCursor>
-#include <QTextTable>
-#include <QTextList>
-#include <QTextImageFormat>
+
 #include <QTextBlockFormat>
 #include <QTextCharFormat>
+#include <QTextCursor>
+#include <QTextImageFormat>
+#include <QTextList>
+#include <QTextTable>
+#include <QVBoxLayout>
 
 namespace fincept::screens {
 
@@ -20,19 +22,17 @@ DocumentCanvas::DocumentCanvas(QWidget* parent) : QWidget(parent) {
 
     editor_ = new QTextEdit;
     editor_->setReadOnly(true);
-    editor_->setFixedWidth(794);   // A4 at 96 dpi
+    editor_->setFixedWidth(794); // A4 at 96 dpi
     editor_->setMinimumHeight(1123);
-    editor_->setStyleSheet(
-        QString("QTextEdit { background: white; color: #1a1a1a; border: 1px solid %1; "
-                "padding: 60px; font-family: 'Segoe UI'; font-size: 12pt; }")
-            .arg(ui::colors::BORDER));
+    editor_->setStyleSheet(QString("QTextEdit { background: white; color: #1a1a1a; border: 1px solid %1; "
+                                   "padding: 60px; font-family: 'Segoe UI'; font-size: 12pt; }")
+                               .arg(ui::colors::BORDER));
 
     vl->addWidget(editor_);
 }
 
-void DocumentCanvas::render(const QVector<ReportComponent>& components,
-                             const ReportMetadata& metadata,
-                             int selected_index) {
+void DocumentCanvas::render(const QVector<ReportComponent>& components, const ReportMetadata& metadata,
+                            int selected_index) {
     editor_->clear();
     QTextCursor cursor = editor_->textCursor();
 
@@ -99,8 +99,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components,
             hdr_fmt.setForeground(QColor("#1a1a1a"));
 
             for (int c = 0; c < cols; ++c) {
-                table->cellAt(0, c).firstCursorPosition().insertText(
-                    QString("Header %1").arg(c + 1), hdr_fmt);
+                table->cellAt(0, c).firstCursorPosition().insertText(QString("Header %1").arg(c + 1), hdr_fmt);
             }
             cursor.movePosition(QTextCursor::End);
             cursor.insertText("\n");
@@ -142,7 +141,8 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components,
             lf.setStyle(QTextListFormat::ListDisc);
             lf.setIndent(1);
             QStringList items = comp.content.split("\n", Qt::SkipEmptyParts);
-            if (items.isEmpty()) items << "Item 1" << "Item 2";
+            if (items.isEmpty())
+                items << "Item 1" << "Item 2";
             for (const auto& item : items) {
                 cursor.insertBlock();
                 cursor.createList(lf);

@@ -3,25 +3,29 @@
 // Qt-adapted port using QProcess for subprocess management.
 
 #include "trading/TradingTypes.h"
-#include <QObject>
+
+#include <QElapsedTimer>
 #include <QHash>
-#include <QSet>
 #include <QMutex>
-#include <QTimer>
+#include <QObject>
 #include <QProcess>
-#include <functional>
+#include <QSet>
+#include <QTimer>
+#include <QWaitCondition>
+
 #include <atomic>
+#include <functional>
 
 namespace fincept::trading {
 
 using PriceUpdateCallback = std::function<void(const QString& symbol, const TickerData& ticker)>;
-using OrderBookCallback   = std::function<void(const QString& symbol, const OrderBookData& ob)>;
-using CandleCallback      = std::function<void(const QString& symbol, const Candle& candle)>;
-using TradeCallback       = std::function<void(const QString& symbol, const TradeData& trade)>;
+using OrderBookCallback = std::function<void(const QString& symbol, const OrderBookData& ob)>;
+using CandleCallback = std::function<void(const QString& symbol, const Candle& candle)>;
+using TradeCallback = std::function<void(const QString& symbol, const TradeData& trade)>;
 
 class ExchangeService : public QObject {
     Q_OBJECT
-public:
+  public:
     static ExchangeService& instance();
 
     // Configuration
@@ -47,30 +51,27 @@ public:
     void remove_trade_callback(int id);
 
     // WebSocket streaming
-    void start_ws_stream(const QString& primary_symbol,
-                         const QStringList& all_symbols);
+    void start_ws_stream(const QString& primary_symbol, const QStringList& all_symbols);
     void stop_ws_stream();
     bool is_ws_connected() const;
     void set_ws_primary_symbol(const QString& symbol);
     QString get_ws_primary_symbol() const;
 
-    // One-shot data fetches
+    // One-shot data fetches (synchronous — call from background thread only)
     TickerData fetch_ticker(const QString& symbol);
     QVector<TickerData> fetch_tickers(const QStringList& symbols);
     OrderBookData fetch_orderbook(const QString& symbol, int limit = 20);
-    QVector<Candle> fetch_ohlcv(const QString& symbol,
-                                 const QString& timeframe = "1h",
-                                 int limit = 100);
+    QVector<Candle> fetch_ohlcv(const QString& symbol, const QString& timeframe = "1h", int limit = 100);
     QVector<MarketInfo> fetch_markets(const QString& type = "");
     QStringList list_exchange_ids();
     QVector<TradeData> fetch_trades(const QString& symbol, int limit = 50);
     FundingRateData fetch_funding_rate(const QString& symbol);
     OpenInterestData fetch_open_interest(const QString& symbol);
 
-    // Authenticated operations
+    // Authenticated operations (synchronous — call from background thread only)
     QJsonObject fetch_balance();
-    QJsonObject place_exchange_order(const QString& symbol, const QString& side,
-                                      const QString& type, double amount, double price = 0.0);
+    QJsonObject place_exchange_order(const QString& symbol, const QString& side, const QString& type, double amount,
+                                     double price = 0.0);
     QJsonObject cancel_exchange_order(const QString& order_id, const QString& symbol);
     QJsonObject fetch_positions_live(const QString& symbol = "");
     QJsonObject fetch_open_orders_live(const QString& symbol = "");
@@ -82,20 +83,37 @@ public:
     ExchangeService(const ExchangeService&) = delete;
     ExchangeService& operator=(const ExchangeService&) = delete;
 
-private:
+  private:
     ExchangeService();
     ~ExchangeService();
 
     void poll_prices();
+
+    // Legacy one-shot script calls (fallback if daemon is unavailable)
     QJsonObject call_script(const QString& script, const QStringList& args);
     QJsonObject call_script_with_credentials(const QString& script, const QStringList& args);
+
+    // Persistent daemon — keeps ccxt loaded, eliminates per-request startup
+    void start_daemon();
+    void stop_daemon();
+    bool is_daemon_running() const;
+    QJsonObject daemon_call(const QString& method, const QJsonObject& args, int timeout_ms = 15000);
+    void drain_daemon_buffer();
+
+    QProcess* daemon_process_ = nullptr;
+    std::atomic<bool> daemon_ready_{false};
+    std::atomic<int> daemon_req_id_{0};
+    QHash<QString, QJsonObject> daemon_responses_;  // id -> response
+    QMutex daemon_mutex_;
+    QWaitCondition daemon_response_ready_;  // signaled when any response arrives
+    bool credentials_sent_to_daemon_ = false;
 
     static TickerData parse_ticker(const QJsonObject& j);
     static OrderBookData parse_orderbook(const QJsonObject& j);
     static Candle parse_candle(const QJsonObject& j);
     static MarketInfo parse_market(const QJsonObject& j);
 
-    QString exchange_id_ = "binance";
+    QString exchange_id_ = "kraken";
     ExchangeCredentials credentials_;
 
     QHash<QString, QSet<QString>> watched_;
@@ -109,6 +127,7 @@ private:
 
     QTimer* feed_timer_ = nullptr;
     std::atomic<bool> feed_running_{false};
+    std::atomic<bool> poll_in_progress_{false};
     int feed_interval_ = 5;
 
     // WebSocket subprocess
@@ -117,6 +136,7 @@ private:
     QString ws_primary_symbol_;
     QStringList ws_all_symbols_;
     void handle_ws_line(const QString& line);
+    void drain_ws_buffer();
 
     mutable QMutex mutex_;
 };

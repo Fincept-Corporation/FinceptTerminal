@@ -1,17 +1,19 @@
 #pragma once
+#include "core/result/Result.h"
+
 #include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QSqlError>
+#include <QSqlQuery>
 #include <QString>
 #include <QVector>
+
 #include <functional>
-#include "core/result/Result.h"
 
 namespace fincept {
 
 /// A single versioned migration.
 struct Migration {
-    int     version;
+    int version;
     QString name;
     std::function<Result<void>(QSqlDatabase&)> apply;
 };
@@ -19,7 +21,7 @@ struct Migration {
 /// Runs versioned migrations tracked in a schema_version table.
 /// Migration files auto-register via static initialization.
 class MigrationRunner {
-public:
+  public:
     explicit MigrationRunner(QSqlDatabase& db);
 
     /// Apply all pending migrations in order.
@@ -34,13 +36,24 @@ public:
     /// All registered migrations, sorted by version.
     static const QVector<Migration>& all_migrations();
 
-private:
+  private:
     Result<void> ensure_schema_version_table();
     Result<void> apply_migration(const Migration& m);
     Result<void> record_version(int version, const QString& name);
-    int  read_current_version();
+    int read_current_version();
 
     QSqlDatabase& db_;
 };
+
+// Explicit registration functions — call these before Database::open()
+// to ensure MSVC linker doesn't strip the migration translation units.
+void register_migration_v001();
+void register_migration_v002();
+void register_migration_v003();
+void register_migration_v004();
+void register_migration_v005();
+void register_migration_v006();
+void register_migration_v007();
+void register_migration_v008();
 
 } // namespace fincept

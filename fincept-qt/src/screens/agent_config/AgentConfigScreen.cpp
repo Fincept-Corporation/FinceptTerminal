@@ -1,0 +1,218 @@
+// src/screens/agent_config/AgentConfigScreen.cpp
+#include "screens/agent_config/AgentConfigScreen.h"
+
+#include "core/logging/Logger.h"
+#include "screens/agent_config/AgentChatPanel.h"
+#include "screens/agent_config/AgentsViewPanel.h"
+#include "screens/agent_config/CreateAgentPanel.h"
+#include "screens/agent_config/PlannerViewPanel.h"
+#include "screens/agent_config/SystemViewPanel.h"
+#include "screens/agent_config/TeamsViewPanel.h"
+#include "screens/agent_config/ToolsViewPanel.h"
+#include "screens/agent_config/WorkflowsViewPanel.h"
+#include "services/agents/AgentService.h"
+#include "ui/theme/Theme.h"
+
+#include <QHBoxLayout>
+#include <QShowEvent>
+#include <QVBoxLayout>
+
+namespace fincept::screens {
+
+// ── View mode metadata ───────────────────────────────────────────────────────
+
+struct ViewMeta {
+    services::AgentViewMode mode;
+    const char* label;
+};
+
+static constexpr ViewMeta kViews[] = {
+    {services::AgentViewMode::Agents, "AGENTS"},       {services::AgentViewMode::Create, "CREATE"},
+    {services::AgentViewMode::Teams, "TEAMS"},          {services::AgentViewMode::Workflows, "WORKFLOWS"},
+    {services::AgentViewMode::Planner, "PLANNER"},      {services::AgentViewMode::Tools, "TOOLS"},
+    {services::AgentViewMode::Chat, "CHAT"},            {services::AgentViewMode::System, "SYSTEM"},
+};
+
+// ── Constructor ──────────────────────────────────────────────────────────────
+
+AgentConfigScreen::AgentConfigScreen(QWidget* parent) : QWidget(parent) {
+    setObjectName("AgentConfigScreen");
+    build_ui();
+    setup_connections();
+}
+
+// ── UI construction ──────────────────────────────────────────────────────────
+
+void AgentConfigScreen::build_ui() {
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+
+    build_nav_bar(root);
+
+    // ── View stack ───────────────────────────────────────────────────────────
+    view_stack_ = new QStackedWidget;
+    view_stack_->setObjectName("AgentViewStack");
+    root->addWidget(view_stack_, 1);
+
+    // Index 0: AGENTS view
+    view_stack_->addWidget(new AgentsViewPanel);
+
+    view_stack_->addWidget(new CreateAgentPanel);           // 1
+    view_stack_->addWidget(new TeamsViewPanel);             // 2
+    view_stack_->addWidget(new WorkflowsViewPanel);        // 3
+    view_stack_->addWidget(new PlannerViewPanel);          // 4
+    view_stack_->addWidget(new ToolsViewPanel);             // 5
+    view_stack_->addWidget(new AgentChatPanel);            // 6
+
+    // Index 7: SYSTEM view
+    view_stack_->addWidget(new SystemViewPanel);
+
+    build_status_bar(root);
+}
+
+void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
+    auto* nav_bar = new QWidget;
+    nav_bar->setObjectName("AgentNavBar");
+    nav_bar->setFixedHeight(40);
+    nav_bar->setStyleSheet(
+        QString("QWidget#AgentNavBar { background: %1; border-bottom: 1px solid %2; }")
+            .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+
+    auto* hl = new QHBoxLayout(nav_bar);
+    hl->setContentsMargins(12, 0, 12, 0);
+    hl->setSpacing(0);
+
+    // Title
+    auto* title = new QLabel("AGENT STUDIO");
+    title->setStyleSheet(
+        QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;padding-right:16px;")
+            .arg(ui::colors::AMBER));
+    hl->addWidget(title);
+
+    // Separator
+    auto* sep = new QFrame;
+    sep->setFrameShape(QFrame::VLine);
+    sep->setStyleSheet(QString("color:%1;").arg(ui::colors::BORDER_MED));
+    sep->setFixedWidth(1);
+    hl->addWidget(sep);
+
+    // Navigation buttons
+    for (const auto& vm : kViews) {
+        auto* btn = make_nav_btn(vm.label, vm.mode);
+        hl->addWidget(btn);
+        nav_buttons_.append(btn);
+    }
+
+    hl->addStretch();
+
+    // Agent count badge
+    agent_count_label_ = new QLabel;
+    agent_count_label_->setStyleSheet(
+        QString("color:%1;font-size:11px;padding:2px 8px;background:%2;border-radius:2px;")
+            .arg(ui::colors::AMBER, ui::colors::BG_SURFACE));
+    hl->addWidget(agent_count_label_);
+
+    root->addWidget(nav_bar);
+}
+
+void AgentConfigScreen::build_status_bar(QVBoxLayout* root) {
+    auto* bar = new QWidget;
+    bar->setFixedHeight(24);
+    bar->setStyleSheet(
+        QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(12, 0, 12, 0);
+
+    status_label_ = new QLabel("READY");
+    status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY));
+    hl->addWidget(status_label_);
+    hl->addStretch();
+
+    auto* view_label = new QLabel;
+    view_label->setObjectName("AgentStatusView");
+    view_label->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::AMBER));
+    hl->addWidget(view_label);
+
+    root->addWidget(bar);
+
+    // Update view label when view changes
+    connect(view_stack_, &QStackedWidget::currentChanged, this, [view_label](int idx) {
+        if (idx >= 0 && idx < static_cast<int>(std::size(kViews)))
+            view_label->setText(kViews[idx].label);
+    });
+}
+
+QPushButton* AgentConfigScreen::make_nav_btn(const QString& text, services::AgentViewMode mode) {
+    auto* btn = new QPushButton(text);
+    btn->setCheckable(true);
+    btn->setChecked(mode == services::AgentViewMode::Agents);
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setStyleSheet(
+        QString(
+            "QPushButton { background: transparent; color: %1; font-size: 11px; font-weight: 600; "
+            "letter-spacing: 1px; padding: 8px 12px; border: none; border-bottom: 2px solid transparent; }"
+            "QPushButton:hover { color: %2; }"
+            "QPushButton:checked { color: %2; border-bottom: 2px solid %2; }")
+            .arg(ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+
+    connect(btn, &QPushButton::clicked, this, [this, mode]() { set_view(mode); });
+    return btn;
+}
+
+// ── View switching ───────────────────────────────────────────────────────────
+
+void AgentConfigScreen::set_view(services::AgentViewMode mode) {
+    int idx = static_cast<int>(mode);
+    view_stack_->setCurrentIndex(idx);
+    current_view_ = mode;
+
+    // Update button checked states
+    for (int i = 0; i < nav_buttons_.size(); ++i)
+        nav_buttons_[i]->setChecked(i == idx);
+}
+
+// ── Connections ──────────────────────────────────────────────────────────────
+
+void AgentConfigScreen::setup_connections() {
+    auto& svc = services::AgentService::instance();
+
+    connect(&svc, &services::AgentService::agents_discovered, this,
+            [this](QVector<services::AgentInfo> agents, QVector<services::AgentCategory>) {
+                agent_count_label_->setText(QString("%1 agents").arg(agents.size()));
+            });
+
+    connect(&svc, &services::AgentService::error_occurred, this,
+            [this](const QString& ctx, const QString& msg) {
+                status_label_->setText(QString("ERROR [%1]: %2").arg(ctx, msg.left(60)));
+                status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
+            });
+
+    // Reset status on successful operations
+    connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
+        if (r.success) {
+            status_label_->setText(QString("DONE (%1ms)").arg(r.execution_time_ms));
+            status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::POSITIVE));
+        } else {
+            status_label_->setText(QString("FAILED: %1").arg(r.error.left(60)));
+            status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
+        }
+    });
+}
+
+// ── Visibility ───────────────────────────────────────────────────────────────
+
+void AgentConfigScreen::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (first_show_) {
+        first_show_ = false;
+        services::AgentService::instance().discover_agents();
+    }
+}
+
+void AgentConfigScreen::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+}
+
+} // namespace fincept::screens

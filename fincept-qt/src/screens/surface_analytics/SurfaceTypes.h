@@ -2,10 +2,10 @@
 // Surface Analytics — data types for 35 financial surface visualizations
 // Equity derivatives, fixed income, FX, credit, commodities, risk, macro
 
-#include <vector>
-#include <string>
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <string>
+#include <vector>
 
 namespace fincept::surface {
 
@@ -14,60 +14,121 @@ namespace fincept::surface {
 // ============================================================================
 enum class ChartType {
     // Equity Derivatives (7)
-    Volatility, DeltaSurface, GammaSurface, VegaSurface, ThetaSurface,
-    SkewSurface, LocalVolSurface,
+    Volatility,
+    DeltaSurface,
+    GammaSurface,
+    VegaSurface,
+    ThetaSurface,
+    SkewSurface,
+    LocalVolSurface,
     // Fixed Income (7)
-    YieldCurve, SwaptionVol, CapFloorVol, BondSpread, OISBasis, RealYield, ForwardRate,
+    YieldCurve,
+    SwaptionVol,
+    CapFloorVol,
+    BondSpread,
+    OISBasis,
+    RealYield,
+    ForwardRate,
     // FX (3)
-    FXVol, FXForwardPoints, CrossCurrencyBasis,
+    FXVol,
+    FXForwardPoints,
+    CrossCurrencyBasis,
     // Credit (3)
-    CDSSpread, CreditTransition, RecoveryRate,
+    CDSSpread,
+    CreditTransition,
+    RecoveryRate,
     // Commodities (4)
-    CommodityForward, CommodityVol, CrackSpread, ContangoBackwardation,
+    CommodityForward,
+    CommodityVol,
+    CrackSpread,
+    ContangoBackwardation,
     // Risk & Portfolio (9)
-    Correlation, PCA, VaR, StressTestPnL, FactorExposure,
-    LiquidityHeatmap, Drawdown, BetaSurface, ImpliedDividend,
+    Correlation,
+    PCA,
+    VaR,
+    StressTestPnL,
+    FactorExposure,
+    LiquidityHeatmap,
+    Drawdown,
+    BetaSurface,
+    ImpliedDividend,
     // Macro (2)
-    InflationExpectations, MonetaryPolicyPath,
+    InflationExpectations,
+    MonetaryPolicyPath,
 };
 
 inline const char* chart_type_name(ChartType t) {
     switch (t) {
-        case ChartType::Volatility:            return "VOL SURFACE";
-        case ChartType::DeltaSurface:          return "DELTA";
-        case ChartType::GammaSurface:          return "GAMMA";
-        case ChartType::VegaSurface:           return "VEGA";
-        case ChartType::ThetaSurface:          return "THETA";
-        case ChartType::SkewSurface:           return "SKEW";
-        case ChartType::LocalVolSurface:       return "LOCAL VOL";
-        case ChartType::YieldCurve:            return "YIELD CURVE";
-        case ChartType::SwaptionVol:           return "SWAPTION VOL";
-        case ChartType::CapFloorVol:           return "CAP/FLOOR";
-        case ChartType::BondSpread:            return "BOND SPREAD";
-        case ChartType::OISBasis:              return "OIS BASIS";
-        case ChartType::RealYield:             return "REAL YIELD";
-        case ChartType::ForwardRate:           return "FWD RATE";
-        case ChartType::FXVol:                 return "FX VOL";
-        case ChartType::FXForwardPoints:       return "FX FORWARD";
-        case ChartType::CrossCurrencyBasis:    return "XCCY BASIS";
-        case ChartType::CDSSpread:             return "CDS SPREAD";
-        case ChartType::CreditTransition:      return "TRANSITION";
-        case ChartType::RecoveryRate:          return "RECOVERY";
-        case ChartType::CommodityForward:      return "CMDTY FWD";
-        case ChartType::CommodityVol:          return "CMDTY VOL";
-        case ChartType::CrackSpread:           return "CRACK/CRUSH";
-        case ChartType::ContangoBackwardation: return "CONTANGO";
-        case ChartType::Correlation:           return "CORRELATION";
-        case ChartType::PCA:                   return "PCA";
-        case ChartType::VaR:                   return "VAR";
-        case ChartType::StressTestPnL:         return "STRESS TEST";
-        case ChartType::FactorExposure:        return "FACTOR EXP";
-        case ChartType::LiquidityHeatmap:      return "LIQUIDITY";
-        case ChartType::Drawdown:              return "DRAWDOWN";
-        case ChartType::BetaSurface:           return "BETA";
-        case ChartType::ImpliedDividend:       return "IMPL DIV";
-        case ChartType::InflationExpectations: return "INFLATION";
-        case ChartType::MonetaryPolicyPath:    return "RATE PATH";
+        case ChartType::Volatility:
+            return "VOL SURFACE";
+        case ChartType::DeltaSurface:
+            return "DELTA";
+        case ChartType::GammaSurface:
+            return "GAMMA";
+        case ChartType::VegaSurface:
+            return "VEGA";
+        case ChartType::ThetaSurface:
+            return "THETA";
+        case ChartType::SkewSurface:
+            return "SKEW";
+        case ChartType::LocalVolSurface:
+            return "LOCAL VOL";
+        case ChartType::YieldCurve:
+            return "YIELD CURVE";
+        case ChartType::SwaptionVol:
+            return "SWAPTION VOL";
+        case ChartType::CapFloorVol:
+            return "CAP/FLOOR";
+        case ChartType::BondSpread:
+            return "BOND SPREAD";
+        case ChartType::OISBasis:
+            return "OIS BASIS";
+        case ChartType::RealYield:
+            return "REAL YIELD";
+        case ChartType::ForwardRate:
+            return "FWD RATE";
+        case ChartType::FXVol:
+            return "FX VOL";
+        case ChartType::FXForwardPoints:
+            return "FX FORWARD";
+        case ChartType::CrossCurrencyBasis:
+            return "XCCY BASIS";
+        case ChartType::CDSSpread:
+            return "CDS SPREAD";
+        case ChartType::CreditTransition:
+            return "TRANSITION";
+        case ChartType::RecoveryRate:
+            return "RECOVERY";
+        case ChartType::CommodityForward:
+            return "CMDTY FWD";
+        case ChartType::CommodityVol:
+            return "CMDTY VOL";
+        case ChartType::CrackSpread:
+            return "CRACK/CRUSH";
+        case ChartType::ContangoBackwardation:
+            return "CONTANGO";
+        case ChartType::Correlation:
+            return "CORRELATION";
+        case ChartType::PCA:
+            return "PCA";
+        case ChartType::VaR:
+            return "VAR";
+        case ChartType::StressTestPnL:
+            return "STRESS TEST";
+        case ChartType::FactorExposure:
+            return "FACTOR EXP";
+        case ChartType::LiquidityHeatmap:
+            return "LIQUIDITY";
+        case ChartType::Drawdown:
+            return "DRAWDOWN";
+        case ChartType::BetaSurface:
+            return "BETA";
+        case ChartType::ImpliedDividend:
+            return "IMPL DIV";
+        case ChartType::InflationExpectations:
+            return "INFLATION";
+        case ChartType::MonetaryPolicyPath:
+            return "RATE PATH";
     }
     return "UNKNOWN";
 }
@@ -79,20 +140,21 @@ struct SurfaceCategory {
 
 inline std::vector<SurfaceCategory> get_surface_categories() {
     return {
-        {"EQUITY DERIV", {ChartType::Volatility, ChartType::DeltaSurface, ChartType::GammaSurface,
-                          ChartType::VegaSurface, ChartType::ThetaSurface, ChartType::SkewSurface,
-                          ChartType::LocalVolSurface}},
-        {"FIXED INCOME", {ChartType::YieldCurve, ChartType::SwaptionVol, ChartType::CapFloorVol,
-                          ChartType::BondSpread, ChartType::OISBasis, ChartType::RealYield,
-                          ChartType::ForwardRate}},
-        {"FX",           {ChartType::FXVol, ChartType::FXForwardPoints, ChartType::CrossCurrencyBasis}},
-        {"CREDIT",       {ChartType::CDSSpread, ChartType::CreditTransition, ChartType::RecoveryRate}},
-        {"COMMODITIES",  {ChartType::CommodityForward, ChartType::CommodityVol,
-                          ChartType::CrackSpread, ChartType::ContangoBackwardation}},
-        {"RISK",         {ChartType::Correlation, ChartType::PCA, ChartType::VaR,
-                          ChartType::StressTestPnL, ChartType::FactorExposure, ChartType::LiquidityHeatmap,
-                          ChartType::Drawdown, ChartType::BetaSurface, ChartType::ImpliedDividend}},
-        {"MACRO",        {ChartType::InflationExpectations, ChartType::MonetaryPolicyPath}},
+        {"EQUITY DERIV",
+         {ChartType::Volatility, ChartType::DeltaSurface, ChartType::GammaSurface, ChartType::VegaSurface,
+          ChartType::ThetaSurface, ChartType::SkewSurface, ChartType::LocalVolSurface}},
+        {"FIXED INCOME",
+         {ChartType::YieldCurve, ChartType::SwaptionVol, ChartType::CapFloorVol, ChartType::BondSpread,
+          ChartType::OISBasis, ChartType::RealYield, ChartType::ForwardRate}},
+        {"FX", {ChartType::FXVol, ChartType::FXForwardPoints, ChartType::CrossCurrencyBasis}},
+        {"CREDIT", {ChartType::CDSSpread, ChartType::CreditTransition, ChartType::RecoveryRate}},
+        {"COMMODITIES",
+         {ChartType::CommodityForward, ChartType::CommodityVol, ChartType::CrackSpread,
+          ChartType::ContangoBackwardation}},
+        {"RISK",
+         {ChartType::Correlation, ChartType::PCA, ChartType::VaR, ChartType::StressTestPnL, ChartType::FactorExposure,
+          ChartType::LiquidityHeatmap, ChartType::Drawdown, ChartType::BetaSurface, ChartType::ImpliedDividend}},
+        {"MACRO", {ChartType::InflationExpectations, ChartType::MonetaryPolicyPath}},
     };
 }
 

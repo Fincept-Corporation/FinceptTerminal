@@ -1,8 +1,9 @@
 #pragma once
+#include <QHash>
 #include <QObject>
 #include <QStackedWidget>
-#include <QHash>
 #include <QWidget>
+
 #include <functional>
 
 namespace fincept {
@@ -12,7 +13,7 @@ namespace fincept {
 /// Lazy screens are only constructed on first navigation — critical for startup performance.
 class ScreenRouter : public QObject {
     Q_OBJECT
-public:
+  public:
     using ScreenFactory = std::function<QWidget*()>;
 
     explicit ScreenRouter(QStackedWidget* stack, QObject* parent = nullptr);
@@ -26,10 +27,10 @@ public:
     void navigate(const QString& id);
     QString current_screen_id() const { return current_id_; }
 
-signals:
+  signals:
     void screen_changed(const QString& id);
 
-private:
+  private:
     QStackedWidget* stack_ = nullptr;
     QHash<QString, QWidget*> screens_;
     QHash<QString, ScreenFactory> factories_;

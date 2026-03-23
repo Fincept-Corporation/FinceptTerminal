@@ -1,47 +1,42 @@
 #include "screens/about/AboutScreen.h"
+
 #include "ui/theme/Theme.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
+
+#include <QDesktopServices>
+#include <QFrame>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QFrame>
-#include <QDesktopServices>
 #include <QUrl>
+#include <QVBoxLayout>
 
 namespace fincept::screens {
 
 // ── Style constants ───────────────────────────────────────────────────────────
 
-static const char* SECTION_LABEL =
-    "color: #808080; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; "
-    "text-transform: uppercase; background: transparent; "
-    "font-family: 'Consolas','Courier New',monospace;";
+static const char* SECTION_LABEL = "color: #808080; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; "
+                                   "text-transform: uppercase; background: transparent; "
+                                   "font-family: 'Consolas','Courier New',monospace;";
 
-static const char* BODY =
-    "color: #e5e5e5; font-size: 13px; background: transparent; "
-    "font-family: 'Consolas','Courier New',monospace;";
+static const char* BODY = "color: #e5e5e5; font-size: 13px; background: transparent; "
+                          "font-family: 'Consolas','Courier New',monospace;";
 
-static const char* MUTED =
-    "color: #525252; font-size: 12px; background: transparent; "
-    "font-family: 'Consolas','Courier New',monospace;";
+static const char* MUTED = "color: #525252; font-size: 12px; background: transparent; "
+                           "font-family: 'Consolas','Courier New',monospace;";
 
-static const char* LINK_STYLE =
-    "color: #0891b2; font-size: 13px; background: transparent; "
-    "font-family: 'Consolas','Courier New',monospace;";
+static const char* LINK_STYLE = "color: #0891b2; font-size: 13px; background: transparent; "
+                                "font-family: 'Consolas','Courier New',monospace;";
 
-static const char* PANEL =
-    "background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 2px;";
+static const char* PANEL = "background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 2px;";
 
-static const char* PANEL_HEADER =
-    "background: #111111; border-bottom: 1px solid #1a1a1a;";
+static const char* PANEL_HEADER = "background: #111111; border-bottom: 1px solid #1a1a1a;";
 
-static const char* LINK_BTN =
-    "QPushButton { background: #111111; color: #0891b2; border: 1px solid #1a1a1a; "
-    "border-radius: 2px; padding: 8px 12px; font-size: 12px; text-align: left; "
-    "font-family: 'Consolas','Courier New',monospace; }"
-    "QPushButton:hover { background: #161616; color: #38bdf8; }";
+static const char* LINK_BTN = "QPushButton { background: #111111; color: #0891b2; border: 1px solid #1a1a1a; "
+                              "border-radius: 2px; padding: 8px 12px; font-size: 12px; text-align: left; "
+                              "font-family: 'Consolas','Courier New',monospace; }"
+                              "QPushButton:hover { background: #161616; color: #38bdf8; }";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -51,21 +46,19 @@ static QWidget* makePanel() {
     return w;
 }
 
-static QLabel* makePanelHeader(const QString& icon, const QString& title,
-                                const QString& iconColor) {
+static QLabel* makePanelHeader(const QString& icon, const QString& title, const QString& iconColor) {
     auto* lbl = new QLabel(QString("%1  %2").arg(icon, title));
-    lbl->setStyleSheet(QString(
-        "color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; "
-        "background: #111111; padding: 10px 14px; border-bottom: 1px solid #1a1a1a; "
-        "font-family: 'Consolas','Courier New',monospace;").arg(iconColor));
+    lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; "
+                               "background: #111111; padding: 10px 14px; border-bottom: 1px solid #1a1a1a; "
+                               "font-family: 'Consolas','Courier New',monospace;")
+                           .arg(iconColor));
     return lbl;
 }
 
 static QLabel* makeBullet(const QString& text) {
     auto* lbl = new QLabel(QString("■  %1").arg(text));
-    lbl->setStyleSheet(
-        "color: #808080; font-size: 12px; background: transparent; "
-        "font-family: 'Consolas','Courier New',monospace;");
+    lbl->setStyleSheet("color: #808080; font-size: 12px; background: transparent; "
+                       "font-family: 'Consolas','Courier New',monospace;");
     lbl->setWordWrap(true);
     return lbl;
 }
@@ -86,7 +79,6 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
-
 
     // ── Scrollable content ────────────────────────────────────────────────────
     auto* scroll = new QScrollArea;
@@ -116,9 +108,8 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         auto* left = new QVBoxLayout;
         left->setSpacing(4);
         auto* name = new QLabel("Fincept Terminal");
-        name->setStyleSheet(
-            "color: #e5e5e5; font-size: 15px; font-weight: bold; background: transparent; "
-            "font-family: 'Consolas','Courier New',monospace;");
+        name->setStyleSheet("color: #e5e5e5; font-size: 15px; font-weight: bold; background: transparent; "
+                            "font-family: 'Consolas','Courier New',monospace;");
         left->addWidget(name);
         auto* sub = new QLabel("NATIVE DESKTOP FINANCIAL INTELLIGENCE TERMINAL");
         sub->setStyleSheet(MUTED);
@@ -130,9 +121,8 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         right->setSpacing(4);
         right->setAlignment(Qt::AlignRight);
         auto* ver = new QLabel("v4.0.0");
-        ver->setStyleSheet(
-            "color: #d97706; font-size: 18px; font-weight: bold; background: transparent; "
-            "font-family: 'Consolas','Courier New',monospace;");
+        ver->setStyleSheet("color: #d97706; font-size: 18px; font-weight: bold; background: transparent; "
+                           "font-family: 'Consolas','Courier New',monospace;");
         ver->setAlignment(Qt::AlignRight);
         right->addWidget(ver);
         auto* bdate = new QLabel("Build: 2026-03-20");
@@ -145,10 +135,9 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
 
         // Footer bar
         auto* foot = new QLabel("© 2024-2026 Fincept Corporation. All rights reserved.");
-        foot->setStyleSheet(
-            "color: #525252; font-size: 11px; background: #111111; "
-            "padding: 6px 14px; border-top: 1px solid #1a1a1a; "
-            "font-family: 'Consolas','Courier New',monospace;");
+        foot->setStyleSheet("color: #525252; font-size: 11px; background: #111111; "
+                            "padding: 6px 14px; border-top: 1px solid #1a1a1a; "
+                            "font-family: 'Consolas','Courier New',monospace;");
         pvl->addWidget(foot);
 
         vl->addWidget(panel);
@@ -183,10 +172,9 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
 
             // Footer link
             auto* foot = new QLabel("gnu.org/licenses/agpl-3.0");
-            foot->setStyleSheet(
-                "color: #0891b2; font-size: 11px; background: transparent; "
-                "padding: 6px 14px; border-top: 1px solid #1a1a1a; "
-                "font-family: 'Consolas','Courier New',monospace;");
+            foot->setStyleSheet("color: #0891b2; font-size: 11px; background: transparent; "
+                                "padding: 6px 14px; border-top: 1px solid #1a1a1a; "
+                                "font-family: 'Consolas','Courier New',monospace;");
             pvl->addWidget(foot);
 
             rl->addWidget(panel, 1);
@@ -213,10 +201,9 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
 
             // Footer link
             auto* foot = new QLabel("support@fincept.in");
-            foot->setStyleSheet(
-                "color: #0891b2; font-size: 11px; background: transparent; "
-                "padding: 6px 14px; border-top: 1px solid #1a1a1a; "
-                "font-family: 'Consolas','Courier New',monospace;");
+            foot->setStyleSheet("color: #0891b2; font-size: 11px; background: transparent; "
+                                "padding: 6px 14px; border-top: 1px solid #1a1a1a; "
+                                "font-family: 'Consolas','Courier New',monospace;");
             pvl->addWidget(foot);
 
             rl->addWidget(panel, 1);
@@ -239,16 +226,15 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         bvl->setContentsMargins(14, 10, 14, 12);
         bvl->setSpacing(6);
 
-        auto* desc = new QLabel(
-            "\"Fincept\", \"Fincept Terminal\", and associated logos are trademarks of "
-            "Fincept Corporation. Use of these marks requires explicit written permission.");
+        auto* desc = new QLabel("\"Fincept\", \"Fincept Terminal\", and associated logos are trademarks of "
+                                "Fincept Corporation. Use of these marks requires explicit written permission.");
         desc->setStyleSheet(BODY);
         desc->setWordWrap(true);
         bvl->addWidget(desc);
 
-        auto* perm = new QLabel(
-            "Permission is not granted to use Fincept trademarks in a way that suggests "
-            "affiliation with or endorsement by Fincept Corporation without prior written consent.");
+        auto* perm =
+            new QLabel("Permission is not granted to use Fincept trademarks in a way that suggests "
+                       "affiliation with or endorsement by Fincept Corporation without prior written consent.");
         perm->setStyleSheet(MUTED);
         perm->setWordWrap(true);
         bvl->addWidget(perm);
@@ -271,14 +257,18 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         grid->setContentsMargins(14, 10, 14, 12);
         grid->setSpacing(8);
 
-        struct Link { QString label; QString url; };
+        struct Link {
+            QString label;
+            QString url;
+        };
         const Link links[] = {
-            { "GitHub Repository",   "https://github.com/Fincept-Corporation/FinceptTerminal" },
-            { "License (AGPL-3.0)", "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE" },
-            { "Commercial License",  "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md" },
-            { "Trademark Policy",    "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md" },
-            { "Contributor CLA",     "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md" },
-            { "Official Website",    "https://fincept.in" },
+            {"GitHub Repository", "https://github.com/Fincept-Corporation/FinceptTerminal"},
+            {"License (AGPL-3.0)", "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE"},
+            {"Commercial License",
+             "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md"},
+            {"Trademark Policy", "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md"},
+            {"Contributor CLA", "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md"},
+            {"Official Website", "https://fincept.in"},
         };
 
         for (int i = 0; i < 6; ++i) {
@@ -286,9 +276,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             btn->setStyleSheet(LINK_BTN);
             btn->setFixedHeight(36);
             const QString url = links[i].url;
-            connect(btn, &QPushButton::clicked, this, [url]() {
-                QDesktopServices::openUrl(QUrl(url));
-            });
+            connect(btn, &QPushButton::clicked, this, [url]() { QDesktopServices::openUrl(QUrl(url)); });
             grid->addWidget(btn, i / 3, i % 3);
         }
 
@@ -310,12 +298,15 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         grid->setContentsMargins(14, 10, 14, 12);
         grid->setSpacing(12);
 
-        struct Contact { QString label; QString email; };
+        struct Contact {
+            QString label;
+            QString email;
+        };
         const Contact contacts[] = {
-            { "GENERAL",    "support@fincept.in" },
-            { "COMMERCIAL", "support@fincept.in" },
-            { "SECURITY",   "support@fincept.in" },
-            { "LEGAL",      "support@fincept.in" },
+            {"GENERAL", "support@fincept.in"},
+            {"COMMERCIAL", "support@fincept.in"},
+            {"SECURITY", "support@fincept.in"},
+            {"LEGAL", "support@fincept.in"},
         };
 
         for (int i = 0; i < 4; ++i) {
@@ -343,7 +334,6 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
     vl->addStretch();
     scroll->setWidget(page);
     root->addWidget(scroll, 1);
-
 }
 
 } // namespace fincept::screens

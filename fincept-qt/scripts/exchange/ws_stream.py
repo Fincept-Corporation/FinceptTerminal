@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import signal
+import time
 import traceback
 import platform
 
@@ -28,38 +29,84 @@ from exchange_client import load_cached_markets, save_markets_cache
 
 MAX_CONSECUTIVE_ERRORS = 10  # Stop a watcher after this many consecutive errors
 
+# Try orjson for ~3-5x faster JSON serialization (C extension).
+# Falls back to stdlib json if not installed.
+try:
+    import orjson as _json_mod
+
+    def _dumps(obj):
+        return _json_mod.dumps(obj, default=str).decode()
+except ImportError:
+    _json_mod = None
+
+    def _dumps(obj):
+        return json.dumps(obj, default=str, separators=(",", ":"))
+
+# Stdout write buffer — bypass Python's line-buffered print() overhead.
+# Use a single write() call with JSON+newline to avoid split-write pipe issues
+# where canReadLine() on the C++ side sees partial lines.
+_stdout_write = sys.stdout.write
+_stdout_flush = sys.stdout.flush
+
 
 def emit(obj):
     """Write JSON line to stdout, flush immediately."""
     try:
-        print(json.dumps(obj, default=str), flush=True)
+        _stdout_write(_dumps(obj) + "\n")
+        _stdout_flush()
     except Exception:
         pass
 
 
+def _make_ticker_msg(ticker):
+    """Build a ticker dict from a ccxt ticker — reused by watch_ticker and watch_tickers."""
+    return {
+        "type": "ticker",
+        "symbol": ticker["symbol"],
+        "last": ticker.get("last"),
+        "bid": ticker.get("bid"),
+        "ask": ticker.get("ask"),
+        "high": ticker.get("high"),
+        "low": ticker.get("low"),
+        "open": ticker.get("open"),
+        "close": ticker.get("close"),
+        "change": ticker.get("change"),
+        "percentage": ticker.get("percentage"),
+        "base_volume": ticker.get("baseVolume"),
+        "quote_volume": ticker.get("quoteVolume"),
+        "timestamp": ticker.get("timestamp"),
+    }
+
+
+# Ticker dedup: skip emitting if last price is identical and <100ms since last emit.
+# This prevents flooding stdout with duplicate tickers during calm markets.
+_last_ticker_emit = {}  # symbol -> (last_price, monotonic_time)
+_TICKER_MIN_INTERVAL = 0.1  # seconds
+
+
+def _should_emit_ticker(symbol, last_price):
+    """Return True if this ticker update should be emitted (dedup + throttle)."""
+    now = time.monotonic()
+    prev = _last_ticker_emit.get(symbol)
+    if prev is not None:
+        prev_price, prev_time = prev
+        if prev_price == last_price and (now - prev_time) < _TICKER_MIN_INTERVAL:
+            return False
+    _last_ticker_emit[symbol] = (last_price, now)
+    return True
+
+
 async def watch_ticker(exchange, symbol):
-    """Stream ticker updates."""
+    """Stream ticker updates for the primary symbol."""
     errors = 0
     while True:
         try:
             ticker = await exchange.watch_ticker(symbol)
             errors = 0  # reset on success
-            emit({
-                "type": "ticker",
-                "symbol": ticker["symbol"],
-                "last": ticker.get("last"),
-                "bid": ticker.get("bid"),
-                "ask": ticker.get("ask"),
-                "high": ticker.get("high"),
-                "low": ticker.get("low"),
-                "open": ticker.get("open"),
-                "close": ticker.get("close"),
-                "change": ticker.get("change"),
-                "percentage": ticker.get("percentage"),
-                "base_volume": ticker.get("baseVolume"),
-                "quote_volume": ticker.get("quoteVolume"),
-                "timestamp": ticker.get("timestamp"),
-            })
+            last = ticker.get("last")
+            if not _should_emit_ticker(symbol, last):
+                continue
+            emit(_make_ticker_msg(ticker))
         except Exception as e:
             errors += 1
             if errors <= 3:  # only emit first few errors
@@ -106,13 +153,20 @@ async def watch_orderbook(exchange, symbol, limit=15):
 
 
 async def watch_ohlcv(exchange, symbol, timeframe="1m"):
-    """Stream OHLCV candle updates."""
+    """Stream OHLCV candle updates.
+
+    Only emits the LATEST candle per update (the current/forming candle).
+    ccxt.pro returns the full candle array on each WS message, but the C++ side
+    only needs the latest candle for live chart updates — emitting all candles
+    would flood stdout with redundant historical data.
+    """
     errors = 0
     while True:
         try:
             candles = await exchange.watch_ohlcv(symbol, timeframe)
             errors = 0
-            for c in candles:
+            if candles:
+                c = candles[-1]  # Only emit the latest (current) candle
                 emit({
                     "type": "ohlcv",
                     "symbol": symbol,
@@ -167,29 +221,21 @@ async def watch_trades_stream(exchange, symbol):
 
 
 async def watch_tickers(exchange, symbols):
-    """Stream ticker updates for multiple symbols (batch)."""
+    """Stream ticker updates for multiple symbols (batch watchlist).
+
+    Uses the same dedup/throttle as single-symbol watch_ticker to prevent
+    flooding stdout when many symbols update simultaneously.
+    """
     errors = 0
     while True:
         try:
             tickers = await exchange.watch_tickers(symbols)
             errors = 0
             for symbol, ticker in tickers.items():
-                emit({
-                    "type": "ticker",
-                    "symbol": ticker["symbol"],
-                    "last": ticker.get("last"),
-                    "bid": ticker.get("bid"),
-                    "ask": ticker.get("ask"),
-                    "high": ticker.get("high"),
-                    "low": ticker.get("low"),
-                    "open": ticker.get("open"),
-                    "close": ticker.get("close"),
-                    "change": ticker.get("change"),
-                    "percentage": ticker.get("percentage"),
-                    "base_volume": ticker.get("baseVolume"),
-                    "quote_volume": ticker.get("quoteVolume"),
-                    "timestamp": ticker.get("timestamp"),
-                })
+                last = ticker.get("last")
+                if not _should_emit_ticker(symbol, last):
+                    continue
+                emit(_make_ticker_msg(ticker))
         except Exception as e:
             errors += 1
             if errors <= 3:

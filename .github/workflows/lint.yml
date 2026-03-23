@@ -1,0 +1,104 @@
+name: Lint
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'fincept-qt/src/**'
+      - 'fincept-qt/.clang-format'
+      - 'fincept-qt/.clang-tidy'
+      - 'fincept-qt/CMakeLists.txt'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'fincept-qt/src/**'
+      - 'fincept-qt/.clang-format'
+      - 'fincept-qt/.clang-tidy'
+      - 'fincept-qt/CMakeLists.txt'
+
+jobs:
+  # ── clang-format ─────────────────────────────────────────────────────────────
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang-format-18
+          sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-18 100
+
+      - name: Check formatting
+        working-directory: fincept-qt
+        run: |
+          find src -name "*.cpp" -o -name "*.h" | sort | \
+            xargs clang-format --style=file --dry-run --Werror
+          echo "All files are correctly formatted."
+
+  # ── clang-tidy ───────────────────────────────────────────────────────────────
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            clang-18 clang-tidy-18 \
+            cmake ninja-build \
+            qt6-base-dev qt6-charts-dev \
+            libqt6sql6-dev libqt6websockets6-dev \
+            libqt6concurrent6-dev libqt6printsupport6-dev
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
+          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-18 100
+
+      - name: Configure (generate compile_commands.json)
+        working-directory: fincept-qt
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run clang-tidy
+        working-directory: fincept-qt
+        run: |
+          find src -name "*.cpp" | grep -v "/moc_" | grep -v "/qrc_" | sort | \
+            xargs clang-tidy \
+              --config-file=.clang-tidy \
+              -p build \
+              --extra-arg=-std=c++20 \
+              2>&1
+          echo "clang-tidy complete."
+
+  # ── cppcheck ─────────────────────────────────────────────────────────────────
+  cppcheck:
+    name: cppcheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        working-directory: fincept-qt
+        run: |
+          cppcheck \
+            --enable=warning,performance,portability \
+            --suppressions-list=.cppcheck-suppressions \
+            --inline-suppr \
+            --std=c++20 \
+            --error-exitcode=1 \
+            -I src \
+            -j "$(nproc)" \
+            src 2>&1
+          echo "cppcheck complete."

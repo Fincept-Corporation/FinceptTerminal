@@ -1,10 +1,11 @@
 #pragma once
-#include <QWidget>
+#include "screens/markets/MarketPanel.h"
+
+#include <QHideEvent>
+#include <QShowEvent>
 #include <QTimer>
 #include <QVector>
-#include <QShowEvent>
-#include <QHideEvent>
-#include "screens/markets/MarketPanel.h"
+#include <QWidget>
 
 namespace fincept::screens {
 
@@ -12,19 +13,19 @@ namespace fincept::screens {
 /// Mirrors Tauri's MarketsTab layout.
 class MarketsScreen : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit MarketsScreen(QWidget* parent = nullptr);
 
-protected:
+  protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
 
-private:
+  private:
     QVector<MarketPanel*> global_panels_;
     QVector<MarketPanel*> regional_panels_;
     QTimer* auto_refresh_timer_ = nullptr;
-    bool    auto_update_ = true;
-    int     update_interval_ms_ = 600000;  // 10 min default
+    bool auto_update_ = true;
+    int update_interval_ms_ = 600000; // 10 min default
 
     QWidget* build_header();
     QWidget* build_controls();

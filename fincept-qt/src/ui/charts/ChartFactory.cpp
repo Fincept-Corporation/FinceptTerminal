@@ -1,7 +1,9 @@
 #include "ui/charts/ChartFactory.h"
+
 #include "ui/theme/Theme.h"
-#include <QtCharts/QValueAxis>
+
 #include <QtCharts/QBarCategoryAxis>
+#include <QtCharts/QValueAxis>
 
 namespace fincept::ui {
 
@@ -19,9 +21,7 @@ void ChartFactory::apply_theme(QChart* chart) {
     }
 }
 
-QChartView* ChartFactory::line_chart(const QString& title,
-                                      const QVector<DataPoint>& data,
-                                      const QString& color) {
+QChartView* ChartFactory::line_chart(const QString& title, const QVector<DataPoint>& data, const QString& color) {
     auto* series = new QLineSeries;
     series->setPen(QPen(QColor(color), 1.5));
     for (const auto& p : data) {
@@ -41,10 +41,8 @@ QChartView* ChartFactory::line_chart(const QString& title,
     return view;
 }
 
-QChartView* ChartFactory::bar_chart(const QString& title,
-                                     const QStringList& categories,
-                                     const QVector<double>& values,
-                                     const QString& color) {
+QChartView* ChartFactory::bar_chart(const QString& title, const QStringList& categories, const QVector<double>& values,
+                                    const QString& color) {
     auto* set = new QBarSet("");
     set->setColor(QColor(color));
     for (double v : values) {
@@ -76,9 +74,7 @@ QChartView* ChartFactory::bar_chart(const QString& title,
     return view;
 }
 
-QChartView* ChartFactory::sparkline(const QVector<double>& data,
-                                     const QString& color,
-                                     int width, int height) {
+QChartView* ChartFactory::sparkline(const QVector<double>& data, const QString& color, int width, int height) {
     auto* series = new QLineSeries;
     series->setPen(QPen(QColor(color), 1.0));
     for (int i = 0; i < data.size(); ++i) {

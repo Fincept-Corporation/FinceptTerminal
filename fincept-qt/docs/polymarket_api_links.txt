@@ -1,0 +1,64 @@
+Polymarket API Documentation Links
+====================================
+
+## OpenAPI Specs (Machine-readable)
+- CLOB OpenAPI: https://docs.polymarket.com/api-spec/clob-openapi.yaml
+- Gamma OpenAPI: https://docs.polymarket.com/api-spec/gamma-openapi.yaml
+- Data API OpenAPI: https://docs.polymarket.com/api-reference/data-api-openapi.yaml
+- Relayer OpenAPI: https://docs.polymarket.com/api-spec/relayer-openapi.yaml
+- Bridge OpenAPI: https://docs.polymarket.com/api-spec/bridge-openapi.yaml
+
+## OpenAPI JSON Specs (Individual endpoints)
+- get-markets: https://docs.polymarket.com/developers/open-api/get-markets.json
+- get-events: https://docs.polymarket.com/developers/open-api/get-events.json
+- get-book: https://docs.polymarket.com/developers/open-api/get-book.json
+- get-trades: https://docs.polymarket.com/developers/open-api/get-trades.json
+- get-prices-history: https://docs.polymarket.com/developers/open-api/get-prices-history.json
+- get-price: https://docs.polymarket.com/developers/open-api/get-price.json
+- get-positions: https://docs.polymarket.com/developers/open-api/get-positions.json
+- get-holders: https://docs.polymarket.com/developers/open-api/get-holders.json
+- get-activity: https://docs.polymarket.com/developers/open-api/get-activity.json
+- get-value: https://docs.polymarket.com/developers/open-api/get-value.json
+
+## Core API Reference Pages
+- Authentication: https://docs.polymarket.com/api-reference/authentication.md
+- Rate Limits: https://docs.polymarket.com/api-reference/rate-limits.md
+- Clients & SDKs: https://docs.polymarket.com/api-reference/clients-sdks.md
+
+## Markets & Events
+- List Markets: https://docs.polymarket.com/api-reference/markets/list-markets.md
+- Get Market by ID: https://docs.polymarket.com/api-reference/markets/get-market-by-id.md
+- Get Market by Slug: https://docs.polymarket.com/api-reference/markets/get-market-by-slug.md
+- Get Market by CLOB Token ID: https://docs.polymarket.com/api-reference/markets/get-market-by-clob-token-id.md
+- Get Event by ID: https://docs.polymarket.com/api-reference/events/get-event-by-id.md
+- Get Event by Slug: https://docs.polymarket.com/api-reference/events/get-event-by-slug.md
+- Get Event Tags: https://docs.polymarket.com/api-reference/events/get-event-tags.md
+- List Events: https://docs.polymarket.com/api-reference/events/list-events.md
+
+## Data / Prices
+- Get Midpoint Price: https://docs.polymarket.com/api-reference/data/get-midpoint-price.md
+- Get Server Time: https://docs.polymarket.com/api-reference/data/get-server-time.md
+
+## Order Book
+- Get Order Book Summary: https://docs.polymarket.com/api-reference/orderbook/get-order-book-summary.md
+
+## Core Data
+- Get Trades for User or Markets: https://docs.polymarket.com/api-reference/core/get-trades-for-a-user-or-markets.md
+- Get Positions for a Market: https://docs.polymarket.com/api-reference/core/get-positions-for-a-market.md
+- Get Current Positions for User: https://docs.polymarket.com/api-reference/core/get-current-positions-for-a-user.md
+- Get Closed Positions for User: https://docs.polymarket.com/api-reference/core/get-closed-positions-for-a-user.md
+- Get Top Holders: https://docs.polymarket.com/api-reference/core/get-top-holders-for-markets.md
+- Get Trader Leaderboard: https://docs.polymarket.com/api-reference/core/get-trader-leaderboard-rankings.md
+- Get User Activity: https://docs.polymarket.com/api-reference/core/get-user-activity.md
+- Get Total Value of Positions: https://docs.polymarket.com/api-reference/core/get-total-value-of-a-users-positions.md
+
+## Rewards
+- Get Current Active Rewards: https://docs.polymarket.com/api-reference/rewards/get-current-active-rewards-configurations.md
+- Get Earnings by Date: https://docs.polymarket.com/api-reference/rewards/get-earnings-for-user-by-date.md
+
+## Misc
+- Get Total Markets Traded: https://docs.polymarket.com/api-reference/misc/get-total-markets-a-user-has-traded.md
+- Profiles: https://docs.polymarket.com/api-reference/profiles/get-public-profile-by-wallet-address.md
+
+## Advanced
+- Negative Risk Markets: https://docs.polymarket.com/advanced/neg-risk.md

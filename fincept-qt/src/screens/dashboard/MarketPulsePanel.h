@@ -1,19 +1,19 @@
 #pragma once
-#include <QWidget>
-#include <QVBoxLayout>
 #include <QLabel>
 #include <QScrollArea>
 #include <QTimer>
+#include <QVBoxLayout>
+#include <QWidget>
 
 namespace fincept::screens {
 
 /// Right-side market pulse panel — Fear/Greed, breadth, top movers, global snapshot, market hours.
 class MarketPulsePanel : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit MarketPulsePanel(QWidget* parent = nullptr);
 
-private:
+  private:
     QWidget* build_header();
     QWidget* build_fear_greed_section();
     QWidget* build_breadth_section();

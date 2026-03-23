@@ -1,6 +1,6 @@
 #pragma once
-#include <QTableWidget>
 #include <QStringList>
+#include <QTableWidget>
 #include <QVector>
 
 namespace fincept::ui {
@@ -8,7 +8,7 @@ namespace fincept::ui {
 /// Reusable Bloomberg-style data table with alternating rows.
 class DataTable : public QTableWidget {
     Q_OBJECT
-public:
+  public:
     explicit DataTable(QWidget* parent = nullptr);
 
     void set_headers(const QStringList& headers);

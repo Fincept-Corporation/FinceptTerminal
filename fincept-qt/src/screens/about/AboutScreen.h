@@ -6,7 +6,7 @@ namespace fincept::screens {
 /// About & legal information — version, license, contact, resources.
 class AboutScreen : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit AboutScreen(QWidget* parent = nullptr);
 };
 

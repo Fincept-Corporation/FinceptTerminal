@@ -3,12 +3,13 @@
 // Only used for the macro pattern. All 16 brokers now have real implementations.
 
 #include "trading/BrokerInterface.h"
+
 #include <QDateTime>
 
 namespace fincept::trading {
 
 class GenericBroker : public IBroker {
-public:
+  public:
     TokenExchangeResponse exchange_token(const QString&, const QString&, const QString&) override {
         return {false, "", "", "", QString("Not implemented for %1").arg(name())};
     }
@@ -39,10 +40,12 @@ public:
     ApiResponse<QVector<BrokerQuote>> get_quotes(const BrokerCredentials&, const QVector<QString>&) override {
         return {false, std::nullopt, QString("Not implemented for %1").arg(name()), now_ts()};
     }
-    ApiResponse<QVector<BrokerCandle>> get_history(const BrokerCredentials&, const QString&, const QString&, const QString&, const QString&) override {
+    ApiResponse<QVector<BrokerCandle>> get_history(const BrokerCredentials&, const QString&, const QString&,
+                                                   const QString&, const QString&) override {
         return {false, std::nullopt, QString("Not implemented for %1").arg(name()), now_ts()};
     }
-protected:
+
+  protected:
     QMap<QString, QString> auth_headers(const BrokerCredentials&) const override { return {}; }
     static int64_t now_ts() { return QDateTime::currentSecsSinceEpoch(); }
 };

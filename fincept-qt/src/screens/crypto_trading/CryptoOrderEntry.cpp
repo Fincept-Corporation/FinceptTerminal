@@ -1,200 +1,302 @@
+// CryptoOrderEntry.cpp — BUY/SELL tab form with toggle type buttons
 #include "screens/crypto_trading/CryptoOrderEntry.h"
-#include <QVBoxLayout>
+
 #include <QHBoxLayout>
-#include <QGridLayout>
+#include <QStyle>
+#include <QVBoxLayout>
+
 #include <cmath>
 
 namespace fincept::screens::crypto {
 
 CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
+    setObjectName("cryptoOrderEntry");
+
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(8, 8, 8, 8);
-    layout->setSpacing(4);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    // Header
+    auto* header = new QWidget;
+    header->setObjectName("cryptoOeHeader");
+    header->setFixedHeight(30);
+    auto* h_layout = new QHBoxLayout(header);
+    h_layout->setContentsMargins(8, 0, 8, 0);
 
     auto* title = new QLabel("ORDER ENTRY");
-    title->setStyleSheet("font-weight: bold; color: #00aaff; font-size: 13px;");
-    layout->addWidget(title);
+    title->setObjectName("cryptoOeTitle");
+    h_layout->addWidget(title);
+    h_layout->addStretch();
 
-    mode_label_ = new QLabel("[PAPER]");
-    mode_label_->setStyleSheet("color: #00ff88; font-weight: bold; font-size: 11px;");
-    layout->addWidget(mode_label_);
+    mode_label_ = new QLabel("PAPER");
+    mode_label_->setObjectName("cryptoOeMode");
+    mode_label_->setProperty("mode", "paper");
+    h_layout->addWidget(mode_label_);
 
-    balance_label_ = new QLabel("Balance: $0.00");
-    balance_label_->setStyleSheet("color: #00ff88; font-size: 12px;");
-    layout->addWidget(balance_label_);
+    layout->addWidget(header);
 
-    layout->addSpacing(4);
+    // Content area
+    auto* content = new QWidget;
+    auto* form = new QVBoxLayout(content);
+    form->setContentsMargins(8, 6, 8, 6);
+    form->setSpacing(4);
 
-    // Side buttons (Buy / Sell)
+    // BUY / SELL tabs — side by side
     auto* side_row = new QHBoxLayout;
-    side_combo_ = new QComboBox;
-    side_combo_->addItems({"Buy", "Sell"});
-    // Style the combo with green/red indicator
-    connect(side_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
-        submit_btn_->setStyleSheet(
-            idx == 0
-            ? "QPushButton { background: #00aa55; color: white; padding: 8px; border-radius: 4px; font-weight: bold; font-size: 14px; } QPushButton:hover { background: #00cc66; }"
-            : "QPushButton { background: #cc2222; color: white; padding: 8px; border-radius: 4px; font-weight: bold; font-size: 14px; } QPushButton:hover { background: #ee3333; }"
-        );
-        submit_btn_->setText(idx == 0 ? "BUY" : "SELL");
-    });
-    side_row->addWidget(new QLabel("Side:"));
-    side_row->addWidget(side_combo_, 1);
-    layout->addLayout(side_row);
+    side_row->setSpacing(0);
 
-    // Order type
-    type_combo_ = new QComboBox;
-    type_combo_->addItems({"Market", "Limit", "Stop", "Stop Limit"});
-    connect(type_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
-        price_edit_->setEnabled(idx == 1 || idx == 3);
-        stop_price_edit_->setEnabled(idx == 2 || idx == 3);
-        sl_edit_->setEnabled(idx != 0);
-        tp_edit_->setEnabled(idx != 0);
-        update_cost_preview();
-    });
-    layout->addWidget(new QLabel("Type:"));
-    layout->addWidget(type_combo_);
+    buy_tab_ = new QPushButton("BUY");
+    buy_tab_->setObjectName("cryptoBuyTab");
+    buy_tab_->setProperty("active", true);
+    buy_tab_->setCursor(Qt::PointingHandCursor);
+    buy_tab_->setFixedHeight(28);
+    connect(buy_tab_, &QPushButton::clicked, this, [this]() { set_buy_side(true); });
+    side_row->addWidget(buy_tab_, 1);
+
+    sell_tab_ = new QPushButton("SELL");
+    sell_tab_->setObjectName("cryptoSellTab");
+    sell_tab_->setProperty("active", false);
+    sell_tab_->setCursor(Qt::PointingHandCursor);
+    sell_tab_->setFixedHeight(28);
+    connect(sell_tab_, &QPushButton::clicked, this, [this]() { set_buy_side(false); });
+    side_row->addWidget(sell_tab_, 1);
+    form->addLayout(side_row);
+
+    // Order type toggle buttons
+    auto* type_row = new QHBoxLayout;
+    type_row->setSpacing(2);
+    const char* type_labels[] = {"MKT", "LMT", "STP", "S/L"};
+    for (int i = 0; i < 4; ++i) {
+        type_btns_[i] = new QPushButton(type_labels[i]);
+        type_btns_[i]->setObjectName("cryptoOeTypeBtn");
+        type_btns_[i]->setFixedHeight(20);
+        type_btns_[i]->setCursor(Qt::PointingHandCursor);
+        if (i == 0) type_btns_[i]->setProperty("active", true);
+        connect(type_btns_[i], &QPushButton::clicked, this, [this, i]() { set_order_type(i); });
+        type_row->addWidget(type_btns_[i]);
+    }
+    form->addLayout(type_row);
+
+    form->addSpacing(2);
+
+    // Balance
+    balance_label_ = new QLabel("$0.00");
+    balance_label_->setObjectName("cryptoOeBalance");
+    form->addWidget(balance_label_);
+
+    // Market price
+    market_price_label_ = new QLabel("MKT: --");
+    market_price_label_->setObjectName("cryptoOeMarketPrice");
+    form->addWidget(market_price_label_);
 
     // Quantity
-    qty_edit_ = new QLineEdit;
-    qty_edit_->setPlaceholderText("0.00");
-    connect(qty_edit_, &QLineEdit::textChanged, this, [this]() { update_cost_preview(); });
-    layout->addWidget(new QLabel("Quantity:"));
-    layout->addWidget(qty_edit_);
+    auto* qty_lbl = new QLabel("QTY");
+    qty_lbl->setObjectName("cryptoOeLabel");
+    form->addWidget(qty_lbl);
 
-    // Percentage buttons (25%, 50%, 75%, 100%)
+    qty_edit_ = new QLineEdit;
+    qty_edit_->setObjectName("cryptoOeInput");
+    qty_edit_->setPlaceholderText("0.00");
+    qty_edit_->setFixedHeight(26);
+    connect(qty_edit_, &QLineEdit::textChanged, this, [this]() { update_cost_preview(); });
+    form->addWidget(qty_edit_);
+
+    // Percentage buttons
     auto* pct_row = new QHBoxLayout;
     pct_row->setSpacing(2);
     for (int pct : {25, 50, 75, 100}) {
         auto* btn = new QPushButton(QString("%1%").arg(pct));
-        btn->setFixedHeight(22);
-        btn->setStyleSheet("QPushButton { background: #1a1a2e; color: #888; border: 1px solid #333; "
-                            "border-radius: 2px; font-size: 11px; padding: 0 4px; }"
-                            "QPushButton:hover { background: #222244; color: #ccc; }");
+        btn->setObjectName("cryptoOePctBtn");
+        btn->setFixedHeight(18);
+        btn->setCursor(Qt::PointingHandCursor);
         connect(btn, &QPushButton::clicked, this, [this, pct]() { on_pct_clicked(pct); });
         pct_row->addWidget(btn);
     }
-    layout->addLayout(pct_row);
+    form->addLayout(pct_row);
 
     // Price
+    auto* price_lbl = new QLabel("PRICE");
+    price_lbl->setObjectName("cryptoOeLabel");
+    form->addWidget(price_lbl);
+
     price_edit_ = new QLineEdit;
+    price_edit_->setObjectName("cryptoOeInput");
     price_edit_->setPlaceholderText("Limit price");
     price_edit_->setEnabled(false);
+    price_edit_->setFixedHeight(26);
     connect(price_edit_, &QLineEdit::textChanged, this, [this]() { update_cost_preview(); });
-    layout->addWidget(new QLabel("Price:"));
-    layout->addWidget(price_edit_);
+    form->addWidget(price_edit_);
 
     // Stop price
+    auto* stop_lbl = new QLabel("STOP");
+    stop_lbl->setObjectName("cryptoOeLabel");
+    form->addWidget(stop_lbl);
+
     stop_price_edit_ = new QLineEdit;
+    stop_price_edit_->setObjectName("cryptoOeInput");
     stop_price_edit_->setPlaceholderText("Stop price");
     stop_price_edit_->setEnabled(false);
-    layout->addWidget(new QLabel("Stop:"));
-    layout->addWidget(stop_price_edit_);
+    stop_price_edit_->setFixedHeight(26);
+    form->addWidget(stop_price_edit_);
 
-    // SL / TP
-    auto* sltp_grid = new QGridLayout;
+    // Advanced toggle
+    advanced_toggle_ = new QPushButton("+ ADVANCED");
+    advanced_toggle_->setObjectName("cryptoAdvToggle");
+    advanced_toggle_->setCursor(Qt::PointingHandCursor);
+    advanced_toggle_->setFixedHeight(18);
+    form->addWidget(advanced_toggle_);
+
+    // Collapsible SL/TP section
+    advanced_section_ = new QWidget;
+    advanced_section_->setVisible(false);
+    auto* adv_layout = new QVBoxLayout(advanced_section_);
+    adv_layout->setContentsMargins(0, 0, 0, 0);
+    adv_layout->setSpacing(4);
+
+    auto* sl_lbl = new QLabel("SL");
+    sl_lbl->setObjectName("cryptoOeLabel");
     sl_edit_ = new QLineEdit;
+    sl_edit_->setObjectName("cryptoOeInput");
     sl_edit_->setPlaceholderText("Stop Loss");
-    sl_edit_->setEnabled(false);
+    sl_edit_->setFixedHeight(26);
+
+    auto* tp_lbl = new QLabel("TP");
+    tp_lbl->setObjectName("cryptoOeLabel");
     tp_edit_ = new QLineEdit;
+    tp_edit_->setObjectName("cryptoOeInput");
     tp_edit_->setPlaceholderText("Take Profit");
-    tp_edit_->setEnabled(false);
-    sltp_grid->addWidget(new QLabel("SL:"), 0, 0);
-    sltp_grid->addWidget(sl_edit_, 0, 1);
-    sltp_grid->addWidget(new QLabel("TP:"), 1, 0);
-    sltp_grid->addWidget(tp_edit_, 1, 1);
-    layout->addLayout(sltp_grid);
+    tp_edit_->setFixedHeight(26);
+
+    adv_layout->addWidget(sl_lbl);
+    adv_layout->addWidget(sl_edit_);
+    adv_layout->addWidget(tp_lbl);
+    adv_layout->addWidget(tp_edit_);
+    form->addWidget(advanced_section_);
+
+    connect(advanced_toggle_, &QPushButton::clicked, this, [this]() {
+        const bool show = !advanced_section_->isVisible();
+        advanced_section_->setVisible(show);
+        advanced_toggle_->setText(show ? "- ADVANCED" : "+ ADVANCED");
+    });
 
     // Cost preview
-    cost_label_ = new QLabel("Est. cost: --");
-    cost_label_->setStyleSheet("color: #666; font-size: 11px;");
-    layout->addWidget(cost_label_);
+    cost_label_ = new QLabel("Est: --");
+    cost_label_->setObjectName("cryptoOeCost");
+    form->addWidget(cost_label_);
 
-    // Submit
-    submit_btn_ = new QPushButton("BUY");
-    submit_btn_->setStyleSheet(
-        "QPushButton { background: #00aa55; color: white; padding: 8px; border-radius: 4px; "
-        "font-weight: bold; font-size: 14px; } QPushButton:hover { background: #00cc66; }");
+    // Submit button
+    submit_btn_ = new QPushButton("BUY BTC/USDT");
+    submit_btn_->setObjectName("cryptoBuySubmit");
+    submit_btn_->setFixedHeight(34);
+    submit_btn_->setCursor(Qt::PointingHandCursor);
     connect(submit_btn_, &QPushButton::clicked, this, &CryptoOrderEntry::on_submit);
-    layout->addWidget(submit_btn_);
+    form->addWidget(submit_btn_);
 
     // Status
     status_label_ = new QLabel("");
+    status_label_->setObjectName("cryptoOeStatus");
     status_label_->setWordWrap(true);
-    status_label_->setStyleSheet("font-size: 11px;");
-    layout->addWidget(status_label_);
+    form->addWidget(status_label_);
 
-    layout->addStretch();
+    form->addStretch();
+    layout->addWidget(content, 1);
+}
 
-    // Style all inputs
-    QString input_style = "QLineEdit { background: #1a1a2e; border: 1px solid #333; border-radius: 3px; "
-                           "color: #ccc; padding: 4px 6px; }";
-    qty_edit_->setStyleSheet(input_style);
-    price_edit_->setStyleSheet(input_style);
-    stop_price_edit_->setStyleSheet(input_style);
-    sl_edit_->setStyleSheet(input_style);
-    tp_edit_->setStyleSheet(input_style);
+void CryptoOrderEntry::set_buy_side(bool is_buy) {
+    is_buy_side_ = is_buy;
+    buy_tab_->setProperty("active", is_buy);
+    sell_tab_->setProperty("active", !is_buy);
+
+    // Update submit button
+    const QString label = QString("%1 %2").arg(is_buy ? "BUY" : "SELL", current_symbol_);
+    submit_btn_->setText(label);
+    submit_btn_->setObjectName(is_buy ? "cryptoBuySubmit" : "cryptoSellSubmit");
+
+    // Single style refresh on the parent instead of 6 individual unpolish/polish calls
+    style()->unpolish(this);
+    style()->polish(this);
+}
+
+void CryptoOrderEntry::set_order_type(int idx) {
+    active_type_ = idx;
+    for (int i = 0; i < 4; ++i)
+        type_btns_[i]->setProperty("active", i == idx);
+
+    // Single parent-level style refresh instead of 8 individual unpolish/polish calls
+    style()->unpolish(this);
+    style()->polish(this);
+
+    price_edit_->setEnabled(idx == 1 || idx == 3);
+    stop_price_edit_->setEnabled(idx == 2 || idx == 3);
+    update_cost_preview();
 }
 
 void CryptoOrderEntry::set_balance(double balance) {
     balance_ = balance;
-    balance_label_->setText(QString("Balance: $%1").arg(balance, 0, 'f', 2));
+    balance_label_->setText(QString("$%1").arg(balance, 0, 'f', 2));
     update_cost_preview();
 }
 
 void CryptoOrderEntry::set_current_price(double price) {
     current_price_ = price;
+    market_price_label_->setText(QString("MKT: $%1").arg(price, 0, 'f', 2));
     update_cost_preview();
 }
 
 void CryptoOrderEntry::set_mode(bool is_paper) {
     is_paper_ = is_paper;
-    mode_label_->setText(is_paper ? "[PAPER]" : "[LIVE]");
-    mode_label_->setStyleSheet(
-        QString("color: %1; font-weight: bold; font-size: 11px;")
-            .arg(is_paper ? "#00ff88" : "#ff4444"));
+    mode_label_->setText(is_paper ? "PAPER" : "LIVE");
+    mode_label_->setProperty("mode", is_paper ? "paper" : "live");
+    mode_label_->style()->unpolish(mode_label_);
+    mode_label_->style()->polish(mode_label_);
+}
+
+void CryptoOrderEntry::set_symbol(const QString& symbol) {
+    current_symbol_ = symbol;
+    submit_btn_->setText(QString("%1 %2").arg(is_buy_side_ ? "BUY" : "SELL", symbol));
 }
 
 void CryptoOrderEntry::on_submit() {
-    QString side = side_combo_->currentIndex() == 0 ? "buy" : "sell";
-
+    const QString side = is_buy_side_ ? "buy" : "sell";
     static const char* type_map[] = {"market", "limit", "stop", "stop_limit"};
-    QString order_type = type_map[type_combo_->currentIndex()];
+    const QString order_type = type_map[active_type_];
 
-    double qty = qty_edit_->text().toDouble();
+    const double qty = qty_edit_->text().toDouble();
     if (qty <= 0) {
         status_label_->setText("Enter a valid quantity");
-        status_label_->setStyleSheet("color: #ff4444; font-size: 11px;");
+        status_label_->setProperty("error", true);
+        status_label_->style()->unpolish(status_label_);
+        status_label_->style()->polish(status_label_);
         return;
     }
 
-    double price = price_edit_->text().toDouble();
-    double stop_price = stop_price_edit_->text().toDouble();
-    double sl = sl_edit_->text().toDouble();
-    double tp = tp_edit_->text().toDouble();
+    const double price = price_edit_->text().toDouble();
+    const double stop_price = stop_price_edit_->text().toDouble();
+    const double sl = sl_edit_->text().toDouble();
+    const double tp = tp_edit_->text().toDouble();
 
     emit order_submitted(side, order_type, qty, price, stop_price, sl, tp);
 }
 
 void CryptoOrderEntry::on_pct_clicked(int pct) {
-    if (balance_ <= 0 || current_price_ <= 0) return;
-    double max_qty = balance_ / current_price_;
-    double qty = max_qty * pct / 100.0;
+    if (balance_ <= 0 || current_price_ <= 0)
+        return;
+    const double max_qty = balance_ / current_price_;
+    const double qty = max_qty * pct / 100.0;
     qty_edit_->setText(QString::number(qty, 'f', 6));
 }
 
 void CryptoOrderEntry::update_cost_preview() {
-    double qty = qty_edit_->text().toDouble();
+    const double qty = qty_edit_->text().toDouble();
     double price = current_price_;
-    if (type_combo_->currentIndex() == 1 || type_combo_->currentIndex() == 3) {
-        double limit_p = price_edit_->text().toDouble();
+    if (active_type_ == 1 || active_type_ == 3) {
+        const double limit_p = price_edit_->text().toDouble();
         if (limit_p > 0) price = limit_p;
     }
-    if (qty > 0 && price > 0) {
-        cost_label_->setText(QString("Est. cost: $%1").arg(qty * price, 0, 'f', 2));
-    } else {
-        cost_label_->setText("Est. cost: --");
-    }
+    if (qty > 0 && price > 0)
+        cost_label_->setText(QString("Est: $%1").arg(qty * price, 0, 'f', 2));
+    else
+        cost_label_->setText("Est: --");
 }
 
 } // namespace fincept::screens::crypto

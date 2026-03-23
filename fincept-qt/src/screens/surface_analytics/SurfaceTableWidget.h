@@ -1,15 +1,16 @@
 #pragma once
 #include "SurfaceTypes.h"
-#include <QWidget>
+
 #include <QTableWidget>
 #include <QVBoxLayout>
+#include <QWidget>
 
 namespace fincept::surface {
 
 // SurfaceTableWidget — renders the current surface data as a color-coded table
 class SurfaceTableWidget : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit SurfaceTableWidget(QWidget* parent = nullptr);
 
     void show_surface(ChartType type,
@@ -21,13 +22,11 @@ public:
     void show_correlation(const CorrelationMatrixData& d);
     void show_yield(const YieldCurveData& d);
     void show_pca(const PCAData& d);
-    void show_generic_matrix(
-        const std::vector<std::string>& row_labels,
-        const std::vector<std::string>& col_labels,
-        const std::vector<std::vector<float>>& z,
-        float min_val, float max_val, bool diverging = false);
+    void show_generic_matrix(const std::vector<std::string>& row_labels, const std::vector<std::string>& col_labels,
+                             const std::vector<std::vector<float>>& z, float min_val, float max_val,
+                             bool diverging = false);
 
-private:
+  private:
     QTableWidget* table_;
     void apply_heatmap(float value, float min_val, float max_val, bool diverging, int row, int col);
     static QColor heat_color(float t, bool diverging);

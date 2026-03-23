@@ -1,11 +1,11 @@
 #pragma once
-#include <QHash>
-#include <QString>
-#include <QVariant>
 #include <QDateTime>
+#include <QHash>
 #include <QMutex>
-#include <QTimer>
 #include <QObject>
+#include <QString>
+#include <QTimer>
+#include <QVariant>
 
 namespace fincept {
 
@@ -13,11 +13,10 @@ namespace fincept {
 /// Falls back to pure in-memory if CacheDatabase is not available.
 class CacheManager : public QObject {
     Q_OBJECT
-public:
+  public:
     static CacheManager& instance();
 
-    void put(const QString& key, const QVariant& value, int ttl_seconds = 300,
-             const QString& category = "general");
+    void put(const QString& key, const QVariant& value, int ttl_seconds = 300, const QString& category = "general");
     QVariant get(const QString& key) const;
     bool has(const QString& key) const;
     void remove(const QString& key);
@@ -26,7 +25,7 @@ public:
 
     int entry_count() const;
 
-private:
+  private:
     explicit CacheManager(QObject* parent = nullptr);
 
     void evict_expired();
@@ -34,9 +33,9 @@ private:
     void remove_persisted(const QString& key);
 
     struct Entry {
-        QVariant  value;
+        QVariant value;
         QDateTime expires_at;
-        QString   category;
+        QString category;
     };
 
     mutable QMutex mutex_;

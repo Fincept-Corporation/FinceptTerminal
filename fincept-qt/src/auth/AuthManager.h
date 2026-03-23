@@ -1,6 +1,7 @@
 #pragma once
-#include <QObject>
 #include "auth/AuthTypes.h"
+
+#include <QObject>
 
 namespace fincept::auth {
 
@@ -8,7 +9,7 @@ namespace fincept::auth {
 /// Manages login/signup/MFA flows, session persistence, and validation.
 class AuthManager : public QObject {
     Q_OBJECT
-public:
+  public:
     static AuthManager& instance();
 
     const SessionData& session() const { return session_; }
@@ -17,9 +18,8 @@ public:
 
     // Auth flows
     void login(const QString& email, const QString& password, bool force_login = false);
-    void signup(const QString& username, const QString& email, const QString& password,
-                const QString& phone, const QString& country = {},
-                const QString& country_code = {});
+    void signup(const QString& username, const QString& email, const QString& password, const QString& phone,
+                const QString& country = {}, const QString& country_code = {});
     void verify_otp(const QString& email, const QString& otp);
     void verify_mfa(const QString& email, const QString& otp);
     void forgot_password(const QString& email);
@@ -30,7 +30,7 @@ public:
     void initialize();
     void refresh_user_data();
 
-signals:
+  signals:
     void auth_state_changed();
     void login_succeeded();
     void login_failed(const QString& error);
@@ -51,7 +51,7 @@ signals:
     void loading_changed(bool loading);
     void subscription_fetched();
 
-private:
+  private:
     AuthManager();
 
     void set_loading(bool v);
@@ -61,6 +61,7 @@ private:
     void validate_saved_session(const SessionData& saved);
     void fetch_user_profile(const QString& api_key);
     void fetch_user_subscription();
+    void auto_configure_fincept_llm();
     QString generate_device_id() const;
     QJsonObject unwrap_data(const QJsonObject& raw) const;
 

@@ -2,14 +2,14 @@
 // Crypto Credentials — dialog for entering exchange API keys
 
 #include <QDialog>
-#include <QLineEdit>
 #include <QLabel>
+#include <QLineEdit>
 
 namespace fincept::screens::crypto {
 
 class CryptoCredentials : public QDialog {
     Q_OBJECT
-public:
+  public:
     explicit CryptoCredentials(const QString& exchange_id, QWidget* parent = nullptr);
 
     QString api_key() const;
@@ -18,14 +18,14 @@ public:
 
     void set_values(const QString& key, const QString& secret, const QString& password);
 
-signals:
+  signals:
     void credentials_saved(const QString& api_key, const QString& api_secret, const QString& password);
 
-private slots:
+  private slots:
     void on_save();
     void on_clear();
 
-private:
+  private:
     QLineEdit* key_edit_ = nullptr;
     QLineEdit* secret_edit_ = nullptr;
     QLineEdit* password_edit_ = nullptr;

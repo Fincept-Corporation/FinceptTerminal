@@ -1,6 +1,6 @@
 #pragma once
-#include <QObject>
 #include <QElapsedTimer>
+#include <QObject>
 #include <QSettings>
 #include <QVariantMap>
 
@@ -9,7 +9,7 @@ namespace fincept {
 /// Manages session state: uptime, last-used tabs, window geometry, etc.
 class SessionManager : public QObject {
     Q_OBJECT
-public:
+  public:
     static SessionManager& instance();
 
     void start_session();
@@ -29,10 +29,10 @@ public:
     void set_last_screen(const QString& screen_id);
     QString last_screen() const;
 
-signals:
+  signals:
     void session_started();
 
-private:
+  private:
     SessionManager() = default;
     QElapsedTimer elapsed_;
     QSettings settings_{"Fincept", "FinceptTerminal"};

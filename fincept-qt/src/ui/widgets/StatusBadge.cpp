@@ -1,4 +1,5 @@
 #include "ui/widgets/StatusBadge.h"
+
 #include "ui/theme/Theme.h"
 
 namespace fincept::ui {

@@ -1,11 +1,10 @@
 #include "screens/dashboard/widgets/MarketSentimentWidget.h"
+
 #include "ui/theme/Theme.h"
 
 namespace fincept::screens::widgets {
 
-MarketSentimentWidget::MarketSentimentWidget(QWidget* parent)
-    : BaseWidget("MARKET SENTIMENT", parent)
-{
+MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget("MARKET SENTIMENT", parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(8);
@@ -24,13 +23,14 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent)
     srl->setAlignment(Qt::AlignCenter);
     srl->setSpacing(8);
 
-    auto* arrow = new QLabel(QChar(0x2014));  // em-dash placeholder
-    arrow->setStyleSheet(QString("font-size: 18px; background: transparent; color: %1;").arg(ui::colors::TEXT_TERTIARY));
+    auto* arrow = new QLabel(QChar(0x2014)); // em-dash placeholder
+    arrow->setStyleSheet(
+        QString("font-size: 18px; background: transparent; color: %1;").arg(ui::colors::TEXT_TERTIARY));
     srl->addWidget(arrow);
 
     score_label_ = new QLabel("--");
     score_label_->setStyleSheet(QString("color: %1; font-size: 24px; font-weight: bold; background: transparent;")
-        .arg(ui::colors::TEXT_TERTIARY));
+                                    .arg(ui::colors::TEXT_TERTIARY));
     srl->addWidget(score_label_);
 
     bl->addWidget(score_row);
@@ -38,7 +38,7 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent)
     verdict_label_ = new QLabel("LOADING...");
     verdict_label_->setAlignment(Qt::AlignCenter);
     verdict_label_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-        .arg(ui::colors::TEXT_TERTIARY));
+                                      .arg(ui::colors::TEXT_TERTIARY));
     bl->addWidget(verdict_label_);
 
     vl->addWidget(banner);
@@ -70,17 +70,20 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent)
     bll->setContentsMargins(0, 0, 0, 0);
 
     bull_label_ = new QLabel("-- BULL");
-    bull_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::POSITIVE));
+    bull_label_->setStyleSheet(
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::POSITIVE));
     bll->addWidget(bull_label_);
     bll->addStretch();
 
     neutral_label_ = new QLabel("-- NEUTRAL");
-    neutral_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+    neutral_label_->setStyleSheet(
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
     bll->addWidget(neutral_label_);
     bll->addStretch();
 
     bear_label_ = new QLabel("-- BEAR");
-    bear_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::NEGATIVE));
+    bear_label_->setStyleSheet(
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::NEGATIVE));
     bll->addWidget(bear_label_);
 
     vl->addWidget(bar_labels);
@@ -103,13 +106,13 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent)
 
         auto* lbl = new QLabel(label);
         lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-            .arg(ui::colors::TEXT_TERTIARY));
+                               .arg(ui::colors::TEXT_TERTIARY));
         rl->addWidget(lbl);
         rl->addStretch();
 
         val_out = new QLabel("--");
         val_out->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-            .arg(ui::colors::TEXT_PRIMARY));
+                                   .arg(ui::colors::TEXT_PRIMARY));
         rl->addWidget(val_out);
 
         stl->addWidget(row);
@@ -131,17 +134,16 @@ void MarketSentimentWidget::refresh_data() {
     set_loading(true);
 
     // Fetch a broad basket: VIX + 24 liquid stocks for breadth
-    QStringList syms = {"^VIX",
-        "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "NFLX",
-        "AMD", "INTC", "JPM", "GS", "BAC", "WMT", "DIS", "BA",
-        "XOM", "CVX", "COIN", "PLTR", "SOFI", "NKE", "PFE", "PYPL"};
+    QStringList syms = {"^VIX", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "NFLX",
+                        "AMD",  "INTC", "JPM",  "GS",    "BAC",  "WMT",  "DIS",  "BA",   "XOM",
+                        "CVX",  "COIN", "PLTR", "SOFI",  "NKE",  "PFE",  "PYPL"};
 
-    services::MarketDataService::instance().fetch_quotes(syms,
-        [this](bool ok, QVector<services::QuoteData> quotes) {
-            set_loading(false);
-            if (!ok || quotes.isEmpty()) return;
-            populate(quotes);
-        });
+    services::MarketDataService::instance().fetch_quotes(syms, [this](bool ok, QVector<services::QuoteData> quotes) {
+        set_loading(false);
+        if (!ok || quotes.isEmpty())
+            return;
+        populate(quotes);
+    });
 }
 
 void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes) {
@@ -153,40 +155,47 @@ void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes)
             vix_price = q.price;
             continue;
         }
-        if (q.change_pct > 0.5) ++bullish;
-        else if (q.change_pct < -0.5) ++bearish;
-        else ++neutral;
+        if (q.change_pct > 0.5)
+            ++bullish;
+        else if (q.change_pct < -0.5)
+            ++bearish;
+        else
+            ++neutral;
     }
 
     int total = bullish + bearish + neutral;
-    if (total == 0) total = 1;
+    if (total == 0)
+        total = 1;
 
     // Score: (bullish - bearish) / total * 100
     int score = static_cast<int>(((bullish - bearish) / static_cast<double>(total)) * 100);
 
     // Adjust score based on VIX if available
     if (vix_price > 0) {
-        if (vix_price > 30) score -= 20;
-        else if (vix_price > 25) score -= 10;
-        else if (vix_price < 15) score += 10;
+        if (vix_price > 30)
+            score -= 20;
+        else if (vix_price > 25)
+            score -= 10;
+        else if (vix_price < 15)
+            score += 10;
     }
     score = qBound(-100, score, 100);
 
     // Update UI
-    QString score_color = score > 20 ? ui::colors::POSITIVE
-                        : score < -20 ? ui::colors::NEGATIVE
-                        : ui::colors::WARNING;
-    QString verdict = score > 40 ? "STRONGLY BULLISH"
-                    : score > 20 ? "BULLISH"
-                    : score > -20 ? "NEUTRAL"
-                    : score > -40 ? "BEARISH"
-                    : "STRONGLY BEARISH";
+    QString score_color = score > 20 ? ui::colors::POSITIVE : score < -20 ? ui::colors::NEGATIVE : ui::colors::WARNING;
+    QString verdict = score > 40    ? "STRONGLY BULLISH"
+                      : score > 20  ? "BULLISH"
+                      : score > -20 ? "NEUTRAL"
+                      : score > -40 ? "BEARISH"
+                                    : "STRONGLY BEARISH";
 
     score_label_->setText(QString("%1%2").arg(score > 0 ? "+" : "").arg(score));
-    score_label_->setStyleSheet(QString("color: %1; font-size: 24px; font-weight: bold; background: transparent;").arg(score_color));
+    score_label_->setStyleSheet(
+        QString("color: %1; font-size: 24px; font-weight: bold; background: transparent;").arg(score_color));
 
     verdict_label_->setText(verdict);
-    verdict_label_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg(score_color));
+    verdict_label_->setStyleSheet(
+        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg(score_color));
 
     // Update bar proportions
     auto* bar_layout = qobject_cast<QHBoxLayout*>(bull_bar_->parentWidget()->layout());
@@ -203,14 +212,17 @@ void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes)
     // VIX
     if (vix_price > 0) {
         vix_label_->setText(QString::number(vix_price, 'f', 2));
-        QString vix_color = vix_price > 25 ? ui::colors::NEGATIVE : vix_price > 18 ? ui::colors::WARNING : ui::colors::POSITIVE;
-        vix_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(vix_color));
+        QString vix_color = vix_price > 25   ? ui::colors::NEGATIVE
+                            : vix_price > 18 ? ui::colors::WARNING
+                                             : ui::colors::POSITIVE;
+        vix_label_->setStyleSheet(
+            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(vix_color));
     }
 
     // Breadth
     breadth_label_->setText(QString("%1A / %2D").arg(bullish).arg(bearish));
     breadth_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-        .arg(bullish > bearish ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+                                      .arg(bullish > bearish ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
 }
 
 } // namespace fincept::screens::widgets

@@ -1,5 +1,7 @@
 #include "ui/tables/DataTable.h"
+
 #include "ui/theme/Theme.h"
+
 #include <QHeaderView>
 
 namespace fincept::ui {
@@ -13,12 +15,11 @@ DataTable::DataTable(QWidget* parent) : QTableWidget(parent) {
     verticalHeader()->setVisible(false);
     horizontalHeader()->setStretchLastSection(true);
     horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    setStyleSheet(
-        QString("QTableWidget { background: %1; alternate-background-color: %2; "
-                "gridline-color: %3; border: none; }"
-                "QTableWidget::item { padding: 4px 8px; height: 26px; }"
-                "QTableWidget::item:selected { background: #111111; }")
-            .arg(colors::DARK, colors::ROW_ALT, colors::BORDER));
+    setStyleSheet(QString("QTableWidget { background: %1; alternate-background-color: %2; "
+                          "gridline-color: %3; border: none; }"
+                          "QTableWidget::item { padding: 4px 8px; height: 26px; }"
+                          "QTableWidget::item:selected { background: #111111; }")
+                      .arg(colors::DARK, colors::ROW_ALT, colors::BORDER));
 }
 
 void DataTable::set_headers(const QStringList& headers) {
@@ -56,7 +57,8 @@ void DataTable::set_column_widths(const QVector<int>& widths) {
 
 void DataTable::set_cell_color(int row, int col, const QString& color) {
     auto* it = item(row, col);
-    if (it) it->setForeground(QColor(color));
+    if (it)
+        it->setForeground(QColor(color));
 }
 
 } // namespace fincept::ui

@@ -1,30 +1,31 @@
 #pragma once
-#include <QString>
-#include <QJsonObject>
 #include "core/result/Result.h"
+
+#include <QJsonObject>
+#include <QString>
 
 namespace fincept {
 
 struct TabSession {
-    QString     tab_id;
-    QString     screen_name;
-    double      scroll_position = 0;
+    QString tab_id;
+    QString screen_name;
+    double scroll_position = 0;
     QJsonObject filters;
     QJsonObject selections;
-    QString     last_accessed;
+    QString last_accessed;
 };
 
 /// Persists per-tab UI state (scroll position, filters, selections) in cache.db.
 class TabSessionStore {
-public:
+  public:
     static TabSessionStore& instance();
 
-    Result<void>       save(const TabSession& session);
+    Result<void> save(const TabSession& session);
     Result<TabSession> load(const QString& tab_id);
-    Result<void>       remove(const QString& tab_id);
-    Result<void>       clear_all();
+    Result<void> remove(const QString& tab_id);
+    Result<void> clear_all();
 
-private:
+  private:
     TabSessionStore() = default;
 };
 

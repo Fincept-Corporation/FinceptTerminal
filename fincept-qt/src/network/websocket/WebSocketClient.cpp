@@ -1,4 +1,5 @@
 #include "network/websocket/WebSocketClient.h"
+
 #include "core/logging/Logger.h"
 
 namespace fincept {
@@ -7,8 +8,8 @@ WebSocketClient::WebSocketClient(QObject* parent) : QObject(parent) {
     connect(&socket_, &QWebSocket::connected, this, &WebSocketClient::on_connected);
     connect(&socket_, &QWebSocket::disconnected, this, &WebSocketClient::on_disconnected);
     connect(&socket_, &QWebSocket::textMessageReceived, this, &WebSocketClient::on_text_received);
-    connect(&socket_, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
-            this, &WebSocketClient::on_error);
+    connect(&socket_, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error), this,
+            &WebSocketClient::on_error);
     connect(&reconnect_timer_, &QTimer::timeout, this, &WebSocketClient::attempt_reconnect);
     reconnect_timer_.setSingleShot(true);
 }
@@ -60,8 +61,7 @@ void WebSocketClient::on_error(QAbstractSocket::SocketError err) {
 
 void WebSocketClient::attempt_reconnect() {
     reconnect_attempts_++;
-    LOG_INFO("WS", QString("Reconnect attempt %1/%2")
-        .arg(reconnect_attempts_).arg(MAX_RECONNECT_ATTEMPTS));
+    LOG_INFO("WS", QString("Reconnect attempt %1/%2").arg(reconnect_attempts_).arg(MAX_RECONNECT_ATTEMPTS));
     socket_.open(QUrl(url_));
 }
 

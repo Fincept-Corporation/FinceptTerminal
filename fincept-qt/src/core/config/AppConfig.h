@@ -7,7 +7,7 @@ namespace fincept {
 
 /// Application configuration backed by QSettings (persistent across sessions).
 class AppConfig {
-public:
+  public:
     static AppConfig& instance();
 
     QVariant get(const QString& key, const QVariant& default_val = {}) const;
@@ -21,7 +21,7 @@ public:
     bool dark_mode() const;
     int refresh_interval_ms() const;
 
-private:
+  private:
     AppConfig();
     QSettings settings_;
 };

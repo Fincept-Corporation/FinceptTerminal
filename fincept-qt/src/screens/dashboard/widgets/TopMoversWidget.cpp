@@ -1,11 +1,10 @@
 #include "screens/dashboard/widgets/TopMoversWidget.h"
+
 #include "ui/theme/Theme.h"
 
 namespace fincept::screens::widgets {
 
-TopMoversWidget::TopMoversWidget(QWidget* parent)
-    : BaseWidget("TOP MOVERS", parent)
-{
+TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget("TOP MOVERS", parent) {
     // Tab toggle
     auto* tab_bar = new QWidget;
     tab_bar->setFixedHeight(26);
@@ -15,15 +14,15 @@ TopMoversWidget::TopMoversWidget(QWidget* parent)
 
     auto active_style = [](const char* color) {
         return QString("QPushButton { background: %1; color: #000; border: none; "
-            "font-size: 9px; font-weight: bold; padding: 4px; }").arg(color);
+                       "font-size: 9px; font-weight: bold; padding: 4px; }")
+            .arg(color);
     };
-    auto inactive_style = QString(
-        "QPushButton { background: %1; color: %2; border: none; "
-        "font-size: 9px; font-weight: bold; padding: 4px; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY);
+    auto inactive_style = QString("QPushButton { background: %1; color: %2; border: none; "
+                                  "font-size: 9px; font-weight: bold; padding: 4px; }")
+                              .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY);
 
     gainers_btn_ = new QPushButton(QString(QChar(0x25B2)) + " GAINERS");
-    losers_btn_  = new QPushButton(QString(QChar(0x25BC)) + " LOSERS");
+    losers_btn_ = new QPushButton(QString(QChar(0x25BC)) + " LOSERS");
 
     gainers_btn_->setStyleSheet(active_style(ui::colors::POSITIVE));
     losers_btn_->setStyleSheet(inactive_style);
@@ -52,15 +51,15 @@ void TopMoversWidget::refresh_data() {
     set_loading(true);
 
     services::MarketDataService::instance().fetch_quotes(
-        services::MarketDataService::mover_symbols(),
-        [this](bool ok, QVector<services::QuoteData> quotes) {
+        services::MarketDataService::mover_symbols(), [this](bool ok, QVector<services::QuoteData> quotes) {
             set_loading(false);
-            if (!ok || quotes.isEmpty()) return;
+            if (!ok || quotes.isEmpty())
+                return;
 
             all_quotes_ = quotes;
             // Sort by change_pct descending
             std::sort(all_quotes_.begin(), all_quotes_.end(),
-                [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
+                      [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
 
             show_tab(showing_gainers_);
         });
@@ -70,12 +69,14 @@ void TopMoversWidget::show_tab(bool gainers) {
     showing_gainers_ = gainers;
 
     auto active_g = QString("QPushButton { background: %1; color: #000; border: none; "
-        "font-size: 9px; font-weight: bold; padding: 4px; }").arg(ui::colors::POSITIVE);
+                            "font-size: 9px; font-weight: bold; padding: 4px; }")
+                        .arg(ui::colors::POSITIVE);
     auto active_l = QString("QPushButton { background: %1; color: #000; border: none; "
-        "font-size: 9px; font-weight: bold; padding: 4px; }").arg(ui::colors::NEGATIVE);
+                            "font-size: 9px; font-weight: bold; padding: 4px; }")
+                        .arg(ui::colors::NEGATIVE);
     auto inactive = QString("QPushButton { background: %1; color: %2; border: none; "
-        "font-size: 9px; font-weight: bold; padding: 4px; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY);
+                            "font-size: 9px; font-weight: bold; padding: 4px; }")
+                        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY);
 
     gainers_btn_->setStyleSheet(gainers ? active_g : inactive);
     losers_btn_->setStyleSheet(gainers ? inactive : active_l);
@@ -84,19 +85,18 @@ void TopMoversWidget::show_tab(bool gainers) {
 
     QVector<services::QuoteData> filtered;
     for (const auto& q : all_quotes_) {
-        if (gainers && q.change_pct > 0) filtered.append(q);
-        if (!gainers && q.change_pct < 0) filtered.append(q);
+        if (gainers && q.change_pct > 0)
+            filtered.append(q);
+        if (!gainers && q.change_pct < 0)
+            filtered.append(q);
     }
 
     // Show top 6
     int count = std::min(filtered.size(), qsizetype(6));
     for (int i = 0; i < count; ++i) {
         const auto& q = gainers ? filtered[i] : filtered[filtered.size() - 1 - i];
-        table_->add_row({
-            q.symbol,
-            QString("$%1").arg(q.price, 0, 'f', 2),
-            QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2)
-        });
+        table_->add_row({q.symbol, QString("$%1").arg(q.price, 0, 'f', 2),
+                         QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2)});
         int row = table_->rowCount() - 1;
         table_->set_cell_color(row, 2, ui::change_color(q.change_pct));
     }

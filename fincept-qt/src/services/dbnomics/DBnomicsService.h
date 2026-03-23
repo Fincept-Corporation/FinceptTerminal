@@ -1,40 +1,35 @@
 // src/services/dbnomics/DBnomicsService.h
 #pragma once
 #include "services/dbnomics/DBnomicsModels.h"
-#include <QObject>
-#include <QMap>
-#include <QTimer>
+
 #include <QJsonDocument>
+#include <QMap>
+#include <QObject>
+#include <QTimer>
 
 namespace fincept::services {
 
 class DBnomicsService : public QObject {
     Q_OBJECT
-public:
+  public:
     static DBnomicsService& instance();
 
     // ── API methods (all async, result via signals) ───────────────────────────
     void fetch_providers();
     void fetch_datasets(const QString& provider_code, int offset = 0);
-    void fetch_series(const QString& provider_code,
-                      const QString& dataset_code,
-                      const QString& query = {},
+    void fetch_series(const QString& provider_code, const QString& dataset_code, const QString& query = {},
                       int offset = 0);
-    void fetch_observations(const QString& provider_code,
-                            const QString& dataset_code,
-                            const QString& series_code);
+    void fetch_observations(const QString& provider_code, const QString& dataset_code, const QString& series_code);
     void global_search(const QString& query, int offset = 0);
 
     // ── Debounce entry points (called by UI on each keystroke) ────────────────
-    void schedule_series_search(const QString& provider_code,
-                                const QString& dataset_code,
-                                const QString& query);
+    void schedule_series_search(const QString& provider_code, const QString& dataset_code, const QString& query);
     void schedule_global_search(const QString& query);
 
     // ── Chart color palette ───────────────────────────────────────────────────
     static QColor chart_color(int index);
 
-signals:
+  signals:
     void providers_loaded(QVector<DbnProvider> providers);
     void datasets_loaded(QVector<DbnDataset> datasets, DbnPagination page, bool append);
     void series_loaded(QVector<DbnSeriesInfo> series, DbnPagination page, bool append);
@@ -42,15 +37,15 @@ signals:
     void search_results_loaded(QVector<DbnSearchResult> results, DbnPagination page, bool append);
     void error_occurred(const QString& context, const QString& message);
 
-private:
+  private:
     explicit DBnomicsService(QObject* parent = nullptr);
     Q_DISABLE_COPY(DBnomicsService)
 
-    static constexpr const char* kBaseUrl  = "https://api.db.nomics.world/v22";
-    static constexpr int kProviderCacheMs  = 10 * 60 * 1000; // 10 min
-    static constexpr int kDatasetCacheMs   =  5 * 60 * 1000; //  5 min
-    static constexpr int kSeriesCacheMs    =  5 * 60 * 1000; //  5 min
-    static constexpr int kDebounceMs       = 400;
+    static constexpr const char* kBaseUrl = "https://api.db.nomics.world/v22";
+    static constexpr int kProviderCacheMs = 10 * 60 * 1000; // 10 min
+    static constexpr int kDatasetCacheMs = 5 * 60 * 1000;   //  5 min
+    static constexpr int kSeriesCacheMs = 5 * 60 * 1000;    //  5 min
+    static constexpr int kDebounceMs = 400;
 
     // ── Cache structures ──────────────────────────────────────────────────────
     struct CachedProviders {
@@ -61,20 +56,20 @@ private:
     struct CachedDatasets {
         QVector<DbnDataset> data;
         qint64 fetched_at = 0;
-        int    total = 0;
+        int total = 0;
     };
     QMap<QString, CachedDatasets> datasets_cache_; // key = provider_code
 
     struct CachedSeries {
         QVector<DbnSeriesInfo> data;
         qint64 fetched_at = 0;
-        int    total = 0;
+        int total = 0;
     };
     QMap<QString, CachedSeries> series_cache_; // key = "prov/ds"
 
     // ── Debounce timers ───────────────────────────────────────────────────────
-    QTimer* series_debounce_  = nullptr;
-    QTimer* search_debounce_  = nullptr;
+    QTimer* series_debounce_ = nullptr;
+    QTimer* search_debounce_ = nullptr;
     QString pending_series_prov_;
     QString pending_series_ds_;
     QString pending_series_q_;

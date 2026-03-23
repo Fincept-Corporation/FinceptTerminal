@@ -82,13 +82,14 @@ def make_exchange(exchange_id: str, credentials: dict = None,
 
 
 def output_success(data: dict | list):
-    """Print JSON result to stdout for C++ python_runner to extract."""
-    print(json.dumps({"success": True, "data": data}, default=str))
+    """Print JSON result to stdout for C++ python_runner to extract.
+    Uses compact separators to reduce payload size (no whitespace)."""
+    print(json.dumps({"success": True, "data": data}, default=str, separators=(",", ":")))
 
 
 def output_error(message: str, code: str = "EXCHANGE_ERROR"):
     """Print JSON error to stdout."""
-    print(json.dumps({"success": False, "error": message, "code": code}, default=str))
+    print(json.dumps({"success": False, "error": message, "code": code}, default=str, separators=(",", ":")))
     sys.exit(1)
 
 

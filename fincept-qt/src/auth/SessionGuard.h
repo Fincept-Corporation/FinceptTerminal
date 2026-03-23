@@ -9,21 +9,21 @@ namespace fincept::auth {
 /// Mirrors Tauri's SessionGuard.tsx.
 class SessionGuard : public QObject {
     Q_OBJECT
-public:
+  public:
     explicit SessionGuard(QObject* parent = nullptr);
 
     void start();
     void stop();
 
-signals:
+  signals:
     void session_expired();
 
-private slots:
+  private slots:
     void check_pulse();
 
-private:
+  private:
     QTimer timer_;
-    bool   is_checking_ = false;
+    bool is_checking_ = false;
 
     static constexpr int PULSE_INTERVAL_MS = 30000;
 };

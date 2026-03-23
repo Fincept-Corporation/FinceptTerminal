@@ -1,17 +1,18 @@
 #pragma once
+#include "core/result/Result.h"
+
 #include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QSqlError>
+#include <QSqlQuery>
 #include <QString>
 #include <QVariantList>
-#include "core/result/Result.h"
 
 namespace fincept {
 
 /// Separate SQLite database for ephemeral cache data.
 /// Uses synchronous=OFF for maximum write speed.
 class CacheDatabase {
-public:
+  public:
     static CacheDatabase& instance();
 
     Result<void> open(const QString& path);
@@ -21,7 +22,7 @@ public:
     Result<QSqlQuery> execute(const QString& sql, const QVariantList& params = {});
     Result<void> exec(const QString& sql);
 
-private:
+  private:
     CacheDatabase() = default;
     Result<void> apply_pragmas();
     Result<void> create_tables();

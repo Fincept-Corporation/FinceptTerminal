@@ -1,34 +1,45 @@
 #pragma once
-#include <QWidget>
-#include <QSplitter>
-#include <QShowEvent>
-#include <QHideEvent>
-#include "screens/dashboard/DashboardToolBar.h"
-#include "screens/dashboard/TickerBar.h"
-#include "screens/dashboard/WidgetGrid.h"
-#include "screens/dashboard/MarketPulsePanel.h"
 #include "screens/dashboard/DashboardStatusBar.h"
+#include "screens/dashboard/DashboardToolBar.h"
+#include "screens/dashboard/MarketPulsePanel.h"
+#include "screens/dashboard/TickerBar.h"
+#include "screens/dashboard/canvas/DashboardCanvas.h"
+
+#include <QHideEvent>
+#include <QScrollArea>
+#include <QShowEvent>
+#include <QSplitter>
+#include <QTimer>
+#include <QWidget>
 
 namespace fincept::screens {
 
-/// Main dashboard screen — toolbar, ticker, widget grid, market pulse, status bar.
+/// Main dashboard screen — toolbar, ticker, draggable widget grid, market pulse, status bar.
 class DashboardScreen : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit DashboardScreen(QWidget* parent = nullptr);
 
-protected:
+  protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
-private:
-    DashboardToolBar*   toolbar_      = nullptr;
-    TickerBar*          ticker_bar_   = nullptr;
-    WidgetGrid*         widget_grid_  = nullptr;
-    MarketPulsePanel*   market_pulse_ = nullptr;
-    DashboardStatusBar* status_bar_   = nullptr;
-    QSplitter*          content_split_= nullptr;
-    bool                pulse_visible_= true;
+  private:
+    void build_default_layout();
+    void save_layout();
+    void restore_layout();
+
+    DashboardToolBar* toolbar_ = nullptr;
+    TickerBar* ticker_bar_ = nullptr;
+    QScrollArea* scroll_area_ = nullptr;
+    DashboardCanvas* canvas_ = nullptr;
+    QSplitter* content_split_ = nullptr;
+    MarketPulsePanel* market_pulse_ = nullptr;
+    DashboardStatusBar* status_bar_ = nullptr;
+    QTimer* save_timer_ = nullptr;
+    bool pulse_visible_ = true;
+    bool layout_restored_ = false;
 };
 
 } // namespace fincept::screens

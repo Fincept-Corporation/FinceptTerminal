@@ -1,16 +1,17 @@
 #pragma once
+#include "core/result/Result.h"
+
 #include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QSqlError>
+#include <QSqlQuery>
 #include <QString>
 #include <QVariantList>
-#include "core/result/Result.h"
 
 namespace fincept {
 
 /// SQLite database wrapper with WAL mode, prepared statements, and transaction support.
 class Database {
-public:
+  public:
     static Database& instance();
 
     Result<void> open(const QString& path);
@@ -27,7 +28,7 @@ public:
 
     QSqlDatabase& raw_db() { return db_; }
 
-private:
+  private:
     Database() = default;
     Result<void> apply_pragmas();
 

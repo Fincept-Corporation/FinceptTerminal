@@ -1,220 +1,364 @@
+// CryptoOrderBook.cpp — custom-painted dual-column order book with depth bars
 #include "screens/crypto_trading/CryptoOrderBook.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QHeaderView>
-#include <QMutexLocker>
+
 #include <QDateTime>
+#include <QHBoxLayout>
+#include <QMouseEvent>
+#include <QMutexLocker>
+#include <QPainter>
+#include <QShowEvent>
+#include <QStyle>
+#include <QVBoxLayout>
+
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens::crypto {
 
+namespace {
+const QColor kBgBase("#080808");
+const QColor kBgSurface("#0a0a0a");
+const QColor kBgRaised("#111111");
+const QColor kBorderDim("#1a1a1a");
+const QColor kTextPrimary("#e5e5e5");
+const QColor kTextSecondary("#808080");
+const QColor kTextTertiary("#525252");
+const QColor kTextDim("#404040");
+const QColor kColorBid("#16a34a");
+const QColor kColorAsk("#dc2626");
+const QColor kColorAmber("#d97706");
+const QColor kBidBar(22, 163, 74, 35);
+const QColor kAskBar(220, 38, 38, 35);
+const QColor kBidBarHot(22, 163, 74, 65);
+const QColor kAskBarHot(220, 38, 38, 65);
+const QColor kRowEven("#080808");
+const QColor kRowOdd("#0c0c0c");
+} // namespace
+
 CryptoOrderBook::CryptoOrderBook(QWidget* parent) : QWidget(parent) {
+    setObjectName("cryptoOrderBook");
+
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 4, 0, 0);
-    layout->setSpacing(2);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
 
-    auto* header = new QHBoxLayout;
+    // Header with mode toggle buttons
+    auto* header = new QWidget;
+    header->setObjectName("cryptoObHeader");
+    header->setFixedHeight(HEADER_H);
+    auto* h_layout = new QHBoxLayout(header);
+    h_layout->setContentsMargins(8, 0, 8, 0);
+    h_layout->setSpacing(2);
+
     auto* title = new QLabel("ORDER BOOK");
-    title->setStyleSheet("font-weight: bold; color: #00aaff; font-size: 12px;");
-    header->addWidget(title);
+    title->setObjectName("cryptoObTitle");
+    h_layout->addWidget(title);
+    h_layout->addStretch();
 
-    mode_combo_ = new QComboBox;
-    mode_combo_->addItems({"Book", "Volume", "Imbalance", "Signals"});
-    mode_combo_->setFixedWidth(90);
-    connect(mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
-        view_mode_ = static_cast<ObViewMode>(idx);
-        update_display();
-    });
-    header->addWidget(mode_combo_);
-    layout->addLayout(header);
+    const char* mode_labels[] = {"Book", "Vol", "Imb", "Sig"};
+    for (int i = 0; i < 4; ++i) {
+        mode_btns_[i] = new QPushButton(mode_labels[i]);
+        mode_btns_[i]->setObjectName("cryptoObModeBtn");
+        mode_btns_[i]->setFixedHeight(22);
+        mode_btns_[i]->setCursor(Qt::PointingHandCursor);
+        if (i == 0) mode_btns_[i]->setProperty("active", true);
+        connect(mode_btns_[i], &QPushButton::clicked, this, [this, i]() { set_active_mode(i); });
+        h_layout->addWidget(mode_btns_[i]);
+    }
+    layout->addWidget(header);
 
-    table_ = new QTableWidget;
-    table_->setColumnCount(3);
-    table_->setHorizontalHeaderLabels({"Price", "Amount", "Total"});
-    table_->horizontalHeader()->setStretchLastSection(true);
-    table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    table_->verticalHeader()->hide();
-    table_->setShowGrid(false);
-    table_->setStyleSheet(
-        "QTableWidget { background: #0d1117; border: none; color: #ccc; font-size: 11px; }"
-        "QTableWidget::item { padding: 1px 3px; }");
-    connect(table_, &QTableWidget::cellClicked, this, [this](int row, int) {
-        auto* item = table_->item(row, 0);
-        if (item) emit price_clicked(item->text().toDouble());
-    });
-    layout->addWidget(table_, 1);
-
+    // Spread label
     spread_label_ = new QLabel("Spread: --");
+    spread_label_->setObjectName("cryptoObSpread");
     spread_label_->setAlignment(Qt::AlignCenter);
-    spread_label_->setStyleSheet("background: #1a1a2e; padding: 3px; font-weight: bold; "
-                                  "font-size: 11px; color: #aaa;");
+    spread_label_->setFixedHeight(SPREAD_H);
+    // Spread is positioned between asks and bids in paintEvent conceptually,
+    // but as a real widget it sits between header and the painted area
     layout->addWidget(spread_label_);
+
+    // The rest is custom-painted
+    layout->addStretch(1);
+
+    setMinimumHeight(200);
+
+    // Coalesce repaint: max 20fps instead of per-message
+    repaint_timer_ = new QTimer(this);
+    repaint_timer_->setSingleShot(true);
+    repaint_timer_->setInterval(50);
+    connect(repaint_timer_, &QTimer::timeout, this, [this]() { update(); });
+}
+
+void CryptoOrderBook::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    // Resume repaint timer when visible — only if there is dirty data to show
+    if (cache_dirty_ && repaint_timer_ && !repaint_timer_->isActive())
+        repaint_timer_->start();
+}
+
+void CryptoOrderBook::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    // Stop repaint timer to avoid wasting CPU painting an invisible widget
+    if (repaint_timer_)
+        repaint_timer_->stop();
+}
+
+void CryptoOrderBook::set_active_mode(int idx) {
+    view_mode_ = static_cast<ObViewMode>(idx);
+    for (int i = 0; i < 4; ++i) {
+        mode_btns_[i]->setProperty("active", i == idx);
+        mode_btns_[i]->style()->unpolish(mode_btns_[i]);
+        mode_btns_[i]->style()->polish(mode_btns_[i]);
+    }
+    cache_dirty_ = true;
+    if (repaint_timer_ && !repaint_timer_->isActive()) repaint_timer_->start();
 }
 
 void CryptoOrderBook::set_data(const QVector<QPair<double, double>>& bids,
                                 const QVector<QPair<double, double>>& asks,
                                 double spread, double spread_pct) {
-    QMutexLocker lock(&mutex_);
-    bids_ = bids;
-    asks_ = asks;
-    spread_ = spread;
-    spread_pct_ = spread_pct;
-    lock.unlock();
-    update_display();
+    {
+        QMutexLocker lock(&mutex_);
+        bids_ = bids;
+        asks_ = asks;
+        spread_ = spread;
+        spread_pct_ = spread_pct;
+    }
+    spread_label_->setText(
+        QString("SPREAD  %1  (%2%)").arg(spread, 0, 'f', 2).arg(spread_pct, 0, 'f', 4));
+    cache_dirty_ = true;
+    if (repaint_timer_ && !repaint_timer_->isActive()) repaint_timer_->start();
 }
 
 void CryptoOrderBook::add_tick_snapshot(const TickSnapshot& snap) {
     QMutexLocker lock(&mutex_);
     tick_history_.append(snap);
-    if (tick_history_.size() > OB_MAX_TICK_HISTORY) {
+    if (tick_history_.size() > OB_MAX_TICK_HISTORY)
         tick_history_.remove(0, tick_history_.size() - OB_MAX_TICK_HISTORY);
-    }
 }
 
-void CryptoOrderBook::update_display() {
-    switch (view_mode_) {
-        case ObViewMode::Book:       render_book_mode(); break;
-        case ObViewMode::Volume:     render_volume_mode(); break;
-        case ObViewMode::Imbalance:  render_imbalance_mode(); break;
-        case ObViewMode::Signals:    render_signals_mode(); break;
-    }
+void CryptoOrderBook::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    cache_dirty_ = true;
 }
 
-void CryptoOrderBook::render_book_mode() {
+void CryptoOrderBook::mousePressEvent(QMouseEvent* event) {
+    if (view_mode_ != ObViewMode::Book) return;
+
+    // Calculate which row was clicked in the paint area
+    const int paint_y = event->pos().y() - (HEADER_H + SPREAD_H);
+    if (paint_y < 0) return;
+
+    const int row = paint_y / ROW_H;
     QMutexLocker lock(&mutex_);
-    int ask_count = std::min(static_cast<int>(asks_.size()), OB_MAX_DISPLAY_LEVELS);
-    int bid_count = std::min(static_cast<int>(bids_.size()), OB_MAX_DISPLAY_LEVELS);
-    int total = ask_count + bid_count;
+    const int ask_count = std::min(static_cast<int>(asks_.size()), OB_MAX_DISPLAY_LEVELS);
+    const int bid_count = std::min(static_cast<int>(bids_.size()), OB_MAX_DISPLAY_LEVELS);
 
-    table_->setRowCount(total);
-    table_->setHorizontalHeaderLabels({"Price", "Amount", "Total"});
-
-    // Asks (reversed — lowest at bottom near spread)
-    double ask_cum = 0;
-    for (int i = 0; i < ask_count; ++i) {
-        int src = ask_count - 1 - i;
-        ask_cum += asks_[src].second;
-        auto* price = new QTableWidgetItem(QString::number(asks_[src].first, 'f', 2));
-        price->setForeground(QColor("#ff4444"));
-        table_->setItem(i, 0, price);
-        table_->setItem(i, 1, new QTableWidgetItem(QString::number(asks_[src].second, 'f', 4)));
-        table_->setItem(i, 2, new QTableWidgetItem(QString::number(ask_cum, 'f', 4)));
-    }
-
-    // Bids
-    double bid_cum = 0;
-    for (int i = 0; i < bid_count; ++i) {
-        bid_cum += bids_[i].second;
-        int row = ask_count + i;
-        auto* price = new QTableWidgetItem(QString::number(bids_[i].first, 'f', 2));
-        price->setForeground(QColor("#00ff88"));
-        table_->setItem(row, 0, price);
-        table_->setItem(row, 1, new QTableWidgetItem(QString::number(bids_[i].second, 'f', 4)));
-        table_->setItem(row, 2, new QTableWidgetItem(QString::number(bid_cum, 'f', 4)));
-    }
-
-    spread_label_->setText(QString("Spread: %1 (%2%)")
-        .arg(spread_, 0, 'f', 2).arg(spread_pct_, 0, 'f', 4));
-}
-
-void CryptoOrderBook::render_volume_mode() {
-    QMutexLocker lock(&mutex_);
-    int ask_count = std::min(static_cast<int>(asks_.size()), OB_MAX_DISPLAY_LEVELS);
-    int bid_count = std::min(static_cast<int>(bids_.size()), OB_MAX_DISPLAY_LEVELS);
-
-    table_->setRowCount(ask_count + bid_count);
-    table_->setHorizontalHeaderLabels({"Price", "Volume", "% of Max"});
-
-    // Find max volume for bar scaling
-    double max_vol = 0;
-    for (int i = 0; i < ask_count; ++i) max_vol = std::max(max_vol, asks_[i].second);
-    for (int i = 0; i < bid_count; ++i) max_vol = std::max(max_vol, bids_[i].second);
-    if (max_vol <= 0) max_vol = 1;
-
-    for (int i = 0; i < ask_count; ++i) {
-        int src = ask_count - 1 - i;
-        auto* price = new QTableWidgetItem(QString::number(asks_[src].first, 'f', 2));
-        price->setForeground(QColor("#ff4444"));
-        table_->setItem(i, 0, price);
-        table_->setItem(i, 1, new QTableWidgetItem(QString::number(asks_[src].second, 'f', 4)));
-        double pct = (asks_[src].second / max_vol) * 100.0;
-        table_->setItem(i, 2, new QTableWidgetItem(QString("%1%").arg(pct, 0, 'f', 1)));
-    }
-
-    for (int i = 0; i < bid_count; ++i) {
-        int row = ask_count + i;
-        auto* price = new QTableWidgetItem(QString::number(bids_[i].first, 'f', 2));
-        price->setForeground(QColor("#00ff88"));
-        table_->setItem(row, 0, price);
-        table_->setItem(row, 1, new QTableWidgetItem(QString::number(bids_[i].second, 'f', 4)));
-        double pct = (bids_[i].second / max_vol) * 100.0;
-        table_->setItem(row, 2, new QTableWidgetItem(QString("%1%").arg(pct, 0, 'f', 1)));
+    if (row < ask_count) {
+        // Clicked an ask row (displayed in reverse)
+        const int src = ask_count - 1 - row;
+        if (src < asks_.size())
+            emit price_clicked(asks_[src].first);
+    } else if (row < ask_count + bid_count) {
+        const int bid_idx = row - ask_count;
+        if (bid_idx < bids_.size())
+            emit price_clicked(bids_[bid_idx].first);
     }
 }
 
-void CryptoOrderBook::render_imbalance_mode() {
-    QMutexLocker lock(&mutex_);
-    table_->setHorizontalHeaderLabels({"Time", "Imbalance", "Signal"});
+void CryptoOrderBook::paintEvent(QPaintEvent* /*event*/) {
+    if (cache_dirty_)
+        rebuild_cache();
 
-    int count = std::min(static_cast<int>(tick_history_.size()), 30);
-    table_->setRowCount(count);
-
-    for (int i = 0; i < count; ++i) {
-        int idx = tick_history_.size() - 1 - i;
-        const auto& snap = tick_history_[idx];
-
-        QDateTime dt = QDateTime::fromMSecsSinceEpoch(snap.timestamp);
-        table_->setItem(i, 0, new QTableWidgetItem(dt.toString("HH:mm:ss")));
-
-        auto* imb = new QTableWidgetItem(QString("%1").arg(snap.imbalance, 0, 'f', 3));
-        imb->setForeground(snap.imbalance > 0 ? QColor("#00ff88") : QColor("#ff4444"));
-        table_->setItem(i, 1, imb);
-
-        QString signal;
-        if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD) signal = "BUY PRESSURE";
-        else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD) signal = "SELL PRESSURE";
-        else signal = "NEUTRAL";
-
-        auto* sig = new QTableWidgetItem(signal);
-        sig->setForeground(signal == "BUY PRESSURE" ? QColor("#00ff88")
-                           : signal == "SELL PRESSURE" ? QColor("#ff4444")
-                           : QColor("#888"));
-        table_->setItem(i, 2, sig);
-    }
+    QPainter p(this);
+    // Paint cache starting below header + spread
+    const int y_offset = HEADER_H + SPREAD_H;
+    p.drawPixmap(0, y_offset, cache_);
 }
 
-void CryptoOrderBook::render_signals_mode() {
-    QMutexLocker lock(&mutex_);
-    table_->setHorizontalHeaderLabels({"Time", "Rise%", "Action"});
+void CryptoOrderBook::rebuild_cache() {
+    const int w = width();
+    const int h = height() - HEADER_H - SPREAD_H;
+    if (w <= 0 || h <= 0) return;
 
-    int count = std::min(static_cast<int>(tick_history_.size()), 30);
-    table_->setRowCount(count);
+    cache_ = QPixmap(w, h);
+    cache_.fill(kBgBase);
 
-    for (int i = 0; i < count; ++i) {
-        int idx = tick_history_.size() - 1 - i;
-        const auto& snap = tick_history_[idx];
+    QPainter p(&cache_);
+    p.setFont(QFont("Consolas", 9));
 
-        QDateTime dt = QDateTime::fromMSecsSinceEpoch(snap.timestamp);
-        table_->setItem(i, 0, new QTableWidgetItem(dt.toString("HH:mm:ss")));
-
-        auto* rise = new QTableWidgetItem(QString("%1%").arg(snap.rise_ratio_60 * 100.0, 0, 'f', 2));
-        rise->setForeground(snap.rise_ratio_60 >= 0 ? QColor("#00ff88") : QColor("#ff4444"));
-        table_->setItem(i, 1, rise);
-
-        // Combined signal from imbalance + momentum
-        QString action = "HOLD";
-        if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD && snap.rise_ratio_60 > 0.001) action = "STRONG BUY";
-        else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD && snap.rise_ratio_60 < -0.001) action = "STRONG SELL";
-        else if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD) action = "BUY SIGNAL";
-        else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD) action = "SELL SIGNAL";
-
-        auto* act = new QTableWidgetItem(action);
-        act->setForeground(action.contains("BUY") ? QColor("#00ff88")
-                           : action.contains("SELL") ? QColor("#ff4444")
-                           : QColor("#888"));
-        table_->setItem(i, 2, act);
+    QVector<QPair<double, double>> bids, asks;
+    QVector<TickSnapshot> history;
+    {
+        QMutexLocker lock(&mutex_);
+        bids = bids_;
+        asks = asks_;
+        history = tick_history_;
     }
+
+    if (view_mode_ == ObViewMode::Book || view_mode_ == ObViewMode::Volume) {
+        // ── Dual-column order book with depth bars ──
+        const int ask_count = std::min(static_cast<int>(asks.size()), OB_MAX_DISPLAY_LEVELS);
+        const int bid_count = std::min(static_cast<int>(bids.size()), OB_MAX_DISPLAY_LEVELS);
+        const int half_w = w / 2;
+        const int price_col_w = half_w - 10;
+
+        // Calculate cumulative volumes for bar scaling
+        double max_cum = 0;
+        QVector<double> ask_cum(ask_count, 0), bid_cum(bid_count, 0);
+        {
+            double cum = 0;
+            for (int i = 0; i < ask_count; ++i) {
+                cum += asks[i].second;
+                ask_cum[i] = cum;
+            }
+            max_cum = std::max(max_cum, cum);
+        }
+        {
+            double cum = 0;
+            for (int i = 0; i < bid_count; ++i) {
+                cum += bids[i].second;
+                bid_cum[i] = cum;
+            }
+            max_cum = std::max(max_cum, cum);
+        }
+        if (max_cum <= 0) max_cum = 1;
+
+        // Calculate 75th percentile for heat coloring
+        QVector<double> all_vols;
+        all_vols.reserve(ask_count + bid_count);
+        for (int i = 0; i < ask_count; ++i) all_vols.append(asks[i].second);
+        for (int i = 0; i < bid_count; ++i) all_vols.append(bids[i].second);
+        std::sort(all_vols.begin(), all_vols.end());
+        const double p75 = all_vols.isEmpty() ? 0 : all_vols[all_vols.size() * 3 / 4];
+
+        // Column headers
+        p.setPen(kTextDim);
+        p.drawText(QRect(4, 0, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "BID");
+        p.drawText(QRect(4, 0, half_w - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "QTY");
+        p.drawText(QRect(half_w + 4, 0, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "ASK");
+        p.drawText(QRect(half_w + 4, 0, half_w - 8, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "QTY");
+
+        // Draw bid side (left) — prices descending from center
+        const int rows_start_y = ROW_H;
+        for (int i = 0; i < bid_count && rows_start_y + i * ROW_H < h; ++i) {
+            const int y = rows_start_y + i * ROW_H;
+            const QColor& row_bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+            p.fillRect(0, y, half_w - 1, ROW_H, row_bg);
+
+            // Depth bar (grows from right to left)
+            const double ratio = bid_cum[i] / max_cum;
+            const int bar_w = static_cast<int>((half_w - 4) * ratio);
+            const bool hot = bids[i].second >= p75 && p75 > 0;
+            p.fillRect(half_w - 1 - bar_w, y, bar_w, ROW_H, hot ? kBidBarHot : kBidBar);
+
+            // Price text
+            p.setPen(kColorBid);
+            p.drawText(QRect(4, y, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter,
+                       QString::number(bids[i].first, 'f', 2));
+
+            // Amount text
+            p.setPen(kTextSecondary);
+            p.drawText(QRect(4, y, half_w - 8, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
+                       QString::number(bids[i].second, 'f', 4));
+        }
+
+        // Draw ask side (right) — prices ascending from center
+        for (int i = 0; i < ask_count && rows_start_y + i * ROW_H < h; ++i) {
+            const int y = rows_start_y + i * ROW_H;
+            const QColor& row_bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+            p.fillRect(half_w + 1, y, half_w - 1, ROW_H, row_bg);
+
+            // Depth bar (grows from left to right)
+            const double ratio = ask_cum[i] / max_cum;
+            const int bar_w = static_cast<int>((half_w - 4) * ratio);
+            const bool hot = asks[i].second >= p75 && p75 > 0;
+            p.fillRect(half_w + 1, y, bar_w, ROW_H, hot ? kAskBarHot : kAskBar);
+
+            // Price text
+            p.setPen(kColorAsk);
+            p.drawText(QRect(half_w + 4, y, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter,
+                       QString::number(asks[i].first, 'f', 2));
+
+            // Amount text
+            p.setPen(kTextSecondary);
+            p.drawText(QRect(half_w + 4, y, half_w - 8, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
+                       QString::number(asks[i].second, 'f', 4));
+        }
+
+        // Center divider line
+        p.setPen(kBorderDim);
+        p.drawLine(half_w, 0, half_w, h);
+
+    } else {
+        // ── Imbalance / Signals mode — list view ──
+        const int count = std::min(static_cast<int>(history.size()), 30);
+        const bool is_signals = (view_mode_ == ObViewMode::Signals);
+
+        // Header
+        p.setPen(kTextDim);
+        if (is_signals) {
+            p.drawText(QRect(4, 0, w / 3, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "TIME");
+            p.drawText(QRect(w / 3, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "RISE%");
+            p.drawText(QRect(2 * w / 3, 0, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "ACTION");
+        } else {
+            p.drawText(QRect(4, 0, w / 3, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "TIME");
+            p.drawText(QRect(w / 3, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "IMBALANCE");
+            p.drawText(QRect(2 * w / 3, 0, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "SIGNAL");
+        }
+
+        for (int i = 0; i < count && (i + 1) * ROW_H < h; ++i) {
+            const int idx = history.size() - 1 - i;
+            const auto& snap = history[idx];
+            const int y = (i + 1) * ROW_H;
+            const QColor& row_bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+            p.fillRect(0, y, w, ROW_H, row_bg);
+
+            // Time
+            p.setPen(kTextDim);
+            p.drawText(QRect(4, y, w / 3, ROW_H), Qt::AlignLeft | Qt::AlignVCenter,
+                       QDateTime::fromMSecsSinceEpoch(snap.timestamp).toString("HH:mm:ss"));
+
+            if (is_signals) {
+                // Rise %
+                p.setPen(snap.rise_ratio_60 >= 0 ? kColorBid : kColorAsk);
+                p.drawText(QRect(w / 3, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
+                           QString("%1%").arg(snap.rise_ratio_60 * 100.0, 0, 'f', 2));
+
+                // Action
+                QString action = "HOLD";
+                QColor c = kTextTertiary;
+                if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD && snap.rise_ratio_60 > 0.001) {
+                    action = "STRONG BUY"; c = kColorBid;
+                } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD && snap.rise_ratio_60 < -0.001) {
+                    action = "STRONG SELL"; c = kColorAsk;
+                } else if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD) {
+                    action = "BUY"; c = kColorBid;
+                } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD) {
+                    action = "SELL"; c = kColorAsk;
+                }
+                p.setPen(c);
+                p.drawText(QRect(2 * w / 3, y, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, action);
+            } else {
+                // Imbalance
+                p.setPen(snap.imbalance > 0 ? kColorBid : kColorAsk);
+                p.drawText(QRect(w / 3, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
+                           QString("%1").arg(snap.imbalance, 0, 'f', 3));
+
+                // Signal
+                QString signal = "NEUTRAL";
+                QColor c = kTextTertiary;
+                if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD) {
+                    signal = "BUY PRESSURE"; c = kColorBid;
+                } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD) {
+                    signal = "SELL PRESSURE"; c = kColorAsk;
+                }
+                p.setPen(c);
+                p.drawText(QRect(2 * w / 3, y, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, signal);
+            }
+        }
+    }
+
+    cache_dirty_ = false;
 }
 
 } // namespace fincept::screens::crypto

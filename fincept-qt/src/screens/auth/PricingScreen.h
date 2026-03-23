@@ -1,34 +1,37 @@
 #pragma once
-#include <QWidget>
-#include <QVBoxLayout>
+#include "auth/AuthTypes.h"
+
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
-#include "auth/AuthTypes.h"
+#include <QVBoxLayout>
+#include <QWidget>
+
 #include <vector>
 
 namespace fincept::screens {
 
 class PricingScreen : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit PricingScreen(QWidget* parent = nullptr);
 
     void refresh_plans();
 
-signals:
+  signals:
     void navigate_dashboard();
+    void payment_initiated(const QString& order_id, const QString& plan_name);
 
-protected:
+  protected:
     void showEvent(QShowEvent* event) override;
 
-private:
-    QVBoxLayout*  cards_layout_ = nullptr;
-    QLabel*       error_label_  = nullptr;
-    QLabel*       loading_label_ = nullptr;
-    QLabel*       user_info_label_ = nullptr;
-    QWidget*      cards_container_ = nullptr;
-    QWidget*      footer_widget_ = nullptr;
+  private:
+    QVBoxLayout* cards_layout_ = nullptr;
+    QLabel* error_label_ = nullptr;
+    QLabel* loading_label_ = nullptr;
+    QLabel* user_info_label_ = nullptr;
+    QWidget* cards_container_ = nullptr;
+    QWidget* footer_widget_ = nullptr;
 
     std::vector<auth::SubscriptionPlan> plans_;
     bool fetched_ = false;

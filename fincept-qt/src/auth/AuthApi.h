@@ -1,7 +1,9 @@
 #pragma once
-#include <QObject>
-#include <functional>
 #include "auth/AuthTypes.h"
+
+#include <QObject>
+
+#include <functional>
 
 namespace fincept::auth {
 
@@ -9,7 +11,7 @@ namespace fincept::auth {
 /// All token state lives in HttpClient — AuthApi has no state of its own.
 class AuthApi : public QObject {
     Q_OBJECT
-public:
+  public:
     using Callback = std::function<void(ApiResponse)>;
 
     static AuthApi& instance();
@@ -40,12 +42,12 @@ public:
     // Subscription / payment
     void get_subscription_plans(Callback cb);
     void create_payment_order(const QString& plan_id, Callback cb);
+    void get_transaction_status(const QString& order_id, Callback cb);
 
-private:
+  private:
     AuthApi() = default;
 
-    void request(const QString& method, const QString& endpoint,
-                 const QJsonObject& body, Callback cb);
+    void request(const QString& method, const QString& endpoint, const QJsonObject& body, Callback cb);
 };
 
 } // namespace fincept::auth

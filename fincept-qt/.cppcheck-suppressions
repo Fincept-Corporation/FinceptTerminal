@@ -1,0 +1,7 @@
+# cppcheck suppressions for Fincept Terminal
+# Qt macros (Q_OBJECT, signals, slots, emit) are not understood by cppcheck without Qt config
+unknownMacro
+# System includes are not provided to cppcheck
+missingIncludeSystem
+# unusedFunction is noisy in a large Qt project (slots are "unused" from cppcheck's view)
+unusedFunction

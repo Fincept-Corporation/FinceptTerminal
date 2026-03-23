@@ -1,15 +1,16 @@
 #pragma once
-#include <QWidget>
-#include <QListWidget>
-#include <QLineEdit>
-#include <QLabel>
-#include <QPushButton>
-#include <QTimer>
-#include <QShowEvent>
-#include <QHideEvent>
-#include "ui/tables/DataTable.h"
-#include "storage/repositories/WatchlistRepository.h"
 #include "services/markets/MarketDataService.h"
+#include "storage/repositories/WatchlistRepository.h"
+#include "ui/tables/DataTable.h"
+
+#include <QHideEvent>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QPushButton>
+#include <QShowEvent>
+#include <QTimer>
+#include <QWidget>
 
 namespace fincept::screens {
 
@@ -17,14 +18,14 @@ namespace fincept::screens {
 /// Layout: Watchlist Sidebar | Stock Table + Controls
 class WatchlistScreen : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit WatchlistScreen(QWidget* parent = nullptr);
 
-protected:
+  protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
 
-private slots:
+  private slots:
     void on_watchlist_selected(int row);
     void on_add_watchlist();
     void on_delete_watchlist();
@@ -32,7 +33,7 @@ private slots:
     void on_remove_stock();
     void on_refresh();
 
-private:
+  private:
     void build_ui();
     QWidget* build_sidebar();
     QWidget* build_main_panel();
@@ -42,20 +43,20 @@ private:
     void populate_table(const QVector<services::QuoteData>& quotes);
 
     // Data
-    QVector<fincept::Watchlist>      watchlists_;
+    QVector<fincept::Watchlist> watchlists_;
     QVector<fincept::WatchlistStock> stocks_;
     QString current_wl_id_;
 
     // Sidebar
-    QListWidget* wl_list_       = nullptr;
-    QLabel*      wl_count_      = nullptr;
+    QListWidget* wl_list_ = nullptr;
+    QLabel* wl_count_ = nullptr;
 
     // Main panel
-    QLabel*      panel_title_   = nullptr;
-    QLabel*      stock_count_   = nullptr;
-    QLineEdit*   add_input_     = nullptr;
-    ui::DataTable* table_       = nullptr;
-    QTimer*      refresh_timer_ = nullptr;
+    QLabel* panel_title_ = nullptr;
+    QLabel* stock_count_ = nullptr;
+    QLineEdit* add_input_ = nullptr;
+    ui::DataTable* table_ = nullptr;
+    QTimer* refresh_timer_ = nullptr;
 };
 
 } // namespace fincept::screens

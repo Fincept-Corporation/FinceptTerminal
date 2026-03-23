@@ -1,4 +1,5 @@
 #include "ui/widgets/GeometricBackground.h"
+
 #include <QPainter>
 #include <QPen>
 #include <QResizeEvent>
@@ -11,7 +12,8 @@ GeometricBackground::GeometricBackground(QWidget* parent) : QWidget(parent) {
 }
 
 void GeometricBackground::rebuild_cache() {
-    if (width() <= 0 || height() <= 0) return;
+    if (width() <= 0 || height() <= 0)
+        return;
 
     cache_ = QPixmap(size());
     cache_.fill(QColor("#000000"));
@@ -19,7 +21,7 @@ void GeometricBackground::rebuild_cache() {
     QPainter p(&cache_);
     p.setRenderHint(QPainter::Antialiasing);
 
-    QPen pen(QColor(51, 51, 51, 122));  // #333333 at ~48% opacity
+    QPen pen(QColor(51, 51, 51, 122)); // #333333 at ~48% opacity
     pen.setWidthF(0.8);
     p.setPen(pen);
 
@@ -41,8 +43,10 @@ void GeometricBackground::resizeEvent(QResizeEvent* event) {
 }
 
 void GeometricBackground::paintEvent(QPaintEvent*) {
-    if (cache_.isNull()) rebuild_cache();
-    if (cache_.isNull()) return;
+    if (cache_.isNull())
+        rebuild_cache();
+    if (cache_.isNull())
+        return;
 
     QPainter p(this);
     p.drawPixmap(0, 0, cache_);

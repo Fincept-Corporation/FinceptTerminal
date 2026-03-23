@@ -1,6 +1,7 @@
 #include "storage/sqlite/Database.h"
-#include "storage/sqlite/migrations/MigrationRunner.h"
+
 #include "core/logging/Logger.h"
+#include "storage/sqlite/migrations/MigrationRunner.h"
 
 namespace fincept {
 
@@ -18,7 +19,8 @@ Result<void> Database::open(const QString& path) {
     LOG_INFO("DB", "Opened database: " + path);
 
     auto pr = apply_pragmas();
-    if (pr.is_err()) return pr;
+    if (pr.is_err())
+        return pr;
 
     // Run versioned migrations
     MigrationRunner runner(db_);
@@ -26,7 +28,8 @@ Result<void> Database::open(const QString& path) {
 }
 
 void Database::close() {
-    if (db_.isOpen()) db_.close();
+    if (db_.isOpen())
+        db_.close();
 }
 
 bool Database::is_open() const {
@@ -79,19 +82,14 @@ Result<void> Database::rollback() {
 
 Result<void> Database::apply_pragmas() {
     const char* pragmas[] = {
-        "PRAGMA journal_mode = WAL",
-        "PRAGMA synchronous = NORMAL",
-        "PRAGMA cache_size = -20000",
-        "PRAGMA temp_store = MEMORY",
-        "PRAGMA mmap_size = 268435456",
-        "PRAGMA foreign_keys = ON",
+        "PRAGMA journal_mode = WAL",  "PRAGMA synchronous = NORMAL",  "PRAGMA cache_size = -20000",
+        "PRAGMA temp_store = MEMORY", "PRAGMA mmap_size = 268435456", "PRAGMA foreign_keys = ON",
         "PRAGMA busy_timeout = 5000",
     };
     for (auto* p : pragmas) {
         auto r = exec(p);
         if (r.is_err()) {
-            LOG_WARN("DB", QString("PRAGMA failed: %1 — %2")
-                .arg(p, QString::fromStdString(r.error())));
+            LOG_WARN("DB", QString("PRAGMA failed: %1 — %2").arg(p, QString::fromStdString(r.error())));
         }
     }
     LOG_INFO("DB", "PRAGMAs applied (WAL, foreign_keys, cache_size=20MB)");

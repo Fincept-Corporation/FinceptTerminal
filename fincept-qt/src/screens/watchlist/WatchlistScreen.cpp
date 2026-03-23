@@ -1,13 +1,15 @@
 #include "screens/watchlist/WatchlistScreen.h"
-#include "ui/theme/Theme.h"
+
 #include "core/logging/Logger.h"
-#include <QVBoxLayout>
+#include "ui/theme/Theme.h"
+
 #include <QHBoxLayout>
-#include <QShowEvent>
 #include <QHideEvent>
-#include <QSplitter>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QShowEvent>
+#include <QSplitter>
+#include <QVBoxLayout>
 
 namespace fincept::screens {
 
@@ -23,11 +25,10 @@ static const QString kAccentBtn =
     "QPushButton:hover { background: #d97706; color: #080808; }";
 
 // §5.5 Standard button
-static const QString kStdBtn =
-    "QPushButton { background: #111111; color: #808080; border: 1px solid #1a1a1a; "
-    "padding: 0 10px; height: 24px; "
-    "font-size: 11px; font-weight: 700; font-family: 'Consolas','Courier New',monospace; }"
-    "QPushButton:hover { color: #e5e5e5; background: #161616; }";
+static const QString kStdBtn = "QPushButton { background: #111111; color: #808080; border: 1px solid #1a1a1a; "
+                               "padding: 0 10px; height: 24px; "
+                               "font-size: 11px; font-weight: 700; font-family: 'Consolas','Courier New',monospace; }"
+                               "QPushButton:hover { color: #e5e5e5; background: #161616; }";
 
 // §5.5 Danger button
 static const QString kDangerBtn =
@@ -65,13 +66,15 @@ WatchlistScreen::WatchlistScreen(QWidget* parent) : QWidget(parent) {
 
 void WatchlistScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (refresh_timer_) refresh_timer_->start();
+    if (refresh_timer_)
+        refresh_timer_->start();
     on_refresh();
 }
 
 void WatchlistScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
-    if (refresh_timer_) refresh_timer_->stop();
+    if (refresh_timer_)
+        refresh_timer_->stop();
 }
 
 void WatchlistScreen::build_ui() {
@@ -95,8 +98,7 @@ void WatchlistScreen::build_ui() {
 QWidget* WatchlistScreen::build_sidebar() {
     auto* panel = new QWidget;
     panel->setFixedWidth(220);
-    panel->setStyleSheet(QString("background: %1; border-right: 1px solid %2;")
-        .arg(BG_SURFACE, BORDER_DIM));
+    panel->setStyleSheet(QString("background: %1; border-right: 1px solid %2;").arg(BG_SURFACE, BORDER_DIM));
 
     auto* lay = new QVBoxLayout(panel);
     lay->setContentsMargins(0, 0, 0, 0);
@@ -105,17 +107,15 @@ QWidget* WatchlistScreen::build_sidebar() {
     // §5.1 Panel header — 34px, #111111 bg, amber title
     auto* header = new QWidget;
     header->setFixedHeight(34);
-    header->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
-        .arg(BG_RAISED, BORDER_DIM));
+    header->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;").arg(BG_RAISED, BORDER_DIM));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(12, 0, 8, 0);
     hl->setSpacing(6);
 
     auto* title = new QLabel("WATCHLISTS");
-    title->setStyleSheet(QString(
-        "color: %1; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; "
-        "font-family: 'Consolas','Courier New',monospace; background: transparent;")
-        .arg(AMBER));
+    title->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; "
+                                 "font-family: 'Consolas','Courier New',monospace; background: transparent;")
+                             .arg(AMBER));
     hl->addWidget(title);
     hl->addStretch();
 
@@ -130,18 +130,16 @@ QWidget* WatchlistScreen::build_sidebar() {
     // Watchlist list
     wl_list_ = new QListWidget;
     wl_list_->setStyleSheet(kList.arg(BG_SURFACE, BORDER_DIM));
-    connect(wl_list_, &QListWidget::currentRowChanged,
-            this, &WatchlistScreen::on_watchlist_selected);
+    connect(wl_list_, &QListWidget::currentRowChanged, this, &WatchlistScreen::on_watchlist_selected);
     lay->addWidget(wl_list_);
 
     // Footer count
     wl_count_ = new QLabel("0 lists");
     wl_count_->setFixedHeight(26);
     wl_count_->setAlignment(Qt::AlignCenter);
-    wl_count_->setStyleSheet(QString(
-        "background: %1; color: %2; font-size: 11px; border-top: 1px solid %3; "
-        "font-family: 'Consolas','Courier New',monospace;")
-        .arg(BG_SURFACE, TEXT_TERTIARY, BORDER_DIM));
+    wl_count_->setStyleSheet(QString("background: %1; color: %2; font-size: 11px; border-top: 1px solid %3; "
+                                     "font-family: 'Consolas','Courier New',monospace;")
+                                 .arg(BG_SURFACE, TEXT_TERTIARY, BORDER_DIM));
     lay->addWidget(wl_count_);
 
     return panel;
@@ -160,25 +158,23 @@ QWidget* WatchlistScreen::build_main_panel() {
     // Top bar: title + controls
     auto* top_bar = new QWidget;
     top_bar->setFixedHeight(34);
-    top_bar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
-        .arg(BG_RAISED, BORDER_DIM));
+    top_bar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;").arg(BG_RAISED, BORDER_DIM));
     auto* tl = new QHBoxLayout(top_bar);
     tl->setContentsMargins(14, 0, 14, 0);
     tl->setSpacing(8);
 
     panel_title_ = new QLabel("Select a watchlist");
-    panel_title_->setStyleSheet(QString(
-        "color: %1; font-size: 13px; font-weight: 700; "
-        "font-family: 'Consolas','Courier New',monospace; background: transparent;")
-        .arg(TEXT_PRIMARY));
+    panel_title_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700; "
+                                        "font-family: 'Consolas','Courier New',monospace; background: transparent;")
+                                    .arg(TEXT_PRIMARY));
     tl->addWidget(panel_title_);
 
     tl->addStretch();
 
     stock_count_ = new QLabel;
-    stock_count_->setStyleSheet(QString(
-        "color: %1; font-size: 11px; font-family: 'Consolas','Courier New',monospace; "
-        "background: transparent;").arg(TEXT_TERTIARY));
+    stock_count_->setStyleSheet(QString("color: %1; font-size: 11px; font-family: 'Consolas','Courier New',monospace; "
+                                        "background: transparent;")
+                                    .arg(TEXT_TERTIARY));
     tl->addWidget(stock_count_);
 
     auto* refresh_btn = new QPushButton("REFRESH");
@@ -196,17 +192,15 @@ QWidget* WatchlistScreen::build_main_panel() {
     // Add stock bar
     auto* add_bar = new QWidget;
     add_bar->setFixedHeight(34);
-    add_bar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
-        .arg(BG_SURFACE, BORDER_DIM));
+    add_bar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;").arg(BG_SURFACE, BORDER_DIM));
     auto* al = new QHBoxLayout(add_bar);
     al->setContentsMargins(14, 0, 14, 0);
     al->setSpacing(6);
 
     auto* add_label = new QLabel("ADD:");
-    add_label->setStyleSheet(QString(
-        "color: %1; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; "
-        "font-family: 'Consolas','Courier New',monospace; background: transparent;")
-        .arg(TEXT_SECONDARY));
+    add_label->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; "
+                                     "font-family: 'Consolas','Courier New',monospace; background: transparent;")
+                                 .arg(TEXT_SECONDARY));
     al->addWidget(add_label);
 
     add_input_ = new QLineEdit;
@@ -285,7 +279,8 @@ void WatchlistScreen::load_watchlists() {
 }
 
 void WatchlistScreen::load_stocks() {
-    if (current_wl_id_.isEmpty()) return;
+    if (current_wl_id_.isEmpty())
+        return;
 
     auto r = fincept::WatchlistRepository::instance().get_stocks(current_wl_id_);
     if (r.is_err()) {
@@ -309,18 +304,17 @@ void WatchlistScreen::fetch_quotes() {
         symbols << s.symbol;
     }
 
-    services::MarketDataService::instance().fetch_quotes(symbols,
-        [this](bool ok, QVector<services::QuoteData> quotes) {
-            if (!ok || quotes.isEmpty()) {
-                // Show symbols without price data
-                table_->clear_data();
-                for (const auto& s : stocks_) {
-                    table_->add_row({s.symbol, s.name, "--", "--", "--", "--", "--", "--"});
-                }
-                return;
+    services::MarketDataService::instance().fetch_quotes(symbols, [this](bool ok, QVector<services::QuoteData> quotes) {
+        if (!ok || quotes.isEmpty()) {
+            // Show symbols without price data
+            table_->clear_data();
+            for (const auto& s : stocks_) {
+                table_->add_row({s.symbol, s.name, "--", "--", "--", "--", "--", "--"});
             }
-            populate_table(quotes);
-        });
+            return;
+        }
+        populate_table(quotes);
+    });
 }
 
 void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes) {
@@ -336,16 +330,11 @@ void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes)
         auto it = quote_map.find(s.symbol);
         if (it != quote_map.end()) {
             const auto& q = it.value();
-            table_->add_row({
-                q.symbol,
-                q.name.isEmpty() ? s.name : q.name,
-                QString("$%1").arg(q.price, 0, 'f', 2),
-                QString("%1%2").arg(q.change >= 0 ? "+" : "").arg(q.change, 0, 'f', 2),
-                QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2),
-                QString("$%1").arg(q.high, 0, 'f', 2),
-                QString("$%1").arg(q.low, 0, 'f', 2),
-                QString::number(static_cast<qint64>(q.volume))
-            });
+            table_->add_row({q.symbol, q.name.isEmpty() ? s.name : q.name, QString("$%1").arg(q.price, 0, 'f', 2),
+                             QString("%1%2").arg(q.change >= 0 ? "+" : "").arg(q.change, 0, 'f', 2),
+                             QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2),
+                             QString("$%1").arg(q.high, 0, 'f', 2), QString("$%1").arg(q.low, 0, 'f', 2),
+                             QString::number(static_cast<qint64>(q.volume))});
 
             int row = table_->rowCount() - 1;
             // §8 Rule 6: Green = good, Red = bad
@@ -361,7 +350,8 @@ void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes)
 // ── Slots ────────────────────────────────────────────────────────────────────
 
 void WatchlistScreen::on_watchlist_selected(int row) {
-    if (row < 0 || row >= watchlists_.size()) return;
+    if (row < 0 || row >= watchlists_.size())
+        return;
     current_wl_id_ = watchlists_[row].id;
     panel_title_->setText(watchlists_[row].name.toUpper());
     load_stocks();
@@ -369,9 +359,9 @@ void WatchlistScreen::on_watchlist_selected(int row) {
 
 void WatchlistScreen::on_add_watchlist() {
     bool ok = false;
-    QString name = QInputDialog::getText(this, "New Watchlist", "Name:",
-                                          QLineEdit::Normal, "", &ok);
-    if (!ok || name.trimmed().isEmpty()) return;
+    QString name = QInputDialog::getText(this, "New Watchlist", "Name:", QLineEdit::Normal, "", &ok);
+    if (!ok || name.trimmed().isEmpty())
+        return;
 
     auto r = fincept::WatchlistRepository::instance().create(name.trimmed());
     if (r.is_ok()) {
@@ -382,13 +372,15 @@ void WatchlistScreen::on_add_watchlist() {
 }
 
 void WatchlistScreen::on_delete_watchlist() {
-    if (current_wl_id_.isEmpty()) return;
+    if (current_wl_id_.isEmpty())
+        return;
 
     auto reply = QMessageBox::question(this, "Delete Watchlist",
-        "Are you sure you want to delete this watchlist and all its stocks?",
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+                                       "Are you sure you want to delete this watchlist and all its stocks?",
+                                       QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
-    if (reply != QMessageBox::Yes) return;
+    if (reply != QMessageBox::Yes)
+        return;
 
     fincept::WatchlistRepository::instance().remove(current_wl_id_);
     current_wl_id_.clear();
@@ -399,10 +391,12 @@ void WatchlistScreen::on_delete_watchlist() {
 }
 
 void WatchlistScreen::on_add_stock() {
-    if (current_wl_id_.isEmpty()) return;
+    if (current_wl_id_.isEmpty())
+        return;
 
     QString text = add_input_->text().trimmed().toUpper();
-    if (text.isEmpty()) return;
+    if (text.isEmpty())
+        return;
 
     auto& repo = fincept::WatchlistRepository::instance();
     for (auto& s : text.split(",")) {
@@ -417,10 +411,12 @@ void WatchlistScreen::on_add_stock() {
 }
 
 void WatchlistScreen::on_remove_stock() {
-    if (current_wl_id_.isEmpty()) return;
+    if (current_wl_id_.isEmpty())
+        return;
 
     int row = table_->currentRow();
-    if (row < 0 || row >= stocks_.size()) return;
+    if (row < 0 || row >= stocks_.size())
+        return;
 
     QString symbol = stocks_[row].symbol;
     fincept::WatchlistRepository::instance().remove_stock(current_wl_id_, symbol);

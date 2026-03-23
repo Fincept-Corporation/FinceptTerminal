@@ -1,6 +1,7 @@
 #include "auth/SessionGuard.h"
-#include "auth/AuthManager.h"
+
 #include "auth/AuthApi.h"
+#include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
 
 namespace fincept::auth {
@@ -33,8 +34,10 @@ void SessionGuard::stop() {
 
 void SessionGuard::check_pulse() {
     const auto& s = AuthManager::instance().session();
-    if (!s.authenticated || s.api_key.isEmpty()) return;
-    if (is_checking_) return;
+    if (!s.authenticated || s.api_key.isEmpty())
+        return;
+    if (is_checking_)
+        return;
 
     is_checking_ = true;
 

@@ -2,10 +2,12 @@
 // Broker Registry — factory + lookup for all 16 broker implementations
 
 #include "trading/BrokerInterface.h"
+
 #include <QString>
 #include <QStringList>
-#include <unordered_map>
+
 #include <memory>
+#include <unordered_map>
 
 namespace fincept::trading {
 
@@ -15,7 +17,7 @@ struct QStringHash {
 };
 
 class BrokerRegistry {
-public:
+  public:
     static BrokerRegistry& instance();
 
     IBroker* get(const QString& broker_id) const;
@@ -26,7 +28,7 @@ public:
     BrokerRegistry(const BrokerRegistry&) = delete;
     BrokerRegistry& operator=(const BrokerRegistry&) = delete;
 
-private:
+  private:
     BrokerRegistry();
     ~BrokerRegistry() = default;
 

@@ -1,10 +1,11 @@
 #include "storage/secure/SecureStorage.h"
+
 #include <QSettings>
 
 #ifdef Q_OS_WIN
-#include <windows.h>
-#include <wincred.h>
-#pragma comment(lib, "Advapi32.lib")
+#    include <windows.h>
+#    include <wincred.h>
+#    pragma comment(lib, "Advapi32.lib")
 #endif
 
 namespace fincept {
@@ -47,15 +48,15 @@ Result<QString> SecureStorage::retrieve(const QString& key) {
         return Result<QString>::err("Credential not found");
     }
 
-    QString value = QString::fromUtf8(
-        reinterpret_cast<const char*>(cred->CredentialBlob),
-        static_cast<int>(cred->CredentialBlobSize));
+    QString value = QString::fromUtf8(reinterpret_cast<const char*>(cred->CredentialBlob),
+                                      static_cast<int>(cred->CredentialBlobSize));
     CredFree(cred);
     return Result<QString>::ok(value);
 #else
     QSettings s("Fincept", "FinceptTerminal-Secure");
     QVariant v = s.value("secure/" + key);
-    if (!v.isValid()) return Result<QString>::err("Not found");
+    if (!v.isValid())
+        return Result<QString>::err("Not found");
     return Result<QString>::ok(v.toString());
 #endif
 }

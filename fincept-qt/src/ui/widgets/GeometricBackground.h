@@ -1,6 +1,6 @@
 #pragma once
-#include <QWidget>
 #include <QPixmap>
+#include <QWidget>
 
 namespace fincept::ui {
 
@@ -9,14 +9,14 @@ namespace fincept::ui {
 /// Caches rendering as QPixmap — redraws only on resize.
 class GeometricBackground : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit GeometricBackground(QWidget* parent = nullptr);
 
-protected:
+  protected:
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
-private:
+  private:
     void rebuild_cache();
     QPixmap cache_;
 };

@@ -4,7 +4,7 @@
 namespace fincept {
 
 struct Report {
-    int     id = 0;
+    int id = 0;
     QString title;
     QString content_json;
     QString created_at;
@@ -21,23 +21,23 @@ struct ReportTemplate {
 };
 
 class ReportRepository : public BaseRepository<Report> {
-public:
+  public:
     static ReportRepository& instance();
 
-    Result<qint64>             create(const QString& title, const QString& content_json);
-    Result<Report>             get(int id);
-    Result<QVector<Report>>    list_all();
-    Result<void>               update(int id, const QString& title, const QString& content_json);
-    Result<void>               remove(int id);
+    Result<qint64> create(const QString& title, const QString& content_json);
+    Result<Report> get(int id);
+    Result<QVector<Report>> list_all();
+    Result<void> update(int id, const QString& title, const QString& content_json);
+    Result<void> remove(int id);
 
     // Templates
     Result<QVector<ReportTemplate>> list_templates();
-    Result<void>                    save_template(const ReportTemplate& t);
-    Result<void>                    remove_template(const QString& id);
+    Result<void> save_template(const ReportTemplate& t);
+    Result<void> remove_template(const QString& id);
 
-private:
+  private:
     ReportRepository() = default;
-    static Report         map_report(QSqlQuery& q);
+    static Report map_report(QSqlQuery& q);
     static ReportTemplate map_template(QSqlQuery& q);
 };
 

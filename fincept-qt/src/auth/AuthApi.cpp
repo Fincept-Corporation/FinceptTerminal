@@ -1,6 +1,8 @@
 #include "auth/AuthApi.h"
-#include "network/http/HttpClient.h"
+
 #include "core/logging/Logger.h"
+#include "network/http/HttpClient.h"
+
 #include <QJsonDocument>
 
 namespace fincept::auth {
@@ -10,8 +12,7 @@ AuthApi& AuthApi::instance() {
     return s;
 }
 
-void AuthApi::request(const QString& method, const QString& endpoint,
-                       const QJsonObject& body, Callback cb) {
+void AuthApi::request(const QString& method, const QString& endpoint, const QJsonObject& body, Callback cb) {
     auto& http = fincept::HttpClient::instance();
 
     auto handle = [cb, endpoint](fincept::Result<QJsonDocument> result) {
@@ -25,14 +26,24 @@ void AuthApi::request(const QString& method, const QString& endpoint,
             // Build a meaningful error message from the status
             QString msg;
             switch (status) {
-                case 401: msg = "Session expired. Please log in again."; break;
-                case 403: msg = "Access denied."; break;
-                case 404: msg = "Resource not found."; break;
-                case 422: msg = "Invalid request data."; break;
-                case 500: msg = "Server error. Please try again."; break;
-                default:  msg = status > 0
-                              ? QString("Request failed (HTTP %1)").arg(status)
-                              : "Network error. Check your connection.";
+                case 401:
+                    msg = "Session expired. Please log in again.";
+                    break;
+                case 403:
+                    msg = "Access denied.";
+                    break;
+                case 404:
+                    msg = "Resource not found.";
+                    break;
+                case 422:
+                    msg = "Invalid request data.";
+                    break;
+                case 500:
+                    msg = "Server error. Please try again.";
+                    break;
+                default:
+                    msg = status > 0 ? QString("Request failed (HTTP %1)").arg(status)
+                                     : "Network error. Check your connection.";
             }
             cb({false, {}, msg, status});
             return;
@@ -43,8 +54,7 @@ void AuthApi::request(const QString& method, const QString& endpoint,
 
         // Detect API-level failures: {success: false, message: "..."}
         if (obj.contains("success") && !obj["success"].toBool()) {
-            QString msg = obj.value("message").toString(
-                          obj.value("detail").toString("Request failed"));
+            QString msg = obj.value("message").toString(obj.value("detail").toString("Request failed"));
             cb({false, obj, msg, 200});
             return;
         }
@@ -52,10 +62,14 @@ void AuthApi::request(const QString& method, const QString& endpoint,
         cb({true, obj, {}, 200});
     };
 
-    if (method == "GET")         http.get(endpoint, handle);
-    else if (method == "POST")   http.post(endpoint, body, handle);
-    else if (method == "PUT")    http.put(endpoint, body, handle);
-    else if (method == "DELETE") http.del(endpoint, handle);
+    if (method == "GET")
+        http.get(endpoint, handle);
+    else if (method == "POST")
+        http.post(endpoint, body, handle);
+    else if (method == "PUT")
+        http.put(endpoint, body, handle);
+    else if (method == "DELETE")
+        http.del(endpoint, handle);
 }
 
 // ── Health ───────────────────────────────────────────────────────────────────
@@ -138,6 +152,10 @@ void AuthApi::create_payment_order(const QString& plan_id, Callback cb) {
     body["plan_id"] = plan_id;
     body["currency"] = QStringLiteral("USD");
     request("POST", "/cashfree/create-order", body, cb);
+}
+
+void AuthApi::get_transaction_status(const QString& order_id, Callback cb) {
+    request("GET", "/cashfree/order/" + order_id, {}, cb);
 }
 
 } // namespace fincept::auth

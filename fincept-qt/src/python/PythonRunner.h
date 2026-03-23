@@ -1,18 +1,19 @@
 #pragma once
 #include <QObject>
 #include <QProcess>
+#include <QQueue>
 #include <QString>
 #include <QStringList>
-#include <QQueue>
+
 #include <functional>
 
 namespace fincept::python {
 
 struct PythonResult {
-    bool    success = false;
+    bool success = false;
     QString output;
     QString error;
-    int     exit_code = -1;
+    int exit_code = -1;
 };
 
 /// Runs Python scripts as subprocesses and returns JSON output.
@@ -20,7 +21,7 @@ struct PythonResult {
 /// Limits concurrent processes to avoid overwhelming the system.
 class PythonRunner : public QObject {
     Q_OBJECT
-public:
+  public:
     using Callback = std::function<void(PythonResult)>;
 
     static PythonRunner& instance();
@@ -28,6 +29,10 @@ public:
     /// Run a script asynchronously. Callback invoked on Qt event loop.
     /// Requests are queued if max concurrency is reached.
     void run(const QString& script, const QStringList& args, Callback cb);
+
+    /// Run arbitrary Python code (for notebook/colab cells).
+    /// Creates a temp file, executes it, returns stdout/stderr.
+    void run_code(const QString& code, Callback cb);
 
     /// Resolve path to python executable
     QString python_path() const;
@@ -41,7 +46,7 @@ public:
     /// Set max concurrent Python processes (default: 3)
     void set_max_concurrent(int n) { max_concurrent_ = n; }
 
-private:
+  private:
     PythonRunner();
     QString find_python() const;
     QString find_scripts_dir() const;
@@ -53,12 +58,12 @@ private:
     // Concurrency limiter
     static constexpr int DEFAULT_MAX_CONCURRENT = 3;
     int max_concurrent_ = DEFAULT_MAX_CONCURRENT;
-    int active_count_   = 0;
+    int active_count_ = 0;
 
     struct QueuedRequest {
-        QString     script;
+        QString script;
         QStringList args;
-        Callback    cb;
+        Callback cb;
     };
     QQueue<QueuedRequest> queue_;
 };

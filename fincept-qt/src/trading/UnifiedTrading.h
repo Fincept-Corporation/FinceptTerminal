@@ -1,23 +1,24 @@
 #pragma once
 // Unified Trading — routes orders to live broker or paper trading engine
 
-#include "trading/TradingTypes.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/TradingTypes.h"
+
 #include <QMutex>
 #include <QThread>
-#include <optional>
+
 #include <atomic>
+#include <optional>
 
 namespace fincept::trading {
 
 class UnifiedTrading : public QObject {
     Q_OBJECT
-public:
+  public:
     static UnifiedTrading& instance();
 
     // Session management
-    TradingSession init_session(const QString& broker, const QString& mode,
-                                 const QString& paper_portfolio_id = "");
+    TradingSession init_session(const QString& broker, const QString& mode, const QString& paper_portfolio_id = "");
     std::optional<TradingSession> get_session() const;
     TradingSession switch_mode(const QString& mode);
 
@@ -33,13 +34,11 @@ public:
     UnifiedTrading(const UnifiedTrading&) = delete;
     UnifiedTrading& operator=(const UnifiedTrading&) = delete;
 
-private:
+  private:
     UnifiedTrading() = default;
 
-    UnifiedOrderResponse place_paper_order(const TradingSession& session,
-                                             const UnifiedOrder& order);
-    UnifiedOrderResponse place_live_order(const TradingSession& session,
-                                            const UnifiedOrder& order);
+    UnifiedOrderResponse place_paper_order(const TradingSession& session, const UnifiedOrder& order);
+    UnifiedOrderResponse place_live_order(const TradingSession& session, const UnifiedOrder& order);
 
     std::optional<TradingSession> session_;
     mutable QMutex mutex_;

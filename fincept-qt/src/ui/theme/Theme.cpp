@@ -1,7 +1,18 @@
 #include "ui/theme/Theme.h"
+
 #include <QApplication>
 
 namespace fincept::ui {
+
+static bool s_rtl = false;
+
+bool is_rtl() { return s_rtl; }
+
+void set_rtl(bool rtl) {
+    s_rtl = rtl;
+    qApp->setLayoutDirection(rtl ? Qt::RightToLeft : Qt::LeftToRight);
+    apply_global_stylesheet();
+}
 
 QString change_color(double value) {
     return value >= 0 ? colors::POSITIVE : colors::NEGATIVE;
@@ -20,17 +31,13 @@ void apply_global_stylesheet() {
         QScrollBar:vertical {
             background: transparent; width: 5px; margin: 0;
         }
-        QScrollBar::handle:vertical {
-            background: #222222; min-height: 20px;
-        }
+        QScrollBar::handle:vertical { background: #222222; min-height: 20px; }
         QScrollBar::handle:vertical:hover { background: #333333; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         QScrollBar:horizontal {
             background: transparent; height: 5px; margin: 0;
         }
-        QScrollBar::handle:horizontal {
-            background: #222222; min-width: 20px;
-        }
+        QScrollBar::handle:horizontal { background: #222222; min-width: 20px; }
         QScrollBar::handle:horizontal:hover { background: #333333; }
         QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
         QLineEdit, QTextEdit, QPlainTextEdit {

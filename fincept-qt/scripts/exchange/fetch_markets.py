@@ -33,7 +33,10 @@ Output JSON:
 """
 
 import sys
-from exchange_client import make_exchange, output_success, output_error, run_with_error_handling
+from exchange_client import (
+    make_exchange, output_success, output_error, run_with_error_handling,
+    save_markets_cache,
+)
 
 
 @run_with_error_handling
@@ -46,6 +49,8 @@ def main():
 
     exchange = make_exchange(exchange_id)
     exchange.load_markets()
+    # Persist to disk cache so place_order.py / cancel_order.py can skip load_markets()
+    save_markets_cache(exchange_id, exchange.markets)
 
     markets = []
     for symbol, market in exchange.markets.items():

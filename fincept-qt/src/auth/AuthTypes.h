@@ -1,9 +1,9 @@
 #pragma once
-#include <QString>
-#include <QJsonObject>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QMap>
 #include <QRegularExpression>
+#include <QString>
 
 namespace fincept::auth {
 
@@ -12,13 +12,14 @@ namespace fincept::auth {
 struct LoginRequest {
     QString email;
     QString password;
-    bool    force_login = false;
+    bool force_login = false;
 
     QJsonObject to_json() const {
         QJsonObject obj;
         obj["email"] = email;
         obj["password"] = password;
-        if (force_login) obj["force_login"] = true;
+        if (force_login)
+            obj["force_login"] = true;
         return obj;
     }
 };
@@ -36,9 +37,10 @@ struct RegisterRequest {
         obj["username"] = username;
         obj["email"] = email;
         obj["password"] = password;
-        obj["phone"] = phone;           // required by API
+        obj["phone"] = phone;               // required by API
         obj["country_code"] = country_code; // required by API
-        if (!country.isEmpty()) obj["country"] = country;
+        if (!country.isEmpty())
+            obj["country"] = country;
         return obj;
     }
 };
@@ -82,21 +84,21 @@ struct ResetPasswordRequest {
 // ── Response types ───────────────────────────────────────────────────────────
 
 struct ApiResponse {
-    bool    success = false;
+    bool success = false;
     QJsonObject data;
     QString error;
-    int     status_code = 0;
+    int status_code = 0;
 };
 
 struct UserProfile {
-    int     id = 0;
+    int id = 0;
     QString username;
     QString email;
     QString account_type = "free";
-    double  credit_balance = 0;
-    bool    is_verified = false;
-    bool    is_admin = false;
-    bool    mfa_enabled = false;
+    double credit_balance = 0;
+    bool is_verified = false;
+    bool is_admin = false;
+    bool mfa_enabled = false;
     QString phone;
     QString country;
     QString country_code;
@@ -123,9 +125,9 @@ struct UserProfile {
 };
 
 struct UserSubscription {
-    int     user_id = 0;
+    int user_id = 0;
     QString account_type;
-    double  credit_balance = 0;
+    double credit_balance = 0;
     QString credits_expire_at;
     QString support_type;
     QString last_credit_purchase_at;
@@ -150,14 +152,14 @@ struct SubscriptionPlan {
     QString plan_id;
     QString name;
     QString description;
-    double  price_usd = 0.0;
+    double price_usd = 0.0;
     QString currency;
-    int     credits = 0;
+    int credits = 0;
     QString support_type;
-    int     validity_days = 0;
+    int validity_days = 0;
     QStringList features;
-    bool    is_free = false;
-    int     display_order = 0;
+    bool is_free = false;
+    int display_order = 0;
 
     static SubscriptionPlan from_json(const QJsonObject& obj) {
         SubscriptionPlan p;
@@ -182,13 +184,13 @@ struct SubscriptionPlan {
 // ── Session data ─────────────────────────────────────────────────────────────
 
 struct SessionData {
-    bool    authenticated = false;
+    bool authenticated = false;
     QString api_key;
     QString session_token;
     QString device_id;
     UserProfile user_info;
     UserSubscription subscription;
-    bool    has_subscription = false;
+    bool has_subscription = false;
 
     bool has_paid_plan() const {
         QString at = user_info.account_type.toLower();
@@ -250,15 +252,17 @@ struct SessionData {
 // ── Validation utilities ─────────────────────────────────────────────────────
 
 struct ValidationResult {
-    bool    valid = false;
+    bool valid = false;
     QString error;
 };
 
 inline ValidationResult validate_email(const QString& email) {
-    if (email.isEmpty()) return {false, "Email is required"};
+    if (email.isEmpty())
+        return {false, "Email is required"};
     // Basic email regex
     QRegularExpression re("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
-    if (!re.match(email).hasMatch()) return {false, "Invalid email format"};
+    if (!re.match(email).hasMatch())
+        return {false, "Invalid email format"};
     return {true, {}};
 }
 
@@ -269,7 +273,7 @@ struct PasswordStrength {
     bool has_lower = false;
     bool has_number = false;
     bool has_special = false;
-    int  score = 0;
+    int score = 0;
 };
 
 inline PasswordStrength validate_password(const QString& pw) {
@@ -279,8 +283,7 @@ inline PasswordStrength validate_password(const QString& pw) {
     r.has_lower = pw.contains(QRegularExpression("[a-z]"));
     r.has_number = pw.contains(QRegularExpression("[0-9]"));
     r.has_special = pw.contains(QRegularExpression("[!@#$%^&*(),.?\":{}|<>]"));
-    r.score = (int)r.min_length + (int)r.has_upper + (int)r.has_lower +
-              (int)r.has_number + (int)r.has_special;
+    r.score = (int)r.min_length + (int)r.has_upper + (int)r.has_lower + (int)r.has_number + (int)r.has_special;
     r.valid = r.min_length && r.has_upper && r.has_lower && r.has_number;
     return r;
 }

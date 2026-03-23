@@ -1,15 +1,18 @@
 #include "auth/AuthManager.h"
+
 #include "auth/AuthApi.h"
 #include "auth/UserApi.h"
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
-#include "storage/repositories/SettingsRepository.h"
 #include "network/http/HttpClient.h"
-#include <QJsonDocument>
-#include <QSysInfo>
-#include <QDateTime>
-#include <QRandomGenerator>
+#include "storage/repositories/LlmConfigRepository.h"
+#include "storage/repositories/SettingsRepository.h"
+
 #include <QCryptographicHash>
+#include <QDateTime>
+#include <QJsonDocument>
+#include <QRandomGenerator>
+#include <QSysInfo>
 
 namespace fincept::auth {
 
@@ -39,9 +42,8 @@ QJsonObject AuthManager::unwrap_data(const QJsonObject& raw) const {
 }
 
 QString AuthManager::generate_device_id() const {
-    QString info = QSysInfo::machineHostName() + "|" +
-                   QSysInfo::productType() + "|" +
-                   QSysInfo::currentCpuArchitecture();
+    QString info =
+        QSysInfo::machineHostName() + "|" + QSysInfo::productType() + "|" + QSysInfo::currentCpuArchitecture();
     QByteArray hash = QCryptographicHash::hash(info.toUtf8(), QCryptographicHash::Sha256).toHex();
     QString timestamp = QString::number(QDateTime::currentMSecsSinceEpoch(), 36);
     quint32 random = QRandomGenerator::global()->generate();
@@ -74,15 +76,20 @@ void AuthManager::save_session() {
 
 void AuthManager::load_session() {
     auto r = fincept::SettingsRepository::instance().get("fincept_session");
-    if (r.is_err()) return;
+    if (r.is_err())
+        return;
 
     QString json = r.value();
-    if (json.isEmpty()) return;
+    if (json.isEmpty())
+        return;
 
     auto doc = QJsonDocument::fromJson(json.toUtf8());
-    if (doc.isNull()) return;
+    if (doc.isNull())
+        return;
 
     session_ = SessionData::from_json(doc.object());
+    // Never trust saved authenticated flag — must be re-validated
+    session_.authenticated = false;
 }
 
 void AuthManager::clear_session() {
@@ -90,6 +97,9 @@ void AuthManager::clear_session() {
     clear_tokens();
     fincept::SettingsRepository::instance().remove("fincept_session");
     fincept::SettingsRepository::instance().remove("fincept_api_key");
+
+    // Clear auto-configured fincept LLM provider and reset LlmService
+    LlmConfigRepository::instance().delete_provider("fincept");
 }
 
 // ── Initialize ───────────────────────────────────────────────────────────────
@@ -131,10 +141,15 @@ void AuthManager::validate_saved_session(const SessionData& saved) {
             return;
         }
 
-        // Success — also check explicit valid=false from response body
+        // Success — check response body
         auto data = unwrap_data(r.data);
-        if (data.contains("valid") && !data["valid"].toBool()) {
-            LOG_WARN("Auth", "Session invalid (valid=false) — clearing");
+        LOG_DEBUG("Auth", "validate-session response: " +
+                              QString::fromUtf8(QJsonDocument(r.data).toJson(QJsonDocument::Compact)));
+
+        // Only clear if server explicitly says valid=false with a 200 OK.
+        // Some servers return {"valid": false} only when the token is truly revoked.
+        if (r.status_code == 200 && data.contains("valid") && !data["valid"].toBool()) {
+            LOG_WARN("Auth", "Session invalid (valid=false in body) — clearing");
             clear_session();
             set_loading(false);
             emit auth_state_changed();
@@ -171,7 +186,11 @@ void AuthManager::fetch_user_subscription() {
             session_.subscription.credit_balance = session_.user_info.credit_balance;
             session_.has_subscription = true;
         }
+        // Mark as authenticated — we have a valid api_key and server didn't reject
+        if (!session_.api_key.isEmpty())
+            session_.authenticated = true;
         save_session();
+        auto_configure_fincept_llm();
         set_loading(false);
         emit subscription_fetched();
         emit auth_state_changed();
@@ -199,8 +218,7 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
 
         if (data["active_session"].toBool()) {
             set_loading(false);
-            emit login_active_session(data["message"].toString(
-                "You are already logged in on another device."));
+            emit login_active_session(data["message"].toString("You are already logged in on another device."));
             return;
         }
 
@@ -246,6 +264,7 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
                     session_.has_subscription = true;
                 }
                 save_session();
+                auto_configure_fincept_llm();
                 set_loading(false);
                 emit login_succeeded();
                 emit auth_state_changed();
@@ -256,9 +275,8 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
 
 // ── Signup ───────────────────────────────────────────────────────────────────
 
-void AuthManager::signup(const QString& username, const QString& email,
-                          const QString& password, const QString& phone,
-                          const QString& country, const QString& country_code) {
+void AuthManager::signup(const QString& username, const QString& email, const QString& password, const QString& phone,
+                         const QString& country, const QString& country_code) {
     set_loading(true);
 
     RegisterRequest req;
@@ -271,8 +289,10 @@ void AuthManager::signup(const QString& username, const QString& email,
 
     AuthApi::instance().register_user(req, [this](ApiResponse r) {
         set_loading(false);
-        if (r.success) emit signup_succeeded();
-        else emit signup_failed(r.error.isEmpty() ? "Registration failed" : r.error);
+        if (r.success)
+            emit signup_succeeded();
+        else
+            emit signup_failed(r.error.isEmpty() ? "Registration failed" : r.error);
     });
 }
 
@@ -325,6 +345,7 @@ void AuthManager::verify_otp(const QString& email, const QString& otp) {
                     session_.has_subscription = true;
                 }
                 save_session();
+                auto_configure_fincept_llm();
                 set_loading(false);
                 emit otp_verified();
                 emit auth_state_changed();
@@ -338,9 +359,7 @@ void AuthManager::verify_otp(const QString& email, const QString& otp) {
 void AuthManager::verify_mfa(const QString& email, const QString& otp) {
     set_loading(true);
 
-    AuthApi::instance().verify_mfa(sanitize_input(email).toLower(),
-                                    sanitize_input(otp),
-                                    [this, email](ApiResponse r) {
+    AuthApi::instance().verify_mfa(sanitize_input(email).toLower(), sanitize_input(otp), [this, email](ApiResponse r) {
         if (!r.success) {
             set_loading(false);
             emit mfa_failed(r.error.isEmpty() ? "MFA verification failed" : r.error);
@@ -380,6 +399,7 @@ void AuthManager::verify_mfa(const QString& email, const QString& otp) {
                     session_.has_subscription = true;
                 }
                 save_session();
+                auto_configure_fincept_llm();
                 set_loading(false);
                 emit mfa_verified();
                 emit auth_state_changed();
@@ -398,15 +418,16 @@ void AuthManager::forgot_password(const QString& email) {
 
     AuthApi::instance().forgot_password(req, [this](ApiResponse r) {
         set_loading(false);
-        if (r.success) emit forgot_password_sent();
-        else emit forgot_password_failed(r.error.isEmpty() ? "Failed to send reset code" : r.error);
+        if (r.success)
+            emit forgot_password_sent();
+        else
+            emit forgot_password_failed(r.error.isEmpty() ? "Failed to send reset code" : r.error);
     });
 }
 
 // ── Reset password ───────────────────────────────────────────────────────────
 
-void AuthManager::reset_password(const QString& email, const QString& otp,
-                                  const QString& new_password) {
+void AuthManager::reset_password(const QString& email, const QString& otp, const QString& new_password) {
     set_loading(true);
 
     ResetPasswordRequest req;
@@ -416,15 +437,18 @@ void AuthManager::reset_password(const QString& email, const QString& otp,
 
     AuthApi::instance().reset_password(req, [this](ApiResponse r) {
         set_loading(false);
-        if (r.success) emit password_reset_succeeded();
-        else emit password_reset_failed(r.error.isEmpty() ? "Password reset failed" : r.error);
+        if (r.success)
+            emit password_reset_succeeded();
+        else
+            emit password_reset_failed(r.error.isEmpty() ? "Password reset failed" : r.error);
     });
 }
 
 // ── Logout ───────────────────────────────────────────────────────────────────
 
 void AuthManager::logout() {
-    if (is_logging_out_) return;
+    if (is_logging_out_)
+        return;
     is_logging_out_ = true;
 
     if (!session_.api_key.isEmpty()) {
@@ -441,9 +465,37 @@ void AuthManager::logout() {
 // ── Refresh user data ────────────────────────────────────────────────────────
 
 void AuthManager::refresh_user_data() {
-    if (!session_.authenticated || session_.api_key.isEmpty()) return;
+    if (!session_.authenticated || session_.api_key.isEmpty())
+        return;
     // fetch_user_profile chains into fetch_user_subscription automatically
     fetch_user_profile(session_.api_key);
+}
+
+// ── Auto-configure Fincept LLM provider ──────────────────────────────────────
+
+void AuthManager::auto_configure_fincept_llm() {
+    if (session_.api_key.isEmpty())
+        return;
+
+    // Store API key in settings for fallback access
+    fincept::SettingsRepository::instance().set("fincept_api_key", session_.api_key, "auth");
+
+    // Save/update fincept as an LLM provider (api_key left empty — resolved from
+    // SettingsRepository at runtime by LlmService::ensure_config())
+    LlmConfig fincept_llm;
+    fincept_llm.provider = "fincept";
+    fincept_llm.model    = "fincept-llm";
+    fincept_llm.base_url = "https://api.fincept.in/research/llm";
+
+    LlmConfigRepository::instance().save_provider(fincept_llm);
+
+    // Set as active if no other provider is configured
+    auto active = LlmConfigRepository::instance().get_active_provider();
+    bool has_active = active.is_ok() && !active.value().provider.isEmpty();
+    if (!has_active)
+        LlmConfigRepository::instance().set_active("fincept");
+
+    LOG_INFO("Auth", "Fincept LLM auto-configured with session API key");
 }
 
 } // namespace fincept::auth

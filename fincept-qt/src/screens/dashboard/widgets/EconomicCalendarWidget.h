@@ -1,9 +1,10 @@
 #pragma once
 #include "screens/dashboard/widgets/BaseWidget.h"
+
+#include <QJsonArray>
 #include <QLabel>
 #include <QScrollArea>
 #include <QVBoxLayout>
-#include <QJsonArray>
 
 namespace fincept::screens::widgets {
 
@@ -11,15 +12,15 @@ namespace fincept::screens::widgets {
 /// GET http://api.fincept.in/macro/upcoming-events via HttpClient.
 class EconomicCalendarWidget : public BaseWidget {
     Q_OBJECT
-public:
+  public:
     explicit EconomicCalendarWidget(QWidget* parent = nullptr);
 
-private:
+  private:
     void refresh_data();
     void populate(const QJsonArray& events);
 
     QVBoxLayout* list_layout_ = nullptr;
-    QLabel*      status_label_ = nullptr;
+    QLabel* status_label_ = nullptr;
 };
 
 } // namespace fincept::screens::widgets

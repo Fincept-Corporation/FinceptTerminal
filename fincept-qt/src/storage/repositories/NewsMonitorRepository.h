@@ -1,19 +1,20 @@
 #pragma once
 #include "storage/repositories/BaseRepository.h"
+
 #include <QStringList>
 
 namespace fincept {
 
 struct NewsMonitorRow {
-    QString     id;
-    QString     label;
+    QString id;
+    QString label;
     QStringList keywords;
-    QString     color;
-    bool        enabled = true;
+    QString color;
+    bool enabled = true;
 };
 
 class NewsMonitorRepository : public BaseRepository<NewsMonitorRow> {
-public:
+  public:
     static NewsMonitorRepository& instance();
 
     Result<QVector<NewsMonitorRow>> list_all();
@@ -21,7 +22,7 @@ public:
     Result<void> remove(const QString& id);
     Result<void> set_enabled(const QString& id, bool enabled);
 
-private:
+  private:
     NewsMonitorRepository() = default;
     static NewsMonitorRow map_row(QSqlQuery& q);
 };

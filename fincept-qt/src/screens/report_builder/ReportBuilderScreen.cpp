@@ -1,15 +1,17 @@
 #include "screens/report_builder/ReportBuilderScreen.h"
+
 #include "ui/theme/Theme.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QPushButton>
-#include <QLabel>
-#include <QPrinter>
-#include <QPrintPreviewDialog>
-#include <QFileDialog>
-#include <QTextDocumentWriter>
+
 #include <QDateTime>
+#include <QFileDialog>
 #include <QFrame>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPrintPreviewDialog>
+#include <QPrinter>
+#include <QPushButton>
+#include <QTextDocumentWriter>
+#include <QVBoxLayout>
 
 namespace fincept::screens {
 
@@ -33,13 +35,12 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
     // 3-panel splitter
     splitter_ = new QSplitter(Qt::Horizontal);
     splitter_->setHandleWidth(1);
-    splitter_->setStyleSheet(
-        "QSplitter::handle { background: #1A1A1A; }"
-        "QSplitter::handle:hover { background: #333333; }");
+    splitter_->setStyleSheet("QSplitter::handle { background: #1A1A1A; }"
+                             "QSplitter::handle:hover { background: #333333; }");
 
     comp_toolbar_ = new ComponentToolbar;
-    canvas_       = new DocumentCanvas;
-    properties_   = new PropertiesPanel;
+    canvas_ = new DocumentCanvas;
+    properties_ = new PropertiesPanel;
 
     splitter_->addWidget(comp_toolbar_);
     splitter_->addWidget(canvas_);
@@ -57,12 +58,9 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
     connect(autosave_, &QTimer::timeout, this, &ReportBuilderScreen::on_save);
 
     // Wire signals
-    connect(comp_toolbar_, &ComponentToolbar::add_component,
-            this, &ReportBuilderScreen::add_component);
-    connect(comp_toolbar_, &ComponentToolbar::structure_selected,
-            this, &ReportBuilderScreen::select_component);
-    connect(comp_toolbar_, &ComponentToolbar::delete_item,
-            this, &ReportBuilderScreen::remove_component);
+    connect(comp_toolbar_, &ComponentToolbar::add_component, this, &ReportBuilderScreen::add_component);
+    connect(comp_toolbar_, &ComponentToolbar::structure_selected, this, &ReportBuilderScreen::select_component);
+    connect(comp_toolbar_, &ComponentToolbar::delete_item, this, &ReportBuilderScreen::remove_component);
     connect(comp_toolbar_, &ComponentToolbar::duplicate, this, [this](int idx) {
         if (idx >= 0 && idx < components_.size()) {
             ReportComponent copy = components_[idx];
@@ -95,12 +93,13 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
             refresh_canvas();
         }
     });
-    connect(properties_, &PropertiesPanel::config_changed, this, [this](int idx, const QString& key, const QString& val) {
-        if (idx >= 0 && idx < components_.size()) {
-            components_[idx].config[key] = val;
-            refresh_canvas();
-        }
-    });
+    connect(properties_, &PropertiesPanel::config_changed, this,
+            [this](int idx, const QString& key, const QString& val) {
+                if (idx >= 0 && idx < components_.size()) {
+                    components_[idx].config[key] = val;
+                    refresh_canvas();
+                }
+            });
     connect(properties_, &PropertiesPanel::duplicate_requested, this, [this](int idx) {
         if (idx >= 0 && idx < components_.size()) {
             ReportComponent copy = components_[idx];
@@ -110,8 +109,7 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
             refresh_structure();
         }
     });
-    connect(properties_, &PropertiesPanel::delete_requested,
-            this, &ReportBuilderScreen::remove_component);
+    connect(properties_, &PropertiesPanel::delete_requested, this, &ReportBuilderScreen::remove_component);
 
     // Initial render
     refresh_canvas();
@@ -127,16 +125,15 @@ QWidget* ReportBuilderScreen::build_toolbar() {
     hl->setSpacing(6);
 
     auto* back_btn = new QPushButton("< BACK");
-    back_btn->setStyleSheet(
-        QString("QPushButton { color: %1; background: transparent; border: none; font-size: 13px; }"
-                "QPushButton:hover { color: %2; }")
-            .arg(ui::colors::GRAY, ui::colors::WHITE));
+    back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; font-size: 13px; }"
+                                    "QPushButton:hover { color: %2; }")
+                                .arg(ui::colors::GRAY, ui::colors::WHITE));
     connect(back_btn, &QPushButton::clicked, this, &ReportBuilderScreen::back_to_dashboard);
     hl->addWidget(back_btn);
 
     auto* title = new QLabel("REPORT BUILDER");
-    title->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;")
-        .arg(ui::colors::ORANGE));
+    title->setStyleSheet(
+        QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;").arg(ui::colors::ORANGE));
     hl->addWidget(title);
 
     hl->addStretch();
@@ -160,8 +157,7 @@ QWidget* ReportBuilderScreen::build_toolbar() {
     connect(save_btn, &QPushButton::clicked, this, &ReportBuilderScreen::on_save);
 
     auto* pdf_btn = make_btn("Export PDF");
-    pdf_btn->setStyleSheet(
-        QString("QPushButton { color: %1; font-weight: bold; }").arg(ui::colors::ORANGE));
+    pdf_btn->setStyleSheet(QString("QPushButton { color: %1; font-weight: bold; }").arg(ui::colors::ORANGE));
     connect(pdf_btn, &QPushButton::clicked, this, &ReportBuilderScreen::on_export_pdf);
 
     auto* preview_btn = make_btn("Preview");
@@ -215,8 +211,7 @@ void ReportBuilderScreen::remove_component(int index) {
     }
 }
 
-void ReportBuilderScreen::update_component(int index, const QString& content,
-                                            const QMap<QString, QString>& config) {
+void ReportBuilderScreen::update_component(int index, const QString& content, const QMap<QString, QString>& config) {
     if (index >= 0 && index < components_.size()) {
         components_[index].content = content;
         for (auto it = config.begin(); it != config.end(); ++it) {
@@ -243,18 +238,18 @@ void ReportBuilderScreen::refresh_structure() {
 }
 
 void ReportBuilderScreen::on_save() {
-    QString path = QFileDialog::getSaveFileName(this, "Save Report", "",
-        "HTML (*.html);;ODF (*.odt)");
-    if (path.isEmpty()) return;
+    QString path = QFileDialog::getSaveFileName(this, "Save Report", "", "HTML (*.html);;ODF (*.odt)");
+    if (path.isEmpty())
+        return;
 
     QTextDocumentWriter writer(path);
     writer.write(canvas_->text_edit()->document());
 }
 
 void ReportBuilderScreen::on_export_pdf() {
-    QString path = QFileDialog::getSaveFileName(this, "Export PDF", "",
-        "PDF (*.pdf)");
-    if (path.isEmpty()) return;
+    QString path = QFileDialog::getSaveFileName(this, "Export PDF", "", "PDF (*.pdf)");
+    if (path.isEmpty())
+        return;
 
     QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
@@ -268,9 +263,8 @@ void ReportBuilderScreen::on_preview() {
     printer.setPageSize(QPageSize(QPageSize::A4));
 
     QPrintPreviewDialog preview(&printer, this);
-    connect(&preview, &QPrintPreviewDialog::paintRequested, this, [this](QPrinter* p) {
-        canvas_->text_edit()->document()->print(p);
-    });
+    connect(&preview, &QPrintPreviewDialog::paintRequested, this,
+            [this](QPrinter* p) { canvas_->text_edit()->document()->print(p); });
     preview.exec();
 }
 

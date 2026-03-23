@@ -1,12 +1,14 @@
 #pragma once
-#include <QObject>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
+#include "core/result/Result.h"
+
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonArray>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QObject>
+
 #include <functional>
-#include "core/result/Result.h"
 
 namespace fincept {
 
@@ -14,7 +16,7 @@ namespace fincept {
 /// All responses delivered via callbacks on the Qt event loop.
 class HttpClient : public QObject {
     Q_OBJECT
-public:
+  public:
     static HttpClient& instance();
 
     using JsonCallback = std::function<void(Result<QJsonDocument>)>;
@@ -28,7 +30,7 @@ public:
     void set_session_token(const QString& token);
     void set_base_url(const QString& base);
 
-private:
+  private:
     HttpClient();
     QNetworkRequest build_request(const QString& url) const;
     void handle_reply(QNetworkReply* reply, JsonCallback callback);

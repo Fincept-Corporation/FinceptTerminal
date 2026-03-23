@@ -1,15 +1,16 @@
 #include "screens/report_builder/ComponentToolbar.h"
+
 #include "ui/theme/Theme.h"
+
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QScrollArea>
-#include <QHBoxLayout>
 
 namespace fincept::screens {
 
 ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     setFixedWidth(240);
-    setStyleSheet(QString("background: %1; border-right: 1px solid %2;")
-        .arg(ui::colors::PANEL, ui::colors::BORDER));
+    setStyleSheet(QString("background: %1; border-right: 1px solid %2;").arg(ui::colors::PANEL, ui::colors::BORDER));
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(8, 8, 8, 8);
@@ -17,14 +18,14 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
 
     // Section: Add Component
     auto* add_label = new QLabel("ADD COMPONENT");
-    add_label->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;")
-        .arg(ui::colors::MUTED));
+    add_label->setStyleSheet(
+        QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;").arg(ui::colors::MUTED));
     vl->addWidget(add_label);
 
     const char* types[][2] = {
-        {"Heading", "heading"}, {"Text Block", "text"}, {"Table", "table"},
-        {"Image", "image"}, {"Chart Placeholder", "chart"}, {"Code Block", "code"},
-        {"Divider", "divider"}, {"Block Quote", "quote"}, {"List", "list"},
+        {"Heading", "heading"}, {"Text Block", "text"},         {"Table", "table"},
+        {"Image", "image"},     {"Chart Placeholder", "chart"}, {"Code Block", "code"},
+        {"Divider", "divider"}, {"Block Quote", "quote"},       {"List", "list"},
     };
 
     for (auto& t : types) {
@@ -39,8 +40,8 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
 
     // Section: Font Settings
     auto* font_label = new QLabel("FONT");
-    font_label->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;")
-        .arg(ui::colors::MUTED));
+    font_label->setStyleSheet(
+        QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;").arg(ui::colors::MUTED));
     vl->addWidget(font_label);
 
     font_combo_ = new QFontComboBox;
@@ -72,9 +73,7 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     vl->addWidget(size_row);
 
     auto emit_font = [this]() {
-        emit font_changed(font_combo_->currentFont().family(),
-                          font_size_->value(),
-                          bold_btn_->isChecked(),
+        emit font_changed(font_combo_->currentFont().family(), font_size_->value(), bold_btn_->isChecked(),
                           italic_btn_->isChecked());
     };
     connect(font_combo_, &QFontComboBox::currentFontChanged, this, emit_font);
@@ -90,18 +89,16 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
 
     // Section: Document Structure
     auto* struct_label = new QLabel("STRUCTURE");
-    struct_label->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;")
-        .arg(ui::colors::MUTED));
+    struct_label->setStyleSheet(
+        QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;").arg(ui::colors::MUTED));
     vl->addWidget(struct_label);
 
     structure_list_ = new QListWidget;
-    structure_list_->setStyleSheet(
-        QString("QListWidget { background: %1; border: 1px solid %2; } "
-                "QListWidget::item { color: %3; padding: 4px; } "
-                "QListWidget::item:selected { background: #111111; color: %4; }")
-            .arg(ui::colors::DARK, ui::colors::BORDER, ui::colors::GRAY, ui::colors::WHITE));
-    connect(structure_list_, &QListWidget::currentRowChanged,
-            this, &ComponentToolbar::structure_selected);
+    structure_list_->setStyleSheet(QString("QListWidget { background: %1; border: 1px solid %2; } "
+                                           "QListWidget::item { color: %3; padding: 4px; } "
+                                           "QListWidget::item:selected { background: #111111; color: %4; }")
+                                       .arg(ui::colors::DARK, ui::colors::BORDER, ui::colors::GRAY, ui::colors::WHITE));
+    connect(structure_list_, &QListWidget::currentRowChanged, this, &ComponentToolbar::structure_selected);
     vl->addWidget(structure_list_, 1);
 
     // Structure action buttons
@@ -124,19 +121,23 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
 
     connect(up_btn, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
-        if (r > 0) emit move_up(r);
+        if (r > 0)
+            emit move_up(r);
     });
     connect(dn_btn, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
-        if (r >= 0) emit move_down(r);
+        if (r >= 0)
+            emit move_down(r);
     });
     connect(dup_btn, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
-        if (r >= 0) emit duplicate(r);
+        if (r >= 0)
+            emit duplicate(r);
     });
     connect(del_btn, &QPushButton::clicked, this, [this]() {
         int r = structure_list_->currentRow();
-        if (r >= 0) emit delete_item(r);
+        if (r >= 0)
+            emit delete_item(r);
     });
 
     vl->addWidget(action_row);
@@ -145,15 +146,12 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
 void ComponentToolbar::add_type_button(QVBoxLayout* layout, const QString& label, const QString& type) {
     auto* btn = new QPushButton(label);
     btn->setFixedHeight(28);
-    btn->setStyleSheet(
-        QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
-                "text-align: left; padding: 0 8px; font-size: 12px; }"
-                "QPushButton:hover { background: #111111; color: %4; }")
-            .arg(ui::colors::DARK, ui::colors::GRAY, ui::colors::BORDER, ui::colors::WHITE));
+    btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
+                               "text-align: left; padding: 0 8px; font-size: 12px; }"
+                               "QPushButton:hover { background: #111111; color: %4; }")
+                           .arg(ui::colors::DARK, ui::colors::GRAY, ui::colors::BORDER, ui::colors::WHITE));
 
-    connect(btn, &QPushButton::clicked, this, [this, type]() {
-        emit add_component(type);
-    });
+    connect(btn, &QPushButton::clicked, this, [this, type]() { emit add_component(type); });
 
     layout->addWidget(btn);
 }

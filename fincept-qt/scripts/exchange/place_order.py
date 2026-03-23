@@ -31,6 +31,7 @@ import sys
 from exchange_client import (
     make_exchange, output_success, output_error,
     parse_credentials_from_stdin, run_with_error_handling,
+    load_cached_markets, save_markets_cache,
 )
 
 
@@ -63,7 +64,16 @@ def main():
         output_error("API key required. Pass credentials via stdin JSON.", "AUTH_ERROR")
 
     exchange = make_exchange(exchange_id, credentials)
-    exchange.load_markets()
+
+    # Use disk-cached markets (TTL 30min) to skip 3-10s load_markets() network call.
+    # The ws_stream.py process and fetch_markets.py both maintain this cache.
+    cached = load_cached_markets(exchange_id)
+    if cached is not None:
+        exchange.markets = cached
+        exchange.markets_by_id = exchange.index_by(cached, "id")
+    else:
+        exchange.load_markets()
+        save_markets_cache(exchange_id, exchange.markets)
 
     order = exchange.create_order(symbol, order_type, side, amount, price)
 

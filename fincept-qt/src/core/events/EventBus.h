@@ -1,8 +1,9 @@
 #pragma once
-#include <QObject>
-#include <QVariantMap>
 #include <QHash>
 #include <QList>
+#include <QObject>
+#include <QVariantMap>
+
 #include <functional>
 
 namespace fincept {
@@ -11,7 +12,7 @@ namespace fincept {
 /// Decouples screens from services — screens emit events, services listen.
 class EventBus : public QObject {
     Q_OBJECT
-public:
+  public:
     static EventBus& instance();
 
     using Handler = std::function<void(const QVariantMap&)>;
@@ -21,10 +22,10 @@ public:
     void unsubscribe(HandlerId id);
     void publish(const QString& event, const QVariantMap& data = {});
 
-signals:
+  signals:
     void eventPublished(const QString& event, const QVariantMap& data);
 
-private:
+  private:
     EventBus() = default;
 
     struct Subscription {

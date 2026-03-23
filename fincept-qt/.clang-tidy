@@ -1,0 +1,76 @@
+# Fincept Terminal — clang-tidy configuration
+# Targets C++20 / Qt6 codebase.  Checks are balanced: catches real bugs without
+# flooding the developer with Qt-internal or generated-code warnings.
+
+Checks: >
+  clang-diagnostic-*,
+  -clang-diagnostic-gnu-zero-variadic-macro-arguments,
+
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+
+  performance-*,
+
+  readability-*,
+  -readability-magic-numbers,
+  -readability-named-parameter,
+  -readability-implicit-bool-conversion,
+  -readability-identifier-length,
+
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+
+  misc-*,
+  -misc-non-private-member-variables-in-classes,
+
+  concurrency-*
+
+# Treat warnings as errors in CI (set via --warnings-as-errors in CI workflow)
+WarningsAsErrors: ''
+
+CheckOptions:
+  # Naming: snake_case functions/variables, PascalCase types
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.MethodCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.MemberCase
+    value: lower_case
+  - key: readability-identifier-naming.MemberSuffix
+    value: '_'
+  - key: readability-identifier-naming.ConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+
+  # modernize
+  - key: modernize-use-override.AllowOverrideAndFinal
+    value: 'true'
+
+  # performance
+  - key: performance-unnecessary-value-param.AllowedTypes
+    value: ''
+
+HeaderFilterRegex: '^(?!.*(/moc_|/qrc_|/ui_)).*\.(h|hpp)$'
+
+# Suppress warnings in Qt-generated files (moc_, qrc_, ui_) and third-party
+ExcludeHeaderFilterRegex: '.*(moc_|qrc_|ui_|/vendor/).*'

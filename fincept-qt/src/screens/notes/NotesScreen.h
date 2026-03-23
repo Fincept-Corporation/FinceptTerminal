@@ -1,13 +1,14 @@
 #pragma once
-#include <QWidget>
-#include <QListWidget>
-#include <QTextEdit>
-#include <QLineEdit>
+#include "storage/repositories/NotesRepository.h"
+
 #include <QComboBox>
 #include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
 #include <QPushButton>
 #include <QStackedWidget>
-#include "storage/repositories/NotesRepository.h"
+#include <QTextEdit>
+#include <QWidget>
 
 namespace fincept::screens {
 
@@ -15,10 +16,10 @@ namespace fincept::screens {
 /// Category Sidebar | Notes List | Editor / Viewer
 class NotesScreen : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit NotesScreen(QWidget* parent = nullptr);
 
-private slots:
+  private slots:
     void on_category_selected(int row);
     void on_note_selected(int row);
     void on_new_note();
@@ -28,7 +29,7 @@ private slots:
     void on_toggle_archive();
     void on_search_changed(const QString& text);
 
-private:
+  private:
     void build_ui();
     QWidget* build_category_sidebar();
     QWidget* build_notes_list_panel();
@@ -44,32 +45,32 @@ private:
     QVector<fincept::FinancialNote> notes_;
     QVector<fincept::FinancialNote> filtered_notes_;
     QString current_category_ = "ALL";
-    int     selected_note_id_ = -1;
-    bool    is_editing_       = false;
+    int selected_note_id_ = -1;
+    bool is_editing_ = false;
 
     // Category sidebar
-    QListWidget* category_list_  = nullptr;
-    QLabel*      stats_label_    = nullptr;
+    QListWidget* category_list_ = nullptr;
+    QLabel* stats_label_ = nullptr;
 
     // Notes list panel
-    QListWidget* notes_list_     = nullptr;
-    QLineEdit*   search_input_   = nullptr;
-    QLabel*      count_label_    = nullptr;
+    QListWidget* notes_list_ = nullptr;
+    QLineEdit* search_input_ = nullptr;
+    QLabel* count_label_ = nullptr;
 
     // Editor / Viewer panel
     QStackedWidget* right_stack_ = nullptr;
     // View mode
-    QLabel*      view_title_     = nullptr;
-    QLabel*      view_meta_      = nullptr;
-    QLabel*      view_content_   = nullptr;
+    QLabel* view_title_ = nullptr;
+    QLabel* view_meta_ = nullptr;
+    QLabel* view_content_ = nullptr;
     // Edit mode
-    QLineEdit*   edit_title_     = nullptr;
-    QTextEdit*   edit_content_   = nullptr;
-    QComboBox*   edit_category_  = nullptr;
-    QComboBox*   edit_priority_  = nullptr;
-    QComboBox*   edit_sentiment_ = nullptr;
-    QLineEdit*   edit_tags_      = nullptr;
-    QLineEdit*   edit_tickers_   = nullptr;
+    QLineEdit* edit_title_ = nullptr;
+    QTextEdit* edit_content_ = nullptr;
+    QComboBox* edit_category_ = nullptr;
+    QComboBox* edit_priority_ = nullptr;
+    QComboBox* edit_sentiment_ = nullptr;
+    QLineEdit* edit_tags_ = nullptr;
+    QLineEdit* edit_tickers_ = nullptr;
 };
 
 } // namespace fincept::screens

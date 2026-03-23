@@ -1,6 +1,7 @@
 #include "ui/widgets/Card.h"
-#include "ui/theme/Theme.h"
+
 #include "ui/theme/StyleSheets.h"
+#include "ui/theme/Theme.h"
 
 namespace fincept::ui {
 

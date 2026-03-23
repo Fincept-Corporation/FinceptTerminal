@@ -1,36 +1,36 @@
 #pragma once
-#include <QWidget>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QLabel>
 #include <QStackedWidget>
+#include <QWidget>
 
 namespace fincept::screens {
 
 /// 4-step password reset: email → OTP sent → reset form → success.
 class ForgotPasswordScreen : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit ForgotPasswordScreen(QWidget* parent = nullptr);
 
-signals:
+  signals:
     void navigate_login();
 
-private:
+  private:
     QStackedWidget* pages_ = nullptr;
 
-    QLineEdit* email_input_       = nullptr;
-    QLineEdit* otp_input_         = nullptr;
-    QLineEdit* new_password_      = nullptr;
-    QLineEdit* confirm_password_  = nullptr;
-    QLabel*    error_label_       = nullptr;
+    QLineEdit* email_input_ = nullptr;
+    QLineEdit* otp_input_ = nullptr;
+    QLineEdit* new_password_ = nullptr;
+    QLineEdit* confirm_password_ = nullptr;
+    QLabel* error_label_ = nullptr;
 
     void build_email_page();
     void build_otp_sent_page();
     void build_reset_page();
     void build_success_page();
 
-private slots:
+  private slots:
     void on_send_code();
     void on_reset_password();
     void on_resend();

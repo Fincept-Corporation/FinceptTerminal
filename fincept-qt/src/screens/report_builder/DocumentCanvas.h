@@ -1,7 +1,7 @@
 #pragma once
-#include <QWidget>
-#include <QTextEdit>
 #include <QScrollArea>
+#include <QTextEdit>
+#include <QWidget>
 
 namespace fincept::screens {
 
@@ -11,16 +11,14 @@ struct ReportMetadata;
 /// Center panel — A4 document canvas rendering components as rich text.
 class DocumentCanvas : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit DocumentCanvas(QWidget* parent = nullptr);
 
-    void render(const QVector<ReportComponent>& components,
-                const ReportMetadata& metadata,
-                int selected_index);
+    void render(const QVector<ReportComponent>& components, const ReportMetadata& metadata, int selected_index);
 
     QTextEdit* text_edit() const { return editor_; }
 
-private:
+  private:
     QTextEdit* editor_ = nullptr;
 };
 

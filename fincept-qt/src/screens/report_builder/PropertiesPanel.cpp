@@ -1,18 +1,19 @@
 #include "screens/report_builder/PropertiesPanel.h"
+
 #include "screens/report_builder/ReportBuilderScreen.h"
 #include "ui/theme/Theme.h"
+
+#include <QFileDialog>
 #include <QLabel>
-#include <QTextEdit>
 #include <QPushButton>
 #include <QSpinBox>
-#include <QFileDialog>
+#include <QTextEdit>
 
 namespace fincept::screens {
 
 PropertiesPanel::PropertiesPanel(QWidget* parent) : QWidget(parent) {
     setFixedWidth(260);
-    setStyleSheet(QString("background: %1; border-left: 1px solid %2;")
-        .arg(ui::colors::PANEL, ui::colors::BORDER));
+    setStyleSheet(QString("background: %1; border-left: 1px solid %2;").arg(ui::colors::PANEL, ui::colors::BORDER));
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -33,8 +34,7 @@ void PropertiesPanel::build_empty_page() {
 
     auto* lbl = new QLabel("Select a component\nto edit properties");
     lbl->setAlignment(Qt::AlignCenter);
-    lbl->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;")
-        .arg(ui::colors::MUTED));
+    lbl->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(ui::colors::MUTED));
     vl->addWidget(lbl);
 
     stack_->addWidget(empty_widget_);
@@ -56,7 +56,10 @@ void PropertiesPanel::show_empty() {
 }
 
 void PropertiesPanel::show_properties(const ReportComponent* component, int index) {
-    if (!component) { show_empty(); return; }
+    if (!component) {
+        show_empty();
+        return;
+    }
 
     current_index_ = index;
 
@@ -71,13 +74,13 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
     // Title
     auto* title = new QLabel(QString("PROPERTIES — %1").arg(component->type.toUpper()));
-    title->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;")
-        .arg(ui::colors::MUTED));
+    title->setStyleSheet(
+        QString("color: %1; font-size: 12px; font-weight: bold; background: transparent;").arg(ui::colors::MUTED));
     editor_layout_->addWidget(title);
 
     // Content editor for text-based types
-    if (component->type == "heading" || component->type == "text" ||
-        component->type == "code" || component->type == "quote") {
+    if (component->type == "heading" || component->type == "text" || component->type == "code" ||
+        component->type == "quote") {
         auto* lbl = new QLabel("Content:");
         lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::GRAY));
         editor_layout_->addWidget(lbl);
@@ -85,9 +88,8 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         auto* edit = new QTextEdit;
         edit->setPlainText(component->content);
         edit->setMaximumHeight(200);
-        connect(edit, &QTextEdit::textChanged, this, [this, edit]() {
-            emit content_changed(current_index_, edit->toPlainText());
-        });
+        connect(edit, &QTextEdit::textChanged, this,
+                [this, edit]() { emit content_changed(current_index_, edit->toPlainText()); });
         editor_layout_->addWidget(edit);
     }
 
@@ -100,9 +102,8 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         auto* rows_spin = new QSpinBox;
         rows_spin->setRange(1, 50);
         rows_spin->setValue(component->config.value("rows", "3").toInt());
-        connect(rows_spin, &QSpinBox::valueChanged, this, [this](int val) {
-            emit config_changed(current_index_, "rows", QString::number(val));
-        });
+        connect(rows_spin, &QSpinBox::valueChanged, this,
+                [this](int val) { emit config_changed(current_index_, "rows", QString::number(val)); });
         editor_layout_->addWidget(rows_spin);
 
         auto* cols_lbl = new QLabel("Columns:");
@@ -112,9 +113,8 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         auto* cols_spin = new QSpinBox;
         cols_spin->setRange(1, 20);
         cols_spin->setValue(component->config.value("cols", "3").toInt());
-        connect(cols_spin, &QSpinBox::valueChanged, this, [this](int val) {
-            emit config_changed(current_index_, "cols", QString::number(val));
-        });
+        connect(cols_spin, &QSpinBox::valueChanged, this,
+                [this](int val) { emit config_changed(current_index_, "cols", QString::number(val)); });
         editor_layout_->addWidget(cols_spin);
     }
 
@@ -126,8 +126,8 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
         auto* browse = new QPushButton("Browse...");
         connect(browse, &QPushButton::clicked, this, [this]() {
-            QString path = QFileDialog::getOpenFileName(this, "Select Image", "",
-                "Images (*.png *.jpg *.jpeg *.bmp *.svg)");
+            QString path =
+                QFileDialog::getOpenFileName(this, "Select Image", "", "Images (*.png *.jpg *.jpeg *.bmp *.svg)");
             if (!path.isEmpty()) {
                 emit config_changed(current_index_, "path", path);
             }
@@ -144,9 +144,8 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         auto* edit = new QTextEdit;
         edit->setPlainText(component->content);
         edit->setMaximumHeight(150);
-        connect(edit, &QTextEdit::textChanged, this, [this, edit]() {
-            emit content_changed(current_index_, edit->toPlainText());
-        });
+        connect(edit, &QTextEdit::textChanged, this,
+                [this, edit]() { emit content_changed(current_index_, edit->toPlainText()); });
         editor_layout_->addWidget(edit);
     }
 
@@ -157,16 +156,12 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
     editor_layout_->addWidget(sep);
 
     auto* dup_btn = new QPushButton("Duplicate");
-    connect(dup_btn, &QPushButton::clicked, this, [this]() {
-        emit duplicate_requested(current_index_);
-    });
+    connect(dup_btn, &QPushButton::clicked, this, [this]() { emit duplicate_requested(current_index_); });
     editor_layout_->addWidget(dup_btn);
 
     auto* del_btn = new QPushButton("Delete");
     del_btn->setStyleSheet("QPushButton { color: #FF0000; }");
-    connect(del_btn, &QPushButton::clicked, this, [this]() {
-        emit delete_requested(current_index_);
-    });
+    connect(del_btn, &QPushButton::clicked, this, [this]() { emit delete_requested(current_index_); });
     editor_layout_->addWidget(del_btn);
 
     editor_layout_->addStretch();

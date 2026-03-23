@@ -1,25 +1,27 @@
 #pragma once
-#include <QObject>
+#include "core/result/Result.h"
+
+#include <QDateTime>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QObject>
 #include <QTimer>
 #include <QVector>
-#include <QHash>
-#include <QDateTime>
+
 #include <functional>
-#include "core/result/Result.h"
 
 namespace fincept::services {
 
 struct QuoteData {
     QString symbol;
     QString name;
-    double  price = 0;
-    double  change = 0;
-    double  change_pct = 0;
-    double  high = 0;
-    double  low = 0;
-    double  volume = 0;
+    double price = 0;
+    double change = 0;
+    double change_pct = 0;
+    double high = 0;
+    double low = 0;
+    double volume = 0;
 };
 
 struct TickerDef {
@@ -43,7 +45,7 @@ struct RegionalMarket {
 ///   - Quote caching: returns cached data immediately, refreshes in background
 class MarketDataService : public QObject {
     Q_OBJECT
-public:
+  public:
     using QuoteCallback = std::function<void(bool, QVector<QuoteData>)>;
 
     static MarketDataService& instance();
@@ -68,7 +70,7 @@ public:
     static QStringList mover_symbols();
     static QStringList global_snapshot_symbols();
 
-private:
+  private:
     MarketDataService();
     void flush_batch();
 
@@ -83,7 +85,7 @@ private:
     // ── Caching ──
     struct CachedQuote {
         QuoteData data;
-        qint64 timestamp = 0;  // seconds since epoch
+        qint64 timestamp = 0; // seconds since epoch
     };
     QHash<QString, CachedQuote> cache_;
     int cache_ttl_sec_ = 30;

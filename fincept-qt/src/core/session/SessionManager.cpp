@@ -21,10 +21,7 @@ QString SessionManager::uptime_string() const {
     int h = static_cast<int>(total / 3600);
     int m = static_cast<int>((total % 3600) / 60);
     int s = static_cast<int>(total % 60);
-    return QString("%1:%2:%3")
-        .arg(h, 2, 10, QChar('0'))
-        .arg(m, 2, 10, QChar('0'))
-        .arg(s, 2, 10, QChar('0'));
+    return QString("%1:%2:%3").arg(h, 2, 10, QChar('0')).arg(m, 2, 10, QChar('0')).arg(s, 2, 10, QChar('0'));
 }
 
 void SessionManager::save_tab_state(const QString& tab_id, const QVariantMap& state) {

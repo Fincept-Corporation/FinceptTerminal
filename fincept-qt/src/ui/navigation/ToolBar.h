@@ -1,10 +1,10 @@
 #pragma once
-#include <QWidget>
-#include <QMenuBar>
-#include <QMenu>
 #include <QLabel>
+#include <QMenu>
+#include <QMenuBar>
 #include <QPushButton>
 #include <QTimer>
+#include <QWidget>
 
 namespace fincept::ui {
 
@@ -12,27 +12,27 @@ namespace fincept::ui {
 /// Replaces both ToolBar and NavigationBar in a single row.
 class ToolBar : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit ToolBar(QWidget* parent = nullptr);
 
     void refresh_user_display();
 
-signals:
+  signals:
     void navigate_to(const QString& tab_id);
     void action_triggered(const QString& action);
     void logout_clicked();
     void plan_clicked();
 
-private slots:
+  private slots:
     void update_clock();
 
-private:
-    QMenuBar*    menu_bar_      = nullptr;
-    QLabel*      clock_label_   = nullptr;
-    QLabel*      user_label_    = nullptr;
-    QLabel*      credits_label_ = nullptr;
-    QPushButton* plan_btn_      = nullptr;
-    QTimer*      clock_timer_   = nullptr;
+  private:
+    QMenuBar* menu_bar_ = nullptr;
+    QLabel* clock_label_ = nullptr;
+    QLabel* user_label_ = nullptr;
+    QLabel* credits_label_ = nullptr;
+    QPushButton* plan_btn_ = nullptr;
+    QTimer* clock_timer_ = nullptr;
 
     QMenu* build_file_menu();
     QMenu* build_navigate_menu();

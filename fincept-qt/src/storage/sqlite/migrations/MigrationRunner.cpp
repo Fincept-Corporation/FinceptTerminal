@@ -1,5 +1,7 @@
 #include "storage/sqlite/migrations/MigrationRunner.h"
+
 #include "core/logging/Logger.h"
+
 #include <algorithm>
 
 namespace fincept {
@@ -15,8 +17,7 @@ void MigrationRunner::register_migration(Migration m) {
     auto& reg = migration_registry();
     reg.append(std::move(m));
     // Keep sorted by version
-    std::sort(reg.begin(), reg.end(),
-              [](const Migration& a, const Migration& b) { return a.version < b.version; });
+    std::sort(reg.begin(), reg.end(), [](const Migration& a, const Migration& b) { return a.version < b.version; });
 }
 
 const QVector<Migration>& MigrationRunner::all_migrations() {
@@ -29,29 +30,30 @@ MigrationRunner::MigrationRunner(QSqlDatabase& db) : db_(db) {}
 
 Result<void> MigrationRunner::run() {
     auto r = ensure_schema_version_table();
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     int current = read_current_version();
     const auto& migrations = all_migrations();
 
     for (const auto& m : migrations) {
-        if (m.version <= current) continue;
+        if (m.version <= current)
+            continue;
 
         LOG_INFO("DB", QString("Applying migration v%1: %2").arg(m.version).arg(m.name));
 
         // Begin transaction for this migration
         QSqlQuery q(db_);
         if (!q.exec("BEGIN IMMEDIATE")) {
-            return Result<void>::err("Failed to begin transaction for migration v"
-                + std::to_string(m.version) + ": " + q.lastError().text().toStdString());
+            return Result<void>::err("Failed to begin transaction for migration v" + std::to_string(m.version) + ": " +
+                                     q.lastError().text().toStdString());
         }
 
         // Apply
         auto ar = apply_migration(m);
         if (ar.is_err()) {
             q.exec("ROLLBACK");
-            LOG_ERROR("DB", QString("Migration v%1 failed: %2")
-                .arg(m.version).arg(QString::fromStdString(ar.error())));
+            LOG_ERROR("DB", QString("Migration v%1 failed: %2").arg(m.version).arg(QString::fromStdString(ar.error())));
             return ar;
         }
 
@@ -64,8 +66,8 @@ Result<void> MigrationRunner::run() {
 
         // Commit
         if (!q.exec("COMMIT")) {
-            return Result<void>::err("Failed to commit migration v"
-                + std::to_string(m.version) + ": " + q.lastError().text().toStdString());
+            return Result<void>::err("Failed to commit migration v" + std::to_string(m.version) + ": " +
+                                     q.lastError().text().toStdString());
         }
 
         LOG_INFO("DB", QString("Migration v%1 applied successfully").arg(m.version));
@@ -86,14 +88,12 @@ int MigrationRunner::current_version() const {
 
 Result<void> MigrationRunner::ensure_schema_version_table() {
     QSqlQuery q(db_);
-    if (!q.exec(
-        "CREATE TABLE IF NOT EXISTS schema_version ("
-        "  version INTEGER PRIMARY KEY,"
-        "  name TEXT NOT NULL,"
-        "  applied_at TEXT DEFAULT (datetime('now'))"
-        ")")) {
-        return Result<void>::err("Failed to create schema_version table: "
-            + q.lastError().text().toStdString());
+    if (!q.exec("CREATE TABLE IF NOT EXISTS schema_version ("
+                "  version INTEGER PRIMARY KEY,"
+                "  name TEXT NOT NULL,"
+                "  applied_at TEXT DEFAULT (datetime('now'))"
+                ")")) {
+        return Result<void>::err("Failed to create schema_version table: " + q.lastError().text().toStdString());
     }
     return Result<void>::ok();
 }
@@ -108,8 +108,7 @@ Result<void> MigrationRunner::record_version(int version, const QString& name) {
     q.bindValue(0, version);
     q.bindValue(1, name);
     if (!q.exec()) {
-        return Result<void>::err("Failed to record migration version: "
-            + q.lastError().text().toStdString());
+        return Result<void>::err("Failed to record migration version: " + q.lastError().text().toStdString());
     }
     return Result<void>::ok();
 }
@@ -119,7 +118,8 @@ int MigrationRunner::read_current_version() {
     if (!q.exec("SELECT MAX(version) FROM schema_version")) {
         return 0;
     }
-    if (!q.next()) return 0;
+    if (!q.next())
+        return 0;
     return q.value(0).toInt(); // returns 0 if NULL
 }
 
