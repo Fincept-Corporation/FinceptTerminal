@@ -9,7 +9,7 @@ on:
 env:
   BUILD_TYPE: Release
   QT_VERSION: "6.8.3"
-  QT_MODULES: "qtcharts qtwebsockets qtsql qtmultimedia"
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
 
 jobs:
   build:
@@ -32,7 +32,7 @@ jobs:
             platform: Windows
             artifact: FinceptTerminal-Windows-arm64
             exe: FinceptTerminal.exe
-            qt_arch: win64_msvc2022_arm64
+            qt_arch: win64_msvc2022_arm64_cross_compiled
             cmake_extra: "-A ARM64"
 
           # ---- Linux x64 ----
@@ -45,7 +45,7 @@ jobs:
             cmake_extra: ""
 
           # ---- macOS ARM64 (Apple Silicon) ----
-          - os: macos-14
+          - os: macos-15
             arch: arm64
             platform: macOS
             artifact: FinceptTerminal-macOS-arm64
@@ -54,7 +54,7 @@ jobs:
             cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=arm64"
 
           # ---- macOS x64 (Intel) ----
-          - os: macos-13
+          - os: macos-15
             arch: x64
             platform: macOS
             artifact: FinceptTerminal-macOS-x64
@@ -79,9 +79,9 @@ jobs:
           sudo apt-get install -y \
             cmake ninja-build g++ \
             qt6-base-dev qt6-charts-dev qt6-tools-dev qt6-tools-dev-tools \
-            libqt6sql6 libqt6websockets6-dev \
+            libqt6sql6-dev libqt6websockets6-dev \
             qt6-multimedia-dev libqt6multimediawidgets6 \
-            libqt6svg6-dev libqt6concurrent6-dev \
+            libqt6svg6-dev \
             libqt6printsupport6-dev \
             libgl1-mesa-dev libglu1-mesa-dev \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
@@ -110,7 +110,7 @@ jobs:
           modules: ${{ env.QT_MODULES }}
           cache: true
           set-env: false
-          dir: ${{ runner.temp }}/qt-host
+          dir: "${{ runner.temp }}/qt-host"
 
       # ---- Configure CMake ----
       - name: Configure CMake (Linux)
@@ -227,7 +227,7 @@ jobs:
   # ---- macOS Universal Binary ----
   macos-universal:
     needs: build
-    runs-on: macos-14
+    runs-on: macos-15
     name: macOS Universal
     if: "!cancelled() && needs.build.result != 'failure'"
 
