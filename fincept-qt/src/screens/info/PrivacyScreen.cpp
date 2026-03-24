@@ -88,8 +88,8 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     vl->addWidget(title);
 
     auto* updated = new QLabel("Last updated: January 1, 2026");
-    updated->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
-                               .arg(colors::TEXT_TERTIARY, MF));
+    updated->setStyleSheet(
+        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
     vl->addWidget(updated);
     vl->addSpacing(12);
 
@@ -102,9 +102,9 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
 
     // 1 — Commitment
     pvl->addWidget(section_heading("#", "OUR COMMITMENT TO PRIVACY"));
-    pvl->addWidget(body_text(
-        "At Fincept Corporation, we are committed to protecting your privacy. This policy describes "
-        "how we collect, use, and safeguard your personal information when you use Fincept Terminal."));
+    pvl->addWidget(
+        body_text("At Fincept Corporation, we are committed to protecting your privacy. This policy describes "
+                  "how we collect, use, and safeguard your personal information when you use Fincept Terminal."));
 
     // 2 — Information We Collect
     pvl->addWidget(section_heading("@", "INFORMATION WE COLLECT"));
@@ -128,10 +128,20 @@ PrivacyScreen::PrivacyScreen(QWidget* parent) : QWidget(parent) {
     {
         auto* grid = new QGridLayout;
         grid->setSpacing(8);
-        grid->addWidget(info_card("SERVICE DELIVERY", "Provide and maintain terminal features, process transactions, and deliver data feeds"), 0, 0);
-        grid->addWidget(info_card("SECURITY", "Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity"), 0, 1);
-        grid->addWidget(info_card("COMMUNICATION", "Send service updates, security alerts, support responses, and optional marketing"), 1, 0);
-        grid->addWidget(info_card("IMPROVEMENT", "Analyze usage to improve features, fix bugs, and develop new capabilities"), 1, 1);
+        grid->addWidget(
+            info_card("SERVICE DELIVERY",
+                      "Provide and maintain terminal features, process transactions, and deliver data feeds"),
+            0, 0);
+        grid->addWidget(
+            info_card("SECURITY",
+                      "Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity"),
+            0, 1);
+        grid->addWidget(info_card("COMMUNICATION",
+                                  "Send service updates, security alerts, support responses, and optional marketing"),
+                        1, 0);
+        grid->addWidget(
+            info_card("IMPROVEMENT", "Analyze usage to improve features, fix bugs, and develop new capabilities"), 1,
+            1);
         pvl->addLayout(grid);
     }
 

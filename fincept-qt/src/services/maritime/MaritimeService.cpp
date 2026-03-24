@@ -55,42 +55,42 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
     // The API doesn't have an area-search endpoint.
     // Use multi-vessel with a set of well-known container ship IMOs instead.
     static const QStringList known_imos = {
-        "9893890",  // EVER ACE
-        "9461867",  // APL CHONGQING
-        "9811000",  // MSC GULSUN
-        "9839430",  // MSC TESSA
-        "9795622",  // HMM ALGECIRAS
-        "9484525",  // COSCO SHIPPING UNIVERSE
-        "9706891",  // ONE APRICOT
-        "9732319",  // MAERSK EDINBURGH
-        "9758098",  // CMA CGM ANTOINE
-        "9778791",  // EVER GOLDEN
+        "9893890", // EVER ACE
+        "9461867", // APL CHONGQING
+        "9811000", // MSC GULSUN
+        "9839430", // MSC TESSA
+        "9795622", // HMM ALGECIRAS
+        "9484525", // COSCO SHIPPING UNIVERSE
+        "9706891", // ONE APRICOT
+        "9732319", // MAERSK EDINBURGH
+        "9758098", // CMA CGM ANTOINE
+        "9778791", // EVER GOLDEN
     };
     get_multi_vessel_positions(known_imos);
 }
 
 // ── Single vessel position ───────────────────────────────────────────────────
 void MaritimeService::get_vessel_position(const QString& imo) {
-    if (imo.trimmed().isEmpty()) return;
+    if (imo.trimmed().isEmpty())
+        return;
 
     QJsonObject body;
     body["imo"] = imo.trimmed();
 
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().post(QString(kMarineBase) + "/vessel/position", body,
-        [self](Result<QJsonDocument> result) {
-            if (!self) return;
-            if (!result.is_ok()) {
-                LOG_ERROR("Maritime", "Vessel position failed: " + QString::fromStdString(result.error()));
-                emit self->error_occurred("vessel_position", QString::fromStdString(result.error()));
-                return;
-            }
-            auto data = unwrap(result.value().object());
-            auto vessel = self->parse_vessel(data["vessel"].toObject());
-            LOG_INFO("Maritime", QString("Found vessel: %1 [%2]")
-                .arg(vessel.name, vessel.imo));
-            emit self->vessel_found(vessel);
-        });
+    HttpClient::instance().post(QString(kMarineBase) + "/vessel/position", body, [self](Result<QJsonDocument> result) {
+        if (!self)
+            return;
+        if (!result.is_ok()) {
+            LOG_ERROR("Maritime", "Vessel position failed: " + QString::fromStdString(result.error()));
+            emit self->error_occurred("vessel_position", QString::fromStdString(result.error()));
+            return;
+        }
+        auto data = unwrap(result.value().object());
+        auto vessel = self->parse_vessel(data["vessel"].toObject());
+        LOG_INFO("Maritime", QString("Found vessel: %1 [%2]").arg(vessel.name, vessel.imo));
+        emit self->vessel_found(vessel);
+    });
 }
 
 // ── Multi vessel positions ───────────────────────────────────────────────────
@@ -102,24 +102,24 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
     body["imos"] = arr;
 
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().post(QString(kMarineBase) + "/vessel/multi", body,
-        [self](Result<QJsonDocument> result) {
-            if (!self) return;
-            if (!result.is_ok()) {
-                LOG_ERROR("Maritime", "Multi vessel failed: " + QString::fromStdString(result.error()));
-                emit self->error_occurred("multi_vessel", QString::fromStdString(result.error()));
-                return;
-            }
-            auto data = unwrap(result.value().object());
-            auto arr = data["vessels"].toArray();
-            QVector<VesselData> vessels;
-            vessels.reserve(arr.size());
-            for (const auto& v : arr)
-                vessels.append(self->parse_vessel(v.toObject()));
-            int total = data["found_count"].toInt(vessels.size());
-            LOG_INFO("Maritime", QString("Multi vessel: %1 found").arg(vessels.size()));
-            emit self->vessels_loaded(vessels, total);
-        });
+    HttpClient::instance().post(QString(kMarineBase) + "/vessel/multi", body, [self](Result<QJsonDocument> result) {
+        if (!self)
+            return;
+        if (!result.is_ok()) {
+            LOG_ERROR("Maritime", "Multi vessel failed: " + QString::fromStdString(result.error()));
+            emit self->error_occurred("multi_vessel", QString::fromStdString(result.error()));
+            return;
+        }
+        auto data = unwrap(result.value().object());
+        auto arr = data["vessels"].toArray();
+        QVector<VesselData> vessels;
+        vessels.reserve(arr.size());
+        for (const auto& v : arr)
+            vessels.append(self->parse_vessel(v.toObject()));
+        int total = data["found_count"].toInt(vessels.size());
+        LOG_INFO("Maritime", QString("Multi vessel: %1 found").arg(vessels.size()));
+        emit self->vessels_loaded(vessels, total);
+    });
 }
 
 // ── Vessel history ───────────────────────────────────────────────────────────
@@ -128,36 +128,37 @@ void MaritimeService::get_vessel_history(const QString& imo) {
     body["imo"] = imo.trimmed();
 
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().post(QString(kMarineBase) + "/vessel/history", body,
-        [self](Result<QJsonDocument> result) {
-            if (!self) return;
-            if (!result.is_ok()) {
-                emit self->error_occurred("vessel_history", QString::fromStdString(result.error()));
-                return;
-            }
-            auto data = unwrap(result.value().object());
-            auto arr = data["positions"].toArray();
-            if (arr.isEmpty()) arr = data["history"].toArray();
-            QVector<VesselData> history;
-            history.reserve(arr.size());
-            for (const auto& v : arr)
-                history.append(self->parse_vessel(v.toObject()));
-            emit self->vessel_history_loaded(history);
-        });
+    HttpClient::instance().post(QString(kMarineBase) + "/vessel/history", body, [self](Result<QJsonDocument> result) {
+        if (!self)
+            return;
+        if (!result.is_ok()) {
+            emit self->error_occurred("vessel_history", QString::fromStdString(result.error()));
+            return;
+        }
+        auto data = unwrap(result.value().object());
+        auto arr = data["positions"].toArray();
+        if (arr.isEmpty())
+            arr = data["history"].toArray();
+        QVector<VesselData> history;
+        history.reserve(arr.size());
+        for (const auto& v : arr)
+            history.append(self->parse_vessel(v.toObject()));
+        emit self->vessel_history_loaded(history);
+    });
 }
 
 // ── Health check ─────────────────────────────────────────────────────────────
 void MaritimeService::check_health() {
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().get(QString(kMarineBase) + "/health",
-        [self](Result<QJsonDocument> result) {
-            if (!self) return;
-            if (!result.is_ok()) {
-                emit self->error_occurred("health", QString::fromStdString(result.error()));
-                return;
-            }
-            emit self->health_loaded(result.value().object());
-        });
+    HttpClient::instance().get(QString(kMarineBase) + "/health", [self](Result<QJsonDocument> result) {
+        if (!self)
+            return;
+        if (!result.is_ok()) {
+            emit self->error_occurred("health", QString::fromStdString(result.error()));
+            return;
+        }
+        emit self->health_loaded(result.value().object());
+    });
 }
 
 } // namespace fincept::services::maritime

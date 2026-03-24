@@ -14,7 +14,9 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-namespace fincept::ui { class WorldMapWidget; }
+namespace fincept::ui {
+class WorldMapWidget;
+}
 
 namespace fincept::screens {
 

@@ -28,21 +28,21 @@ class QuantStatsView : public QWidget {
     QTabWidget* tabs_ = nullptr;
 
     // Metrics tab
-    QTableWidget* metrics_table_   = nullptr;
+    QTableWidget* metrics_table_ = nullptr;
 
     // Returns tab
-    QWidget*      returns_panel_   = nullptr;
+    QWidget* returns_panel_ = nullptr;
 
     // Drawdown tab
-    QWidget*      drawdown_panel_  = nullptr;
+    QWidget* drawdown_panel_ = nullptr;
 
     // Rolling tab
-    QWidget*      rolling_panel_   = nullptr;
+    QWidget* rolling_panel_ = nullptr;
 
     // Monte Carlo tab
-    QPushButton*  mc_run_btn_      = nullptr;
-    QLabel*       mc_status_       = nullptr;
-    QWidget*      mc_results_      = nullptr;
+    QPushButton* mc_run_btn_ = nullptr;
+    QLabel* mc_status_ = nullptr;
+    QWidget* mc_results_ = nullptr;
 
     portfolio::PortfolioSummary summary_;
     QString currency_;

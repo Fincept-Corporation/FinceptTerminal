@@ -19,93 +19,92 @@
 
 namespace {
 using namespace fincept::ui;
-static const QString kStyle = QStringLiteral(
-    "#econScreen { background: %1; }"
+static const QString kStyle =
+    QStringLiteral("#econScreen { background: %1; }"
 
-    "#econHeader { background: %2; border-bottom: 2px solid %3; }"
-    "#econHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
-    "#econHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
+                   "#econHeader { background: %2; border-bottom: 2px solid %3; }"
+                   "#econHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
+                   "#econHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
 
-    "#econFetchBtn { background: %3; color: %1; border: none; padding: 5px 16px; "
-    "  font-size: 9px; font-weight: 700; }"
-    "#econFetchBtn:hover { background: #FF8800; }"
-    "#econFetchBtn:disabled { background: %10; color: %11; }"
+                   "#econFetchBtn { background: %3; color: %1; border: none; padding: 5px 16px; "
+                   "  font-size: 9px; font-weight: 700; }"
+                   "#econFetchBtn:hover { background: #FF8800; }"
+                   "#econFetchBtn:disabled { background: %10; color: %11; }"
 
-    "#econLeftPanel { background: %7; border-right: 1px solid %8; }"
-    "#econSectionTitle { color: %5; font-size: 10px; font-weight: 700; "
-    "  letter-spacing: 0.5px; background: transparent; padding: 6px 8px; "
-    "  border-bottom: 1px solid %8; }"
+                   "#econLeftPanel { background: %7; border-right: 1px solid %8; }"
+                   "#econSectionTitle { color: %5; font-size: 10px; font-weight: 700; "
+                   "  letter-spacing: 0.5px; background: transparent; padding: 6px 8px; "
+                   "  border-bottom: 1px solid %8; }"
 
-    "#econSearchInput { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 3px 8px; font-size: 11px; }"
-    "#econSearchInput:focus { border-color: %9; }"
+                   "#econSearchInput { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 3px 8px; font-size: 11px; }"
+                   "#econSearchInput:focus { border-color: %9; }"
 
-    "#econCountLabel { color: %5; font-size: 9px; font-weight: 700; "
-    "  background: transparent; padding: 2px 8px; }"
+                   "#econCountLabel { color: %5; font-size: 9px; font-weight: 700; "
+                   "  background: transparent; padding: 2px 8px; }"
 
-    "#econCountryList, #econIndicatorList { background: %1; border: none; "
-    "  outline: none; font-size: 11px; }"
-    "#econCountryList::item, #econIndicatorList::item { color: %5; "
-    "  padding: 4px 8px; border-bottom: 1px solid %8; }"
-    "#econCountryList::item:hover, #econIndicatorList::item:hover "
-    "  { color: %4; background: %12; }"
-    "#econCountryList::item:selected, #econIndicatorList::item:selected "
-    "  { color: %3; background: rgba(217,119,6,0.1); border-left: 2px solid %3; }"
+                   "#econCountryList, #econIndicatorList { background: %1; border: none; "
+                   "  outline: none; font-size: 11px; }"
+                   "#econCountryList::item, #econIndicatorList::item { color: %5; "
+                   "  padding: 4px 8px; border-bottom: 1px solid %8; }"
+                   "#econCountryList::item:hover, #econIndicatorList::item:hover "
+                   "  { color: %4; background: %12; }"
+                   "#econCountryList::item:selected, #econIndicatorList::item:selected "
+                   "  { color: %3; background: rgba(217,119,6,0.1); border-left: 2px solid %3; }"
 
-    "#econRightPanel { background: %1; }"
-    "#econStatsBar { background: %7; border-bottom: 1px solid %8; }"
-    "#econStatLabel { color: %5; font-size: 9px; font-weight: 700; "
-    "  letter-spacing: 0.5px; background: transparent; }"
-    "#econStatValue { color: %13; font-size: 13px; font-weight: 700; "
-    "  background: transparent; }"
-    "#econStatChange { font-size: 11px; font-weight: 700; background: transparent; }"
-    "#econDataTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
-    "#econDataStatus { color: %5; font-size: 11px; background: transparent; }"
+                   "#econRightPanel { background: %1; }"
+                   "#econStatsBar { background: %7; border-bottom: 1px solid %8; }"
+                   "#econStatLabel { color: %5; font-size: 9px; font-weight: 700; "
+                   "  letter-spacing: 0.5px; background: transparent; }"
+                   "#econStatValue { color: %13; font-size: 13px; font-weight: 700; "
+                   "  background: transparent; }"
+                   "#econStatChange { font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#econDataTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#econDataStatus { color: %5; font-size: 11px; background: transparent; }"
 
-    "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
-    "  font-size: 11px; }"
-    "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
-    "QTableWidget::item:selected { background: rgba(217,119,6,0.1); color: %3; }"
-    "QHeaderView::section { background: %2; color: %5; border: none; "
-    "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
-    "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
+                   "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
+                   "  font-size: 11px; }"
+                   "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
+                   "QTableWidget::item:selected { background: rgba(217,119,6,0.1); color: %3; }"
+                   "QHeaderView::section { background: %2; color: %5; border: none; "
+                   "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
+                   "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
 
-    "QComboBox { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 3px 8px; font-size: 11px; }"
-    "QComboBox::drop-down { border: none; width: 16px; }"
-    "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
-    "  selection-background-color: %3; }"
+                   "QComboBox { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 3px 8px; font-size: 11px; }"
+                   "QComboBox::drop-down { border: none; width: 16px; }"
+                   "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
+                   "  selection-background-color: %3; }"
 
-    "QLineEdit { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 3px 8px; font-size: 11px; }"
+                   "QLineEdit { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 3px 8px; font-size: 11px; }"
 
-    "#econStatusBar { background: %2; border-top: 1px solid %8; }"
-    "#econStatusText { color: %5; font-size: 9px; background: transparent; }"
-    "#econStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
+                   "#econStatusBar { background: %2; border-top: 1px solid %8; }"
+                   "#econStatusText { color: %5; font-size: 9px; background: transparent; }"
+                   "#econStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
 
-    "#econErrorPanel { background: rgba(220,38,38,0.1); border: 1px solid %14; "
-    "  padding: 8px 12px; }"
-    "#econErrorText { color: %14; font-size: 10px; background: transparent; }"
+                   "#econErrorPanel { background: rgba(220,38,38,0.1); border: 1px solid %14; "
+                   "  padding: 8px 12px; }"
+                   "#econErrorText { color: %14; font-size: 10px; background: transparent; }"
 
-    "QSplitter::handle { background: %8; }"
-    "QScrollBar:vertical { background: %1; width: 6px; }"
-    "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-)
-    .arg(colors::BG_BASE)         // %1
-    .arg(colors::BG_RAISED)       // %2
-    .arg(colors::AMBER)           // %3
-    .arg(colors::TEXT_PRIMARY)    // %4
-    .arg(colors::TEXT_SECONDARY)  // %5
-    .arg(colors::POSITIVE)        // %6  (reserved)
-    .arg(colors::BG_SURFACE)      // %7
-    .arg(colors::BORDER_DIM)      // %8
-    .arg(colors::BORDER_BRIGHT)   // %9
-    .arg(colors::AMBER_DIM)       // %10
-    .arg(colors::TEXT_DIM)         // %11
-    .arg(colors::BG_HOVER)        // %12
-    .arg(colors::CYAN)             // %13
-    .arg(colors::NEGATIVE)        // %14
+                   "QSplitter::handle { background: %8; }"
+                   "QScrollBar:vertical { background: %1; width: 6px; }"
+                   "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
+                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(colors::BG_BASE)        // %1
+        .arg(colors::BG_RAISED)      // %2
+        .arg(colors::AMBER)          // %3
+        .arg(colors::TEXT_PRIMARY)   // %4
+        .arg(colors::TEXT_SECONDARY) // %5
+        .arg(colors::POSITIVE)       // %6  (reserved)
+        .arg(colors::BG_SURFACE)     // %7
+        .arg(colors::BORDER_DIM)     // %8
+        .arg(colors::BORDER_BRIGHT)  // %9
+        .arg(colors::AMBER_DIM)      // %10
+        .arg(colors::TEXT_DIM)       // %11
+        .arg(colors::BG_HOVER)       // %12
+        .arg(colors::CYAN)           // %13
+        .arg(colors::NEGATIVE)       // %14
     ;
 } // namespace
 
@@ -117,37 +116,35 @@ using namespace fincept::ui;
 
 static QList<EconSource> build_sources() {
     return {
-        {"worldbank",  "World Bank",     "worldbank_data.py",  "#00E5FF", false, "NY.GDP.MKTP.CD"},
-        {"bis",        "BIS",            "bis_data.py",        "#9D4EDD", false, "WS_CBPOL"},
-        {"imf",        "IMF",            "imf_data.py",        "#0088FF", false, "NGDP_RPCH"},
-        {"fred",       "FRED",           "fred_data.py",       "#00D66F", false, "GDP"},
-        {"oecd",       "OECD",           "oecd_data.py",       "#FFD700", false, "GDP"},
-        {"wto",        "WTO",            "wto_data.py",        "#E91E63", true,  "TP_A_0010"},
-        {"cftc",       "CFTC",           "cftc_data.py",       "#FF5722", false, "gold"},
-        {"eia",        "EIA",            "eia_data.py",        "#4CAF50", true,  "crude_petroleum_stocks"},
-        {"adb",        "ADB",            "adb_data.py",        "#0072BC", false, "NGDP_XDC"},
-        {"fed",        "Federal Reserve", "fed_data.py",       "#1A5F7A", false, "federal_funds_rate"},
-        {"bls",        "BLS",            "bls_data.py",        "#AB47BC", true,  "CUSR0000SA0"},
-        {"unesco",     "UNESCO",         "unesco_data.py",     "#00ACC1", false, "GER.1"},
-        {"fiscaldata", "FiscalData",     "fiscaldata.py",      "#FFA726", true,  "total_public_debt"},
-        {"bea",        "BEA",            "bea_data.py",        "#E65100", true,  "gdp_growth"},
-        {"fincept",    "Fincept Macro",  "fincept_macro.py",   "#FF8800", true,  "wgb_central_bank_rates"},
+        {"worldbank", "World Bank", "worldbank_data.py", "#00E5FF", false, "NY.GDP.MKTP.CD"},
+        {"bis", "BIS", "bis_data.py", "#9D4EDD", false, "WS_CBPOL"},
+        {"imf", "IMF", "imf_data.py", "#0088FF", false, "NGDP_RPCH"},
+        {"fred", "FRED", "fred_data.py", "#00D66F", false, "GDP"},
+        {"oecd", "OECD", "oecd_data.py", "#FFD700", false, "GDP"},
+        {"wto", "WTO", "wto_data.py", "#E91E63", true, "TP_A_0010"},
+        {"cftc", "CFTC", "cftc_data.py", "#FF5722", false, "gold"},
+        {"eia", "EIA", "eia_data.py", "#4CAF50", true, "crude_petroleum_stocks"},
+        {"adb", "ADB", "adb_data.py", "#0072BC", false, "NGDP_XDC"},
+        {"fed", "Federal Reserve", "fed_data.py", "#1A5F7A", false, "federal_funds_rate"},
+        {"bls", "BLS", "bls_data.py", "#AB47BC", true, "CUSR0000SA0"},
+        {"unesco", "UNESCO", "unesco_data.py", "#00ACC1", false, "GER.1"},
+        {"fiscaldata", "FiscalData", "fiscaldata.py", "#FFA726", true, "total_public_debt"},
+        {"bea", "BEA", "bea_data.py", "#E65100", true, "gdp_growth"},
+        {"fincept", "Fincept Macro", "fincept_macro.py", "#FF8800", true, "wgb_central_bank_rates"},
     };
 }
 
 // ── Country lists per source ────────────────────────────────────────────────
 
 static QStringList g_major_countries = {
-    "USA", "CHN", "JPN", "DEU", "GBR", "FRA", "IND", "ITA", "BRA", "CAN",
-    "KOR", "RUS", "AUS", "ESP", "MEX", "IDN", "NLD", "SAU", "TUR", "CHE",
-    "ARG", "ZAF", "THA", "SGP", "MYS", "PHL", "VNM", "NGA", "EGY", "PAK",
+    "USA", "CHN", "JPN", "DEU", "GBR", "FRA", "IND", "ITA", "BRA", "CAN", "KOR", "RUS", "AUS", "ESP", "MEX",
+    "IDN", "NLD", "SAU", "TUR", "CHE", "ARG", "ZAF", "THA", "SGP", "MYS", "PHL", "VNM", "NGA", "EGY", "PAK",
 };
 
 static QStringList g_oecd_countries = {
-    "USA", "GBR", "DEU", "FRA", "JPN", "CAN", "ITA", "ESP", "AUS", "KOR",
-    "NLD", "CHE", "BEL", "SWE", "AUT", "NOR", "DNK", "FIN", "IRL", "PRT",
-    "NZL", "ISR", "CZE", "POL", "HUN", "SVK", "SVN", "LUX", "ISL", "EST",
-    "LVA", "LTU", "CHL", "COL", "CRI", "MEX", "TUR",
+    "USA", "GBR", "DEU", "FRA", "JPN", "CAN", "ITA", "ESP", "AUS", "KOR", "NLD", "CHE", "BEL",
+    "SWE", "AUT", "NOR", "DNK", "FIN", "IRL", "PRT", "NZL", "ISR", "CZE", "POL", "HUN", "SVK",
+    "SVN", "LUX", "ISL", "EST", "LVA", "LTU", "CHL", "COL", "CRI", "MEX", "TUR",
 };
 
 static QStringList g_adb_countries = {
@@ -279,11 +276,12 @@ QWidget* EconomicsScreen::create_header() {
     source_combo_->setFixedWidth(180);
     for (const auto& s : sources_) {
         QString label = s.name;
-        if (s.needs_api_key) label += " (API Key)";
+        if (s.needs_api_key)
+            label += " (API Key)";
         source_combo_->addItem(label);
     }
-    connect(source_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &EconomicsScreen::on_source_changed);
+    connect(source_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &EconomicsScreen::on_source_changed);
     hl->addWidget(source_combo_);
 
     hl->addSpacing(8);
@@ -293,8 +291,7 @@ QWidget* EconomicsScreen::create_header() {
     date_preset_->addItems({"1Y", "2Y", "5Y", "10Y", "ALL", "Custom"});
     date_preset_->setCurrentIndex(2); // 5Y default
     date_preset_->setFixedWidth(70);
-    connect(date_preset_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &EconomicsScreen::on_date_preset);
+    connect(date_preset_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &EconomicsScreen::on_date_preset);
     hl->addWidget(date_preset_);
 
     date_start_ = new QLineEdit;
@@ -495,7 +492,8 @@ QWidget* EconomicsScreen::create_status_bar() {
 // ── Slots ───────────────────────────────────────────────────────────────────
 
 void EconomicsScreen::on_source_changed(int index) {
-    if (index < 0 || index >= sources_.size()) return;
+    if (index < 0 || index >= sources_.size())
+        return;
     active_source_ = index;
     active_indicator_ = sources_[index].default_indicator;
 
@@ -508,13 +506,15 @@ void EconomicsScreen::on_source_changed(int index) {
 }
 
 void EconomicsScreen::on_country_clicked(QListWidgetItem* item) {
-    if (!item) return;
+    if (!item)
+        return;
     active_country_ = item->data(Qt::UserRole).toString();
     status_country_->setText("COUNTRY: " + active_country_);
 }
 
 void EconomicsScreen::on_indicator_clicked(QListWidgetItem* item) {
-    if (!item) return;
+    if (!item)
+        return;
     active_indicator_ = item->data(Qt::UserRole).toString();
     status_indicator_->setText(active_indicator_);
 
@@ -523,7 +523,8 @@ void EconomicsScreen::on_indicator_clicked(QListWidgetItem* item) {
 }
 
 void EconomicsScreen::on_fetch() {
-    if (loading_ || active_indicator_.isEmpty()) return;
+    if (loading_ || active_indicator_.isEmpty())
+        return;
 
     const auto& src = sources_[active_source_];
     QStringList args;
@@ -531,8 +532,10 @@ void EconomicsScreen::on_fetch() {
 
     // Add date range if custom
     if (date_preset_->currentIndex() == 5) { // Custom
-        if (!date_start_->text().isEmpty()) args << date_start_->text();
-        if (!date_end_->text().isEmpty()) args << date_end_->text();
+        if (!date_start_->text().isEmpty())
+            args << date_start_->text();
+        if (!date_end_->text().isEmpty())
+            args << date_end_->text();
     }
 
     execute_fetch(src.script, args);
@@ -547,8 +550,7 @@ void EconomicsScreen::on_date_preset(int index) {
 void EconomicsScreen::on_country_search(const QString& text) {
     for (int i = 0; i < country_list_->count(); ++i) {
         auto* item = country_list_->item(i);
-        bool match = text.isEmpty() ||
-                     item->text().contains(text, Qt::CaseInsensitive) ||
+        bool match = text.isEmpty() || item->text().contains(text, Qt::CaseInsensitive) ||
                      item->data(Qt::UserRole).toString().contains(text, Qt::CaseInsensitive);
         item->setHidden(!match);
     }
@@ -557,8 +559,7 @@ void EconomicsScreen::on_country_search(const QString& text) {
 void EconomicsScreen::on_indicator_search(const QString& text) {
     for (int i = 0; i < indicator_list_->count(); ++i) {
         auto* item = indicator_list_->item(i);
-        bool match = text.isEmpty() ||
-                     item->text().contains(text, Qt::CaseInsensitive) ||
+        bool match = text.isEmpty() || item->text().contains(text, Qt::CaseInsensitive) ||
                      item->data(Qt::UserRole).toString().contains(text, Qt::CaseInsensitive);
         item->setHidden(!match);
     }
@@ -572,10 +573,11 @@ void EconomicsScreen::populate_countries(int source_index) {
     const auto& src = sources_[source_index];
     QStringList countries;
 
-    if (src.id == "oecd") countries = g_oecd_countries;
-    else if (src.id == "adb") countries = g_adb_countries;
-    else if (src.id == "fred" || src.id == "fed" || src.id == "bls" ||
-             src.id == "fiscaldata" || src.id == "bea") {
+    if (src.id == "oecd")
+        countries = g_oecd_countries;
+    else if (src.id == "adb")
+        countries = g_adb_countries;
+    else if (src.id == "fred" || src.id == "fed" || src.id == "bls" || src.id == "fiscaldata" || src.id == "bea") {
         countries = {"USA"}; // US-only sources
     } else {
         countries = g_major_countries;
@@ -602,10 +604,14 @@ void EconomicsScreen::populate_indicators(int source_index) {
     const auto& src = sources_[source_index];
     QList<IndicatorDef> indicators;
 
-    if (src.id == "worldbank") indicators = g_worldbank_indicators;
-    else if (src.id == "fred") indicators = g_fred_indicators;
-    else if (src.id == "imf") indicators = g_imf_indicators;
-    else indicators = g_generic_indicators;
+    if (src.id == "worldbank")
+        indicators = g_worldbank_indicators;
+    else if (src.id == "fred")
+        indicators = g_fred_indicators;
+    else if (src.id == "imf")
+        indicators = g_imf_indicators;
+    else
+        indicators = g_generic_indicators;
 
     // Group by category
     QString last_cat;
@@ -641,58 +647,56 @@ void EconomicsScreen::execute_fetch(const QString& script, const QStringList& ar
 
     QPointer<EconomicsScreen> self = this;
 
-    python::PythonRunner::instance().run(
-        script, args,
-        [self](const python::PythonResult& result) {
-            if (!self) return;
-            self->set_loading(false);
+    python::PythonRunner::instance().run(script, args, [self](const python::PythonResult& result) {
+        if (!self)
+            return;
+        self->set_loading(false);
 
-            if (!result.success) {
-                self->display_error(result.error.isEmpty() ? "Fetch failed" : result.error);
-                return;
-            }
+        if (!result.success) {
+            self->display_error(result.error.isEmpty() ? "Fetch failed" : result.error);
+            return;
+        }
 
-            QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) {
-                self->display_error("No data returned");
-                return;
-            }
+        QString json_str = python::extract_json(result.output);
+        if (json_str.isEmpty()) {
+            self->display_error("No data returned");
+            return;
+        }
 
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-            if (doc.isNull()) {
-                self->display_error("JSON parse error: " + err.errorString());
-                return;
-            }
+        QJsonParseError err;
+        auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+        if (doc.isNull()) {
+            self->display_error("JSON parse error: " + err.errorString());
+            return;
+        }
 
-            auto obj = doc.isObject() ? doc.object() : QJsonObject();
-            if (obj.contains("error")) {
-                self->display_error(obj["error"].toString());
-                return;
-            }
+        auto obj = doc.isObject() ? doc.object() : QJsonObject();
+        if (obj.contains("error")) {
+            self->display_error(obj["error"].toString());
+            return;
+        }
 
-            // Extract data array
-            QJsonArray data_array;
-            if (obj.contains("data") && obj["data"].isArray()) {
-                data_array = obj["data"].toArray();
-            } else if (doc.isArray()) {
-                data_array = doc.array();
-            } else if (obj.contains("data")) {
-                QJsonObject wrapper;
-                wrapper["value"] = obj["data"];
-                data_array.append(wrapper);
-            }
+        // Extract data array
+        QJsonArray data_array;
+        if (obj.contains("data") && obj["data"].isArray()) {
+            data_array = obj["data"].toArray();
+        } else if (doc.isArray()) {
+            data_array = doc.array();
+        } else if (obj.contains("data")) {
+            QJsonObject wrapper;
+            wrapper["value"] = obj["data"];
+            data_array.append(wrapper);
+        }
 
-            if (data_array.isEmpty()) {
-                self->display_error("No data points returned");
-                return;
-            }
+        if (data_array.isEmpty()) {
+            self->display_error("No data points returned");
+            return;
+        }
 
-            self->display_data(data_array, self->active_indicator_);
-            self->display_stats(data_array);
-            LOG_INFO("Economics", self->active_indicator_ + ": " +
-                     QString::number(data_array.size()) + " points");
-        });
+        self->display_data(data_array, self->active_indicator_);
+        self->display_stats(data_array);
+        LOG_INFO("Economics", self->active_indicator_ + ": " + QString::number(data_array.size()) + " points");
+    });
 }
 
 // ── Display ─────────────────────────────────────────────────────────────────
@@ -703,7 +707,8 @@ void EconomicsScreen::display_data(const QJsonArray& data, const QString& title)
     data_table_->setRowCount(0);
     data_table_->setColumnCount(0);
 
-    if (data.isEmpty()) return;
+    if (data.isEmpty())
+        return;
 
     // Extract columns
     QStringList columns;
@@ -753,7 +758,8 @@ void EconomicsScreen::display_data(const QJsonArray& data, const QString& title)
 
 void EconomicsScreen::display_stats(const QJsonArray& data) {
     // Find the value column (try "value", then first numeric)
-    if (data.isEmpty()) return;
+    if (data.isEmpty())
+        return;
 
     QVector<double> values;
     for (const auto& item : data) {
@@ -773,7 +779,8 @@ void EconomicsScreen::display_stats(const QJsonArray& data) {
         values.append(v);
     }
 
-    if (values.isEmpty()) return;
+    if (values.isEmpty())
+        return;
 
     double latest = values.last();
     double prev = values.size() > 1 ? values[values.size() - 2] : latest;
@@ -781,20 +788,22 @@ void EconomicsScreen::display_stats(const QJsonArray& data) {
     double min_val = *std::min_element(values.begin(), values.end());
     double max_val = *std::max_element(values.begin(), values.end());
     double sum = 0;
-    for (double v : values) sum += v;
+    for (double v : values)
+        sum += v;
     double avg = sum / values.size();
 
     auto fmt = [](double v) {
-        if (std::abs(v) >= 1e9) return QString::number(v / 1e9, 'f', 2) + "B";
-        if (std::abs(v) >= 1e6) return QString::number(v / 1e6, 'f', 2) + "M";
-        if (std::abs(v) >= 1e3) return QString::number(v / 1e3, 'f', 2) + "K";
+        if (std::abs(v) >= 1e9)
+            return QString::number(v / 1e9, 'f', 2) + "B";
+        if (std::abs(v) >= 1e6)
+            return QString::number(v / 1e6, 'f', 2) + "M";
+        if (std::abs(v) >= 1e3)
+            return QString::number(v / 1e3, 'f', 2) + "K";
         return QString::number(v, 'f', 2);
     };
 
     stat_latest_->setText(fmt(latest));
-    stat_change_->setText(QString("%1%2%")
-                              .arg(change >= 0 ? "+" : "")
-                              .arg(change, 0, 'f', 2));
+    stat_change_->setText(QString("%1%2%").arg(change >= 0 ? "+" : "").arg(change, 0, 'f', 2));
     stat_change_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700; background: transparent;")
                                     .arg(change >= 0 ? colors::POSITIVE : colors::NEGATIVE));
     stat_min_->setText(fmt(min_val));

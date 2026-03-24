@@ -22,13 +22,16 @@ class DocsScreen : public QWidget {
     void navigate_to(const QString& section_id);
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-    QWidget* make_page(const QString& title, const QString& subtitle, const std::vector<std::pair<QString, QString>>& sections);
-    QWidget* make_section_panel(const QString& icon, const QString& title, const QString& body, const QString& accent_color);
-    QWidget* make_skill_panel(const QString& beginner, const QString& intermediate, const QString& advanced, const QString& pro);
+    QWidget* make_page(const QString& title, const QString& subtitle,
+                       const std::vector<std::pair<QString, QString>>& sections);
+    QWidget* make_section_panel(const QString& icon, const QString& title, const QString& body,
+                                const QString& accent_color);
+    QWidget* make_skill_panel(const QString& beginner, const QString& intermediate, const QString& advanced,
+                              const QString& pro);
     QWidget* make_tip_box(const QString& text, const QString& color);
-    QLabel*  make_heading(const QString& text);
-    QLabel*  make_body_label(const QString& text);
-    QLabel*  make_muted_label(const QString& text);
+    QLabel* make_heading(const QString& text);
+    QLabel* make_body_label(const QString& text);
+    QLabel* make_muted_label(const QString& text);
 
     // ── Content page builders ────────────────────────────────────────────────
     QWidget* page_welcome();
@@ -87,11 +90,11 @@ class DocsScreen : public QWidget {
     QWidget* page_profile();
 
     // ── Members ──────────────────────────────────────────────────────────────
-    QTreeWidget*    sidebar_   = nullptr;
-    QStackedWidget* pages_     = nullptr;
-    QLabel*         page_title_ = nullptr;
-    QLabel*         breadcrumb_ = nullptr;
-    QMap<QString, int> page_index_;  // section_id → stacked widget index
+    QTreeWidget* sidebar_ = nullptr;
+    QStackedWidget* pages_ = nullptr;
+    QLabel* page_title_ = nullptr;
+    QLabel* breadcrumb_ = nullptr;
+    QMap<QString, int> page_index_; // section_id → stacked widget index
 };
 
 } // namespace fincept::screens

@@ -37,9 +37,10 @@ void NewsNlpService::extract_entities(const QVector<NewsArticle>& articles, Enti
     auto json_str = QString::fromUtf8(QJsonDocument(articles_to_json(articles)).toJson(QJsonDocument::Compact));
 
     QPointer<NewsNlpService> self = this;
-    python::PythonRunner::instance().run("news_nlp.py", {"extract_entities", json_str},
-        [self, cb](python::PythonResult result) {
-            if (!self) return;
+    python::PythonRunner::instance().run(
+        "news_nlp.py", {"extract_entities", json_str}, [self, cb](python::PythonResult result) {
+            if (!self)
+                return;
             if (!result.success) {
                 LOG_WARN("NewsNlpService", "Entity extraction failed: " + result.error);
                 cb(false, {});
@@ -96,9 +97,10 @@ void NewsNlpService::cluster_semantic(const QVector<NewsArticle>& articles, Sema
     auto json_str = QString::fromUtf8(QJsonDocument(articles_to_json(articles)).toJson(QJsonDocument::Compact));
 
     QPointer<NewsNlpService> self = this;
-    python::PythonRunner::instance().run("news_nlp.py", {"cluster_semantic", json_str},
-        [self, cb](python::PythonResult result) {
-            if (!self) return;
+    python::PythonRunner::instance().run(
+        "news_nlp.py", {"cluster_semantic", json_str}, [self, cb](python::PythonResult result) {
+            if (!self)
+                return;
             if (!result.success) {
                 LOG_WARN("NewsNlpService", "Semantic clustering failed: " + result.error);
                 cb(false, {});
@@ -115,92 +117,88 @@ void NewsNlpService::geolocate_articles(const QVector<NewsArticle>& articles, Ge
 
     QPointer<NewsNlpService> self = this;
     python::PythonRunner::instance().run("news_geolocation.py", {"extract_and_geocode", json_str},
-        [self, cb](python::PythonResult result) {
-            if (!self) return;
-            if (!result.success) {
-                LOG_WARN("NewsNlpService", "Geolocation failed: " + result.error);
-                cb(false, {});
-                return;
-            }
+                                         [self, cb](python::PythonResult result) {
+                                             if (!self)
+                                                 return;
+                                             if (!result.success) {
+                                                 LOG_WARN("NewsNlpService", "Geolocation failed: " + result.error);
+                                                 cb(false, {});
+                                                 return;
+                                             }
 
-            auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-            auto obj = doc.object();
-            if (!obj["success"].toBool()) {
-                cb(false, {});
-                return;
-            }
+                                             auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+                                             auto obj = doc.object();
+                                             if (!obj["success"].toBool()) {
+                                                 cb(false, {});
+                                                 return;
+                                             }
 
-            QVector<ArticleGeo> results;
-            for (const auto& v : obj["geolocated_articles"].toArray()) {
-                auto a = v.toObject();
-                ArticleGeo ag;
-                ag.id = a["id"].toString();
-                ag.primary_lat = a["primary_lat"].toDouble();
-                ag.primary_lon = a["primary_lon"].toDouble();
-                for (const auto& lv : a["locations"].toArray()) {
-                    auto lo = lv.toObject();
-                    GeoLocation gl;
-                    gl.name = lo["name"].toString();
-                    gl.code = lo["code"].toString();
-                    gl.lat = lo["lat"].toDouble();
-                    gl.lon = lo["lon"].toDouble();
-                    gl.type = lo["type"].toString();
-                    ag.locations.append(gl);
-                }
-                results.append(ag);
-            }
+                                             QVector<ArticleGeo> results;
+                                             for (const auto& v : obj["geolocated_articles"].toArray()) {
+                                                 auto a = v.toObject();
+                                                 ArticleGeo ag;
+                                                 ag.id = a["id"].toString();
+                                                 ag.primary_lat = a["primary_lat"].toDouble();
+                                                 ag.primary_lon = a["primary_lon"].toDouble();
+                                                 for (const auto& lv : a["locations"].toArray()) {
+                                                     auto lo = lv.toObject();
+                                                     GeoLocation gl;
+                                                     gl.name = lo["name"].toString();
+                                                     gl.code = lo["code"].toString();
+                                                     gl.lat = lo["lat"].toDouble();
+                                                     gl.lon = lo["lon"].toDouble();
+                                                     gl.type = lo["type"].toString();
+                                                     ag.locations.append(gl);
+                                                 }
+                                                 results.append(ag);
+                                             }
 
-            self->geo_cache_ = results;
-            cb(true, results);
-        });
+                                             self->geo_cache_ = results;
+                                             cb(true, results);
+                                         });
 }
 
 void NewsNlpService::nearby_infrastructure(double lat, double lon, int radius_km, InfraCallback cb) {
-    QStringList args = {"nearby_infrastructure",
-                        QString::number(lat, 'f', 4),
-                        QString::number(lon, 'f', 4),
+    QStringList args = {"nearby_infrastructure", QString::number(lat, 'f', 4), QString::number(lon, 'f', 4),
                         QString::number(radius_km)};
 
-    python::PythonRunner::instance().run("news_geolocation.py", args,
-        [cb](python::PythonResult result) {
-            if (!result.success) {
-                cb(false, {});
-                return;
-            }
-            auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-            auto obj = doc.object();
-            if (!obj["success"].toBool()) {
-                cb(false, {});
-                return;
-            }
+    python::PythonRunner::instance().run("news_geolocation.py", args, [cb](python::PythonResult result) {
+        if (!result.success) {
+            cb(false, {});
+            return;
+        }
+        auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+        auto obj = doc.object();
+        if (!obj["success"].toBool()) {
+            cb(false, {});
+            return;
+        }
 
-            QVector<InfrastructureItem> items;
-            for (const auto& v : obj["infrastructure"].toArray()) {
-                auto i = v.toObject();
-                InfrastructureItem item;
-                item.name = i["name"].toString();
-                item.type = i["type"].toString();
-                item.lat = i["lat"].toDouble();
-                item.lon = i["lon"].toDouble();
-                item.distance_km = i["distance_km"].toDouble();
-                items.append(item);
-            }
-            cb(true, items);
-        });
+        QVector<InfrastructureItem> items;
+        for (const auto& v : obj["infrastructure"].toArray()) {
+            auto i = v.toObject();
+            InfrastructureItem item;
+            item.name = i["name"].toString();
+            item.type = i["type"].toString();
+            item.lat = i["lat"].toDouble();
+            item.lon = i["lon"].toDouble();
+            item.distance_km = i["distance_km"].toDouble();
+            items.append(item);
+        }
+        cb(true, items);
+    });
 }
 
 void NewsNlpService::translate_text(const QString& text, const QString& target_lang, TranslateCallback cb) {
-    python::PythonRunner::instance().run("translate_text.py", {"single", text, "auto", target_lang},
-        [cb](python::PythonResult result) {
+    python::PythonRunner::instance().run(
+        "translate_text.py", {"single", text, "auto", target_lang}, [cb](python::PythonResult result) {
             if (!result.success) {
                 cb(false, {}, {});
                 return;
             }
             auto doc = QJsonDocument::fromJson(result.output.toUtf8());
             auto obj = doc.object();
-            cb(obj["success"].toBool(),
-               obj["translated"].toString(),
-               obj["detected_lang"].toString());
+            cb(obj["success"].toBool(), obj["translated"].toString(), obj["detected_lang"].toString());
         });
 }
 

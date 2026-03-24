@@ -71,7 +71,8 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         type_btns_[i]->setObjectName("cryptoOeTypeBtn");
         type_btns_[i]->setFixedHeight(20);
         type_btns_[i]->setCursor(Qt::PointingHandCursor);
-        if (i == 0) type_btns_[i]->setProperty("active", true);
+        if (i == 0)
+            type_btns_[i]->setProperty("active", true);
         connect(type_btns_[i], &QPushButton::clicked, this, [this, i]() { set_order_type(i); });
         type_row->addWidget(type_btns_[i]);
     }
@@ -291,7 +292,8 @@ void CryptoOrderEntry::update_cost_preview() {
     double price = current_price_;
     if (active_type_ == 1 || active_type_ == 3) {
         const double limit_p = price_edit_->text().toDouble();
-        if (limit_p > 0) price = limit_p;
+        if (limit_p > 0)
+            price = limit_p;
     }
     if (qty > 0 && price > 0)
         cost_label_->setText(QString("Est: $%1").arg(qty * price, 0, 'f', 2));

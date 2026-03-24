@@ -4,6 +4,7 @@
 
 #include <QHash>
 #include <QObject>
+
 #include <functional>
 
 namespace fincept::services::quant {
@@ -16,8 +17,7 @@ class AIQuantLabService : public QObject {
 
     // ── Generic module execution ────────────────────────────────────────────
     /// Run any quant module by ID with JSON params
-    void run_module(const QString& module_id, const QString& command,
-                    const QJsonObject& params);
+    void run_module(const QString& module_id, const QString& command, const QJsonObject& params);
 
     // ── Qlib core ───────────────────────────────────────────────────────────
     void list_models();
@@ -73,8 +73,7 @@ class AIQuantLabService : public QObject {
     explicit AIQuantLabService(QObject* parent = nullptr);
     Q_DISABLE_COPY(AIQuantLabService)
 
-    void run_python(const QString& script, const QStringList& args,
-                    const QString& module_id, const QString& command);
+    void run_python(const QString& script, const QStringList& args, const QString& module_id, const QString& command);
 
     // Module ID → script mapping
     QHash<QString, QString> script_map_;

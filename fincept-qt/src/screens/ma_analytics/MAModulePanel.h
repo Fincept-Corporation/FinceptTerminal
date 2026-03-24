@@ -22,8 +22,7 @@ namespace fincept::screens {
 class MAModulePanel : public QWidget {
     Q_OBJECT
   public:
-    explicit MAModulePanel(const fincept::services::ma::ModuleInfo& info,
-                           QWidget* parent = nullptr);
+    explicit MAModulePanel(const fincept::services::ma::ModuleInfo& info, QWidget* parent = nullptr);
 
   private slots:
     void on_result_ready(const QString& context, const QJsonObject& data);
@@ -45,8 +44,8 @@ class MAModulePanel : public QWidget {
 
     // Helpers for building input forms
     QWidget* build_input_row(const QString& label, QWidget* input, QWidget* parent);
-    QDoubleSpinBox* make_double_spin(double min, double max, double val, int decimals,
-                                     const QString& suffix, QWidget* parent);
+    QDoubleSpinBox* make_double_spin(double min, double max, double val, int decimals, const QString& suffix,
+                                     QWidget* parent);
     QSpinBox* make_int_spin(int min, int max, int val, QWidget* parent);
     QPushButton* make_run_button(const QString& text, QWidget* parent);
 
@@ -54,8 +53,7 @@ class MAModulePanel : public QWidget {
     void display_result(const QJsonObject& data);
     void display_error(const QString& msg);
     void clear_results();
-    QWidget* build_metric_card(const QString& label, const QString& value,
-                               const QString& color, QWidget* parent);
+    QWidget* build_metric_card(const QString& label, const QString& value, const QString& color, QWidget* parent);
 
     fincept::services::ma::ModuleInfo module_;
     QTabWidget* sub_tabs_ = nullptr;

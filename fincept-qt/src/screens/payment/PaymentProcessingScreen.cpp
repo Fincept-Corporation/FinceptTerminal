@@ -44,8 +44,7 @@ void PaymentProcessingScreen::build_ui() {
     title_label_ = new QLabel("PAYMENT PROCESSING", center);
     title_label_->setAlignment(Qt::AlignCenter);
     title_label_->setStyleSheet(
-        QString("color: %1; font-size: 20px; font-weight: 700; letter-spacing: 1px; %2")
-            .arg(colors::AMBER, MF));
+        QString("color: %1; font-size: 20px; font-weight: 700; letter-spacing: 1px; %2").arg(colors::AMBER, MF));
     cl->addWidget(title_label_);
 
     // Status indicator panel
@@ -67,8 +66,8 @@ void PaymentProcessingScreen::build_ui() {
                                status_panel);
     detail_label_->setAlignment(Qt::AlignCenter);
     detail_label_->setWordWrap(true);
-    detail_label_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
-                                     .arg(colors::TEXT_SECONDARY, MF));
+    detail_label_->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY, MF));
     sp_vl->addWidget(detail_label_);
 
     // Stats row
@@ -78,15 +77,15 @@ void PaymentProcessingScreen::build_ui() {
     stats_hl->setContentsMargins(0, 8, 0, 0);
 
     elapsed_label_ = new QLabel("Elapsed: 0s", stats_row);
-    elapsed_label_->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
-                                      .arg(colors::TEXT_TERTIARY, MF));
+    elapsed_label_->setStyleSheet(
+        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
     stats_hl->addWidget(elapsed_label_);
 
     stats_hl->addStretch();
 
     check_count_label_ = new QLabel("Checks: 0/60", stats_row);
-    check_count_label_->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
-                                          .arg(colors::TEXT_TERTIARY, MF));
+    check_count_label_->setStyleSheet(
+        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
     stats_hl->addWidget(check_count_label_);
 
     sp_vl->addWidget(stats_row);
@@ -121,11 +120,10 @@ void PaymentProcessingScreen::build_ui() {
     back_btn_ = new QPushButton("BACK TO PRICING", btn_row);
     back_btn_->setFixedHeight(36);
     back_btn_->setCursor(Qt::PointingHandCursor);
-    back_btn_->setStyleSheet(
-        QString("QPushButton { background: transparent; color: %1; border: 1px solid #1a1a1a; "
-                "font-size: 12px; font-weight: 700; %2 }"
-                "QPushButton:hover { color: #e5e5e5; background: #111111; }")
-            .arg(colors::TEXT_SECONDARY, MF));
+    back_btn_->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid #1a1a1a; "
+                                     "font-size: 12px; font-weight: 700; %2 }"
+                                     "QPushButton:hover { color: #e5e5e5; background: #111111; }")
+                                 .arg(colors::TEXT_SECONDARY, MF));
     connect(back_btn_, &QPushButton::clicked, this, [this]() {
         stop_polling();
         emit navigate_back();
@@ -222,8 +220,7 @@ void PaymentProcessingScreen::poll_status() {
 void PaymentProcessingScreen::set_status(const QString& status, const QString& color) {
     status_label_->setText(status);
     status_label_->setStyleSheet(
-        QString("color: %1; font-size: 14px; font-weight: 600; background: transparent; %2")
-            .arg(color, MF));
+        QString("color: %1; font-size: 14px; font-weight: 600; background: transparent; %2").arg(color, MF));
 }
 
 } // namespace fincept::screens

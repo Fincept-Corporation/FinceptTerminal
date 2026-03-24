@@ -30,20 +30,18 @@ void RelationshipMapService::fetch(const QString& ticker) {
 
     emit progress_changed(5, "Starting data fetch for " + current_ticker_ + "...");
 
-    python::PythonRunner::instance().run(
-        "relationship_map.py", {current_ticker_},
-        [this](python::PythonResult result) {
-            loading_ = false;
+    python::PythonRunner::instance().run("relationship_map.py", {current_ticker_}, [this](python::PythonResult result) {
+        loading_ = false;
 
-            if (!result.success || result.output.trimmed().isEmpty()) {
-                LOG_ERROR("RelMapService", "Python script failed: exit=" + QString::number(result.exit_code));
-                emit fetch_failed("Failed to fetch data for " + current_ticker_);
-                return;
-            }
+        if (!result.success || result.output.trimmed().isEmpty()) {
+            LOG_ERROR("RelMapService", "Python script failed: exit=" + QString::number(result.exit_code));
+            emit fetch_failed("Failed to fetch data for " + current_ticker_);
+            return;
+        }
 
-            emit progress_changed(70, "Parsing results...");
-            parse_result(result.output);
-        });
+        emit progress_changed(70, "Parsing results...");
+        parse_result(result.output);
+    });
 }
 
 void RelationshipMapService::clear() {
@@ -157,8 +155,7 @@ void RelationshipMapService::parse_result(const QString& json_output) {
                                   .arg(data_.data_quality));
 }
 
-ValuationSignal RelationshipMapService::compute_valuation(const CompanyInfo& co,
-                                                           const QVector<PeerCompany>& peers) {
+ValuationSignal RelationshipMapService::compute_valuation(const CompanyInfo& co, const QVector<PeerCompany>& peers) {
     ValuationSignal sig;
     if (peers.isEmpty() || co.pe_ratio <= 0) {
         sig.status = "INSUFFICIENT DATA";
@@ -186,25 +183,43 @@ ValuationSignal RelationshipMapService::compute_valuation(const CompanyInfo& co,
 
     double score = 0;
     // PE undervalued if < 0.8x peers
-    if (pe_ratio_vs_peers < 0.7) score += 2;
-    else if (pe_ratio_vs_peers < 0.85) score += 1;
-    else if (pe_ratio_vs_peers > 1.3) score -= 2;
-    else if (pe_ratio_vs_peers > 1.15) score -= 1;
+    if (pe_ratio_vs_peers < 0.7)
+        score += 2;
+    else if (pe_ratio_vs_peers < 0.85)
+        score += 1;
+    else if (pe_ratio_vs_peers > 1.3)
+        score -= 2;
+    else if (pe_ratio_vs_peers > 1.15)
+        score -= 1;
 
     // Growth premium
-    if (co.revenue_growth > 0.2) score += 1;
-    else if (co.revenue_growth < -0.05) score -= 1;
+    if (co.revenue_growth > 0.2)
+        score += 1;
+    else if (co.revenue_growth < -0.05)
+        score -= 1;
 
     // Profitability
-    if (co.profit_margins > 0.2) score += 0.5;
+    if (co.profit_margins > 0.2)
+        score += 0.5;
 
     sig.score = std::max(-3.0, std::min(3.0, score));
 
-    if (sig.score >= 1.5) { sig.status = "UNDERVALUED"; sig.action = "BUY"; }
-    else if (sig.score >= 0.5) { sig.status = "POTENTIALLY UNDERVALUED"; sig.action = "BUY"; }
-    else if (sig.score <= -1.5) { sig.status = "OVERVALUED"; sig.action = "SELL"; }
-    else if (sig.score <= -0.5) { sig.status = "POTENTIALLY OVERVALUED"; sig.action = "SELL"; }
-    else { sig.status = "FAIRLY VALUED"; sig.action = "HOLD"; }
+    if (sig.score >= 1.5) {
+        sig.status = "UNDERVALUED";
+        sig.action = "BUY";
+    } else if (sig.score >= 0.5) {
+        sig.status = "POTENTIALLY UNDERVALUED";
+        sig.action = "BUY";
+    } else if (sig.score <= -1.5) {
+        sig.status = "OVERVALUED";
+        sig.action = "SELL";
+    } else if (sig.score <= -0.5) {
+        sig.status = "POTENTIALLY OVERVALUED";
+        sig.action = "SELL";
+    } else {
+        sig.status = "FAIRLY VALUED";
+        sig.action = "HOLD";
+    }
 
     return sig;
 }

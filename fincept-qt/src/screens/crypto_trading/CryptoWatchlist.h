@@ -19,8 +19,7 @@ class WatchlistVolumeDelegate : public QStyledItemDelegate {
     Q_OBJECT
   public:
     using QStyledItemDelegate::QStyledItemDelegate;
-    void paint(QPainter* painter, const QStyleOptionViewItem& option,
-               const QModelIndex& index) const override;
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     void set_max_volume(double v) { max_volume_ = v; }
 
   private:

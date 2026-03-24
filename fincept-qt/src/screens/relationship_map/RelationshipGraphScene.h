@@ -29,8 +29,8 @@ class RelationshipGraphScene : public QGraphicsScene {
 
   private:
     void apply_layout(QVector<GraphNode>& nodes, const QVector<GraphEdge>& edges, LayoutMode mode);
-    void place_in_ring(const QVector<int>& indices, QVector<QPointF>& positions,
-                       double radius, double start_angle, const QPointF& center);
+    void place_in_ring(const QVector<int>& indices, QVector<QPointF>& positions, double radius, double start_angle,
+                       const QPointF& center);
 
     void add_node_item(const GraphNode& node, const QPointF& pos);
     void add_edge_item(const QPointF& from, const QPointF& to, EdgeCategory cat, const QString& label);

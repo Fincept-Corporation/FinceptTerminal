@@ -23,7 +23,8 @@ namespace {
 static const QString kIn =
     QString("background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:12px;")
         .arg(fincept::ui::colors::BG_RAISED, fincept::ui::colors::TEXT_PRIMARY, fincept::ui::colors::BORDER_MED);
-static const QString kChk = QString("QCheckBox{color:%1;font-size:11px;spacing:6px;}").arg(fincept::ui::colors::TEXT_PRIMARY);
+static const QString kChk =
+    QString("QCheckBox{color:%1;font-size:11px;spacing:6px;}").arg(fincept::ui::colors::TEXT_PRIMARY);
 } // namespace
 
 namespace fincept::screens {
@@ -32,12 +33,11 @@ static QGroupBox* make_section(const QString& title, bool collapsible = true) {
     auto* box = new QGroupBox(title);
     box->setCheckable(collapsible);
     box->setChecked(!collapsible); // collapsed by default if collapsible
-    box->setStyleSheet(
-        QString("QGroupBox{color:%1;font-size:10px;font-weight:700;letter-spacing:1px;"
-                "border:1px solid %2;border-radius:0;margin-top:12px;padding-top:16px;}"
-                "QGroupBox::title{subcontrol-origin:margin;left:8px;padding:0 4px;}"
-                "QGroupBox::indicator{width:10px;height:10px;}")
-            .arg(ui::colors::AMBER, ui::colors::BORDER_DIM));
+    box->setStyleSheet(QString("QGroupBox{color:%1;font-size:10px;font-weight:700;letter-spacing:1px;"
+                               "border:1px solid %2;border-radius:0;margin-top:12px;padding-top:16px;}"
+                               "QGroupBox::title{subcontrol-origin:margin;left:8px;padding:0 4px;}"
+                               "QGroupBox::indicator{width:10px;height:10px;}")
+                           .arg(ui::colors::AMBER, ui::colors::BORDER_DIM));
     return box;
 }
 
@@ -75,8 +75,8 @@ QWidget* CreateAgentPanel::build_saved_list_panel() {
     auto* panel = new QWidget;
     panel->setMinimumWidth(240);
     panel->setMaximumWidth(340);
-    panel->setStyleSheet(QString("background:%1;border-right:1px solid %2;")
-                             .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    panel->setStyleSheet(
+        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
@@ -93,22 +93,20 @@ QWidget* CreateAgentPanel::build_saved_list_panel() {
     vl->addLayout(hdr);
 
     saved_list_ = new QListWidget;
-    saved_list_->setStyleSheet(
-        QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:12px;}"
-                "QListWidget::item{padding:6px 8px;border-bottom:1px solid %2;}"
-                "QListWidget::item:selected{background:%4;}"
-                "QListWidget::item:hover{background:%5;}")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
-                 ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
+    saved_list_->setStyleSheet(QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:12px;}"
+                                       "QListWidget::item{padding:6px 8px;border-bottom:1px solid %2;}"
+                                       "QListWidget::item:selected{background:%4;}"
+                                       "QListWidget::item:hover{background:%5;}")
+                                   .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
+                                        ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
     vl->addWidget(saved_list_, 1);
 
     auto* btns = new QHBoxLayout;
     auto* load_btn = new QPushButton("LOAD");
     load_btn->setCursor(Qt::PointingHandCursor);
-    load_btn->setStyleSheet(
-        QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:5px 12px;"
-                "font-size:10px;font-weight:600;}QPushButton:hover{background:%3;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::AMBER, ui::colors::AMBER_DIM));
+    load_btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:5px 12px;"
+                                    "font-size:10px;font-weight:600;}QPushButton:hover{background:%3;}")
+                                .arg(ui::colors::BG_RAISED, ui::colors::AMBER, ui::colors::AMBER_DIM));
     connect(load_btn, &QPushButton::clicked, this, [this]() {
         int row = saved_list_->currentRow();
         if (row >= 0 && row < saved_agents_.size())
@@ -118,10 +116,9 @@ QWidget* CreateAgentPanel::build_saved_list_panel() {
 
     auto* del_btn = new QPushButton("DELETE");
     del_btn->setCursor(Qt::PointingHandCursor);
-    del_btn->setStyleSheet(
-        QString("QPushButton{background:transparent;color:%1;border:1px solid %1;padding:5px 12px;"
-                "font-size:10px;font-weight:600;}QPushButton:hover{background:%2;}")
-            .arg(ui::colors::NEGATIVE, ui::colors::BG_HOVER));
+    del_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %1;padding:5px 12px;"
+                                   "font-size:10px;font-weight:600;}QPushButton:hover{background:%2;}")
+                               .arg(ui::colors::NEGATIVE, ui::colors::BG_HOVER));
     connect(del_btn, &QPushButton::clicked, this, &CreateAgentPanel::delete_agent);
     btns->addWidget(del_btn);
     btns->addStretch();
@@ -131,10 +128,9 @@ QWidget* CreateAgentPanel::build_saved_list_panel() {
     auto* io = new QHBoxLayout;
     auto* exp_btn = new QPushButton("EXPORT");
     exp_btn->setCursor(Qt::PointingHandCursor);
-    exp_btn->setStyleSheet(
-        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:4px 10px;"
-                "font-size:9px;font-weight:600;}QPushButton:hover{background:%3;}")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
+    exp_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:4px 10px;"
+                                   "font-size:9px;font-weight:600;}QPushButton:hover{background:%3;}")
+                               .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
     connect(exp_btn, &QPushButton::clicked, this, &CreateAgentPanel::export_json);
     io->addWidget(exp_btn);
 
@@ -155,11 +151,10 @@ QWidget* CreateAgentPanel::build_form_panel() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(
-        QString("QScrollArea{background:%1;border:none;}"
-                "QScrollBar:vertical{background:%1;width:6px;}"
-                "QScrollBar::handle:vertical{background:%2;min-height:30px;}")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
+    scroll->setStyleSheet(QString("QScrollArea{background:%1;border:none;}"
+                                  "QScrollBar:vertical{background:%1;width:6px;}"
+                                  "QScrollBar::handle:vertical{background:%2;min-height:30px;}")
+                              .arg(ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
 
     auto* content = new QWidget;
     auto* vl = new QVBoxLayout(content);
@@ -171,46 +166,70 @@ QWidget* CreateAgentPanel::build_form_panel() {
     auto* bl = new QVBoxLayout(basic);
     bl->setSpacing(6);
 
-    auto* r1 = new QHBoxLayout; r1->addWidget(field_label("Name:"));
-    name_edit_ = new QLineEdit; name_edit_->setPlaceholderText("Agent name"); name_edit_->setStyleSheet(kIn);
-    r1->addWidget(name_edit_, 1); bl->addLayout(r1);
+    auto* r1 = new QHBoxLayout;
+    r1->addWidget(field_label("Name:"));
+    name_edit_ = new QLineEdit;
+    name_edit_->setPlaceholderText("Agent name");
+    name_edit_->setStyleSheet(kIn);
+    r1->addWidget(name_edit_, 1);
+    bl->addLayout(r1);
 
-    auto* r2 = new QHBoxLayout; r2->addWidget(field_label("Category:"));
+    auto* r2 = new QHBoxLayout;
+    r2->addWidget(field_label("Category:"));
     category_combo_ = new QComboBox;
     for (const auto& c : {"general", "trader", "hedge-fund", "economic", "geopolitics", "research", "custom"})
         category_combo_->addItem(c);
     category_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(kIn));
-    r2->addWidget(category_combo_, 1); bl->addLayout(r2);
+    r2->addWidget(category_combo_, 1);
+    bl->addLayout(r2);
 
     bl->addWidget(field_label("Description:"));
-    desc_edit_ = new QPlainTextEdit; desc_edit_->setPlaceholderText("What does this agent do?");
-    desc_edit_->setMaximumHeight(60); desc_edit_->setStyleSheet(QString("QPlainTextEdit{%1}").arg(kIn));
+    desc_edit_ = new QPlainTextEdit;
+    desc_edit_->setPlaceholderText("What does this agent do?");
+    desc_edit_->setMaximumHeight(60);
+    desc_edit_->setStyleSheet(QString("QPlainTextEdit{%1}").arg(kIn));
     bl->addWidget(desc_edit_);
     vl->addWidget(basic);
 
     // ── MODEL ────────────────────────────────────────────────────────────────
     auto* model = make_section("MODEL", false);
-    auto* ml = new QVBoxLayout(model); ml->setSpacing(6);
+    auto* ml = new QVBoxLayout(model);
+    ml->setSpacing(6);
 
-    auto* r3 = new QHBoxLayout; r3->addWidget(field_label("Provider:"));
+    auto* r3 = new QHBoxLayout;
+    r3->addWidget(field_label("Provider:"));
     provider_combo_ = new QComboBox;
     for (const auto& p : {"openai", "anthropic", "google", "groq", "deepseek", "ollama", "openrouter", "fincept"})
         provider_combo_->addItem(p);
     provider_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(kIn));
-    r3->addWidget(provider_combo_, 1); ml->addLayout(r3);
+    r3->addWidget(provider_combo_, 1);
+    ml->addLayout(r3);
 
-    auto* r4 = new QHBoxLayout; r4->addWidget(field_label("Model ID:"));
-    model_id_edit_ = new QLineEdit; model_id_edit_->setPlaceholderText("e.g. gpt-4o"); model_id_edit_->setStyleSheet(kIn);
-    r4->addWidget(model_id_edit_, 1); ml->addLayout(r4);
+    auto* r4 = new QHBoxLayout;
+    r4->addWidget(field_label("Model ID:"));
+    model_id_edit_ = new QLineEdit;
+    model_id_edit_->setPlaceholderText("e.g. gpt-4o");
+    model_id_edit_->setStyleSheet(kIn);
+    r4->addWidget(model_id_edit_, 1);
+    ml->addLayout(r4);
 
     auto* r5 = new QHBoxLayout;
-    r5->addWidget(field_label("Temp:")); temperature_spin_ = new QDoubleSpinBox;
-    temperature_spin_->setRange(0.0, 2.0); temperature_spin_->setSingleStep(0.1);
-    temperature_spin_->setValue(0.7); temperature_spin_->setStyleSheet(kIn); r5->addWidget(temperature_spin_);
-    r5->addWidget(field_label("Max Tokens:")); max_tokens_spin_ = new QSpinBox;
-    max_tokens_spin_->setRange(100, 128000); max_tokens_spin_->setSingleStep(500);
-    max_tokens_spin_->setValue(4096); max_tokens_spin_->setStyleSheet(kIn); r5->addWidget(max_tokens_spin_);
-    r5->addStretch(); ml->addLayout(r5);
+    r5->addWidget(field_label("Temp:"));
+    temperature_spin_ = new QDoubleSpinBox;
+    temperature_spin_->setRange(0.0, 2.0);
+    temperature_spin_->setSingleStep(0.1);
+    temperature_spin_->setValue(0.7);
+    temperature_spin_->setStyleSheet(kIn);
+    r5->addWidget(temperature_spin_);
+    r5->addWidget(field_label("Max Tokens:"));
+    max_tokens_spin_ = new QSpinBox;
+    max_tokens_spin_->setRange(100, 128000);
+    max_tokens_spin_->setSingleStep(500);
+    max_tokens_spin_->setValue(4096);
+    max_tokens_spin_->setStyleSheet(kIn);
+    r5->addWidget(max_tokens_spin_);
+    r5->addStretch();
+    ml->addLayout(r5);
     vl->addWidget(model);
 
     // ── INSTRUCTIONS ─────────────────────────────────────────────────────────
@@ -225,105 +244,174 @@ QWidget* CreateAgentPanel::build_form_panel() {
 
     // ── TOOLS (multi-select) ─────────────────────────────────────────────────
     auto* tools_sec = make_section("TOOLS", false);
-    auto* tl2 = new QVBoxLayout(tools_sec); tl2->setSpacing(4);
-    tool_search_edit_ = new QLineEdit; tool_search_edit_->setPlaceholderText("Search tools...");
-    tool_search_edit_->setStyleSheet(kIn); tl2->addWidget(tool_search_edit_);
-    tools_list_ = new QListWidget; tools_list_->setMaximumHeight(120);
-    tools_list_->setStyleSheet(
-        QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:11px;}"
-                "QListWidget::item{padding:2px 6px;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY));
+    auto* tl2 = new QVBoxLayout(tools_sec);
+    tl2->setSpacing(4);
+    tool_search_edit_ = new QLineEdit;
+    tool_search_edit_->setPlaceholderText("Search tools...");
+    tool_search_edit_->setStyleSheet(kIn);
+    tl2->addWidget(tool_search_edit_);
+    tools_list_ = new QListWidget;
+    tools_list_->setMaximumHeight(120);
+    tools_list_->setStyleSheet(QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:11px;}"
+                                       "QListWidget::item{padding:2px 6px;}")
+                                   .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY));
     tl2->addWidget(tools_list_);
     vl->addWidget(tools_sec);
 
     // ── FEATURES ─────────────────────────────────────────────────────────────
     auto* feat = make_section("FEATURES", false);
-    auto* fg = new QGridLayout(feat); fg->setSpacing(4);
-    reasoning_check_ = new QCheckBox("Reasoning"); reasoning_check_->setStyleSheet(kChk); fg->addWidget(reasoning_check_, 0, 0);
-    memory_check_ = new QCheckBox("Memory"); memory_check_->setStyleSheet(kChk); fg->addWidget(memory_check_, 0, 1);
-    knowledge_check_ = new QCheckBox("Knowledge"); knowledge_check_->setStyleSheet(kChk); fg->addWidget(knowledge_check_, 1, 0);
-    guardrails_check_ = new QCheckBox("Guardrails"); guardrails_check_->setStyleSheet(kChk); fg->addWidget(guardrails_check_, 1, 1);
-    agentic_memory_check_ = new QCheckBox("Agentic Memory"); agentic_memory_check_->setStyleSheet(kChk); fg->addWidget(agentic_memory_check_, 2, 0);
-    storage_check_ = new QCheckBox("Storage"); storage_check_->setStyleSheet(kChk); fg->addWidget(storage_check_, 2, 1);
-    tracing_check_ = new QCheckBox("Tracing"); tracing_check_->setStyleSheet(kChk); fg->addWidget(tracing_check_, 3, 0);
-    compression_check_ = new QCheckBox("Compression"); compression_check_->setStyleSheet(kChk); fg->addWidget(compression_check_, 3, 1);
-    hooks_check_ = new QCheckBox("Hooks"); hooks_check_->setStyleSheet(kChk); fg->addWidget(hooks_check_, 4, 0);
-    evaluation_check_ = new QCheckBox("Evaluation"); evaluation_check_->setStyleSheet(kChk); fg->addWidget(evaluation_check_, 4, 1);
+    auto* fg = new QGridLayout(feat);
+    fg->setSpacing(4);
+    reasoning_check_ = new QCheckBox("Reasoning");
+    reasoning_check_->setStyleSheet(kChk);
+    fg->addWidget(reasoning_check_, 0, 0);
+    memory_check_ = new QCheckBox("Memory");
+    memory_check_->setStyleSheet(kChk);
+    fg->addWidget(memory_check_, 0, 1);
+    knowledge_check_ = new QCheckBox("Knowledge");
+    knowledge_check_->setStyleSheet(kChk);
+    fg->addWidget(knowledge_check_, 1, 0);
+    guardrails_check_ = new QCheckBox("Guardrails");
+    guardrails_check_->setStyleSheet(kChk);
+    fg->addWidget(guardrails_check_, 1, 1);
+    agentic_memory_check_ = new QCheckBox("Agentic Memory");
+    agentic_memory_check_->setStyleSheet(kChk);
+    fg->addWidget(agentic_memory_check_, 2, 0);
+    storage_check_ = new QCheckBox("Storage");
+    storage_check_->setStyleSheet(kChk);
+    fg->addWidget(storage_check_, 2, 1);
+    tracing_check_ = new QCheckBox("Tracing");
+    tracing_check_->setStyleSheet(kChk);
+    fg->addWidget(tracing_check_, 3, 0);
+    compression_check_ = new QCheckBox("Compression");
+    compression_check_->setStyleSheet(kChk);
+    fg->addWidget(compression_check_, 3, 1);
+    hooks_check_ = new QCheckBox("Hooks");
+    hooks_check_->setStyleSheet(kChk);
+    fg->addWidget(hooks_check_, 4, 0);
+    evaluation_check_ = new QCheckBox("Evaluation");
+    evaluation_check_->setStyleSheet(kChk);
+    fg->addWidget(evaluation_check_, 4, 1);
     vl->addWidget(feat);
 
     // ── KNOWLEDGE CONFIG (collapsible) ───────────────────────────────────────
     auto* know = make_section("KNOWLEDGE CONFIG");
-    auto* kl = new QVBoxLayout(know); kl->setSpacing(4);
-    auto* kr1 = new QHBoxLayout; kr1->addWidget(field_label("Type:"));
+    auto* kl = new QVBoxLayout(know);
+    kl->setSpacing(4);
+    auto* kr1 = new QHBoxLayout;
+    kr1->addWidget(field_label("Type:"));
     knowledge_type_combo_ = new QComboBox;
     knowledge_type_combo_->addItems({"url", "pdf", "text", "combined"});
     knowledge_type_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(kIn));
-    kr1->addWidget(knowledge_type_combo_, 1); kl->addLayout(kr1);
+    kr1->addWidget(knowledge_type_combo_, 1);
+    kl->addLayout(kr1);
     kl->addWidget(field_label("URLs (one per line):"));
-    knowledge_urls_edit_ = new QPlainTextEdit; knowledge_urls_edit_->setMaximumHeight(60);
-    knowledge_urls_edit_->setStyleSheet(QString("QPlainTextEdit{%1}").arg(kIn)); kl->addWidget(knowledge_urls_edit_);
-    auto* kr2 = new QHBoxLayout; kr2->addWidget(field_label("Vector DB:"));
-    knowledge_vectordb_combo_ = new QComboBox; knowledge_vectordb_combo_->addItems({"lancedb", "pgvector", "qdrant"});
+    knowledge_urls_edit_ = new QPlainTextEdit;
+    knowledge_urls_edit_->setMaximumHeight(60);
+    knowledge_urls_edit_->setStyleSheet(QString("QPlainTextEdit{%1}").arg(kIn));
+    kl->addWidget(knowledge_urls_edit_);
+    auto* kr2 = new QHBoxLayout;
+    kr2->addWidget(field_label("Vector DB:"));
+    knowledge_vectordb_combo_ = new QComboBox;
+    knowledge_vectordb_combo_->addItems({"lancedb", "pgvector", "qdrant"});
     knowledge_vectordb_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(kIn));
-    kr2->addWidget(knowledge_vectordb_combo_, 1); kr2->addWidget(field_label("Embedder:"));
-    knowledge_embedder_combo_ = new QComboBox; knowledge_embedder_combo_->addItems({"openai", "ollama", "sentence-transformers"});
+    kr2->addWidget(knowledge_vectordb_combo_, 1);
+    kr2->addWidget(field_label("Embedder:"));
+    knowledge_embedder_combo_ = new QComboBox;
+    knowledge_embedder_combo_->addItems({"openai", "ollama", "sentence-transformers"});
     knowledge_embedder_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(kIn));
-    kr2->addWidget(knowledge_embedder_combo_, 1); kl->addLayout(kr2);
+    kr2->addWidget(knowledge_embedder_combo_, 1);
+    kl->addLayout(kr2);
     vl->addWidget(know);
 
     // ── GUARDRAILS CONFIG (collapsible) ──────────────────────────────────────
     auto* guard = make_section("GUARDRAILS CONFIG");
-    auto* gl = new QVBoxLayout(guard); gl->setSpacing(4);
-    guardrails_pii_check_ = new QCheckBox("PII Detection"); guardrails_pii_check_->setStyleSheet(kChk); gl->addWidget(guardrails_pii_check_);
-    guardrails_injection_check_ = new QCheckBox("Injection Prevention"); guardrails_injection_check_->setStyleSheet(kChk); gl->addWidget(guardrails_injection_check_);
-    guardrails_compliance_check_ = new QCheckBox("Financial Compliance"); guardrails_compliance_check_->setStyleSheet(kChk); gl->addWidget(guardrails_compliance_check_);
+    auto* gl = new QVBoxLayout(guard);
+    gl->setSpacing(4);
+    guardrails_pii_check_ = new QCheckBox("PII Detection");
+    guardrails_pii_check_->setStyleSheet(kChk);
+    gl->addWidget(guardrails_pii_check_);
+    guardrails_injection_check_ = new QCheckBox("Injection Prevention");
+    guardrails_injection_check_->setStyleSheet(kChk);
+    gl->addWidget(guardrails_injection_check_);
+    guardrails_compliance_check_ = new QCheckBox("Financial Compliance");
+    guardrails_compliance_check_->setStyleSheet(kChk);
+    gl->addWidget(guardrails_compliance_check_);
     vl->addWidget(guard);
 
     // ── MEMORY CONFIG (collapsible) ──────────────────────────────────────────
     auto* mem = make_section("MEMORY CONFIG");
-    auto* mel = new QVBoxLayout(mem); mel->setSpacing(4);
-    auto* mr1 = new QHBoxLayout; mr1->addWidget(field_label("DB Path:"));
-    memory_db_path_edit_ = new QLineEdit; memory_db_path_edit_->setPlaceholderText("agent_memory.db");
-    memory_db_path_edit_->setStyleSheet(kIn); mr1->addWidget(memory_db_path_edit_, 1); mel->addLayout(mr1);
-    auto* mr2 = new QHBoxLayout; mr2->addWidget(field_label("Table:"));
-    memory_table_edit_ = new QLineEdit; memory_table_edit_->setPlaceholderText("agent_memory");
-    memory_table_edit_->setStyleSheet(kIn); mr2->addWidget(memory_table_edit_, 1); mel->addLayout(mr2);
-    memory_user_memories_check_ = new QCheckBox("Create User Memories"); memory_user_memories_check_->setStyleSheet(kChk); mel->addWidget(memory_user_memories_check_);
-    memory_session_summary_check_ = new QCheckBox("Create Session Summary"); memory_session_summary_check_->setStyleSheet(kChk); mel->addWidget(memory_session_summary_check_);
+    auto* mel = new QVBoxLayout(mem);
+    mel->setSpacing(4);
+    auto* mr1 = new QHBoxLayout;
+    mr1->addWidget(field_label("DB Path:"));
+    memory_db_path_edit_ = new QLineEdit;
+    memory_db_path_edit_->setPlaceholderText("agent_memory.db");
+    memory_db_path_edit_->setStyleSheet(kIn);
+    mr1->addWidget(memory_db_path_edit_, 1);
+    mel->addLayout(mr1);
+    auto* mr2 = new QHBoxLayout;
+    mr2->addWidget(field_label("Table:"));
+    memory_table_edit_ = new QLineEdit;
+    memory_table_edit_->setPlaceholderText("agent_memory");
+    memory_table_edit_->setStyleSheet(kIn);
+    mr2->addWidget(memory_table_edit_, 1);
+    mel->addLayout(mr2);
+    memory_user_memories_check_ = new QCheckBox("Create User Memories");
+    memory_user_memories_check_->setStyleSheet(kChk);
+    mel->addWidget(memory_user_memories_check_);
+    memory_session_summary_check_ = new QCheckBox("Create Session Summary");
+    memory_session_summary_check_->setStyleSheet(kChk);
+    mel->addWidget(memory_session_summary_check_);
     vl->addWidget(mem);
 
     // ── STORAGE CONFIG (collapsible) ─────────────────────────────────────────
     auto* stor = make_section("STORAGE CONFIG");
-    auto* sl = new QVBoxLayout(stor); sl->setSpacing(4);
-    auto* sr1 = new QHBoxLayout; sr1->addWidget(field_label("Type:"));
-    storage_type_combo_ = new QComboBox; storage_type_combo_->addItems({"sqlite", "postgres"});
+    auto* sl = new QVBoxLayout(stor);
+    sl->setSpacing(4);
+    auto* sr1 = new QHBoxLayout;
+    sr1->addWidget(field_label("Type:"));
+    storage_type_combo_ = new QComboBox;
+    storage_type_combo_->addItems({"sqlite", "postgres"});
     storage_type_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(kIn));
-    sr1->addWidget(storage_type_combo_, 1); sl->addLayout(sr1);
-    auto* sr2 = new QHBoxLayout; sr2->addWidget(field_label("DB Path:"));
-    storage_db_path_edit_ = new QLineEdit; storage_db_path_edit_->setStyleSheet(kIn);
-    sr2->addWidget(storage_db_path_edit_, 1); sl->addLayout(sr2);
-    auto* sr3 = new QHBoxLayout; sr3->addWidget(field_label("Table:"));
-    storage_table_edit_ = new QLineEdit; storage_table_edit_->setStyleSheet(kIn);
-    sr3->addWidget(storage_table_edit_, 1); sl->addLayout(sr3);
+    sr1->addWidget(storage_type_combo_, 1);
+    sl->addLayout(sr1);
+    auto* sr2 = new QHBoxLayout;
+    sr2->addWidget(field_label("DB Path:"));
+    storage_db_path_edit_ = new QLineEdit;
+    storage_db_path_edit_->setStyleSheet(kIn);
+    sr2->addWidget(storage_db_path_edit_, 1);
+    sl->addLayout(sr2);
+    auto* sr3 = new QHBoxLayout;
+    sr3->addWidget(field_label("Table:"));
+    storage_table_edit_ = new QLineEdit;
+    storage_table_edit_->setStyleSheet(kIn);
+    sr3->addWidget(storage_table_edit_, 1);
+    sl->addLayout(sr3);
     vl->addWidget(stor);
 
     // ── AGENTIC MEMORY (collapsible) ─────────────────────────────────────────
     auto* am = make_section("AGENTIC MEMORY CONFIG");
-    auto* aml = new QVBoxLayout(am); aml->setSpacing(4);
-    auto* amr = new QHBoxLayout; amr->addWidget(field_label("User ID:"));
-    agentic_memory_user_id_edit_ = new QLineEdit; agentic_memory_user_id_edit_->setStyleSheet(kIn);
-    amr->addWidget(agentic_memory_user_id_edit_, 1); aml->addLayout(amr);
+    auto* aml = new QVBoxLayout(am);
+    aml->setSpacing(4);
+    auto* amr = new QHBoxLayout;
+    amr->addWidget(field_label("User ID:"));
+    agentic_memory_user_id_edit_ = new QLineEdit;
+    agentic_memory_user_id_edit_->setStyleSheet(kIn);
+    amr->addWidget(agentic_memory_user_id_edit_, 1);
+    aml->addLayout(amr);
     vl->addWidget(am);
 
     // ── MCP SERVERS (collapsible) ────────────────────────────────────────────
     auto* mcp = make_section("MCP SERVERS");
-    auto* mcl = new QVBoxLayout(mcp); mcl->setSpacing(4);
-    mcp_servers_list_ = new QListWidget; mcp_servers_list_->setMaximumHeight(80);
+    auto* mcl = new QVBoxLayout(mcp);
+    mcl->setSpacing(4);
+    mcp_servers_list_ = new QListWidget;
+    mcp_servers_list_->setMaximumHeight(80);
     mcp_servers_list_->setSelectionMode(QAbstractItemView::MultiSelection);
-    mcp_servers_list_->setStyleSheet(
-        QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:11px;}"
-                "QListWidget::item{padding:2px 6px;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY));
+    mcp_servers_list_->setStyleSheet(QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:11px;}"
+                                             "QListWidget::item{padding:2px 6px;}")
+                                         .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY));
     mcl->addWidget(mcp_servers_list_);
     vl->addWidget(mcp);
 
@@ -348,10 +436,9 @@ QWidget* CreateAgentPanel::build_form_panel() {
 
     auto* clr_btn = new QPushButton("CLEAR");
     clr_btn->setCursor(Qt::PointingHandCursor);
-    clr_btn->setStyleSheet(
-        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:10px 16px;"
-                "font-size:11px;font-weight:600;}QPushButton:hover{background:%3;}")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
+    clr_btn->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:10px 16px;"
+                                   "font-size:11px;font-weight:600;}QPushButton:hover{background:%3;}")
+                               .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
     connect(clr_btn, &QPushButton::clicked, this, &CreateAgentPanel::clear_form);
     btns->addWidget(clr_btn);
     btns->addStretch();
@@ -362,9 +449,12 @@ QWidget* CreateAgentPanel::build_form_panel() {
     vl->addWidget(status_label_);
 
     auto* th = new QLabel("TEST RESULT");
-    th->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:8px;").arg(ui::colors::TEXT_SECONDARY));
+    th->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:8px;")
+                          .arg(ui::colors::TEXT_SECONDARY));
     vl->addWidget(th);
-    test_result_ = new QTextEdit; test_result_->setReadOnly(true); test_result_->setMaximumHeight(150);
+    test_result_ = new QTextEdit;
+    test_result_->setReadOnly(true);
+    test_result_->setMaximumHeight(150);
     test_result_->setStyleSheet(
         QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px;}")
             .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM));
@@ -410,7 +500,8 @@ void CreateAgentPanel::setup_connections() {
         available_tools_.clear();
         for (const auto& cat : info.categories) {
             QJsonArray arr = info.tools[cat].toArray();
-            for (const auto& t : arr) available_tools_.append(t.toString());
+            for (const auto& t : arr)
+                available_tools_.append(t.toString());
         }
         // Populate checkable tools list
         tools_list_->clear();
@@ -449,12 +540,14 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
     name_edit_->setText(cfg.name);
     desc_edit_->setPlainText(cfg.description);
     int ci = category_combo_->findText(cfg.category);
-    if (ci >= 0) category_combo_->setCurrentIndex(ci);
+    if (ci >= 0)
+        category_combo_->setCurrentIndex(ci);
 
     QJsonObject c = QJsonDocument::fromJson(cfg.config_json.toUtf8()).object();
     QJsonObject m = c["model"].toObject();
     int pi = provider_combo_->findText(m["provider"].toString());
-    if (pi >= 0) provider_combo_->setCurrentIndex(pi);
+    if (pi >= 0)
+        provider_combo_->setCurrentIndex(pi);
     model_id_edit_->setText(m["model_id"].toString());
     temperature_spin_->setValue(m["temperature"].toDouble(0.7));
     max_tokens_spin_->setValue(m["max_tokens"].toInt(4096));
@@ -463,9 +556,11 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
     // Tools
     QJsonArray ta = c["tools"].toArray();
     QSet<QString> selected;
-    for (const auto& t : ta) selected.insert(t.toString());
+    for (const auto& t : ta)
+        selected.insert(t.toString());
     for (int i = 0; i < tools_list_->count(); ++i)
-        tools_list_->item(i)->setCheckState(selected.contains(tools_list_->item(i)->text()) ? Qt::Checked : Qt::Unchecked);
+        tools_list_->item(i)->setCheckState(selected.contains(tools_list_->item(i)->text()) ? Qt::Checked
+                                                                                            : Qt::Unchecked);
 
     reasoning_check_->setChecked(c["reasoning"].toBool());
     memory_check_->setChecked(c["memory"].toBool());
@@ -481,15 +576,19 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
     // Knowledge
     QJsonObject kc = c["knowledge_config"].toObject();
     int ki = knowledge_type_combo_->findText(kc["type"].toString());
-    if (ki >= 0) knowledge_type_combo_->setCurrentIndex(ki);
+    if (ki >= 0)
+        knowledge_type_combo_->setCurrentIndex(ki);
     QJsonArray urls = kc["urls"].toArray();
     QStringList url_list;
-    for (const auto& u : urls) url_list.append(u.toString());
+    for (const auto& u : urls)
+        url_list.append(u.toString());
     knowledge_urls_edit_->setPlainText(url_list.join("\n"));
     int vi = knowledge_vectordb_combo_->findText(kc["vector_db"].toString());
-    if (vi >= 0) knowledge_vectordb_combo_->setCurrentIndex(vi);
+    if (vi >= 0)
+        knowledge_vectordb_combo_->setCurrentIndex(vi);
     int ei = knowledge_embedder_combo_->findText(kc["embedder"].toString());
-    if (ei >= 0) knowledge_embedder_combo_->setCurrentIndex(ei);
+    if (ei >= 0)
+        knowledge_embedder_combo_->setCurrentIndex(ei);
 
     // Guardrails
     QJsonObject gc = c["guardrails_config"].toObject();
@@ -507,7 +606,8 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
     // Storage config
     QJsonObject sc = c["storage_config"].toObject();
     int sti = storage_type_combo_->findText(sc["type"].toString());
-    if (sti >= 0) storage_type_combo_->setCurrentIndex(sti);
+    if (sti >= 0)
+        storage_type_combo_->setCurrentIndex(sti);
     storage_db_path_edit_->setText(sc["db_path"].toString());
     storage_table_edit_->setText(sc["table_name"].toString());
 
@@ -519,21 +619,37 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
 
 void CreateAgentPanel::clear_form() {
     editing_id_.clear();
-    name_edit_->clear(); desc_edit_->clear(); category_combo_->setCurrentIndex(0);
-    provider_combo_->setCurrentIndex(0); model_id_edit_->clear();
-    temperature_spin_->setValue(0.7); max_tokens_spin_->setValue(4096);
+    name_edit_->clear();
+    desc_edit_->clear();
+    category_combo_->setCurrentIndex(0);
+    provider_combo_->setCurrentIndex(0);
+    model_id_edit_->clear();
+    temperature_spin_->setValue(0.7);
+    max_tokens_spin_->setValue(4096);
     instructions_edit_->clear();
-    for (int i = 0; i < tools_list_->count(); ++i) tools_list_->item(i)->setCheckState(Qt::Unchecked);
-    reasoning_check_->setChecked(false); memory_check_->setChecked(false);
-    knowledge_check_->setChecked(false); guardrails_check_->setChecked(false);
-    agentic_memory_check_->setChecked(false); storage_check_->setChecked(false);
-    tracing_check_->setChecked(false); compression_check_->setChecked(false);
-    hooks_check_->setChecked(false); evaluation_check_->setChecked(false);
-    knowledge_urls_edit_->clear(); memory_db_path_edit_->clear(); memory_table_edit_->clear();
-    storage_db_path_edit_->clear(); storage_table_edit_->clear(); agentic_memory_user_id_edit_->clear();
-    guardrails_pii_check_->setChecked(false); guardrails_injection_check_->setChecked(false);
+    for (int i = 0; i < tools_list_->count(); ++i)
+        tools_list_->item(i)->setCheckState(Qt::Unchecked);
+    reasoning_check_->setChecked(false);
+    memory_check_->setChecked(false);
+    knowledge_check_->setChecked(false);
+    guardrails_check_->setChecked(false);
+    agentic_memory_check_->setChecked(false);
+    storage_check_->setChecked(false);
+    tracing_check_->setChecked(false);
+    compression_check_->setChecked(false);
+    hooks_check_->setChecked(false);
+    evaluation_check_->setChecked(false);
+    knowledge_urls_edit_->clear();
+    memory_db_path_edit_->clear();
+    memory_table_edit_->clear();
+    storage_db_path_edit_->clear();
+    storage_table_edit_->clear();
+    agentic_memory_user_id_edit_->clear();
+    guardrails_pii_check_->setChecked(false);
+    guardrails_injection_check_->setChecked(false);
     guardrails_compliance_check_->setChecked(false);
-    memory_user_memories_check_->setChecked(false); memory_session_summary_check_->setChecked(false);
+    memory_user_memories_check_->setChecked(false);
+    memory_session_summary_check_->setChecked(false);
     test_result_->clear();
     status_label_->setText("Form cleared");
     status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:4px 0;").arg(ui::colors::TEXT_TERTIARY));
@@ -639,7 +755,8 @@ void CreateAgentPanel::test_agent() {
 
 void CreateAgentPanel::export_json() {
     QString path = QFileDialog::getSaveFileName(this, "Export Agent Config", "agent_config.json", "JSON (*.json)");
-    if (path.isEmpty()) return;
+    if (path.isEmpty())
+        return;
     QJsonObject out;
     out["name"] = name_edit_->text();
     out["description"] = desc_edit_->toPlainText();
@@ -654,9 +771,11 @@ void CreateAgentPanel::export_json() {
 
 void CreateAgentPanel::import_json() {
     QString path = QFileDialog::getOpenFileName(this, "Import Agent Config", {}, "JSON (*.json)");
-    if (path.isEmpty()) return;
+    if (path.isEmpty())
+        return;
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) return;
+    if (!file.open(QIODevice::ReadOnly))
+        return;
     QJsonObject obj = QJsonDocument::fromJson(file.readAll()).object();
     AgentConfig cfg;
     cfg.id = QUuid::createUuid().toString(QUuid::WithoutBraces);

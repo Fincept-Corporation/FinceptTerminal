@@ -21,8 +21,7 @@ namespace fincept::screens {
 class QuantModulePanel : public QWidget {
     Q_OBJECT
   public:
-    explicit QuantModulePanel(const fincept::services::quant::QuantModule& mod,
-                              QWidget* parent = nullptr);
+    explicit QuantModulePanel(const fincept::services::quant::QuantModule& mod, QWidget* parent = nullptr);
 
   private slots:
     void on_result(const QString& module_id, const QString& command, const QJsonObject& data);
@@ -42,8 +41,8 @@ class QuantModulePanel : public QWidget {
 
     // Helpers
     QWidget* build_input_row(const QString& label, QWidget* input, QWidget* parent);
-    QDoubleSpinBox* make_double_spin(double min, double max, double val,
-                                     int decimals, const QString& suffix, QWidget* parent);
+    QDoubleSpinBox* make_double_spin(double min, double max, double val, int decimals, const QString& suffix,
+                                     QWidget* parent);
     QPushButton* make_run_button(const QString& text, QWidget* parent);
     void display_result(const QJsonObject& data);
     void display_error(const QString& msg);

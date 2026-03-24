@@ -38,9 +38,9 @@ class PaymentProcessingScreen : public QWidget {
     QString plan_name_;
     int check_count_ = 0;
     int elapsed_seconds_ = 0;
-    static constexpr int MAX_CHECKS = 60;            // 5 minutes at 5s intervals
-    static constexpr int POLL_INTERVAL_MS = 5000;     // 5 seconds
-    static constexpr int INITIAL_DELAY_MS = 3000;     // 3 seconds before first check
+    static constexpr int MAX_CHECKS = 60;         // 5 minutes at 5s intervals
+    static constexpr int POLL_INTERVAL_MS = 5000; // 5 seconds
+    static constexpr int INITIAL_DELAY_MS = 3000; // 3 seconds before first check
 };
 
 } // namespace fincept::screens

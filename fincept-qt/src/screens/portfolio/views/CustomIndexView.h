@@ -32,9 +32,9 @@ class CustomIndexView : public QWidget {
     QTabWidget* tabs_ = nullptr;
 
     // Create panel
-    QLineEdit* name_edit_    = nullptr;
-    QComboBox* method_cb_    = nullptr;
-    QLineEdit* base_edit_    = nullptr;
+    QLineEdit* name_edit_ = nullptr;
+    QComboBox* method_cb_ = nullptr;
+    QLineEdit* base_edit_ = nullptr;
     QTableWidget* const_table_ = nullptr;
     QPushButton* create_btn_ = nullptr;
 

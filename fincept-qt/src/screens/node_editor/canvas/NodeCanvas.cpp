@@ -1,7 +1,7 @@
 #include "screens/node_editor/canvas/NodeCanvas.h"
+
 #include "screens/node_editor/canvas/NodeScene.h"
 #include "screens/node_editor/canvas/PortItem.h"
-
 #include "services/workflow/NodeRegistry.h"
 
 #include <QAction>
@@ -14,14 +14,12 @@
 #include <QPainter>
 #include <QScrollBar>
 #include <QWheelEvent>
+
 #include <cmath>
 
 namespace fincept::workflow {
 
-NodeCanvas::NodeCanvas(NodeScene* scene, QWidget* parent)
-    : QGraphicsView(scene, parent)
-    , node_scene_(scene)
-{
+NodeCanvas::NodeCanvas(NodeScene* scene, QWidget* parent) : QGraphicsView(scene, parent), node_scene_(scene) {
     setRenderHint(QPainter::Antialiasing, false);
     setViewportUpdateMode(MinimalViewportUpdate);
     setOptimizationFlag(DontSavePainterState);
@@ -33,21 +31,20 @@ NodeCanvas::NodeCanvas(NodeScene* scene, QWidget* parent)
     setAcceptDrops(true);
     setTransformationAnchor(AnchorUnderMouse);
 
-    setStyleSheet(
-        "QGraphicsView { background: #0d0d0d; border: none; }"
-    );
+    setStyleSheet("QGraphicsView { background: #0d0d0d; border: none; }");
 }
 
 // ── Zoom ───────────────────────────────────────────────────────────────
 
-void NodeCanvas::wheelEvent(QWheelEvent* event)
-{
+void NodeCanvas::wheelEvent(QWheelEvent* event) {
     qreal factor = 1.0 + (event->angleDelta().y() / 1200.0);
     qreal current_scale = transform().m11();
     qreal new_scale = current_scale * factor;
 
-    if (new_scale < kMinZoom) factor = kMinZoom / current_scale;
-    if (new_scale > kMaxZoom) factor = kMaxZoom / current_scale;
+    if (new_scale < kMinZoom)
+        factor = kMinZoom / current_scale;
+    if (new_scale > kMaxZoom)
+        factor = kMaxZoom / current_scale;
 
     scale(factor, factor);
     event->accept();
@@ -55,8 +52,7 @@ void NodeCanvas::wheelEvent(QWheelEvent* event)
 
 // ── Pan (middle-click or Ctrl+left-click) ──────────────────────────────
 
-void NodeCanvas::mousePressEvent(QMouseEvent* event)
-{
+void NodeCanvas::mousePressEvent(QMouseEvent* event) {
     bool pan_trigger = (event->button() == Qt::MiddleButton) ||
                        (event->button() == Qt::LeftButton && event->modifiers() & Qt::ControlModifier);
 
@@ -78,8 +74,7 @@ void NodeCanvas::mousePressEvent(QMouseEvent* event)
     QGraphicsView::mousePressEvent(event);
 }
 
-void NodeCanvas::mouseMoveEvent(QMouseEvent* event)
-{
+void NodeCanvas::mouseMoveEvent(QMouseEvent* event) {
     if (panning_) {
         QPoint delta = event->pos() - last_pan_pos_;
         last_pan_pos_ = event->pos();
@@ -97,8 +92,7 @@ void NodeCanvas::mouseMoveEvent(QMouseEvent* event)
     QGraphicsView::mouseMoveEvent(event);
 }
 
-void NodeCanvas::mouseReleaseEvent(QMouseEvent* event)
-{
+void NodeCanvas::mouseReleaseEvent(QMouseEvent* event) {
     if (panning_) {
         panning_ = false;
         setCursor(Qt::ArrowCursor);
@@ -121,19 +115,19 @@ void NodeCanvas::mouseReleaseEvent(QMouseEvent* event)
 
 // ── Background (dot grid) ──────────────────────────────────────────────
 
-void NodeCanvas::drawBackground(QPainter* painter, const QRectF& rect)
-{
+void NodeCanvas::drawBackground(QPainter* painter, const QRectF& rect) {
     painter->fillRect(rect, QColor("#0d0d0d"));
 
     qreal scale = transform().m11();
     qreal grid_size = 20.0;
 
-    if (scale < 0.5) return; // skip dots at very low zoom
+    if (scale < 0.5)
+        return; // skip dots at very low zoom
 
-    int left   = static_cast<int>(std::floor(rect.left()   / grid_size) * grid_size);
-    int top    = static_cast<int>(std::floor(rect.top()    / grid_size) * grid_size);
-    int right  = static_cast<int>(std::ceil(rect.right()   / grid_size) * grid_size);
-    int bottom = static_cast<int>(std::ceil(rect.bottom()  / grid_size) * grid_size);
+    int left = static_cast<int>(std::floor(rect.left() / grid_size) * grid_size);
+    int top = static_cast<int>(std::floor(rect.top() / grid_size) * grid_size);
+    int right = static_cast<int>(std::ceil(rect.right() / grid_size) * grid_size);
+    int bottom = static_cast<int>(std::ceil(rect.bottom() / grid_size) * grid_size);
 
     painter->setPen(Qt::NoPen);
     painter->setBrush(QColor("#2a2a2a"));
@@ -148,8 +142,7 @@ void NodeCanvas::drawBackground(QPainter* painter, const QRectF& rect)
 
 // ── Drop from palette ──────────────────────────────────────────────────
 
-void NodeCanvas::dragEnterEvent(QDragEnterEvent* event)
-{
+void NodeCanvas::dragEnterEvent(QDragEnterEvent* event) {
     if (event->mimeData()->hasFormat("application/x-fincept-node-type")) {
         event->acceptProposedAction();
     } else {
@@ -157,8 +150,7 @@ void NodeCanvas::dragEnterEvent(QDragEnterEvent* event)
     }
 }
 
-void NodeCanvas::dragMoveEvent(QDragMoveEvent* event)
-{
+void NodeCanvas::dragMoveEvent(QDragMoveEvent* event) {
     if (event->mimeData()->hasFormat("application/x-fincept-node-type")) {
         event->acceptProposedAction();
     } else {
@@ -166,11 +158,9 @@ void NodeCanvas::dragMoveEvent(QDragMoveEvent* event)
     }
 }
 
-void NodeCanvas::dropEvent(QDropEvent* event)
-{
+void NodeCanvas::dropEvent(QDropEvent* event) {
     if (event->mimeData()->hasFormat("application/x-fincept-node-type")) {
-        QString type_id = QString::fromUtf8(
-            event->mimeData()->data("application/x-fincept-node-type"));
+        QString type_id = QString::fromUtf8(event->mimeData()->data("application/x-fincept-node-type"));
         QPointF scene_pos = mapToScene(event->position().toPoint());
         emit node_drop_requested(type_id, scene_pos);
         event->acceptProposedAction();
@@ -181,8 +171,7 @@ void NodeCanvas::dropEvent(QDropEvent* event)
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-PortItem* NodeCanvas::port_at(const QPoint& view_pos) const
-{
+PortItem* NodeCanvas::port_at(const QPoint& view_pos) const {
     QList<QGraphicsItem*> items_at = items(view_pos);
     for (auto* item : items_at) {
         if (auto* port = dynamic_cast<PortItem*>(item))
@@ -193,10 +182,10 @@ PortItem* NodeCanvas::port_at(const QPoint& view_pos) const
 
 // ── Empty state placeholder ────────────────────────────────────────────
 
-void NodeCanvas::drawForeground(QPainter* painter, const QRectF& rect)
-{
+void NodeCanvas::drawForeground(QPainter* painter, const QRectF& rect) {
     Q_UNUSED(rect);
-    if (!node_scene_ || !node_scene_->items().isEmpty()) return;
+    if (!node_scene_ || !node_scene_->items().isEmpty())
+        return;
 
     painter->save();
     painter->resetTransform();
@@ -212,15 +201,14 @@ void NodeCanvas::drawForeground(QPainter* painter, const QRectF& rect)
     QFont small("Consolas", 10);
     painter->setFont(small);
     painter->setPen(QColor("#303030"));
-    painter->drawText(QRect(vp.x(), vp.y() + vp.height() / 2 + 24, vp.width(), 20),
-                      Qt::AlignCenter, "or right-click for quick add");
+    painter->drawText(QRect(vp.x(), vp.y() + vp.height() / 2 + 24, vp.width(), 20), Qt::AlignCenter,
+                      "or right-click for quick add");
     painter->restore();
 }
 
 // ── Canvas context menu ────────────────────────────────────────────────
 
-void NodeCanvas::contextMenuEvent(QContextMenuEvent* event)
-{
+void NodeCanvas::contextMenuEvent(QContextMenuEvent* event) {
     // Only show on empty area (no item under cursor)
     QGraphicsItem* item_under = itemAt(event->pos());
     if (item_under) {
@@ -229,12 +217,11 @@ void NodeCanvas::contextMenuEvent(QContextMenuEvent* event)
     }
 
     QMenu menu;
-    menu.setStyleSheet(
-        "QMenu { background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
-        "  font-family: Consolas; font-size: 12px; }"
-        "QMenu::item { padding: 4px 16px; }"
-        "QMenu::item:selected { background: #d97706; color: #0d0d0d; }"
-        "QMenu::separator { background: #2a2a2a; height: 1px; margin: 2px 6px; }");
+    menu.setStyleSheet("QMenu { background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
+                       "  font-family: Consolas; font-size: 12px; }"
+                       "QMenu::item { padding: 4px 16px; }"
+                       "QMenu::item:selected { background: #d97706; color: #0d0d0d; }"
+                       "QMenu::separator { background: #2a2a2a; height: 1px; margin: 2px 6px; }");
 
     auto& registry = NodeRegistry::instance();
     QStringList cats = registry.categories();
@@ -242,7 +229,8 @@ void NodeCanvas::contextMenuEvent(QContextMenuEvent* event)
 
     for (const auto& cat : cats) {
         auto nodes = registry.by_category(cat);
-        if (nodes.isEmpty()) continue;
+        if (nodes.isEmpty())
+            continue;
 
         auto* sub = menu.addMenu(cat);
         sub->setStyleSheet(menu.styleSheet());
@@ -250,9 +238,8 @@ void NodeCanvas::contextMenuEvent(QContextMenuEvent* event)
         for (const auto& n : nodes) {
             QString type_id = n.type_id;
             auto* action = sub->addAction(QString("%1  %2").arg(n.icon_text, n.display_name));
-            connect(action, &QAction::triggered, this, [this, type_id, scene_pos]() {
-                emit node_drop_requested(type_id, scene_pos);
-            });
+            connect(action, &QAction::triggered, this,
+                    [this, type_id, scene_pos]() { emit node_drop_requested(type_id, scene_pos); });
         }
     }
 
@@ -262,8 +249,7 @@ void NodeCanvas::contextMenuEvent(QContextMenuEvent* event)
 
 // ── Resize (reposition minimap) ────────────────────────────────────────
 
-void NodeCanvas::resizeEvent(QResizeEvent* event)
-{
+void NodeCanvas::resizeEvent(QResizeEvent* event) {
     QGraphicsView::resizeEvent(event);
 
     // Reposition minimap child widget if present

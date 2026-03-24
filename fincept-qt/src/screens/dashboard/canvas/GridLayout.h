@@ -234,10 +234,10 @@ inline QVector<GridItem> resolve_collisions(QVector<GridItem> items, const GridI
 /// Compute responsive column count based on container width.
 inline int responsive_cols(int container_w) {
     if (container_w < 600)
-        return 6;  // small: 2 widgets per row (each w=3 in 6-col grid)
+        return 6; // small: 2 widgets per row (each w=3 in 6-col grid)
     if (container_w < 1000)
-        return 9;  // medium: 3 widgets
-    return 12;     // large: 3-4 widgets (standard)
+        return 9; // medium: 3 widgets
+    return 12;    // large: 3-4 widgets (standard)
 }
 
 /// Maximum row bottom edge across all items.

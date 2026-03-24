@@ -14,15 +14,15 @@ namespace fincept::screens {
 
 /// Analyzer descriptor within a category.
 struct AltAnalyzer {
-    QString id;          // Python command name
-    QString name;        // Display name
+    QString id;   // Python command name
+    QString name; // Display name
 };
 
 /// Category of alternative investments.
 struct AltCategory {
     QString id;
     QString name;
-    QString color;       // accent hex
+    QString color; // accent hex
     QList<AltAnalyzer> analyzers;
 };
 

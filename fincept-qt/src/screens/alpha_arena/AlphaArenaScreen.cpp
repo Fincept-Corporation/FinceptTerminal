@@ -19,121 +19,118 @@
 namespace {
 using namespace fincept::ui;
 
-static const QString kStyle = QStringLiteral(
-    "#aaScreen { background: %1; }"
+static const QString kStyle =
+    QStringLiteral("#aaScreen { background: %1; }"
 
-    "#aaHeader { background: %2; border-bottom: 2px solid %3; }"
-    "#aaHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
-    "#aaHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
+                   "#aaHeader { background: %2; border-bottom: 2px solid %3; }"
+                   "#aaHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
+                   "#aaHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
 
-    "#aaStatusBadge { font-size: 8px; font-weight: 700; padding: 2px 6px; }"
-    "#aaCycleLabel { color: %13; font-size: 11px; font-weight: 700; background: transparent; }"
-    "#aaPriceLabel { color: %6; font-size: 11px; font-weight: 700; "
-    "  background: rgba(22,163,74,0.15); padding: 2px 8px; }"
+                   "#aaStatusBadge { font-size: 8px; font-weight: 700; padding: 2px 6px; }"
+                   "#aaCycleLabel { color: %13; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#aaPriceLabel { color: %6; font-size: 11px; font-weight: 700; "
+                   "  background: rgba(22,163,74,0.15); padding: 2px 8px; }"
 
-    "#aaCreatePanel { background: %7; border: 1px solid %8; }"
-    "#aaCreateHeader { background: %2; border-bottom: 1px solid %8; }"
-    "#aaCreateTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#aaCreatePanel { background: %7; border: 1px solid %8; }"
+                   "#aaCreateHeader { background: %2; border-bottom: 1px solid %8; }"
+                   "#aaCreateTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
 
-    "#aaLabel { color: %5; font-size: 9px; font-weight: 700; "
-    "  letter-spacing: 0.5px; background: transparent; }"
-    "QLineEdit { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "QComboBox { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "QComboBox::drop-down { border: none; width: 16px; }"
-    "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
-    "  selection-background-color: %3; }"
-    "QDoubleSpinBox, QSpinBox { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button, "
-    "QSpinBox::up-button, QSpinBox::down-button { width: 0; }"
+                   "#aaLabel { color: %5; font-size: 9px; font-weight: 700; "
+                   "  letter-spacing: 0.5px; background: transparent; }"
+                   "QLineEdit { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "QComboBox { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "QComboBox::drop-down { border: none; width: 16px; }"
+                   "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
+                   "  selection-background-color: %3; }"
+                   "QDoubleSpinBox, QSpinBox { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button, "
+                   "QSpinBox::up-button, QSpinBox::down-button { width: 0; }"
 
-    "#aaCreateBtn { background: %3; color: %1; border: none; padding: 6px 16px; "
-    "  font-size: 10px; font-weight: 700; }"
-    "#aaCreateBtn:hover { background: #FF8800; }"
-    "#aaCreateBtn:disabled { background: %10; color: %11; }"
+                   "#aaCreateBtn { background: %3; color: %1; border: none; padding: 6px 16px; "
+                   "  font-size: 10px; font-weight: 700; }"
+                   "#aaCreateBtn:hover { background: #FF8800; }"
+                   "#aaCreateBtn:disabled { background: %10; color: %11; }"
 
-    "#aaControlsBar { background: %2; border-bottom: 1px solid %8; }"
-    "#aaRunBtn { background: %3; color: %1; border: none; padding: 5px 14px; "
-    "  font-size: 9px; font-weight: 700; }"
-    "#aaRunBtn:hover { background: #FF8800; }"
-    "#aaRunBtn:disabled { background: %10; color: %11; }"
-    "#aaAutoBtn { background: %7; color: %5; border: 1px solid %8; "
-    "  padding: 5px 14px; font-size: 9px; font-weight: 700; }"
-    "#aaAutoBtn[running=\"true\"] { color: %14; border-color: %14; }"
-    "#aaResetBtn { background: %7; color: %5; border: 1px solid %8; "
-    "  padding: 5px 14px; font-size: 9px; font-weight: 700; }"
-    "#aaIntervalLabel { color: %5; font-size: 9px; background: transparent; }"
+                   "#aaControlsBar { background: %2; border-bottom: 1px solid %8; }"
+                   "#aaRunBtn { background: %3; color: %1; border: none; padding: 5px 14px; "
+                   "  font-size: 9px; font-weight: 700; }"
+                   "#aaRunBtn:hover { background: #FF8800; }"
+                   "#aaRunBtn:disabled { background: %10; color: %11; }"
+                   "#aaAutoBtn { background: %7; color: %5; border: 1px solid %8; "
+                   "  padding: 5px 14px; font-size: 9px; font-weight: 700; }"
+                   "#aaAutoBtn[running=\"true\"] { color: %14; border-color: %14; }"
+                   "#aaResetBtn { background: %7; color: %5; border: 1px solid %8; "
+                   "  padding: 5px 14px; font-size: 9px; font-weight: 700; }"
+                   "#aaIntervalLabel { color: %5; font-size: 9px; background: transparent; }"
 
-    "#aaLeaderboard { background: %7; border: 1px solid %8; }"
-    "#aaLeaderboardHeader { background: %2; border-bottom: 1px solid %8; }"
-    "#aaLeaderboardTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#aaLeaderboard { background: %7; border: 1px solid %8; }"
+                   "#aaLeaderboardHeader { background: %2; border-bottom: 1px solid %8; }"
+                   "#aaLeaderboardTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
 
-    "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
-    "  font-size: 11px; }"
-    "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
-    "QHeaderView::section { background: %2; color: %5; border: none; "
-    "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
-    "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
+                   "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
+                   "  font-size: 11px; }"
+                   "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
+                   "QHeaderView::section { background: %2; color: %5; border: none; "
+                   "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
+                   "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
 
-    "#aaRightPanel { background: %7; border-left: 1px solid %8; }"
-    "#aaRightTabBtn { background: transparent; color: %5; border: none; "
-    "  font-size: 9px; font-weight: 700; padding: 6px 10px; "
-    "  border-bottom: 2px solid transparent; }"
-    "#aaRightTabBtn:hover { color: %4; }"
-    "#aaRightTabBtn[active=\"true\"] { color: %4; border-bottom-color: %3; }"
+                   "#aaRightPanel { background: %7; border-left: 1px solid %8; }"
+                   "#aaRightTabBtn { background: transparent; color: %5; border: none; "
+                   "  font-size: 9px; font-weight: 700; padding: 6px 10px; "
+                   "  border-bottom: 2px solid transparent; }"
+                   "#aaRightTabBtn:hover { color: %4; }"
+                   "#aaRightTabBtn[active=\"true\"] { color: %4; border-bottom-color: %3; }"
 
-    "#aaDecisionList { background: %1; border: none; outline: none; font-size: 11px; }"
-    "#aaDecisionList::item { color: %5; padding: 6px 8px; border-bottom: 1px solid %8; }"
-    "#aaDecisionList::item:selected { color: %3; background: rgba(217,119,6,0.1); }"
+                   "#aaDecisionList { background: %1; border: none; outline: none; font-size: 11px; }"
+                   "#aaDecisionList::item { color: %5; padding: 6px 8px; border-bottom: 1px solid %8; }"
+                   "#aaDecisionList::item:selected { color: %3; background: rgba(217,119,6,0.1); }"
 
-    "QTextEdit { background: %1; color: %13; border: none; font-size: 11px; }"
+                   "QTextEdit { background: %1; color: %13; border: none; font-size: 11px; }"
 
-    "#aaModelList { background: %1; border: none; outline: none; font-size: 11px; }"
-    "#aaModelList::item { color: %5; padding: 4px 8px; border-bottom: 1px solid %8; }"
-    "#aaModelList::item:selected { color: %3; background: rgba(217,119,6,0.1); }"
-    "#aaModelList::item:hover { color: %4; background: %12; }"
+                   "#aaModelList { background: %1; border: none; outline: none; font-size: 11px; }"
+                   "#aaModelList::item { color: %5; padding: 4px 8px; border-bottom: 1px solid %8; }"
+                   "#aaModelList::item:selected { color: %3; background: rgba(217,119,6,0.1); }"
+                   "#aaModelList::item:hover { color: %4; background: %12; }"
 
-    "#aaPastPanel { background: %7; border: 1px solid %8; }"
-    "#aaPastList { background: %1; border: none; font-size: 11px; }"
-    "#aaPastList::item { color: %5; padding: 6px 8px; border-bottom: 1px solid %8; }"
-    "#aaPastList::item:hover { color: %4; background: %12; }"
+                   "#aaPastPanel { background: %7; border: 1px solid %8; }"
+                   "#aaPastList { background: %1; border: none; font-size: 11px; }"
+                   "#aaPastList::item { color: %5; padding: 6px 8px; border-bottom: 1px solid %8; }"
+                   "#aaPastList::item:hover { color: %4; background: %12; }"
 
-    "#aaStatusBar { background: %2; border-top: 1px solid %8; }"
-    "#aaStatusText { color: %5; font-size: 9px; background: transparent; }"
-    "#aaStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
+                   "#aaStatusBar { background: %2; border-top: 1px solid %8; }"
+                   "#aaStatusText { color: %5; font-size: 9px; background: transparent; }"
+                   "#aaStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
 
-    "QSplitter::handle { background: %8; }"
-    "QScrollBar:vertical { background: %1; width: 6px; }"
-    "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-)
-    .arg(colors::BG_BASE)         // %1
-    .arg(colors::BG_RAISED)       // %2
-    .arg(colors::AMBER)           // %3
-    .arg(colors::TEXT_PRIMARY)    // %4
-    .arg(colors::TEXT_SECONDARY)  // %5
-    .arg(colors::POSITIVE)        // %6
-    .arg(colors::BG_SURFACE)      // %7
-    .arg(colors::BORDER_DIM)      // %8
-    .arg(colors::BORDER_BRIGHT)   // %9
-    .arg(colors::AMBER_DIM)       // %10
-    .arg(colors::TEXT_DIM)         // %11
-    .arg(colors::BG_HOVER)        // %12
-    .arg(colors::CYAN)             // %13
-    .arg(colors::NEGATIVE)        // %14
+                   "QSplitter::handle { background: %8; }"
+                   "QScrollBar:vertical { background: %1; width: 6px; }"
+                   "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
+                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(colors::BG_BASE)        // %1
+        .arg(colors::BG_RAISED)      // %2
+        .arg(colors::AMBER)          // %3
+        .arg(colors::TEXT_PRIMARY)   // %4
+        .arg(colors::TEXT_SECONDARY) // %5
+        .arg(colors::POSITIVE)       // %6
+        .arg(colors::BG_SURFACE)     // %7
+        .arg(colors::BORDER_DIM)     // %8
+        .arg(colors::BORDER_BRIGHT)  // %9
+        .arg(colors::AMBER_DIM)      // %10
+        .arg(colors::TEXT_DIM)       // %11
+        .arg(colors::BG_HOVER)       // %12
+        .arg(colors::CYAN)           // %13
+        .arg(colors::NEGATIVE)       // %14
     ;
 
 // ── Trading symbols ─────────────────────────────────────────────────────────
 
 static const QStringList CRYPTO_SYMBOLS = {
-    "BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "DOGE/USD",
-    "ADA/USD", "AVAX/USD", "DOT/USD", "LINK/USD", "MATIC/USD",
-    "ATOM/USD", "UNI/USD", "LTC/USD", "BCH/USD", "APT/USD",
-    "ARB/USD", "OP/USD", "FIL/USD", "NEAR/USD", "INJ/USD",
-    "SUI/USD", "SEI/USD", "TIA/USD", "RENDER/USD", "FET/USD",
-    "AAVE/USD", "MKR/USD", "CRV/USD", "PEPE/USD", "WIF/USD",
+    "BTC/USD",  "ETH/USD",   "SOL/USD",  "XRP/USD", "DOGE/USD", "ADA/USD", "AVAX/USD", "DOT/USD",
+    "LINK/USD", "MATIC/USD", "ATOM/USD", "UNI/USD", "LTC/USD",  "BCH/USD", "APT/USD",  "ARB/USD",
+    "OP/USD",   "FIL/USD",   "NEAR/USD", "INJ/USD", "SUI/USD",  "SEI/USD", "TIA/USD",  "RENDER/USD",
+    "FET/USD",  "AAVE/USD",  "MKR/USD",  "CRV/USD", "PEPE/USD", "WIF/USD",
 };
 
 static const QStringList COMP_MODES = {"baseline", "monk", "situational", "max_leverage"};
@@ -141,8 +138,7 @@ static const QStringList COMP_MODES = {"baseline", "monk", "situational", "max_l
 // ── Model colors for leaderboard ────────────────────────────────────────────
 
 static const QStringList MODEL_COLORS = {
-    "#FF8800", "#00E5FF", "#9D4EDD", "#00D66F", "#FF3B3B",
-    "#FFD700", "#0088FF", "#E91E63", "#4CAF50", "#FF5722",
+    "#FF8800", "#00E5FF", "#9D4EDD", "#00D66F", "#FF3B3B", "#FFD700", "#0088FF", "#E91E63", "#4CAF50", "#FF5722",
 };
 } // namespace
 
@@ -166,7 +162,8 @@ AlphaArenaScreen::AlphaArenaScreen(QWidget* parent) : QWidget(parent) {
 
 void AlphaArenaScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    if (is_auto_running_) auto_timer_->start();
+    if (is_auto_running_)
+        auto_timer_->start();
 }
 
 void AlphaArenaScreen::hideEvent(QHideEvent* e) {
@@ -217,7 +214,7 @@ QWidget* AlphaArenaScreen::create_header() {
     status_badge_ = new QLabel("READY");
     status_badge_->setObjectName("aaStatusBadge");
     status_badge_->setStyleSheet(QString("color: %1; background: rgba(217,119,6,0.15); "
-                                          "font-size: 8px; font-weight: 700; padding: 2px 6px;")
+                                         "font-size: 8px; font-weight: 700; padding: 2px 6px;")
                                      .arg(colors::AMBER));
     hl->addWidget(status_badge_);
 
@@ -290,8 +287,8 @@ QWidget* AlphaArenaScreen::create_create_panel() {
     type_lbl->setObjectName("aaLabel");
     comp_type_ = new QComboBox;
     comp_type_->addItems({"Crypto Trading", "Prediction Markets"});
-    connect(comp_type_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &AlphaArenaScreen::on_competition_type_changed);
+    connect(comp_type_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &AlphaArenaScreen::on_competition_type_changed);
     type_col->addWidget(type_lbl);
     type_col->addWidget(comp_type_);
     r1->addLayout(type_col, 1);
@@ -643,7 +640,8 @@ void AlphaArenaScreen::on_create_competition() {
 }
 
 void AlphaArenaScreen::on_run_cycle() {
-    if (loading_ || competition_id_.isEmpty()) return;
+    if (loading_ || competition_id_.isEmpty())
+        return;
 
     set_loading(true);
     QJsonObject params;
@@ -679,7 +677,7 @@ void AlphaArenaScreen::on_reset() {
 
     status_badge_->setText("READY");
     status_badge_->setStyleSheet(QString("color: %1; background: rgba(217,119,6,0.15); "
-                                          "font-size: 8px; font-weight: 700; padding: 2px 6px;")
+                                         "font-size: 8px; font-weight: 700; padding: 2px 6px;")
                                      .arg(colors::AMBER));
     cycle_label_->setText("CYCLE 0");
     price_label_->hide();
@@ -719,7 +717,8 @@ void AlphaArenaScreen::on_competition_type_changed(int index) {
 }
 
 void AlphaArenaScreen::on_refresh_leaderboard() {
-    if (competition_id_.isEmpty()) return;
+    if (competition_id_.isEmpty())
+        return;
     QJsonObject params;
     params["competition_id"] = competition_id_;
     run_python_action("get_leaderboard", params);
@@ -728,13 +727,16 @@ void AlphaArenaScreen::on_refresh_leaderboard() {
 void AlphaArenaScreen::on_past_competitions_toggle() {
     past_visible_ = !past_visible_;
     past_panel_->setVisible(past_visible_);
-    if (past_visible_) load_past_competitions();
+    if (past_visible_)
+        load_past_competitions();
 }
 
 void AlphaArenaScreen::on_past_competition_clicked(QListWidgetItem* item) {
-    if (!item) return;
+    if (!item)
+        return;
     QString id = item->data(Qt::UserRole).toString();
-    if (id.isEmpty()) return;
+    if (id.isEmpty())
+        return;
 
     competition_id_ = id;
     past_panel_->hide();
@@ -761,9 +763,9 @@ void AlphaArenaScreen::run_python_action(const QString& action, const QJsonObjec
     QPointer<AlphaArenaScreen> self = this;
 
     python::PythonRunner::instance().run(
-        "alpha_arena/main.py", {json_arg},
-        [self, action](const python::PythonResult& result) {
-            if (!self) return;
+        "alpha_arena/main.py", {json_arg}, [self, action](const python::PythonResult& result) {
+            if (!self)
+                return;
             self->set_loading(false);
 
             if (!result.success) {
@@ -801,10 +803,9 @@ void AlphaArenaScreen::run_python_action(const QString& action, const QJsonObjec
                 self->auto_btn_->setEnabled(true);
 
                 self->status_badge_->setText("CREATED");
-                self->status_badge_->setStyleSheet(
-                    QString("color: %1; background: rgba(22,163,74,0.15); "
-                            "font-size: 8px; font-weight: 700; padding: 2px 6px;")
-                        .arg(colors::POSITIVE));
+                self->status_badge_->setStyleSheet(QString("color: %1; background: rgba(22,163,74,0.15); "
+                                                           "font-size: 8px; font-weight: 700; padding: 2px 6px;")
+                                                       .arg(colors::POSITIVE));
                 self->status_comp_->setText("COMP: " + self->competition_id_.left(8) + "...");
 
                 int model_count = self->model_list_->selectedItems().size();
@@ -819,10 +820,9 @@ void AlphaArenaScreen::run_python_action(const QString& action, const QJsonObjec
                 self->leaderboard_cycle_->setText("Cycle " + QString::number(self->cycle_count_));
 
                 self->status_badge_->setText("RUNNING");
-                self->status_badge_->setStyleSheet(
-                    QString("color: %1; background: rgba(22,163,74,0.15); "
-                            "font-size: 8px; font-weight: 700; padding: 2px 6px;")
-                        .arg(colors::POSITIVE));
+                self->status_badge_->setStyleSheet(QString("color: %1; background: rgba(22,163,74,0.15); "
+                                                           "font-size: 8px; font-weight: 700; padding: 2px 6px;")
+                                                       .arg(colors::POSITIVE));
 
                 if (data.contains("leaderboard")) {
                     self->update_leaderboard(data["leaderboard"].toArray());
@@ -844,8 +844,8 @@ void AlphaArenaScreen::run_python_action(const QString& action, const QJsonObjec
                 self->past_list_->clear();
                 for (const auto& c : comps) {
                     auto co = c.toObject();
-                    QString label = co["name"].toString() + " — " + co["status"].toString() +
-                                    " (" + QString::number(co["cycle_count"].toInt()) + " cycles)";
+                    QString label = co["name"].toString() + " — " + co["status"].toString() + " (" +
+                                    QString::number(co["cycle_count"].toInt()) + " cycles)";
                     auto* item = new QListWidgetItem(label);
                     item->setData(Qt::UserRole, co["competition_id"].toString());
                     self->past_list_->addItem(item);
@@ -871,8 +871,7 @@ void AlphaArenaScreen::update_leaderboard(const QJsonArray& entries) {
         double win_rate = e["win_rate"].toDouble(-1);
 
         // Rank with medal
-        QString rank_str = (rank == 1) ? "1st" : (rank == 2) ? "2nd" : (rank == 3) ? "3rd"
-                                                              : QString::number(rank);
+        QString rank_str = (rank == 1) ? "1st" : (rank == 2) ? "2nd" : (rank == 3) ? "3rd" : QString::number(rank);
         auto* rank_item = new QTableWidgetItem(rank_str);
         rank_item->setTextAlignment(Qt::AlignCenter);
         if (rank <= 3) {
@@ -894,17 +893,13 @@ void AlphaArenaScreen::update_leaderboard(const QJsonArray& entries) {
         leaderboard_table_->setItem(i, 2, port_item);
 
         // PnL
-        auto* pnl_item = new QTableWidgetItem(QString("%1$%2")
-                                                   .arg(pnl >= 0 ? "+" : "")
-                                                   .arg(pnl, 0, 'f', 2));
+        auto* pnl_item = new QTableWidgetItem(QString("%1$%2").arg(pnl >= 0 ? "+" : "").arg(pnl, 0, 'f', 2));
         pnl_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         pnl_item->setForeground(QColor(pnl >= 0 ? colors::POSITIVE : colors::NEGATIVE));
         leaderboard_table_->setItem(i, 3, pnl_item);
 
         // Return %
-        auto* ret_item = new QTableWidgetItem(QString("%1%2%")
-                                                   .arg(ret >= 0 ? "+" : "")
-                                                   .arg(ret, 0, 'f', 2));
+        auto* ret_item = new QTableWidgetItem(QString("%1%2%").arg(ret >= 0 ? "+" : "").arg(ret, 0, 'f', 2));
         ret_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         ret_item->setForeground(QColor(ret >= 0 ? colors::POSITIVE : colors::NEGATIVE));
         leaderboard_table_->setItem(i, 4, ret_item);
@@ -937,10 +932,10 @@ void AlphaArenaScreen::update_decisions(const QJsonArray& decisions) {
         double confidence = d["confidence"].toDouble();
         QString reasoning = d["reasoning"].toString();
 
-        QString action_color = (action == "BUY") ? colors::POSITIVE
-                             : (action == "SELL") ? colors::NEGATIVE
-                             : (action == "SHORT") ? "#9D4EDD"
-                             : colors::TEXT_SECONDARY;
+        QString action_color = (action == "BUY")     ? colors::POSITIVE
+                               : (action == "SELL")  ? colors::NEGATIVE
+                               : (action == "SHORT") ? "#9D4EDD"
+                                                     : colors::TEXT_SECONDARY;
 
         QString text = QString("%1 | %2 %3 | Conf: %4%\n%5")
                            .arg(model, action, symbol)

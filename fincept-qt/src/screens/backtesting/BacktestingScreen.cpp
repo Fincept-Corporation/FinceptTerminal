@@ -1,19 +1,17 @@
 // src/screens/backtesting/BacktestingScreen.cpp
 #include "screens/backtesting/BacktestingScreen.h"
-#include "services/backtesting/BacktestingService.h"
 
 #include "core/logging/Logger.h"
+#include "services/backtesting/BacktestingService.h"
 #include "ui/theme/Theme.h"
 
-#include <QCheckBox>
-#include <QDateEdit>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QScrollArea>
-#include <QTabWidget>
 
 #include <cmath>
 
@@ -21,9 +19,65 @@ namespace fincept::screens {
 
 using namespace fincept::services::backtest;
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+static QString fmt_metric(const QString& key, const QJsonValue& val) {
+    if (val.isString())
+        return val.toString();
+    if (val.isBool())
+        return val.toBool() ? "YES" : "NO";
+    if (!val.isDouble())
+        return QString::fromUtf8("\u2014");
+
+    double v = val.toDouble();
+
+    // Count metrics → integer
+    if (count_metric_keys().contains(key))
+        return QString::number(static_cast<int>(v));
+
+    // Percentage metrics → show as "xx.xx%"
+    if (pct_metric_keys().contains(key)) {
+        // If value is in 0-1 range, multiply by 100
+        if (std::abs(v) <= 1.0)
+            return QString("%1%").arg(v * 100.0, 0, 'f', 2);
+        return QString("%1%").arg(v, 0, 'f', 2);
+    }
+
+    // Ratio metrics → show as-is with 2-4 decimals
+    if (ratio_metric_keys().contains(key))
+        return QString::number(v, 'f', std::abs(v) >= 10.0 ? 2 : 4);
+
+    // Currency-like large values
+    if (std::abs(v) >= 1e9)
+        return QString("$%1B").arg(v / 1e9, 0, 'f', 1);
+    if (std::abs(v) >= 1e6)
+        return QString("$%1M").arg(v / 1e6, 0, 'f', 1);
+    if (std::abs(v) >= 1e3)
+        return QString("$%1K").arg(v / 1e3, 0, 'f', 0);
+
+    return QString::number(v, 'f', 4);
+}
+
+static void clear_layout(QLayout* layout) {
+    if (!layout)
+        return;
+    while (layout->count() > 0) {
+        auto* item = layout->takeAt(0);
+        if (auto* w = item->widget()) {
+            w->setParent(nullptr);
+            w->deleteLater();
+        } else if (auto* sub = item->layout()) {
+            clear_layout(sub);
+        }
+        delete item;
+    }
+}
+
 // ── Constructor ──────────────────────────────────────────────────────────────
+
 BacktestingScreen::BacktestingScreen(QWidget* parent) : QWidget(parent) {
     providers_ = all_providers();
+    commands_ = all_commands();
     strategies_ = default_strategies();
     build_ui();
     connect_service();
@@ -35,6 +89,7 @@ void BacktestingScreen::showEvent(QShowEvent* e) {
     if (first_show_) {
         first_show_ = false;
         on_provider_changed(0);
+        on_command_changed(0);
     }
 }
 
@@ -72,22 +127,23 @@ void BacktestingScreen::build_ui() {
 }
 
 // ── Top Bar: Provider tabs + Run button ──────────────────────────────────────
+
 QWidget* BacktestingScreen::build_top_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(44);
-    bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
-        .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    bar->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(8);
 
     auto* brand = new QLabel("BACKTESTING", bar);
-    brand->setStyleSheet(QString(
-        "color:#FF6B35; font-size:%1px; font-weight:700; font-family:%2;"
-        "padding:4px 12px; background:rgba(255,107,53,0.08);"
-        "border:1px solid rgba(255,107,53,0.25); border-radius:2px;")
-        .arg(ui::fonts::TINY).arg(ui::fonts::DATA_FAMILY));
+    brand->setStyleSheet(QString("color:#FF6B35; font-size:%1px; font-weight:700; font-family:%2;"
+                                 "padding:4px 12px; background:rgba(255,107,53,0.08);"
+                                 "border:1px solid rgba(255,107,53,0.25); border-radius:2px;")
+                             .arg(ui::fonts::TINY)
+                             .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(brand);
 
     auto* div = new QWidget(bar);
@@ -100,14 +156,6 @@ QWidget* BacktestingScreen::build_top_bar() {
         const auto& p = providers_[i];
         auto* btn = new QPushButton(p.display_name, bar);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(QString(
-            "QPushButton { color:%1; font-size:9px; font-family:%2;"
-            "padding:4px 10px; border:1px solid transparent; border-radius:2px;"
-            "background:transparent; }"
-            "QPushButton:hover { background:rgba(%3,0.1); color:%4; }")
-            .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY)
-            .arg(QString("%1,%2,%3").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue()))
-            .arg(p.color.name()));
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_provider_changed(i); });
         hl->addWidget(btn);
         provider_buttons_.append(btn);
@@ -118,105 +166,129 @@ QWidget* BacktestingScreen::build_top_bar() {
     // Run button
     run_button_ = new QPushButton("RUN", bar);
     run_button_->setCursor(Qt::PointingHandCursor);
-    run_button_->setStyleSheet(QString(
-        "QPushButton { background:#FF6B35; color:#000; font-family:%1; font-size:%2px;"
-        "font-weight:700; border:none; padding:6px 20px; border-radius:2px;"
-        "letter-spacing:1px; }"
-        "QPushButton:hover { background:#E55A2B; }"
-        "QPushButton:disabled { background:#444; color:#888; }")
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    run_button_->setStyleSheet(QString("QPushButton { background:#FF6B35; color:#000; font-family:%1; font-size:%2px;"
+                                       "font-weight:700; border:none; padding:6px 20px; border-radius:2px;"
+                                       "letter-spacing:1px; }"
+                                       "QPushButton:hover { background:#E55A2B; }"
+                                       "QPushButton:disabled { background:#444; color:#888; }")
+                                   .arg(ui::fonts::DATA_FAMILY)
+                                   .arg(ui::fonts::SMALL));
     connect(run_button_, &QPushButton::clicked, this, &BacktestingScreen::on_run);
     hl->addWidget(run_button_);
 
     // Status dot
-    auto* ready = new QLabel("READY", bar);
-    ready->setObjectName("bt_status_dot");
-    ready->setStyleSheet(QString(
-        "color:%1; font-size:9px; font-weight:700; font-family:%2;"
-        "padding:3px 8px; background:rgba(22,163,74,0.08);"
-        "border:1px solid rgba(22,163,74,0.25); border-radius:2px;")
-        .arg(ui::colors::POSITIVE).arg(ui::fonts::DATA_FAMILY));
-    hl->addWidget(ready);
+    status_dot_ = new QLabel("READY", bar);
+    status_dot_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
+                                       "padding:3px 8px; background:rgba(22,163,74,0.08);"
+                                       "border:1px solid rgba(22,163,74,0.25); border-radius:2px;")
+                                   .arg(ui::colors::POSITIVE)
+                                   .arg(ui::fonts::DATA_FAMILY));
+    hl->addWidget(status_dot_);
 
     return bar;
 }
 
-// ── Left Panel: Commands + Strategy Selector ─────────────────────────────────
+// ── Left Panel: Commands + Strategy Selector + Params ────────────────────────
+
 QWidget* BacktestingScreen::build_left_panel() {
     auto* panel = new QWidget(this);
-    panel->setFixedWidth(240);
-    panel->setStyleSheet(QString("background:%1; border-right:1px solid %2;")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    panel->setFixedWidth(250);
+    panel->setStyleSheet(
+        QString("background:%1; border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
-    auto* vl = new QVBoxLayout(panel);
+    auto* scroll = new QScrollArea(panel);
+    scroll->setWidgetResizable(true);
+    scroll->setStyleSheet("QScrollArea { border:none; background:transparent; }");
+
+    auto* content = new QWidget(scroll);
+    auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(12, 12, 12, 12);
-    vl->setSpacing(8);
+    vl->setSpacing(6);
 
     auto label_style = QString("color:%1; font-size:8px; font-weight:700;"
-        "font-family:%2; letter-spacing:1px;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY);
+                               "font-family:%2; letter-spacing:1px;")
+                           .arg(ui::colors::TEXT_TERTIARY)
+                           .arg(ui::fonts::DATA_FAMILY);
 
-    // Commands section
-    auto* cmd_title = new QLabel("COMMANDS", panel);
-    cmd_title->setStyleSheet(QString("color:#FF6B35; font-size:9px; font-weight:700;"
-        "font-family:%1; letter-spacing:1px; padding-bottom:4px;"
-        "border-bottom:1px solid %2;")
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::colors::BORDER_DIM));
+    auto section_style = QString("color:#FF6B35; font-size:9px; font-weight:700;"
+                                 "font-family:%1; letter-spacing:1px; padding-bottom:4px;"
+                                 "border-bottom:1px solid %2;")
+                             .arg(ui::fonts::DATA_FAMILY)
+                             .arg(ui::colors::BORDER_DIM);
+
+    // ── Commands section ──
+    auto* cmd_title = new QLabel("COMMANDS", content);
+    cmd_title->setStyleSheet(section_style);
     vl->addWidget(cmd_title);
 
-    auto cmds = all_commands();
+    const auto& cmds = commands_;
     for (int i = 0; i < cmds.size(); ++i) {
         const auto& cmd = cmds[i];
-        auto* btn = new QPushButton(cmd.label, panel);
+        auto* btn = new QPushButton(cmd.label, content);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(QString(
-            "QPushButton { text-align:left; padding:6px 10px; border:none;"
-            "border-left:2px solid transparent; color:%1;"
-            "font-size:10px; font-family:%2; background:transparent; }"
-            "QPushButton:hover { background:rgba(%3,0.08); color:%4; }")
-            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-            .arg(QString("%1,%2,%3").arg(cmd.color.red()).arg(cmd.color.green()).arg(cmd.color.blue()))
-            .arg(cmd.color.name()));
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_command_changed(i); });
         vl->addWidget(btn);
         command_buttons_.append(btn);
     }
 
-    // Strategies section
+    // ── Strategies section ──
     vl->addSpacing(8);
-    auto* strat_title = new QLabel("STRATEGY", panel);
-    strat_title->setStyleSheet(cmd_title->styleSheet());
+    auto* strat_title = new QLabel("STRATEGY", content);
+    strat_title->setStyleSheet(section_style);
     vl->addWidget(strat_title);
 
-    auto combo_style = QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
+    auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
+                               "QComboBox::drop-down { border:none; }"
+                               "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3;"
+                               "selection-background-color:rgba(255,107,53,0.15); }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL);
 
-    auto* cat_lbl = new QLabel("CATEGORY", panel);
+    auto* cat_lbl = new QLabel("CATEGORY", content);
     cat_lbl->setStyleSheet(label_style);
     vl->addWidget(cat_lbl);
-    strategy_category_combo_ = new QComboBox(panel);
+    strategy_category_combo_ = new QComboBox(content);
     strategy_category_combo_->setStyleSheet(combo_style);
     for (const auto& cat : strategy_categories())
         strategy_category_combo_->addItem(cat);
-    connect(strategy_category_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int) { populate_strategies(); });
+    connect(strategy_category_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { populate_strategies(); });
     vl->addWidget(strategy_category_combo_);
 
-    auto* strat_lbl = new QLabel("STRATEGY", panel);
+    auto* strat_lbl = new QLabel("STRATEGY", content);
     strat_lbl->setStyleSheet(label_style);
     vl->addWidget(strat_lbl);
-    strategy_combo_ = new QComboBox(panel);
+    strategy_combo_ = new QComboBox(content);
     strategy_combo_->setStyleSheet(combo_style);
+    connect(strategy_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &BacktestingScreen::on_strategy_changed);
     vl->addWidget(strategy_combo_);
 
+    // ── Strategy parameters ──
+    vl->addSpacing(4);
+    auto* params_title = new QLabel("PARAMETERS", content);
+    params_title->setStyleSheet(label_style);
+    vl->addWidget(params_title);
+
+    strategy_params_container_ = new QWidget(content);
+    strategy_params_layout_ = new QVBoxLayout(strategy_params_container_);
+    strategy_params_layout_->setContentsMargins(0, 0, 0, 0);
+    strategy_params_layout_->setSpacing(4);
+    vl->addWidget(strategy_params_container_);
+
     vl->addStretch();
+    scroll->setWidget(content);
+
+    auto* outer = new QVBoxLayout(panel);
+    outer->setContentsMargins(0, 0, 0, 0);
+    outer->addWidget(scroll);
     return panel;
 }
 
-// ── Center: Results Display ──────────────────────────────────────────────────
+// ── Center: Tabbed Results Display ───────────────────────────────────────────
+
 QWidget* BacktestingScreen::build_center_panel() {
     auto* panel = new QWidget(this);
     auto* vl = new QVBoxLayout(panel);
@@ -226,53 +298,111 @@ QWidget* BacktestingScreen::build_center_panel() {
     // Header
     auto* header = new QWidget(panel);
     header->setFixedHeight(36);
-    header->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
-        .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    header->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(16, 0, 16, 0);
     auto* title = new QLabel("RESULTS", header);
-    title->setStyleSheet(QString(
-        "color:#FF6B35; font-size:%1px; font-weight:700; font-family:%2; letter-spacing:1px;")
-        .arg(ui::fonts::TINY).arg(ui::fonts::DATA_FAMILY));
+    title->setStyleSheet(QString("color:#FF6B35; font-size:%1px; font-weight:700; font-family:%2; letter-spacing:1px;")
+                             .arg(ui::fonts::TINY)
+                             .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(title);
     hhl->addStretch();
     vl->addWidget(header);
 
-    // Results scroll area
-    auto* scroll = new QScrollArea(panel);
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border:none; background:transparent; }");
+    // Tab widget for results
+    result_tabs_ = new QTabWidget(panel);
+    result_tabs_->setStyleSheet(QString("QTabWidget::pane { border:none; background:%1; }"
+                                        "QTabBar::tab { background:%2; color:%3; font-family:%4; font-size:%5px;"
+                                        "padding:6px 14px; border:none; border-bottom:2px solid transparent; }"
+                                        "QTabBar::tab:selected { color:#FF6B35; border-bottom:2px solid #FF6B35;"
+                                        "background:%6; }"
+                                        "QTabBar::tab:hover { color:%7; background:rgba(255,107,53,0.05); }")
+                                    .arg(ui::colors::BG_BASE)
+                                    .arg(ui::colors::BG_RAISED)
+                                    .arg(ui::colors::TEXT_TERTIARY)
+                                    .arg(ui::fonts::DATA_FAMILY)
+                                    .arg(ui::fonts::SMALL)
+                                    .arg(ui::colors::BG_RAISED)
+                                    .arg(ui::colors::TEXT_PRIMARY));
 
-    results_container_ = new QWidget(scroll);
-    results_layout_ = new QVBoxLayout(results_container_);
-    results_layout_->setContentsMargins(16, 16, 16, 16);
-    results_layout_->setSpacing(12);
+    // SUMMARY tab
+    auto* summary_scroll = new QScrollArea;
+    summary_scroll->setWidgetResizable(true);
+    summary_scroll->setStyleSheet("QScrollArea { border:none; background:transparent; }");
+    summary_container_ = new QWidget;
+    summary_layout_ = new QVBoxLayout(summary_container_);
+    summary_layout_->setContentsMargins(16, 16, 16, 16);
+    summary_layout_->setSpacing(12);
 
     // Initial hint
-    auto* hint = new QLabel(
-        "Select a provider, command, and strategy, then click RUN to execute.\n\n"
-        "Supported providers: VectorBT, Backtesting.py, FastTrade, Zipline, BT, Fincept\n"
-        "Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Returns Analysis");
+    auto* hint = new QLabel("Select a provider, command, and strategy, then click RUN to execute.\n\n"
+                            "Supported providers: VectorBT, Backtesting.py, FastTrade, Zipline, BT, Fincept\n"
+                            "Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Returns");
     hint->setWordWrap(true);
     hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; line-height:1.6;"
-        "padding:20px; background:%4; border:1px solid %5; border-radius:2px;")
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_DIM));
-    results_layout_->addWidget(hint);
-    results_layout_->addStretch();
+                                "padding:20px; background:%4; border:1px solid %5; border-radius:2px;")
+                            .arg(ui::colors::TEXT_SECONDARY)
+                            .arg(ui::fonts::SMALL)
+                            .arg(ui::fonts::DATA_FAMILY)
+                            .arg(ui::colors::BG_RAISED)
+                            .arg(ui::colors::BORDER_DIM));
+    summary_layout_->addWidget(hint);
+    summary_layout_->addStretch();
+    summary_scroll->setWidget(summary_container_);
+    result_tabs_->addTab(summary_scroll, "SUMMARY");
 
-    scroll->setWidget(results_container_);
-    vl->addWidget(scroll, 1);
+    // METRICS tab
+    metrics_table_ = new QTableWidget(0, 2);
+    metrics_table_->setHorizontalHeaderLabels({"Metric", "Value"});
+    metrics_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    metrics_table_->setAlternatingRowColors(true);
+    metrics_table_->horizontalHeader()->setStretchLastSection(true);
+    metrics_table_->verticalHeader()->setVisible(false);
+    metrics_table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                                          "font-family:%4; font-size:%5px; border:none; }"
+                                          "QTableWidget::item { padding:3px 8px; }"
+                                          "QHeaderView::section { background:%6; color:%7; font-weight:700;"
+                                          "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
+                                          "QTableWidget::item:alternate { background:%8; }")
+                                      .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                                      .arg(ui::fonts::DATA_FAMILY)
+                                      .arg(ui::fonts::SMALL)
+                                      .arg(ui::colors::BG_RAISED)
+                                      .arg(ui::colors::TEXT_SECONDARY)
+                                      .arg(ui::colors::ROW_ALT));
+    result_tabs_->addTab(metrics_table_, "METRICS");
 
+    // TRADES tab
+    trades_table_ = new QTableWidget(0, 0);
+    trades_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    trades_table_->setAlternatingRowColors(true);
+    trades_table_->horizontalHeader()->setStretchLastSection(true);
+    trades_table_->verticalHeader()->setVisible(false);
+    trades_table_->setStyleSheet(metrics_table_->styleSheet());
+    result_tabs_->addTab(trades_table_, "TRADES");
+
+    // RAW JSON tab
+    raw_json_edit_ = new QTextEdit;
+    raw_json_edit_->setReadOnly(true);
+    raw_json_edit_->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:none;"
+                                          "font-family:%3; font-size:%4px; padding:12px; }")
+                                      .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY)
+                                      .arg(ui::fonts::DATA_FAMILY)
+                                      .arg(ui::fonts::SMALL));
+    result_tabs_->addTab(raw_json_edit_, "RAW JSON");
+
+    vl->addWidget(result_tabs_, 1);
     return panel;
 }
 
 // ── Right Panel: Config ──────────────────────────────────────────────────────
+
 QWidget* BacktestingScreen::build_right_panel() {
     auto* panel = new QWidget(this);
     panel->setFixedWidth(300);
-    panel->setStyleSheet(QString("background:%1; border-left:1px solid %2;")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    panel->setStyleSheet(
+        QString("background:%1; border-left:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     auto* scroll = new QScrollArea(panel);
     scroll->setWidgetResizable(true);
@@ -281,26 +411,40 @@ QWidget* BacktestingScreen::build_right_panel() {
     auto* content = new QWidget(scroll);
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(12, 12, 12, 12);
-    vl->setSpacing(8);
+    vl->setSpacing(6);
 
     auto label_style = QString("color:%1; font-size:8px; font-weight:700;"
-        "font-family:%2; letter-spacing:1px;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY);
-    auto input_style = QString(
-        "QLineEdit, QDoubleSpinBox, QSpinBox, QDateEdit { background:%1; color:%2;"
-        "border:1px solid %3; font-family:%4; font-size:%5px; padding:4px 6px;"
-        "border-radius:2px; }"
-        "QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus, QDateEdit:focus"
-        "{ border-color:#FF6B35; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
+                               "font-family:%2; letter-spacing:1px;")
+                           .arg(ui::colors::TEXT_TERTIARY)
+                           .arg(ui::fonts::DATA_FAMILY);
+
+    auto section_style = QString("color:#FF6B35; font-size:9px; font-weight:700;"
+                                 "font-family:%1; letter-spacing:1px; padding-bottom:4px;"
+                                 "border-bottom:1px solid %2;")
+                             .arg(ui::fonts::DATA_FAMILY)
+                             .arg(ui::colors::BORDER_DIM);
+
+    auto input_style = QString("QLineEdit, QDoubleSpinBox, QSpinBox, QDateEdit, QCheckBox { background:%1; color:%2;"
+                               "border:1px solid %3; font-family:%4; font-size:%5px; padding:4px 6px;"
+                               "border-radius:2px; }"
+                               "QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus, QDateEdit:focus"
+                               "{ border-color:#FF6B35; }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL);
+
+    auto combo_style = QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
+                               "QComboBox::drop-down { border:none; }"
+                               "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3;"
+                               "selection-background-color:rgba(255,107,53,0.15); }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL);
 
     // ── MARKET DATA ──
     auto* mkt_title = new QLabel("MARKET DATA", content);
-    mkt_title->setStyleSheet(QString("color:#FF6B35; font-size:9px; font-weight:700;"
-        "font-family:%1; letter-spacing:1px; padding-bottom:4px;"
-        "border-bottom:1px solid %2;")
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::colors::BORDER_DIM));
+    mkt_title->setStyleSheet(section_style);
     vl->addWidget(mkt_title);
 
     auto* sym_lbl = new QLabel("SYMBOLS", content);
@@ -344,7 +488,7 @@ QWidget* BacktestingScreen::build_right_panel() {
     // ── EXECUTION SETTINGS ──
     vl->addSpacing(8);
     auto* exec_title = new QLabel("EXECUTION", content);
-    exec_title->setStyleSheet(mkt_title->styleSheet());
+    exec_title->setStyleSheet(section_style);
     vl->addWidget(exec_title);
 
     auto* comm_lbl = new QLabel("COMMISSION (%)", content);
@@ -372,7 +516,7 @@ QWidget* BacktestingScreen::build_right_panel() {
     // ── ADVANCED ──
     vl->addSpacing(8);
     auto* adv_title = new QLabel("ADVANCED", content);
-    adv_title->setStyleSheet(mkt_title->styleSheet());
+    adv_title->setStyleSheet(section_style);
     vl->addWidget(adv_title);
 
     auto* lev_lbl = new QLabel("LEVERAGE", content);
@@ -410,12 +554,6 @@ QWidget* BacktestingScreen::build_right_panel() {
     take_profit_spin_->setStyleSheet(input_style);
     vl->addWidget(take_profit_spin_);
 
-    auto combo_style = QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
-
     auto* ps_lbl = new QLabel("POSITION SIZING", content);
     ps_lbl->setStyleSheet(label_style);
     vl->addWidget(ps_lbl);
@@ -425,12 +563,304 @@ QWidget* BacktestingScreen::build_right_panel() {
         pos_sizing_combo_->addItem(m);
     vl->addWidget(pos_sizing_combo_);
 
+    allow_short_check_ = new QCheckBox("Allow Short Selling", content);
+    allow_short_check_->setStyleSheet(
+        QString("QCheckBox { color:%1; font-family:%2; font-size:%3px; spacing:6px; }"
+                "QCheckBox::indicator { width:14px; height:14px; border:1px solid %4;"
+                "border-radius:2px; background:%5; }"
+                "QCheckBox::indicator:checked { background:#FF6B35; border-color:#FF6B35; }")
+            .arg(ui::colors::TEXT_SECONDARY)
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::SMALL)
+            .arg(ui::colors::BORDER_MED)
+            .arg(ui::colors::BG_RAISED));
+    vl->addWidget(allow_short_check_);
+
     auto* bm_lbl = new QLabel("BENCHMARK", content);
     bm_lbl->setStyleSheet(label_style);
     vl->addWidget(bm_lbl);
     benchmark_edit_ = new QLineEdit("SPY", content);
     benchmark_edit_->setStyleSheet(input_style);
     vl->addWidget(benchmark_edit_);
+
+    // ── COMMAND-SPECIFIC CONFIG ──
+    vl->addSpacing(8);
+    cmd_config_stack_ = new QStackedWidget(content);
+
+    // Page 0: backtest (no extra config needed)
+    cmd_config_stack_->addWidget(new QWidget);
+
+    // Page 1: optimize
+    {
+        auto* page = new QWidget;
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(4);
+        auto* t = new QLabel("OPTIMIZATION", page);
+        t->setStyleSheet(section_style);
+        pl->addWidget(t);
+
+        auto* ol = new QLabel("OBJECTIVE", page);
+        ol->setStyleSheet(label_style);
+        pl->addWidget(ol);
+        opt_objective_combo_ = new QComboBox(page);
+        opt_objective_combo_->setStyleSheet(combo_style);
+        for (const auto& o : optimize_objectives())
+            opt_objective_combo_->addItem(o);
+        pl->addWidget(opt_objective_combo_);
+
+        auto* ml = new QLabel("METHOD", page);
+        ml->setStyleSheet(label_style);
+        pl->addWidget(ml);
+        opt_method_combo_ = new QComboBox(page);
+        opt_method_combo_->setStyleSheet(combo_style);
+        for (const auto& m : optimize_methods())
+            opt_method_combo_->addItem(m);
+        pl->addWidget(opt_method_combo_);
+
+        auto* il = new QLabel("MAX ITERATIONS", page);
+        il->setStyleSheet(label_style);
+        pl->addWidget(il);
+        opt_iterations_spin_ = new QSpinBox(page);
+        opt_iterations_spin_->setRange(10, 10000);
+        opt_iterations_spin_->setValue(100);
+        opt_iterations_spin_->setStyleSheet(input_style);
+        pl->addWidget(opt_iterations_spin_);
+
+        pl->addStretch();
+        cmd_config_stack_->addWidget(page);
+    }
+
+    // Page 2: walk_forward
+    {
+        auto* page = new QWidget;
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(4);
+        auto* t = new QLabel("WALK-FORWARD", page);
+        t->setStyleSheet(section_style);
+        pl->addWidget(t);
+
+        auto* sl = new QLabel("NUMBER OF SPLITS", page);
+        sl->setStyleSheet(label_style);
+        pl->addWidget(sl);
+        wf_splits_spin_ = new QSpinBox(page);
+        wf_splits_spin_->setRange(2, 20);
+        wf_splits_spin_->setValue(5);
+        wf_splits_spin_->setStyleSheet(input_style);
+        pl->addWidget(wf_splits_spin_);
+
+        auto* tl = new QLabel("TRAIN RATIO", page);
+        tl->setStyleSheet(label_style);
+        pl->addWidget(tl);
+        wf_train_ratio_spin_ = new QDoubleSpinBox(page);
+        wf_train_ratio_spin_->setRange(0.5, 0.95);
+        wf_train_ratio_spin_->setValue(0.7);
+        wf_train_ratio_spin_->setDecimals(2);
+        wf_train_ratio_spin_->setSingleStep(0.05);
+        wf_train_ratio_spin_->setStyleSheet(input_style);
+        pl->addWidget(wf_train_ratio_spin_);
+
+        pl->addStretch();
+        cmd_config_stack_->addWidget(page);
+    }
+
+    // Page 3: indicator
+    {
+        auto* page = new QWidget;
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(4);
+        auto* t = new QLabel("INDICATOR", page);
+        t->setStyleSheet(section_style);
+        pl->addWidget(t);
+
+        auto* il = new QLabel("INDICATOR TYPE", page);
+        il->setStyleSheet(label_style);
+        pl->addWidget(il);
+        indicator_combo_ = new QComboBox(page);
+        indicator_combo_->setStyleSheet(combo_style);
+        for (const auto& ind : all_indicators())
+            indicator_combo_->addItem(ind.label, ind.id);
+        pl->addWidget(indicator_combo_);
+
+        pl->addStretch();
+        cmd_config_stack_->addWidget(page);
+    }
+
+    // Page 4: indicator_signals
+    {
+        auto* page = new QWidget;
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(4);
+        auto* t = new QLabel("INDICATOR SIGNALS", page);
+        t->setStyleSheet(section_style);
+        pl->addWidget(t);
+
+        auto* isl = new QLabel("INDICATOR", page);
+        isl->setStyleSheet(label_style);
+        pl->addWidget(isl);
+        ind_signal_indicator_combo_ = new QComboBox(page);
+        ind_signal_indicator_combo_->setStyleSheet(combo_style);
+        for (const auto& ind : all_indicators())
+            ind_signal_indicator_combo_->addItem(ind.label, ind.id);
+        pl->addWidget(ind_signal_indicator_combo_);
+
+        auto* ml = new QLabel("SIGNAL MODE", page);
+        ml->setStyleSheet(label_style);
+        pl->addWidget(ml);
+        ind_signal_mode_combo_ = new QComboBox(page);
+        ind_signal_mode_combo_->setStyleSheet(combo_style);
+        for (const auto& m : indicator_signal_modes())
+            ind_signal_mode_combo_->addItem(m);
+        pl->addWidget(ind_signal_mode_combo_);
+
+        pl->addStretch();
+        cmd_config_stack_->addWidget(page);
+    }
+
+    // Page 5: labels
+    {
+        auto* page = new QWidget;
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(4);
+        auto* t = new QLabel("ML LABELS", page);
+        t->setStyleSheet(section_style);
+        pl->addWidget(t);
+
+        auto* tl = new QLabel("LABEL TYPE", page);
+        tl->setStyleSheet(label_style);
+        pl->addWidget(tl);
+        labels_type_combo_ = new QComboBox(page);
+        labels_type_combo_->setStyleSheet(combo_style);
+        for (const auto& lt : label_types())
+            labels_type_combo_->addItem(lt);
+        pl->addWidget(labels_type_combo_);
+
+        auto* hl = new QLabel("HORIZON", page);
+        hl->setStyleSheet(label_style);
+        pl->addWidget(hl);
+        labels_horizon_spin_ = new QSpinBox(page);
+        labels_horizon_spin_->setRange(1, 100);
+        labels_horizon_spin_->setValue(5);
+        labels_horizon_spin_->setStyleSheet(input_style);
+        pl->addWidget(labels_horizon_spin_);
+
+        auto* thl = new QLabel("THRESHOLD", page);
+        thl->setStyleSheet(label_style);
+        pl->addWidget(thl);
+        labels_threshold_spin_ = new QDoubleSpinBox(page);
+        labels_threshold_spin_->setRange(0.001, 1.0);
+        labels_threshold_spin_->setValue(0.02);
+        labels_threshold_spin_->setDecimals(3);
+        labels_threshold_spin_->setSingleStep(0.005);
+        labels_threshold_spin_->setStyleSheet(input_style);
+        pl->addWidget(labels_threshold_spin_);
+
+        pl->addStretch();
+        cmd_config_stack_->addWidget(page);
+    }
+
+    // Page 6: splits
+    {
+        auto* page = new QWidget;
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(4);
+        auto* t = new QLabel("CV SPLITS", page);
+        t->setStyleSheet(section_style);
+        pl->addWidget(t);
+
+        auto* tl = new QLabel("SPLITTER TYPE", page);
+        tl->setStyleSheet(label_style);
+        pl->addWidget(tl);
+        splitter_type_combo_ = new QComboBox(page);
+        splitter_type_combo_->setStyleSheet(combo_style);
+        for (const auto& st : splitter_types())
+            splitter_type_combo_->addItem(st);
+        pl->addWidget(splitter_type_combo_);
+
+        auto* wl = new QLabel("WINDOW LENGTH", page);
+        wl->setStyleSheet(label_style);
+        pl->addWidget(wl);
+        splitter_window_spin_ = new QSpinBox(page);
+        splitter_window_spin_->setRange(10, 500);
+        splitter_window_spin_->setValue(60);
+        splitter_window_spin_->setStyleSheet(input_style);
+        pl->addWidget(splitter_window_spin_);
+
+        auto* stl = new QLabel("STEP SIZE", page);
+        stl->setStyleSheet(label_style);
+        pl->addWidget(stl);
+        splitter_step_spin_ = new QSpinBox(page);
+        splitter_step_spin_->setRange(1, 100);
+        splitter_step_spin_->setValue(10);
+        splitter_step_spin_->setStyleSheet(input_style);
+        pl->addWidget(splitter_step_spin_);
+
+        pl->addStretch();
+        cmd_config_stack_->addWidget(page);
+    }
+
+    // Page 7: returns
+    {
+        auto* page = new QWidget;
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(4);
+        auto* t = new QLabel("RETURNS ANALYSIS", page);
+        t->setStyleSheet(section_style);
+        pl->addWidget(t);
+
+        auto* tl = new QLabel("ANALYSIS TYPE", page);
+        tl->setStyleSheet(label_style);
+        pl->addWidget(tl);
+        returns_type_combo_ = new QComboBox(page);
+        returns_type_combo_->setStyleSheet(combo_style);
+        for (const auto& rt : returns_analysis_types())
+            returns_type_combo_->addItem(rt);
+        pl->addWidget(returns_type_combo_);
+
+        auto* wl = new QLabel("ROLLING WINDOW", page);
+        wl->setStyleSheet(label_style);
+        pl->addWidget(wl);
+        returns_window_spin_ = new QSpinBox(page);
+        returns_window_spin_->setRange(5, 252);
+        returns_window_spin_->setValue(21);
+        returns_window_spin_->setStyleSheet(input_style);
+        pl->addWidget(returns_window_spin_);
+
+        pl->addStretch();
+        cmd_config_stack_->addWidget(page);
+    }
+
+    // Page 8: signals
+    {
+        auto* page = new QWidget;
+        auto* pl = new QVBoxLayout(page);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(4);
+        auto* t = new QLabel("SIGNAL GENERATORS", page);
+        t->setStyleSheet(section_style);
+        pl->addWidget(t);
+
+        auto* gl = new QLabel("GENERATOR TYPE", page);
+        gl->setStyleSheet(label_style);
+        pl->addWidget(gl);
+        signal_gen_combo_ = new QComboBox(page);
+        signal_gen_combo_->setStyleSheet(combo_style);
+        for (const auto& sg : signal_generators())
+            signal_gen_combo_->addItem(sg);
+        pl->addWidget(signal_gen_combo_);
+
+        pl->addStretch();
+        cmd_config_stack_->addWidget(page);
+    }
+
+    cmd_config_stack_->setCurrentIndex(0);
+    vl->addWidget(cmd_config_stack_);
 
     vl->addStretch();
     scroll->setWidget(content);
@@ -442,355 +872,542 @@ QWidget* BacktestingScreen::build_right_panel() {
 }
 
 // ── Status Bar ───────────────────────────────────────────────────────────────
+
 QWidget* BacktestingScreen::build_status_bar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(24);
-    bar->setStyleSheet(QString("background:%1; border-top:1px solid %2;")
-        .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    bar->setStyleSheet(
+        QString("background:%1; border-top:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(16);
-    auto s = QString("color:%1; font-size:8px; font-family:%2;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY);
-    auto* l1 = new QLabel("PROVIDERS:", bar); l1->setStyleSheet(s);
+    auto s =
+        QString("color:%1; font-size:8px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY);
+    auto bold = QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
+                    .arg(ui::colors::TEXT_PRIMARY)
+                    .arg(ui::fonts::DATA_FAMILY);
+
+    auto* l1 = new QLabel("PROVIDERS:", bar);
+    l1->setStyleSheet(s);
     auto* v1 = new QLabel("6", bar);
-    v1->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
-        .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::DATA_FAMILY));
-    hl->addWidget(l1); hl->addWidget(v1);
-    auto* l2 = new QLabel("STRATEGIES:", bar); l2->setStyleSheet(s);
-    auto* v2 = new QLabel("50+", bar); v2->setStyleSheet(v1->styleSheet());
-    hl->addWidget(l2); hl->addWidget(v2);
+    v1->setStyleSheet(bold);
+    hl->addWidget(l1);
+    hl->addWidget(v1);
+
+    auto* l2 = new QLabel("STRATEGIES:", bar);
+    l2->setStyleSheet(s);
+    auto* v2 = new QLabel(QString::number(strategies_.size()), bar);
+    v2->setStyleSheet(bold);
+    hl->addWidget(l2);
+    hl->addWidget(v2);
+
     hl->addStretch();
     status_label_ = new QLabel("READY", bar);
     status_label_->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
-        .arg(ui::colors::POSITIVE).arg(ui::fonts::DATA_FAMILY));
+                                     .arg(ui::colors::POSITIVE)
+                                     .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(status_label_);
     return bar;
 }
 
 // ── Provider/Command/Strategy selection ──────────────────────────────────────
+
 void BacktestingScreen::on_provider_changed(int index) {
-    if (index < 0 || index >= providers_.size()) return;
+    if (index < 0 || index >= providers_.size())
+        return;
     active_provider_ = index;
     update_provider_buttons();
+    update_command_buttons();
     populate_strategies();
-
-    // Enable/disable command buttons based on provider support
-    auto cmds = all_commands();
-    const auto& supported = providers_[index].commands;
-    for (int i = 0; i < command_buttons_.size() && i < cmds.size(); ++i)
-        command_buttons_[i]->setEnabled(supported.contains(cmds[i].id));
 }
 
 void BacktestingScreen::update_provider_buttons() {
     for (int i = 0; i < provider_buttons_.size(); ++i) {
         const auto& p = providers_[i];
         bool active = (i == active_provider_);
-        provider_buttons_[i]->setStyleSheet(QString(
-            "QPushButton { color:%1; font-size:9px; font-family:%2;"
-            "padding:4px 10px; border:1px solid %3; border-radius:2px;"
-            "background:%4; font-weight:%5; }"
-            "QPushButton:hover { background:rgba(%6,0.1); }")
-            .arg(active ? p.color.name() : ui::colors::TEXT_TERTIARY)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(active ? QString("rgba(%1,%2,%3,0.3)")
-                .arg(p.color.red()).arg(p.color.green()).arg(p.color.blue()) : "transparent")
-            .arg(active ? QString("rgba(%1,%2,%3,0.12)")
-                .arg(p.color.red()).arg(p.color.green()).arg(p.color.blue()) : "transparent")
-            .arg(active ? "700" : "400")
-            .arg(QString("%1,%2,%3").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue())));
+        provider_buttons_[i]->setStyleSheet(
+            QString("QPushButton { color:%1; font-size:9px; font-family:%2;"
+                    "padding:4px 10px; border:1px solid %3; border-radius:2px;"
+                    "background:%4; font-weight:%5; }"
+                    "QPushButton:hover { background:rgba(%6,0.15); }")
+                .arg(active ? p.color.name() : ui::colors::TEXT_TERTIARY)
+                .arg(ui::fonts::DATA_FAMILY)
+                .arg(active ? QString("rgba(%1,%2,%3,0.3)").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue())
+                            : "transparent")
+                .arg(active ? QString("rgba(%1,%2,%3,0.12)").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue())
+                            : "transparent")
+                .arg(active ? "700" : "400")
+                .arg(QString("%1,%2,%3").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue())));
     }
 }
 
 void BacktestingScreen::on_command_changed(int index) {
-    auto cmds = all_commands();
-    if (index < 0 || index >= cmds.size()) return;
+    const auto& cmds = commands_;
+    if (index < 0 || index >= cmds.size())
+        return;
     active_command_ = index;
+    update_command_buttons();
 
-    for (int i = 0; i < command_buttons_.size(); ++i) {
+    // Map command index to config stack page
+    // commands: backtest(0), optimize(1), walk_forward(2), indicator(3),
+    //           indicator_signals(4), labels(5), splits(6), returns(7), signals(8)
+    cmd_config_stack_->setCurrentIndex(index);
+}
+
+void BacktestingScreen::update_command_buttons() {
+    const auto& cmds = commands_;
+    const auto& supported = providers_[active_provider_].commands;
+
+    for (int i = 0; i < command_buttons_.size() && i < cmds.size(); ++i) {
         const auto& cmd = cmds[i];
-        bool active = (i == index);
-        command_buttons_[i]->setStyleSheet(QString(
-            "QPushButton { text-align:left; padding:6px 10px; border:none;"
-            "border-left:2px solid %1; color:%2;"
-            "font-size:10px; font-family:%3; font-weight:%4; background:%5; }"
-            "QPushButton:hover { background:rgba(%6,0.1); color:%7; }"
-            "QPushButton:disabled { color:%8; }")
-            .arg(active ? cmd.color.name() : "transparent")
-            .arg(active ? cmd.color.name() : ui::colors::TEXT_SECONDARY)
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(active ? "700" : "400")
-            .arg(active ? QString("rgba(%1,%2,%3,0.08)")
-                .arg(cmd.color.red()).arg(cmd.color.green()).arg(cmd.color.blue()) : "transparent")
-            .arg(QString("%1,%2,%3").arg(cmd.color.red()).arg(cmd.color.green()).arg(cmd.color.blue()))
-            .arg(cmd.color.name())
-            .arg(ui::colors::TEXT_DIM));
+        bool active = (i == active_command_);
+        bool enabled = supported.contains(cmd.id);
+        command_buttons_[i]->setEnabled(enabled);
+        command_buttons_[i]->setStyleSheet(
+            QString("QPushButton { text-align:left; padding:6px 10px; border:none;"
+                    "border-left:2px solid %1; color:%2;"
+                    "font-size:10px; font-family:%3; font-weight:%4; background:%5; }"
+                    "QPushButton:hover { background:rgba(%6,0.1); color:%7; }"
+                    "QPushButton:disabled { color:%8; border-left-color:transparent; }")
+                .arg(active ? cmd.color.name() : "transparent")
+                .arg(active ? cmd.color.name() : ui::colors::TEXT_SECONDARY)
+                .arg(ui::fonts::DATA_FAMILY)
+                .arg(active ? "700" : "400")
+                .arg(active ? QString("rgba(%1,%2,%3,0.08)")
+                                  .arg(cmd.color.red())
+                                  .arg(cmd.color.green())
+                                  .arg(cmd.color.blue())
+                            : "transparent")
+                .arg(QString("%1,%2,%3").arg(cmd.color.red()).arg(cmd.color.green()).arg(cmd.color.blue()))
+                .arg(cmd.color.name())
+                .arg(ui::colors::TEXT_DIM));
     }
 }
 
-void BacktestingScreen::on_strategy_changed(int) {
-    // Strategy changed — no immediate action needed
+void BacktestingScreen::on_strategy_changed(int index) {
+    Q_UNUSED(index)
+    rebuild_strategy_params();
 }
 
 void BacktestingScreen::populate_strategies() {
+    strategy_combo_->blockSignals(true);
     strategy_combo_->clear();
     auto cat = strategy_category_combo_->currentText();
     for (const auto& s : strategies_) {
         if (s.category == cat)
             strategy_combo_->addItem(s.name, s.id);
     }
+    strategy_combo_->blockSignals(false);
+
+    if (strategy_combo_->count() > 0) {
+        strategy_combo_->setCurrentIndex(0);
+        rebuild_strategy_params();
+    } else {
+        clear_layout(strategy_params_layout_);
+        param_spinboxes_.clear();
+    }
+}
+
+void BacktestingScreen::rebuild_strategy_params() {
+    clear_layout(strategy_params_layout_);
+    param_spinboxes_.clear();
+
+    auto strategy_id = strategy_combo_->currentData().toString();
+    if (strategy_id.isEmpty())
+        return;
+
+    const Strategy* strat = nullptr;
+    for (const auto& s : strategies_) {
+        if (s.id == strategy_id) {
+            strat = &s;
+            break;
+        }
+    }
+    if (!strat || strat->params.isEmpty())
+        return;
+
+    auto input_style = QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
+                               "font-family:%4; font-size:%5px; padding:3px 4px; border-radius:2px; }"
+                               "QDoubleSpinBox:focus { border-color:#FF6B35; }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL);
+
+    auto label_style =
+        QString("color:%1; font-size:8px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY);
+
+    for (const auto& p : strat->params) {
+        auto* lbl = new QLabel(p.label.toUpper(), strategy_params_container_);
+        lbl->setStyleSheet(label_style);
+        strategy_params_layout_->addWidget(lbl);
+
+        auto* spin = new QDoubleSpinBox(strategy_params_container_);
+        spin->setRange(p.min_val, p.max_val);
+        spin->setValue(p.default_val);
+        spin->setSingleStep(p.step);
+        spin->setDecimals(p.step < 1.0 ? 2 : 0);
+        spin->setStyleSheet(input_style);
+        spin->setProperty("param_name", p.name);
+        strategy_params_layout_->addWidget(spin);
+        param_spinboxes_.append(spin);
+    }
 }
 
 // ── Gather args ──────────────────────────────────────────────────────────────
-QJsonObject BacktestingScreen::gather_args() {
-    QJsonObject args;
 
-    // Symbols
+QJsonObject BacktestingScreen::gather_strategy_params() {
+    QJsonObject params;
+    for (auto* spin : param_spinboxes_) {
+        auto name = spin->property("param_name").toString();
+        if (!name.isEmpty())
+            params[name] = spin->value();
+    }
+    return params;
+}
+
+QJsonObject BacktestingScreen::gather_args() {
+    const auto& cmds = commands_;
+    auto cmd_id = cmds[active_command_].id;
+
+    // Common fields
     auto sym_text = symbols_edit_->text().trimmed();
     QJsonArray symbols;
     for (const auto& s : sym_text.split(',', Qt::SkipEmptyParts))
         symbols.append(s.trimmed());
+
+    auto start = start_date_->date().toString("yyyy-MM-dd");
+    auto end = end_date_->date().toString("yyyy-MM-dd");
+
+    QJsonObject args;
     args["symbols"] = symbols;
+    args["startDate"] = start;
+    args["endDate"] = end;
 
-    args["startDate"] = start_date_->date().toString("yyyy-MM-dd");
-    args["endDate"] = end_date_->date().toString("yyyy-MM-dd");
-    args["initialCapital"] = capital_spin_->value();
-    args["commission"] = commission_spin_->value() / 100.0;
-    args["slippage"] = slippage_spin_->value() / 100.0;
-    args["leverage"] = leverage_spin_->value();
+    // ── Command-specific args ──
+    if (cmd_id == "backtest" || cmd_id == "optimize" || cmd_id == "walk_forward") {
+        args["initialCapital"] = capital_spin_->value();
+        args["commission"] = commission_spin_->value() / 100.0;
+        args["slippage"] = slippage_spin_->value() / 100.0;
+        args["leverage"] = leverage_spin_->value();
+        args["positionSizing"] = pos_sizing_combo_->currentText();
+        args["allowShort"] = allow_short_check_->isChecked();
+        args["benchmarkSymbol"] = benchmark_edit_->text().trimmed();
 
-    if (stop_loss_spin_->value() > 0)
-        args["stopLoss"] = stop_loss_spin_->value() / 100.0;
-    if (take_profit_spin_->value() > 0)
-        args["takeProfit"] = take_profit_spin_->value() / 100.0;
+        if (stop_loss_spin_->value() > 0)
+            args["stopLoss"] = stop_loss_spin_->value() / 100.0;
+        if (take_profit_spin_->value() > 0)
+            args["takeProfit"] = take_profit_spin_->value() / 100.0;
 
-    args["positionSizing"] = pos_sizing_combo_->currentText();
-    args["benchmarkSymbol"] = benchmark_edit_->text().trimmed();
+        // Strategy
+        QJsonObject strategy;
+        strategy["name"] = strategy_combo_->currentData().toString();
+        strategy["type"] = strategy_category_combo_->currentText();
+        strategy["params"] = gather_strategy_params();
+        args["strategy"] = strategy;
+    }
 
-    // Strategy
-    QJsonObject strategy;
-    strategy["name"] = strategy_combo_->currentData().toString();
-    strategy["type"] = strategy_category_combo_->currentText();
-    args["strategy"] = strategy;
+    if (cmd_id == "optimize") {
+        args["optimizeObjective"] = opt_objective_combo_->currentText();
+        args["optimizeMethod"] = opt_method_combo_->currentText();
+        args["maxIterations"] = opt_iterations_spin_->value();
+
+        // Build param ranges from strategy params
+        QJsonObject ranges;
+        for (auto* spin : param_spinboxes_) {
+            auto name = spin->property("param_name").toString();
+            double val = spin->value();
+            QJsonObject range;
+            range["min"] = qMax(spin->minimum(), val * 0.8);
+            range["max"] = qMin(spin->maximum(), val * 1.2);
+            range["step"] = spin->singleStep();
+            ranges[name] = range;
+        }
+        args["paramRanges"] = ranges;
+    }
+
+    if (cmd_id == "walk_forward") {
+        args["wfSplits"] = wf_splits_spin_->value();
+        args["wfTrainRatio"] = wf_train_ratio_spin_->value();
+    }
+
+    if (cmd_id == "indicator") {
+        args["indicator"] = indicator_combo_->currentData().toString();
+    }
+
+    if (cmd_id == "indicator_signals") {
+        args["indicator"] = ind_signal_indicator_combo_->currentData().toString();
+        args["mode"] = ind_signal_mode_combo_->currentText();
+    }
+
+    if (cmd_id == "labels") {
+        args["labelType"] = labels_type_combo_->currentText();
+        QJsonObject params;
+        params["horizon"] = labels_horizon_spin_->value();
+        params["threshold"] = labels_threshold_spin_->value();
+        args["params"] = params;
+    }
+
+    if (cmd_id == "splits") {
+        args["splitterType"] = splitter_type_combo_->currentText();
+        QJsonObject params;
+        params["windowLength"] = splitter_window_spin_->value();
+        params["step"] = splitter_step_spin_->value();
+        args["params"] = params;
+    }
+
+    if (cmd_id == "returns") {
+        args["analysisType"] = returns_type_combo_->currentText();
+        args["rollingWindow"] = returns_window_spin_->value();
+        if (returns_type_combo_->currentText() == "benchmark_comparison")
+            args["benchmarkSymbol"] = benchmark_edit_->text().trimmed();
+    }
+
+    if (cmd_id == "signals") {
+        args["generatorType"] = signal_gen_combo_->currentText();
+    }
 
     return args;
 }
 
 // ── Run ──────────────────────────────────────────────────────────────────────
+
 void BacktestingScreen::on_run() {
-    if (is_running_) return;
+    if (is_running_)
+        return;
+    if (active_provider_ < 0 || active_provider_ >= providers_.size())
+        return;
+    if (active_command_ < 0 || active_command_ >= commands_.size())
+        return;
+
+    const auto& provider_info = providers_[active_provider_];
+    const auto& command_id = commands_[active_command_].id;
+
+    // Validate command is supported by current provider
+    if (!provider_info.commands.contains(command_id)) {
+        display_error(
+            QString("Command '%1' is not supported by provider '%2'").arg(command_id, provider_info.display_name));
+        return;
+    }
+
+    // Validate symbols not empty
+    if (symbols_edit_->text().trimmed().isEmpty()) {
+        display_error("Please enter at least one symbol (e.g. SPY, AAPL)");
+        return;
+    }
+
     is_running_ = true;
     run_button_->setEnabled(false);
     status_label_->setText("EXECUTING...");
     status_label_->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
-        .arg(ui::colors::WARNING).arg(ui::fonts::DATA_FAMILY));
+                                     .arg(ui::colors::WARNING)
+                                     .arg(ui::fonts::DATA_FAMILY));
+    status_dot_->setText("EXEC");
+    status_dot_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
+                                       "padding:3px 8px; background:rgba(217,119,6,0.08);"
+                                       "border:1px solid rgba(217,119,6,0.25); border-radius:2px;")
+                                   .arg(ui::colors::WARNING)
+                                   .arg(ui::fonts::DATA_FAMILY));
 
-    auto provider = providers_[active_provider_].slug;
-    auto cmds = all_commands();
-    auto command = cmds[active_command_].id;
     auto args = gather_args();
 
-    BacktestingService::instance().execute(provider, command, args);
+    LOG_INFO("Backtesting", QString("Executing %1/%2").arg(provider_info.slug, command_id));
+    BacktestingService::instance().execute(provider_info.slug, command_id, args);
 }
 
 // ── Result display ───────────────────────────────────────────────────────────
-static QString fmt_val(const QJsonValue& val) {
-    if (val.isDouble()) {
-        double v = val.toDouble();
-        if (std::abs(v) >= 1e9)  return QString("$%1B").arg(v / 1e9, 0, 'f', 1);
-        if (std::abs(v) >= 1e6)  return QString("$%1M").arg(v / 1e6, 0, 'f', 1);
-        if (std::abs(v) >= 1e3)  return QString("$%1K").arg(v / 1e3, 0, 'f', 0);
-        if (std::abs(v) < 1.0 && std::abs(v) > 0.0001)
-            return QString("%1%").arg(v * 100, 0, 'f', 2);
-        return QString::number(v, 'f', 4);
-    }
-    if (val.isBool()) return val.toBool() ? "YES" : "NO";
-    if (val.isString()) return val.toString();
-    return QString::fromUtf8("\u2014");
+
+void BacktestingScreen::clear_results() {
+    clear_layout(summary_layout_);
+    metrics_table_->setRowCount(0);
+    trades_table_->setRowCount(0);
+    trades_table_->setColumnCount(0);
+    raw_json_edit_->clear();
 }
 
 void BacktestingScreen::display_result(const QJsonObject& data) {
-    // Clear
-    while (results_layout_->count() > 0) {
-        auto* item = results_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
-        delete item;
-    }
+    clear_results();
 
     auto accent = providers_[active_provider_].color.name();
 
-    // Header
-    auto* header = new QLabel("BACKTEST RESULTS");
+    // ── SUMMARY tab: metric cards ──
+    auto* header = new QLabel("BACKTEST RESULTS", summary_container_);
     header->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
-        "letter-spacing:1px;").arg(accent).arg(ui::fonts::DATA_FAMILY));
-    results_layout_->addWidget(header);
+                                  "letter-spacing:1px;")
+                              .arg(accent)
+                              .arg(ui::fonts::DATA_FAMILY));
+    summary_layout_->addWidget(header);
 
-    // Performance metrics cards (if nested in "performance" or "data.performance")
+    // Extract performance metrics (handle nested structures)
     auto perf = data.contains("performance") ? data["performance"].toObject()
-              : data.contains("data") ? data["data"].toObject()["performance"].toObject()
-              : data;
+                : data.contains("data")      ? data["data"].toObject().value("performance").toObject()
+                                             : data;
 
-    // Key metric cards
-    auto* cards = new QWidget;
+    // Key metric cards in grid
+    auto* cards = new QWidget(summary_container_);
     auto* gl = new QGridLayout(cards);
     gl->setContentsMargins(0, 0, 0, 0);
     gl->setSpacing(8);
 
-    QStringList key_metrics = {"total_return", "sharpe_ratio", "max_drawdown",
-                                "win_rate", "profit_factor", "total_trades",
-                                "annualized_return", "sortino_ratio", "calmar_ratio",
-                                "volatility", "alpha", "beta"};
+    QStringList key_metrics = {"total_return", "sharpe_ratio", "max_drawdown", "win_rate", "profit_factor",
+                               "total_trades", "annualized_return", "sortino_ratio", "calmar_ratio", "volatility",
+                               "alpha", "beta",
+                               // camelCase variants
+                               "totalReturn", "sharpeRatio", "maxDrawdown", "winRate", "profitFactor", "totalTrades",
+                               "annualizedReturn", "sortinoRatio", "calmarRatio"};
 
     int col = 0, row = 0;
+    QStringList shown;
     for (const auto& key : key_metrics) {
-        if (!perf.contains(key)) continue;
-        auto label = key;
-        label.replace('_', ' ');
+        if (!perf.contains(key))
+            continue;
+        // Skip duplicate camelCase if we already showed snake_case
+        auto normalized = key;
+        normalized.replace(QRegularExpression("([a-z])([A-Z])"), "\\1_\\2");
+        normalized = normalized.toLower();
+        if (shown.contains(normalized))
+            continue;
+        shown.append(normalized);
+
+        auto display_label = key;
+        display_label.replace('_', ' ');
+        // Also handle camelCase
+        display_label.replace(QRegularExpression("([a-z])([A-Z])"), "\\1 \\2");
+
         auto* card = new QWidget(cards);
         card->setStyleSheet(QString("background:%1; border:1px solid %2; border-radius:2px;")
-            .arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_DIM));
+                                .arg(ui::colors::BG_RAISED)
+                                .arg(ui::colors::BORDER_DIM));
         auto* cvl = new QVBoxLayout(card);
         cvl->setContentsMargins(10, 8, 10, 8);
         cvl->setSpacing(2);
-        auto* lbl = new QLabel(label.toUpper(), card);
+
+        auto* lbl = new QLabel(display_label.toUpper(), card);
         lbl->setStyleSheet(QString("color:%1; font-size:8px; font-family:%2;")
-            .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
-        auto* val = new QLabel(fmt_val(perf[key]), card);
+                               .arg(ui::colors::TEXT_TERTIARY)
+                               .arg(ui::fonts::DATA_FAMILY));
+        auto* val = new QLabel(fmt_metric(key, perf[key]), card);
         val->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700; font-family:%2;")
-            .arg(accent).arg(ui::fonts::DATA_FAMILY));
+                               .arg(accent)
+                               .arg(ui::fonts::DATA_FAMILY));
         cvl->addWidget(lbl);
         cvl->addWidget(val);
         gl->addWidget(card, row, col);
-        if (++col >= 3) { col = 0; row++; }
+        if (++col >= 3) {
+            col = 0;
+            row++;
+        }
     }
-    results_layout_->addWidget(cards);
 
-    // Shared table stylesheet (used for both metrics and trades tables)
-    const QString table_style = QString(
-        "QTableWidget { background:%1; color:%2; gridline-color:%3;"
-        "font-family:%4; font-size:%5px; border:1px solid %3; }"
-        "QTableWidget::item { padding:3px 8px; }"
-        "QHeaderView::section { background:%6; color:%7; font-weight:700;"
-        "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-        "QTableWidget::item:alternate { background:%8; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(ui::colors::BG_RAISED).arg(ui::colors::TEXT_SECONDARY)
-        .arg(ui::colors::ROW_ALT);
+    if (row > 0 || col > 0)
+        summary_layout_->addWidget(cards);
+    else
+        cards->deleteLater();
 
-    // Full metrics table
+    // If result has a status/message, show it
+    if (data.contains("status")) {
+        auto status = data["status"].toString();
+        auto* status_lbl = new QLabel(QString("Status: %1").arg(status), summary_container_);
+        status_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px;")
+                                      .arg(status == "success" ? ui::colors::POSITIVE : ui::colors::WARNING)
+                                      .arg(ui::fonts::SMALL)
+                                      .arg(ui::fonts::DATA_FAMILY));
+        summary_layout_->addWidget(status_lbl);
+    }
+
+    summary_layout_->addStretch();
+
+    // ── METRICS tab: full metrics table ──
     QStringList all_keys;
     for (auto it = perf.begin(); it != perf.end(); ++it)
         if (!it.value().isObject() && !it.value().isArray())
             all_keys.append(it.key());
 
     if (!all_keys.isEmpty()) {
-        auto* metrics_title = new QLabel("ALL METRICS");
-        metrics_title->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;"
-            "font-family:%2; letter-spacing:1px; padding-top:8px;")
-            .arg(accent).arg(ui::fonts::DATA_FAMILY));
-        results_layout_->addWidget(metrics_title);
-
-        auto* table = new QTableWidget(all_keys.size(), 2);
-        table->setHorizontalHeaderLabels({"Metric", "Value"});
-        table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        table->setAlternatingRowColors(true);
-        table->horizontalHeader()->setStretchLastSection(true);
-        table->verticalHeader()->setVisible(false);
-        table->setMaximumHeight(qMin(all_keys.size() * 28 + 30, 500));
-        table->setStyleSheet(table_style);
-
+        metrics_table_->setRowCount(all_keys.size());
         for (int r = 0; r < all_keys.size(); ++r) {
-            auto label = all_keys[r]; label.replace('_', ' ');
-            table->setItem(r, 0, new QTableWidgetItem(label.toUpper()));
-            auto* vi = new QTableWidgetItem(fmt_val(perf[all_keys[r]]));
-            vi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            table->setItem(r, 1, vi);
+            auto label = all_keys[r];
+            label.replace('_', ' ');
+            label.replace(QRegularExpression("([a-z])([A-Z])"), "\\1 \\2");
+            auto* name_item = new QTableWidgetItem(label.toUpper());
+            metrics_table_->setItem(r, 0, name_item);
+
+            auto* val_item = new QTableWidgetItem(fmt_metric(all_keys[r], perf[all_keys[r]]));
+            val_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            metrics_table_->setItem(r, 1, val_item);
         }
-        table->resizeColumnsToContents();
-        results_layout_->addWidget(table);
+        metrics_table_->resizeColumnsToContents();
     }
 
-    // Trades table (if present)
+    // ── TRADES tab ──
     auto trades = data.contains("trades") ? data["trades"].toArray()
-                : data.contains("data") ? data["data"].toObject()["trades"].toArray()
-                : QJsonArray();
+                  : data.contains("data") ? data["data"].toObject().value("trades").toArray()
+                                          : QJsonArray();
 
-    if (!trades.isEmpty()) {
-        auto* trades_title = new QLabel(QString("TRADES (%1)").arg(trades.size()));
-        trades_title->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;"
-            "font-family:%2; letter-spacing:1px; padding-top:8px;")
-            .arg(accent).arg(ui::fonts::DATA_FAMILY));
-        results_layout_->addWidget(trades_title);
+    if (!trades.isEmpty() && trades[0].isObject()) {
+        auto first = trades[0].toObject();
+        QStringList cols;
+        for (auto it = first.begin(); it != first.end(); ++it)
+            if (!it.value().isObject() && !it.value().isArray())
+                cols.append(it.key());
 
-        // Build table from first trade's keys
-        if (trades[0].isObject()) {
-            auto first = trades[0].toObject();
-            QStringList cols;
-            for (auto it = first.begin(); it != first.end(); ++it)
-                if (!it.value().isObject() && !it.value().isArray())
-                    cols.append(it.key());
+        int show = qMin(static_cast<int>(trades.size()), 100);
+        trades_table_->setColumnCount(cols.size());
+        trades_table_->setHorizontalHeaderLabels(cols);
+        trades_table_->setRowCount(show);
 
-            int show = qMin(trades.size(), 50);
-            auto* tt = new QTableWidget(show, cols.size());
-            tt->setHorizontalHeaderLabels(cols);
-            tt->setEditTriggers(QAbstractItemView::NoEditTriggers);
-            tt->setAlternatingRowColors(true);
-            tt->horizontalHeader()->setStretchLastSection(true);
-            tt->verticalHeader()->setVisible(false);
-            tt->setMaximumHeight(400);
-            tt->setStyleSheet(table_style);
-
-            for (int r = 0; r < show; ++r) {
-                auto trade = trades[r].toObject();
-                for (int c = 0; c < cols.size(); ++c) {
-                    auto* item = new QTableWidgetItem(fmt_val(trade[cols[c]]));
-                    item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    tt->setItem(r, c, item);
-                }
+        for (int r = 0; r < show; ++r) {
+            auto trade = trades[r].toObject();
+            for (int c = 0; c < cols.size(); ++c) {
+                auto* item = new QTableWidgetItem(fmt_metric(cols[c], trade[cols[c]]));
+                item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                trades_table_->setItem(r, c, item);
             }
-            tt->resizeColumnsToContents();
-            results_layout_->addWidget(tt);
         }
+        trades_table_->resizeColumnsToContents();
     }
 
-    // Raw JSON
-    auto* raw = new QTextEdit;
-    raw->setReadOnly(true);
-    raw->setMaximumHeight(200);
-    raw->setPlainText(QJsonDocument(data).toJson(QJsonDocument::Indented));
-    raw->setStyleSheet(QString(
-        "QTextEdit { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:8px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
-    results_layout_->addWidget(raw);
+    // ── RAW JSON tab ──
+    raw_json_edit_->setPlainText(QJsonDocument(data).toJson(QJsonDocument::Indented));
+
+    // Switch to summary tab
+    result_tabs_->setCurrentIndex(0);
 }
 
 void BacktestingScreen::display_error(const QString& msg) {
-    while (results_layout_->count() > 0) {
-        auto* item = results_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
-        delete item;
-    }
-    auto* err = new QLabel(msg);
+    clear_results();
+
+    auto* err = new QLabel(msg, summary_container_);
     err->setWordWrap(true);
-    err->setStyleSheet(QString(
-        "color:%1; font-size:%2px; font-family:%3; padding:12px;"
-        "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3);"
-        "border-radius:2px;")
-        .arg(ui::colors::NEGATIVE).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
-    results_layout_->addWidget(err);
+    err->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:12px;"
+                               "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3);"
+                               "border-radius:2px;")
+                           .arg(ui::colors::NEGATIVE)
+                           .arg(ui::fonts::SMALL)
+                           .arg(ui::fonts::DATA_FAMILY));
+    summary_layout_->addWidget(err);
+    summary_layout_->addStretch();
+
+    // Also put error in raw JSON tab for debugging
+    raw_json_edit_->setPlainText(msg);
+
+    result_tabs_->setCurrentIndex(0);
 }
 
 // ── Signal handlers ──────────────────────────────────────────────────────────
-void BacktestingScreen::on_result(const QString& provider, const QString& command,
-                                   const QJsonObject& data) {
+
+void BacktestingScreen::on_result(const QString& provider, const QString& command, const QJsonObject& data) {
     is_running_ = false;
     run_button_->setEnabled(true);
     status_label_->setText("READY");
     status_label_->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
-        .arg(ui::colors::POSITIVE).arg(ui::fonts::DATA_FAMILY));
+                                     .arg(ui::colors::POSITIVE)
+                                     .arg(ui::fonts::DATA_FAMILY));
+    status_dot_->setText("READY");
+    status_dot_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
+                                       "padding:3px 8px; background:rgba(22,163,74,0.08);"
+                                       "border:1px solid rgba(22,163,74,0.25); border-radius:2px;")
+                                   .arg(ui::colors::POSITIVE)
+                                   .arg(ui::fonts::DATA_FAMILY));
     display_result(data);
     LOG_INFO("Backtesting", QString("[%1/%2] Complete").arg(provider, command));
 }
@@ -800,7 +1417,14 @@ void BacktestingScreen::on_error(const QString& context, const QString& message)
     run_button_->setEnabled(true);
     status_label_->setText("ERROR");
     status_label_->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
-        .arg(ui::colors::NEGATIVE).arg(ui::fonts::DATA_FAMILY));
+                                     .arg(ui::colors::NEGATIVE)
+                                     .arg(ui::fonts::DATA_FAMILY));
+    status_dot_->setText("ERROR");
+    status_dot_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
+                                       "padding:3px 8px; background:rgba(220,38,38,0.08);"
+                                       "border:1px solid rgba(220,38,38,0.25); border-radius:2px;")
+                                   .arg(ui::colors::NEGATIVE)
+                                   .arg(ui::fonts::DATA_FAMILY));
     display_error(QString("[%1] %2").arg(context, message));
 }
 

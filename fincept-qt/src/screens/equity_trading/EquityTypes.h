@@ -18,15 +18,13 @@ enum class TradingMode { Paper, Live };
 // ── Default Watchlist (NIFTY 50 subset) ────────────────────────────────────
 
 inline const QStringList DEFAULT_WATCHLIST = {
-    "HDFCBANK", "ICICIBANK", "SBIN",     "KOTAKBANK",  "AXISBANK",
-    "TCS",      "INFY",      "WIPRO",    "HCLTECH",    "RELIANCE",
-    "TATAMOTORS","MARUTI",   "BAJFINANCE","HINDUNILVR", "ITC",
-    "SUNPHARMA", "DRREDDY",  "LT",       "BHARTIARTL", "TITAN",
+    "HDFCBANK", "ICICIBANK", "SBIN",     "KOTAKBANK",  "AXISBANK",   "TCS",        "INFY",
+    "WIPRO",    "HCLTECH",   "RELIANCE", "TATAMOTORS", "MARUTI",     "BAJFINANCE", "HINDUNILVR",
+    "ITC",      "SUNPHARMA", "DRREDDY",  "LT",         "BHARTIARTL", "TITAN",
 };
 
 inline const QStringList US_WATCHLIST = {
-    "AAPL", "MSFT", "GOOGL", "AMZN",  "NVDA",
-    "META", "TSLA", "JPM",   "V",     "JNJ",
+    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "JPM", "V", "JNJ",
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -65,8 +63,7 @@ inline const QColor ROW_ALT = QColor("#0c0c0c");
 // ── Exchange → Currency mapping ────────────────────────────────────────────
 
 inline QString exchange_currency(const QString& exchange) {
-    if (exchange == "NSE" || exchange == "BSE" || exchange == "NFO" ||
-        exchange == "MCX" || exchange == "CDS")
+    if (exchange == "NSE" || exchange == "BSE" || exchange == "NFO" || exchange == "MCX" || exchange == "CDS")
         return "INR";
     if (exchange == "NYSE" || exchange == "NASDAQ" || exchange == "AMEX")
         return "USD";
@@ -76,10 +73,14 @@ inline QString exchange_currency(const QString& exchange) {
 }
 
 inline QString currency_symbol(const QString& currency) {
-    if (currency == "INR") return QString::fromUtf8("\u20B9");
-    if (currency == "GBP") return QString::fromUtf8("\u00A3");
-    if (currency == "EUR") return QString::fromUtf8("\u20AC");
-    if (currency == "JPY") return QString::fromUtf8("\u00A5");
+    if (currency == "INR")
+        return QString::fromUtf8("\u20B9");
+    if (currency == "GBP")
+        return QString::fromUtf8("\u00A3");
+    if (currency == "EUR")
+        return QString::fromUtf8("\u20AC");
+    if (currency == "JPY")
+        return QString::fromUtf8("\u00A5");
     return "$";
 }
 

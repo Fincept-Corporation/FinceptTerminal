@@ -1,4 +1,5 @@
 #include "screens/node_editor/palette/NodePalette.h"
+
 #include "services/workflow/NodeRegistry.h"
 
 #include <QDrag>
@@ -14,16 +15,13 @@
 
 namespace fincept::workflow {
 
-NodePalette::NodePalette(QWidget* parent)
-    : QWidget(parent)
-{
+NodePalette::NodePalette(QWidget* parent) : QWidget(parent) {
     setFixedWidth(240);
     setObjectName("nodePalette");
     build_ui();
 }
 
-void NodePalette::build_ui()
-{
+void NodePalette::build_ui() {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
@@ -35,9 +33,8 @@ void NodePalette::build_ui()
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(10, 0, 10, 0);
     auto* title = new QLabel("NODES");
-    title->setStyleSheet(
-        "color: #d97706; font-family: Consolas; font-size: 12px;"
-        "font-weight: bold; letter-spacing: 0.5px;");
+    title->setStyleSheet("color: #d97706; font-family: Consolas; font-size: 12px;"
+                         "font-weight: bold; letter-spacing: 0.5px;");
     hl->addWidget(title);
     hl->addStretch();
     root->addWidget(header);
@@ -56,12 +53,11 @@ void NodePalette::build_ui()
 
     search_input_ = new QLineEdit;
     search_input_->setPlaceholderText("Search nodes...");
-    search_input_->setStyleSheet(
-        "QLineEdit {"
-        "  background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
-        "  font-family: Consolas; font-size: 12px; padding: 4px 8px;"
-        "}"
-        "QLineEdit:focus { border: 1px solid #d97706; }");
+    search_input_->setStyleSheet("QLineEdit {"
+                                 "  background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
+                                 "  font-family: Consolas; font-size: 12px; padding: 4px 8px;"
+                                 "}"
+                                 "QLineEdit:focus { border: 1px solid #d97706; }");
     sl->addWidget(search_input_);
     root->addWidget(search_wrap);
 
@@ -71,17 +67,16 @@ void NodePalette::build_ui()
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(
-        "QScrollArea { background: #141414; border: none; }"
-        "QScrollBar:vertical {"
-        "  background: #141414; width: 6px; margin: 0;"
-        "}"
-        "QScrollBar::handle:vertical {"
-        "  background: #4a4a4a; min-height: 20px;"
-        "}"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-        "  height: 0; background: none;"
-        "}");
+    scroll->setStyleSheet("QScrollArea { background: #141414; border: none; }"
+                          "QScrollBar:vertical {"
+                          "  background: #141414; width: 6px; margin: 0;"
+                          "}"
+                          "QScrollBar::handle:vertical {"
+                          "  background: #4a4a4a; min-height: 20px;"
+                          "}"
+                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                          "  height: 0; background: none;"
+                          "}");
 
     categories_container_ = new QWidget;
     categories_layout_ = new QVBoxLayout(categories_container_);
@@ -95,8 +90,7 @@ void NodePalette::build_ui()
     rebuild_categories();
 }
 
-void NodePalette::rebuild_categories(const QString& filter)
-{
+void NodePalette::rebuild_categories(const QString& filter) {
     // Remove existing category widgets (keep the trailing stretch)
     while (categories_layout_->count() > 1) {
         auto* item = categories_layout_->takeAt(0);
@@ -115,15 +109,15 @@ void NodePalette::rebuild_categories(const QString& filter)
         // Filter nodes by search text
         QVector<NodeTypeDef> filtered;
         for (const auto& n : nodes) {
-            if (filter.isEmpty() ||
-                n.display_name.contains(filter, Qt::CaseInsensitive) ||
+            if (filter.isEmpty() || n.display_name.contains(filter, Qt::CaseInsensitive) ||
                 n.description.contains(filter, Qt::CaseInsensitive) ||
                 n.type_id.contains(filter, Qt::CaseInsensitive)) {
                 filtered.append(n);
             }
         }
 
-        if (filtered.isEmpty()) continue;
+        if (filtered.isEmpty())
+            continue;
 
         // Category header
         auto* cat_header = new QWidget;
@@ -133,14 +127,13 @@ void NodePalette::rebuild_categories(const QString& filter)
         chl->setContentsMargins(10, 0, 10, 0);
         auto* cat_label = new QLabel(cat.toUpper());
         QString accent = filtered.first().accent_color;
-        cat_label->setStyleSheet(
-            QString("color: %1; font-family: Consolas; font-size: 11px;"
-                    "font-weight: bold; letter-spacing: 0.5px;").arg(accent));
+        cat_label->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 11px;"
+                                         "font-weight: bold; letter-spacing: 0.5px;")
+                                     .arg(accent));
         chl->addWidget(cat_label);
 
         auto* count_label = new QLabel(QString::number(filtered.size()));
-        count_label->setStyleSheet(
-            "color: #525252; font-family: Consolas; font-size: 10px;");
+        count_label->setStyleSheet("color: #525252; font-family: Consolas; font-size: 10px;");
         chl->addStretch();
         chl->addWidget(count_label);
 
@@ -152,15 +145,14 @@ void NodePalette::rebuild_categories(const QString& filter)
             auto* btn = new QPushButton;
             btn->setFixedHeight(32);
             btn->setCursor(Qt::OpenHandCursor);
-            btn->setStyleSheet(
-                "QPushButton {"
-                "  background: #141414; color: #e5e5e5; border: none;"
-                "  border-bottom: 1px solid #1e1e1e; font-family: Consolas;"
-                "  font-size: 11px; text-align: left; padding: 0 10px;"
-                "}"
-                "QPushButton:hover {"
-                "  background: #252525; color: #e5e5e5;"
-                "}");
+            btn->setStyleSheet("QPushButton {"
+                               "  background: #141414; color: #e5e5e5; border: none;"
+                               "  border-bottom: 1px solid #1e1e1e; font-family: Consolas;"
+                               "  font-size: 11px; text-align: left; padding: 0 10px;"
+                               "}"
+                               "QPushButton:hover {"
+                               "  background: #252525; color: #e5e5e5;"
+                               "}");
 
             btn->setToolTip(n.description);
 
@@ -171,30 +163,26 @@ void NodePalette::rebuild_categories(const QString& filter)
 
             auto* icon = new QLabel(n.icon_text);
             icon->setFixedWidth(20);
-            icon->setStyleSheet(
-                QString("color: %1; font-family: Consolas; font-size: 10px;"
-                        "font-weight: bold;").arg(accent));
+            icon->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
+                                        "font-weight: bold;")
+                                    .arg(accent));
             icon->setAttribute(Qt::WA_TransparentForMouseEvents);
             bl->addWidget(icon);
 
             auto* name = new QLabel(n.display_name);
-            name->setStyleSheet(
-                "color: #e5e5e5; font-family: Consolas; font-size: 11px;");
+            name->setStyleSheet("color: #e5e5e5; font-family: Consolas; font-size: 11px;");
             name->setAttribute(Qt::WA_TransparentForMouseEvents);
             bl->addWidget(name, 1);
 
             QString type_id = n.type_id;
-            connect(btn, &QPushButton::pressed, this, [this, type_id]() {
-                start_drag(type_id);
-            });
+            connect(btn, &QPushButton::pressed, this, [this, type_id]() { start_drag(type_id); });
 
             categories_layout_->insertWidget(categories_layout_->count() - 1, btn);
         }
     }
 }
 
-void NodePalette::start_drag(const QString& type_id)
-{
+void NodePalette::start_drag(const QString& type_id) {
     auto& registry = NodeRegistry::instance();
     const auto* type_def = registry.find(type_id);
 

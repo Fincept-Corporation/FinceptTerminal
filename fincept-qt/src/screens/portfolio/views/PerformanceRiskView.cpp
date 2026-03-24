@@ -1,5 +1,6 @@
 // src/screens/portfolio/views/PerformanceRiskView.cpp
 #include "screens/portfolio/views/PerformanceRiskView.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QAreaSeries>
@@ -34,8 +35,8 @@ void PerformanceRiskView::build_ui() {
     period_bar->setContentsMargins(12, 6, 12, 6);
 
     auto* chart_title = new QLabel("NAV PERFORMANCE");
-    chart_title->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;")
-                               .arg(ui::colors::AMBER));
+    chart_title->setStyleSheet(
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     period_bar->addWidget(chart_title);
     period_bar->addStretch();
 
@@ -44,13 +45,13 @@ void PerformanceRiskView::build_ui() {
         btn->setFixedSize(32, 20);
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(QString(
-            "QPushButton { background:transparent; color:%1; border:none;"
-            "  font-size:9px; font-weight:700; }"
-            "QPushButton:checked { color:%2; border-bottom:2px solid %2; }"
-            "QPushButton:hover { color:%3; }")
-            .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
-        if (p == current_period_) btn->setChecked(true);
+        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
+                                   "  font-size:9px; font-weight:700; }"
+                                   "QPushButton:checked { color:%2; border-bottom:2px solid %2; }"
+                                   "QPushButton:hover { color:%3; }")
+                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+        if (p == current_period_)
+            btn->setChecked(true);
         connect(btn, &QPushButton::clicked, this, [this, period = p]() { set_period(period); });
         period_bar->addWidget(btn);
         period_btns_.append(btn);
@@ -81,33 +82,33 @@ void PerformanceRiskView::build_ui() {
     metrics_header->setFixedHeight(24);
     metrics_header->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;"
                                           "letter-spacing:1px; background:%2;")
-                                  .arg(ui::colors::TEXT_SECONDARY, ui::colors::BG_SURFACE));
+                                      .arg(ui::colors::TEXT_SECONDARY, ui::colors::BG_SURFACE));
     layout->addWidget(metrics_header);
 
     auto* cards_layout = new QGridLayout;
     cards_layout->setContentsMargins(12, 8, 12, 8);
     cards_layout->setSpacing(8);
 
-    sharpe_card_   = add_metric_card(cards_layout, "SHARPE RATIO", "Risk-adjusted return", ui::colors::CYAN);
-    sortino_card_  = add_metric_card(cards_layout, "SORTINO RATIO", "Downside risk-adjusted", ui::colors::CYAN);
-    beta_card_     = add_metric_card(cards_layout, "BETA", "Market sensitivity (vs SPY)", ui::colors::WARNING);
-    alpha_card_    = add_metric_card(cards_layout, "ALPHA", "Excess return vs benchmark", ui::colors::POSITIVE);
-    vol_card_      = add_metric_card(cards_layout, "VOLATILITY", "Annualized 30-day", ui::colors::AMBER);
+    sharpe_card_ = add_metric_card(cards_layout, "SHARPE RATIO", "Risk-adjusted return", ui::colors::CYAN);
+    sortino_card_ = add_metric_card(cards_layout, "SORTINO RATIO", "Downside risk-adjusted", ui::colors::CYAN);
+    beta_card_ = add_metric_card(cards_layout, "BETA", "Market sensitivity (vs SPY)", ui::colors::WARNING);
+    alpha_card_ = add_metric_card(cards_layout, "ALPHA", "Excess return vs benchmark", ui::colors::POSITIVE);
+    vol_card_ = add_metric_card(cards_layout, "VOLATILITY", "Annualized 30-day", ui::colors::AMBER);
     drawdown_card_ = add_metric_card(cards_layout, "MAX DRAWDOWN", "Peak-to-trough decline", ui::colors::NEGATIVE);
-    var_card_      = add_metric_card(cards_layout, "VALUE AT RISK (95%)", "1-day parametric VaR", ui::colors::NEGATIVE);
-    cvar_card_     = add_metric_card(cards_layout, "CONDITIONAL VaR", "Expected shortfall", ui::colors::NEGATIVE);
+    var_card_ = add_metric_card(cards_layout, "VALUE AT RISK (95%)", "1-day parametric VaR", ui::colors::NEGATIVE);
+    cvar_card_ = add_metric_card(cards_layout, "CONDITIONAL VaR", "Expected shortfall", ui::colors::NEGATIVE);
 
     auto* cards_widget = new QWidget;
     cards_widget->setLayout(cards_layout);
     layout->addWidget(cards_widget, 3);
 }
 
-PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(
-    QLayout* parent_layout, const QString& title, const QString& desc, const char* color) {
+PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(QLayout* parent_layout, const QString& title,
+                                                                     const QString& desc, const char* color) {
 
     auto* card = new QWidget;
-    card->setStyleSheet(QString("background:%1; border:1px solid %2; padding:8px;")
-                        .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    card->setStyleSheet(
+        QString("background:%1; border:1px solid %2; padding:8px;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
 
     auto* layout = new QVBoxLayout(card);
     layout->setContentsMargins(10, 8, 10, 8);
@@ -117,7 +118,7 @@ PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(
 
     mc.title = new QLabel(title);
     mc.title->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px; border:none;")
-                            .arg(ui::colors::TEXT_TERTIARY));
+                                .arg(ui::colors::TEXT_TERTIARY));
     layout->addWidget(mc.title);
 
     mc.value = new QLabel("--");
@@ -137,8 +138,7 @@ PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(
     return mc;
 }
 
-void PerformanceRiskView::set_data(const portfolio::PortfolioSummary& summary,
-                                     const QString& currency) {
+void PerformanceRiskView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     summary_ = summary;
     currency_ = currency;
     update_chart();
@@ -161,7 +161,8 @@ void PerformanceRiskView::update_chart() {
         delete axis;
     }
 
-    if (summary_.holdings.isEmpty()) return;
+    if (summary_.holdings.isEmpty())
+        return;
 
     // Build synthetic NAV curve (cost -> current)
     auto* line = new QLineSeries;
@@ -192,7 +193,8 @@ void PerformanceRiskView::update_chart() {
         lower->append(line->at(i).x(), 0);
 
     auto* area = new QAreaSeries(upper, lower);
-    QColor fill = lc; fill.setAlpha(25);
+    QColor fill = lc;
+    fill.setAlpha(25);
     area->setBrush(fill);
     area->setPen(Qt::NoPen);
 
@@ -213,8 +215,10 @@ void PerformanceRiskView::update_chart() {
 
     chart->addAxis(x_axis, Qt::AlignBottom);
     chart->addAxis(y_axis, Qt::AlignLeft);
-    line->attachAxis(x_axis); line->attachAxis(y_axis);
-    area->attachAxis(x_axis); area->attachAxis(y_axis);
+    line->attachAxis(x_axis);
+    line->attachAxis(y_axis);
+    area->attachAxis(x_axis);
+    area->attachAxis(y_axis);
 }
 
 void PerformanceRiskView::update_metrics() {
@@ -253,7 +257,8 @@ void PerformanceRiskView::update_metrics() {
     }
 
     // Sortino (using only negative returns as downside deviation)
-    double neg_sq = 0; int neg_n = 0;
+    double neg_sq = 0;
+    int neg_n = 0;
     for (const auto& h : summary_.holdings) {
         if (h.day_change_percent < 0) {
             neg_sq += h.day_change_percent * h.day_change_percent;

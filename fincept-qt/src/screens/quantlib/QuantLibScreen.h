@@ -19,7 +19,7 @@ struct QuantModule {
     QString id;
     QString name;
     int endpoint_count;
-    QStringList panels;  // sub-panel names
+    QStringList panels; // sub-panel names
 };
 
 /// QuantLib Suite — 18 quantitative analysis modules with 590+ endpoints.

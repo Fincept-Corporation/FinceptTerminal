@@ -15,10 +15,10 @@ struct AlgoStrategy {
     QString id;
     QString name;
     QString description;
-    QString timeframe;        // live, 1m, 5m, 15m, 1h, 4h, 1d
+    QString timeframe; // live, 1m, 5m, 15m, 1h, 4h, 1d
     QJsonArray entry_conditions;
     QJsonArray exit_conditions;
-    QString entry_logic = "AND";  // AND, OR
+    QString entry_logic = "AND"; // AND, OR
     QString exit_logic = "AND";
     double stop_loss = 0;
     double take_profit = 0;
@@ -35,8 +35,8 @@ struct AlgoDeployment {
     QString strategy_id;
     QString strategy_name;
     QString symbol;
-    QString mode;             // paper, live
-    QString status;           // pending, starting, running, stopped, error
+    QString mode;   // paper, live
+    QString status; // pending, starting, running, stopped, error
     QString timeframe;
     double quantity = 1.0;
     QString error_message;
@@ -55,10 +55,14 @@ struct AlgoDeployment {
 };
 
 inline QColor deployment_status_color(const QString& status) {
-    if (status == "running")  return QColor("#00D66F");
-    if (status == "starting") return QColor("#FFC400");
-    if (status == "error")    return QColor("#FF3B3B");
-    if (status == "stopped")  return QColor("#787878");
+    if (status == "running")
+        return QColor("#00D66F");
+    if (status == "starting")
+        return QColor("#FFC400");
+    if (status == "error")
+        return QColor("#FF3B3B");
+    if (status == "stopped")
+        return QColor("#787878");
     return QColor("#787878"); // pending
 }
 
@@ -68,7 +72,7 @@ struct AlgoTrade {
     QString id;
     QString deployment_id;
     QString symbol;
-    QString side;             // BUY, SELL
+    QString side; // BUY, SELL
     double quantity = 0;
     double price = 0;
     double pnl = 0;
@@ -82,9 +86,9 @@ struct ConditionDef {
     QString indicator;
     QJsonObject params;
     QString field;
-    QString op;               // >, <, >=, <=, ==, crosses_above, crosses_below
+    QString op; // >, <, >=, <=, ==, crosses_above, crosses_below
     double value = 0;
-    QString compare_mode = "value";  // value, indicator
+    QString compare_mode = "value"; // value, indicator
     QString compare_indicator;
     QJsonObject compare_params;
     QString compare_field;
@@ -95,7 +99,7 @@ struct ConditionDef {
 struct IndicatorDef {
     QString id;
     QString label;
-    QString category;       // stock, ma, momentum, trend, volatility, volume
+    QString category; // stock, ma, momentum, trend, volatility, volume
     QStringList params;
     QStringList fields;
 };
@@ -117,8 +121,7 @@ inline QVector<IndicatorDef> algo_indicators() {
         {"TEMA", "TEMA", "ma", {"period"}, {"value"}},
         // Momentum
         {"RSI", "RSI", "momentum", {"period"}, {"value"}},
-        {"MACD", "MACD", "momentum", {"fast", "slow", "signal"},
-         {"line", "signal_line", "histogram"}},
+        {"MACD", "MACD", "momentum", {"fast", "slow", "signal"}, {"line", "signal_line", "histogram"}},
         {"STOCHASTIC", "Stochastic", "momentum", {"k_period", "d_period"}, {"k", "d"}},
         {"CCI", "CCI", "momentum", {"period"}, {"value"}},
         {"WILLIAMS_R", "Williams %R", "momentum", {"period"}, {"value"}},
@@ -128,16 +131,20 @@ inline QVector<IndicatorDef> algo_indicators() {
         {"ADX", "ADX", "trend", {"period"}, {"value", "plus_di", "minus_di"}},
         {"SUPERTREND", "SuperTrend", "trend", {"period", "multiplier"}, {"value", "direction"}},
         {"AROON", "Aroon", "trend", {"period"}, {"up", "down"}},
-        {"ICHIMOKU", "Ichimoku", "trend", {"tenkan", "kijun", "senkou"},
+        {"ICHIMOKU",
+         "Ichimoku",
+         "trend",
+         {"tenkan", "kijun", "senkou"},
          {"tenkan_sen", "kijun_sen", "senkou_a", "senkou_b"}},
         // Volatility
         {"ATR", "ATR", "volatility", {"period"}, {"value"}},
-        {"BOLLINGER", "Bollinger Bands", "volatility", {"period", "std_dev"},
+        {"BOLLINGER",
+         "Bollinger Bands",
+         "volatility",
+         {"period", "std_dev"},
          {"upper", "middle", "lower", "width", "pct_b"}},
-        {"KELTNER", "Keltner Channel", "volatility", {"period", "multiplier"},
-         {"upper", "middle", "lower"}},
-        {"DONCHIAN", "Donchian Channel", "volatility", {"period"},
-         {"upper", "lower"}},
+        {"KELTNER", "Keltner Channel", "volatility", {"period", "multiplier"}, {"upper", "middle", "lower"}},
+        {"DONCHIAN", "Donchian Channel", "volatility", {"period"}, {"upper", "lower"}},
         // Volume
         {"OBV", "On Balance Volume", "volume", {}, {"value"}},
         {"CMF", "Chaikin Money Flow", "volume", {"period"}, {"value"}},
@@ -145,9 +152,7 @@ inline QVector<IndicatorDef> algo_indicators() {
 }
 
 inline QStringList algo_operators() {
-    return {">", "<", ">=", "<=", "==",
-            "crosses_above", "crosses_below",
-            "rising", "falling"};
+    return {">", "<", ">=", "<=", "==", "crosses_above", "crosses_below", "rising", "falling"};
 }
 
 inline QStringList algo_timeframes() {
@@ -165,8 +170,8 @@ struct ScannerPreset {
 inline QVector<ScannerPreset> scanner_presets() {
     QVector<ScannerPreset> presets;
 
-    auto make_cond = [](const QString& ind, const QJsonObject& params,
-                        const QString& field, const QString& op, double val) {
+    auto make_cond = [](const QString& ind, const QJsonObject& params, const QString& field, const QString& op,
+                        double val) {
         QJsonObject c;
         c["indicator"] = ind;
         c["params"] = params;
@@ -188,19 +193,18 @@ inline QVector<ScannerPreset> scanner_presets() {
 
     // MACD Bullish
     QJsonArray macd_bull;
-    macd_bull.append(make_cond("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}},
-                               "histogram", ">", 0));
+    macd_bull.append(make_cond("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "histogram", ">", 0));
     presets.append({"MACD Bullish", "momentum", macd_bull});
 
     // Bollinger Squeeze
     QJsonArray bb_sq;
-    bb_sq.append(make_cond("BOLLINGER", {{"period", 20}, {"std_dev", 2}},
-                            "width", "<", 0.05));
+    bb_sq.append(make_cond("BOLLINGER", {{"period", 20}, {"std_dev", 2}}, "width", "<", 0.05));
     presets.append({"Bollinger Squeeze", "volatility", bb_sq});
 
     // Volume Breakout
     QJsonArray vol_bo;
-    QJsonObject vol_params; vol_params["period"] = 20;
+    QJsonObject vol_params;
+    vol_params["period"] = 20;
     vol_bo.append(make_cond("VOLUME", {}, "value", ">", 1000000));
     presets.append({"High Volume", "volume", vol_bo});
 
@@ -210,16 +214,14 @@ inline QVector<ScannerPreset> scanner_presets() {
 // ── Nifty watchlists ────────────────────────────────────────────────────────
 
 inline QStringList nifty50_symbols() {
-    return {"RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK",
-            "HINDUNILVR", "SBIN", "BHARTIARTL", "ITC", "KOTAKBANK",
-            "LT", "AXISBANK", "BAJFINANCE", "ASIANPAINT", "MARUTI",
-            "TITAN", "SUNPHARMA", "ULTRACEMCO", "NESTLEIND", "WIPRO"};
+    return {"RELIANCE",   "TCS",   "HDFCBANK",  "INFY",       "ICICIBANK", "HINDUNILVR", "SBIN",
+            "BHARTIARTL", "ITC",   "KOTAKBANK", "LT",         "AXISBANK",  "BAJFINANCE", "ASIANPAINT",
+            "MARUTI",     "TITAN", "SUNPHARMA", "ULTRACEMCO", "NESTLEIND", "WIPRO"};
 }
 
 inline QStringList bank_nifty_symbols() {
-    return {"HDFCBANK", "ICICIBANK", "KOTAKBANK", "AXISBANK", "SBIN",
-            "INDUSINDBK", "BANDHANBNK", "FEDERALBNK", "PNB", "BANKBARODA",
-            "IDFCFIRSTB", "AUBANK"};
+    return {"HDFCBANK",   "ICICIBANK",  "KOTAKBANK", "AXISBANK",   "SBIN",       "INDUSINDBK",
+            "BANDHANBNK", "FEDERALBNK", "PNB",       "BANKBARODA", "IDFCFIRSTB", "AUBANK"};
 }
 
 } // namespace fincept::services::algo

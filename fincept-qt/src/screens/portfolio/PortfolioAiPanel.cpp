@@ -1,5 +1,6 @@
 // src/screens/portfolio/PortfolioAiPanel.cpp
 #include "screens/portfolio/PortfolioAiPanel.h"
+
 #include "ai_chat/LlmService.h"
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
@@ -19,9 +20,7 @@ PortfolioAiPanel::PortfolioAiPanel(QWidget* parent) : QWidget(parent) {
 }
 
 void PortfolioAiPanel::build_ui() {
-    setStyleSheet(QString(
-        "background:%1; border:1px solid #9D4EDD;")
-        .arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1; border:1px solid #9D4EDD;").arg(ui::colors::BG_BASE));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -53,9 +52,8 @@ void PortfolioAiPanel::build_ui() {
     close_btn_ = new QPushButton("\u2715");
     close_btn_->setFixedSize(18, 18);
     close_btn_->setCursor(Qt::PointingHandCursor);
-    close_btn_->setStyleSheet(
-        "QPushButton { background:none; border:none; color:#787878; font-size:11px; }"
-        "QPushButton:hover { color:#e5e5e5; }");
+    close_btn_->setStyleSheet("QPushButton { background:none; border:none; color:#787878; font-size:11px; }"
+                              "QPushButton:hover { color:#e5e5e5; }");
     connect(close_btn_, &QPushButton::clicked, this, [this]() {
         hide();
         emit close_requested();
@@ -67,8 +65,7 @@ void PortfolioAiPanel::build_ui() {
     // ── Analysis type selector ───────────────────────────────────────────────
     auto* type_bar = new QWidget;
     type_bar->setFixedHeight(28);
-    type_bar->setStyleSheet(QString("background:%1; border-bottom:1px solid #2A2A2A;")
-                            .arg(ui::colors::BG_SURFACE));
+    type_bar->setStyleSheet(QString("background:%1; border-bottom:1px solid #2A2A2A;").arg(ui::colors::BG_SURFACE));
 
     auto* type_layout = new QHBoxLayout(type_bar);
     type_layout->setContentsMargins(0, 0, 0, 0);
@@ -78,23 +75,20 @@ void PortfolioAiPanel::build_ui() {
         auto* btn = new QPushButton(text);
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(
-            "QPushButton { background:transparent; color:#787878; border:none;"
-            "  border-bottom:2px solid transparent; padding:4px 8px;"
-            "  font-size:8px; font-weight:700; letter-spacing:0.5px; }"
-            "QPushButton:checked { color:#9D4EDD; border-bottom:2px solid #9D4EDD;"
-            "  background:rgba(157,78,221,0.08); }"
-            "QPushButton:hover { color:#9D4EDD; }");
-        connect(btn, &QPushButton::clicked, this, [this, type_id]() {
-            set_analysis_type(type_id);
-        });
+        btn->setStyleSheet("QPushButton { background:transparent; color:#787878; border:none;"
+                           "  border-bottom:2px solid transparent; padding:4px 8px;"
+                           "  font-size:8px; font-weight:700; letter-spacing:0.5px; }"
+                           "QPushButton:checked { color:#9D4EDD; border-bottom:2px solid #9D4EDD;"
+                           "  background:rgba(157,78,221,0.08); }"
+                           "QPushButton:hover { color:#9D4EDD; }");
+        connect(btn, &QPushButton::clicked, this, [this, type_id]() { set_analysis_type(type_id); });
         type_layout->addWidget(btn, 1);
         return btn;
     };
 
-    full_btn_   = make_type_btn("FULL",          "full");
-    risk_btn_   = make_type_btn("RISK",          "risk");
-    rebal_btn_  = make_type_btn("REBALANCE",     "rebalance");
+    full_btn_ = make_type_btn("FULL", "full");
+    risk_btn_ = make_type_btn("RISK", "risk");
+    rebal_btn_ = make_type_btn("REBALANCE", "rebalance");
     opport_btn_ = make_type_btn("OPPORTUNITIES", "opportunities");
     full_btn_->setChecked(true);
 
@@ -104,22 +98,20 @@ void PortfolioAiPanel::build_ui() {
     run_btn_ = new QPushButton("\U0001F916 RUN FULL ANALYSIS");
     run_btn_->setFixedHeight(28);
     run_btn_->setCursor(Qt::PointingHandCursor);
-    run_btn_->setStyleSheet(
-        "QPushButton { background:rgba(157,78,221,0.13); color:#9D4EDD;"
-        "  border:1px solid rgba(157,78,221,0.27); font-size:9px; font-weight:700;"
-        "  letter-spacing:0.5px; margin:6px 12px; }"
-        "QPushButton:hover { background:rgba(157,78,221,0.22); }"
-        "QPushButton:disabled { color:#555; }");
+    run_btn_->setStyleSheet("QPushButton { background:rgba(157,78,221,0.13); color:#9D4EDD;"
+                            "  border:1px solid rgba(157,78,221,0.27); font-size:9px; font-weight:700;"
+                            "  letter-spacing:0.5px; margin:6px 12px; }"
+                            "QPushButton:hover { background:rgba(157,78,221,0.22); }"
+                            "QPushButton:disabled { color:#555; }");
     connect(run_btn_, &QPushButton::clicked, this, [this]() { run_analysis(true); });
     layout->addWidget(run_btn_);
 
     // ── Content ──────────────────────────────────────────────────────────────
     content_ = new QTextBrowser;
     content_->setOpenExternalLinks(true);
-    content_->setStyleSheet(QString(
-        "QTextBrowser { background:%1; color:%2; border:none; padding:12px;"
-        "  font-size:11px; line-height:1.6; }")
-        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY));
+    content_->setStyleSheet(QString("QTextBrowser { background:%1; color:%2; border:none; padding:12px;"
+                                    "  font-size:11px; line-height:1.6; }")
+                                .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY));
     content_->setPlaceholderText("Select an analysis type above and click Run.");
     layout->addWidget(content_, 1);
 }
@@ -146,9 +138,8 @@ void PortfolioAiPanel::set_analysis_type(const QString& type) {
     rebal_btn_->setChecked(type == "rebalance");
     opport_btn_->setChecked(type == "opportunities");
 
-    run_btn_->setText(QString("\U0001F916 %1 %2 ANALYSIS")
-        .arg(result_cache_.contains(type) ? "RE-RUN" : "RUN")
-        .arg(type.toUpper()));
+    run_btn_->setText(
+        QString("\U0001F916 %1 %2 ANALYSIS").arg(result_cache_.contains(type) ? "RE-RUN" : "RUN").arg(type.toUpper()));
 
     // Show cached result if available
     if (result_cache_.contains(type)) {
@@ -161,25 +152,26 @@ void PortfolioAiPanel::set_analysis_type(const QString& type) {
 QString PortfolioAiPanel::build_portfolio_prompt() const {
     QStringList lines;
     lines << QString("Portfolio: %1 | NAV: %2 %3")
-        .arg(summary_.portfolio.name, summary_.portfolio.currency)
-        .arg(QString::number(summary_.total_market_value, 'f', 2));
+                 .arg(summary_.portfolio.name, summary_.portfolio.currency)
+                 .arg(QString::number(summary_.total_market_value, 'f', 2));
     lines << QString("Total P&L: %1% | Day Change: %2%")
-        .arg(QString::number(summary_.total_unrealized_pnl_percent, 'f', 2))
-        .arg(QString::number(summary_.total_day_change_percent, 'f', 2));
+                 .arg(QString::number(summary_.total_unrealized_pnl_percent, 'f', 2))
+                 .arg(QString::number(summary_.total_day_change_percent, 'f', 2));
     lines << QString("Holdings (%1):").arg(summary_.holdings.size());
 
     for (const auto& h : summary_.holdings) {
         lines << QString("  %1: %2 units @ %3 | P&L: %4% | Weight: %5%")
-            .arg(h.symbol)
-            .arg(QString::number(h.quantity, 'f', 2))
-            .arg(QString::number(h.current_price, 'f', 2))
-            .arg(QString::number(h.unrealized_pnl_percent, 'f', 2))
-            .arg(QString::number(h.weight, 'f', 1));
+                     .arg(h.symbol)
+                     .arg(QString::number(h.quantity, 'f', 2))
+                     .arg(QString::number(h.current_price, 'f', 2))
+                     .arg(QString::number(h.unrealized_pnl_percent, 'f', 2))
+                     .arg(QString::number(h.weight, 'f', 1));
     }
 
     QString type_instruction;
     if (current_type_ == "risk")
-        type_instruction = "Focus on risk analysis: identify concentration risks, correlation risks, and downside scenarios.";
+        type_instruction =
+            "Focus on risk analysis: identify concentration risks, correlation risks, and downside scenarios.";
     else if (current_type_ == "rebalance")
         type_instruction = "Suggest rebalancing actions with specific weight targets and rationale.";
     else if (current_type_ == "opportunities")
@@ -192,7 +184,8 @@ QString PortfolioAiPanel::build_portfolio_prompt() const {
 }
 
 void PortfolioAiPanel::run_analysis(bool force) {
-    if (analyzing_ || summary_.holdings.isEmpty()) return;
+    if (analyzing_ || summary_.holdings.isEmpty())
+        return;
 
     if (!force && result_cache_.contains(current_type_)) {
         content_->setHtml(result_cache_[current_type_]);
@@ -217,31 +210,36 @@ void PortfolioAiPanel::run_analysis(bool force) {
     QtConcurrent::run([self, prompt, type]() {
         auto response = ai_chat::LlmService::instance().chat(prompt, {});
 
-        if (!self) return;
-        QMetaObject::invokeMethod(self, [self, response, type]() {
-            if (!self) return;
-            self->analyzing_ = false;
-            self->run_btn_->setEnabled(true);
-            self->status_lbl_->clear();
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, response, type]() {
+                if (!self)
+                    return;
+                self->analyzing_ = false;
+                self->run_btn_->setEnabled(true);
+                self->status_lbl_->clear();
 
-            if (response.success) {
-                // Simple markdown-to-html: preserve line breaks, bold
-                QString html = response.content;
-                html.replace("&", "&amp;");
-                html.replace("<", "&lt;");
-                html.replace(">", "&gt;");
-                html.replace("\n", "<br>");
-                static const QRegularExpression bold_re("\\*\\*(.+?)\\*\\*");
-                html.replace(bold_re, "<b>\\1</b>");
-                html = QString("<div style='font-size:11px; line-height:1.6; color:#e5e5e5;'>%1</div>").arg(html);
+                if (response.success) {
+                    // Simple markdown-to-html: preserve line breaks, bold
+                    QString html = response.content;
+                    html.replace("&", "&amp;");
+                    html.replace("<", "&lt;");
+                    html.replace(">", "&gt;");
+                    html.replace("\n", "<br>");
+                    static const QRegularExpression bold_re("\\*\\*(.+?)\\*\\*");
+                    html.replace(bold_re, "<b>\\1</b>");
+                    html = QString("<div style='font-size:11px; line-height:1.6; color:#e5e5e5;'>%1</div>").arg(html);
 
-                self->result_cache_[type] = html;
-                self->content_->setHtml(html);
-                self->run_btn_->setText(QString("\U0001F916 RE-RUN %1 ANALYSIS").arg(type.toUpper()));
-            } else {
-                self->content_->setPlainText("Analysis failed: " + response.error);
-            }
-        }, Qt::QueuedConnection);
+                    self->result_cache_[type] = html;
+                    self->content_->setHtml(html);
+                    self->run_btn_->setText(QString("\U0001F916 RE-RUN %1 ANALYSIS").arg(type.toUpper()));
+                } else {
+                    self->content_->setPlainText("Analysis failed: " + response.error);
+                }
+            },
+            Qt::QueuedConnection);
     });
 }
 

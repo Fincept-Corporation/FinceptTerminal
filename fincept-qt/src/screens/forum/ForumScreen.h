@@ -39,26 +39,26 @@ class ForumScreen : public QWidget {
     void show_edit_profile_dialog(const services::ForumProfile& profile);
 
     // Toolbar
-    QWidget*     toolbar_           = nullptr;
-    QWidget*     chips_container_   = nullptr;
-    QHBoxLayout* chips_layout_      = nullptr;
-    QLineEdit*   search_input_      = nullptr;
-    QLabel*      stat_posts_lbl_    = nullptr;
-    QLabel*      stat_active_lbl_   = nullptr;
-    QLabel*      profile_avatar_    = nullptr;
+    QWidget* toolbar_ = nullptr;
+    QWidget* chips_container_ = nullptr;
+    QHBoxLayout* chips_layout_ = nullptr;
+    QLineEdit* search_input_ = nullptr;
+    QLabel* stat_posts_lbl_ = nullptr;
+    QLabel* stat_active_lbl_ = nullptr;
+    QLabel* profile_avatar_ = nullptr;
 
     // Main stacked view: 0=feed, 1=thread
-    QStackedWidget* main_stack_     = nullptr;
-    ForumFeedPanel*   feed_         = nullptr;
-    ForumThreadPanel* thread_       = nullptr;
+    QStackedWidget* main_stack_ = nullptr;
+    ForumFeedPanel* feed_ = nullptr;
+    ForumThreadPanel* thread_ = nullptr;
 
     // State
     QVector<services::ForumCategory> categories_;
-    int     active_category_id_   = 0;
+    int active_category_id_ = 0;
     QString active_category_name_;
     QString active_category_color_;
     QString current_detail_uuid_;
-    bool    initial_load_done_    = false;
+    bool initial_load_done_ = false;
 };
 
 } // namespace fincept::screens

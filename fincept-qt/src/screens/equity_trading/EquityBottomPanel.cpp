@@ -43,8 +43,7 @@ void EquityBottomPanel::setup_positions_tab() {
     positions_table_ = new QTableWidget;
     positions_table_->setObjectName("eqTable");
     positions_table_->setColumnCount(7);
-    positions_table_->setHorizontalHeaderLabels(
-        {"Symbol", "Exchange", "Side", "Qty", "Avg Price", "LTP", "P&L"});
+    positions_table_->setHorizontalHeaderLabels({"Symbol", "Exchange", "Side", "Qty", "Avg Price", "LTP", "P&L"});
     positions_table_->verticalHeader()->setVisible(false);
     positions_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     positions_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -60,8 +59,7 @@ void EquityBottomPanel::setup_holdings_tab() {
     holdings_table_ = new QTableWidget;
     holdings_table_->setObjectName("eqTable");
     holdings_table_->setColumnCount(7);
-    holdings_table_->setHorizontalHeaderLabels(
-        {"Symbol", "Qty", "Avg Price", "LTP", "Invested", "Current", "P&L %"});
+    holdings_table_->setHorizontalHeaderLabels({"Symbol", "Qty", "Avg Price", "LTP", "Invested", "Current", "P&L %"});
     holdings_table_->verticalHeader()->setVisible(false);
     holdings_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     holdings_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -77,8 +75,7 @@ void EquityBottomPanel::setup_orders_tab() {
     orders_table_ = new QTableWidget;
     orders_table_->setObjectName("eqTable");
     orders_table_->setColumnCount(8);
-    orders_table_->setHorizontalHeaderLabels(
-        {"Order ID", "Symbol", "Side", "Type", "Qty", "Price", "Status", "Time"});
+    orders_table_->setHorizontalHeaderLabels({"Order ID", "Symbol", "Side", "Type", "Qty", "Price", "Status", "Time"});
     orders_table_->verticalHeader()->setVisible(false);
     orders_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     orders_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -177,8 +174,7 @@ void EquityBottomPanel::set_paper_orders(const QVector<trading::PtOrder>& orders
         ensure_item(orders_table_, i, 2)->setText(o.side.toUpper());
         ensure_item(orders_table_, i, 3)->setText(o.order_type.toUpper());
         ensure_item(orders_table_, i, 4)->setText(QString::number(o.quantity, 'f', 0));
-        ensure_item(orders_table_, i, 5)->setText(
-            o.price ? QString::number(*o.price, 'f', 2) : "MKT");
+        ensure_item(orders_table_, i, 5)->setText(o.price ? QString::number(*o.price, 'f', 2) : "MKT");
         ensure_item(orders_table_, i, 6)->setText(o.status.toUpper());
         ensure_item(orders_table_, i, 7)->setText(o.created_at);
     }
@@ -188,7 +184,8 @@ void EquityBottomPanel::set_paper_trades(const QVector<trading::PtTrade>& trades
     // Append trade rows below orders in the orders table (separated by a visual break)
     // We use a dedicated approach: show last 20 trades after orders
     const int base = orders_table_->rowCount();
-    if (trades.isEmpty()) return;
+    if (trades.isEmpty())
+        return;
 
     // Add a separator row
     orders_table_->setRowCount(base + 1 + trades.size());
@@ -218,8 +215,7 @@ void EquityBottomPanel::set_paper_trades(const QVector<trading::PtTrade>& trades
 
 void EquityBottomPanel::set_paper_stats(const trading::PtStats& stats) {
     stat_values_[0]->setText(QString::number(stats.total_pnl, 'f', 2));
-    stat_values_[0]->setStyleSheet(
-        QString("color: %1;").arg(stats.total_pnl >= 0 ? "#16a34a" : "#dc2626"));
+    stat_values_[0]->setStyleSheet(QString("color: %1;").arg(stats.total_pnl >= 0 ? "#16a34a" : "#dc2626"));
     stat_values_[1]->setText(QString("%1%").arg(stats.win_rate * 100, 0, 'f', 1));
     stat_values_[2]->setText(QString::number(stats.total_trades));
     stat_values_[3]->setText(QString::number(stats.largest_win, 'f', 2));

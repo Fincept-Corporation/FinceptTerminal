@@ -24,28 +24,44 @@ enum class NodeCategory {
 
 inline QString category_label(NodeCategory c) {
     switch (c) {
-    case NodeCategory::Company:        return "COMPANY";
-    case NodeCategory::Peer:           return "PEER";
-    case NodeCategory::Institutional:  return "INSTITUTIONAL";
-    case NodeCategory::FundFamily:     return "FUND FAMILY";
-    case NodeCategory::Insider:        return "INSIDER";
-    case NodeCategory::Event:          return "EVENT";
-    case NodeCategory::SupplyChain:    return "SUPPLY CHAIN";
-    case NodeCategory::Metrics:        return "METRICS";
+        case NodeCategory::Company:
+            return "COMPANY";
+        case NodeCategory::Peer:
+            return "PEER";
+        case NodeCategory::Institutional:
+            return "INSTITUTIONAL";
+        case NodeCategory::FundFamily:
+            return "FUND FAMILY";
+        case NodeCategory::Insider:
+            return "INSIDER";
+        case NodeCategory::Event:
+            return "EVENT";
+        case NodeCategory::SupplyChain:
+            return "SUPPLY CHAIN";
+        case NodeCategory::Metrics:
+            return "METRICS";
     }
     return "UNKNOWN";
 }
 
 inline QColor category_color(NodeCategory c) {
     switch (c) {
-    case NodeCategory::Company:        return QColor("#d97706"); // amber
-    case NodeCategory::Peer:           return QColor("#2563eb"); // blue
-    case NodeCategory::Institutional:  return QColor("#16a34a"); // green
-    case NodeCategory::FundFamily:     return QColor("#9333ea"); // purple
-    case NodeCategory::Insider:        return QColor("#0891b2"); // cyan
-    case NodeCategory::Event:          return QColor("#dc2626"); // red
-    case NodeCategory::SupplyChain:    return QColor("#ca8a04"); // yellow
-    case NodeCategory::Metrics:        return QColor("#808080"); // gray
+        case NodeCategory::Company:
+            return QColor("#d97706"); // amber
+        case NodeCategory::Peer:
+            return QColor("#2563eb"); // blue
+        case NodeCategory::Institutional:
+            return QColor("#16a34a"); // green
+        case NodeCategory::FundFamily:
+            return QColor("#9333ea"); // purple
+        case NodeCategory::Insider:
+            return QColor("#0891b2"); // cyan
+        case NodeCategory::Event:
+            return QColor("#dc2626"); // red
+        case NodeCategory::SupplyChain:
+            return QColor("#ca8a04"); // yellow
+        case NodeCategory::Metrics:
+            return QColor("#808080"); // gray
     }
     return QColor("#808080");
 }
@@ -62,11 +78,16 @@ enum class EdgeCategory { Ownership, Peer, SupplyChain, Event, Internal };
 
 inline QColor edge_color(EdgeCategory c) {
     switch (c) {
-    case EdgeCategory::Ownership:    return QColor("#16a34a");
-    case EdgeCategory::Peer:         return QColor(35, 99, 235, 120);
-    case EdgeCategory::SupplyChain:  return QColor("#ca8a04");
-    case EdgeCategory::Event:        return QColor(220, 38, 38, 100);
-    case EdgeCategory::Internal:     return QColor("#404040");
+        case EdgeCategory::Ownership:
+            return QColor("#16a34a");
+        case EdgeCategory::Peer:
+            return QColor(35, 99, 235, 120);
+        case EdgeCategory::SupplyChain:
+            return QColor("#ca8a04");
+        case EdgeCategory::Event:
+            return QColor(220, 38, 38, 100);
+        case EdgeCategory::Internal:
+            return QColor("#404040");
     }
     return QColor("#404040");
 }
@@ -142,9 +163,9 @@ struct SupplyChainEntity {
 };
 
 struct ValuationSignal {
-    QString status;     // UNDERVALUED, FAIRLY_VALUED, OVERVALUED
-    QString action;     // BUY, HOLD, SELL
-    double score = 0;   // -3 to +3
+    QString status;   // UNDERVALUED, FAIRLY_VALUED, OVERVALUED
+    QString action;   // BUY, HOLD, SELL
+    double score = 0; // -3 to +3
 };
 
 // ── Graph Node ───────────────────────────────────────────────────────────────
@@ -198,9 +219,12 @@ enum class LayoutMode { Layered, Radial, Force };
 
 inline QString layout_label(LayoutMode m) {
     switch (m) {
-    case LayoutMode::Layered: return "LAYERED";
-    case LayoutMode::Radial:  return "RADIAL";
-    case LayoutMode::Force:   return "FORCE";
+        case LayoutMode::Layered:
+            return "LAYERED";
+        case LayoutMode::Radial:
+            return "RADIAL";
+        case LayoutMode::Force:
+            return "FORCE";
     }
     return "LAYERED";
 }

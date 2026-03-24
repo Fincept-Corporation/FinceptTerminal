@@ -1,7 +1,10 @@
 #pragma once
 #include <QObject>
 #include <QTimer>
-#include <QWebSocket>
+
+#ifdef HAS_QT_WEBSOCKETS
+#    include <QWebSocket>
+#endif
 
 #include <functional>
 
@@ -25,14 +28,18 @@ class WebSocketClient : public QObject {
     void error_occurred(const QString& error);
 
   private slots:
+#ifdef HAS_QT_WEBSOCKETS
     void on_connected();
     void on_disconnected();
     void on_text_received(const QString& msg);
     void on_error(QAbstractSocket::SocketError err);
     void attempt_reconnect();
+#endif
 
   private:
+#ifdef HAS_QT_WEBSOCKETS
     QWebSocket socket_;
+#endif
     QTimer reconnect_timer_;
     QString url_;
     int reconnect_attempts_ = 0;

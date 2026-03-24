@@ -20,8 +20,7 @@ class HDXDataPanel : public QWidget {
     explicit HDXDataPanel(QWidget* parent = nullptr);
 
   private slots:
-    void on_hdx_results(const QString& context,
-                        QVector<fincept::services::geo::HDXDataset> datasets);
+    void on_hdx_results(const QString& context, QVector<fincept::services::geo::HDXDataset> datasets);
     void on_view_changed(int index);
 
   private:

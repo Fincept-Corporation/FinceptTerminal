@@ -95,9 +95,7 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
         auto* dlg = new TemplatePicker(this);
         connect(dlg, &TemplatePicker::template_selected, this, [this](const QString& tid) {
             // Clear saved state so fresh template is used
-            QtConcurrent::run([]() {
-                fincept::SettingsRepository::instance().remove("dashboard_canvas_layout");
-            });
+            QtConcurrent::run([]() { fincept::SettingsRepository::instance().remove("dashboard_canvas_layout"); });
             canvas_->apply_template(tid);
         });
         dlg->exec();
@@ -165,9 +163,8 @@ void DashboardScreen::save_layout() {
 
     QString encoded = data.toBase64();
     QPointer<DashboardScreen> self = this;
-    QtConcurrent::run([encoded]() {
-        fincept::SettingsRepository::instance().set("dashboard_canvas_layout", encoded, "dashboard");
-    });
+    QtConcurrent::run(
+        [encoded]() { fincept::SettingsRepository::instance().set("dashboard_canvas_layout", encoded, "dashboard"); });
 }
 
 void DashboardScreen::restore_layout() {

@@ -1,5 +1,6 @@
 // src/screens/geopolitics/ConflictMonitorPanel.cpp
 #include "screens/geopolitics/ConflictMonitorPanel.h"
+
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
 #include "ui/widgets/WorldMapWidget.h"
@@ -28,8 +29,7 @@ void ConflictMonitorPanel::build_ui() {
     // Left: map + table in a vertical splitter
     auto* left_splitter = new QSplitter(Qt::Vertical, this);
     left_splitter->setHandleWidth(2);
-    left_splitter->setStyleSheet(QString(
-        "QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
+    left_splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
 
     // ── World Map ───────────────────────────────────────────────────────────
     map_widget_ = new fincept::ui::WorldMapWidget(left_splitter);
@@ -39,40 +39,35 @@ void ConflictMonitorPanel::build_ui() {
     // ── Events Table ────────────────────────────────────────────────────────
     events_table_ = new QTableWidget(left_splitter);
     events_table_->setColumnCount(7);
-    events_table_->setHorizontalHeaderLabels(
-        {"Category", "Country", "City", "Keywords", "Date", "Lat", "Lng"});
+    events_table_->setHorizontalHeaderLabels({"Category", "Country", "City", "Keywords", "Date", "Lat", "Lng"});
     events_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     events_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     events_table_->setAlternatingRowColors(true);
     events_table_->horizontalHeader()->setStretchLastSection(true);
     events_table_->verticalHeader()->setVisible(false);
     events_table_->setSortingEnabled(true);
-    events_table_->setStyleSheet(QString(
-        "QTableWidget { background:%1; color:%2; gridline-color:%3;"
-        "font-family:%4; font-size:%5px; border:none; }"
-        "QTableWidget::item { padding:4px 8px; }"
-        "QTableWidget::item:selected { background:rgba(255,0,0,0.15); }"
-        "QHeaderView::section { background:%6; color:%7; font-weight:700;"
-        "padding:6px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-        "QTableWidget::item:alternate { background:%8; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(ui::colors::BG_RAISED).arg(ui::colors::TEXT_SECONDARY)
-        .arg(ui::colors::ROW_ALT));
+    events_table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                                         "font-family:%4; font-size:%5px; border:none; }"
+                                         "QTableWidget::item { padding:4px 8px; }"
+                                         "QTableWidget::item:selected { background:rgba(255,0,0,0.15); }"
+                                         "QHeaderView::section { background:%6; color:%7; font-weight:700;"
+                                         "padding:6px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
+                                         "QTableWidget::item:alternate { background:%8; }")
+                                     .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                                     .arg(ui::fonts::DATA_FAMILY)
+                                     .arg(ui::fonts::SMALL)
+                                     .arg(ui::colors::BG_RAISED)
+                                     .arg(ui::colors::TEXT_SECONDARY)
+                                     .arg(ui::colors::ROW_ALT));
 
-    connect(events_table_, &QTableWidget::currentCellChanged,
-            this, [this](int row, int, int, int) {
-        if (row < 0 || !detail_panel_) return;
-        detail_category_->setText(events_table_->item(row, 0) ?
-            events_table_->item(row, 0)->text().toUpper() : "");
-        detail_country_->setText(events_table_->item(row, 1) ?
-            events_table_->item(row, 1)->text() : "");
-        detail_city_->setText(events_table_->item(row, 2) ?
-            events_table_->item(row, 2)->text() : "");
-        detail_keywords_->setText(events_table_->item(row, 3) ?
-            events_table_->item(row, 3)->text() : "");
-        detail_date_->setText(events_table_->item(row, 4) ?
-            events_table_->item(row, 4)->text() : "");
+    connect(events_table_, &QTableWidget::currentCellChanged, this, [this](int row, int, int, int) {
+        if (row < 0 || !detail_panel_)
+            return;
+        detail_category_->setText(events_table_->item(row, 0) ? events_table_->item(row, 0)->text().toUpper() : "");
+        detail_country_->setText(events_table_->item(row, 1) ? events_table_->item(row, 1)->text() : "");
+        detail_city_->setText(events_table_->item(row, 2) ? events_table_->item(row, 2)->text() : "");
+        detail_keywords_->setText(events_table_->item(row, 3) ? events_table_->item(row, 3)->text() : "");
+        detail_date_->setText(events_table_->item(row, 4) ? events_table_->item(row, 4)->text() : "");
         detail_panel_->setVisible(true);
     });
     left_splitter->addWidget(events_table_);
@@ -85,17 +80,17 @@ void ConflictMonitorPanel::build_ui() {
     // Right sidebar: stats + selected detail
     auto* sidebar = new QWidget(this);
     sidebar->setFixedWidth(240);
-    sidebar->setStyleSheet(QString("background:%1; border-left:1px solid %2;")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    sidebar->setStyleSheet(
+        QString("background:%1; border-left:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     auto* svl = new QVBoxLayout(sidebar);
     svl->setContentsMargins(12, 12, 12, 12);
     svl->setSpacing(8);
 
     auto* stats_title = new QLabel("TOP CATEGORIES", sidebar);
-    stats_title->setStyleSheet(QString(
-        "color:#FF0000; font-size:9px; font-weight:700; font-family:%1; letter-spacing:1px;")
-        .arg(ui::fonts::DATA_FAMILY));
+    stats_title->setStyleSheet(
+        QString("color:#FF0000; font-size:9px; font-weight:700; font-family:%1; letter-spacing:1px;")
+            .arg(ui::fonts::DATA_FAMILY));
     svl->addWidget(stats_title);
 
     auto* stats_container = new QWidget(sidebar);
@@ -105,37 +100,42 @@ void ConflictMonitorPanel::build_ui() {
     svl->addWidget(stats_container);
 
     stats_label_ = new QLabel("No data", sidebar);
-    stats_label_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+    stats_label_->setStyleSheet(
+        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
     svl->addWidget(stats_label_);
 
     // Selected event detail
     svl->addSpacing(8);
     detail_panel_ = new QWidget(sidebar);
     detail_panel_->setVisible(false);
-    detail_panel_->setStyleSheet(QString(
-        "background:rgba(255,0,0,0.04); border:1px solid rgba(255,0,0,0.2);"
-        "border-left:3px solid #FF0000; border-radius:2px;"));
+    detail_panel_->setStyleSheet(QString("background:rgba(255,0,0,0.04); border:1px solid rgba(255,0,0,0.2);"
+                                         "border-left:3px solid #FF0000; border-radius:2px;"));
     auto* dvl = new QVBoxLayout(detail_panel_);
     dvl->setContentsMargins(10, 10, 10, 10);
     dvl->setSpacing(4);
 
     auto* detail_title = new QLabel("SELECTED EVENT", detail_panel_);
-    detail_title->setStyleSheet(QString(
-        "color:#FF0000; font-size:9px; font-weight:700; font-family:%1; letter-spacing:1px;")
-        .arg(ui::fonts::DATA_FAMILY));
+    detail_title->setStyleSheet(
+        QString("color:#FF0000; font-size:9px; font-weight:700; font-family:%1; letter-spacing:1px;")
+            .arg(ui::fonts::DATA_FAMILY));
     dvl->addWidget(detail_title);
 
-    auto det_style = QString("color:%1; font-size:9px; font-family:%2;")
-        .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::DATA_FAMILY);
+    auto det_style =
+        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::DATA_FAMILY);
 
-    detail_category_ = new QLabel(detail_panel_); detail_category_->setStyleSheet(det_style);
-    detail_country_ = new QLabel(detail_panel_);  detail_country_->setStyleSheet(det_style);
-    detail_city_ = new QLabel(detail_panel_);      detail_city_->setStyleSheet(det_style);
-    detail_keywords_ = new QLabel(detail_panel_);  detail_keywords_->setStyleSheet(det_style);
+    detail_category_ = new QLabel(detail_panel_);
+    detail_category_->setStyleSheet(det_style);
+    detail_country_ = new QLabel(detail_panel_);
+    detail_country_->setStyleSheet(det_style);
+    detail_city_ = new QLabel(detail_panel_);
+    detail_city_->setStyleSheet(det_style);
+    detail_keywords_ = new QLabel(detail_panel_);
+    detail_keywords_->setStyleSheet(det_style);
     detail_keywords_->setWordWrap(true);
-    detail_date_ = new QLabel(detail_panel_);      detail_date_->setStyleSheet(det_style);
-    detail_source_ = new QLabel(detail_panel_);    detail_source_->setStyleSheet(det_style);
+    detail_date_ = new QLabel(detail_panel_);
+    detail_date_->setStyleSheet(det_style);
+    detail_source_ = new QLabel(detail_panel_);
+    detail_source_->setStyleSheet(det_style);
 
     dvl->addWidget(detail_category_);
     dvl->addWidget(detail_country_);
@@ -191,7 +191,10 @@ void ConflictMonitorPanel::update_map(const QVector<NewsEvent>& events) {
 
     int skipped = 0;
     for (const auto& ev : events) {
-        if (ev.latitude == 0.0 && ev.longitude == 0.0) { ++skipped; continue; }
+        if (ev.latitude == 0.0 && ev.longitude == 0.0) {
+            ++skipped;
+            continue;
+        }
 
         double lat = ev.latitude;
         double lng = ev.longitude;
@@ -203,20 +206,20 @@ void ConflictMonitorPanel::update_map(const QVector<NewsEvent>& events) {
         if (count > 0) {
             // Spread in a ring around the original point
             double angle = (count * 137.508) * 3.14159265 / 180.0; // golden angle
-            double dist = 0.02 + 0.005 * count; // degrees offset, grows with count
+            double dist = 0.02 + 0.005 * count;                    // degrees offset, grows with count
             lat += dist * std::cos(angle);
             lng += dist * std::sin(angle);
         }
 
-        pins.append({lat, lng,
-                     QString("%1 — %2, %3").arg(ev.event_category, ev.city, ev.country),
-                     category_color(ev.event_category),
-                     5.0});
+        pins.append({lat, lng, QString("%1 — %2, %3").arg(ev.event_category, ev.city, ev.country),
+                     category_color(ev.event_category), 5.0});
     }
 
-    LOG_INFO("Geopolitics",
-             QString("Map: %1 events → %2 pins (%3 skipped, %4 unique coords)")
-                 .arg(events.size()).arg(pins.size()).arg(skipped).arg(coord_counts.size()));
+    LOG_INFO("Geopolitics", QString("Map: %1 events → %2 pins (%3 skipped, %4 unique coords)")
+                                .arg(events.size())
+                                .arg(pins.size())
+                                .arg(skipped)
+                                .arg(coord_counts.size()));
 
     map_widget_->set_pins(pins);
     map_widget_->fit_to_pins();
@@ -226,7 +229,8 @@ void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
     // Clear old stats
     while (stats_layout_->count() > 0) {
         auto* item = stats_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
@@ -239,8 +243,7 @@ void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
     QVector<QPair<QString, int>> sorted;
     for (auto it = counts.begin(); it != counts.end(); ++it)
         sorted.append({it.key(), it.value()});
-    std::sort(sorted.begin(), sorted.end(),
-              [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
 
     for (int i = 0; i < qMin(sorted.size(), 10); ++i) {
         const auto& [cat, count] = sorted[i];
@@ -251,18 +254,19 @@ void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
 
         auto* dot = new QWidget(row);
         dot->setFixedSize(6, 6);
-        dot->setStyleSheet(QString("background:%1; border-radius:3px;")
-            .arg(category_color(cat).name()));
+        dot->setStyleSheet(QString("background:%1; border-radius:3px;").arg(category_color(cat).name()));
         rl->addWidget(dot);
 
         auto* name = new QLabel(cat, row);
         name->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
-            .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY));
+                                .arg(ui::colors::TEXT_SECONDARY)
+                                .arg(ui::fonts::DATA_FAMILY));
         rl->addWidget(name, 1);
 
         auto* cnt = new QLabel(QString::number(count), row);
         cnt->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;")
-            .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::DATA_FAMILY));
+                               .arg(ui::colors::TEXT_PRIMARY)
+                               .arg(ui::fonts::DATA_FAMILY));
         rl->addWidget(cnt);
 
         stats_layout_->addWidget(row);

@@ -1,4 +1,5 @@
 #include "screens/node_editor/canvas/NodeItem.h"
+
 #include "screens/node_editor/canvas/EdgeItem.h"
 #include "screens/node_editor/canvas/PortItem.h"
 
@@ -10,16 +11,13 @@
 #include <QKeyEvent>
 #include <QMenu>
 #include <QPainter>
+
 #include <algorithm>
 
 namespace fincept::workflow {
 
-NodeItem::NodeItem(const NodeDef& def, const NodeTypeDef& type_def,
-                   QGraphicsItem* parent)
-    : QGraphicsObject(parent)
-    , def_(def)
-    , type_def_(type_def)
-{
+NodeItem::NodeItem(const NodeDef& def, const NodeTypeDef& type_def, QGraphicsItem* parent)
+    : QGraphicsObject(parent), def_(def), type_def_(type_def) {
     setFlag(ItemIsMovable);
     setFlag(ItemIsSelectable);
     setFlag(ItemSendsGeometryChanges);
@@ -32,37 +30,35 @@ NodeItem::NodeItem(const NodeDef& def, const NodeTypeDef& type_def,
     rebuild_layout();
 }
 
-void NodeItem::set_name(const QString& name)
-{
+void NodeItem::set_name(const QString& name) {
     def_.name = name;
     invalidate_cache();
 }
 
-void NodeItem::set_parameter(const QString& key, const QJsonValue& value)
-{
+void NodeItem::set_parameter(const QString& key, const QJsonValue& value) {
     def_.parameters[key] = value;
     invalidate_cache();
 }
 
-void NodeItem::set_execution_state(const QString& state)
-{
+void NodeItem::set_execution_state(const QString& state) {
     execution_state_ = state;
     invalidate_cache();
 }
 
-PortItem* NodeItem::find_port(const QString& port_id) const
-{
+PortItem* NodeItem::find_port(const QString& port_id) const {
     for (auto* p : input_ports_)
-        if (p->def().id == port_id) return p;
+        if (p->def().id == port_id)
+            return p;
     for (auto* p : output_ports_)
-        if (p->def().id == port_id) return p;
+        if (p->def().id == port_id)
+            return p;
     return nullptr;
 }
 
-void NodeItem::rebuild_layout()
-{
+void NodeItem::rebuild_layout() {
     // Clear existing ports
-    for (auto* p : input_ports_) { /* owned by scene via parent */ }
+    for (auto* p : input_ports_) { /* owned by scene via parent */
+    }
     input_ports_.clear();
     output_ports_.clear();
 
@@ -85,21 +81,18 @@ void NodeItem::rebuild_layout()
     invalidate_cache();
 }
 
-void NodeItem::invalidate_cache()
-{
+void NodeItem::invalidate_cache() {
     cache_dirty_ = true;
     update();
 }
 
-QRectF NodeItem::boundingRect() const
-{
+QRectF NodeItem::boundingRect() const {
     int max_ports = std::max(type_def_.inputs.size(), type_def_.outputs.size());
     qreal body_h = std::max(kMinBodyHeight, max_ports * kPortSpacing + kPortPadding * 2);
     return QRectF(0, 0, kWidth, kHeaderHeight + body_h);
 }
 
-void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*)
-{
+void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) {
     QRectF rect = boundingRect();
 
     if (cache_dirty_ || cache_.size() != rect.size().toSize()) {
@@ -166,9 +159,12 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
         // ── Execution state indicator ──────────────────────────────
         if (execution_state_ != "idle") {
             QColor state_color;
-            if (execution_state_ == "running")   state_color = QColor("#d97706");
-            else if (execution_state_ == "completed") state_color = QColor("#16a34a");
-            else if (execution_state_ == "error")     state_color = QColor("#dc2626");
+            if (execution_state_ == "running")
+                state_color = QColor("#d97706");
+            else if (execution_state_ == "completed")
+                state_color = QColor("#16a34a");
+            else if (execution_state_ == "error")
+                state_color = QColor("#dc2626");
 
             cp.setPen(Qt::NoPen);
             cp.setBrush(state_color);
@@ -184,11 +180,16 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
 
     // ── Border (not cached — changes with selection/hover) ─────────
     QColor border_color;
-    if (def_.disabled)          border_color = QColor("#4a4a4a");
-    else if (isSelected())      border_color = QColor("#d97706");
-    else if (execution_state_ == "error") border_color = QColor("#dc2626");
-    else if (hovered_)          border_color = QColor("#4a4a4a");
-    else                        border_color = QColor("#2a2a2a");
+    if (def_.disabled)
+        border_color = QColor("#4a4a4a");
+    else if (isSelected())
+        border_color = QColor("#d97706");
+    else if (execution_state_ == "error")
+        border_color = QColor("#dc2626");
+    else if (hovered_)
+        border_color = QColor("#4a4a4a");
+    else
+        border_color = QColor("#2a2a2a");
 
     painter->setPen(QPen(border_color, 1.0));
     painter->setBrush(Qt::NoBrush);
@@ -202,8 +203,7 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
     }
 }
 
-QVariant NodeItem::itemChange(GraphicsItemChange change, const QVariant& value)
-{
+QVariant NodeItem::itemChange(GraphicsItemChange change, const QVariant& value) {
     if (change == ItemPositionHasChanged) {
         QPointF pos = value.toPointF();
         def_.x = pos.x();
@@ -231,8 +231,7 @@ QVariant NodeItem::itemChange(GraphicsItemChange change, const QVariant& value)
     return QGraphicsObject::itemChange(change, value);
 }
 
-void NodeItem::keyPressEvent(QKeyEvent* event)
-{
+void NodeItem::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
         emit delete_requested(def_.id);
         event->accept();
@@ -241,21 +240,18 @@ void NodeItem::keyPressEvent(QKeyEvent* event)
     }
 }
 
-void NodeItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event)
-{
+void NodeItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
     // Reserved for future inline editing
     QGraphicsObject::mouseDoubleClickEvent(event);
 }
 
-void NodeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
-{
+void NodeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     QMenu menu;
-    menu.setStyleSheet(
-        "QMenu { background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
-        "  font-family: Consolas; font-size: 12px; }"
-        "QMenu::item { padding: 4px 20px; }"
-        "QMenu::item:selected { background: #d97706; color: #080808; }"
-        "QMenu::separator { background: #2a2a2a; height: 1px; margin: 2px 6px; }");
+    menu.setStyleSheet("QMenu { background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
+                       "  font-family: Consolas; font-size: 12px; }"
+                       "QMenu::item { padding: 4px 20px; }"
+                       "QMenu::item:selected { background: #d97706; color: #080808; }"
+                       "QMenu::separator { background: #2a2a2a; height: 1px; margin: 2px 6px; }");
 
     auto* duplicate_action = menu.addAction("Duplicate");
     auto* disable_action = menu.addAction(def_.disabled ? "Enable" : "Disable");
@@ -266,7 +262,8 @@ void NodeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     delete_action->setShortcut(QKeySequence::Delete);
 
     auto* chosen = menu.exec(event->screenPos());
-    if (!chosen) return;
+    if (!chosen)
+        return;
 
     if (chosen == duplicate_action) {
         emit duplicate_requested(def_.id);
@@ -280,15 +277,13 @@ void NodeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     }
 }
 
-void NodeItem::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
-{
+void NodeItem::hoverEnterEvent(QGraphicsSceneHoverEvent* event) {
     hovered_ = true;
     update();
     QGraphicsObject::hoverEnterEvent(event);
 }
 
-void NodeItem::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
-{
+void NodeItem::hoverLeaveEvent(QGraphicsSceneHoverEvent* event) {
     hovered_ = false;
     update();
     QGraphicsObject::hoverLeaveEvent(event);

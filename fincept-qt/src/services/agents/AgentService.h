@@ -53,12 +53,10 @@ class AgentService : public QObject {
     void execute_plan(const QJsonObject& plan);
 
     // ── Memory & Knowledge ───────────────────────────────────────────────────
-    void store_memory(const QString& content, const QString& memory_type = "general",
-                      const QJsonObject& metadata = {});
+    void store_memory(const QString& content, const QString& memory_type = "general", const QJsonObject& metadata = {});
     void recall_memories(const QString& query, const QString& memory_type = {}, int limit = 10);
     void search_knowledge(const QString& query, int limit = 10);
-    void save_memory_repo(const QString& content, const QString& agent_id = {},
-                          const QJsonObject& options = {});
+    void save_memory_repo(const QString& content, const QString& agent_id = {}, const QJsonObject& options = {});
     void search_memories_repo(const QString& query, const QString& agent_id = {}, int limit = 10);
 
     // ── Session management ───────────────────────────────────────────────────
@@ -67,8 +65,8 @@ class AgentService : public QObject {
     void add_session_message(const QString& session_id, const QString& role, const QString& content);
 
     // ── Paper trading ────────────────────────────────────────────────────────
-    void paper_execute_trade(const QString& portfolio_id, const QString& symbol,
-                             const QString& action, double quantity, double price);
+    void paper_execute_trade(const QString& portfolio_id, const QString& symbol, const QString& action, double quantity,
+                             double price);
     void paper_get_portfolio(const QString& portfolio_id);
     void paper_get_positions(const QString& portfolio_id);
 

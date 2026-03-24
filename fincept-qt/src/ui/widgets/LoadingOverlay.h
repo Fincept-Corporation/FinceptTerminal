@@ -24,15 +24,13 @@ class LoadingOverlay : public QWidget {
     void paintEvent(QPaintEvent* e) override;
 
   private:
-    QLabel* spinner_label_  = nullptr;
-    QLabel* message_label_  = nullptr;
-    QTimer* spin_timer_     = nullptr;
-    int     spin_angle_     = 0;
+    QLabel* spinner_label_ = nullptr;
+    QLabel* message_label_ = nullptr;
+    QTimer* spin_timer_ = nullptr;
+    int spin_angle_ = 0;
 
     static constexpr int SPIN_CHARS_COUNT = 8;
-    static constexpr const char* SPIN_CHARS[8] = {
-        "◜", "◠", "◝", "◞", "◡", "◟", "◜", "◠"
-    };
+    static constexpr const char* SPIN_CHARS[8] = {"◜", "◠", "◝", "◞", "◡", "◟", "◜", "◠"};
     int spin_idx_ = 0;
 };
 

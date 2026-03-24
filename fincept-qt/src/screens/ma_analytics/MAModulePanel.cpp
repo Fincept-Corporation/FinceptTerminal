@@ -1,8 +1,8 @@
 // src/screens/ma_analytics/MAModulePanel.cpp
 #include "screens/ma_analytics/MAModulePanel.h"
-#include "services/ma_analytics/MAAnalyticsService.h"
 
 #include "core/logging/Logger.h"
+#include "services/ma_analytics/MAAnalyticsService.h"
 #include "ui/theme/Theme.h"
 
 #include <QFormLayout>
@@ -22,21 +22,21 @@ using namespace fincept::services::ma;
 
 // ── Helpers: create styled input widgets ─────────────────────────────────────
 
-QDoubleSpinBox* MAModulePanel::make_double_spin(double min, double max, double val,
-                                                 int decimals, const QString& suffix,
-                                                 QWidget* parent) {
+QDoubleSpinBox* MAModulePanel::make_double_spin(double min, double max, double val, int decimals, const QString& suffix,
+                                                QWidget* parent) {
     auto* spin = new QDoubleSpinBox(parent);
     spin->setRange(min, max);
     spin->setValue(val);
     spin->setDecimals(decimals);
-    if (!suffix.isEmpty()) spin->setSuffix(suffix);
-    spin->setStyleSheet(QString(
-        "QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-        "QDoubleSpinBox:focus { border-color:%6; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.name()));
+    if (!suffix.isEmpty())
+        spin->setSuffix(suffix);
+    spin->setStyleSheet(QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
+                                "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
+                                "QDoubleSpinBox:focus { border-color:%6; }")
+                            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                            .arg(ui::fonts::DATA_FAMILY)
+                            .arg(ui::fonts::SMALL)
+                            .arg(module_.color.name()));
     return spin;
 }
 
@@ -44,31 +44,30 @@ QSpinBox* MAModulePanel::make_int_spin(int min, int max, int val, QWidget* paren
     auto* spin = new QSpinBox(parent);
     spin->setRange(min, max);
     spin->setValue(val);
-    spin->setStyleSheet(QString(
-        "QSpinBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-        "QSpinBox:focus { border-color:%6; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.name()));
+    spin->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
+                                "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
+                                "QSpinBox:focus { border-color:%6; }")
+                            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                            .arg(ui::fonts::DATA_FAMILY)
+                            .arg(ui::fonts::SMALL)
+                            .arg(module_.color.name()));
     return spin;
 }
 
 QPushButton* MAModulePanel::make_run_button(const QString& text, QWidget* parent) {
     auto* btn = new QPushButton(text, parent);
     btn->setCursor(Qt::PointingHandCursor);
-    btn->setStyleSheet(QString(
-        "QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
-        "font-weight:700; border:none; padding:8px 20px; border-radius:2px;"
-        "letter-spacing:1px; }"
-        "QPushButton:hover { background:%5; }"
-        "QPushButton:pressed { background:%6; }")
-        .arg(module_.color.name())
-        .arg(ui::colors::BG_BASE)
-        .arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::fonts::SMALL)
-        .arg(module_.color.lighter(120).name())
-        .arg(module_.color.darker(120).name()));
+    btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
+                               "font-weight:700; border:none; padding:8px 20px; border-radius:2px;"
+                               "letter-spacing:1px; }"
+                               "QPushButton:hover { background:%5; }"
+                               "QPushButton:pressed { background:%6; }")
+                           .arg(module_.color.name())
+                           .arg(ui::colors::BG_BASE)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL)
+                           .arg(module_.color.lighter(120).name())
+                           .arg(module_.color.darker(120).name()));
     return btn;
 }
 
@@ -79,29 +78,31 @@ QWidget* MAModulePanel::build_input_row(const QString& label, QWidget* input, QW
     hl->setSpacing(8);
     auto* lbl = new QLabel(label, row);
     lbl->setFixedWidth(160);
-    lbl->setStyleSheet(QString(
-        "color:%1; font-size:%2px; font-family:%3;")
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+    lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
+                           .arg(ui::colors::TEXT_SECONDARY)
+                           .arg(ui::fonts::SMALL)
+                           .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(lbl);
     hl->addWidget(input, 1);
     return row;
 }
 
-QWidget* MAModulePanel::build_metric_card(const QString& label, const QString& value,
-                                           const QString& color, QWidget* parent) {
+QWidget* MAModulePanel::build_metric_card(const QString& label, const QString& value, const QString& color,
+                                          QWidget* parent) {
     auto* card = new QWidget(parent);
-    card->setStyleSheet(QString(
-        "background:%1; border:1px solid %2; border-radius:2px; padding:10px;")
-        .arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_DIM));
+    card->setStyleSheet(QString("background:%1; border:1px solid %2; border-radius:2px; padding:10px;")
+                            .arg(ui::colors::BG_RAISED)
+                            .arg(ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
     auto* lbl = new QLabel(label, card);
     lbl->setStyleSheet(QString("color:%1; font-size:8px; font-family:%2; letter-spacing:1px;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+                           .arg(ui::colors::TEXT_TERTIARY)
+                           .arg(ui::fonts::DATA_FAMILY));
     auto* val = new QLabel(value, card);
-    val->setStyleSheet(QString("color:%1; font-size:16px; font-weight:700; font-family:%2;")
-        .arg(color).arg(ui::fonts::DATA_FAMILY));
+    val->setStyleSheet(
+        QString("color:%1; font-size:16px; font-weight:700; font-family:%2;").arg(color).arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(lbl);
     vl->addWidget(val);
     return card;
@@ -109,18 +110,15 @@ QWidget* MAModulePanel::build_metric_card(const QString& label, const QString& v
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
-MAModulePanel::MAModulePanel(const ModuleInfo& info, QWidget* parent)
-    : QWidget(parent), module_(info) {
+MAModulePanel::MAModulePanel(const ModuleInfo& info, QWidget* parent) : QWidget(parent), module_(info) {
     build_ui();
     connect_service();
 }
 
 void MAModulePanel::connect_service() {
     auto& svc = MAAnalyticsService::instance();
-    connect(&svc, &MAAnalyticsService::result_ready,
-            this, &MAModulePanel::on_result_ready);
-    connect(&svc, &MAAnalyticsService::error_occurred,
-            this, &MAModulePanel::on_error);
+    connect(&svc, &MAAnalyticsService::result_ready, this, &MAModulePanel::on_result_ready);
+    connect(&svc, &MAAnalyticsService::error_occurred, this, &MAModulePanel::on_error);
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -133,14 +131,16 @@ void MAModulePanel::build_ui() {
     // Module header bar
     auto* header = new QWidget(this);
     header->setFixedHeight(36);
-    header->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
-        .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    header->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(16, 0, 16, 0);
     auto* title = new QLabel(module_.label.toUpper(), header);
     title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-        "letter-spacing:1px;")
-        .arg(module_.color.name()).arg(ui::fonts::TINY).arg(ui::fonts::DATA_FAMILY));
+                                 "letter-spacing:1px;")
+                             .arg(module_.color.name())
+                             .arg(ui::fonts::TINY)
+                             .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(title);
 
     auto* div = new QWidget(header);
@@ -149,14 +149,14 @@ void MAModulePanel::build_ui() {
     hhl->addWidget(div);
 
     auto* cat = new QLabel(module_.category.toUpper(), header);
-    cat->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+    cat->setStyleSheet(
+        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(cat);
     hhl->addStretch();
 
     status_label_ = new QLabel(header);
-    status_label_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(
+        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(status_label_);
     root->addWidget(header);
 
@@ -167,14 +167,30 @@ void MAModulePanel::build_ui() {
 
     QWidget* panel_content = nullptr;
     switch (module_.id) {
-    case ModuleId::Valuation:  panel_content = build_valuation_panel(); break;
-    case ModuleId::Merger:     panel_content = build_merger_panel(); break;
-    case ModuleId::Deals:      panel_content = build_deals_panel(); break;
-    case ModuleId::Startup:    panel_content = build_startup_panel(); break;
-    case ModuleId::Fairness:   panel_content = build_fairness_panel(); break;
-    case ModuleId::Industry:   panel_content = build_industry_panel(); break;
-    case ModuleId::Advanced:   panel_content = build_advanced_panel(); break;
-    case ModuleId::Comparison: panel_content = build_comparison_panel(); break;
+        case ModuleId::Valuation:
+            panel_content = build_valuation_panel();
+            break;
+        case ModuleId::Merger:
+            panel_content = build_merger_panel();
+            break;
+        case ModuleId::Deals:
+            panel_content = build_deals_panel();
+            break;
+        case ModuleId::Startup:
+            panel_content = build_startup_panel();
+            break;
+        case ModuleId::Fairness:
+            panel_content = build_fairness_panel();
+            break;
+        case ModuleId::Industry:
+            panel_content = build_industry_panel();
+            break;
+        case ModuleId::Advanced:
+            panel_content = build_advanced_panel();
+            break;
+        case ModuleId::Comparison:
+            panel_content = build_comparison_panel();
+            break;
     }
 
     scroll->setWidget(panel_content);
@@ -192,15 +208,16 @@ QWidget* MAModulePanel::build_valuation_panel() {
     vl->setSpacing(12);
 
     sub_tabs_ = new QTabWidget(w);
-    sub_tabs_->setStyleSheet(QString(
-        "QTabWidget::pane { border:1px solid %1; background:%2; }"
-        "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
-        "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-        "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
-        "border-bottom:2px solid %7; }")
-        .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.name()));
+    sub_tabs_->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
+                                     "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
+                                     "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
+                                     "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
+                                     "border-bottom:2px solid %7; }")
+                                 .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
+                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::fonts::DATA_FAMILY)
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(module_.color.name()));
 
     // ── DCF Tab ──
     auto* dcf = new QWidget;
@@ -425,11 +442,13 @@ QWidget* MAModulePanel::build_valuation_panel() {
     sens_vl->setContentsMargins(12, 12, 12, 12);
     sens_vl->setSpacing(8);
 
-    auto* sens_hint = new QLabel(
-        "Sensitivity analysis varies entry multiple and exit multiple around base case.", lbo_sens);
+    auto* sens_hint =
+        new QLabel("Sensitivity analysis varies entry multiple and exit multiple around base case.", lbo_sens);
     sens_hint->setWordWrap(true);
     sens_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(ui::fonts::DATA_FAMILY));
     sens_vl->addWidget(sens_hint);
 
     auto* sens_entry_base = make_double_spin(0, 50, 8, 1, "x", lbo_sens);
@@ -472,17 +491,19 @@ QWidget* MAModulePanel::build_valuation_panel() {
 
     auto* comps_hint = new QLabel("Enter target ticker and comparable tickers (comma-separated):", comps);
     comps_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                                  .arg(ui::colors::TEXT_SECONDARY)
+                                  .arg(ui::fonts::SMALL)
+                                  .arg(ui::fonts::DATA_FAMILY));
     comps_vl->addWidget(comps_hint);
 
     auto* comps_target = new QComboBox(comps);
     comps_target->setEditable(true);
     comps_target->setPlaceholderText("Target ticker (e.g. AAPL)");
-    comps_target->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    comps_target->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                        "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                    .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                    .arg(ui::fonts::DATA_FAMILY)
+                                    .arg(ui::fonts::SMALL));
     combo_inputs_["comps_target"] = comps_target;
     comps_vl->addWidget(build_input_row("Target Ticker", comps_target, comps));
 
@@ -554,15 +575,16 @@ QWidget* MAModulePanel::build_merger_panel() {
     vl->setSpacing(12);
 
     sub_tabs_ = new QTabWidget(w);
-    sub_tabs_->setStyleSheet(QString(
-        "QTabWidget::pane { border:1px solid %1; background:%2; }"
-        "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
-        "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-        "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
-        "border-bottom:2px solid %7; }")
-        .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.name()));
+    sub_tabs_->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
+                                     "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
+                                     "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
+                                     "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
+                                     "border-bottom:2px solid %7; }")
+                                 .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
+                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::fonts::DATA_FAMILY)
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(module_.color.name()));
 
     // ── Accretion/Dilution ──
     auto* ad = new QWidget;
@@ -572,7 +594,9 @@ QWidget* MAModulePanel::build_merger_panel() {
 
     auto* sec_acq = new QLabel("ACQUIRER", ad);
     sec_acq->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
-        "letter-spacing:1px;").arg(module_.color.name()).arg(ui::fonts::DATA_FAMILY));
+                                   "letter-spacing:1px;")
+                               .arg(module_.color.name())
+                               .arg(ui::fonts::DATA_FAMILY));
     ad_vl->addWidget(sec_acq);
 
     auto* acq_rev = make_double_spin(0, 1e15, 1e9, 0, "", ad);
@@ -752,11 +776,12 @@ QWidget* MAModulePanel::build_merger_panel() {
     contrib_vl->setContentsMargins(12, 12, 12, 12);
     contrib_vl->setSpacing(8);
 
-    auto* contrib_hint = new QLabel(
-        "Calculates each party's % contribution to the combined entity.", contrib);
+    auto* contrib_hint = new QLabel("Calculates each party's % contribution to the combined entity.", contrib);
     contrib_hint->setWordWrap(true);
     contrib_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                                    .arg(ui::colors::TEXT_SECONDARY)
+                                    .arg(ui::fonts::SMALL)
+                                    .arg(ui::fonts::DATA_FAMILY));
     contrib_vl->addWidget(contrib_hint);
 
     auto* contrib_own = make_double_spin(0, 100, 70, 1, "%", contrib);
@@ -925,11 +950,11 @@ QWidget* MAModulePanel::build_merger_panel() {
 
     auto* cvr_type = new QComboBox(cvr);
     cvr_type->addItems({"milestone", "revenue", "regulatory"});
-    cvr_type->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    cvr_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                    "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                .arg(ui::fonts::DATA_FAMILY)
+                                .arg(ui::fonts::SMALL));
     combo_inputs_["cvr_type"] = cvr_type;
     cvr_vl->addWidget(build_input_row("CVR Type", cvr_type, cvr));
 
@@ -1011,11 +1036,11 @@ QWidget* MAModulePanel::build_deals_panel() {
     auto* search_box = new QComboBox(w);
     search_box->setEditable(true);
     search_box->setPlaceholderText("Search deals by target, acquirer, or industry...");
-    search_box->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:6px 10px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    search_box->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                      "font-family:%4; font-size:%5px; padding:6px 10px; }")
+                                  .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                  .arg(ui::fonts::DATA_FAMILY)
+                                  .arg(ui::fonts::SMALL));
     combo_inputs_["deal_search"] = search_box;
     // Search on enter
     connect(search_box->lineEdit(), &QLineEdit::returnPressed, this, [this]() {
@@ -1049,15 +1074,16 @@ QWidget* MAModulePanel::build_startup_panel() {
     vl->setSpacing(12);
 
     sub_tabs_ = new QTabWidget(w);
-    sub_tabs_->setStyleSheet(QString(
-        "QTabWidget::pane { border:1px solid %1; background:%2; }"
-        "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-        "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-        "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
-        "border-bottom:2px solid %7; }")
-        .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.name()));
+    sub_tabs_->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
+                                     "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
+                                     "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
+                                     "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
+                                     "border-bottom:2px solid %7; }")
+                                 .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
+                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::fonts::DATA_FAMILY)
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(module_.color.name()));
 
     // ── Berkus ──
     auto* berkus = new QWidget;
@@ -1065,8 +1091,8 @@ QWidget* MAModulePanel::build_startup_panel() {
     bvl->setContentsMargins(12, 12, 12, 12);
     bvl->setSpacing(8);
 
-    QStringList berkus_factors = {"Sound Idea", "Prototype", "Quality Team",
-                                  "Strategic Relationships", "Product Rollout"};
+    QStringList berkus_factors = {"Sound Idea", "Prototype", "Quality Team", "Strategic Relationships",
+                                  "Product Rollout"};
     for (int i = 0; i < berkus_factors.size(); ++i) {
         auto* spin = make_double_spin(0, 100, 50, 0, "%", berkus);
         double_inputs_[QString("berkus_%1").arg(i)] = spin;
@@ -1095,16 +1121,16 @@ QWidget* MAModulePanel::build_startup_panel() {
 
     auto* sc_stage = new QComboBox(sc);
     sc_stage->addItems({"seed", "early", "growth"});
-    sc_stage->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    sc_stage->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                    "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                .arg(ui::fonts::DATA_FAMILY)
+                                .arg(ui::fonts::SMALL));
     combo_inputs_["sc_stage"] = sc_stage;
     scvl->addWidget(build_input_row("Stage", sc_stage, sc));
 
-    QStringList sc_factors = {"Management Team", "Market Size", "Product/Technology",
-                               "Competition", "Marketing/Sales", "Need for Funding", "Other"};
+    QStringList sc_factors = {"Management Team",  "Market Size", "Product/Technology", "Competition", "Marketing/Sales",
+                              "Need for Funding", "Other"};
     for (int i = 0; i < sc_factors.size(); ++i) {
         auto* spin = make_double_spin(0.5, 2.0, 1.0, 1, "x", sc);
         double_inputs_[QString("sc_%1").arg(i)] = spin;
@@ -1174,7 +1200,9 @@ QWidget* MAModulePanel::build_startup_panel() {
     for (int i = 0; i < 3; ++i) {
         auto* lbl = new QLabel(scenarios[i].toUpper() + " CASE", fc);
         lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
-            "letter-spacing:1px;").arg(module_.color.name()).arg(ui::fonts::DATA_FAMILY));
+                                   "letter-spacing:1px;")
+                               .arg(module_.color.name())
+                               .arg(ui::fonts::DATA_FAMILY));
         fc_vl->addWidget(lbl);
 
         auto* prob = make_double_spin(0, 100, defaults_prob[i], 0, "%", fc);
@@ -1214,10 +1242,9 @@ QWidget* MAModulePanel::build_startup_panel() {
     double_inputs_["rf_base"] = rf_base;
     rf_vl->addWidget(build_input_row("Base Valuation ($)", rf_base, rf));
 
-    QStringList risk_factors = {"Management", "Stage", "Legislation", "Manufacturing",
-                                 "Sales & Marketing", "Funding", "Competition",
-                                 "Technology", "Litigation", "International",
-                                 "Reputation", "Exit Opportunity"};
+    QStringList risk_factors = {"Management",        "Stage",         "Legislation", "Manufacturing",
+                                "Sales & Marketing", "Funding",       "Competition", "Technology",
+                                "Litigation",        "International", "Reputation",  "Exit Opportunity"};
     for (int i = 0; i < risk_factors.size(); ++i) {
         auto* spin = make_int_spin(-2, 2, 0, rf);
         int_inputs_[QString("rf_%1").arg(i)] = spin;
@@ -1248,7 +1275,9 @@ QWidget* MAModulePanel::build_startup_panel() {
     auto* comp_hint = new QLabel("Runs all 5 methods with current inputs and returns a consensus range.", comp);
     comp_hint->setWordWrap(true);
     comp_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(ui::fonts::DATA_FAMILY));
     comp_vl->addWidget(comp_hint);
 
     auto* comp_run = make_run_button("RUN ALL METHODS", comp);
@@ -1293,15 +1322,16 @@ QWidget* MAModulePanel::build_fairness_panel() {
     vl->setSpacing(12);
 
     sub_tabs_ = new QTabWidget(w);
-    sub_tabs_->setStyleSheet(QString(
-        "QTabWidget::pane { border:1px solid %1; background:%2; }"
-        "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
-        "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-        "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
-        "border-bottom:2px solid %7; }")
-        .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.name()));
+    sub_tabs_->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
+                                     "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
+                                     "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
+                                     "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
+                                     "border-bottom:2px solid %7; }")
+                                 .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
+                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::fonts::DATA_FAMILY)
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(module_.color.name()));
 
     // ── Fairness Analysis ──
     auto* fa = new QWidget;
@@ -1332,10 +1362,15 @@ QWidget* MAModulePanel::build_fairness_panel() {
         params["offer_price"] = double_inputs_["fo_offer_price"]->value();
         QJsonArray methods;
         QJsonObject dcf, comps, prec;
-        dcf["method"] = "DCF"; dcf["valuation"] = double_inputs_["fo_dcf_val"]->value();
-        comps["method"] = "Trading Comps"; comps["valuation"] = double_inputs_["fo_comps_val"]->value();
-        prec["method"] = "Precedent Txns"; prec["valuation"] = double_inputs_["fo_prec_val"]->value();
-        methods.append(dcf); methods.append(comps); methods.append(prec);
+        dcf["method"] = "DCF";
+        dcf["valuation"] = double_inputs_["fo_dcf_val"]->value();
+        comps["method"] = "Trading Comps";
+        comps["valuation"] = double_inputs_["fo_comps_val"]->value();
+        prec["method"] = "Precedent Txns";
+        prec["valuation"] = double_inputs_["fo_prec_val"]->value();
+        methods.append(dcf);
+        methods.append(comps);
+        methods.append(prec);
         params["methods"] = methods;
         MAAnalyticsService::instance().generate_fairness_opinion(params);
     });
@@ -1385,9 +1420,8 @@ QWidget* MAModulePanel::build_fairness_panel() {
     pq_vl->setContentsMargins(12, 12, 12, 12);
     pq_vl->setSpacing(8);
 
-    QStringList pq_factors = {"Board Independence", "Special Committee", "Independent Advisor",
-                               "Market Check", "Negotiation Process", "Due Diligence",
-                               "Disclosure Quality", "Timing Adequacy"};
+    QStringList pq_factors = {"Board Independence",  "Special Committee", "Independent Advisor", "Market Check",
+                              "Negotiation Process", "Due Diligence",     "Disclosure Quality",  "Timing Adequacy"};
     for (int i = 0; i < pq_factors.size(); ++i) {
         auto* spin = make_int_spin(1, 5, 3, pq);
         int_inputs_[QString("pq_%1").arg(i)] = spin;
@@ -1430,15 +1464,16 @@ QWidget* MAModulePanel::build_industry_panel() {
     vl->setSpacing(12);
 
     sub_tabs_ = new QTabWidget(w);
-    sub_tabs_->setStyleSheet(QString(
-        "QTabWidget::pane { border:1px solid %1; background:%2; }"
-        "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
-        "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-        "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
-        "border-bottom:2px solid %7; }")
-        .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.name()));
+    sub_tabs_->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
+                                     "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
+                                     "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
+                                     "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
+                                     "border-bottom:2px solid %7; }")
+                                 .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
+                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::fonts::DATA_FAMILY)
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(module_.color.name()));
 
     // ── Technology ──
     auto* tech = new QWidget;
@@ -1448,11 +1483,11 @@ QWidget* MAModulePanel::build_industry_panel() {
 
     auto* tech_sector = new QComboBox(tech);
     tech_sector->addItems({"saas", "marketplace", "semiconductor"});
-    tech_sector->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    tech_sector->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                       "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                   .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                   .arg(ui::fonts::DATA_FAMILY)
+                                   .arg(ui::fonts::SMALL));
     combo_inputs_["tech_sector"] = tech_sector;
     tech_vl->addWidget(build_input_row("Sector", tech_sector, tech));
 
@@ -1635,15 +1670,16 @@ QWidget* MAModulePanel::build_advanced_panel() {
     vl->setSpacing(12);
 
     sub_tabs_ = new QTabWidget(w);
-    sub_tabs_->setStyleSheet(QString(
-        "QTabWidget::pane { border:1px solid %1; background:%2; }"
-        "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
-        "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-        "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
-        "border-bottom:2px solid %7; }")
-        .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.name()));
+    sub_tabs_->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
+                                     "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
+                                     "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
+                                     "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
+                                     "border-bottom:2px solid %7; }")
+                                 .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
+                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::fonts::DATA_FAMILY)
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(module_.color.name()));
 
     // ── Monte Carlo ──
     auto* mc = new QWidget;
@@ -1704,11 +1740,11 @@ QWidget* MAModulePanel::build_advanced_panel() {
 
     auto* reg_type = new QComboBox(reg);
     reg_type->addItems({"OLS", "Multiple"});
-    reg_type->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    reg_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                    "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                .arg(ui::fonts::DATA_FAMILY)
+                                .arg(ui::fonts::SMALL));
     combo_inputs_["reg_type"] = reg_type;
     reg_vl->addWidget(build_input_row("Regression Type", reg_type, reg));
 
@@ -1762,15 +1798,16 @@ QWidget* MAModulePanel::build_comparison_panel() {
     vl->setSpacing(12);
 
     sub_tabs_ = new QTabWidget(w);
-    sub_tabs_->setStyleSheet(QString(
-        "QTabWidget::pane { border:1px solid %1; background:%2; }"
-        "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
-        "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-        "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
-        "border-bottom:2px solid %7; }")
-        .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.name()));
+    sub_tabs_->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
+                                     "QTabBar::tab { background:%3; color:%4; padding:6px 16px;"
+                                     "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
+                                     "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
+                                     "border-bottom:2px solid %7; }")
+                                 .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
+                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::fonts::DATA_FAMILY)
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(module_.color.name()));
 
     // ── Compare ──
     auto* cmp = new QWidget;
@@ -1778,25 +1815,26 @@ QWidget* MAModulePanel::build_comparison_panel() {
     cmp_vl->setContentsMargins(12, 12, 12, 12);
     cmp_vl->setSpacing(8);
 
-    auto* cmp_hint = new QLabel(
-        "Enter deal data as JSON array. Each deal: "
-        "{\"acquirer\":\"...\",\"target\":\"...\",\"deal_value\":N,\"premium\":N,"
-        "\"ev_revenue\":N,\"ev_ebitda\":N}", cmp);
+    auto* cmp_hint = new QLabel("Enter deal data as JSON array. Each deal: "
+                                "{\"acquirer\":\"...\",\"target\":\"...\",\"deal_value\":N,\"premium\":N,"
+                                "\"ev_revenue\":N,\"ev_ebitda\":N}",
+                                cmp);
     cmp_hint->setWordWrap(true);
     cmp_hint->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                                .arg(ui::colors::TEXT_SECONDARY)
+                                .arg(ui::fonts::SMALL)
+                                .arg(ui::fonts::DATA_FAMILY));
     cmp_vl->addWidget(cmp_hint);
 
     auto* cmp_text = new QTextEdit(cmp);
-    cmp_text->setPlaceholderText(
-        "[{\"acquirer\":\"MSFT\",\"target\":\"ATVI\",\"deal_value\":68700,\"premium\":45.3,"
-        "\"ev_revenue\":8.7,\"ev_ebitda\":23.1}]");
+    cmp_text->setPlaceholderText("[{\"acquirer\":\"MSFT\",\"target\":\"ATVI\",\"deal_value\":68700,\"premium\":45.3,"
+                                 "\"ev_revenue\":8.7,\"ev_ebitda\":23.1}]");
     cmp_text->setMaximumHeight(120);
-    cmp_text->setStyleSheet(QString(
-        "QTextEdit { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:8px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    cmp_text->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
+                                    "font-family:%4; font-size:%5px; padding:8px; }")
+                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                .arg(ui::fonts::DATA_FAMILY)
+                                .arg(ui::fonts::SMALL));
     cmp_vl->addWidget(cmp_text);
 
     auto* cmp_run = make_run_button("COMPARE DEALS", cmp);
@@ -1819,11 +1857,11 @@ QWidget* MAModulePanel::build_comparison_panel() {
 
     auto* rank_criteria = new QComboBox(rank);
     rank_criteria->addItems({"premium", "deal_value", "ev_revenue", "ev_ebitda", "synergies"});
-    rank_criteria->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    rank_criteria->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                         "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                     .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                     .arg(ui::fonts::DATA_FAMILY)
+                                     .arg(ui::fonts::SMALL));
     combo_inputs_["rank_criteria"] = rank_criteria;
     rank_vl->addWidget(build_input_row("Rank By", rank_criteria, rank));
 
@@ -1941,7 +1979,8 @@ QWidget* MAModulePanel::build_comparison_panel() {
 void MAModulePanel::clear_results() {
     while (results_layout_->count() > 0) {
         auto* item = results_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 }
@@ -1950,11 +1989,12 @@ void MAModulePanel::display_error(const QString& msg) {
     clear_results();
     auto* err = new QLabel(msg);
     err->setWordWrap(true);
-    err->setStyleSheet(QString(
-        "color:%1; font-size:%2px; font-family:%3; padding:12px;"
-        "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3);"
-        "border-radius:2px;")
-        .arg(ui::colors::NEGATIVE).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+    err->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:12px;"
+                               "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3);"
+                               "border-radius:2px;")
+                           .arg(ui::colors::NEGATIVE)
+                           .arg(ui::fonts::SMALL)
+                           .arg(ui::fonts::DATA_FAMILY));
     results_layout_->addWidget(err);
     status_label_->setText("Error");
 }
@@ -1962,28 +2002,34 @@ void MAModulePanel::display_error(const QString& msg) {
 static QString format_value(const QJsonValue& val) {
     if (val.isDouble()) {
         double v = val.toDouble();
-        if (std::abs(v) >= 1e9)  return QString("$%1B").arg(v / 1e9, 0, 'f', 1);
-        if (std::abs(v) >= 1e6)  return QString("$%1M").arg(v / 1e6, 0, 'f', 1);
-        if (std::abs(v) >= 1e3)  return QString("$%1K").arg(v / 1e3, 0, 'f', 0);
+        if (std::abs(v) >= 1e9)
+            return QString("$%1B").arg(v / 1e9, 0, 'f', 1);
+        if (std::abs(v) >= 1e6)
+            return QString("$%1M").arg(v / 1e6, 0, 'f', 1);
+        if (std::abs(v) >= 1e3)
+            return QString("$%1K").arg(v / 1e3, 0, 'f', 0);
         if (std::abs(v) < 1.0 && std::abs(v) > 0.0001)
             return QString("%1%").arg(v * 100, 0, 'f', 1);
         return QString::number(v, 'f', 2);
     }
-    if (val.isBool()) return val.toBool() ? "YES" : "NO";
-    if (val.isString()) return val.toString();
+    if (val.isBool())
+        return val.toBool() ? "YES" : "NO";
+    if (val.isString())
+        return val.toString();
     return QString::fromUtf8("—");
 }
 
-static QTableWidget* build_json_table(const QJsonArray& arr, const QString& accent,
-                                       QWidget* parent) {
-    if (arr.isEmpty()) return nullptr;
+static QTableWidget* build_json_table(const QJsonArray& arr, const QString& accent, QWidget* parent) {
+    if (arr.isEmpty())
+        return nullptr;
     // Collect all column keys from first object
     auto first = arr[0].toObject();
     QStringList cols;
     for (auto it = first.begin(); it != first.end(); ++it)
         if (!it.value().isObject() && !it.value().isArray())
             cols.append(it.key());
-    if (cols.isEmpty()) return nullptr;
+    if (cols.isEmpty())
+        return nullptr;
 
     auto* table = new QTableWidget(arr.size(), cols.size(), parent);
     table->setHorizontalHeaderLabels(cols);
@@ -1993,19 +2039,20 @@ static QTableWidget* build_json_table(const QJsonArray& arr, const QString& acce
     table->horizontalHeader()->setStretchLastSection(true);
     table->verticalHeader()->setVisible(false);
     table->setMaximumHeight(300);
-    table->setStyleSheet(QString(
-        "QTableWidget { background:%1; color:%2; gridline-color:%3;"
-        "font-family:%4; font-size:%5px; border:1px solid %3; }"
-        "QTableWidget::item { padding:4px 8px; }"
-        "QTableWidget::item:selected { background:%6; }"
-        "QHeaderView::section { background:%7; color:%8; font-weight:700;"
-        "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-        "QTableWidget::item:alternate { background:%9; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(QString("rgba(%1,0.15)").arg(accent))
-        .arg(ui::colors::BG_RAISED).arg(ui::colors::TEXT_SECONDARY)
-        .arg(ui::colors::ROW_ALT));
+    table->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                                 "font-family:%4; font-size:%5px; border:1px solid %3; }"
+                                 "QTableWidget::item { padding:4px 8px; }"
+                                 "QTableWidget::item:selected { background:%6; }"
+                                 "QHeaderView::section { background:%7; color:%8; font-weight:700;"
+                                 "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
+                                 "QTableWidget::item:alternate { background:%9; }")
+                             .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                             .arg(ui::fonts::DATA_FAMILY)
+                             .arg(ui::fonts::SMALL)
+                             .arg(QString("rgba(%1,0.15)").arg(accent))
+                             .arg(ui::colors::BG_RAISED)
+                             .arg(ui::colors::TEXT_SECONDARY)
+                             .arg(ui::colors::ROW_ALT));
 
     for (int r = 0; r < arr.size(); ++r) {
         auto obj = arr[r].toObject();
@@ -2019,14 +2066,14 @@ static QTableWidget* build_json_table(const QJsonArray& arr, const QString& acce
     return table;
 }
 
-static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accent,
-                                     QWidget* parent) {
+static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accent, QWidget* parent) {
     // Collect only scalar key-value pairs
     QStringList keys;
     for (auto it = obj.begin(); it != obj.end(); ++it)
         if (!it.value().isObject() && !it.value().isArray())
             keys.append(it.key());
-    if (keys.isEmpty()) return nullptr;
+    if (keys.isEmpty())
+        return nullptr;
 
     auto* table = new QTableWidget(keys.size(), 2, parent);
     table->setHorizontalHeaderLabels({"Metric", "Value"});
@@ -2036,19 +2083,20 @@ static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accen
     table->horizontalHeader()->setStretchLastSection(true);
     table->verticalHeader()->setVisible(false);
     table->setMaximumHeight(400);
-    table->setStyleSheet(QString(
-        "QTableWidget { background:%1; color:%2; gridline-color:%3;"
-        "font-family:%4; font-size:%5px; border:1px solid %3; }"
-        "QTableWidget::item { padding:4px 8px; }"
-        "QTableWidget::item:selected { background:%6; }"
-        "QHeaderView::section { background:%7; color:%8; font-weight:700;"
-        "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-        "QTableWidget::item:alternate { background:%9; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(QString("rgba(%1,0.15)").arg(accent))
-        .arg(ui::colors::BG_RAISED).arg(ui::colors::TEXT_SECONDARY)
-        .arg(ui::colors::ROW_ALT));
+    table->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                                 "font-family:%4; font-size:%5px; border:1px solid %3; }"
+                                 "QTableWidget::item { padding:4px 8px; }"
+                                 "QTableWidget::item:selected { background:%6; }"
+                                 "QHeaderView::section { background:%7; color:%8; font-weight:700;"
+                                 "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
+                                 "QTableWidget::item:alternate { background:%9; }")
+                             .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                             .arg(ui::fonts::DATA_FAMILY)
+                             .arg(ui::fonts::SMALL)
+                             .arg(QString("rgba(%1,0.15)").arg(accent))
+                             .arg(ui::colors::BG_RAISED)
+                             .arg(ui::colors::TEXT_SECONDARY)
+                             .arg(ui::colors::ROW_ALT));
 
     for (int r = 0; r < keys.size(); ++r) {
         auto label = keys[r];
@@ -2067,15 +2115,14 @@ static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accen
 void MAModulePanel::display_result(const QJsonObject& data) {
     clear_results();
 
-    QString accent = QString("%1,%2,%3")
-        .arg(module_.color.red()).arg(module_.color.green()).arg(module_.color.blue());
+    QString accent = QString("%1,%2,%3").arg(module_.color.red()).arg(module_.color.green()).arg(module_.color.blue());
 
     // Section header
     auto* header = new QLabel("RESULTS");
-    header->setStyleSheet(QString(
-        "color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;"
-        "padding:4px 0;")
-        .arg(module_.color.name()).arg(ui::fonts::DATA_FAMILY));
+    header->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;"
+                                  "padding:4px 0;")
+                              .arg(module_.color.name())
+                              .arg(ui::fonts::DATA_FAMILY));
     results_layout_->addWidget(header);
 
     // 1. Metric cards for top-level scalar values
@@ -2087,15 +2134,18 @@ void MAModulePanel::display_result(const QJsonObject& data) {
     int col = 0, row = 0;
     bool has_scalars = false;
     for (auto it = data.begin(); it != data.end(); ++it) {
-        if (it.value().isObject() || it.value().isArray()) continue;
+        if (it.value().isObject() || it.value().isArray())
+            continue;
         has_scalars = true;
         QString label = it.key();
         label.replace('_', ' ');
-        auto* card = build_metric_card(label.toUpper(), format_value(it.value()),
-                                        module_.color.name(), grid);
+        auto* card = build_metric_card(label.toUpper(), format_value(it.value()), module_.color.name(), grid);
         gl->addWidget(card, row, col);
         col++;
-        if (col >= 3) { col = 0; row++; }
+        if (col >= 3) {
+            col = 0;
+            row++;
+        }
     }
     if (has_scalars)
         results_layout_->addWidget(grid);
@@ -2106,72 +2156,80 @@ void MAModulePanel::display_result(const QJsonObject& data) {
     for (auto it = data.begin(); it != data.end(); ++it) {
         if (it.value().isArray()) {
             auto arr = it.value().toArray();
-            if (arr.isEmpty()) continue;
+            if (arr.isEmpty())
+                continue;
 
             QString sec_label = it.key();
             sec_label.replace('_', ' ');
             auto* sec = new QLabel(sec_label.toUpper());
-            sec->setStyleSheet(QString(
-                "color:%1; font-size:9px; font-weight:700; font-family:%2;"
-                "letter-spacing:1px; padding:8px 0 4px 0;")
-                .arg(module_.color.name()).arg(ui::fonts::DATA_FAMILY));
+            sec->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
+                                       "letter-spacing:1px; padding:8px 0 4px 0;")
+                                   .arg(module_.color.name())
+                                   .arg(ui::fonts::DATA_FAMILY));
             results_layout_->addWidget(sec);
 
             if (arr[0].isObject()) {
                 auto* table = build_json_table(arr, accent, this);
-                if (table) results_layout_->addWidget(table);
+                if (table)
+                    results_layout_->addWidget(table);
             } else {
                 // Simple array — display as comma-separated
                 QStringList items;
-                for (const auto& v : arr) items.append(format_value(v));
+                for (const auto& v : arr)
+                    items.append(format_value(v));
                 auto* lbl = new QLabel(items.join(", "));
                 lbl->setWordWrap(true);
                 lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;"
-                    "padding:4px; background:%4; border:1px solid %5; border-radius:2px;")
-                    .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL)
-                    .arg(ui::fonts::DATA_FAMILY).arg(ui::colors::BG_RAISED)
-                    .arg(ui::colors::BORDER_DIM));
+                                           "padding:4px; background:%4; border:1px solid %5; border-radius:2px;")
+                                       .arg(ui::colors::TEXT_PRIMARY)
+                                       .arg(ui::fonts::SMALL)
+                                       .arg(ui::fonts::DATA_FAMILY)
+                                       .arg(ui::colors::BG_RAISED)
+                                       .arg(ui::colors::BORDER_DIM));
                 results_layout_->addWidget(lbl);
             }
         } else if (it.value().isObject()) {
             auto obj = it.value().toObject();
-            if (obj.isEmpty()) continue;
+            if (obj.isEmpty())
+                continue;
 
             QString sec_label = it.key();
             sec_label.replace('_', ' ');
             auto* sec = new QLabel(sec_label.toUpper());
-            sec->setStyleSheet(QString(
-                "color:%1; font-size:9px; font-weight:700; font-family:%2;"
-                "letter-spacing:1px; padding:8px 0 4px 0;")
-                .arg(module_.color.name()).arg(ui::fonts::DATA_FAMILY));
+            sec->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
+                                       "letter-spacing:1px; padding:8px 0 4px 0;")
+                                   .arg(module_.color.name())
+                                   .arg(ui::fonts::DATA_FAMILY));
             results_layout_->addWidget(sec);
 
             auto* table = build_kv_table(obj, accent, this);
-            if (table) results_layout_->addWidget(table);
+            if (table)
+                results_layout_->addWidget(table);
         }
     }
 
     // 3. Raw JSON viewer (collapsed)
     auto* raw_btn = new QPushButton("Show Raw JSON", this);
     raw_btn->setCursor(Qt::PointingHandCursor);
-    raw_btn->setStyleSheet(QString(
-        "QPushButton { color:%1; font-size:9px; font-family:%2;"
-        "background:transparent; border:1px solid %3; padding:4px 12px;"
-        "border-radius:2px; }"
-        "QPushButton:hover { background:%4; }")
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::colors::BORDER_DIM).arg(ui::colors::BG_HOVER));
+    raw_btn->setStyleSheet(QString("QPushButton { color:%1; font-size:9px; font-family:%2;"
+                                   "background:transparent; border:1px solid %3; padding:4px 12px;"
+                                   "border-radius:2px; }"
+                                   "QPushButton:hover { background:%4; }")
+                               .arg(ui::colors::TEXT_SECONDARY)
+                               .arg(ui::fonts::DATA_FAMILY)
+                               .arg(ui::colors::BORDER_DIM)
+                               .arg(ui::colors::BG_HOVER));
 
     auto* raw_text = new QTextEdit;
     raw_text->setReadOnly(true);
     raw_text->setVisible(false);
     raw_text->setMaximumHeight(300);
     raw_text->setPlainText(QJsonDocument(data).toJson(QJsonDocument::Indented));
-    raw_text->setStyleSheet(QString(
-        "QTextEdit { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:8px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    raw_text->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
+                                    "font-family:%4; font-size:%5px; padding:8px; }")
+                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                                .arg(ui::fonts::DATA_FAMILY)
+                                .arg(ui::fonts::SMALL));
 
     connect(raw_btn, &QPushButton::clicked, this, [raw_text, raw_btn]() {
         bool showing = raw_text->isVisible();
@@ -2189,23 +2247,21 @@ void MAModulePanel::display_result(const QJsonObject& data) {
 
 static const QHash<ModuleId, QStringList>& get_context_map() {
     static const QHash<ModuleId, QStringList> map = {
-        {ModuleId::Valuation,  {"dcf", "dcf_sensitivity", "football_field",
-                                 "lbo_returns", "lbo_model", "lbo_debt_schedule",
-                                 "lbo_sensitivity", "trading_comps", "precedent_txns"}},
-        {ModuleId::Merger,     {"merger_model", "accretion_dilution", "pro_forma",
-                                 "sources_uses", "contribution", "revenue_synergies",
-                                 "cost_synergies", "synergy_dcf", "integration_costs",
-                                 "payment_structure", "earnout", "exchange_ratio",
-                                 "collar", "cvr"}},
-        {ModuleId::Deals,      {"scan_filings", "all_deals", "search_deals",
-                                 "create_deal", "update_deal", "parse_filing"}},
-        {ModuleId::Startup,    {"berkus", "scorecard", "vc_method", "first_chicago",
-                                 "risk_factor", "startup_comprehensive"}},
-        {ModuleId::Fairness,   {"fairness_opinion", "premium_analysis", "process_quality"}},
-        {ModuleId::Industry,   {"tech_metrics", "healthcare_metrics", "finserv_metrics"}},
-        {ModuleId::Advanced,   {"monte_carlo", "regression"}},
-        {ModuleId::Comparison, {"compare_deals", "rank_deals", "benchmark_premium",
-                                 "payment_structures", "industry_deals"}},
+        {ModuleId::Valuation,
+         {"dcf", "dcf_sensitivity", "football_field", "lbo_returns", "lbo_model", "lbo_debt_schedule",
+          "lbo_sensitivity", "trading_comps", "precedent_txns"}},
+        {ModuleId::Merger,
+         {"merger_model", "accretion_dilution", "pro_forma", "sources_uses", "contribution", "revenue_synergies",
+          "cost_synergies", "synergy_dcf", "integration_costs", "payment_structure", "earnout", "exchange_ratio",
+          "collar", "cvr"}},
+        {ModuleId::Deals, {"scan_filings", "all_deals", "search_deals", "create_deal", "update_deal", "parse_filing"}},
+        {ModuleId::Startup,
+         {"berkus", "scorecard", "vc_method", "first_chicago", "risk_factor", "startup_comprehensive"}},
+        {ModuleId::Fairness, {"fairness_opinion", "premium_analysis", "process_quality"}},
+        {ModuleId::Industry, {"tech_metrics", "healthcare_metrics", "finserv_metrics"}},
+        {ModuleId::Advanced, {"monte_carlo", "regression"}},
+        {ModuleId::Comparison,
+         {"compare_deals", "rank_deals", "benchmark_premium", "payment_structures", "industry_deals"}},
     };
     return map;
 }

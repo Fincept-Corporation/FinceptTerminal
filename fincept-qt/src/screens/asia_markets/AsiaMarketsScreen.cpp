@@ -18,99 +18,98 @@
 namespace {
 using namespace fincept::ui;
 
-static const QString kStyle = QStringLiteral(
-    "#asiaScreen { background: %1; }"
+static const QString kStyle =
+    QStringLiteral("#asiaScreen { background: %1; }"
 
-    "#asiaHeader { background: %2; border-bottom: 2px solid %3; }"
-    "#asiaHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
-    "#asiaHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
+                   "#asiaHeader { background: %2; border-bottom: 2px solid %3; }"
+                   "#asiaHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
+                   "#asiaHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
 
-    "#asiaRegionBtn { background: transparent; color: %5; border: 1px solid %8; "
-    "  font-size: 9px; font-weight: 700; padding: 3px 10px; }"
-    "#asiaRegionBtn:hover { color: %4; border-color: %9; }"
-    "#asiaRegionBtn[active=\"true\"] { background: %3; color: %1; border-color: %3; }"
+                   "#asiaRegionBtn { background: transparent; color: %5; border: 1px solid %8; "
+                   "  font-size: 9px; font-weight: 700; padding: 3px 10px; }"
+                   "#asiaRegionBtn:hover { color: %4; border-color: %9; }"
+                   "#asiaRegionBtn[active=\"true\"] { background: %3; color: %1; border-color: %3; }"
 
-    "#asiaCatBar { background: %1; border-bottom: 1px solid %8; }"
-    "#asiaCatBtn { background: transparent; color: %5; border: none; "
-    "  font-size: 9px; font-weight: 700; padding: 6px 14px; border-bottom: 2px solid transparent; }"
-    "#asiaCatBtn:hover { color: %4; }"
-    "#asiaCatBtn[active=\"true\"] { color: %4; border-bottom-color: %3; }"
+                   "#asiaCatBar { background: %1; border-bottom: 1px solid %8; }"
+                   "#asiaCatBtn { background: transparent; color: %5; border: none; "
+                   "  font-size: 9px; font-weight: 700; padding: 6px 14px; border-bottom: 2px solid transparent; }"
+                   "#asiaCatBtn:hover { color: %4; }"
+                   "#asiaCatBtn[active=\"true\"] { color: %4; border-bottom-color: %3; }"
 
-    "#asiaLeftPanel { background: %7; border-right: 1px solid %8; }"
-    "#asiaSearchInput { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "#asiaSearchInput:focus { border-color: %9; }"
-    "#asiaSymbolInput { background: %1; color: %13; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; font-weight: 700; }"
-    "#asiaSymbolInput:focus { border-color: %9; }"
-    "#asiaEndpointCount { color: %5; font-size: 9px; font-weight: 700; background: transparent; }"
+                   "#asiaLeftPanel { background: %7; border-right: 1px solid %8; }"
+                   "#asiaSearchInput { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "#asiaSearchInput:focus { border-color: %9; }"
+                   "#asiaSymbolInput { background: %1; color: %13; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; font-weight: 700; }"
+                   "#asiaSymbolInput:focus { border-color: %9; }"
+                   "#asiaEndpointCount { color: %5; font-size: 9px; font-weight: 700; background: transparent; }"
 
-    "#asiaEndpointList { background: %1; border: none; outline: none; font-size: 11px; }"
-    "#asiaEndpointList::item { color: %5; padding: 4px 8px; border-bottom: 1px solid %8; }"
-    "#asiaEndpointList::item:hover { color: %4; background: %10; }"
-    "#asiaEndpointList::item:selected { color: %3; background: rgba(217,119,6,0.1); "
-    "  border-left: 2px solid %3; }"
+                   "#asiaEndpointList { background: %1; border: none; outline: none; font-size: 11px; }"
+                   "#asiaEndpointList::item { color: %5; padding: 4px 8px; border-bottom: 1px solid %8; }"
+                   "#asiaEndpointList::item:hover { color: %4; background: %10; }"
+                   "#asiaEndpointList::item:selected { color: %3; background: rgba(217,119,6,0.1); "
+                   "  border-left: 2px solid %3; }"
 
-    "#asiaDataPanel { background: %1; }"
-    "#asiaToolbar { background: %2; border-bottom: 1px solid %8; }"
-    "#asiaDataStatus { color: %5; font-size: 11px; background: transparent; }"
-    "#asiaRecordCount { color: %13; font-size: 9px; font-weight: 700; background: transparent; }"
+                   "#asiaDataPanel { background: %1; }"
+                   "#asiaToolbar { background: %2; border-bottom: 1px solid %8; }"
+                   "#asiaDataStatus { color: %5; font-size: 11px; background: transparent; }"
+                   "#asiaRecordCount { color: %13; font-size: 9px; font-weight: 700; background: transparent; }"
 
-    "#asiaExecBtn { background: %3; color: %1; border: none; padding: 4px 14px; "
-    "  font-size: 9px; font-weight: 700; }"
-    "#asiaExecBtn:hover { background: #FF8800; }"
-    "#asiaExecBtn:disabled { background: %11; color: %12; }"
+                   "#asiaExecBtn { background: %3; color: %1; border: none; padding: 4px 14px; "
+                   "  font-size: 9px; font-weight: 700; }"
+                   "#asiaExecBtn:hover { background: #FF8800; }"
+                   "#asiaExecBtn:disabled { background: %11; color: %12; }"
 
-    "#asiaViewToggle { background: %7; color: %5; border: 1px solid %8; "
-    "  padding: 4px 10px; font-size: 9px; font-weight: 700; }"
-    "#asiaViewToggle:hover { color: %4; }"
+                   "#asiaViewToggle { background: %7; color: %5; border: 1px solid %8; "
+                   "  padding: 4px 10px; font-size: 9px; font-weight: 700; }"
+                   "#asiaViewToggle:hover { color: %4; }"
 
-    "#asiaRefreshBtn { background: %7; color: %5; border: 1px solid %8; "
-    "  padding: 4px 10px; font-size: 9px; font-weight: 700; }"
-    "#asiaRefreshBtn:hover { color: %4; }"
+                   "#asiaRefreshBtn { background: %7; color: %5; border: 1px solid %8; "
+                   "  padding: 4px 10px; font-size: 9px; font-weight: 700; }"
+                   "#asiaRefreshBtn:hover { color: %4; }"
 
-    "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
-    "  font-size: 11px; }"
-    "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
-    "QTableWidget::item:selected { background: rgba(217,119,6,0.1); color: %3; }"
-    "QHeaderView::section { background: %2; color: %5; border: none; "
-    "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
-    "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
+                   "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
+                   "  font-size: 11px; }"
+                   "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
+                   "QTableWidget::item:selected { background: rgba(217,119,6,0.1); color: %3; }"
+                   "QHeaderView::section { background: %2; color: %5; border: none; "
+                   "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
+                   "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
 
-    "#asiaJsonView { background: %1; color: %13; border: none; font-size: 11px; }"
+                   "#asiaJsonView { background: %1; color: %13; border: none; font-size: 11px; }"
 
-    "#asiaErrorPanel { background: rgba(220,38,38,0.1); border: 1px solid %14; padding: 8px 12px; }"
-    "#asiaErrorText { color: %14; font-size: 10px; background: transparent; }"
+                   "#asiaErrorPanel { background: rgba(220,38,38,0.1); border: 1px solid %14; padding: 8px 12px; }"
+                   "#asiaErrorText { color: %14; font-size: 10px; background: transparent; }"
 
-    "#asiaStatusBar { background: %2; border-top: 1px solid %8; }"
-    "#asiaStatusText { color: %5; font-size: 9px; background: transparent; }"
-    "#asiaStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
+                   "#asiaStatusBar { background: %2; border-top: 1px solid %8; }"
+                   "#asiaStatusText { color: %5; font-size: 9px; background: transparent; }"
+                   "#asiaStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
 
-    "#asiaEmptyState { color: %12; font-size: 13px; background: transparent; }"
-    "#asiaParamLabel { color: %5; font-size: 9px; font-weight: 700; background: transparent; }"
+                   "#asiaEmptyState { color: %12; font-size: 13px; background: transparent; }"
+                   "#asiaParamLabel { color: %5; font-size: 9px; font-weight: 700; background: transparent; }"
 
-    "QSplitter::handle { background: %8; }"
-    "QScrollBar:vertical { background: %1; width: 6px; }"
-    "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-    "QScrollBar:horizontal { background: %1; height: 6px; }"
-    "QScrollBar::handle:horizontal { background: %8; min-width: 20px; }"
-    "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }"
-)
-    .arg(colors::BG_BASE)         // %1
-    .arg(colors::BG_RAISED)       // %2
-    .arg(colors::AMBER)           // %3
-    .arg(colors::TEXT_PRIMARY)    // %4
-    .arg(colors::TEXT_SECONDARY)  // %5
-    .arg(colors::POSITIVE)        // %6  (unused but reserved)
-    .arg(colors::BG_SURFACE)      // %7
-    .arg(colors::BORDER_DIM)      // %8
-    .arg(colors::BORDER_BRIGHT)   // %9
-    .arg(colors::BG_HOVER)        // %10
-    .arg(colors::AMBER_DIM)       // %11
-    .arg(colors::TEXT_DIM)         // %12
-    .arg(colors::CYAN)             // %13
-    .arg(colors::NEGATIVE)        // %14
+                   "QSplitter::handle { background: %8; }"
+                   "QScrollBar:vertical { background: %1; width: 6px; }"
+                   "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
+                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+                   "QScrollBar:horizontal { background: %1; height: 6px; }"
+                   "QScrollBar::handle:horizontal { background: %8; min-width: 20px; }"
+                   "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }")
+        .arg(colors::BG_BASE)        // %1
+        .arg(colors::BG_RAISED)      // %2
+        .arg(colors::AMBER)          // %3
+        .arg(colors::TEXT_PRIMARY)   // %4
+        .arg(colors::TEXT_SECONDARY) // %5
+        .arg(colors::POSITIVE)       // %6  (unused but reserved)
+        .arg(colors::BG_SURFACE)     // %7
+        .arg(colors::BORDER_DIM)     // %8
+        .arg(colors::BORDER_BRIGHT)  // %9
+        .arg(colors::BG_HOVER)       // %10
+        .arg(colors::AMBER_DIM)      // %11
+        .arg(colors::TEXT_DIM)       // %12
+        .arg(colors::CYAN)           // %13
+        .arg(colors::NEGATIVE)       // %14
     ;
 } // namespace
 
@@ -122,14 +121,14 @@ using namespace fincept::ui;
 
 static QList<StockCategory> build_categories() {
     return {
-        {"realtime",   "REALTIME",    "akshare_stocks_realtime.py",    "#00D66F", 49},
-        {"historical", "HISTORICAL",  "akshare_stocks_historical.py",  "#0088FF", 52},
-        {"financial",  "FINANCIAL",   "akshare_stocks_financial.py",   "#9D4EDD", 45},
-        {"holders",    "HOLDERS",     "akshare_stocks_holders.py",     "#FFD700", 49},
-        {"fund_flow",  "FUND FLOW",   "akshare_stocks_funds.py",       "#FF3B3B", 56},
-        {"boards",     "BOARDS",      "akshare_stocks_board.py",       "#00E5FF", 49},
-        {"margin",     "MARGIN/HSGT", "akshare_stocks_margin.py",      "#FF8800", 46},
-        {"hot_news",   "HOT & NEWS",  "akshare_stocks_hot.py",         "#FF6B6B", 55},
+        {"realtime", "REALTIME", "akshare_stocks_realtime.py", "#00D66F", 49},
+        {"historical", "HISTORICAL", "akshare_stocks_historical.py", "#0088FF", 52},
+        {"financial", "FINANCIAL", "akshare_stocks_financial.py", "#9D4EDD", 45},
+        {"holders", "HOLDERS", "akshare_stocks_holders.py", "#FFD700", 49},
+        {"fund_flow", "FUND FLOW", "akshare_stocks_funds.py", "#FF3B3B", 56},
+        {"boards", "BOARDS", "akshare_stocks_board.py", "#00E5FF", 49},
+        {"margin", "MARGIN/HSGT", "akshare_stocks_margin.py", "#FF8800", 46},
+        {"hot_news", "HOT & NEWS", "akshare_stocks_hot.py", "#FF6B6B", 55},
     };
 }
 
@@ -381,7 +380,8 @@ QWidget* AsiaMarketsScreen::create_status_bar() {
 // ── Slots ───────────────────────────────────────────────────────────────────
 
 void AsiaMarketsScreen::on_category_changed(int index) {
-    if (index == active_category_ && endpoint_list_->count() > 0) return;
+    if (index == active_category_ && endpoint_list_->count() > 0)
+        return;
     active_category_ = index;
     active_endpoint_.clear();
     exec_btn_->setEnabled(false);
@@ -419,9 +419,11 @@ void AsiaMarketsScreen::on_region_changed(int index) {
 }
 
 void AsiaMarketsScreen::on_endpoint_clicked(QListWidgetItem* item) {
-    if (!item) return;
+    if (!item)
+        return;
     QString ep = item->data(Qt::UserRole).toString();
-    if (ep.isEmpty()) return; // category header
+    if (ep.isEmpty())
+        return; // category header
     active_endpoint_ = ep;
     exec_btn_->setEnabled(true);
 
@@ -437,15 +439,15 @@ void AsiaMarketsScreen::on_search_changed(const QString& text) {
             item->setHidden(false); // always show headers (they'll be hidden if all children hidden)
             continue;
         }
-        bool match = text.isEmpty() ||
-                     item->text().contains(text, Qt::CaseInsensitive) ||
+        bool match = text.isEmpty() || item->text().contains(text, Qt::CaseInsensitive) ||
                      item->data(Qt::UserRole).toString().contains(text, Qt::CaseInsensitive);
         item->setHidden(!match);
     }
 }
 
 void AsiaMarketsScreen::on_execute() {
-    if (loading_ || active_endpoint_.isEmpty()) return;
+    if (loading_ || active_endpoint_.isEmpty())
+        return;
 
     QStringList extra;
     QString sym = symbol_input_->text().trimmed();
@@ -472,35 +474,35 @@ void AsiaMarketsScreen::load_endpoints(int cat_index) {
     const QString script = categories_[cat_index].script;
     QPointer<AsiaMarketsScreen> self = this;
 
-    python::PythonRunner::instance().run(
-        script, {"get_all_endpoints"},
-        [self, script](const python::PythonResult& result) {
-            if (!self) return;
-            self->set_loading(false);
+    python::PythonRunner::instance().run(script, {"get_all_endpoints"},
+                                         [self, script](const python::PythonResult& result) {
+                                             if (!self)
+                                                 return;
+                                             self->set_loading(false);
 
-            if (!result.success) {
-                self->data_status_->setText("Failed to load endpoints");
-                LOG_ERROR("AsiaMarkets", "Endpoint load failed: " + result.error);
-                return;
-            }
+                                             if (!result.success) {
+                                                 self->data_status_->setText("Failed to load endpoints");
+                                                 LOG_ERROR("AsiaMarkets", "Endpoint load failed: " + result.error);
+                                                 return;
+                                             }
 
-            QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) {
-                self->data_status_->setText("No endpoint data");
-                return;
-            }
+                                             QString json_str = python::extract_json(result.output);
+                                             if (json_str.isEmpty()) {
+                                                 self->data_status_->setText("No endpoint data");
+                                                 return;
+                                             }
 
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-            if (doc.isNull() || !doc.isObject()) {
-                self->data_status_->setText("Invalid endpoint data");
-                return;
-            }
+                                             QJsonParseError err;
+                                             auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+                                             if (doc.isNull() || !doc.isObject()) {
+                                                 self->data_status_->setText("Invalid endpoint data");
+                                                 return;
+                                             }
 
-            auto obj = doc.object();
-            self->endpoint_cache_[script] = obj;
-            self->populate_endpoint_list(obj);
-        });
+                                             auto obj = doc.object();
+                                             self->endpoint_cache_[script] = obj;
+                                             self->populate_endpoint_list(obj);
+                                         });
 }
 
 void AsiaMarketsScreen::populate_endpoint_list(const QJsonObject& result) {
@@ -564,69 +566,68 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
 
     QPointer<AsiaMarketsScreen> self = this;
 
-    python::PythonRunner::instance().run(
-        script, args,
-        [self, endpoint](const python::PythonResult& result) {
-            if (!self) return;
-            self->set_loading(false);
+    python::PythonRunner::instance().run(script, args, [self, endpoint](const python::PythonResult& result) {
+        if (!self)
+            return;
+        self->set_loading(false);
 
-            if (!result.success) {
-                self->display_error(result.error.isEmpty() ? "Query failed" : result.error);
-                return;
-            }
+        if (!result.success) {
+            self->display_error(result.error.isEmpty() ? "Query failed" : result.error);
+            return;
+        }
 
-            QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) {
-                self->display_error("No data from " + endpoint);
-                return;
-            }
+        QString json_str = python::extract_json(result.output);
+        if (json_str.isEmpty()) {
+            self->display_error("No data from " + endpoint);
+            return;
+        }
 
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-            if (doc.isNull()) {
-                self->display_error("JSON parse error: " + err.errorString());
-                return;
-            }
+        QJsonParseError err;
+        auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+        if (doc.isNull()) {
+            self->display_error("JSON parse error: " + err.errorString());
+            return;
+        }
 
-            auto obj = doc.isObject() ? doc.object() : QJsonObject();
+        auto obj = doc.isObject() ? doc.object() : QJsonObject();
 
-            if (obj.contains("error")) {
-                self->display_error(obj["error"].toString());
-                return;
-            }
-            if (obj.contains("success") && !obj["success"].toBool()) {
-                self->display_error(obj.value("error").toString("Query returned failure"));
-                return;
-            }
+        if (obj.contains("error")) {
+            self->display_error(obj["error"].toString());
+            return;
+        }
+        if (obj.contains("success") && !obj["success"].toBool()) {
+            self->display_error(obj.value("error").toString("Query returned failure"));
+            return;
+        }
 
-            // Extract data array
-            QJsonArray data_array;
-            if (obj.contains("data")) {
-                if (obj["data"].isArray()) {
-                    data_array = obj["data"].toArray();
-                } else if (obj["data"].isObject()) {
-                    data_array.append(obj["data"]);
-                } else {
-                    QJsonObject wrapper;
-                    wrapper["value"] = obj["data"];
-                    data_array.append(wrapper);
-                }
-            } else if (doc.isArray()) {
-                data_array = doc.array();
+        // Extract data array
+        QJsonArray data_array;
+        if (obj.contains("data")) {
+            if (obj["data"].isArray()) {
+                data_array = obj["data"].toArray();
+            } else if (obj["data"].isObject()) {
+                data_array.append(obj["data"]);
             } else {
-                data_array.append(obj);
+                QJsonObject wrapper;
+                wrapper["value"] = obj["data"];
+                data_array.append(wrapper);
             }
+        } else if (doc.isArray()) {
+            data_array = doc.array();
+        } else {
+            data_array.append(obj);
+        }
 
-            int count = data_array.size();
-            self->record_count_->setText(QString::number(count) + " records");
-            self->record_count_->show();
-            self->data_status_->setText(endpoint);
+        int count = data_array.size();
+        self->record_count_->setText(QString::number(count) + " records");
+        self->record_count_->show();
+        self->data_status_->setText(endpoint);
 
-            self->display_table(data_array);
-            self->display_json(data_array);
+        self->display_table(data_array);
+        self->display_json(data_array);
 
-            LOG_INFO("AsiaMarkets", endpoint + ": " + QString::number(count) + " records");
-        });
+        LOG_INFO("AsiaMarkets", endpoint + ": " + QString::number(count) + " records");
+    });
 }
 
 // ── Display ─────────────────────────────────────────────────────────────────

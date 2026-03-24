@@ -10,13 +10,13 @@
 namespace fincept::screens {
 
 NewsFeedDelegate::NewsFeedDelegate(QObject* parent)
-    : QStyledItemDelegate(parent)
-    , data_font_(ui::fonts::DATA_FAMILY, ui::fonts::TINY)
-    , bold_font_(ui::fonts::DATA_FAMILY, ui::fonts::TINY)
-    , tiny_font_(ui::fonts::DATA_FAMILY, 10)
-    , data_fm_(data_font_)
-    , bold_fm_(bold_font_)
-    , tiny_fm_(tiny_font_) {
+    : QStyledItemDelegate(parent),
+      data_font_(ui::fonts::DATA_FAMILY, ui::fonts::TINY),
+      bold_font_(ui::fonts::DATA_FAMILY, ui::fonts::TINY),
+      tiny_font_(ui::fonts::DATA_FAMILY, 10),
+      data_fm_(data_font_),
+      bold_fm_(bold_font_),
+      tiny_fm_(tiny_font_) {
     bold_font_.setBold(true);
     bold_fm_ = QFontMetrics(bold_font_);
 }
@@ -32,8 +32,7 @@ QSize NewsFeedDelegate::sizeHint(const QStyleOptionViewItem& option, const QMode
     return QSize(0, 26);
 }
 
-void NewsFeedDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
-                              const QModelIndex& index) const {
+void NewsFeedDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
     painter->save();
     painter->setRenderHint(QPainter::TextAntialiasing);
 
@@ -49,8 +48,8 @@ void NewsFeedDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     painter->restore();
 }
 
-void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect,
-                                       const QModelIndex& index, bool selected, bool hovered) const {
+void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, const QModelIndex& index, bool selected,
+                                      bool hovered) const {
     auto article = index.data(ArticleRole).value<services::NewsArticle>();
     auto monitor_color = index.data(MonitorColorRole).toString();
     bool is_new = index.data(IsNewRole).toBool();
@@ -138,16 +137,14 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect,
     }
 
     // Threat level left border (for MEDIUM+ threats)
-    if (article.threat.level != services::ThreatLevel::INFO &&
-        article.threat.level != services::ThreatLevel::LOW) {
+    if (article.threat.level != services::ThreatLevel::INFO && article.threat.level != services::ThreatLevel::LOW) {
         QString tcolor = services::threat_level_color(article.threat.level);
         painter->fillRect(QRect(rect.left(), rect.top(), 2, rect.height()), QColor(tcolor));
     }
 
     // Headline — fills remaining space
     painter->setFont(data_font_);
-    bool is_hot = article.priority == services::Priority::FLASH ||
-                  article.priority == services::Priority::URGENT;
+    bool is_hot = article.priority == services::Priority::FLASH || article.priority == services::Priority::URGENT;
     if (is_hot) {
         painter->setFont(bold_font_);
         painter->setPen(QColor(ui::colors::TEXT_PRIMARY));
@@ -160,7 +157,8 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect,
     if (headline_width > 0) {
         QFontMetrics& fm = is_hot ? const_cast<QFontMetrics&>(bold_fm_) : const_cast<QFontMetrics&>(data_fm_);
         QString elided = fm.elidedText(article.headline, Qt::ElideRight, headline_width);
-        painter->drawText(QRect(x, rect.top(), headline_width, rect.height()), Qt::AlignVCenter | Qt::AlignLeft, elided);
+        painter->drawText(QRect(x, rect.top(), headline_width, rect.height()), Qt::AlignVCenter | Qt::AlignLeft,
+                          elided);
     }
     x = rect.right() - right_reserve;
 
@@ -169,7 +167,7 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect,
         painter->setFont(tiny_font_);
         QString flag_label = services::NewsService::source_flag_label(article.source_flag);
         if (article.source_flag == services::SourceFlag::STATE_MEDIA) {
-            painter->setPen(QColor("#f97316")); // orange warning
+            painter->setPen(QColor("#f97316"));                                      // orange warning
             painter->drawText(QPoint(x, text_y), QString::fromUtf8("\xe2\x9a\xa0")); // ⚠
             x += 12;
         } else {
@@ -180,8 +178,7 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect,
     }
 
     // Threat level badge (only for MEDIUM+)
-    if (article.threat.level != services::ThreatLevel::INFO &&
-        article.threat.level != services::ThreatLevel::LOW) {
+    if (article.threat.level != services::ThreatLevel::INFO && article.threat.level != services::ThreatLevel::LOW) {
         painter->setFont(tiny_font_);
         QString tcolor = services::threat_level_color(article.threat.level);
         painter->setPen(QColor(tcolor));
@@ -218,15 +215,16 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect,
     painter->drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom());
 }
 
-void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect,
-                                            const QModelIndex& index, bool selected, bool hovered) const {
+void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, const QModelIndex& index, bool selected,
+                                          bool hovered) const {
     auto cluster = index.data(ClusterRole).value<services::NewsCluster>();
     auto monitor_color = index.data(MonitorColorRole).toString();
     bool is_new = index.data(IsNewRole).toBool();
     auto velocity_text = index.data(VelocityTextRole).toString();
 
     // Card background
-    QColor bg = selected ? QColor(ui::colors::BG_HOVER) : (hovered ? QColor(ui::colors::BG_RAISED) : QColor(ui::colors::BG_SURFACE));
+    QColor bg = selected ? QColor(ui::colors::BG_HOVER)
+                         : (hovered ? QColor(ui::colors::BG_RAISED) : QColor(ui::colors::BG_SURFACE));
     painter->fillRect(rect, bg);
 
     // Card border
@@ -281,7 +279,8 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect,
     if (!velocity_text.isEmpty()) {
         int vx = rect.right() - 70;
         painter->setFont(tiny_font_);
-        painter->setPen(cluster.velocity == "rising" ? QColor(ui::colors::POSITIVE) : QColor(ui::colors::TEXT_TERTIARY));
+        painter->setPen(cluster.velocity == "rising" ? QColor(ui::colors::POSITIVE)
+                                                     : QColor(ui::colors::TEXT_TERTIARY));
         painter->drawText(QPoint(vx, y + 12), velocity_text);
     }
 

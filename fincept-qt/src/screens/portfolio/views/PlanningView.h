@@ -29,19 +29,19 @@ class PlanningView : public QWidget {
     QTabWidget* tabs_ = nullptr;
 
     // Retirement inputs
-    QDoubleSpinBox* current_age_     = nullptr;
-    QDoubleSpinBox* retire_age_      = nullptr;
-    QDoubleSpinBox* annual_expense_  = nullptr;
+    QDoubleSpinBox* current_age_ = nullptr;
+    QDoubleSpinBox* retire_age_ = nullptr;
+    QDoubleSpinBox* annual_expense_ = nullptr;
     QDoubleSpinBox* monthly_contrib_ = nullptr;
     QDoubleSpinBox* expected_return_ = nullptr;
-    QDoubleSpinBox* inflation_       = nullptr;
+    QDoubleSpinBox* inflation_ = nullptr;
 
     // Results
-    QLabel* years_label_       = nullptr;
-    QLabel* target_label_      = nullptr;
-    QLabel* projected_label_   = nullptr;
-    QLabel* gap_label_         = nullptr;
-    QLabel* status_label_      = nullptr;
+    QLabel* years_label_ = nullptr;
+    QLabel* target_label_ = nullptr;
+    QLabel* projected_label_ = nullptr;
+    QLabel* gap_label_ = nullptr;
+    QLabel* status_label_ = nullptr;
 
     portfolio::PortfolioSummary summary_;
     QString currency_;

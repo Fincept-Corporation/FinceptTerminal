@@ -1,4 +1,5 @@
 #include "storage/repositories/WorkflowRepository.h"
+
 #include "core/logging/Logger.h"
 
 #include <QJsonDocument>
@@ -13,58 +14,53 @@ WorkflowRepository& WorkflowRepository::instance() {
 
 WorkflowRow WorkflowRepository::map_row(QSqlQuery& q) {
     return {
-        q.value(0).toString(),
-        q.value(1).toString(),
-        q.value(2).toString(),
-        q.value(3).toString(),
-        q.value(4).toString(),
-        q.value(5).toString(),
+        q.value(0).toString(), q.value(1).toString(), q.value(2).toString(),
+        q.value(3).toString(), q.value(4).toString(), q.value(5).toString(),
     };
 }
 
 Result<void> WorkflowRepository::save(const workflow::WorkflowDef& wf) {
     // Upsert the workflow header
-    auto r = exec_write(
-        "INSERT INTO workflows (id, name, description, status, static_data, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, datetime('now')) "
-        "ON CONFLICT(id) DO UPDATE SET "
-        "  name = excluded.name,"
-        "  description = excluded.description,"
-        "  status = excluded.status,"
-        "  static_data = excluded.static_data,"
-        "  updated_at = datetime('now')",
-        {wf.id, wf.name, wf.description,
-         wf.status == workflow::WorkflowStatus::Draft ? "draft" :
-         wf.status == workflow::WorkflowStatus::Idle  ? "idle" :
-         wf.status == workflow::WorkflowStatus::Running ? "running" :
-         wf.status == workflow::WorkflowStatus::Completed ? "completed" : "error",
-         QString::fromUtf8(QJsonDocument(wf.static_data).toJson(QJsonDocument::Compact))});
-    if (r.is_err()) return r;
+    auto r = exec_write("INSERT INTO workflows (id, name, description, status, static_data, updated_at) "
+                        "VALUES (?, ?, ?, ?, ?, datetime('now')) "
+                        "ON CONFLICT(id) DO UPDATE SET "
+                        "  name = excluded.name,"
+                        "  description = excluded.description,"
+                        "  status = excluded.status,"
+                        "  static_data = excluded.static_data,"
+                        "  updated_at = datetime('now')",
+                        {wf.id, wf.name, wf.description,
+                         wf.status == workflow::WorkflowStatus::Draft       ? "draft"
+                         : wf.status == workflow::WorkflowStatus::Idle      ? "idle"
+                         : wf.status == workflow::WorkflowStatus::Running   ? "running"
+                         : wf.status == workflow::WorkflowStatus::Completed ? "completed"
+                                                                            : "error",
+                         QString::fromUtf8(QJsonDocument(wf.static_data).toJson(QJsonDocument::Compact))});
+    if (r.is_err())
+        return r;
 
     // Delete existing nodes and edges (cascade would handle edges, but be explicit)
     r = exec_write("DELETE FROM workflow_edges WHERE workflow_id = ?", {wf.id});
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     r = exec_write("DELETE FROM workflow_nodes WHERE workflow_id = ?", {wf.id});
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     // Insert nodes
     for (int i = 0; i < wf.nodes.size(); ++i) {
         const auto& nd = wf.nodes[i];
-        r = exec_write(
-            "INSERT INTO workflow_nodes "
-            "(id, workflow_id, type, name, type_version, pos_x, pos_y, "
-            " parameters, credentials, disabled, continue_on_fail, retry_on_fail, max_tries, sort_order) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            {nd.id, wf.id, nd.type, nd.name, nd.type_version,
-             nd.x, nd.y,
-             QString::fromUtf8(QJsonDocument(nd.parameters).toJson(QJsonDocument::Compact)),
-             QString::fromUtf8(QJsonDocument(nd.credentials).toJson(QJsonDocument::Compact)),
-             nd.disabled ? 1 : 0,
-             nd.continue_on_fail ? 1 : 0,
-             nd.retry_on_fail ? 1 : 0,
-             nd.max_tries, i});
-        if (r.is_err()) return r;
+        r = exec_write("INSERT INTO workflow_nodes "
+                       "(id, workflow_id, type, name, type_version, pos_x, pos_y, "
+                       " parameters, credentials, disabled, continue_on_fail, retry_on_fail, max_tries, sort_order) "
+                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       {nd.id, wf.id, nd.type, nd.name, nd.type_version, nd.x, nd.y,
+                        QString::fromUtf8(QJsonDocument(nd.parameters).toJson(QJsonDocument::Compact)),
+                        QString::fromUtf8(QJsonDocument(nd.credentials).toJson(QJsonDocument::Compact)),
+                        nd.disabled ? 1 : 0, nd.continue_on_fail ? 1 : 0, nd.retry_on_fail ? 1 : 0, nd.max_tries, i});
+        if (r.is_err())
+            return r;
     }
 
     // Insert edges
@@ -73,21 +69,21 @@ Result<void> WorkflowRepository::save(const workflow::WorkflowDef& wf) {
             "INSERT INTO workflow_edges "
             "(id, workflow_id, source_node, target_node, source_port, target_port, animated) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            {ed.id, wf.id, ed.source_node, ed.target_node,
-             ed.source_port, ed.target_port, ed.animated ? 1 : 0});
-        if (r.is_err()) return r;
+            {ed.id, wf.id, ed.source_node, ed.target_node, ed.source_port, ed.target_port, ed.animated ? 1 : 0});
+        if (r.is_err())
+            return r;
     }
 
-    LOG_INFO("WorkflowRepo", QString("Saved workflow: %1 (%2 nodes, %3 edges)")
-             .arg(wf.name).arg(wf.nodes.size()).arg(wf.edges.size()));
+    LOG_INFO("WorkflowRepo",
+             QString("Saved workflow: %1 (%2 nodes, %3 edges)").arg(wf.name).arg(wf.nodes.size()).arg(wf.edges.size()));
     return Result<void>::ok();
 }
 
 Result<workflow::WorkflowDef> WorkflowRepository::load(const QString& id) {
     // Load header
-    auto hr = db().execute(
-        "SELECT id, name, description, status, static_data, created_at, updated_at "
-        "FROM workflows WHERE id = ?", {id});
+    auto hr = db().execute("SELECT id, name, description, status, static_data, created_at, updated_at "
+                           "FROM workflows WHERE id = ?",
+                           {id});
     if (hr.is_err())
         return Result<workflow::WorkflowDef>::err(hr.error());
 
@@ -101,21 +97,26 @@ Result<workflow::WorkflowDef> WorkflowRepository::load(const QString& id) {
     wf.description = hq.value(2).toString();
 
     QString status_str = hq.value(3).toString();
-    if (status_str == "idle")           wf.status = workflow::WorkflowStatus::Idle;
-    else if (status_str == "running")   wf.status = workflow::WorkflowStatus::Running;
-    else if (status_str == "completed") wf.status = workflow::WorkflowStatus::Completed;
-    else if (status_str == "error")     wf.status = workflow::WorkflowStatus::Error;
-    else                                wf.status = workflow::WorkflowStatus::Draft;
+    if (status_str == "idle")
+        wf.status = workflow::WorkflowStatus::Idle;
+    else if (status_str == "running")
+        wf.status = workflow::WorkflowStatus::Running;
+    else if (status_str == "completed")
+        wf.status = workflow::WorkflowStatus::Completed;
+    else if (status_str == "error")
+        wf.status = workflow::WorkflowStatus::Error;
+    else
+        wf.status = workflow::WorkflowStatus::Draft;
 
     wf.static_data = QJsonDocument::fromJson(hq.value(4).toString().toUtf8()).object();
     wf.created_at = hq.value(5).toString();
     wf.updated_at = hq.value(6).toString();
 
     // Load nodes
-    auto nr = db().execute(
-        "SELECT id, type, name, type_version, pos_x, pos_y, parameters, credentials, "
-        "disabled, continue_on_fail, retry_on_fail, max_tries "
-        "FROM workflow_nodes WHERE workflow_id = ? ORDER BY sort_order", {id});
+    auto nr = db().execute("SELECT id, type, name, type_version, pos_x, pos_y, parameters, credentials, "
+                           "disabled, continue_on_fail, retry_on_fail, max_tries "
+                           "FROM workflow_nodes WHERE workflow_id = ? ORDER BY sort_order",
+                           {id});
     if (nr.is_err())
         return Result<workflow::WorkflowDef>::err(nr.error());
 
@@ -138,9 +139,9 @@ Result<workflow::WorkflowDef> WorkflowRepository::load(const QString& id) {
     }
 
     // Load edges
-    auto er = db().execute(
-        "SELECT id, source_node, target_node, source_port, target_port, animated "
-        "FROM workflow_edges WHERE workflow_id = ?", {id});
+    auto er = db().execute("SELECT id, source_node, target_node, source_port, target_port, animated "
+                           "FROM workflow_edges WHERE workflow_id = ?",
+                           {id});
     if (er.is_err())
         return Result<workflow::WorkflowDef>::err(er.error());
 
@@ -156,16 +157,16 @@ Result<workflow::WorkflowDef> WorkflowRepository::load(const QString& id) {
         wf.edges.append(ed);
     }
 
-    LOG_INFO("WorkflowRepo", QString("Loaded workflow: %1 (%2 nodes, %3 edges)")
-             .arg(wf.name).arg(wf.nodes.size()).arg(wf.edges.size()));
+    LOG_INFO(
+        "WorkflowRepo",
+        QString("Loaded workflow: %1 (%2 nodes, %3 edges)").arg(wf.name).arg(wf.nodes.size()).arg(wf.edges.size()));
     return Result<workflow::WorkflowDef>::ok(std::move(wf));
 }
 
 Result<QVector<WorkflowRow>> WorkflowRepository::list_all() {
-    return query_list(
-        "SELECT id, name, description, status, created_at, updated_at "
-        "FROM workflows ORDER BY updated_at DESC",
-        {}, map_row);
+    return query_list("SELECT id, name, description, status, created_at, updated_at "
+                      "FROM workflows ORDER BY updated_at DESC",
+                      {}, map_row);
 }
 
 Result<void> WorkflowRepository::remove(const QString& id) {

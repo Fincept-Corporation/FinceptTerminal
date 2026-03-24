@@ -34,7 +34,7 @@ class PerformanceRiskView : public QWidget {
     struct MetricCard {
         QLabel* title = nullptr;
         QLabel* value = nullptr;
-        QLabel* desc  = nullptr;
+        QLabel* desc = nullptr;
     };
     MetricCard sharpe_card_;
     MetricCard sortino_card_;
@@ -45,8 +45,7 @@ class PerformanceRiskView : public QWidget {
     MetricCard var_card_;
     MetricCard cvar_card_;
 
-    MetricCard add_metric_card(QLayout* layout, const QString& title,
-                               const QString& desc, const char* color);
+    MetricCard add_metric_card(QLayout* layout, const QString& title, const QString& desc, const char* color);
 
     // Data
     portfolio::PortfolioSummary summary_;

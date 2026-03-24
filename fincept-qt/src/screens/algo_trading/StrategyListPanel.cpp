@@ -1,8 +1,8 @@
 // src/screens/algo_trading/StrategyListPanel.cpp
 #include "screens/algo_trading/StrategyListPanel.h"
-#include "services/algo_trading/AlgoTradingService.h"
 
 #include "core/logging/Logger.h"
+#include "services/algo_trading/AlgoTradingService.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -18,12 +18,13 @@ inline QString kMonoFont() {
 }
 
 inline QString kInputStyle() {
-    return QString(
-        "QLineEdit { background: %1; border: 1px solid %2; color: %3; padding: 4px 8px;"
-        " font-size: %4px; %5 }"
-        "QLineEdit:focus { border-color: %6; }")
+    return QString("QLineEdit { background: %1; border: 1px solid %2; color: %3; padding: 4px 8px;"
+                   " font-size: %4px; %5 }"
+                   "QLineEdit:focus { border-color: %6; }")
         .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM, fincept::ui::colors::TEXT_PRIMARY)
-        .arg(fincept::ui::fonts::SMALL).arg(kMonoFont()).arg(fincept::ui::colors::BORDER_BRIGHT);
+        .arg(fincept::ui::fonts::SMALL)
+        .arg(kMonoFont())
+        .arg(fincept::ui::colors::BORDER_BRIGHT);
 }
 
 } // namespace
@@ -44,26 +45,22 @@ StrategyListPanel::StrategyListPanel(QWidget* parent) : QWidget(parent) {
 
 void StrategyListPanel::connect_service() {
     auto& svc = AlgoTradingService::instance();
-    connect(&svc, &AlgoTradingService::strategies_loaded,
-            this, &StrategyListPanel::on_strategies_loaded);
+    connect(&svc, &AlgoTradingService::strategies_loaded, this, &StrategyListPanel::on_strategies_loaded);
     connect(&svc, &AlgoTradingService::strategy_deleted, this, [this](const QString& id) {
         Q_UNUSED(id)
         AlgoTradingService::instance().list_strategies();
     });
-    connect(&svc, &AlgoTradingService::deployment_started, this, [](const QString& id) {
-        LOG_INFO("AlgoTrading", QString("Deployment started: %1").arg(id));
-    });
-    connect(&svc, &AlgoTradingService::error_occurred,
-            this, &StrategyListPanel::on_error);
+    connect(&svc, &AlgoTradingService::deployment_started, this,
+            [](const QString& id) { LOG_INFO("AlgoTrading", QString("Deployment started: %1").arg(id)); });
+    connect(&svc, &AlgoTradingService::error_occurred, this, &StrategyListPanel::on_error);
 }
 
 // ── Build strategy card ─────────────────────────────────────────────────────
 
 QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* parent) {
     auto* card = new QWidget(parent);
-    card->setStyleSheet(QString(
-        "background: %1; border: 1px solid %2;")
-        .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
+    card->setStyleSheet(QString("background: %1; border: 1px solid %2;")
+                            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_DIM));
 
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(12, 10, 12, 10);
@@ -74,18 +71,20 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
     top->setSpacing(8);
 
     auto* name_lbl = new QLabel(s.name, card);
-    name_lbl->setStyleSheet(
-        QString("color: %1; font-size: %2px; font-weight: 700; %3"
-                " background: transparent; border: none;")
-            .arg(fincept::ui::colors::AMBER).arg(fincept::ui::fonts::DATA).arg(kMonoFont()));
+    name_lbl->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
+                                    " background: transparent; border: none;")
+                                .arg(fincept::ui::colors::AMBER)
+                                .arg(fincept::ui::fonts::DATA)
+                                .arg(kMonoFont()));
     top->addWidget(name_lbl);
 
     auto* tf_badge = new QLabel(s.timeframe.toUpper(), card);
-    tf_badge->setStyleSheet(
-        QString("color: %1; font-size: %2px; font-weight: 700; %3"
-                " padding: 2px 6px; background: rgba(8,145,178,0.08);"
-                " border: 1px solid rgba(8,145,178,0.25);")
-            .arg(fincept::ui::colors::CYAN).arg(fincept::ui::fonts::TINY).arg(kMonoFont()));
+    tf_badge->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
+                                    " padding: 2px 6px; background: rgba(8,145,178,0.08);"
+                                    " border: 1px solid rgba(8,145,178,0.25);")
+                                .arg(fincept::ui::colors::CYAN)
+                                .arg(fincept::ui::fonts::TINY)
+                                .arg(kMonoFont()));
     top->addWidget(tf_badge);
     top->addStretch();
 
@@ -95,9 +94,10 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
     if (!s.description.isEmpty()) {
         auto* desc = new QLabel(s.description, card);
         desc->setWordWrap(true);
-        desc->setStyleSheet(
-            QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                .arg(fincept::ui::colors::TEXT_SECONDARY).arg(fincept::ui::fonts::SMALL).arg(kMonoFont()));
+        desc->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
+                                .arg(fincept::ui::colors::TEXT_SECONDARY)
+                                .arg(fincept::ui::fonts::SMALL)
+                                .arg(kMonoFont()));
         vl->addWidget(desc);
     }
 
@@ -111,14 +111,16 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
         ml->setContentsMargins(0, 0, 0, 0);
         ml->setSpacing(0);
         auto* lbl = new QLabel(label, w);
-        lbl->setStyleSheet(
-            QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                .arg(fincept::ui::colors::TEXT_TERTIARY).arg(fincept::ui::fonts::TINY).arg(kMonoFont()));
+        lbl->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
+                               .arg(fincept::ui::colors::TEXT_TERTIARY)
+                               .arg(fincept::ui::fonts::TINY)
+                               .arg(kMonoFont()));
         auto* val = new QLabel(value, w);
-        val->setStyleSheet(
-            QString("color: %1; font-size: %2px; font-weight: 700; %3"
-                    " background: transparent; border: none;")
-                .arg(fincept::ui::colors::TEXT_PRIMARY).arg(fincept::ui::fonts::SMALL).arg(kMonoFont()));
+        val->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
+                                   " background: transparent; border: none;")
+                               .arg(fincept::ui::colors::TEXT_PRIMARY)
+                               .arg(fincept::ui::fonts::SMALL)
+                               .arg(kMonoFont()));
         ml->addWidget(lbl);
         ml->addWidget(val);
         metrics->addWidget(w);
@@ -141,12 +143,13 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
     auto* deploy_btn = new QPushButton("DEPLOY", card);
     deploy_btn->setCursor(Qt::PointingHandCursor);
     deploy_btn->setFixedHeight(28);
-    deploy_btn->setStyleSheet(QString(
-        "QPushButton { background: rgba(22,163,74,0.1); color: %1; border: 1px solid %1;"
-        " font-size: %2px; font-weight: 700; %3 padding: 4px 16px; }"
-        "QPushButton:hover { background: %1; color: %4; }")
-        .arg(fincept::ui::colors::POSITIVE).arg(fincept::ui::fonts::TINY).arg(kMonoFont())
-        .arg(fincept::ui::colors::BG_BASE));
+    deploy_btn->setStyleSheet(QString("QPushButton { background: rgba(22,163,74,0.1); color: %1; border: 1px solid %1;"
+                                      " font-size: %2px; font-weight: 700; %3 padding: 4px 16px; }"
+                                      "QPushButton:hover { background: %1; color: %4; }")
+                                  .arg(fincept::ui::colors::POSITIVE)
+                                  .arg(fincept::ui::fonts::TINY)
+                                  .arg(kMonoFont())
+                                  .arg(fincept::ui::colors::BG_BASE));
     connect(deploy_btn, &QPushButton::clicked, card, [id = s.id]() {
         AlgoTradingService::instance().deploy_strategy(id, "RELIANCE", "paper", "1d", 1.0);
         LOG_INFO("AlgoTrading", QString("Deploy requested for strategy: %1").arg(id));
@@ -156,11 +159,12 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
     auto* delete_btn = new QPushButton("DELETE", card);
     delete_btn->setCursor(Qt::PointingHandCursor);
     delete_btn->setFixedHeight(28);
-    delete_btn->setStyleSheet(QString(
-        "QPushButton { background: transparent; color: %1; border: 1px solid %1;"
-        " font-size: %2px; font-weight: 700; %3 padding: 4px 16px; }"
-        "QPushButton:hover { background: rgba(220,38,38,0.1); }")
-        .arg(fincept::ui::colors::NEGATIVE).arg(fincept::ui::fonts::TINY).arg(kMonoFont()));
+    delete_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %1;"
+                                      " font-size: %2px; font-weight: 700; %3 padding: 4px 16px; }"
+                                      "QPushButton:hover { background: rgba(220,38,38,0.1); }")
+                                  .arg(fincept::ui::colors::NEGATIVE)
+                                  .arg(fincept::ui::fonts::TINY)
+                                  .arg(kMonoFont()));
     connect(delete_btn, &QPushButton::clicked, card, [id = s.id]() {
         AlgoTradingService::instance().delete_strategy(id);
         LOG_INFO("AlgoTrading", QString("Delete requested for strategy: %1").arg(id));
@@ -183,16 +187,17 @@ void StrategyListPanel::build_ui() {
     auto* top_bar = new QWidget(this);
     top_bar->setFixedHeight(44);
     top_bar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
-        .arg(fincept::ui::colors::BG_RAISED, fincept::ui::colors::BORDER_DIM));
+                               .arg(fincept::ui::colors::BG_RAISED, fincept::ui::colors::BORDER_DIM));
     auto* top_hl = new QHBoxLayout(top_bar);
     top_hl->setContentsMargins(12, 0, 12, 0);
     top_hl->setSpacing(12);
 
     auto* search_icon = new QLabel("SEARCH", top_bar);
-    search_icon->setStyleSheet(
-        QString("color: %1; font-size: %2px; font-weight: 700; %3"
-                " background: transparent; border: none;")
-            .arg(fincept::ui::colors::TEXT_TERTIARY).arg(fincept::ui::fonts::TINY).arg(kMonoFont()));
+    search_icon->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
+                                       " background: transparent; border: none;")
+                                   .arg(fincept::ui::colors::TEXT_TERTIARY)
+                                   .arg(fincept::ui::fonts::TINY)
+                                   .arg(kMonoFont()));
     top_hl->addWidget(search_icon);
 
     search_edit_ = new QLineEdit(top_bar);
@@ -202,10 +207,11 @@ void StrategyListPanel::build_ui() {
     top_hl->addWidget(search_edit_, 1);
 
     count_label_ = new QLabel("0 strategies", top_bar);
-    count_label_->setStyleSheet(
-        QString("color: %1; font-size: %2px; font-weight: 700; %3"
-                " background: transparent; border: none;")
-            .arg(fincept::ui::colors::TEXT_SECONDARY).arg(fincept::ui::fonts::TINY).arg(kMonoFont()));
+    count_label_->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
+                                        " background: transparent; border: none;")
+                                    .arg(fincept::ui::colors::TEXT_SECONDARY)
+                                    .arg(fincept::ui::fonts::TINY)
+                                    .arg(kMonoFont()));
     top_hl->addWidget(count_label_);
 
     root->addWidget(top_bar);
@@ -214,12 +220,11 @@ void StrategyListPanel::build_ui() {
     auto* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet(QString(
-        "QScrollArea { background: %1; border: none; }"
-        "QScrollBar:vertical { background: %1; width: 6px; }"
-        "QScrollBar::handle:vertical { background: %2; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_MED));
+    scroll->setStyleSheet(QString("QScrollArea { background: %1; border: none; }"
+                                  "QScrollBar:vertical { background: %1; width: 6px; }"
+                                  "QScrollBar::handle:vertical { background: %2; }"
+                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                              .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_MED));
 
     auto* list_widget = new QWidget;
     list_widget->setStyleSheet(QString("background: %1;").arg(fincept::ui::colors::BG_BASE));
@@ -237,7 +242,8 @@ void StrategyListPanel::build_ui() {
         for (int i = 0; i < list_layout_->count(); ++i) {
             auto* item = list_layout_->itemAt(i);
             auto* w = item ? item->widget() : nullptr;
-            if (!w) continue;
+            if (!w)
+                continue;
             if (filter.isEmpty()) {
                 w->setVisible(true);
             } else {
@@ -254,7 +260,8 @@ void StrategyListPanel::on_strategies_loaded(QVector<AlgoStrategy> strategies) {
     // Clear existing cards (keep the stretch at end)
     while (list_layout_->count() > 0) {
         auto* item = list_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
@@ -265,9 +272,8 @@ void StrategyListPanel::on_strategies_loaded(QVector<AlgoStrategy> strategies) {
     }
     list_layout_->addStretch();
 
-    count_label_->setText(QString("%1 %2")
-        .arg(strategies.size())
-        .arg(strategies.size() == 1 ? "strategy" : "strategies"));
+    count_label_->setText(
+        QString("%1 %2").arg(strategies.size()).arg(strategies.size() == 1 ? "strategy" : "strategies"));
 
     LOG_INFO("AlgoTrading", QString("Loaded %1 strategies").arg(strategies.size()));
 }

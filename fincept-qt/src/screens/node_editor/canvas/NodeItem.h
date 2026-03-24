@@ -14,8 +14,7 @@ class PortItem;
 class NodeItem : public QGraphicsObject {
     Q_OBJECT
   public:
-    NodeItem(const NodeDef& def, const NodeTypeDef& type_def,
-             QGraphicsItem* parent = nullptr);
+    NodeItem(const NodeDef& def, const NodeTypeDef& type_def, QGraphicsItem* parent = nullptr);
 
     const NodeDef& node_def() const { return def_; }
     NodeDef& node_def_mutable() { return def_; }
@@ -30,8 +29,7 @@ class NodeItem : public QGraphicsObject {
     QVector<PortItem*> output_ports() const { return output_ports_; }
 
     QRectF boundingRect() const override;
-    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
-               QWidget* widget) override;
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
 
   signals:
     void node_moved(const QString& id, double x, double y);

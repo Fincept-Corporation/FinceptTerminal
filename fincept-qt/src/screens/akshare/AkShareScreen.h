@@ -22,8 +22,8 @@ namespace fincept::screens {
 struct AkShareSource {
     QString id;
     QString name;
-    QString script;   // e.g. "akshare_stocks_realtime.py"
-    QString icon;      // emoji
+    QString script; // e.g. "akshare_stocks_realtime.py"
+    QString icon;   // emoji
 };
 
 /// AkShare Data Explorer screen.

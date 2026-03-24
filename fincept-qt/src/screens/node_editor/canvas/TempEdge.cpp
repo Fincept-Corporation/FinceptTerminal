@@ -1,27 +1,26 @@
 #include "screens/node_editor/canvas/TempEdge.h"
+
 #include "screens/node_editor/canvas/PortItem.h"
 
 #include <QPainterPath>
 #include <QPen>
+
 #include <cmath>
 
 namespace fincept::workflow {
 
-TempEdge::TempEdge(PortItem* source, QGraphicsItem* parent)
-    : QGraphicsPathItem(parent)
-    , source_(source)
-{
+TempEdge::TempEdge(PortItem* source, QGraphicsItem* parent) : QGraphicsPathItem(parent), source_(source) {
     setPen(QPen(QColor("#d97706"), 2.0, Qt::DashLine, Qt::RoundCap));
     setZValue(10); // above everything
 }
 
-void TempEdge::update_target(const QPointF& scene_pos)
-{
+void TempEdge::update_target(const QPointF& scene_pos) {
     QPointF p1 = source_->scene_center();
     QPointF p2 = scene_pos;
 
     qreal dx = std::abs(p2.x() - p1.x()) * 0.5;
-    if (dx < 40.0) dx = 40.0;
+    if (dx < 40.0)
+        dx = 40.0;
 
     // Reverse control points if dragging from input port
     bool from_output = (source_->def().direction == PortDirection::Output);

@@ -90,8 +90,8 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
     vl->addWidget(title);
 
     auto* subtitle = new QLabel("Get in touch with our team");
-    subtitle->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent; %2")
-                                .arg(colors::TEXT_TERTIARY, MF));
+    subtitle->setStyleSheet(
+        QString("color: %1; font-size: 13px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
     vl->addWidget(subtitle);
 
     vl->addSpacing(8);
@@ -112,18 +112,10 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
         grid->setContentsMargins(14, 12, 14, 12);
         grid->setSpacing(10);
 
-        grid->addWidget(make_contact_card("EMAIL SUPPORT", "support@fincept.in",
-                                          "Response within 4-6 hours"),
-                        0, 0);
-        grid->addWidget(make_contact_card("PHONE SUPPORT", "+1-800-FINCEPT",
-                                          "Mon-Fri, 9AM-6PM EST"),
-                        0, 1);
-        grid->addWidget(make_contact_card("SUPPORT HOURS", "Mon-Fri 9AM-6PM EST",
-                                          "Saturday 10AM-4PM EST"),
-                        1, 0);
-        grid->addWidget(make_contact_card("OFFICE", "Fincept Corporation",
-                                          "New York, United States"),
-                        1, 1);
+        grid->addWidget(make_contact_card("EMAIL SUPPORT", "support@fincept.in", "Response within 4-6 hours"), 0, 0);
+        grid->addWidget(make_contact_card("PHONE SUPPORT", "+1-800-FINCEPT", "Mon-Fri, 9AM-6PM EST"), 0, 1);
+        grid->addWidget(make_contact_card("SUPPORT HOURS", "Mon-Fri 9AM-6PM EST", "Saturday 10AM-4PM EST"), 1, 0);
+        grid->addWidget(make_contact_card("OFFICE", "Fincept Corporation", "New York, United States"), 1, 1);
 
         pvl->addWidget(body);
         vl->addWidget(panel);
@@ -167,8 +159,9 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
         hl->addWidget(discord_btn);
 
         auto* github_btn = make_action("GitHub Issues");
-        connect(github_btn, &QPushButton::clicked, this,
-                []() { QDesktopServices::openUrl(QUrl("https://github.com/Fincept-Corporation/FinceptTerminal/issues")); });
+        connect(github_btn, &QPushButton::clicked, this, []() {
+            QDesktopServices::openUrl(QUrl("https://github.com/Fincept-Corporation/FinceptTerminal/issues"));
+        });
         hl->addWidget(github_btn);
 
         hl->addStretch();
@@ -207,7 +200,8 @@ ContactScreen::ContactScreen(QWidget* parent) : QWidget(parent) {
 
         for (const auto& issue : issues) {
             auto* q = new QLabel(QString("> %1").arg(issue.q));
-            q->setStyleSheet(QString("color: #e5e5e5; font-size: 12px; font-weight: 600; background: transparent; %1").arg(MF));
+            q->setStyleSheet(
+                QString("color: #e5e5e5; font-size: 12px; font-weight: 600; background: transparent; %1").arg(MF));
             bvl->addWidget(q);
 
             auto* a = new QLabel(QString("  %1").arg(issue.a));

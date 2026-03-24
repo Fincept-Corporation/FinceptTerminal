@@ -6,6 +6,8 @@
 // Used by: Canada, Switzerland, Hong Kong, openAFRICA, Universal CKAN, Australia, etc.
 #pragma once
 
+#include "services/gov_data/GovDataService.h"
+
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -15,8 +17,6 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-#include "services/gov_data/GovDataService.h"
-
 namespace fincept::screens {
 
 class GovDataProviderPanel : public QWidget {
@@ -25,10 +25,8 @@ class GovDataProviderPanel : public QWidget {
     /// @param script       Python script filename
     /// @param provider_color  Accent color hex string
     /// @param org_label    Label for top-level entities ("Publishers", "Organizations", "Categories")
-    explicit GovDataProviderPanel(const QString& script,
-                                   const QString& provider_color,
-                                   const QString& org_label = "Publishers",
-                                   QWidget* parent = nullptr);
+    explicit GovDataProviderPanel(const QString& script, const QString& provider_color,
+                                  const QString& org_label = "Publishers", QWidget* parent = nullptr);
 
   public slots:
     void load_initial_data();

@@ -21,8 +21,8 @@ class PortfolioService : public QObject {
 
     // ── Portfolio CRUD ───────────────────────────────────────────────────────
     void load_portfolios();
-    void create_portfolio(const QString& name, const QString& owner,
-                          const QString& currency, const QString& description = {});
+    void create_portfolio(const QString& name, const QString& owner, const QString& currency,
+                          const QString& description = {});
     void delete_portfolio(const QString& id);
 
     // ── Summary (assets + live quotes) ───────────────────────────────────────
@@ -30,15 +30,15 @@ class PortfolioService : public QObject {
     void refresh_summary(const QString& portfolio_id); // invalidates cache first
 
     // ── Asset operations ─────────────────────────────────────────────────────
-    void add_asset(const QString& portfolio_id, const QString& symbol,
-                   double qty, double price, const QString& date = {});
-    void sell_asset(const QString& portfolio_id, const QString& symbol,
-                    double qty, double price, const QString& date = {});
+    void add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
+                   const QString& date = {});
+    void sell_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
+                    const QString& date = {});
 
     // ── Transactions ─────────────────────────────────────────────────────────
     void load_transactions(const QString& portfolio_id, int limit = 50);
-    void update_transaction(const QString& id, double qty, double price,
-                            const QString& date, const QString& notes = {});
+    void update_transaction(const QString& id, double qty, double price, const QString& date,
+                            const QString& notes = {});
     void delete_transaction(const QString& id, const QString& portfolio_id);
 
     // ── Metrics (async computation) ──────────────────────────────────────────
@@ -47,8 +47,7 @@ class PortfolioService : public QObject {
     // ── Import / Export ──────────────────────────────────────────────────────
     void export_csv(const QString& portfolio_id, const QString& file_path);
     void export_json(const QString& portfolio_id, const QString& file_path);
-    void import_json(const QString& file_path, portfolio::ImportMode mode,
-                     const QString& merge_target_id = {});
+    void import_json(const QString& file_path, portfolio::ImportMode mode, const QString& merge_target_id = {});
 
     // ── Cache control ────────────────────────────────────────────────────────
     void invalidate_cache(const QString& portfolio_id);
@@ -74,8 +73,7 @@ class PortfolioService : public QObject {
   private:
     PortfolioService();
 
-    void build_summary(const QString& portfolio_id,
-                       const QVector<portfolio::PortfolioAsset>& assets,
+    void build_summary(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
                        const portfolio::Portfolio& portfolio);
 
     // ── Summary cache (P11) ──────────────────────────────────────────────────

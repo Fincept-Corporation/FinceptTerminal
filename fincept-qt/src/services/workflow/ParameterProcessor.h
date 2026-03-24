@@ -37,17 +37,14 @@ class ParameterProcessor {
     static bool validate(const QJsonValue& value, const ParamDef& def, QString* error = nullptr);
 
     /// Validate all parameters for a node.
-    static bool validate_all(const QJsonObject& params, const QVector<ParamDef>& defs,
-                             QStringList* errors = nullptr);
+    static bool validate_all(const QJsonObject& params, const QVector<ParamDef>& defs, QStringList* errors = nullptr);
 
     /// Process parameters with expression resolution and validation.
-    static QJsonObject process(const QJsonObject& raw_params,
-                               const QVector<ParamDef>& defs,
+    static QJsonObject process(const QJsonObject& raw_params, const QVector<ParamDef>& defs,
                                const QJsonObject& context = {});
 
     /// Build an HTTP request from parameters with routing annotations.
-    static RoutedRequest build_request(const QJsonObject& params,
-                                       const QVector<ParamDef>& defs,
+    static RoutedRequest build_request(const QJsonObject& params, const QVector<ParamDef>& defs,
                                        const QString& base_url);
 
     /// Extract a nested value using dot-path notation.

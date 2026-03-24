@@ -1,9 +1,10 @@
 #include "services/workflow/adapters/ServiceBridges.h"
-#include "services/workflow/NodeRegistry.h"
-#include "services/workflow/ConfirmationService.h"
-#include "services/workflow/AuditLogger.h"
-#include "services/workflow/RiskManager.h"
+
 #include "core/logging/Logger.h"
+#include "services/workflow/AuditLogger.h"
+#include "services/workflow/ConfirmationService.h"
+#include "services/workflow/NodeRegistry.h"
+#include "services/workflow/RiskManager.h"
 
 #include <QDateTime>
 
@@ -11,8 +12,7 @@ namespace fincept::workflow {
 
 // ── Market Data Bridge ─────────────────────────────────────────────────
 
-void wire_market_data_bridges(NodeRegistry& registry)
-{
+void wire_market_data_bridges(NodeRegistry& registry) {
     // Get Quote — uses MarketDataService via PythonRunner
     auto* quote_def = const_cast<NodeTypeDef*>(registry.find("market.get_quote"));
     if (quote_def) {
@@ -50,12 +50,12 @@ void wire_market_data_bridges(NodeRegistry& registry)
     }
 
     // Wire remaining market data nodes with placeholder executors
-    for (const auto& id : {"market.get_depth", "market.get_stats", "market.get_fundamentals",
-                            "market.get_economics", "market.get_news"}) {
+    for (const auto& id : {"market.get_depth", "market.get_stats", "market.get_fundamentals", "market.get_economics",
+                           "market.get_news"}) {
         auto* def = const_cast<NodeTypeDef*>(registry.find(id));
         if (def && !def->execute) {
             def->execute = [id_str = QString(id)](const QJsonObject& params, const QVector<QJsonValue>&,
-                                                   std::function<void(bool, QJsonValue, QString)> cb) {
+                                                  std::function<void(bool, QJsonValue, QString)> cb) {
                 QJsonObject out;
                 out["node_type"] = id_str;
                 out["symbol"] = params.value("symbol").toString();
@@ -70,8 +70,7 @@ void wire_market_data_bridges(NodeRegistry& registry)
 
 // ── Trading Bridge ─────────────────────────────────────────────────────
 
-void wire_trading_bridges(NodeRegistry& registry)
-{
+void wire_trading_bridges(NodeRegistry& registry) {
     // Place Order — with confirmation and audit
     auto* place_def = const_cast<NodeTypeDef*>(registry.find("trading.place_order"));
     if (place_def) {
@@ -87,13 +86,13 @@ void wire_trading_bridges(NodeRegistry& registry)
             req.type = ConfirmationType::Trade;
             req.risk = paper ? RiskLevel::Low : RiskLevel::High;
             req.title = QString("%1 %2 x%3").arg(side.toUpper(), symbol).arg(qty);
-            req.message = QString("Place %1 order for %2 shares of %3 via %4")
-                          .arg(side, QString::number(qty), symbol, broker);
+            req.message =
+                QString("Place %1 order for %2 shares of %3 via %4").arg(side, QString::number(qty), symbol, broker);
             req.details = params;
             req.paper_trading = paper;
 
-            ConfirmationService::instance().request(req,
-                [cb, params, symbol, side, qty, broker, paper](bool approved, const QString& notes) {
+            ConfirmationService::instance().request(
+                req, [cb, params, symbol, side, qty, broker, paper](bool approved, const QString& notes) {
                     if (!approved) {
                         cb(false, {}, "Order rejected by user: " + notes);
                         return;
@@ -101,8 +100,8 @@ void wire_trading_bridges(NodeRegistry& registry)
 
                     // Log the order
                     AuditLogger::instance().log(AuditAction::OrderPlaced, {}, {}, symbol,
-                        QString("%1 %2 x%3 via %4").arg(side, symbol).arg(qty).arg(broker),
-                        params, paper);
+                                                QString("%1 %2 x%3 via %4").arg(side, symbol).arg(qty).arg(broker),
+                                                params, paper);
 
                     QJsonObject out;
                     out["order_id"] = "ORD-" + QString::number(QDateTime::currentMSecsSinceEpoch());
@@ -117,13 +116,13 @@ void wire_trading_bridges(NodeRegistry& registry)
     }
 
     // Wire remaining trading nodes with placeholder executors
-    for (const auto& id : {"trading.cancel_order", "trading.modify_order", "trading.get_orders",
-                            "trading.get_positions", "trading.get_holdings", "trading.get_balance",
-                            "trading.close_position"}) {
+    for (const auto& id :
+         {"trading.cancel_order", "trading.modify_order", "trading.get_orders", "trading.get_positions",
+          "trading.get_holdings", "trading.get_balance", "trading.close_position"}) {
         auto* def = const_cast<NodeTypeDef*>(registry.find(id));
         if (def && !def->execute) {
             def->execute = [id_str = QString(id)](const QJsonObject& params, const QVector<QJsonValue>&,
-                                                   std::function<void(bool, QJsonValue, QString)> cb) {
+                                                  std::function<void(bool, QJsonValue, QString)> cb) {
                 QJsonObject out;
                 out["node_type"] = id_str;
                 out["broker"] = params.value("broker").toString("paper");
@@ -138,8 +137,7 @@ void wire_trading_bridges(NodeRegistry& registry)
 
 // ── Agent Bridge ───────────────────────────────────────────────────────
 
-void wire_agent_bridges(NodeRegistry& registry)
-{
+void wire_agent_bridges(NodeRegistry& registry) {
     auto* agent_def = const_cast<NodeTypeDef*>(registry.find("agent.single"));
     if (agent_def) {
         agent_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
@@ -184,8 +182,7 @@ void wire_agent_bridges(NodeRegistry& registry)
 
 // ── Wire All ───────────────────────────────────────────────────────────
 
-static void wire_utility_bridges(NodeRegistry& registry)
-{
+static void wire_utility_bridges(NodeRegistry& registry) {
     // ── HTTP Request — via HttpClient ──────────────────────────────
     auto* http_def = const_cast<NodeTypeDef*>(registry.find("utility.http_request"));
     if (http_def) {
@@ -193,14 +190,18 @@ static void wire_utility_bridges(NodeRegistry& registry)
                                std::function<void(bool, QJsonValue, QString)> cb) {
             QString url = params.value("url").toString();
             QString method = params.value("method").toString("GET");
-            if (url.isEmpty()) { cb(false, {}, "URL is required"); return; }
+            if (url.isEmpty()) {
+                cb(false, {}, "URL is required");
+                return;
+            }
 
             // Build output — real HttpClient integration point
             QJsonObject out;
             out["url"] = url;
             out["method"] = method;
             out["status"] = "pending_http_integration";
-            if (!inputs.isEmpty()) out["input"] = inputs[0];
+            if (!inputs.isEmpty())
+                out["input"] = inputs[0];
             cb(true, out, {});
             LOG_DEBUG("UtilityBridge", QString("HTTP %1 %2").arg(method, url));
         };
@@ -213,30 +214,35 @@ static void wire_utility_bridges(NodeRegistry& registry)
                                std::function<void(bool, QJsonValue, QString)> cb) {
             QString language = params.value("language").toString("python");
             QString code = params.value("code").toString();
-            if (code.isEmpty()) { cb(false, {}, "Code is empty"); return; }
+            if (code.isEmpty()) {
+                cb(false, {}, "Code is empty");
+                return;
+            }
 
             QJsonObject out;
             out["language"] = language;
             out["code_length"] = code.length();
             out["status"] = "pending_python_integration";
-            if (!inputs.isEmpty()) out["input"] = inputs[0];
+            if (!inputs.isEmpty())
+                out["input"] = inputs[0];
             cb(true, out, {});
             LOG_DEBUG("UtilityBridge", QString("Code exec (%1, %2 chars)").arg(language).arg(code.length()));
         };
     }
 
     // ── Analytics nodes — via PythonRunner scripts ────────────────
-    for (const auto& id : {"analytics.technical_indicators", "analytics.backtest",
-                            "analytics.portfolio_optimization", "analytics.performance_metrics",
-                            "analytics.correlation_matrix", "analytics.risk_analysis"}) {
+    for (const auto& id :
+         {"analytics.technical_indicators", "analytics.backtest", "analytics.portfolio_optimization",
+          "analytics.performance_metrics", "analytics.correlation_matrix", "analytics.risk_analysis"}) {
         auto* def = const_cast<NodeTypeDef*>(registry.find(id));
         if (def && !def->execute) {
             def->execute = [id_str = QString(id)](const QJsonObject& params, const QVector<QJsonValue>& inputs,
-                                                   std::function<void(bool, QJsonValue, QString)> cb) {
+                                                  std::function<void(bool, QJsonValue, QString)> cb) {
                 QJsonObject out;
                 out["node_type"] = id_str;
                 out["status"] = "pending_python_integration";
-                if (!inputs.isEmpty()) out["input"] = inputs[0];
+                if (!inputs.isEmpty())
+                    out["input"] = inputs[0];
                 for (auto it = params.constBegin(); it != params.constEnd(); ++it)
                     out[it.key()] = it.value();
                 cb(true, out, {});
@@ -245,18 +251,18 @@ static void wire_utility_bridges(NodeRegistry& registry)
     }
 
     // ── File nodes — via Qt file I/O ─────────────────────────────
-    for (const auto& id : {"file.operations", "file.spreadsheet", "file.binary",
-                            "file.convert", "file.compress"}) {
+    for (const auto& id : {"file.operations", "file.spreadsheet", "file.binary", "file.convert", "file.compress"}) {
         auto* def = const_cast<NodeTypeDef*>(registry.find(id));
         if (def && !def->execute) {
             def->execute = [id_str = QString(id)](const QJsonObject& params, const QVector<QJsonValue>& inputs,
-                                                   std::function<void(bool, QJsonValue, QString)> cb) {
+                                                  std::function<void(bool, QJsonValue, QString)> cb) {
                 QJsonObject out;
                 out["node_type"] = id_str;
                 out["operation"] = params.value("operation").toString();
                 out["path"] = params.value("path").toString();
                 out["status"] = "pending_file_integration";
-                if (!inputs.isEmpty()) out["input"] = inputs[0];
+                if (!inputs.isEmpty())
+                    out["input"] = inputs[0];
                 cb(true, out, {});
             };
         }
@@ -270,7 +276,8 @@ static void wire_utility_bridges(NodeRegistry& registry)
             QJsonObject out;
             out["selector"] = params.value("selector").toString();
             out["status"] = "pending_integration";
-            if (!inputs.isEmpty()) out["input"] = inputs[0];
+            if (!inputs.isEmpty())
+                out["input"] = inputs[0];
             cb(true, out, {});
         };
     }
@@ -295,7 +302,8 @@ static void wire_utility_bridges(NodeRegistry& registry)
             QJsonObject out;
             out["operation"] = params.value("operation").toString();
             out["status"] = "pending_integration";
-            if (!inputs.isEmpty()) out["input"] = inputs[0];
+            if (!inputs.isEmpty())
+                out["input"] = inputs[0];
             cb(true, out, {});
         };
     }
@@ -315,8 +323,7 @@ static void wire_utility_bridges(NodeRegistry& registry)
     LOG_INFO("ServiceBridges", "Utility bridges wired");
 }
 
-void wire_all_bridges(NodeRegistry& registry)
-{
+void wire_all_bridges(NodeRegistry& registry) {
     wire_market_data_bridges(registry);
     wire_trading_bridges(registry);
     wire_agent_bridges(registry);
@@ -328,9 +335,8 @@ void wire_all_bridges(NodeRegistry& registry)
         if (!def.execute) {
             auto* mutable_def = const_cast<NodeTypeDef*>(registry.find(def.type_id));
             if (mutable_def) {
-                mutable_def->execute = [type_id = def.type_id](
-                    const QJsonObject&, const QVector<QJsonValue>& inputs,
-                    std::function<void(bool, QJsonValue, QString)> cb) {
+                mutable_def->execute = [type_id = def.type_id](const QJsonObject&, const QVector<QJsonValue>& inputs,
+                                                               std::function<void(bool, QJsonValue, QString)> cb) {
                     auto data = inputs.isEmpty() ? QJsonValue(QJsonObject{{"node", type_id}}) : inputs[0];
                     cb(true, data, {});
                 };

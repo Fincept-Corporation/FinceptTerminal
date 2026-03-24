@@ -33,9 +33,10 @@ void NewsCorrelationService::detect_signals(const QVector<NewsArticle>& articles
     auto json_str = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
 
     QPointer<NewsCorrelationService> self = this;
-    python::PythonRunner::instance().run("news_correlation.py", {"detect_signals", json_str},
-        [self, cb](python::PythonResult result) {
-            if (!self) return;
+    python::PythonRunner::instance().run(
+        "news_correlation.py", {"detect_signals", json_str}, [self, cb](python::PythonResult result) {
+            if (!self)
+                return;
             if (!result.success) {
                 LOG_WARN("NewsCorrelation", "Signal detection failed: " + result.error);
                 cb(false, {});
@@ -68,9 +69,8 @@ void NewsCorrelationService::detect_signals(const QVector<NewsArticle>& articles
         });
 }
 
-void NewsCorrelationService::compute_instability(const QString& country_code,
-                                                   const QVector<CorrelationSignal>& sigs,
-                                                   InstabilityCallback cb) {
+void NewsCorrelationService::compute_instability(const QString& country_code, const QVector<CorrelationSignal>& sigs,
+                                                 InstabilityCallback cb) {
     QJsonArray sig_arr;
     for (const auto& s : sigs) {
         QJsonObject obj;
@@ -82,73 +82,72 @@ void NewsCorrelationService::compute_instability(const QString& country_code,
     }
     auto sig_json = QString::fromUtf8(QJsonDocument(sig_arr).toJson(QJsonDocument::Compact));
 
-    python::PythonRunner::instance().run("news_correlation.py",
-        {"compute_instability", country_code, sig_json},
-        [cb](python::PythonResult result) {
-            if (!result.success) {
-                cb(false, {});
-                return;
-            }
-            auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-            auto obj = doc.object();
-            if (!obj["success"].toBool()) {
-                cb(false, {});
-                return;
-            }
+    python::PythonRunner::instance().run("news_correlation.py", {"compute_instability", country_code, sig_json},
+                                         [cb](python::PythonResult result) {
+                                             if (!result.success) {
+                                                 cb(false, {});
+                                                 return;
+                                             }
+                                             auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+                                             auto obj = doc.object();
+                                             if (!obj["success"].toBool()) {
+                                                 cb(false, {});
+                                                 return;
+                                             }
 
-            InstabilityScore score;
-            score.country = obj["country"].toString();
-            score.cii_score = obj["cii_score"].toInt();
-            score.level = obj["level"].toString();
-            score.baseline = obj["baseline"].toInt();
+                                             InstabilityScore score;
+                                             score.country = obj["country"].toString();
+                                             score.cii_score = obj["cii_score"].toInt();
+                                             score.level = obj["level"].toString();
+                                             score.baseline = obj["baseline"].toInt();
 
-            auto contribs = obj["signal_contributions"].toObject();
-            for (auto it = contribs.begin(); it != contribs.end(); ++it)
-                score.signal_contributions[it.key()] = it.value().toDouble();
+                                             auto contribs = obj["signal_contributions"].toObject();
+                                             for (auto it = contribs.begin(); it != contribs.end(); ++it)
+                                                 score.signal_contributions[it.key()] = it.value().toDouble();
 
-            cb(true, score);
-        });
+                                             cb(true, score);
+                                         });
 }
 
 void NewsCorrelationService::detect_focal_points(const QJsonArray& geolocated_articles, FocalCallback cb) {
     auto json_str = QString::fromUtf8(QJsonDocument(geolocated_articles).toJson(QJsonDocument::Compact));
 
     python::PythonRunner::instance().run("news_correlation.py", {"focal_points", json_str},
-        [cb](python::PythonResult result) {
-            if (!result.success) {
-                cb(false, {});
-                return;
-            }
-            auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-            auto obj = doc.object();
-            if (!obj["success"].toBool()) {
-                cb(false, {});
-                return;
-            }
+                                         [cb](python::PythonResult result) {
+                                             if (!result.success) {
+                                                 cb(false, {});
+                                                 return;
+                                             }
+                                             auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+                                             auto obj = doc.object();
+                                             if (!obj["success"].toBool()) {
+                                                 cb(false, {});
+                                                 return;
+                                             }
 
-            QVector<FocalPoint> points;
-            for (const auto& v : obj["focal_points"].toArray()) {
-                auto f = v.toObject();
-                FocalPoint fp;
-                fp.lat = f["lat"].toDouble();
-                fp.lon = f["lon"].toDouble();
-                fp.event_count = f["event_count"].toInt();
-                fp.source_count = f["source_count"].toInt();
-                fp.severity = f["severity"].toString();
-                auto cats = f["categories"].toObject();
-                for (auto it = cats.begin(); it != cats.end(); ++it)
-                    fp.categories[it.key()] = it.value().toInt();
-                for (const auto& h : f["headlines"].toArray())
-                    fp.headlines.append(h.toString());
-                points.append(fp);
-            }
-            cb(true, points);
-        });
+                                             QVector<FocalPoint> points;
+                                             for (const auto& v : obj["focal_points"].toArray()) {
+                                                 auto f = v.toObject();
+                                                 FocalPoint fp;
+                                                 fp.lat = f["lat"].toDouble();
+                                                 fp.lon = f["lon"].toDouble();
+                                                 fp.event_count = f["event_count"].toInt();
+                                                 fp.source_count = f["source_count"].toInt();
+                                                 fp.severity = f["severity"].toString();
+                                                 auto cats = f["categories"].toObject();
+                                                 for (auto it = cats.begin(); it != cats.end(); ++it)
+                                                     fp.categories[it.key()] = it.value().toInt();
+                                                 for (const auto& h : f["headlines"].toArray())
+                                                     fp.headlines.append(h.toString());
+                                                 points.append(fp);
+                                             }
+                                             cb(true, points);
+                                         });
 }
 
 void NewsCorrelationService::fetch_predictions(PredictionCallback cb) {
-    python::PythonRunner::instance().run("polymarket.py", {"get_markets", "20"},
-        [this, cb](python::PythonResult result) {
+    python::PythonRunner::instance().run(
+        "polymarket.py", {"get_markets", "20"}, [this, cb](python::PythonResult result) {
             if (!result.success) {
                 LOG_WARN("NewsCorrelation", "Prediction fetch failed: " + result.error);
                 cb(false, {});
@@ -198,35 +197,36 @@ void NewsCorrelationService::update_baseline(const QMap<QString, int>& current_c
 
     QPointer<NewsCorrelationService> self = this;
     python::PythonRunner::instance().run("news_correlation.py", {"baseline_update", cur_str, ex_str},
-        [self, cb](python::PythonResult result) {
-            if (!self) return;
-            if (!result.success) {
-                cb(false, {});
-                return;
-            }
-            auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-            auto obj = doc.object();
-            if (!obj["success"].toBool()) {
-                cb(false, {});
-                return;
-            }
+                                         [self, cb](python::PythonResult result) {
+                                             if (!self)
+                                                 return;
+                                             if (!result.success) {
+                                                 cb(false, {});
+                                                 return;
+                                             }
+                                             auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+                                             auto obj = doc.object();
+                                             if (!obj["success"].toBool()) {
+                                                 cb(false, {});
+                                                 return;
+                                             }
 
-            QMap<QString, CategoryBaseline> baselines;
-            auto bl_obj = obj["baselines"].toObject();
-            for (auto it = bl_obj.begin(); it != bl_obj.end(); ++it) {
-                auto b = it.value().toObject();
-                CategoryBaseline bl;
-                for (const auto& c : b["hourly_counts"].toArray())
-                    bl.hourly_counts.append(c.toInt());
-                bl.mean = b["mean"].toDouble();
-                bl.stddev = b["stddev"].toDouble();
-                bl.sample_size = b["sample_size"].toInt();
-                baselines[it.key()] = bl;
-            }
+                                             QMap<QString, CategoryBaseline> baselines;
+                                             auto bl_obj = obj["baselines"].toObject();
+                                             for (auto it = bl_obj.begin(); it != bl_obj.end(); ++it) {
+                                                 auto b = it.value().toObject();
+                                                 CategoryBaseline bl;
+                                                 for (const auto& c : b["hourly_counts"].toArray())
+                                                     bl.hourly_counts.append(c.toInt());
+                                                 bl.mean = b["mean"].toDouble();
+                                                 bl.stddev = b["stddev"].toDouble();
+                                                 bl.sample_size = b["sample_size"].toInt();
+                                                 baselines[it.key()] = bl;
+                                             }
 
-            self->baselines_ = baselines;
-            cb(true, baselines);
-        });
+                                             self->baselines_ = baselines;
+                                             cb(true, baselines);
+                                         });
 }
 
 void NewsCorrelationService::detect_deviations(const QMap<QString, int>& current_counts, DeviationCallback cb) {
@@ -247,25 +247,25 @@ void NewsCorrelationService::detect_deviations(const QMap<QString, int>& current
     auto bl_str = QString::fromUtf8(QJsonDocument(baseline).toJson(QJsonDocument::Compact));
 
     python::PythonRunner::instance().run("news_correlation.py", {"detect_deviations", cur_str, bl_str},
-        [cb](python::PythonResult result) {
-            if (!result.success) {
-                cb(false, {});
-                return;
-            }
-            auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-            auto obj = doc.object();
-            if (!obj["success"].toBool()) {
-                cb(false, {});
-                return;
-            }
+                                         [cb](python::PythonResult result) {
+                                             if (!result.success) {
+                                                 cb(false, {});
+                                                 return;
+                                             }
+                                             auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+                                             auto obj = doc.object();
+                                             if (!obj["success"].toBool()) {
+                                                 cb(false, {});
+                                                 return;
+                                             }
 
-            QVector<QPair<QString, double>> deviations;
-            for (const auto& v : obj["deviations"].toArray()) {
-                auto d = v.toObject();
-                deviations.append({d["category"].toString(), d["z_score"].toDouble()});
-            }
-            cb(true, deviations);
-        });
+                                             QVector<QPair<QString, double>> deviations;
+                                             for (const auto& v : obj["deviations"].toArray()) {
+                                                 auto d = v.toObject();
+                                                 deviations.append({d["category"].toString(), d["z_score"].toDouble()});
+                                             }
+                                             cb(true, deviations);
+                                         });
 }
 
 } // namespace fincept::services

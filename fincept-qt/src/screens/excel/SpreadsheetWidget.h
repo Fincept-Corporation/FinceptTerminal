@@ -40,9 +40,8 @@ class SpreadsheetItem : public QTableWidgetItem {
 class SpreadsheetWidget : public QWidget {
     Q_OBJECT
   public:
-    explicit SpreadsheetWidget(const QString& sheet_name = "Sheet1",
-                                int rows = 100, int cols = 26,
-                                QWidget* parent = nullptr);
+    explicit SpreadsheetWidget(const QString& sheet_name = "Sheet1", int rows = 100, int cols = 26,
+                               QWidget* parent = nullptr);
 
     /// Get all cell data as 2D string array
     QVector<QVector<QString>> get_data() const;

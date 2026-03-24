@@ -30,12 +30,12 @@ class PortfolioAiPanel : public QWidget {
 
     // Header
     QPushButton* close_btn_ = nullptr;
-    QLabel*      status_lbl_ = nullptr;
+    QLabel* status_lbl_ = nullptr;
 
     // Type selector buttons
-    QPushButton* full_btn_   = nullptr;
-    QPushButton* risk_btn_   = nullptr;
-    QPushButton* rebal_btn_  = nullptr;
+    QPushButton* full_btn_ = nullptr;
+    QPushButton* risk_btn_ = nullptr;
+    QPushButton* rebal_btn_ = nullptr;
     QPushButton* opport_btn_ = nullptr;
 
     // Run button

@@ -61,7 +61,8 @@ CryptoOrderBook::CryptoOrderBook(QWidget* parent) : QWidget(parent) {
         mode_btns_[i]->setObjectName("cryptoObModeBtn");
         mode_btns_[i]->setFixedHeight(22);
         mode_btns_[i]->setCursor(Qt::PointingHandCursor);
-        if (i == 0) mode_btns_[i]->setProperty("active", true);
+        if (i == 0)
+            mode_btns_[i]->setProperty("active", true);
         connect(mode_btns_[i], &QPushButton::clicked, this, [this, i]() { set_active_mode(i); });
         h_layout->addWidget(mode_btns_[i]);
     }
@@ -110,12 +111,12 @@ void CryptoOrderBook::set_active_mode(int idx) {
         mode_btns_[i]->style()->polish(mode_btns_[i]);
     }
     cache_dirty_ = true;
-    if (repaint_timer_ && !repaint_timer_->isActive()) repaint_timer_->start();
+    if (repaint_timer_ && !repaint_timer_->isActive())
+        repaint_timer_->start();
 }
 
-void CryptoOrderBook::set_data(const QVector<QPair<double, double>>& bids,
-                                const QVector<QPair<double, double>>& asks,
-                                double spread, double spread_pct) {
+void CryptoOrderBook::set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
+                               double spread, double spread_pct) {
     {
         QMutexLocker lock(&mutex_);
         bids_ = bids;
@@ -123,10 +124,10 @@ void CryptoOrderBook::set_data(const QVector<QPair<double, double>>& bids,
         spread_ = spread;
         spread_pct_ = spread_pct;
     }
-    spread_label_->setText(
-        QString("SPREAD  %1  (%2%)").arg(spread, 0, 'f', 2).arg(spread_pct, 0, 'f', 4));
+    spread_label_->setText(QString("SPREAD  %1  (%2%)").arg(spread, 0, 'f', 2).arg(spread_pct, 0, 'f', 4));
     cache_dirty_ = true;
-    if (repaint_timer_ && !repaint_timer_->isActive()) repaint_timer_->start();
+    if (repaint_timer_ && !repaint_timer_->isActive())
+        repaint_timer_->start();
 }
 
 void CryptoOrderBook::add_tick_snapshot(const TickSnapshot& snap) {
@@ -142,11 +143,13 @@ void CryptoOrderBook::resizeEvent(QResizeEvent* event) {
 }
 
 void CryptoOrderBook::mousePressEvent(QMouseEvent* event) {
-    if (view_mode_ != ObViewMode::Book) return;
+    if (view_mode_ != ObViewMode::Book)
+        return;
 
     // Calculate which row was clicked in the paint area
     const int paint_y = event->pos().y() - (HEADER_H + SPREAD_H);
-    if (paint_y < 0) return;
+    if (paint_y < 0)
+        return;
 
     const int row = paint_y / ROW_H;
     QMutexLocker lock(&mutex_);
@@ -178,7 +181,8 @@ void CryptoOrderBook::paintEvent(QPaintEvent* /*event*/) {
 void CryptoOrderBook::rebuild_cache() {
     const int w = width();
     const int h = height() - HEADER_H - SPREAD_H;
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0)
+        return;
 
     cache_ = QPixmap(w, h);
     cache_.fill(kBgBase);
@@ -221,13 +225,16 @@ void CryptoOrderBook::rebuild_cache() {
             }
             max_cum = std::max(max_cum, cum);
         }
-        if (max_cum <= 0) max_cum = 1;
+        if (max_cum <= 0)
+            max_cum = 1;
 
         // Calculate 75th percentile for heat coloring
         QVector<double> all_vols;
         all_vols.reserve(ask_count + bid_count);
-        for (int i = 0; i < ask_count; ++i) all_vols.append(asks[i].second);
-        for (int i = 0; i < bid_count; ++i) all_vols.append(bids[i].second);
+        for (int i = 0; i < ask_count; ++i)
+            all_vols.append(asks[i].second);
+        for (int i = 0; i < bid_count; ++i)
+            all_vols.append(bids[i].second);
         std::sort(all_vols.begin(), all_vols.end());
         const double p75 = all_vols.isEmpty() ? 0 : all_vols[all_vols.size() * 3 / 4];
 
@@ -328,13 +335,17 @@ void CryptoOrderBook::rebuild_cache() {
                 QString action = "HOLD";
                 QColor c = kTextTertiary;
                 if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD && snap.rise_ratio_60 > 0.001) {
-                    action = "STRONG BUY"; c = kColorBid;
+                    action = "STRONG BUY";
+                    c = kColorBid;
                 } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD && snap.rise_ratio_60 < -0.001) {
-                    action = "STRONG SELL"; c = kColorAsk;
+                    action = "STRONG SELL";
+                    c = kColorAsk;
                 } else if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD) {
-                    action = "BUY"; c = kColorBid;
+                    action = "BUY";
+                    c = kColorBid;
                 } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD) {
-                    action = "SELL"; c = kColorAsk;
+                    action = "SELL";
+                    c = kColorAsk;
                 }
                 p.setPen(c);
                 p.drawText(QRect(2 * w / 3, y, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, action);
@@ -348,9 +359,11 @@ void CryptoOrderBook::rebuild_cache() {
                 QString signal = "NEUTRAL";
                 QColor c = kTextTertiary;
                 if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD) {
-                    signal = "BUY PRESSURE"; c = kColorBid;
+                    signal = "BUY PRESSURE";
+                    c = kColorBid;
                 } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD) {
-                    signal = "SELL PRESSURE"; c = kColorAsk;
+                    signal = "SELL PRESSURE";
+                    c = kColorAsk;
                 }
                 p.setPen(c);
                 p.drawText(QRect(2 * w / 3, y, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, signal);

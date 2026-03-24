@@ -6,72 +6,66 @@
 
 namespace {
 
-static const char* kBtnStyle =
-    "QPushButton {"
-    "  background: #1e1e1e; color: #808080; border: 1px solid #2a2a2a;"
-    "  font-family: Consolas; font-size: 11px; font-weight: bold;"
-    "  padding: 0 10px; min-height: 22px;"
-    "}"
-    "QPushButton:hover { color: #e5e5e5; background: #252525; }"
-    "QPushButton:disabled { color: #4a4a4a; }";
+static const char* kBtnStyle = "QPushButton {"
+                               "  background: #1e1e1e; color: #808080; border: 1px solid #2a2a2a;"
+                               "  font-family: Consolas; font-size: 11px; font-weight: bold;"
+                               "  padding: 0 10px; min-height: 22px;"
+                               "}"
+                               "QPushButton:hover { color: #e5e5e5; background: #252525; }"
+                               "QPushButton:disabled { color: #4a4a4a; }";
 
-static const char* kAccentBtnStyle =
-    "QPushButton {"
-    "  background: rgba(217,119,6,0.1); color: #d97706;"
-    "  border: 1px solid #78350f; font-family: Consolas;"
-    "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
-    "}"
-    "QPushButton:hover { background: #d97706; color: #080808; }";
+static const char* kAccentBtnStyle = "QPushButton {"
+                                     "  background: rgba(217,119,6,0.1); color: #d97706;"
+                                     "  border: 1px solid #78350f; font-family: Consolas;"
+                                     "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
+                                     "}"
+                                     "QPushButton:hover { background: #d97706; color: #080808; }";
 
 } // namespace
 
 namespace fincept::workflow {
 
-NodeEditorToolbar::NodeEditorToolbar(QWidget* parent)
-    : QWidget(parent)
-{
+NodeEditorToolbar::NodeEditorToolbar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(34);
     setObjectName("nodeEditorToolbar");
     build_ui();
 }
 
-void NodeEditorToolbar::set_workflow_name(const QString& name)
-{
+void NodeEditorToolbar::set_workflow_name(const QString& name) {
     name_edit_->setText(name);
 }
 
-QString NodeEditorToolbar::workflow_name() const
-{
+QString NodeEditorToolbar::workflow_name() const {
     return name_edit_->text();
 }
 
-void NodeEditorToolbar::set_can_undo(bool can) { undo_btn_->setEnabled(can); }
-void NodeEditorToolbar::set_can_redo(bool can) { redo_btn_->setEnabled(can); }
+void NodeEditorToolbar::set_can_undo(bool can) {
+    undo_btn_->setEnabled(can);
+}
+void NodeEditorToolbar::set_can_redo(bool can) {
+    redo_btn_->setEnabled(can);
+}
 
-void NodeEditorToolbar::set_executing(bool running)
-{
-    static const char* kStopStyle =
-        "QPushButton {"
-        "  background: rgba(220,38,38,0.15); color: #dc2626;"
-        "  border: 1px solid rgba(220,38,38,0.4); font-family: Consolas;"
-        "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
-        "}"
-        "QPushButton:hover { background: #dc2626; color: #e5e5e5; }";
+void NodeEditorToolbar::set_executing(bool running) {
+    static const char* kStopStyle = "QPushButton {"
+                                    "  background: rgba(220,38,38,0.15); color: #dc2626;"
+                                    "  border: 1px solid rgba(220,38,38,0.4); font-family: Consolas;"
+                                    "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
+                                    "}"
+                                    "QPushButton:hover { background: #dc2626; color: #e5e5e5; }";
 
-    static const char* kExecStyle =
-        "QPushButton {"
-        "  background: rgba(217,119,6,0.1); color: #d97706;"
-        "  border: 1px solid #78350f; font-family: Consolas;"
-        "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
-        "}"
-        "QPushButton:hover { background: #d97706; color: #080808; }";
+    static const char* kExecStyle = "QPushButton {"
+                                    "  background: rgba(217,119,6,0.1); color: #d97706;"
+                                    "  border: 1px solid #78350f; font-family: Consolas;"
+                                    "  font-size: 11px; font-weight: bold; padding: 0 12px; min-height: 22px;"
+                                    "}"
+                                    "QPushButton:hover { background: #d97706; color: #080808; }";
 
     execute_btn_->setText(running ? "STOP" : "EXECUTE");
     execute_btn_->setStyleSheet(running ? kStopStyle : kExecStyle);
 }
 
-void NodeEditorToolbar::build_ui()
-{
+void NodeEditorToolbar::build_ui() {
     setStyleSheet("background: #1e1e1e;");
 
     auto* layout = new QHBoxLayout(this);
@@ -81,22 +75,20 @@ void NodeEditorToolbar::build_ui()
     // ── Workflow name ──────────────────────────────────────────────
     name_edit_ = new QLineEdit("Untitled Workflow");
     name_edit_->setFixedWidth(200);
-    name_edit_->setStyleSheet(
-        "QLineEdit {"
-        "  background: transparent; color: #e5e5e5; border: none;"
-        "  border-bottom: 1px solid #4a4a4a; font-family: Consolas;"
-        "  font-size: 13px; font-weight: bold; padding: 2px 4px;"
-        "}"
-        "QLineEdit:focus { border-bottom: 1px solid #d97706; }");
+    name_edit_->setStyleSheet("QLineEdit {"
+                              "  background: transparent; color: #e5e5e5; border: none;"
+                              "  border-bottom: 1px solid #4a4a4a; font-family: Consolas;"
+                              "  font-size: 13px; font-weight: bold; padding: 2px 4px;"
+                              "}"
+                              "QLineEdit:focus { border-bottom: 1px solid #d97706; }");
     layout->addWidget(name_edit_);
 
     connect(name_edit_, &QLineEdit::textChanged, this, &NodeEditorToolbar::name_changed);
 
     // ── Status badge ───────────────────────────────────────────────
     auto* status = new QLabel("DRAFT");
-    status->setStyleSheet(
-        "color: #525252; font-family: Consolas; font-size: 10px;"
-        "font-weight: bold; letter-spacing: 0.5px; padding: 0 6px;");
+    status->setStyleSheet("color: #525252; font-family: Consolas; font-size: 10px;"
+                          "font-weight: bold; letter-spacing: 0.5px; padding: 0 6px;");
     layout->addWidget(status);
 
     layout->addStretch();

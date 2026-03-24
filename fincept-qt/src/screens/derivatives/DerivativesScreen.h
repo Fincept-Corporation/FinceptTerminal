@@ -54,7 +54,7 @@ class DerivativesScreen : public QWidget {
     void run_pricing(const QString& command, const QStringList& args);
 
     // State
-    int active_instrument_ = 0;  // 0=bonds, 1=equity, 2=fx, 3=swaps, 4=credit
+    int active_instrument_ = 0; // 0=bonds, 1=equity, 2=fx, 3=swaps, 4=credit
     bool loading_ = false;
 
     // Layout

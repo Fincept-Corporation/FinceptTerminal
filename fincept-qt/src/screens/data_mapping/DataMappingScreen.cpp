@@ -15,120 +15,119 @@
 
 namespace {
 using namespace fincept::ui;
-static const QString kStyle = QStringLiteral(
-    "#dmScreen { background: %1; }"
+static const QString kStyle =
+    QStringLiteral("#dmScreen { background: %1; }"
 
-    "#dmHeader { background: %2; border-bottom: 2px solid %3; }"
-    "#dmHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
-    "#dmHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
-    "#dmHeaderBadge { color: %6; font-size: 8px; font-weight: 700; "
-    "  background: rgba(22,163,74,0.2); padding: 2px 6px; }"
+                   "#dmHeader { background: %2; border-bottom: 2px solid %3; }"
+                   "#dmHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
+                   "#dmHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
+                   "#dmHeaderBadge { color: %6; font-size: 8px; font-weight: 700; "
+                   "  background: rgba(22,163,74,0.2); padding: 2px 6px; }"
 
-    "#dmViewBtn { background: transparent; color: %5; border: 1px solid %8; "
-    "  font-size: 9px; font-weight: 700; padding: 4px 12px; }"
-    "#dmViewBtn:hover { color: %4; }"
-    "#dmViewBtn[active=\"true\"] { background: %3; color: %1; border-color: %3; }"
+                   "#dmViewBtn { background: transparent; color: %5; border: 1px solid %8; "
+                   "  font-size: 9px; font-weight: 700; padding: 4px 12px; }"
+                   "#dmViewBtn:hover { color: %4; }"
+                   "#dmViewBtn[active=\"true\"] { background: %3; color: %1; border-color: %3; }"
 
-    "#dmStepBar { background: %7; border-bottom: 1px solid %8; }"
-    "#dmStepBtn { background: transparent; color: %5; border: none; "
-    "  font-size: 9px; font-weight: 700; padding: 6px 14px; border-bottom: 2px solid transparent; }"
-    "#dmStepBtn:hover { color: %4; }"
-    "#dmStepBtn[active=\"true\"] { color: %4; border-bottom-color: %3; }"
-    "#dmStepBtn[complete=\"true\"] { color: %6; }"
+                   "#dmStepBar { background: %7; border-bottom: 1px solid %8; }"
+                   "#dmStepBtn { background: transparent; color: %5; border: none; "
+                   "  font-size: 9px; font-weight: 700; padding: 6px 14px; border-bottom: 2px solid transparent; }"
+                   "#dmStepBtn:hover { color: %4; }"
+                   "#dmStepBtn[active=\"true\"] { color: %4; border-bottom-color: %3; }"
+                   "#dmStepBtn[complete=\"true\"] { color: %6; }"
 
-    "#dmLeftPanel { background: %7; border-right: 1px solid %8; }"
-    "#dmRightPanel { background: %7; border-left: 1px solid %8; }"
+                   "#dmLeftPanel { background: %7; border-right: 1px solid %8; }"
+                   "#dmRightPanel { background: %7; border-left: 1px solid %8; }"
 
-    "#dmPanelTitle { color: %5; font-size: 10px; font-weight: 700; "
-    "  letter-spacing: 0.5px; background: transparent; padding: 8px; "
-    "  border-bottom: 1px solid %8; }"
+                   "#dmPanelTitle { color: %5; font-size: 10px; font-weight: 700; "
+                   "  letter-spacing: 0.5px; background: transparent; padding: 8px; "
+                   "  border-bottom: 1px solid %8; }"
 
-    "#dmPanel { background: %7; border: 1px solid %8; }"
-    "#dmPanelHeader { background: %2; border-bottom: 1px solid %8; }"
-    "#dmPanelHeaderTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
-    "#dmPanelHeaderIcon { color: %3; font-size: 13px; background: transparent; }"
+                   "#dmPanel { background: %7; border: 1px solid %8; }"
+                   "#dmPanelHeader { background: %2; border-bottom: 1px solid %8; }"
+                   "#dmPanelHeaderTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#dmPanelHeaderIcon { color: %3; font-size: 13px; background: transparent; }"
 
-    "#dmLabel { color: %5; font-size: 9px; font-weight: 700; "
-    "  letter-spacing: 0.5px; background: transparent; }"
+                   "#dmLabel { color: %5; font-size: 9px; font-weight: 700; "
+                   "  letter-spacing: 0.5px; background: transparent; }"
 
-    "QLineEdit { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "QLineEdit:focus { border-color: %9; }"
-    "QPlainTextEdit { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "QComboBox { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "QComboBox::drop-down { border: none; width: 16px; }"
-    "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
-    "  selection-background-color: %3; }"
-    "QSpinBox { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "QSpinBox::up-button, QSpinBox::down-button { width: 0; }"
+                   "QLineEdit { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "QLineEdit:focus { border-color: %9; }"
+                   "QPlainTextEdit { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "QComboBox { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "QComboBox::drop-down { border: none; width: 16px; }"
+                   "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
+                   "  selection-background-color: %3; }"
+                   "QSpinBox { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "QSpinBox::up-button, QSpinBox::down-button { width: 0; }"
 
-    "#dmCalcBtn { background: %3; color: %1; border: none; padding: 5px 16px; "
-    "  font-size: 9px; font-weight: 700; }"
-    "#dmCalcBtn:hover { background: #FF8800; }"
-    "#dmCalcBtn:disabled { background: %10; color: %11; }"
-    "#dmSecondaryBtn { background: %7; color: %5; border: 1px solid %8; "
-    "  padding: 5px 16px; font-size: 9px; font-weight: 700; }"
-    "#dmSecondaryBtn:hover { color: %4; }"
-    "#dmSaveBtn { background: %6; color: %1; border: none; padding: 6px 20px; "
-    "  font-size: 10px; font-weight: 700; }"
-    "#dmSaveBtn:hover { background: #22c55e; }"
-    "#dmSaveBtn:disabled { background: %10; color: %11; }"
+                   "#dmCalcBtn { background: %3; color: %1; border: none; padding: 5px 16px; "
+                   "  font-size: 9px; font-weight: 700; }"
+                   "#dmCalcBtn:hover { background: #FF8800; }"
+                   "#dmCalcBtn:disabled { background: %10; color: %11; }"
+                   "#dmSecondaryBtn { background: %7; color: %5; border: 1px solid %8; "
+                   "  padding: 5px 16px; font-size: 9px; font-weight: 700; }"
+                   "#dmSecondaryBtn:hover { color: %4; }"
+                   "#dmSaveBtn { background: %6; color: %1; border: none; padding: 6px 20px; "
+                   "  font-size: 10px; font-weight: 700; }"
+                   "#dmSaveBtn:hover { background: #22c55e; }"
+                   "#dmSaveBtn:disabled { background: %10; color: %11; }"
 
-    "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
-    "  font-size: 11px; }"
-    "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
-    "QHeaderView::section { background: %2; color: %5; border: none; "
-    "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
-    "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
+                   "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
+                   "  font-size: 11px; }"
+                   "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
+                   "QHeaderView::section { background: %2; color: %5; border: none; "
+                   "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
+                   "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
 
-    "QTreeWidget { background: %1; color: %4; border: none; font-size: 11px; }"
-    "QTreeWidget::item { padding: 2px 4px; }"
-    "QTreeWidget::item:selected { background: rgba(217,119,6,0.1); color: %3; }"
+                   "QTreeWidget { background: %1; color: %4; border: none; font-size: 11px; }"
+                   "QTreeWidget::item { padding: 2px 4px; }"
+                   "QTreeWidget::item:selected { background: rgba(217,119,6,0.1); color: %3; }"
 
-    "QListWidget { background: %1; border: none; font-size: 11px; }"
-    "QListWidget::item { color: %5; padding: 6px 10px; border-bottom: 1px solid %8; }"
-    "QListWidget::item:hover { color: %4; background: %12; }"
-    "QListWidget::item:selected { color: %3; background: rgba(217,119,6,0.1); }"
+                   "QListWidget { background: %1; border: none; font-size: 11px; }"
+                   "QListWidget::item { color: %5; padding: 6px 10px; border-bottom: 1px solid %8; }"
+                   "QListWidget::item:hover { color: %4; background: %12; }"
+                   "QListWidget::item:selected { color: %3; background: rgba(217,119,6,0.1); }"
 
-    "QTextEdit { background: %1; color: %13; border: none; font-size: 11px; }"
+                   "QTextEdit { background: %1; color: %13; border: none; font-size: 11px; }"
 
-    "#dmInfoLabel { color: %5; font-size: 9px; background: transparent; }"
-    "#dmInfoValue { color: %13; font-size: 11px; font-weight: 700; background: transparent; }"
-    "#dmSuccessBadge { color: %6; font-size: 9px; font-weight: 700; "
-    "  background: rgba(22,163,74,0.15); padding: 2px 6px; }"
-    "#dmErrorBadge { color: %14; font-size: 9px; font-weight: 700; "
-    "  background: rgba(220,38,38,0.15); padding: 2px 6px; }"
+                   "#dmInfoLabel { color: %5; font-size: 9px; background: transparent; }"
+                   "#dmInfoValue { color: %13; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#dmSuccessBadge { color: %6; font-size: 9px; font-weight: 700; "
+                   "  background: rgba(22,163,74,0.15); padding: 2px 6px; }"
+                   "#dmErrorBadge { color: %14; font-size: 9px; font-weight: 700; "
+                   "  background: rgba(220,38,38,0.15); padding: 2px 6px; }"
 
-    "#dmNavFooter { background: %2; border-top: 1px solid %8; }"
-    "#dmStatusBar { background: %2; border-top: 1px solid %8; }"
-    "#dmStatusText { color: %5; font-size: 9px; background: transparent; }"
-    "#dmStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
+                   "#dmNavFooter { background: %2; border-top: 1px solid %8; }"
+                   "#dmStatusBar { background: %2; border-top: 1px solid %8; }"
+                   "#dmStatusText { color: %5; font-size: 9px; background: transparent; }"
+                   "#dmStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
 
-    "#dmEmptyState { color: %11; font-size: 13px; background: transparent; }"
+                   "#dmEmptyState { color: %11; font-size: 13px; background: transparent; }"
 
-    "QSplitter::handle { background: %8; }"
-    "QScrollArea { background: %1; border: none; }"
-    "QScrollBar:vertical { background: %1; width: 6px; }"
-    "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-)
-    .arg(colors::BG_BASE)         // %1
-    .arg(colors::BG_RAISED)       // %2
-    .arg(colors::AMBER)           // %3
-    .arg(colors::TEXT_PRIMARY)    // %4
-    .arg(colors::TEXT_SECONDARY)  // %5
-    .arg(colors::POSITIVE)        // %6
-    .arg(colors::BG_SURFACE)      // %7
-    .arg(colors::BORDER_DIM)      // %8
-    .arg(colors::BORDER_BRIGHT)   // %9
-    .arg(colors::AMBER_DIM)       // %10
-    .arg(colors::TEXT_DIM)         // %11
-    .arg(colors::BG_HOVER)        // %12
-    .arg(colors::CYAN)             // %13
-    .arg(colors::NEGATIVE)        // %14
+                   "QSplitter::handle { background: %8; }"
+                   "QScrollArea { background: %1; border: none; }"
+                   "QScrollBar:vertical { background: %1; width: 6px; }"
+                   "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
+                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(colors::BG_BASE)        // %1
+        .arg(colors::BG_RAISED)      // %2
+        .arg(colors::AMBER)          // %3
+        .arg(colors::TEXT_PRIMARY)   // %4
+        .arg(colors::TEXT_SECONDARY) // %5
+        .arg(colors::POSITIVE)       // %6
+        .arg(colors::BG_SURFACE)     // %7
+        .arg(colors::BORDER_DIM)     // %8
+        .arg(colors::BORDER_BRIGHT)  // %9
+        .arg(colors::AMBER_DIM)      // %10
+        .arg(colors::TEXT_DIM)       // %11
+        .arg(colors::BG_HOVER)       // %12
+        .arg(colors::CYAN)           // %13
+        .arg(colors::NEGATIVE)       // %14
     ;
 } // namespace
 
@@ -153,84 +152,98 @@ struct SchemaInfo {
 
 static QList<SchemaInfo> build_schemas() {
     return {
-        {"OHLCV", "Open/High/Low/Close/Volume candlestick data", {
-            {"symbol", "string", true, "Trading symbol"},
-            {"timestamp", "datetime", true, "Bar timestamp"},
-            {"open", "number", true, "Opening price"},
-            {"high", "number", true, "Highest price"},
-            {"low", "number", true, "Lowest price"},
-            {"close", "number", true, "Closing price"},
-            {"volume", "number", true, "Trading volume"},
-            {"vwap", "number", false, "Volume weighted avg price"},
-            {"trades", "number", false, "Number of trades"},
-        }},
-        {"QUOTE", "Real-time or delayed quote with bid/ask", {
-            {"symbol", "string", true, "Trading symbol"},
-            {"timestamp", "datetime", true, "Quote timestamp"},
-            {"price", "number", true, "Last traded price"},
-            {"bid", "number", false, "Best bid price"},
-            {"ask", "number", false, "Best ask price"},
-            {"bidSize", "number", false, "Bid quantity"},
-            {"askSize", "number", false, "Ask quantity"},
-            {"volume", "number", false, "Total volume"},
-            {"change", "number", false, "Change from prev close"},
-            {"changePercent", "number", false, "Percentage change"},
-            {"open", "number", false, "Day open price"},
-            {"high", "number", false, "Day high price"},
-            {"low", "number", false, "Day low price"},
-            {"previousClose", "number", false, "Previous close"},
-        }},
-        {"TICK", "Individual trade ticks", {
-            {"symbol", "string", true, "Trading symbol"},
-            {"timestamp", "datetime", true, "Trade timestamp"},
-            {"price", "number", true, "Trade price"},
-            {"quantity", "number", true, "Trade quantity"},
-            {"side", "enum", false, "BUY/SELL/UNKNOWN"},
-            {"tradeId", "string", false, "Unique trade ID"},
-        }},
-        {"ORDER", "Trading order", {
-            {"orderId", "string", true, "Unique order ID"},
-            {"symbol", "string", true, "Trading symbol"},
-            {"side", "enum", true, "BUY/SELL"},
-            {"type", "enum", true, "MARKET/LIMIT/STOP/STOP_LIMIT"},
-            {"quantity", "number", true, "Order quantity"},
-            {"filledQuantity", "number", false, "Filled quantity"},
-            {"price", "number", false, "Limit price"},
-            {"averagePrice", "number", false, "Average fill price"},
-            {"status", "enum", true, "PENDING/OPEN/FILLED/CANCELLED"},
-            {"timestamp", "datetime", true, "Placement timestamp"},
-            {"exchange", "string", false, "Exchange name"},
-        }},
-        {"POSITION", "Open position in portfolio", {
-            {"symbol", "string", true, "Trading symbol"},
-            {"quantity", "number", true, "Position quantity"},
-            {"averagePrice", "number", true, "Average entry price"},
-            {"currentPrice", "number", true, "Current market price"},
-            {"marketValue", "number", true, "Current market value"},
-            {"costBasis", "number", true, "Total cost basis"},
-            {"pnl", "number", true, "Unrealized P&L"},
-            {"pnlPercent", "number", true, "P&L percentage"},
-            {"exchange", "string", false, "Exchange name"},
-        }},
-        {"PORTFOLIO", "Portfolio summary", {
-            {"totalValue", "number", true, "Total portfolio value"},
-            {"cash", "number", true, "Available cash"},
-            {"invested", "number", true, "Total invested"},
-            {"marketValue", "number", true, "Market value of holdings"},
-            {"pnl", "number", true, "Total unrealized P&L"},
-            {"pnlPercent", "number", true, "Total P&L percentage"},
-            {"dayPnl", "number", false, "Today's P&L"},
-            {"timestamp", "datetime", true, "Snapshot timestamp"},
-        }},
-        {"INSTRUMENT", "Security/instrument master data", {
-            {"symbol", "string", true, "Trading symbol"},
-            {"name", "string", true, "Instrument name"},
-            {"exchange", "string", true, "Exchange"},
-            {"instrumentType", "enum", true, "EQUITY/FUTURES/OPTIONS/CURRENCY"},
-            {"isin", "string", false, "ISIN code"},
-            {"lotSize", "number", false, "Lot size"},
-            {"tickSize", "number", false, "Min price movement"},
-        }},
+        {"OHLCV",
+         "Open/High/Low/Close/Volume candlestick data",
+         {
+             {"symbol", "string", true, "Trading symbol"},
+             {"timestamp", "datetime", true, "Bar timestamp"},
+             {"open", "number", true, "Opening price"},
+             {"high", "number", true, "Highest price"},
+             {"low", "number", true, "Lowest price"},
+             {"close", "number", true, "Closing price"},
+             {"volume", "number", true, "Trading volume"},
+             {"vwap", "number", false, "Volume weighted avg price"},
+             {"trades", "number", false, "Number of trades"},
+         }},
+        {"QUOTE",
+         "Real-time or delayed quote with bid/ask",
+         {
+             {"symbol", "string", true, "Trading symbol"},
+             {"timestamp", "datetime", true, "Quote timestamp"},
+             {"price", "number", true, "Last traded price"},
+             {"bid", "number", false, "Best bid price"},
+             {"ask", "number", false, "Best ask price"},
+             {"bidSize", "number", false, "Bid quantity"},
+             {"askSize", "number", false, "Ask quantity"},
+             {"volume", "number", false, "Total volume"},
+             {"change", "number", false, "Change from prev close"},
+             {"changePercent", "number", false, "Percentage change"},
+             {"open", "number", false, "Day open price"},
+             {"high", "number", false, "Day high price"},
+             {"low", "number", false, "Day low price"},
+             {"previousClose", "number", false, "Previous close"},
+         }},
+        {"TICK",
+         "Individual trade ticks",
+         {
+             {"symbol", "string", true, "Trading symbol"},
+             {"timestamp", "datetime", true, "Trade timestamp"},
+             {"price", "number", true, "Trade price"},
+             {"quantity", "number", true, "Trade quantity"},
+             {"side", "enum", false, "BUY/SELL/UNKNOWN"},
+             {"tradeId", "string", false, "Unique trade ID"},
+         }},
+        {"ORDER",
+         "Trading order",
+         {
+             {"orderId", "string", true, "Unique order ID"},
+             {"symbol", "string", true, "Trading symbol"},
+             {"side", "enum", true, "BUY/SELL"},
+             {"type", "enum", true, "MARKET/LIMIT/STOP/STOP_LIMIT"},
+             {"quantity", "number", true, "Order quantity"},
+             {"filledQuantity", "number", false, "Filled quantity"},
+             {"price", "number", false, "Limit price"},
+             {"averagePrice", "number", false, "Average fill price"},
+             {"status", "enum", true, "PENDING/OPEN/FILLED/CANCELLED"},
+             {"timestamp", "datetime", true, "Placement timestamp"},
+             {"exchange", "string", false, "Exchange name"},
+         }},
+        {"POSITION",
+         "Open position in portfolio",
+         {
+             {"symbol", "string", true, "Trading symbol"},
+             {"quantity", "number", true, "Position quantity"},
+             {"averagePrice", "number", true, "Average entry price"},
+             {"currentPrice", "number", true, "Current market price"},
+             {"marketValue", "number", true, "Current market value"},
+             {"costBasis", "number", true, "Total cost basis"},
+             {"pnl", "number", true, "Unrealized P&L"},
+             {"pnlPercent", "number", true, "P&L percentage"},
+             {"exchange", "string", false, "Exchange name"},
+         }},
+        {"PORTFOLIO",
+         "Portfolio summary",
+         {
+             {"totalValue", "number", true, "Total portfolio value"},
+             {"cash", "number", true, "Available cash"},
+             {"invested", "number", true, "Total invested"},
+             {"marketValue", "number", true, "Market value of holdings"},
+             {"pnl", "number", true, "Total unrealized P&L"},
+             {"pnlPercent", "number", true, "Total P&L percentage"},
+             {"dayPnl", "number", false, "Today's P&L"},
+             {"timestamp", "datetime", true, "Snapshot timestamp"},
+         }},
+        {"INSTRUMENT",
+         "Security/instrument master data",
+         {
+             {"symbol", "string", true, "Trading symbol"},
+             {"name", "string", true, "Instrument name"},
+             {"exchange", "string", true, "Exchange"},
+             {"instrumentType", "enum", true, "EQUITY/FUTURES/OPTIONS/CURRENCY"},
+             {"isin", "string", false, "ISIN code"},
+             {"lotSize", "number", false, "Lot size"},
+             {"tickSize", "number", false, "Min price movement"},
+         }},
     };
 }
 
@@ -250,30 +263,62 @@ struct MappingTemplate {
 
 static QList<MappingTemplate> build_templates() {
     return {
-        {"upstox_ohlcv", "Upstox Historical Candles → OHLCV",
+        {"upstox_ohlcv",
+         "Upstox Historical Candles → OHLCV",
          "Map Upstox historical candle data to standard OHLCV format",
-         "Upstox", "OHLCV", {"upstox", "historical", "candles", "india"}, true},
-        {"upstox_quote", "Upstox Market Quote → QUOTE",
+         "Upstox",
+         "OHLCV",
+         {"upstox", "historical", "candles", "india"},
+         true},
+        {"upstox_quote",
+         "Upstox Market Quote → QUOTE",
          "Map Upstox market quote data to standard QUOTE format",
-         "Upstox", "QUOTE", {"upstox", "quote", "realtime", "india"}, true},
-        {"fyers_quote", "Fyers Quotes → QUOTE",
+         "Upstox",
+         "QUOTE",
+         {"upstox", "quote", "realtime", "india"},
+         true},
+        {"fyers_quote",
+         "Fyers Quotes → QUOTE",
          "Map Fyers quote data to standard QUOTE format",
-         "Fyers", "QUOTE", {"fyers", "quote", "realtime", "india"}, true},
-        {"fyers_positions", "Fyers Positions → POSITION",
+         "Fyers",
+         "QUOTE",
+         {"fyers", "quote", "realtime", "india"},
+         true},
+        {"fyers_positions",
+         "Fyers Positions → POSITION",
          "Map Fyers position data to standard POSITION format",
-         "Fyers", "POSITION", {"fyers", "position", "portfolio", "india"}, true},
-        {"dhan_positions", "Dhan Positions → POSITION",
+         "Fyers",
+         "POSITION",
+         {"fyers", "position", "portfolio", "india"},
+         true},
+        {"dhan_positions",
+         "Dhan Positions → POSITION",
          "Map Dhan position data to standard POSITION format",
-         "Dhan", "POSITION", {"dhan", "position", "portfolio", "india"}, true},
-        {"dhan_orders", "Dhan Orders → ORDER",
+         "Dhan",
+         "POSITION",
+         {"dhan", "position", "portfolio", "india"},
+         true},
+        {"dhan_orders",
+         "Dhan Orders → ORDER",
          "Map Dhan order data to standard ORDER format",
-         "Dhan", "ORDER", {"dhan", "order", "trading", "india"}, true},
-        {"zerodha_ohlc", "Zerodha OHLC → OHLCV",
+         "Dhan",
+         "ORDER",
+         {"dhan", "order", "trading", "india"},
+         true},
+        {"zerodha_ohlc",
+         "Zerodha OHLC → OHLCV",
          "Map Zerodha Kite OHLC data to standard OHLCV format",
-         "Zerodha", "OHLCV", {"zerodha", "kite", "ohlc", "india"}, true},
-        {"angelone_quote", "Angel One Quote → QUOTE",
+         "Zerodha",
+         "OHLCV",
+         {"zerodha", "kite", "ohlc", "india"},
+         true},
+        {"angelone_quote",
+         "Angel One Quote → QUOTE",
          "Map Angel One market data to standard QUOTE format",
-         "Angel One", "QUOTE", {"angelone", "quote", "india"}, true},
+         "Angel One",
+         "QUOTE",
+         {"angelone", "quote", "india"},
+         true},
     };
 }
 
@@ -442,7 +487,8 @@ QWidget* DataMappingScreen::create_left_panel() {
     vl->addWidget(title);
 
     // Step navigation
-    const QStringList step_labels = {"API Configuration", "Schema Selection", "Field Mapping", "Cache Settings", "Test & Save"};
+    const QStringList step_labels = {"API Configuration", "Schema Selection", "Field Mapping", "Cache Settings",
+                                     "Test & Save"};
     const QStringList step_icons = {"1", "2", "3", "4", "5"};
     for (int i = 0; i < step_labels.size(); ++i) {
         auto* btn = new QPushButton(step_icons[i] + "  " + step_labels[i]);
@@ -596,17 +642,15 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     api_base_url_->setPlaceholderText("https://api.example.com");
     api_endpoint_ = new QLineEdit;
     api_endpoint_->setPlaceholderText("/v2/historical-candle/{symbol}/{interval}");
-    bl->addWidget(create_form_two_col(
-        create_form_row("BASE URL", api_base_url_),
-        create_form_row("ENDPOINT", api_endpoint_)));
+    bl->addWidget(
+        create_form_two_col(create_form_row("BASE URL", api_base_url_), create_form_row("ENDPOINT", api_endpoint_)));
 
     api_method_ = new QComboBox;
     api_method_->addItems({"GET", "POST", "PUT", "DELETE", "PATCH"});
     api_auth_type_ = new QComboBox;
     api_auth_type_->addItems({"None", "API Key", "Bearer Token", "Basic Auth", "OAuth2"});
-    bl->addWidget(create_form_two_col(
-        create_form_row("HTTP METHOD", api_method_),
-        create_form_row("AUTHENTICATION", api_auth_type_)));
+    bl->addWidget(create_form_two_col(create_form_row("HTTP METHOD", api_method_),
+                                      create_form_row("AUTHENTICATION", api_auth_type_)));
 
     api_auth_value_ = new QLineEdit;
     api_auth_value_->setPlaceholderText("Token / API Key value");
@@ -823,15 +867,15 @@ QWidget* DataMappingScreen::create_cache_panel() {
 
     // Security info
     auto* sec_box = new QWidget;
-    sec_box->setStyleSheet(QString("background: rgba(22,163,74,0.05); border: 1px solid %1; padding: 8px;")
-                               .arg(colors::BORDER_DIM));
+    sec_box->setStyleSheet(
+        QString("background: rgba(22,163,74,0.05); border: 1px solid %1; padding: 8px;").arg(colors::BORDER_DIM));
     auto* sbl = new QVBoxLayout(sec_box);
     sbl->setSpacing(4);
     auto* sec_title = new QLabel("ENCRYPTION");
     sec_title->setObjectName("dmLabel");
     sbl->addWidget(sec_title);
     auto* sec_detail = new QLabel("API credentials are encrypted with AES-256-GCM before storage.\n"
-                                   "Sensitive data never stored in plaintext.");
+                                  "Sensitive data never stored in plaintext.");
     sec_detail->setObjectName("dmInfoLabel");
     sec_detail->setWordWrap(true);
     sbl->addWidget(sec_detail);
@@ -1119,8 +1163,7 @@ void DataMappingScreen::update_step_indicators() {
     status_step_->setText(labels[current_step_]);
 }
 
-void DataMappingScreen::populate_json_tree(const QJsonValue& val, QTreeWidgetItem* parent,
-                                            const QString& key) {
+void DataMappingScreen::populate_json_tree(const QJsonValue& val, QTreeWidgetItem* parent, const QString& key) {
     auto* item = parent ? new QTreeWidgetItem(parent) : new QTreeWidgetItem(json_tree_);
     item->setText(0, key);
 
@@ -1158,7 +1201,8 @@ void DataMappingScreen::populate_json_tree(const QJsonValue& val, QTreeWidgetIte
 void DataMappingScreen::populate_mapping_list() {
     // Populate the mapping table with schema fields
     int schema_idx = schema_select_->currentIndex();
-    if (schema_idx < 0 || schema_idx >= g_schemas.size()) return;
+    if (schema_idx < 0 || schema_idx >= g_schemas.size())
+        return;
 
     const auto& fields = g_schemas[schema_idx].fields;
     mapping_table_->setRowCount(fields.size());
@@ -1188,7 +1232,7 @@ void DataMappingScreen::on_view_changed(int view) {
     status_view_->setText("VIEW: " + names[view]);
 
     // Show/hide step bar and nav footer
-    nav_footer_->setVisible(view == 1);  // only in create mode
+    nav_footer_->setVisible(view == 1); // only in create mode
 
     if (view == 1) {
         update_step_indicators();
@@ -1198,7 +1242,8 @@ void DataMappingScreen::on_view_changed(int view) {
 }
 
 void DataMappingScreen::on_step_changed(int step) {
-    if (step < 0 || step > 4) return;
+    if (step < 0 || step > 4)
+        return;
     current_step_ = step;
     step_stack_->setCurrentIndex(step);
     update_step_indicators();
@@ -1209,9 +1254,8 @@ void DataMappingScreen::on_step_changed(int step) {
         // Populate JSON tree if we have sample data
         if (!sample_data_.isNull()) {
             json_tree_->clear();
-            populate_json_tree(sample_data_.isObject()
-                                   ? QJsonValue(sample_data_.object())
-                                   : QJsonValue(sample_data_.array()),
+            populate_json_tree(sample_data_.isObject() ? QJsonValue(sample_data_.object())
+                                                       : QJsonValue(sample_data_.array()),
                                nullptr, "root");
             json_tree_->expandToDepth(1);
         }
@@ -1248,13 +1292,13 @@ void DataMappingScreen::on_test_api() {
         if (result.is_ok()) {
             sample_data_ = result.value();
             api_test_status_->setText("SUCCESS — Sample data received");
-            api_test_status_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;")
-                                                .arg(colors::POSITIVE));
+            api_test_status_->setStyleSheet(
+                QString("color: %1; font-size: 9px; background: transparent;").arg(colors::POSITIVE));
             LOG_INFO("DataMapping", "API test success");
         } else {
             api_test_status_->setText("FAILED — " + QString::fromStdString(result.error()));
-            api_test_status_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;")
-                                                .arg(colors::NEGATIVE));
+            api_test_status_->setStyleSheet(
+                QString("color: %1; font-size: 9px; background: transparent;").arg(colors::NEGATIVE));
             LOG_ERROR("DataMapping", "API test failed: " + QString::fromStdString(result.error()));
         }
     };
@@ -1264,10 +1308,13 @@ void DataMappingScreen::on_test_api() {
         QJsonObject body;
         if (!api_body_->toPlainText().trimmed().isEmpty()) {
             auto doc = QJsonDocument::fromJson(api_body_->toPlainText().toUtf8());
-            if (doc.isObject()) body = doc.object();
+            if (doc.isObject())
+                body = doc.object();
         }
-        if (method == "POST") HttpClient::instance().post(url, body, callback);
-        else HttpClient::instance().put(url, body, callback);
+        if (method == "POST")
+            HttpClient::instance().post(url, body, callback);
+        else
+            HttpClient::instance().put(url, body, callback);
     } else {
         HttpClient::instance().get(url, callback);
     }
@@ -1299,9 +1346,11 @@ void DataMappingScreen::on_test_mapping() {
             m["target"] = mapping_table_->item(r, 0)->text();
             m["expression"] = expr_item->text();
             auto* trans = mapping_table_->item(r, 2);
-            if (trans && !trans->text().isEmpty()) m["transform"] = trans->text();
+            if (trans && !trans->text().isEmpty())
+                m["transform"] = trans->text();
             auto* def = mapping_table_->item(r, 3);
-            if (def && !def->text().isEmpty()) m["default"] = def->text();
+            if (def && !def->text().isEmpty())
+                m["default"] = def->text();
             mappings.append(m);
         }
     }
@@ -1327,12 +1376,14 @@ void DataMappingScreen::on_test_mapping() {
     bool success = mappings.size() > 0;
     if (success) {
         test_status_->setText("TEST PASSED");
-        test_status_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(colors::POSITIVE));
+        test_status_->setStyleSheet(
+            QString("color: %1; font-size: 9px; background: transparent;").arg(colors::POSITIVE));
         save_btn_->setEnabled(true);
         right_test_info_->setText("Test: PASSED");
     } else {
         test_status_->setText("TEST FAILED — No field mappings configured");
-        test_status_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(colors::NEGATIVE));
+        test_status_->setStyleSheet(
+            QString("color: %1; font-size: 9px; background: transparent;").arg(colors::NEGATIVE));
         save_btn_->setEnabled(false);
         right_test_info_->setText("Test: FAILED");
     }
@@ -1362,20 +1413,18 @@ void DataMappingScreen::on_save_mapping() {
 }
 
 void DataMappingScreen::on_template_selected(int index) {
-    if (index < 0 || index >= g_templates.size()) return;
+    if (index < 0 || index >= g_templates.size())
+        return;
 
     const auto& tmpl = g_templates[index];
-    QString detail = QString(
-        "NAME: %1\n\n"
-        "BROKER: %2\n"
-        "SCHEMA: %3\n"
-        "VERIFIED: %4\n\n"
-        "DESCRIPTION:\n%5\n\n"
-        "TAGS: %6")
-        .arg(tmpl.name, tmpl.broker, tmpl.schema,
-             tmpl.verified ? "Yes" : "No",
-             tmpl.description,
-             tmpl.tags.join(", "));
+    QString detail = QString("NAME: %1\n\n"
+                             "BROKER: %2\n"
+                             "SCHEMA: %3\n"
+                             "VERIFIED: %4\n\n"
+                             "DESCRIPTION:\n%5\n\n"
+                             "TAGS: %6")
+                         .arg(tmpl.name, tmpl.broker, tmpl.schema, tmpl.verified ? "Yes" : "No", tmpl.description,
+                              tmpl.tags.join(", "));
 
     template_detail_->setText(detail);
 }
@@ -1402,7 +1451,8 @@ void DataMappingScreen::on_new_mapping() {
 
 void DataMappingScreen::on_delete_mapping() {
     int row = mapping_list_->currentRow();
-    if (row < 0 || row >= saved_mappings_.size()) return;
+    if (row < 0 || row >= saved_mappings_.size())
+        return;
 
     saved_mappings_.removeAt(row);
     delete mapping_list_->takeItem(row);

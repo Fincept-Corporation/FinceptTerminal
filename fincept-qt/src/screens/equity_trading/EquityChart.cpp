@@ -1,5 +1,6 @@
 // EquityChart.cpp — Candlestick chart with timeframe buttons
 #include "screens/equity_trading/EquityChart.h"
+
 #include "screens/equity_trading/EquityTypes.h"
 
 #include <QCandlestickSeries>
@@ -42,7 +43,8 @@ EquityChart::EquityChart(QWidget* parent) : QWidget(parent) {
         tf_buttons_[i]->setObjectName("eqTfBtn");
         tf_buttons_[i]->setFixedHeight(20);
         tf_buttons_[i]->setCursor(Qt::PointingHandCursor);
-        if (i == active_tf_) tf_buttons_[i]->setProperty("active", true);
+        if (i == active_tf_)
+            tf_buttons_[i]->setProperty("active", true);
         connect(tf_buttons_[i], &QPushButton::clicked, this, [this, i]() { set_active_tf(i); });
         h_layout->addWidget(tf_buttons_[i]);
     }
@@ -96,7 +98,8 @@ QString EquityChart::current_timeframe() const {
 }
 
 void EquityChart::set_active_tf(int idx) {
-    if (idx == active_tf_) return;
+    if (idx == active_tf_)
+        return;
     for (int i = 0; i < 6; ++i) {
         tf_buttons_[i]->setProperty("active", i == idx);
         tf_buttons_[i]->style()->unpolish(tf_buttons_[i]);
@@ -111,7 +114,8 @@ void EquityChart::rebuild_chart() {
     last_min_price_ = last_max_price_ = -1;
     last_min_time_ = last_max_time_ = -1;
 
-    if (candles_.isEmpty()) return;
+    if (candles_.isEmpty())
+        return;
 
     const int start = qMax(0, static_cast<int>(candles_.size()) - MAX_VISIBLE);
     double min_p = 1e18, max_p = 0;
@@ -132,14 +136,13 @@ void EquityChart::rebuild_chart() {
 }
 
 void EquityChart::update_axes(double min_price, double max_price, qint64 min_time, qint64 max_time) {
-    if (min_price == last_min_price_ && max_price == last_max_price_ &&
-        min_time == last_min_time_ && max_time == last_max_time_)
+    if (min_price == last_min_price_ && max_price == last_max_price_ && min_time == last_min_time_ &&
+        max_time == last_max_time_)
         return;
 
     const double margin = (max_price - min_price) * 0.05;
     price_axis_->setRange(min_price - margin, max_price + margin);
-    time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time),
-                         QDateTime::fromMSecsSinceEpoch(max_time));
+    time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time), QDateTime::fromMSecsSinceEpoch(max_time));
 
     last_min_price_ = min_price;
     last_max_price_ = max_price;

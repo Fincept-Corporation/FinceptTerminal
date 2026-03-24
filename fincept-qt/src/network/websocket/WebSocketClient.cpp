@@ -4,6 +4,8 @@
 
 namespace fincept {
 
+#ifdef HAS_QT_WEBSOCKETS
+
 WebSocketClient::WebSocketClient(QObject* parent) : QObject(parent) {
     connect(&socket_, &QWebSocket::connected, this, &WebSocketClient::on_connected);
     connect(&socket_, &QWebSocket::disconnected, this, &WebSocketClient::on_disconnected);
@@ -64,5 +66,19 @@ void WebSocketClient::attempt_reconnect() {
     LOG_INFO("WS", QString("Reconnect attempt %1/%2").arg(reconnect_attempts_).arg(MAX_RECONNECT_ATTEMPTS));
     socket_.open(QUrl(url_));
 }
+
+#else // No Qt WebSockets — stub implementations
+
+WebSocketClient::WebSocketClient(QObject* parent) : QObject(parent) {}
+void WebSocketClient::connect_to(const QString& /*url*/) {
+    LOG_WARN("WS", "WebSocket not available — Qt6::WebSockets not installed");
+}
+void WebSocketClient::disconnect() {}
+void WebSocketClient::send(const QString& /*message*/) {}
+bool WebSocketClient::is_connected() const {
+    return false;
+}
+
+#endif
 
 } // namespace fincept

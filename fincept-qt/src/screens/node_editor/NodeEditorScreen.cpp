@@ -1,26 +1,27 @@
 #include "screens/node_editor/NodeEditorScreen.h"
-#include "screens/node_editor/canvas/NodeCanvas.h"
-#include "screens/node_editor/canvas/NodeScene.h"
-#include "screens/node_editor/canvas/NodeItem.h"
+
+#include "core/logging/Logger.h"
 #include "screens/node_editor/canvas/MiniMap.h"
+#include "screens/node_editor/canvas/NodeCanvas.h"
+#include "screens/node_editor/canvas/NodeItem.h"
+#include "screens/node_editor/canvas/NodeScene.h"
 #include "screens/node_editor/palette/NodePalette.h"
-#include "screens/node_editor/properties/NodePropertiesPanel.h"
 #include "screens/node_editor/properties/ExecutionResultsPanel.h"
-#include "screens/node_editor/toolbar/NodeEditorToolbar.h"
+#include "screens/node_editor/properties/NodePropertiesPanel.h"
 #include "screens/node_editor/toolbar/DeployDialog.h"
+#include "screens/node_editor/toolbar/NodeEditorToolbar.h"
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/WorkflowService.h"
-#include "core/logging/Logger.h"
 
 #include <QFileDialog>
 #include <QFrame>
 #include <QInputDialog>
-#include <QSet>
-#include <QSettings>
 #include <QJsonDocument>
 #include <QKeyEvent>
 #include <QMessageBox>
 #include <QScrollBar>
+#include <QSet>
+#include <QSettings>
 #include <QSplitter>
 #include <QUuid>
 #include <QVBoxLayout>
@@ -28,10 +29,7 @@
 namespace fincept::workflow {
 
 NodeEditorScreen::NodeEditorScreen(QWidget* parent)
-    : QWidget(parent)
-    , undo_stack_(new QUndoStack(this))
-    , auto_save_timer_(new QTimer(this))
-{
+    : QWidget(parent), undo_stack_(new QUndoStack(this)), auto_save_timer_(new QTimer(this)) {
     build_ui();
     wire_signals();
 
@@ -42,8 +40,7 @@ NodeEditorScreen::NodeEditorScreen(QWidget* parent)
     LOG_INFO("NodeEditor", "Node editor screen created");
 }
 
-void NodeEditorScreen::showEvent(QShowEvent* event)
-{
+void NodeEditorScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     auto_save_timer_->start();
     if (minimap_ && minimap_->findChild<QTimer*>())
@@ -71,8 +68,7 @@ void NodeEditorScreen::showEvent(QShowEvent* event)
     LOG_INFO("NodeEditor", "Node editor shown");
 }
 
-void NodeEditorScreen::hideEvent(QHideEvent* event)
-{
+void NodeEditorScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     auto_save_timer_->stop();
     if (minimap_ && minimap_->findChild<QTimer*>())
@@ -91,8 +87,7 @@ void NodeEditorScreen::hideEvent(QHideEvent* event)
     LOG_INFO("NodeEditor", "Node editor hidden");
 }
 
-void NodeEditorScreen::keyPressEvent(QKeyEvent* event)
-{
+void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
     if (event->matches(QKeySequence::Undo)) {
         undo_stack_->undo();
         event->accept();
@@ -136,7 +131,10 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event)
         event->accept();
     } else if (event->matches(QKeySequence::Paste)) {
         // Ctrl+V — paste nodes with offset and new IDs
-        if (clipboard_nodes_.isEmpty()) { event->accept(); return; }
+        if (clipboard_nodes_.isEmpty()) {
+            event->accept();
+            return;
+        }
 
         QMap<QString, QString> id_remap;
         for (const auto& nd : clipboard_nodes_) {
@@ -150,7 +148,8 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event)
 
             auto& reg = NodeRegistry::instance();
             const auto* td = reg.find(copy.type);
-            if (td) scene_->add_node(copy, *td);
+            if (td)
+                scene_->add_node(copy, *td);
         }
         for (const auto& ed : clipboard_edges_) {
             EdgeDef copy = ed;
@@ -167,8 +166,7 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event)
     }
 }
 
-void NodeEditorScreen::build_ui()
-{
+void NodeEditorScreen::build_ui() {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
@@ -186,9 +184,8 @@ void NodeEditorScreen::build_ui()
     // ── 3-panel splitter ───────────────────────────────────────────
     auto* splitter = new QSplitter(Qt::Horizontal);
     splitter->setHandleWidth(1);
-    splitter->setStyleSheet(
-        "QSplitter::handle { background: #2a2a2a; }"
-        "QSplitter::handle:hover { background: #4a4a4a; }");
+    splitter->setStyleSheet("QSplitter::handle { background: #2a2a2a; }"
+                            "QSplitter::handle:hover { background: #4a4a4a; }");
 
     // Left: Node palette
     palette_ = new NodePalette;
@@ -220,20 +217,18 @@ void NodeEditorScreen::build_ui()
     minimap_->show();
 }
 
-void NodeEditorScreen::wire_signals()
-{
+void NodeEditorScreen::wire_signals() {
     // ── Canvas: drop from palette ──────────────────────────────────
-    connect(canvas_, &NodeCanvas::node_drop_requested,
-            this, &NodeEditorScreen::on_node_drop);
+    connect(canvas_, &NodeCanvas::node_drop_requested, this, &NodeEditorScreen::on_node_drop);
 
     // ── Scene: selection changed ───────────────────────────────────
-    connect(scene_, &NodeScene::node_selection_changed,
-            this, &NodeEditorScreen::on_node_selected);
+    connect(scene_, &NodeScene::node_selection_changed, this, &NodeEditorScreen::on_node_selected);
 
     // ── Scene: duplicate and execute-from ──────────────────────────
     connect(scene_, &NodeScene::node_duplicate_requested, this, [this](const QString& node_id) {
         auto* item = scene_->find_node(node_id);
-        if (!item) return;
+        if (!item)
+            return;
         NodeDef copy = item->node_def();
         copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
         copy.x += 40;
@@ -241,11 +236,13 @@ void NodeEditorScreen::wire_signals()
         copy.name += " (copy)";
         auto& reg = NodeRegistry::instance();
         const auto* td = reg.find(copy.type);
-        if (td) scene_->add_node(copy, *td);
+        if (td)
+            scene_->add_node(copy, *td);
     });
     connect(scene_, &NodeScene::node_execute_from_requested, this, [this](const QString& node_id) {
         WorkflowDef wf = scene_->serialize();
-        if (wf.nodes.isEmpty()) return;
+        if (wf.nodes.isEmpty())
+            return;
         wf.name = toolbar_->workflow_name();
 
         // Reset all node states
@@ -256,38 +253,25 @@ void NodeEditorScreen::wire_signals()
     });
 
     // ── Properties: parameter changes ──────────────────────────────
-    connect(properties_, &NodePropertiesPanel::param_changed,
-            this, &NodeEditorScreen::on_param_changed);
-    connect(properties_, &NodePropertiesPanel::name_changed,
-            this, &NodeEditorScreen::on_name_changed);
-    connect(properties_, &NodePropertiesPanel::delete_requested,
-            this, &NodeEditorScreen::on_delete_node);
+    connect(properties_, &NodePropertiesPanel::param_changed, this, &NodeEditorScreen::on_param_changed);
+    connect(properties_, &NodePropertiesPanel::name_changed, this, &NodeEditorScreen::on_name_changed);
+    connect(properties_, &NodePropertiesPanel::delete_requested, this, &NodeEditorScreen::on_delete_node);
 
     // ── Toolbar actions ────────────────────────────────────────────
     connect(toolbar_, &NodeEditorToolbar::undo_clicked, undo_stack_, &QUndoStack::undo);
     connect(toolbar_, &NodeEditorToolbar::redo_clicked, undo_stack_, &QUndoStack::redo);
-    connect(toolbar_, &NodeEditorToolbar::save_clicked,
-            this, &NodeEditorScreen::on_save_workflow);
-    connect(toolbar_, &NodeEditorToolbar::load_clicked,
-            this, &NodeEditorScreen::on_load_workflow);
-    connect(toolbar_, &NodeEditorToolbar::clear_clicked,
-            this, &NodeEditorScreen::on_clear_workflow);
-    connect(toolbar_, &NodeEditorToolbar::import_clicked,
-            this, &NodeEditorScreen::on_import_workflow);
-    connect(toolbar_, &NodeEditorToolbar::export_clicked,
-            this, &NodeEditorScreen::on_export_workflow);
-    connect(toolbar_, &NodeEditorToolbar::execute_clicked,
-            this, &NodeEditorScreen::on_execute);
-    connect(toolbar_, &NodeEditorToolbar::templates_clicked,
-            this, &NodeEditorScreen::on_show_templates);
-    connect(toolbar_, &NodeEditorToolbar::deploy_clicked,
-            this, &NodeEditorScreen::on_deploy);
+    connect(toolbar_, &NodeEditorToolbar::save_clicked, this, &NodeEditorScreen::on_save_workflow);
+    connect(toolbar_, &NodeEditorToolbar::load_clicked, this, &NodeEditorScreen::on_load_workflow);
+    connect(toolbar_, &NodeEditorToolbar::clear_clicked, this, &NodeEditorScreen::on_clear_workflow);
+    connect(toolbar_, &NodeEditorToolbar::import_clicked, this, &NodeEditorScreen::on_import_workflow);
+    connect(toolbar_, &NodeEditorToolbar::export_clicked, this, &NodeEditorScreen::on_export_workflow);
+    connect(toolbar_, &NodeEditorToolbar::execute_clicked, this, &NodeEditorScreen::on_execute);
+    connect(toolbar_, &NodeEditorToolbar::templates_clicked, this, &NodeEditorScreen::on_show_templates);
+    connect(toolbar_, &NodeEditorToolbar::deploy_clicked, this, &NodeEditorScreen::on_deploy);
 
     // ── Undo stack state ───────────────────────────────────────────
-    connect(undo_stack_, &QUndoStack::canUndoChanged,
-            toolbar_, &NodeEditorToolbar::set_can_undo);
-    connect(undo_stack_, &QUndoStack::canRedoChanged,
-            toolbar_, &NodeEditorToolbar::set_can_redo);
+    connect(undo_stack_, &QUndoStack::canUndoChanged, toolbar_, &NodeEditorToolbar::set_can_undo);
+    connect(undo_stack_, &QUndoStack::canRedoChanged, toolbar_, &NodeEditorToolbar::set_can_redo);
 
     // ── Scene: deselection → clear properties ──────────────────────
     connect(scene_, &QGraphicsScene::selectionChanged, this, [this]() {
@@ -310,9 +294,8 @@ void NodeEditorScreen::wire_signals()
         properties_->clear();
         LOG_INFO("NodeEditor", QString("Workflow loaded: %1").arg(wf.name));
     });
-    connect(&svc, &WorkflowService::workflow_load_failed, this, [](const QString& err) {
-        LOG_ERROR("NodeEditor", QString("Load failed: %1").arg(err));
-    });
+    connect(&svc, &WorkflowService::workflow_load_failed, this,
+            [](const QString& err) { LOG_ERROR("NodeEditor", QString("Load failed: %1").arg(err)); });
 
     // ── Execution signals ────────────────────────────────────────────
     connect(&svc, &WorkflowService::execution_started, this, [this](const QString& wf_id) {
@@ -321,32 +304,31 @@ void NodeEditorScreen::wire_signals()
     });
     connect(&svc, &WorkflowService::node_execution_started, this, [this](const QString& node_id) {
         auto* item = scene_->find_node(node_id);
-        if (item) item->set_execution_state("running");
+        if (item)
+            item->set_execution_state("running");
         scene_->set_edges_animated(node_id, true);
     });
     connect(&svc, &WorkflowService::node_execution_completed, this,
-        [this](const QString& node_id, const NodeExecutionResult& result) {
-            auto* item = scene_->find_node(node_id);
-            if (item) item->set_execution_state(result.success ? "completed" : "error");
-            scene_->set_edges_animated(node_id, false);
-            results_panel_->add_node_result(result);
-        });
-    connect(&svc, &WorkflowService::execution_finished, this,
-        [this](const WorkflowExecutionResult& result) {
-            scene_->stop_all_edge_animations();
-            results_panel_->set_finished(result);
-            toolbar_->set_executing(false);
-            QString msg = result.success
-                ? QString("Execution completed in %1ms").arg(result.total_duration_ms)
-                : QString("Execution failed: %1").arg(result.error);
-            LOG_INFO("NodeEditor", msg);
-        });
+            [this](const QString& node_id, const NodeExecutionResult& result) {
+                auto* item = scene_->find_node(node_id);
+                if (item)
+                    item->set_execution_state(result.success ? "completed" : "error");
+                scene_->set_edges_animated(node_id, false);
+                results_panel_->add_node_result(result);
+            });
+    connect(&svc, &WorkflowService::execution_finished, this, [this](const WorkflowExecutionResult& result) {
+        scene_->stop_all_edge_animations();
+        results_panel_->set_finished(result);
+        toolbar_->set_executing(false);
+        QString msg = result.success ? QString("Execution completed in %1ms").arg(result.total_duration_ms)
+                                     : QString("Execution failed: %1").arg(result.error);
+        LOG_INFO("NodeEditor", msg);
+    });
 }
 
 // ── Action handlers ────────────────────────────────────────────────────
 
-void NodeEditorScreen::on_node_drop(const QString& type_id, const QPointF& scene_pos)
-{
+void NodeEditorScreen::on_node_drop(const QString& type_id, const QPointF& scene_pos) {
     auto& registry = NodeRegistry::instance();
     const auto* type_def = registry.find(type_id);
     if (!type_def) {
@@ -371,8 +353,7 @@ void NodeEditorScreen::on_node_drop(const QString& type_id, const QPointF& scene
     scene_->add_node(def, *type_def);
 }
 
-void NodeEditorScreen::on_node_selected(const QString& node_id)
-{
+void NodeEditorScreen::on_node_selected(const QString& node_id) {
     auto* node_item = scene_->find_node(node_id);
     if (!node_item) {
         properties_->clear();
@@ -385,34 +366,28 @@ void NodeEditorScreen::on_node_selected(const QString& node_id)
     properties_->show_properties(&node_item->node_def(), type_def);
 }
 
-void NodeEditorScreen::on_param_changed(const QString& node_id, const QString& key, QJsonValue value)
-{
+void NodeEditorScreen::on_param_changed(const QString& node_id, const QString& key, QJsonValue value) {
     auto* node_item = scene_->find_node(node_id);
     if (node_item) {
         node_item->set_parameter(key, value);
     }
 }
 
-void NodeEditorScreen::on_name_changed(const QString& node_id, const QString& new_name)
-{
+void NodeEditorScreen::on_name_changed(const QString& node_id, const QString& new_name) {
     auto* node_item = scene_->find_node(node_id);
     if (node_item) {
         node_item->set_name(new_name);
     }
 }
 
-void NodeEditorScreen::on_delete_node(const QString& node_id)
-{
+void NodeEditorScreen::on_delete_node(const QString& node_id) {
     scene_->remove_node(node_id);
     properties_->clear();
 }
 
-void NodeEditorScreen::on_clear_workflow()
-{
-    auto result = QMessageBox::question(
-        this, "Clear Workflow",
-        "Are you sure you want to clear all nodes and edges?",
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+void NodeEditorScreen::on_clear_workflow() {
+    auto result = QMessageBox::question(this, "Clear Workflow", "Are you sure you want to clear all nodes and edges?",
+                                        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
     if (result == QMessageBox::Yes) {
         scene_->clear_all();
@@ -421,12 +396,10 @@ void NodeEditorScreen::on_clear_workflow()
     }
 }
 
-void NodeEditorScreen::on_import_workflow()
-{
-    QString path = QFileDialog::getOpenFileName(
-        this, "Import Workflow", {},
-        "JSON Files (*.json);;All Files (*)");
-    if (path.isEmpty()) return;
+void NodeEditorScreen::on_import_workflow() {
+    QString path = QFileDialog::getOpenFileName(this, "Import Workflow", {}, "JSON Files (*.json);;All Files (*)");
+    if (path.isEmpty())
+        return;
 
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
@@ -478,12 +451,11 @@ void NodeEditorScreen::on_import_workflow()
     LOG_INFO("NodeEditor", QString("Imported workflow: %1").arg(wf.name));
 }
 
-void NodeEditorScreen::on_export_workflow()
-{
-    QString path = QFileDialog::getSaveFileName(
-        this, "Export Workflow", "workflow.json",
-        "JSON Files (*.json);;All Files (*)");
-    if (path.isEmpty()) return;
+void NodeEditorScreen::on_export_workflow() {
+    QString path =
+        QFileDialog::getSaveFileName(this, "Export Workflow", "workflow.json", "JSON Files (*.json);;All Files (*)");
+    if (path.isEmpty())
+        return;
 
     WorkflowDef wf = scene_->serialize();
     wf.name = toolbar_->workflow_name();
@@ -530,8 +502,7 @@ void NodeEditorScreen::on_export_workflow()
     LOG_INFO("NodeEditor", QString("Exported workflow to: %1").arg(path));
 }
 
-void NodeEditorScreen::on_save_workflow()
-{
+void NodeEditorScreen::on_save_workflow() {
     WorkflowDef wf = scene_->serialize();
     if (current_workflow_id_.isEmpty())
         current_workflow_id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -540,15 +511,14 @@ void NodeEditorScreen::on_save_workflow()
     WorkflowService::instance().save_workflow(wf);
 }
 
-void NodeEditorScreen::on_load_workflow()
-{
+void NodeEditorScreen::on_load_workflow() {
     // Request workflow list, then show picker when signal arrives
     auto& svc = WorkflowService::instance();
 
     // One-shot connection for the list response
     auto* conn = new QMetaObject::Connection;
-    *conn = connect(&svc, &WorkflowService::workflows_listed, this,
-        [this, conn](const QVector<WorkflowDef>& workflows) {
+    *conn =
+        connect(&svc, &WorkflowService::workflows_listed, this, [this, conn](const QVector<WorkflowDef>& workflows) {
             disconnect(*conn);
             delete conn;
 
@@ -563,9 +533,9 @@ void NodeEditorScreen::on_load_workflow()
                 items << QString("%1  (%2)").arg(wf.name, wf.updated_at);
 
             bool ok = false;
-            QString chosen = QInputDialog::getItem(
-                this, "Load Workflow", "Select a workflow:", items, 0, false, &ok);
-            if (!ok) return;
+            QString chosen = QInputDialog::getItem(this, "Load Workflow", "Select a workflow:", items, 0, false, &ok);
+            if (!ok)
+                return;
 
             int idx = items.indexOf(chosen);
             if (idx >= 0 && idx < workflows.size())
@@ -575,9 +545,9 @@ void NodeEditorScreen::on_load_workflow()
     svc.list_workflows();
 }
 
-void NodeEditorScreen::on_auto_save()
-{
-    if (scene_->node_items().isEmpty()) return; // nothing to save
+void NodeEditorScreen::on_auto_save() {
+    if (scene_->node_items().isEmpty())
+        return; // nothing to save
 
     WorkflowDef wf = scene_->serialize();
     if (current_workflow_id_.isEmpty())
@@ -588,8 +558,7 @@ void NodeEditorScreen::on_auto_save()
     LOG_DEBUG("NodeEditor", "Auto-saved workflow");
 }
 
-void NodeEditorScreen::on_execute()
-{
+void NodeEditorScreen::on_execute() {
     if (WorkflowService::instance().is_executing()) {
         WorkflowService::instance().stop_execution();
         LOG_INFO("NodeEditor", "Execution stopped by user");
@@ -611,8 +580,7 @@ void NodeEditorScreen::on_execute()
     WorkflowService::instance().execute_workflow(wf);
 }
 
-void NodeEditorScreen::on_show_templates()
-{
+void NodeEditorScreen::on_show_templates() {
     QStringList templates = {
         // Beginner
         "1. Hello World — Trigger → Set Variable → Display",
@@ -638,9 +606,9 @@ void NodeEditorScreen::on_show_templates()
     };
 
     bool ok = false;
-    QString chosen = QInputDialog::getItem(
-        this, "Workflow Templates", "Select a template:", templates, 0, false, &ok);
-    if (!ok) return;
+    QString chosen = QInputDialog::getItem(this, "Workflow Templates", "Select a template:", templates, 0, false, &ok);
+    if (!ok)
+        return;
 
     int idx = templates.indexOf(chosen);
     scene_->clear_all();
@@ -666,8 +634,8 @@ void NodeEditorScreen::on_show_templates()
         return nd;
     };
 
-    auto make_edge = [&](const QString& src_id, const QString& src_port,
-                         const QString& tgt_id, const QString& tgt_port) {
+    auto make_edge = [&](const QString& src_id, const QString& src_port, const QString& tgt_id,
+                         const QString& tgt_port) {
         EdgeDef ed;
         ed.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
         ed.source_node = src_id;
@@ -681,7 +649,8 @@ void NodeEditorScreen::on_show_templates()
     auto set_param = [&](NodeDef& nd, const QString& key, const QJsonValue& val) {
         nd.parameters[key] = val;
         auto* item = scene_->find_node(nd.id);
-        if (item) item->set_parameter(key, val);
+        if (item)
+            item->set_parameter(key, val);
     };
 
     if (idx == 0) {
@@ -694,8 +663,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n1.id, "output_main", n2.id, "input_0");
         make_edge(n2.id, "output_main", n3.id, "input_0");
         toolbar_->set_workflow_name("Hello World");
-    }
-    else if (idx == 1) {
+    } else if (idx == 1) {
         // ── 2. Stock Quote Lookup ──────────────────────────────────
         auto n1 = make_node("trigger.manual", "Start", 100, 200);
         auto n2 = make_node("market.get_quote", "AAPL Quote", 400, 100);
@@ -713,8 +681,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n3.id, "output_main", n5.id, "input_1");
         make_edge(n5.id, "output_main", n6.id, "input_0");
         toolbar_->set_workflow_name("Stock Quote Lookup");
-    }
-    else if (idx == 2) {
+    } else if (idx == 2) {
         // ── 3. Multi-Indicator Scanner ─────────────────────────────
         auto n1 = make_node("trigger.manual", "Start", 100, 250);
         auto n2 = make_node("market.get_historical", "Get AAPL History", 400, 250);
@@ -738,8 +705,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n4.id, "output_main", n6.id, "input_1");
         make_edge(n6.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Multi-Indicator Scanner");
-    }
-    else if (idx == 3) {
+    } else if (idx == 3) {
         // ── 4. Sector Correlation ──────────────────────────────────
         auto n1 = make_node("trigger.manual", "Start", 100, 200);
         auto n2 = make_node("market.get_historical", "SPY", 400, 100);
@@ -763,8 +729,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n5.id, "output_main", n6.id, "input_0");
         make_edge(n6.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Sector Correlation Analysis");
-    }
-    else if (idx == 4) {
+    } else if (idx == 4) {
         // ── 5. Economic Dashboard ──────────────────────────────────
         auto n1 = make_node("trigger.manual", "Start", 100, 250);
         auto n2 = make_node("market.get_economics", "GDP", 400, 100);
@@ -782,8 +747,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n3.id, "output_main", n5.id, "input_1");
         make_edge(n5.id, "output_main", n6.id, "input_0");
         toolbar_->set_workflow_name("Economic Dashboard");
-    }
-    else if (idx == 5) {
+    } else if (idx == 5) {
         // ── 6. Price Alert Trading ─────────────────────────────────
         auto n1 = make_node("trigger.price_alert", "AAPL > $200", 100, 200);
         set_param(n1, "symbol", "AAPL");
@@ -807,8 +771,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n4.id, "output_main", n6.id, "input_0");
         make_edge(n5.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Price Alert Auto-Trade");
-    }
-    else if (idx == 6) {
+    } else if (idx == 6) {
         // ── 7. Mean Reversion Strategy ─────────────────────────────
         auto n1 = make_node("trigger.manual", "Start", 100, 250);
         auto n2 = make_node("market.get_historical", "Get TSLA 3mo", 400, 250);
@@ -838,8 +801,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n6.id, "output_main", n8.id, "input_0");
         make_edge(n7.id, "output_main", n9.id, "input_0");
         toolbar_->set_workflow_name("Mean Reversion Strategy");
-    }
-    else if (idx == 7) {
+    } else if (idx == 7) {
         // ── 8. Portfolio Rebalancer ─────────────────────────────────
         auto n1 = make_node("trigger.manual", "Start", 100, 200);
         auto n2 = make_node("trading.get_holdings", "Current Holdings", 400, 200);
@@ -862,8 +824,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n6.id, "output_main", n8.id, "input_0");
         make_edge(n7.id, "output_main", n9.id, "input_0");
         toolbar_->set_workflow_name("Portfolio Rebalancer");
-    }
-    else if (idx == 8) {
+    } else if (idx == 8) {
         // ── 9. Daily Risk Monitor ───────────────────────────────────
         auto n1 = make_node("trigger.schedule", "Daily 9:30 AM", 100, 200);
         set_param(n1, "cron", "30 9 * * 1-5");
@@ -883,8 +844,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n4.id, "output_fail", n6.id, "input_0");
         make_edge(n5.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Daily Risk Monitor");
-    }
-    else if (idx == 9) {
+    } else if (idx == 9) {
         // ── 10. Pre-Trade Compliance ────────────────────────────────
         auto n1 = make_node("trigger.manual", "New Order", 100, 250);
         auto n2 = make_node("safety.trading_hours", "Market Open?", 400, 250);
@@ -908,8 +868,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n6.id, "output_main", n8.id, "input_0");
         make_edge(n7.id, "output_main", n9.id, "input_0");
         toolbar_->set_workflow_name("Pre-Trade Compliance");
-    }
-    else if (idx == 10) {
+    } else if (idx == 10) {
         // ── 11. News Sentiment Pipeline ─────────────────────────────
         auto n1 = make_node("trigger.news_event", "Tech News", 100, 200);
         set_param(n1, "keywords", "AAPL,earnings,revenue,guidance");
@@ -939,8 +898,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n6.id, "output_main", n8.id, "input_0");
         make_edge(n7.id, "output_main", n9.id, "input_0");
         toolbar_->set_workflow_name("News Sentiment Pipeline");
-    }
-    else if (idx == 11) {
+    } else if (idx == 11) {
         // ── 12. AI Research Agent ───────────────────────────────────
         auto n1 = make_node("trigger.manual", "Start Research", 100, 250);
         auto n2 = make_node("market.get_quote", "Current Price", 400, 100);
@@ -972,8 +930,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n7.id, "output_main", n8.id, "input_1");
         make_edge(n8.id, "output_main", n9.id, "input_0");
         toolbar_->set_workflow_name("AI Research Agent");
-    }
-    else if (idx == 12) {
+    } else if (idx == 12) {
         // ── 13. Scheduled Report ────────────────────────────────────
         auto n1 = make_node("trigger.schedule", "Daily 5 PM", 100, 200);
         set_param(n1, "cron", "0 17 * * 1-5");
@@ -993,8 +950,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n5.id, "output_main", n6.id, "input_0");
         make_edge(n6.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Scheduled Daily Report");
-    }
-    else if (idx == 13) {
+    } else if (idx == 13) {
         // ── 14. Data Export Pipeline ────────────────────────────────
         auto n1 = make_node("trigger.manual", "Start", 100, 200);
         auto n2 = make_node("utility.http_request", "Fetch API Data", 400, 200);
@@ -1021,8 +977,7 @@ void NodeEditorScreen::on_show_templates()
         make_edge(n5.id, "output_main", n6.id, "input_0");
         make_edge(n6.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Data Export Pipeline");
-    }
-    else if (idx == 14) {
+    } else if (idx == 14) {
         // ── 15. Webhook Automation ──────────────────────────────────
         auto n1 = make_node("trigger.webhook", "Incoming Webhook", 100, 200);
         set_param(n1, "path", "/trading-signal");
@@ -1050,10 +1005,10 @@ void NodeEditorScreen::on_show_templates()
     LOG_INFO("NodeEditor", QString("Loaded template: %1").arg(chosen));
 }
 
-void NodeEditorScreen::on_deploy()
-{
+void NodeEditorScreen::on_deploy() {
     DeployDialog dlg(toolbar_->workflow_name(), this);
-    if (dlg.exec() != QDialog::Accepted) return;
+    if (dlg.exec() != QDialog::Accepted)
+        return;
 
     WorkflowDef wf = scene_->serialize();
     if (current_workflow_id_.isEmpty())

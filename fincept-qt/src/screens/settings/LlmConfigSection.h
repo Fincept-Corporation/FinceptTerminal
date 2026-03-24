@@ -21,10 +21,10 @@ class LlmConfigSection : public QWidget {
   public:
     explicit LlmConfigSection(QWidget* parent = nullptr);
 
-    void reload();  // called when section becomes visible
+    void reload(); // called when section becomes visible
 
   signals:
-    void config_changed();  // emitted when user saves — AiChatScreen reloads
+    void config_changed(); // emitted when user saves — AiChatScreen reloads
 
   private slots:
     void on_provider_selected(int row);
@@ -33,33 +33,32 @@ class LlmConfigSection : public QWidget {
     void on_save_global();
     void on_test_connection();
     void on_fetch_models();
-    void on_models_fetched(const QString& provider, const QStringList& models,
-                           const QString& error);
+    void on_models_fetched(const QString& provider, const QStringList& models, const QString& error);
 
   private:
     // Left: provider list
-    QListWidget*    provider_list_  = nullptr;
-    QPushButton*    add_btn_        = nullptr;
-    QPushButton*    delete_btn_     = nullptr;
+    QListWidget* provider_list_ = nullptr;
+    QPushButton* add_btn_ = nullptr;
+    QPushButton* delete_btn_ = nullptr;
 
     // Right: config form
-    QStackedWidget* form_stack_     = nullptr;   // 0=empty, 1=form, 2=fincept
+    QStackedWidget* form_stack_ = nullptr; // 0=empty, 1=form, 2=fincept
 
     // Form fields
-    QLineEdit*      provider_edit_  = nullptr;
-    QLineEdit*      api_key_edit_   = nullptr;
-    QLineEdit*      base_url_edit_  = nullptr;
-    QComboBox*      model_combo_    = nullptr;
-    QPushButton*    fetch_btn_      = nullptr;
-    QPushButton*    save_btn_       = nullptr;
-    QPushButton*    test_btn_       = nullptr;
-    QLabel*         status_lbl_     = nullptr;
+    QLineEdit* provider_edit_ = nullptr;
+    QLineEdit* api_key_edit_ = nullptr;
+    QLineEdit* base_url_edit_ = nullptr;
+    QComboBox* model_combo_ = nullptr;
+    QPushButton* fetch_btn_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
+    QPushButton* test_btn_ = nullptr;
+    QLabel* status_lbl_ = nullptr;
 
     // Global settings
-    QDoubleSpinBox* temp_spin_      = nullptr;
-    QSpinBox*       tokens_spin_    = nullptr;
-    QPlainTextEdit* system_prompt_  = nullptr;
-    QPushButton*    save_global_btn_= nullptr;
+    QDoubleSpinBox* temp_spin_ = nullptr;
+    QSpinBox* tokens_spin_ = nullptr;
+    QPlainTextEdit* system_prompt_ = nullptr;
+    QPushButton* save_global_btn_ = nullptr;
 
     void build_ui();
     QWidget* build_provider_list_panel();

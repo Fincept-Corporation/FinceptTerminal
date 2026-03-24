@@ -82,8 +82,8 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
     vl->addWidget(title);
 
     auto* subtitle = new QLabel("Frequently asked questions and quick actions");
-    subtitle->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent; %2")
-                                .arg(colors::TEXT_TERTIARY, MF));
+    subtitle->setStyleSheet(
+        QString("color: %1; font-size: 13px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
     vl->addWidget(subtitle);
     vl->addSpacing(12);
 
@@ -108,10 +108,11 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
                                "Email support@fincept.in or join our Discord community at discord.gg/ae87a8ygbN. "
                                "Support hours are Mon-Fri 9AM-6PM EST."));
 
-        vl->addWidget(make_faq("What is a Credit?",
-                               "Credits are the virtual currency used within Fincept Terminal. They are consumed "
-                               "when using premium features like AI analysis, advanced analytics, and certain data feeds. "
-                               "Free accounts receive a limited number of credits."));
+        vl->addWidget(
+            make_faq("What is a Credit?",
+                     "Credits are the virtual currency used within Fincept Terminal. They are consumed "
+                     "when using premium features like AI analysis, advanced analytics, and certain data feeds. "
+                     "Free accounts receive a limited number of credits."));
 
         vl->addWidget(make_faq("What are the system requirements?",
                                "Windows 10+ (x64), macOS 12+, or Linux (glibc 2.31+). 8GB RAM recommended. "

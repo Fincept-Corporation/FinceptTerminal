@@ -50,9 +50,8 @@ class AuditLogger : public QObject {
     static AuditLogger& instance();
 
     /// Log an audit event.
-    void log(AuditAction action, const QString& workflow_id = {},
-             const QString& node_id = {}, const QString& symbol = {},
-             const QString& details = {}, const QJsonObject& metadata = {},
+    void log(AuditAction action, const QString& workflow_id = {}, const QString& node_id = {},
+             const QString& symbol = {}, const QString& details = {}, const QJsonObject& metadata = {},
              bool paper_trading = true);
 
     /// Query logs by date range.

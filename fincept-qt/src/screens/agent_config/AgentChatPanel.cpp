@@ -15,8 +15,8 @@ namespace fincept::screens {
 
 // ── Bubble builder ───────────────────────────────────────────────────────────
 
-static QWidget* make_bubble(const QString& text, const QString& role,
-                             const QString& timestamp, const QString& agent_name = {}) {
+static QWidget* make_bubble(const QString& text, const QString& role, const QString& timestamp,
+                            const QString& agent_name = {}) {
     auto* bubble = new QWidget;
     auto* vl = new QVBoxLayout(bubble);
     vl->setContentsMargins(0, 4, 0, 4);
@@ -27,18 +27,25 @@ static QWidget* make_bubble(const QString& text, const QString& role,
 
     auto* row = new QHBoxLayout;
     row->setContentsMargins(0, 0, 0, 0);
-    if (is_user) row->addStretch();
+    if (is_user)
+        row->addStretch();
 
     auto* card = new QFrame;
     card->setMaximumWidth(600);
 
     QString bg, tc, bd;
     if (is_user) {
-        bg = ui::colors::AMBER_DIM; tc = ui::colors::TEXT_PRIMARY; bd = ui::colors::AMBER;
+        bg = ui::colors::AMBER_DIM;
+        tc = ui::colors::TEXT_PRIMARY;
+        bd = ui::colors::AMBER;
     } else if (is_system) {
-        bg = ui::colors::BG_RAISED; tc = ui::colors::CYAN; bd = ui::colors::BORDER_MED;
+        bg = ui::colors::BG_RAISED;
+        tc = ui::colors::CYAN;
+        bd = ui::colors::BORDER_MED;
     } else {
-        bg = ui::colors::BG_SURFACE; tc = ui::colors::TEXT_PRIMARY; bd = ui::colors::BORDER_DIM;
+        bg = ui::colors::BG_SURFACE;
+        tc = ui::colors::TEXT_PRIMARY;
+        bd = ui::colors::BORDER_DIM;
     }
     card->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;padding:10px;}").arg(bg, bd));
 
@@ -49,9 +56,10 @@ static QWidget* make_bubble(const QString& text, const QString& role,
     // Role + agent name header
     auto* hdr_row = new QHBoxLayout;
     auto* role_lbl = new QLabel(is_user ? "YOU" : is_system ? "SYSTEM" : "AGENT");
-    role_lbl->setStyleSheet(
-        QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;")
-            .arg(is_user ? ui::colors::AMBER : is_system ? ui::colors::CYAN : ui::colors::POSITIVE));
+    role_lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;")
+                                .arg(is_user     ? ui::colors::AMBER
+                                     : is_system ? ui::colors::CYAN
+                                                 : ui::colors::POSITIVE));
     hdr_row->addWidget(role_lbl);
 
     if (!agent_name.isEmpty() && !is_user && !is_system) {
@@ -85,7 +93,8 @@ static QWidget* make_bubble(const QString& text, const QString& role,
     cl->addWidget(content);
 
     row->addWidget(card);
-    if (!is_user) row->addStretch();
+    if (!is_user)
+        row->addStretch();
     vl->addLayout(row);
     return bubble;
 }
@@ -106,7 +115,8 @@ void AgentChatPanel::build_ui() {
     // Header
     auto* header = new QWidget;
     header->setFixedHeight(40);
-    header->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    header->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(12, 0, 12, 0);
 
@@ -138,11 +148,10 @@ void AgentChatPanel::build_ui() {
     scroll_area_ = new QScrollArea;
     scroll_area_->setWidgetResizable(true);
     scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll_area_->setStyleSheet(
-        QString("QScrollArea{background:%1;border:none;}"
-                "QScrollBar:vertical{background:%1;width:6px;}"
-                "QScrollBar::handle:vertical{background:%2;min-height:20px;}")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
+    scroll_area_->setStyleSheet(QString("QScrollArea{background:%1;border:none;}"
+                                        "QScrollBar:vertical{background:%1;width:6px;}"
+                                        "QScrollBar::handle:vertical{background:%2;min-height:20px;}")
+                                    .arg(ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
 
     messages_container_ = new QWidget;
     messages_layout_ = new QVBoxLayout(messages_container_);
@@ -158,7 +167,8 @@ void AgentChatPanel::build_ui() {
     // Input bar
     auto* ib = new QWidget;
     ib->setFixedHeight(52);
-    ib->setStyleSheet(QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    ib->setStyleSheet(
+        QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* il = new QHBoxLayout(ib);
     il->setContentsMargins(12, 8, 12, 8);
     il->setSpacing(8);
@@ -173,12 +183,11 @@ void AgentChatPanel::build_ui() {
     send_btn_ = new QPushButton("SEND");
     send_btn_->setCursor(Qt::PointingHandCursor);
     send_btn_->setFixedWidth(80);
-    send_btn_->setStyleSheet(
-        QString("QPushButton{background:%1;color:%2;border:none;padding:8px;font-size:11px;"
-                "font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%3;}"
-                "QPushButton:disabled{background:%4;color:%5;}")
-            .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE,
-                 ui::colors::BG_RAISED, ui::colors::TEXT_TERTIARY));
+    send_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;padding:8px;font-size:11px;"
+                                     "font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%3;}"
+                                     "QPushButton:disabled{background:%4;color:%5;}")
+                                 .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE, ui::colors::BG_RAISED,
+                                      ui::colors::TEXT_TERTIARY));
     il->addWidget(send_btn_);
     root->addWidget(ib);
 
@@ -195,16 +204,16 @@ void AgentChatPanel::build_ui() {
 void AgentChatPanel::build_portfolio_bar(QVBoxLayout* root) {
     portfolio_bar_ = new QWidget;
     portfolio_bar_->setFixedHeight(36);
-    portfolio_bar_->setStyleSheet(
-        QString("background:%1;border-top:1px solid %2;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    portfolio_bar_->setStyleSheet(QString("background:%1;border-top:1px solid %2;border-bottom:1px solid %2;")
+                                      .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     auto* pl = new QHBoxLayout(portfolio_bar_);
     pl->setContentsMargins(12, 4, 12, 4);
     pl->setSpacing(8);
 
     auto* lbl = new QLabel("PORTFOLIO CTX:");
-    lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:600;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+    lbl->setStyleSheet(
+        QString("color:%1;font-size:9px;font-weight:600;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
     pl->addWidget(lbl);
 
     portfolio_combo_ = new QComboBox;
@@ -266,7 +275,8 @@ void AgentChatPanel::setup_connections() {
     connect(risk_btn_, &QPushButton::clicked, this, [this]() {
         QString pf = portfolio_combo_->currentText();
         if (pf != "None") {
-            input_edit_->setText(QString("Perform risk analysis on my portfolio '%1' — VaR, drawdown, stress test.").arg(pf));
+            input_edit_->setText(
+                QString("Perform risk analysis on my portfolio '%1' — VaR, drawdown, stress test.").arg(pf));
             send_message();
         }
     });
@@ -275,9 +285,9 @@ void AgentChatPanel::setup_connections() {
 
     connect(&svc, &services::AgentService::routing_result, this, [this](services::RoutingResult r) {
         if (r.success) {
-            add_system_bubble(
-                QString("Routed to: %1 (intent: %2, confidence: %3%)")
-                    .arg(r.agent_id, r.intent).arg(int(r.confidence * 100)));
+            add_system_bubble(QString("Routed to: %1 (intent: %2, confidence: %3%)")
+                                  .arg(r.agent_id, r.intent)
+                                  .arg(int(r.confidence * 100)));
             services::AgentService::instance().run_agent(last_query_, r.config);
         } else {
             add_system_bubble("Routing failed, using default agent.");
@@ -301,7 +311,8 @@ void AgentChatPanel::setup_connections() {
 
 void AgentChatPanel::send_message() {
     QString text = input_edit_->text().trimmed();
-    if (text.isEmpty() || executing_) return;
+    if (text.isEmpty() || executing_)
+        return;
 
     executing_ = true;
     send_btn_->setEnabled(false);
@@ -345,7 +356,8 @@ void AgentChatPanel::scroll_to_bottom() {
 void AgentChatPanel::clear_chat() {
     while (messages_layout_->count() > 1) {
         auto* item = messages_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
     status_label_->clear();

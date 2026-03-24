@@ -238,15 +238,14 @@ void OrderMatcher::check_orders(const QString& symbol, const PriceData& price, c
 
             if (fill) {
                 double fill_price = get_fill_price(order, price);
-                fills_to_execute.append({order.id, order.symbol, order.side,
-                                         order.order_type, fill_price, order.quantity});
+                fills_to_execute.append(
+                    {order.id, order.symbol, order.side, order.order_type, fill_price, order.quantity});
                 orders_to_remove.append(order.id);
             }
         }
 
         for (const auto& oid : orders_to_remove) {
-            orders.erase(std::remove_if(orders.begin(), orders.end(),
-                                        [&](const PtOrder& o) { return o.id == oid; }),
+            orders.erase(std::remove_if(orders.begin(), orders.end(), [&](const PtOrder& o) { return o.id == oid; }),
                          orders.end());
             triggered_stops_.remove(oid);
         }
@@ -262,20 +261,21 @@ void OrderMatcher::check_orders(const QString& symbol, const PriceData& price, c
             pt_fill_order(f.order_id, f.fill_price);
 
             auto now_ms = QDateTime::currentMSecsSinceEpoch();
-            OrderFillEvent event{f.order_id, f.order_symbol, f.side,
-                                 f.order_type, f.fill_price, f.quantity, now_ms};
+            OrderFillEvent event{f.order_id, f.order_symbol, f.side, f.order_type, f.fill_price, f.quantity, now_ms};
 
             // Copy callbacks out under lock, invoke outside
             QVector<OrderFillCallback> cbs;
             {
                 QMutexLocker lock(&mutex_);
                 cbs.reserve(fill_callbacks_.size());
-                for (auto cb_it = fill_callbacks_.constBegin();
-                     cb_it != fill_callbacks_.constEnd(); ++cb_it)
+                for (auto cb_it = fill_callbacks_.constBegin(); cb_it != fill_callbacks_.constEnd(); ++cb_it)
                     cbs.append(cb_it.value());
             }
             for (const auto& cb : cbs) {
-                try { cb(event); } catch (...) {}
+                try {
+                    cb(event);
+                } catch (...) {
+                }
             }
 
             EventBus::instance().publish("paper_trading.position_update",

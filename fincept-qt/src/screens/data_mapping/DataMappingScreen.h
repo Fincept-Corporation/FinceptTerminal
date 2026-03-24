@@ -27,8 +27,8 @@ class DataMappingScreen : public QWidget {
     explicit DataMappingScreen(QWidget* parent = nullptr);
 
   private slots:
-    void on_view_changed(int view);          // 0=list, 1=create, 2=templates
-    void on_step_changed(int step);          // 0..4
+    void on_view_changed(int view); // 0=list, 1=create, 2=templates
+    void on_step_changed(int step); // 0..4
     void on_next_step();
     void on_prev_step();
     void on_test_api();
@@ -74,8 +74,8 @@ class DataMappingScreen : public QWidget {
     void build_mapping_config(QJsonObject& config);
 
     // State
-    int current_view_ = 0;     // 0=list, 1=create, 2=templates
-    int current_step_ = 0;     // 0..4
+    int current_view_ = 0; // 0=list, 1=create, 2=templates
+    int current_step_ = 0; // 0..4
     bool loading_ = false;
 
     // Saved mappings (in-memory for now)
@@ -86,8 +86,8 @@ class DataMappingScreen : public QWidget {
     QList<QPushButton*> step_btns_;
 
     // Stacked widgets
-    QStackedWidget* view_stack_ = nullptr;   // list | create | templates
-    QStackedWidget* step_stack_ = nullptr;   // 5 step panels
+    QStackedWidget* view_stack_ = nullptr; // list | create | templates
+    QStackedWidget* step_stack_ = nullptr; // 5 step panels
 
     // Navigation footer
     QPushButton* prev_btn_ = nullptr;
@@ -114,14 +114,14 @@ class DataMappingScreen : public QWidget {
     QLabel* api_test_status_ = nullptr;
 
     // ── Step 1: Schema ──
-    QComboBox* schema_type_ = nullptr;       // predefined | custom
-    QComboBox* schema_select_ = nullptr;     // OHLCV, QUOTE, etc.
+    QComboBox* schema_type_ = nullptr;   // predefined | custom
+    QComboBox* schema_select_ = nullptr; // OHLCV, QUOTE, etc.
     QLabel* schema_desc_ = nullptr;
     QTableWidget* schema_fields_table_ = nullptr;
 
     // ── Step 2: Field Mapping ──
-    QTreeWidget* json_tree_ = nullptr;       // JSON explorer
-    QTableWidget* mapping_table_ = nullptr;  // target field → expression
+    QTreeWidget* json_tree_ = nullptr;      // JSON explorer
+    QTableWidget* mapping_table_ = nullptr; // target field → expression
     QComboBox* parser_engine_ = nullptr;
 
     // ── Step 3: Cache ──

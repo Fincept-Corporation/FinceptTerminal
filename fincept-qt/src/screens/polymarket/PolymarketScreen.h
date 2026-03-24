@@ -2,140 +2,99 @@
 
 #include "services/polymarket/PolymarketTypes.h"
 
-#include <QComboBox>
-#include <QLabel>
-#include <QLineEdit>
-#include <QListWidget>
-#include <QPushButton>
-#include <QStackedWidget>
-#include <QTableWidget>
 #include <QTimer>
 #include <QWidget>
+
+#include <atomic>
+
+namespace fincept::screens::polymarket {
+class PolymarketCommandBar;
+class PolymarketBrowsePanel;
+class PolymarketDetailPanel;
+class PolymarketLeaderboard;
+class PolymarketStatusBar;
+} // namespace fincept::screens::polymarket
 
 namespace fincept::screens {
 
 /// Production-grade Polymarket Prediction Markets screen.
-///
-/// Views: Markets · Events · Resolved
-/// Detail tabs: Overview · Order Book · Price Chart · Trades
-///
-/// All data flows through PolymarketService (singleton).
-/// Screen renders UI only — no direct HTTP calls (P6).
-/// Timer-driven auto-refresh respects visibility (P3).
+/// Thin coordinator owning 5 sub-widget panels, wiring service + WebSocket.
 class PolymarketScreen : public QWidget {
     Q_OBJECT
   public:
     explicit PolymarketScreen(QWidget* parent = nullptr);
+    ~PolymarketScreen() override;
 
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
 
   private slots:
-    // View navigation
-    void on_view_changed(int view);
-    void on_search();
-    void on_sort_changed(int index);
+    // Command bar
+    void on_view_changed(const QString& view);
+    void on_category_changed(const QString& category);
+    void on_search_submitted(const QString& query);
+    void on_sort_changed(const QString& sort_by);
     void on_refresh();
-    void on_prev_page();
-    void on_next_page();
 
-    // List selection
-    void on_market_clicked(QListWidgetItem* item);
+    // Browse panel
+    void on_market_selected(const services::polymarket::Market& market);
+    void on_event_selected(const services::polymarket::Event& event);
 
-    // Detail tabs
-    void on_detail_tab_changed(int tab);
-    void on_history_interval_changed(int index);
+    // Detail panel
+    void on_interval_changed(const QString& interval);
+    void on_outcome_changed(int index);
+    void on_related_market_clicked(const services::polymarket::Market& market);
 
-    // Service signals
+    // Service responses
     void on_markets_received(const QVector<services::polymarket::Market>& markets);
     void on_events_received(const QVector<services::polymarket::Event>& events);
+    void on_tags_received(const QVector<services::polymarket::Tag>& tags);
     void on_order_book_received(const services::polymarket::OrderBook& book);
     void on_price_history_received(const services::polymarket::PriceHistory& history);
     void on_trades_received(const QVector<services::polymarket::Trade>& trades);
     void on_price_summary_received(const services::polymarket::PriceSummary& summary);
+    void on_top_holders_received(const QVector<services::polymarket::TopHolder>& holders);
+    void on_leaderboard_received(const QVector<services::polymarket::LeaderboardEntry>& entries);
+    void on_comments_received(const QVector<services::polymarket::Comment>& comments);
+    void on_related_markets_received(const QVector<services::polymarket::Market>& markets);
     void on_service_error(const QString& ctx, const QString& msg);
 
+    // WebSocket
+    void on_ws_price_updated(const QString& asset_id, double price);
+    void on_ws_orderbook_updated(const QString& asset_id, const services::polymarket::OrderBook& book);
+    void on_ws_status_changed(bool connected);
+
   private:
-    void setup_ui();
+    void build_ui();
     void connect_service();
-
-    QWidget* create_header();
-    QWidget* create_list_panel();
-    QWidget* create_detail_panel();
-    QWidget* create_overview_page();
-    QWidget* create_orderbook_page();
-    QWidget* create_chart_page();
-    QWidget* create_trades_page();
-    QWidget* create_status_bar();
-
+    void connect_websocket();
     void load_current_view();
-    void display_market_list();
-    void display_event_list();
     void select_market(const services::polymarket::Market& market);
-    void set_loading(bool loading);
-    void update_pagination();
+    void subscribe_to_market(const services::polymarket::Market& market);
+    void unsubscribe_current();
 
-    // ── State ────────────────────────────────────────────────────────────
-    enum View { MARKETS = 0, EVENTS = 1, RESOLVED = 2 };
-    View active_view_ = MARKETS;
-    int detail_tab_ = 0;
-    int current_page_ = 0;
-    static constexpr int PAGE_SIZE = 20;
-    bool loading_ = false;
-    bool first_show_ = true;
+    // Sub-widgets
+    polymarket::PolymarketCommandBar* command_bar_ = nullptr;
+    polymarket::PolymarketBrowsePanel* browse_panel_ = nullptr;
+    polymarket::PolymarketDetailPanel* detail_panel_ = nullptr;
+    polymarket::PolymarketLeaderboard* leaderboard_ = nullptr;
+    polymarket::PolymarketStatusBar* status_bar_ = nullptr;
 
-    // Cached data
-    QVector<services::polymarket::Market> markets_;
-    QVector<services::polymarket::Event> events_;
+    // State
+    QString active_view_ = "MARKETS";
+    QString active_category_ = "ALL";
+    QString active_sort_ = "volume";
     services::polymarket::Market selected_market_;
     bool has_selection_ = false;
+    bool first_show_ = true;
+    std::atomic<int> request_generation_{0};
 
-    // ── Timers ───────────────────────────────────────────────────────────
+    // Timer
     QTimer* refresh_timer_ = nullptr;
 
-    // ── Header ───────────────────────────────────────────────────────────
-    QList<QPushButton*> view_btns_;
-    QLineEdit* search_input_ = nullptr;
-    QComboBox* sort_combo_ = nullptr;
-    QPushButton* refresh_btn_ = nullptr;
-
-    // ── List panel ───────────────────────────────────────────────────────
-    QListWidget* market_list_ = nullptr;
-    QLabel* list_header_ = nullptr;
-    QPushButton* prev_btn_ = nullptr;
-    QPushButton* next_btn_ = nullptr;
-    QLabel* page_label_ = nullptr;
-
-    // ── Detail panel ─────────────────────────────────────────────────────
-    QStackedWidget* detail_stack_ = nullptr;
-    QList<QPushButton*> detail_tab_btns_;
-
-    // Overview
-    QLabel* detail_question_ = nullptr;
-    QLabel* detail_volume_ = nullptr;
-    QLabel* detail_liquidity_ = nullptr;
-    QLabel* detail_end_date_ = nullptr;
-    QLabel* detail_midpoint_ = nullptr;
-    QLabel* detail_spread_ = nullptr;
-    QLabel* detail_last_trade_ = nullptr;
-    QLabel* detail_status_ = nullptr;
-    QWidget* outcome_container_ = nullptr;
-
-    // Order book
-    QTableWidget* orderbook_table_ = nullptr;
-
-    // Price chart
-    QWidget* chart_widget_ = nullptr;
-    QComboBox* interval_combo_ = nullptr;
-
-    // Trades
-    QTableWidget* trades_table_ = nullptr;
-
-    // ── Status bar ───────────────────────────────────────────────────────
-    QLabel* status_view_ = nullptr;
-    QLabel* status_market_ = nullptr;
-    QLabel* status_count_ = nullptr;
+    // WS tracking
+    QStringList subscribed_tokens_;
 };
 
 } // namespace fincept::screens

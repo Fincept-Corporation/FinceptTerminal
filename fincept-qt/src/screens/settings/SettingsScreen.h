@@ -33,31 +33,30 @@ class SettingsScreen : public QWidget {
     QWidget* build_mcp_servers();
 
     // ── Shared layout helper ──────────────────────────────────────────────────
-    static QWidget* make_row(const QString& label, QWidget* control,
-                             const QString& description = {});
-    static QFrame*  make_sep();
+    static QWidget* make_row(const QString& label, QWidget* control, const QString& description = {});
+    static QFrame* make_sep();
 
     // ── Credentials state ─────────────────────────────────────────────────────
-    QHash<QString, QLineEdit*> cred_fields_;   // key → password field
-    QHash<QString, QLabel*>    cred_status_;   // key → status label
+    QHash<QString, QLineEdit*> cred_fields_; // key → password field
+    QHash<QString, QLabel*> cred_status_;    // key → status label
 
     // ── Appearance state ──────────────────────────────────────────────────────
-    QComboBox* app_font_size_   = nullptr;
+    QComboBox* app_font_size_ = nullptr;
     QComboBox* app_font_family_ = nullptr;
-    QComboBox* app_theme_       = nullptr;
-    QComboBox* app_density_     = nullptr;
+    QComboBox* app_theme_ = nullptr;
+    QComboBox* app_density_ = nullptr;
 
     // ── Notifications state ───────────────────────────────────────────────────
-    QCheckBox* notif_email_     = nullptr;
-    QLineEdit* notif_email_addr_= nullptr;
-    QCheckBox* notif_inapp_     = nullptr;
-    QCheckBox* notif_price_     = nullptr;
-    QCheckBox* notif_news_      = nullptr;
-    QCheckBox* notif_orders_    = nullptr;
-    QCheckBox* notif_sound_     = nullptr;
+    QCheckBox* notif_email_ = nullptr;
+    QLineEdit* notif_email_addr_ = nullptr;
+    QCheckBox* notif_inapp_ = nullptr;
+    QCheckBox* notif_price_ = nullptr;
+    QCheckBox* notif_news_ = nullptr;
+    QCheckBox* notif_orders_ = nullptr;
+    QCheckBox* notif_sound_ = nullptr;
 
     // ── Storage state ─────────────────────────────────────────────────────────
-    QLabel*    storage_count_   = nullptr;
+    QLabel* storage_count_ = nullptr;
 
     // ── Data loaders (called from showEvent) ──────────────────────────────────
     void load_credentials();

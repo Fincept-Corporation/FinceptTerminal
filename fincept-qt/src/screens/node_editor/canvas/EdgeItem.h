@@ -11,8 +11,7 @@ class PortItem;
 class EdgeItem : public QObject, public QGraphicsPathItem {
     Q_OBJECT
   public:
-    EdgeItem(const QString& id, PortItem* source, PortItem* target,
-             QGraphicsItem* parent = nullptr);
+    EdgeItem(const QString& id, PortItem* source, PortItem* target, QGraphicsItem* parent = nullptr);
     ~EdgeItem() override;
 
     const QString& edge_id() const { return id_; }
@@ -26,8 +25,7 @@ class EdgeItem : public QObject, public QGraphicsPathItem {
     void set_animated(bool animated);
     bool is_animated() const { return animated_; }
 
-    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
-               QWidget* widget) override;
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
 
   signals:
     void edge_selected(const QString& id);

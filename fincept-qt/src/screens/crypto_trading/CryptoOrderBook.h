@@ -19,9 +19,8 @@ class CryptoOrderBook : public QWidget {
   public:
     explicit CryptoOrderBook(QWidget* parent = nullptr);
 
-    void set_data(const QVector<QPair<double, double>>& bids,
-                  const QVector<QPair<double, double>>& asks,
-                  double spread, double spread_pct);
+    void set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks, double spread,
+                  double spread_pct);
 
     void add_tick_snapshot(const TickSnapshot& snap);
 

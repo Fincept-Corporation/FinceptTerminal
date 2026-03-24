@@ -1,5 +1,6 @@
 // src/services/portfolio/PortfolioService.cpp
 #include "services/portfolio/PortfolioService.h"
+
 #include "core/logging/Logger.h"
 #include "storage/repositories/PortfolioRepository.h"
 
@@ -30,13 +31,12 @@ void PortfolioService::load_portfolios() {
     if (r.is_ok()) {
         emit portfolios_loaded(r.value());
     } else {
-        LOG_ERROR("PortfolioSvc", "Failed to load portfolios: "
-                  + QString::fromStdString(r.error()));
+        LOG_ERROR("PortfolioSvc", "Failed to load portfolios: " + QString::fromStdString(r.error()));
     }
 }
 
-void PortfolioService::create_portfolio(const QString& name, const QString& owner,
-                                          const QString& currency, const QString& description) {
+void PortfolioService::create_portfolio(const QString& name, const QString& owner, const QString& currency,
+                                        const QString& description) {
     auto r = PortfolioRepository::instance().create_portfolio(name, owner, currency, description);
     if (r.is_ok()) {
         auto p = PortfolioRepository::instance().get_portfolio(r.value());
@@ -44,8 +44,7 @@ void PortfolioService::create_portfolio(const QString& name, const QString& owne
             emit portfolio_created(p.value());
         load_portfolios();
     } else {
-        LOG_ERROR("PortfolioSvc", "Failed to create portfolio: "
-                  + QString::fromStdString(r.error()));
+        LOG_ERROR("PortfolioSvc", "Failed to create portfolio: " + QString::fromStdString(r.error()));
     }
 }
 
@@ -56,8 +55,7 @@ void PortfolioService::delete_portfolio(const QString& id) {
         emit portfolio_deleted(id);
         load_portfolios();
     } else {
-        LOG_ERROR("PortfolioSvc", "Failed to delete portfolio: "
-                  + QString::fromStdString(r.error()));
+        LOG_ERROR("PortfolioSvc", "Failed to delete portfolio: " + QString::fromStdString(r.error()));
     }
 }
 
@@ -106,9 +104,8 @@ void PortfolioService::refresh_summary(const QString& portfolio_id) {
     load_summary(portfolio_id);
 }
 
-void PortfolioService::build_summary(const QString& portfolio_id,
-                                       const QVector<portfolio::PortfolioAsset>& assets,
-                                       const portfolio::Portfolio& portfolio) {
+void PortfolioService::build_summary(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
+                                     const portfolio::Portfolio& portfolio) {
     // Collect symbols for batch quote fetch
     QStringList symbols;
     symbols.reserve(assets.size());
@@ -119,9 +116,10 @@ void PortfolioService::build_summary(const QString& portfolio_id,
     // Use QPointer for safe async callback (P8)
     QPointer<PortfolioService> self = this;
 
-    MarketDataService::instance().fetch_quotes(symbols, [self, portfolio_id, assets, portfolio]
-                                                (bool ok, QVector<QuoteData> quotes) {
-        if (!self) return;
+    MarketDataService::instance().fetch_quotes(symbols, [self, portfolio_id, assets,
+                                                         portfolio](bool ok, QVector<QuoteData> quotes) {
+        if (!self)
+            return;
 
         // Build quote lookup
         QHash<QString, QuoteData> quote_map;
@@ -134,36 +132,34 @@ void PortfolioService::build_summary(const QString& portfolio_id,
         summary.portfolio = portfolio;
         summary.holdings.reserve(assets.size());
 
-        double total_mv   = 0;
+        double total_mv = 0;
         double total_cost = 0;
-        double total_day  = 0;
+        double total_day = 0;
 
         for (const auto& asset : assets) {
             portfolio::HoldingWithQuote h;
-            h.symbol        = asset.symbol;
-            h.quantity       = asset.quantity;
-            h.avg_buy_price  = asset.avg_buy_price;
-            h.cost_basis     = asset.quantity * asset.avg_buy_price;
+            h.symbol = asset.symbol;
+            h.quantity = asset.quantity;
+            h.avg_buy_price = asset.avg_buy_price;
+            h.cost_basis = asset.quantity * asset.avg_buy_price;
 
             auto it = quote_map.find(asset.symbol);
             if (it != quote_map.end()) {
-                h.current_price      = it->price;
-                h.day_change         = it->change;
+                h.current_price = it->price;
+                h.day_change = it->change;
                 h.day_change_percent = it->change_pct;
             } else {
                 // Fallback to avg buy price if no quote
                 h.current_price = asset.avg_buy_price;
             }
 
-            h.market_value  = h.quantity * h.current_price;
+            h.market_value = h.quantity * h.current_price;
             h.unrealized_pnl = h.market_value - h.cost_basis;
-            h.unrealized_pnl_percent = (h.cost_basis > 0)
-                ? (h.unrealized_pnl / h.cost_basis) * 100.0
-                : 0;
+            h.unrealized_pnl_percent = (h.cost_basis > 0) ? (h.unrealized_pnl / h.cost_basis) * 100.0 : 0;
 
-            total_mv   += h.market_value;
+            total_mv += h.market_value;
             total_cost += h.cost_basis;
-            total_day  += h.day_change * h.quantity;
+            total_day += h.day_change * h.quantity;
 
             if (h.unrealized_pnl >= 0)
                 summary.gainers++;
@@ -178,32 +174,27 @@ void PortfolioService::build_summary(const QString& portfolio_id,
             h.weight = (total_mv > 0) ? (h.market_value / total_mv) * 100.0 : 0;
         }
 
-        summary.total_market_value    = total_mv;
-        summary.total_cost_basis      = total_cost;
-        summary.total_unrealized_pnl  = total_mv - total_cost;
-        summary.total_unrealized_pnl_percent = (total_cost > 0)
-            ? ((total_mv - total_cost) / total_cost) * 100.0
-            : 0;
-        summary.total_day_change      = total_day;
-        summary.total_day_change_percent = (total_mv - total_day > 0)
-            ? (total_day / (total_mv - total_day)) * 100.0
-            : 0;
-        summary.total_positions       = assets.size();
+        summary.total_market_value = total_mv;
+        summary.total_cost_basis = total_cost;
+        summary.total_unrealized_pnl = total_mv - total_cost;
+        summary.total_unrealized_pnl_percent = (total_cost > 0) ? ((total_mv - total_cost) / total_cost) * 100.0 : 0;
+        summary.total_day_change = total_day;
+        summary.total_day_change_percent =
+            (total_mv - total_day > 0) ? (total_day / (total_mv - total_day)) * 100.0 : 0;
+        summary.total_positions = assets.size();
         summary.last_updated = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
         // Cache the result (P11)
         {
             QMutexLocker lock(&self->cache_mutex_);
-            self->summary_cache_[portfolio_id] = {
-                summary, QDateTime::currentSecsSinceEpoch()
-            };
+            self->summary_cache_[portfolio_id] = {summary, QDateTime::currentSecsSinceEpoch()};
         }
 
         // Save snapshot for performance history
         QString today = QDate::currentDate().toString(Qt::ISODate);
-        PortfolioRepository::instance().save_snapshot(
-            portfolio_id, summary.total_market_value, summary.total_cost_basis,
-            summary.total_unrealized_pnl, summary.total_unrealized_pnl_percent, today);
+        PortfolioRepository::instance().save_snapshot(portfolio_id, summary.total_market_value,
+                                                      summary.total_cost_basis, summary.total_unrealized_pnl,
+                                                      summary.total_unrealized_pnl_percent, today);
 
         emit self->summary_loaded(summary);
     });
@@ -211,8 +202,8 @@ void PortfolioService::build_summary(const QString& portfolio_id,
 
 // ── Asset operations ─────────────────────────────────────────────────────────
 
-void PortfolioService::add_asset(const QString& portfolio_id, const QString& symbol,
-                                   double qty, double price, const QString& date) {
+void PortfolioService::add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
+                                 const QString& date) {
     auto& repo = PortfolioRepository::instance();
 
     auto r = repo.add_asset(portfolio_id, symbol, qty, price, date);
@@ -222,24 +213,21 @@ void PortfolioService::add_asset(const QString& portfolio_id, const QString& sym
     }
 
     // Record transaction
-    QString txn_date = date.isEmpty()
-        ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate)
-        : date;
+    QString txn_date = date.isEmpty() ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate) : date;
     repo.add_transaction(portfolio_id, symbol, "BUY", qty, price, txn_date);
 
     invalidate_cache(portfolio_id);
     emit asset_added(portfolio_id);
 }
 
-void PortfolioService::sell_asset(const QString& portfolio_id, const QString& symbol,
-                                    double qty, double price, const QString& date) {
+void PortfolioService::sell_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
+                                  const QString& date) {
     auto& repo = PortfolioRepository::instance();
 
     // Get current holdings to update quantity
     auto assets_r = repo.get_assets(portfolio_id);
     if (assets_r.is_err()) {
-        LOG_ERROR("PortfolioSvc", "Failed to get assets for sell: "
-                  + QString::fromStdString(assets_r.error()));
+        LOG_ERROR("PortfolioSvc", "Failed to get assets for sell: " + QString::fromStdString(assets_r.error()));
         return;
     }
 
@@ -267,9 +255,7 @@ void PortfolioService::sell_asset(const QString& portfolio_id, const QString& sy
     }
 
     // Record transaction
-    QString txn_date = date.isEmpty()
-        ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate)
-        : date;
+    QString txn_date = date.isEmpty() ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate) : date;
     repo.add_transaction(portfolio_id, symbol, "SELL", qty, price, txn_date);
 
     invalidate_cache(portfolio_id);
@@ -283,13 +269,12 @@ void PortfolioService::load_transactions(const QString& portfolio_id, int limit)
     if (r.is_ok()) {
         emit transactions_loaded(r.value());
     } else {
-        LOG_ERROR("PortfolioSvc", "Failed to load transactions: "
-                  + QString::fromStdString(r.error()));
+        LOG_ERROR("PortfolioSvc", "Failed to load transactions: " + QString::fromStdString(r.error()));
     }
 }
 
-void PortfolioService::update_transaction(const QString& id, double qty, double price,
-                                            const QString& date, const QString& notes) {
+void PortfolioService::update_transaction(const QString& id, double qty, double price, const QString& date,
+                                          const QString& notes) {
     PortfolioRepository::instance().update_transaction(id, qty, price, date, notes);
 }
 
@@ -350,8 +335,7 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
 
             // VaR 95% (parametric)
             if (summary.total_market_value > 0) {
-                metrics.var_95 = summary.total_market_value
-                    * std::abs(mean - 1.645 * daily_vol) / 100.0;
+                metrics.var_95 = summary.total_market_value * std::abs(mean - 1.645 * daily_vol) / 100.0;
             }
 
             // Update risk score with volatility component
@@ -393,8 +377,7 @@ void PortfolioService::export_csv(const QString& portfolio_id, const QString& fi
     out << "## HOLDINGS\n";
     out << "Symbol,Quantity,AvgBuyPrice,CostBasis\n";
     for (const auto& a : assets_r.value()) {
-        out << a.symbol << "," << a.quantity << "," << a.avg_buy_price
-            << "," << (a.quantity * a.avg_buy_price) << "\n";
+        out << a.symbol << "," << a.quantity << "," << a.avg_buy_price << "," << (a.quantity * a.avg_buy_price) << "\n";
     }
 
     // Transactions section
@@ -402,9 +385,9 @@ void PortfolioService::export_csv(const QString& portfolio_id, const QString& fi
         out << "\n## TRANSACTIONS\n";
         out << "Date,Symbol,Type,Quantity,Price,TotalValue,Notes\n";
         for (const auto& t : txns_r.value()) {
-            out << t.transaction_date << "," << t.symbol << "," << t.transaction_type
-                << "," << t.quantity << "," << t.price << "," << t.total_value
-                << ",\"" << QString(t.notes).replace(QLatin1Char('"'), QStringLiteral("\"\"")) << "\"\n";
+            out << t.transaction_date << "," << t.symbol << "," << t.transaction_type << "," << t.quantity << ","
+                << t.price << "," << t.total_value << ",\""
+                << QString(t.notes).replace(QLatin1Char('"'), QStringLiteral("\"\"")) << "\"\n";
         }
     }
 
@@ -426,21 +409,21 @@ void PortfolioService::export_json(const QString& portfolio_id, const QString& f
     QJsonObject root;
     root["format_version"] = "1.0";
     root["portfolio_name"] = p.name;
-    root["owner"]          = p.owner;
-    root["currency"]       = p.currency;
-    root["export_date"]    = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    root["owner"] = p.owner;
+    root["currency"] = p.currency;
+    root["export_date"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
     QJsonArray txn_arr;
     if (txns_r.is_ok()) {
         for (const auto& t : txns_r.value()) {
             QJsonObject obj;
-            obj["date"]     = t.transaction_date;
-            obj["symbol"]   = t.symbol;
-            obj["type"]     = t.transaction_type;
+            obj["date"] = t.transaction_date;
+            obj["symbol"] = t.symbol;
+            obj["type"] = t.transaction_type;
             obj["quantity"] = t.quantity;
-            obj["price"]    = t.price;
+            obj["price"] = t.price;
             obj["total_value"] = t.total_value;
-            obj["notes"]    = t.notes;
+            obj["notes"] = t.notes;
             txn_arr.append(obj);
         }
     }
@@ -459,7 +442,7 @@ void PortfolioService::export_json(const QString& portfolio_id, const QString& f
 }
 
 void PortfolioService::import_json(const QString& file_path, portfolio::ImportMode mode,
-                                     const QString& merge_target_id) {
+                                   const QString& merge_target_id) {
     QFile file(file_path);
     if (!file.open(QIODevice::ReadOnly)) {
         emit import_complete({"", "", 0, {"Cannot open file: " + file_path}});
@@ -476,10 +459,10 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
     }
 
     auto root = doc.object();
-    QString name     = root["portfolio_name"].toString("Imported Portfolio");
-    QString owner    = root["owner"].toString("");
+    QString name = root["portfolio_name"].toString("Imported Portfolio");
+    QString owner = root["owner"].toString("");
     QString currency = root["currency"].toString("USD");
-    auto txn_arr     = root["transactions"].toArray();
+    auto txn_arr = root["transactions"].toArray();
 
     auto& repo = PortfolioRepository::instance();
     QString target_id;
@@ -487,8 +470,7 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
     if (mode == portfolio::ImportMode::New) {
         auto r = repo.create_portfolio(name, owner, currency);
         if (r.is_err()) {
-            emit import_complete({"", name, 0, {"Failed to create portfolio: "
-                                                + QString::fromStdString(r.error())}});
+            emit import_complete({"", name, 0, {"Failed to create portfolio: " + QString::fromStdString(r.error())}});
             return;
         }
         target_id = r.value();
@@ -505,13 +487,13 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
 
     // Replay transactions chronologically
     for (const auto& val : txn_arr) {
-        auto obj    = val.toObject();
+        auto obj = val.toObject();
         QString type = obj["type"].toString();
         if (type != "BUY" && type != "SELL")
             continue; // Skip DIVIDEND/SPLIT for now
 
-        QString sym  = obj["symbol"].toString();
-        double qty   = obj["quantity"].toDouble();
+        QString sym = obj["symbol"].toString();
+        double qty = obj["quantity"].toDouble();
         double price = obj["price"].toDouble();
         QString date = obj["date"].toString();
 
@@ -528,8 +510,7 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
                 for (const auto& a : assets.value()) {
                     if (a.symbol == sym.toUpper()) {
                         if (qty > a.quantity + 0.0001) {
-                            errors.append(QString("SELL %1: qty %2 > held %3")
-                                .arg(sym).arg(qty).arg(a.quantity));
+                            errors.append(QString("SELL %1: qty %2 > held %3").arg(sym).arg(qty).arg(a.quantity));
                         } else {
                             double remaining = a.quantity - qty;
                             if (remaining <= 0.0001)
@@ -549,8 +530,7 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
         }
 
         // Record the transaction only on success
-        repo.add_transaction(target_id, sym, type, qty, price, date,
-                              obj["notes"].toString());
+        repo.add_transaction(target_id, sym, type, qty, price, date, obj["notes"].toString());
         ++replayed;
     }
 
@@ -558,8 +538,8 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
     load_portfolios();
 
     emit import_complete({target_id, name, replayed, errors});
-    LOG_INFO("PortfolioSvc", QString("Imported %1 transactions into %2, %3 errors")
-             .arg(replayed).arg(target_id).arg(errors.size()));
+    LOG_INFO("PortfolioSvc",
+             QString("Imported %1 transactions into %2, %3 errors").arg(replayed).arg(target_id).arg(errors.size()));
 }
 
 // ── Cache control ────────────────────────────────────────────────────────────

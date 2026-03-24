@@ -25,9 +25,9 @@ class PortfolioSparkline : public QWidget {
     void rebuild_pixmap();
 
     QVector<double> data_;
-    QColor          color_ = QColor("#16a34a");
-    QPixmap         cached_;
-    bool            dirty_ = true;
+    QColor color_ = QColor("#16a34a");
+    QPixmap cached_;
+    bool dirty_ = true;
 };
 
 } // namespace fincept::screens

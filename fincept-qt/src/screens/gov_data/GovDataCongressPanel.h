@@ -2,6 +2,8 @@
 // Specialized panel for US Congress bills and legislative data
 #pragma once
 
+#include "services/gov_data/GovDataService.h"
+
 #include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
@@ -11,8 +13,6 @@
 #include <QTextBrowser>
 #include <QVBoxLayout>
 #include <QWidget>
-
-#include "services/gov_data/GovDataService.h"
 
 namespace fincept::screens {
 

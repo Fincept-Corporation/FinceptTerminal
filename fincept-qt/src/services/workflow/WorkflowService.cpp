@@ -1,7 +1,8 @@
 #include "services/workflow/WorkflowService.h"
+
+#include "core/logging/Logger.h"
 #include "services/workflow/WorkflowExecutor.h"
 #include "storage/repositories/WorkflowRepository.h"
-#include "core/logging/Logger.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -15,10 +16,7 @@ WorkflowService& WorkflowService::instance() {
     return s;
 }
 
-WorkflowService::WorkflowService()
-    : QObject(nullptr)
-{
-}
+WorkflowService::WorkflowService() : QObject(nullptr) {}
 
 void WorkflowService::save_workflow(const WorkflowDef& wf) {
     auto r = WorkflowRepository::instance().save(wf);
@@ -58,11 +56,16 @@ void WorkflowService::list_workflows() {
         wf.created_at = row.created_at;
         wf.updated_at = row.updated_at;
 
-        if (row.status == "idle")           wf.status = WorkflowStatus::Idle;
-        else if (row.status == "running")   wf.status = WorkflowStatus::Running;
-        else if (row.status == "completed") wf.status = WorkflowStatus::Completed;
-        else if (row.status == "error")     wf.status = WorkflowStatus::Error;
-        else                                wf.status = WorkflowStatus::Draft;
+        if (row.status == "idle")
+            wf.status = WorkflowStatus::Idle;
+        else if (row.status == "running")
+            wf.status = WorkflowStatus::Running;
+        else if (row.status == "completed")
+            wf.status = WorkflowStatus::Completed;
+        else if (row.status == "error")
+            wf.status = WorkflowStatus::Error;
+        else
+            wf.status = WorkflowStatus::Draft;
 
         workflows.append(wf);
     }
@@ -181,20 +184,16 @@ void WorkflowService::execute_workflow(const WorkflowDef& wf) {
 
     executor_ = new WorkflowExecutor(this);
 
-    connect(executor_, &WorkflowExecutor::execution_started,
-            this, &WorkflowService::execution_started);
-    connect(executor_, &WorkflowExecutor::node_started,
-            this, &WorkflowService::node_execution_started);
-    connect(executor_, &WorkflowExecutor::node_completed,
-            this, &WorkflowService::node_execution_completed);
-    connect(executor_, &WorkflowExecutor::execution_finished,
-            this, [this](const WorkflowExecutionResult& result) {
-                emit execution_finished(result);
-                if (executor_) {
-                    executor_->deleteLater();
-                    executor_ = nullptr;
-                }
-            });
+    connect(executor_, &WorkflowExecutor::execution_started, this, &WorkflowService::execution_started);
+    connect(executor_, &WorkflowExecutor::node_started, this, &WorkflowService::node_execution_started);
+    connect(executor_, &WorkflowExecutor::node_completed, this, &WorkflowService::node_execution_completed);
+    connect(executor_, &WorkflowExecutor::execution_finished, this, [this](const WorkflowExecutionResult& result) {
+        emit execution_finished(result);
+        if (executor_) {
+            executor_->deleteLater();
+            executor_ = nullptr;
+        }
+    });
 
     executor_->execute(wf);
 }
@@ -207,20 +206,16 @@ void WorkflowService::execute_from_node(const WorkflowDef& wf, const QString& st
 
     executor_ = new WorkflowExecutor(this);
 
-    connect(executor_, &WorkflowExecutor::execution_started,
-            this, &WorkflowService::execution_started);
-    connect(executor_, &WorkflowExecutor::node_started,
-            this, &WorkflowService::node_execution_started);
-    connect(executor_, &WorkflowExecutor::node_completed,
-            this, &WorkflowService::node_execution_completed);
-    connect(executor_, &WorkflowExecutor::execution_finished,
-            this, [this](const WorkflowExecutionResult& result) {
-                emit execution_finished(result);
-                if (executor_) {
-                    executor_->deleteLater();
-                    executor_ = nullptr;
-                }
-            });
+    connect(executor_, &WorkflowExecutor::execution_started, this, &WorkflowService::execution_started);
+    connect(executor_, &WorkflowExecutor::node_started, this, &WorkflowService::node_execution_started);
+    connect(executor_, &WorkflowExecutor::node_completed, this, &WorkflowService::node_execution_completed);
+    connect(executor_, &WorkflowExecutor::execution_finished, this, [this](const WorkflowExecutionResult& result) {
+        emit execution_finished(result);
+        if (executor_) {
+            executor_->deleteLater();
+            executor_ = nullptr;
+        }
+    });
 
     executor_->execute_from(wf, start_node_id);
 }

@@ -1,7 +1,6 @@
 // src/screens/equity_research/EquityTalippTab.h
 #pragma once
 #include "services/equity/EquityResearchModels.h"
-
 #include "ui/widgets/LoadingOverlay.h"
 
 #include <QChartView>
@@ -32,8 +31,7 @@ class EquityTalippTab : public QWidget {
     void rebuild_indicator_combo(const QString& cat_id);
     void rebuild_param_form(const QString& indicator);
     void rebuild_last_values(const QString& indicator, const QVector<double>& values);
-    void rebuild_chart(const QString& indicator, const QVector<double>& values,
-                       const QVector<qint64>& timestamps);
+    void rebuild_chart(const QString& indicator, const QVector<double>& values, const QVector<qint64>& timestamps);
     QVariantMap collect_params() const;
 
     QString current_symbol_;
@@ -42,16 +40,16 @@ class EquityTalippTab : public QWidget {
     // Category tab buttons
     QMap<QString, QPushButton*> cat_buttons_;
 
-    QComboBox*   indicator_combo_  = nullptr;
-    QWidget*     param_widget_     = nullptr;
-    QFormLayout* param_form_       = nullptr;
-    QLabel*      status_label_     = nullptr;
-    QWidget*     last_values_area_ = nullptr;
-    QChartView*  chart_view_       = nullptr;
-    QWidget*     results_widget_   = nullptr;
-    QWidget*     empty_widget_     = nullptr;
-    QLabel*      data_points_lbl_  = nullptr;
-    QPushButton* compute_btn_      = nullptr;
+    QComboBox* indicator_combo_ = nullptr;
+    QWidget* param_widget_ = nullptr;
+    QFormLayout* param_form_ = nullptr;
+    QLabel* status_label_ = nullptr;
+    QWidget* last_values_area_ = nullptr;
+    QChartView* chart_view_ = nullptr;
+    QWidget* results_widget_ = nullptr;
+    QWidget* empty_widget_ = nullptr;
+    QLabel* data_points_lbl_ = nullptr;
+    QPushButton* compute_btn_ = nullptr;
 
     struct IndicatorDef {
         QString id;

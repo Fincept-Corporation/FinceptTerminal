@@ -15,7 +15,7 @@ namespace fincept::services {
 // ── NER Result Types ────────────────────────────────────────────────────────
 
 struct EntityResult {
-    QString id; // article id
+    QString id;                                 // article id
     QVector<QPair<QString, QString>> countries; // (name, code)
     QStringList organizations;
     QStringList people;

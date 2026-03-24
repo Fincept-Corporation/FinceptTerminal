@@ -4,8 +4,8 @@
 
 #include <QLabel>
 #include <QVBoxLayout>
-#include <QWidget>
 #include <QVector>
+#include <QWidget>
 
 namespace fincept::screens {
 
@@ -33,31 +33,31 @@ class ForumSidebarPanel : public QWidget {
     void update_activity_bars();
 
     // Profile card
-    QLabel*      avatar_lbl_       = nullptr;
-    QLabel*      profile_name_lbl_ = nullptr;
-    QLabel*      profile_sub_lbl_  = nullptr;
+    QLabel* avatar_lbl_ = nullptr;
+    QLabel* profile_name_lbl_ = nullptr;
+    QLabel* profile_sub_lbl_ = nullptr;
 
     // Stats gauges
-    QLabel*      stat_posts_val_    = nullptr;
-    QLabel*      stat_comments_val_ = nullptr;
-    QLabel*      stat_votes_val_    = nullptr;
-    QLabel*      stat_24h_val_      = nullptr;
-    QWidget*     stat_posts_bar_    = nullptr;
-    QWidget*     stat_activity_bar_ = nullptr;
+    QLabel* stat_posts_val_ = nullptr;
+    QLabel* stat_comments_val_ = nullptr;
+    QLabel* stat_votes_val_ = nullptr;
+    QLabel* stat_24h_val_ = nullptr;
+    QWidget* stat_posts_bar_ = nullptr;
+    QWidget* stat_activity_bar_ = nullptr;
 
     // Categories
-    QVBoxLayout* cat_layout_       = nullptr;
-    QWidget*     cat_container_    = nullptr;
+    QVBoxLayout* cat_layout_ = nullptr;
+    QWidget* cat_container_ = nullptr;
 
     // Contributors
-    QVBoxLayout* contrib_layout_   = nullptr;
-    QWidget*     contrib_container_= nullptr;
+    QVBoxLayout* contrib_layout_ = nullptr;
+    QWidget* contrib_container_ = nullptr;
 
-    QVector<services::ForumCategory>   categories_;
+    QVector<services::ForumCategory> categories_;
     QVector<services::ForumContributor> contributors_;
-    services::ForumStats               cached_stats_;
-    int  active_category_id_  = -1;
-    int  active_cat_for_post_ = 0;
+    services::ForumStats cached_stats_;
+    int active_category_id_ = -1;
+    int active_cat_for_post_ = 0;
 };
 
 } // namespace fincept::screens

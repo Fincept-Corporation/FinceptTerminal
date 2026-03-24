@@ -20,14 +20,14 @@ const QColor kColorNeg("#dc2626");
 const QColor kColorAmber("#d97706");
 const QColor kRowEven("#080808");
 const QColor kRowOdd("#0c0c0c");
-const QColor kRowPosHint(22, 163, 74, 8);   // 3% green tint
-const QColor kRowNegHint(220, 38, 38, 8);   // 3% red tint
+const QColor kRowPosHint(22, 163, 74, 8); // 3% green tint
+const QColor kRowNegHint(220, 38, 38, 8); // 3% red tint
 const QColor kActiveHighlight("#d97706");
 } // namespace
 
 // ── Volume delegate ─────────────────────────────────────────────────────────
 void WatchlistVolumeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
-                                     const QModelIndex& index) const {
+                                    const QModelIndex& index) const {
     // Paint default background first
     QStyledItemDelegate::paint(painter, option, index);
 
@@ -140,10 +140,10 @@ void CryptoWatchlist::update_prices(const QVector<trading::TickerData>& tickers)
         for (auto& entry : entries_) {
             auto it = ticker_map.find(entry.symbol);
             if (it != ticker_map.end()) {
-                entry.price      = (*it)->last;
+                entry.price = (*it)->last;
                 entry.change_pct = (*it)->percentage;
-                entry.volume     = (*it)->base_volume;
-                entry.has_data   = true;
+                entry.volume = (*it)->base_volume;
+                entry.has_data = true;
                 max_vol = std::max(max_vol, entry.volume);
                 ++loaded;
             }
@@ -159,12 +159,14 @@ void CryptoWatchlist::update_prices(const QVector<trading::TickerData>& tickers)
         table_->setUpdatesEnabled(false);
         for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
             const auto& e = entries_[i];
-            if (!e.has_data) continue;
+            if (!e.has_data)
+                continue;
 
             auto* price_item = table_->item(i, 1);
-            auto* chg_item   = table_->item(i, 2);
-            auto* vol_item   = table_->item(i, 3);
-            if (!price_item || !chg_item || !vol_item) continue;
+            auto* chg_item = table_->item(i, 2);
+            auto* vol_item = table_->item(i, 3);
+            if (!price_item || !chg_item || !vol_item)
+                continue;
 
             price_item->setText(QString::number(e.price, 'f', 2));
             price_item->setForeground(kColorPrimary);
@@ -174,16 +176,21 @@ void CryptoWatchlist::update_prices(const QVector<trading::TickerData>& tickers)
 
             // Volume with UserRole for delegate bar
             QString vol_text;
-            if (e.volume >= 1e9)      vol_text = QString("%1B").arg(e.volume / 1e9, 0, 'f', 1);
-            else if (e.volume >= 1e6) vol_text = QString("%1M").arg(e.volume / 1e6, 0, 'f', 1);
-            else                      vol_text = QString::number(e.volume, 'f', 0);
+            if (e.volume >= 1e9)
+                vol_text = QString("%1B").arg(e.volume / 1e9, 0, 'f', 1);
+            else if (e.volume >= 1e6)
+                vol_text = QString("%1M").arg(e.volume / 1e6, 0, 'f', 1);
+            else
+                vol_text = QString::number(e.volume, 'f', 0);
             vol_item->setText(vol_text);
             vol_item->setData(Qt::UserRole, e.volume);
 
             // Subtle row tint by direction
             QColor bg = (i % 2 == 0) ? kRowEven : kRowOdd;
-            if (e.change_pct > 0)      bg = kRowPosHint;
-            else if (e.change_pct < 0) bg = kRowNegHint;
+            if (e.change_pct > 0)
+                bg = kRowPosHint;
+            else if (e.change_pct < 0)
+                bg = kRowNegHint;
 
             // Active symbol amber left indicator via first column
             auto* sym_item = table_->item(i, 0);
@@ -193,7 +200,8 @@ void CryptoWatchlist::update_prices(const QVector<trading::TickerData>& tickers)
 
             for (int c = 0; c < 4; ++c) {
                 auto* it = table_->item(i, c);
-                if (it) it->setBackground(bg);
+                if (it)
+                    it->setBackground(bg);
             }
         }
         table_->setUpdatesEnabled(true);
@@ -237,29 +245,34 @@ void CryptoWatchlist::rebuild_table() {
         for (const auto& m : search_results_) {
             if (m.symbol.toUpper().contains(filter)) {
                 filtered.append(m);
-                if (filtered.size() >= 50) break;
+                if (filtered.size() >= 50)
+                    break;
             }
         }
 
         const int n = filtered.size();
         table_->setUpdatesEnabled(false);
-        if (table_->rowCount() != n) table_->setRowCount(n);
+        if (table_->rowCount() != n)
+            table_->setRowCount(n);
 
         for (int i = 0; i < n; ++i) {
             const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
             auto ensure = [&](int col, const QString& text, const QColor& fg,
                               int align = Qt::AlignLeft | Qt::AlignVCenter) {
                 auto* it = table_->item(i, col);
-                if (!it) { it = new QTableWidgetItem; table_->setItem(i, col, it); }
+                if (!it) {
+                    it = new QTableWidgetItem;
+                    table_->setItem(i, col, it);
+                }
                 it->setText(text);
                 it->setForeground(fg);
                 it->setBackground(bg);
                 it->setTextAlignment(align);
             };
             ensure(0, filtered[i].symbol, kColorPrimary);
-            ensure(1, filtered[i].type,   kColorSecondary);
-            ensure(2, "--",                kColorDim, Qt::AlignRight | Qt::AlignVCenter);
-            ensure(3, "",                  kColorDim, Qt::AlignRight | Qt::AlignVCenter);
+            ensure(1, filtered[i].type, kColorSecondary);
+            ensure(2, "--", kColorDim, Qt::AlignRight | Qt::AlignVCenter);
+            ensure(3, "", kColorDim, Qt::AlignRight | Qt::AlignVCenter);
         }
         table_->setUpdatesEnabled(true);
         return;
@@ -275,18 +288,24 @@ void CryptoWatchlist::rebuild_table() {
 
     const int n = visible.size();
     table_->setUpdatesEnabled(false);
-    if (table_->rowCount() != n) table_->setRowCount(n);
+    if (table_->rowCount() != n)
+        table_->setRowCount(n);
 
     for (int i = 0; i < n; ++i) {
         const auto& e = visible[i];
         QColor bg = (i % 2 == 0) ? kRowEven : kRowOdd;
-        if (e.has_data && e.change_pct > 0)       bg = kRowPosHint;
-        else if (e.has_data && e.change_pct < 0)   bg = kRowNegHint;
+        if (e.has_data && e.change_pct > 0)
+            bg = kRowPosHint;
+        else if (e.has_data && e.change_pct < 0)
+            bg = kRowNegHint;
 
         auto ensure = [&](int col, const QString& text, const QColor& fg,
                           int align = Qt::AlignLeft | Qt::AlignVCenter) {
             auto* it = table_->item(i, col);
-            if (!it) { it = new QTableWidgetItem; table_->setItem(i, col, it); }
+            if (!it) {
+                it = new QTableWidgetItem;
+                table_->setItem(i, col, it);
+            }
             it->setText(text);
             it->setForeground(fg);
             it->setBackground(bg);
@@ -297,25 +316,27 @@ void CryptoWatchlist::rebuild_table() {
         QColor sym_color = (e.symbol == active_symbol_) ? kColorAmber : kColorPrimary;
         ensure(0, e.symbol, sym_color);
 
-        ensure(1,
-            e.has_data ? QString::number(e.price, 'f', 2) : QString("--"),
-            e.has_data ? kColorPrimary : kColorDim,
-            Qt::AlignRight | Qt::AlignVCenter);
+        ensure(1, e.has_data ? QString::number(e.price, 'f', 2) : QString("--"), e.has_data ? kColorPrimary : kColorDim,
+               Qt::AlignRight | Qt::AlignVCenter);
 
-        ensure(2,
-            e.has_data ? QString("%1%").arg(e.change_pct, 0, 'f', 2) : QString("--"),
-            (e.change_pct >= 0) ? kColorPos : kColorNeg,
-            Qt::AlignRight | Qt::AlignVCenter);
+        ensure(2, e.has_data ? QString("%1%").arg(e.change_pct, 0, 'f', 2) : QString("--"),
+               (e.change_pct >= 0) ? kColorPos : kColorNeg, Qt::AlignRight | Qt::AlignVCenter);
 
         // Volume column with UserRole for delegate bar
         QString vol_text = "--";
         if (e.has_data) {
-            if (e.volume >= 1e9)      vol_text = QString("%1B").arg(e.volume / 1e9, 0, 'f', 1);
-            else if (e.volume >= 1e6) vol_text = QString("%1M").arg(e.volume / 1e6, 0, 'f', 1);
-            else                      vol_text = QString::number(e.volume, 'f', 0);
+            if (e.volume >= 1e9)
+                vol_text = QString("%1B").arg(e.volume / 1e9, 0, 'f', 1);
+            else if (e.volume >= 1e6)
+                vol_text = QString("%1M").arg(e.volume / 1e6, 0, 'f', 1);
+            else
+                vol_text = QString::number(e.volume, 'f', 0);
         }
         auto* vol_it = table_->item(i, 3);
-        if (!vol_it) { vol_it = new QTableWidgetItem; table_->setItem(i, 3, vol_it); }
+        if (!vol_it) {
+            vol_it = new QTableWidgetItem;
+            table_->setItem(i, 3, vol_it);
+        }
         vol_it->setText(vol_text);
         vol_it->setForeground(kColorSecondary);
         vol_it->setBackground(bg);

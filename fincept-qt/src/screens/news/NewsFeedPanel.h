@@ -62,9 +62,9 @@ class NewsFeedPanel : public QWidget {
     };
     QVector<BreakingEntry> recent_banners_;
     int64_t global_cooldown_until_ = 0;
-    static constexpr int BANNER_DEDUP_WINDOW_SEC = 1800;    // 30 min
-    static constexpr int BANNER_GLOBAL_COOLDOWN_SEC = 120;   // 2 min
-    static constexpr int SOUND_COOLDOWN_SEC = 300;           // 5 min
+    static constexpr int BANNER_DEDUP_WINDOW_SEC = 1800;   // 30 min
+    static constexpr int BANNER_GLOBAL_COOLDOWN_SEC = 120; // 2 min
+    static constexpr int SOUND_COOLDOWN_SEC = 300;         // 5 min
     int64_t last_sound_at_ = 0;
 
     // Skeleton loading

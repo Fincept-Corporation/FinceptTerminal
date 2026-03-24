@@ -236,12 +236,11 @@ Result<void> PaperTradingRepository::update_position_price(const QString& portfo
                                                            double price) {
     // Update current_price AND recompute unrealized_pnl atomically
     // long: (price - entry) * qty,  short: (entry - price) * qty
-    return exec_write(
-        "UPDATE pt_positions SET current_price = ?, "
-        "unrealized_pnl = CASE WHEN side = 'long' THEN (? - entry_price) * quantity "
-        "ELSE (entry_price - ?) * quantity END "
-        "WHERE portfolio_id = ? AND symbol = ?",
-        {price, price, price, portfolio_id, symbol});
+    return exec_write("UPDATE pt_positions SET current_price = ?, "
+                      "unrealized_pnl = CASE WHEN side = 'long' THEN (? - entry_price) * quantity "
+                      "ELSE (entry_price - ?) * quantity END "
+                      "WHERE portfolio_id = ? AND symbol = ?",
+                      {price, price, price, portfolio_id, symbol});
 }
 
 Result<void> PaperTradingRepository::add_realized_pnl(const QString& id, double pnl) {

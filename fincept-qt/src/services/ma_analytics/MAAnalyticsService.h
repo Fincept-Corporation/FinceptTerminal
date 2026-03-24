@@ -4,6 +4,7 @@
 
 #include <QHash>
 #include <QObject>
+
 #include <functional>
 
 namespace fincept::services::ma {
@@ -93,16 +94,18 @@ class MAAnalyticsService : public QObject {
     Q_DISABLE_COPY(MAAnalyticsService)
 
     /// Run a Python script in the Analytics/corporateFinance/ tree.
-    void run_python(const QString& script, const QStringList& args,
-                    const QString& context);
+    void run_python(const QString& script, const QStringList& args, const QString& context);
 
     /// Run with JSON payload piped via args
-    void run_python_json(const QString& script, const QString& command,
-                         const QJsonObject& params, const QString& context);
+    void run_python_json(const QString& script, const QString& command, const QJsonObject& params,
+                         const QString& context);
 
     // ── Cache ───────────────────────────────────────────────────────────────
     static constexpr qint64 kResultTtlSec = 120;
-    struct CachedResult { QJsonObject data; qint64 ts = 0; };
+    struct CachedResult {
+        QJsonObject data;
+        qint64 ts = 0;
+    };
     QHash<QString, CachedResult> result_cache_;
 };
 

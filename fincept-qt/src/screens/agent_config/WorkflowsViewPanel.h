@@ -24,7 +24,7 @@ class WorkflowsViewPanel : public QWidget {
     void run_workflow(const QString& type, const QJsonObject& params = {});
 
     QPushButton* make_workflow_card(const QString& title, const QString& desc, const char* color,
-                                   const QString& action_text, QVBoxLayout* parent_layout);
+                                    const QString& action_text, QVBoxLayout* parent_layout);
 
     // Workflow inputs
     QLineEdit* symbol_input_ = nullptr;

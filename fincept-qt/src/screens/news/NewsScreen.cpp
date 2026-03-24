@@ -13,8 +13,8 @@
 
 #include <QDateTime>
 #include <QDesktopServices>
-#include <QScrollBar>
 #include <QPointer>
+#include <QScrollBar>
 #include <QSettings>
 #include <QShortcut>
 #include <QSplitter>
@@ -119,14 +119,15 @@ void NewsScreen::connect_signals() {
     connect(detail_panel_, &NewsDetailPanel::analyze_requested, this, &NewsScreen::on_analyze_requested);
 
     // RTL toggle
-    connect(command_bar_, &NewsCommandBar::rtl_toggled, this, []() {
-        ui::set_rtl(!ui::is_rtl());
-    });
+    connect(command_bar_, &NewsCommandBar::rtl_toggled, this, []() { ui::set_rtl(!ui::is_rtl()); });
 
     // Variant selector — filter feeds by variant (Fix #11)
     connect(command_bar_, &NewsCommandBar::variant_changed, this, [this](const QString& variant) {
         active_variant_ = variant;
-        QSettings s; s.beginGroup("news"); s.setValue("variant", variant); s.endGroup();
+        QSettings s;
+        s.beginGroup("news");
+        s.setValue("variant", variant);
+        s.endGroup();
         on_refresh();
     });
 
@@ -146,8 +147,7 @@ void NewsScreen::connect_signals() {
     // Started/stopped in showEvent/hideEvent (P3 compliance)
 
     // Scroll-based seen tracking
-    connect(feed_panel_->list_view()->verticalScrollBar(), &QScrollBar::valueChanged,
-            this, [this]() {
+    connect(feed_panel_->list_view()->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
         // Mark visible articles as seen
         auto* lv = feed_panel_->list_view();
         for (int i = 0; i < feed_panel_->model()->rowCount(); ++i) {
@@ -166,13 +166,13 @@ void NewsScreen::connect_signals() {
             return;
         command_bar_->set_summarizing(true);
         QPointer<NewsScreen> self = this;
-        services::NewsService::instance().summarize_headlines(filtered_articles_, 8,
-            [self](bool ok, QString summary) {
-                if (!self) return;
-                self->command_bar_->set_summarizing(false);
-                if (ok)
-                    self->command_bar_->show_summary(summary);
-            });
+        services::NewsService::instance().summarize_headlines(filtered_articles_, 8, [self](bool ok, QString summary) {
+            if (!self)
+                return;
+            self->command_bar_->set_summarizing(false);
+            if (ok)
+                self->command_bar_->show_summary(summary);
+        });
     });
     connect(detail_panel_, &NewsDetailPanel::related_article_clicked, this, &NewsScreen::on_related_clicked);
 
@@ -180,8 +180,8 @@ void NewsScreen::connect_signals() {
     connect(ticker_strip_, &NewsTickerStrip::article_clicked, this, &NewsScreen::on_article_clicked);
 
     // Service auto-refresh
-    connect(&services::NewsService::instance(), &services::NewsService::articles_updated,
-            this, [this](QVector<services::NewsArticle> articles) {
+    connect(&services::NewsService::instance(), &services::NewsService::articles_updated, this,
+            [this](QVector<services::NewsArticle> articles) {
                 if (!visible_)
                     return;
                 all_articles_ = std::move(articles);
@@ -190,14 +190,10 @@ void NewsScreen::connect_signals() {
 
     // Keyboard shortcuts
     auto* shortcut_j = new QShortcut(QKeySequence("J"), this);
-    connect(shortcut_j, &QShortcut::activated, this, [this]() {
-        feed_panel_->select_next();
-    });
+    connect(shortcut_j, &QShortcut::activated, this, [this]() { feed_panel_->select_next(); });
 
     auto* shortcut_k = new QShortcut(QKeySequence("K"), this);
-    connect(shortcut_k, &QShortcut::activated, this, [this]() {
-        feed_panel_->select_previous();
-    });
+    connect(shortcut_k, &QShortcut::activated, this, [this]() { feed_panel_->select_previous(); });
 
     auto* shortcut_enter = new QShortcut(QKeySequence(Qt::Key_Return), this);
     connect(shortcut_enter, &QShortcut::activated, this, [this]() {
@@ -241,26 +237,38 @@ void NewsScreen::hideEvent(QHideEvent* e) {
 void NewsScreen::on_category_changed(const QString& category) {
     active_category_ = category;
     visible_article_count_ = PAGE_SIZE;
-    QSettings s; s.beginGroup("news"); s.setValue("category", category); s.endGroup();
+    QSettings s;
+    s.beginGroup("news");
+    s.setValue("category", category);
+    s.endGroup();
     apply_filters_async();
 }
 
 void NewsScreen::on_time_range_changed(const QString& range) {
     time_range_ = range;
     visible_article_count_ = PAGE_SIZE;
-    QSettings s; s.beginGroup("news"); s.setValue("time_range", range); s.endGroup();
+    QSettings s;
+    s.beginGroup("news");
+    s.setValue("time_range", range);
+    s.endGroup();
     apply_filters_async();
 }
 
 void NewsScreen::on_sort_changed(const QString& sort) {
     sort_mode_ = sort;
-    QSettings s; s.beginGroup("news"); s.setValue("sort_mode", sort); s.endGroup();
+    QSettings s;
+    s.beginGroup("news");
+    s.setValue("sort_mode", sort);
+    s.endGroup();
     apply_filters_async();
 }
 
 void NewsScreen::on_view_mode_changed(const QString& mode) {
     view_mode_ = mode;
-    QSettings s; s.beginGroup("news"); s.setValue("view_mode", mode); s.endGroup();
+    QSettings s;
+    s.beginGroup("news");
+    s.setValue("view_mode", mode);
+    s.endGroup();
     feed_panel_->model()->set_view_mode(mode);
 }
 
@@ -330,8 +338,7 @@ void NewsScreen::on_article_clicked(const services::NewsArticle& article) {
         if (g.id == article.id && !g.locations.isEmpty()) {
             QPointer<NewsScreen> geo_self = this;
             services::NewsNlpService::instance().nearby_infrastructure(
-                g.primary_lat, g.primary_lon, 50,
-                [geo_self](bool ok, QVector<services::InfrastructureItem> items) {
+                g.primary_lat, g.primary_lon, 50, [geo_self](bool ok, QVector<services::InfrastructureItem> items) {
                     if (geo_self && ok)
                         geo_self->detail_panel_->show_infrastructure(items);
                 });
@@ -414,15 +421,15 @@ void NewsScreen::refresh_data(bool force) {
     QPointer<NewsScreen> self = this;
     auto conn = std::make_shared<QMetaObject::Connection>();
     *conn = connect(svc, &services::NewsService::articles_partial, this,
-        [self, conn](QVector<services::NewsArticle> articles, int done, int total) {
-            if (!self)
-                return;
-            self->all_articles_ = std::move(articles);
-            self->command_bar_->set_loading_progress(done, total);
-            self->apply_filters_async();
-            if (done == total)
-                QObject::disconnect(*conn);
-        });
+                    [self, conn](QVector<services::NewsArticle> articles, int done, int total) {
+                        if (!self)
+                            return;
+                        self->all_articles_ = std::move(articles);
+                        self->command_bar_->set_loading_progress(done, total);
+                        self->apply_filters_async();
+                        if (done == total)
+                            QObject::disconnect(*conn);
+                    });
 
     svc->fetch_all_news_progressive(force, [self](bool ok, QVector<services::NewsArticle> articles) {
         if (!self)
@@ -494,14 +501,8 @@ void NewsScreen::apply_filters_async() {
             // Category filter
             if (category != "ALL") {
                 static const QMap<QString, QStringList> cat_map = {
-                    {"MKT", {"MARKETS"}},
-                    {"EARN", {"EARNINGS"}},
-                    {"ECO", {"ECONOMIC"}},
-                    {"TECH", {"TECH"}},
-                    {"NRG", {"ENERGY"}},
-                    {"CRPT", {"CRYPTO"}},
-                    {"GEO", {"GEOPOLITICS"}},
-                    {"DEF", {"DEFENSE"}},
+                    {"MKT", {"MARKETS"}}, {"EARN", {"EARNINGS"}}, {"ECO", {"ECONOMIC"}},    {"TECH", {"TECH"}},
+                    {"NRG", {"ENERGY"}},  {"CRPT", {"CRYPTO"}},   {"GEO", {"GEOPOLITICS"}}, {"DEF", {"DEFENSE"}},
                 };
                 auto it = cat_map.find(category);
                 if (it != cat_map.end() && !it.value().contains(a.category))
@@ -534,9 +535,8 @@ void NewsScreen::apply_filters_async() {
 
         // Sort
         if (sort == "NEWEST") {
-            std::sort(filtered.begin(), filtered.end(), [](const auto& a, const auto& b) {
-                return a.sort_ts > b.sort_ts;
-            });
+            std::sort(filtered.begin(), filtered.end(),
+                      [](const auto& a, const auto& b) { return a.sort_ts > b.sort_ts; });
         } else {
             std::sort(filtered.begin(), filtered.end(), [](const auto& a, const auto& b) {
                 if (a.priority != b.priority)
@@ -549,26 +549,25 @@ void NewsScreen::apply_filters_async() {
         auto clusters = services::cluster_articles(filtered);
 
         // Post back to UI thread
-        QMetaObject::invokeMethod(self, [self, gen, filtered, clusters, category_counts,
-                                          bullish, bearish, neutral]() {
-            if (!self)
-                return;
-            if (gen != self->filter_generation_.load(std::memory_order_relaxed)) {
-                LOG_DEBUG("NewsScreen", QString("Rejected stale filter gen %1").arg(gen));
-                return;
-            }
-            self->update_ui_from_filtered(gen, filtered, clusters, category_counts,
-                                           bullish, bearish, neutral);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, gen, filtered, clusters, category_counts, bullish, bearish, neutral]() {
+                if (!self)
+                    return;
+                if (gen != self->filter_generation_.load(std::memory_order_relaxed)) {
+                    LOG_DEBUG("NewsScreen", QString("Rejected stale filter gen %1").arg(gen));
+                    return;
+                }
+                self->update_ui_from_filtered(gen, filtered, clusters, category_counts, bullish, bearish, neutral);
+            },
+            Qt::QueuedConnection);
     });
 }
 
-void NewsScreen::update_ui_from_filtered(
-    int /*generation*/,
-    const QVector<services::NewsArticle>& filtered,
-    const QVector<services::NewsCluster>& clusters,
-    const QMap<QString, int>& category_counts,
-    int bullish, int bearish, int neutral) {
+void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<services::NewsArticle>& filtered,
+                                         const QVector<services::NewsCluster>& clusters,
+                                         const QMap<QString, int>& category_counts, int bullish, int bearish,
+                                         int neutral) {
 
     filtered_articles_ = filtered;
     clusters_ = clusters;
@@ -586,11 +585,8 @@ void NewsScreen::update_ui_from_filtered(
     command_bar_->set_unseen_count(feed_panel_->model()->unseen_count());
 
     // Side panel stats
-    side_panel_->update_stats(
-        services::NewsService::instance().feed_count(),
-        filtered.size(),
-        clusters.size(),
-        services::NewsService::instance().active_sources().size());
+    side_panel_->update_stats(services::NewsService::instance().feed_count(), filtered.size(), clusters.size(),
+                              services::NewsService::instance().active_sources().size());
     side_panel_->update_sentiment(bullish, bearish, neutral);
 
     // Top 5 stories
@@ -608,8 +604,7 @@ void NewsScreen::update_ui_from_filtered(
     // Ticker strip
     QVector<services::NewsArticle> ticker_articles;
     for (const auto& a : filtered) {
-        if (a.priority == services::Priority::FLASH ||
-            a.priority == services::Priority::URGENT ||
+        if (a.priority == services::Priority::FLASH || a.priority == services::Priority::URGENT ||
             a.priority == services::Priority::BREAKING)
             ticker_articles.append(a);
     }
@@ -626,94 +621,106 @@ void NewsScreen::update_ui_from_filtered(
 
     // Semantic clustering (Fix #13) — upgrade clusters with TF-IDF similarity
     services::NewsNlpService::instance().cluster_semantic(filtered, [nlp_self](bool ok, QJsonArray semantic_clusters) {
-        if (!nlp_self || !ok || semantic_clusters.isEmpty()) return;
+        if (!nlp_self || !ok || semantic_clusters.isEmpty())
+            return;
         LOG_DEBUG("NewsScreen", QString("Semantic clustering found %1 groups").arg(semantic_clusters.size()));
     });
 
     // Entity extraction
     services::NewsNlpService::instance().extract_entities(filtered, [nlp_self](bool ok, services::NerResult ner) {
-        if (!nlp_self || !ok) return;
+        if (!nlp_self || !ok)
+            return;
         // Update side panel with top entities
         nlp_self->side_panel_->update_entities(ner);
     });
 
     // Geolocation + focal point detection (Fix #17)
-    services::NewsNlpService::instance().geolocate_articles(filtered, [nlp_self](bool ok, QVector<services::ArticleGeo> geo) {
-        if (!nlp_self || !ok) return;
-        QSet<QString> geo_ids;
-        for (const auto& g : geo)
-            geo_ids.insert(g.id);
-        nlp_self->feed_panel_->model()->set_geo_articles(geo_ids);
-        nlp_self->side_panel_->update_locations(geo);
+    services::NewsNlpService::instance().geolocate_articles(
+        filtered, [nlp_self](bool ok, QVector<services::ArticleGeo> geo) {
+            if (!nlp_self || !ok)
+                return;
+            QSet<QString> geo_ids;
+            for (const auto& g : geo)
+                geo_ids.insert(g.id);
+            nlp_self->feed_panel_->model()->set_geo_articles(geo_ids);
+            nlp_self->side_panel_->update_locations(geo);
 
-        // Focal point detection from geolocated articles
-        QJsonArray geo_json;
-        for (const auto& g : geo) {
-            QJsonObject obj;
-            obj["id"] = g.id;
-            obj["primary_lat"] = g.primary_lat;
-            obj["primary_lon"] = g.primary_lon;
-            obj["category"] = "GENERAL";
-            obj["source"] = "";
-            obj["headline"] = "";
-            // Find matching article for metadata
-            for (const auto& a : nlp_self->filtered_articles_) {
-                if (a.id == g.id) {
-                    obj["category"] = a.category;
-                    obj["source"] = a.source;
-                    obj["headline"] = a.headline;
-                    break;
-                }
-            }
-            geo_json.append(obj);
-        }
-        if (geo_json.size() >= 3) {
-            services::NewsCorrelationService::instance().detect_focal_points(geo_json,
-                [nlp_self](bool fp_ok, QVector<services::FocalPoint> points) {
-                    if (!nlp_self || !fp_ok || points.isEmpty()) return;
-                    LOG_INFO("NewsScreen", QString("Detected %1 focal points").arg(points.size()));
-                    // Focal points shown as part of signals in side panel
-                    // Convert to CorrelationSignal for display
-                    QVector<services::CorrelationSignal> fp_sigs;
-                    for (const auto& fp : points) {
-                        services::CorrelationSignal sig;
-                        sig.type = "geo_convergence";
-                        sig.severity = fp.severity;
-                        sig.value = fp.event_count;
-                        sig.detail = QString("Focal: %1 events at (%2, %3)")
-                                         .arg(fp.event_count).arg(fp.lat, 0, 'f', 1).arg(fp.lon, 0, 'f', 1);
-                        fp_sigs.append(sig);
+            // Focal point detection from geolocated articles
+            QJsonArray geo_json;
+            for (const auto& g : geo) {
+                QJsonObject obj;
+                obj["id"] = g.id;
+                obj["primary_lat"] = g.primary_lat;
+                obj["primary_lon"] = g.primary_lon;
+                obj["category"] = "GENERAL";
+                obj["source"] = "";
+                obj["headline"] = "";
+                // Find matching article for metadata
+                for (const auto& a : nlp_self->filtered_articles_) {
+                    if (a.id == g.id) {
+                        obj["category"] = a.category;
+                        obj["source"] = a.source;
+                        obj["headline"] = a.headline;
+                        break;
                     }
-                    // Append to existing signals in side panel
-                    auto existing = services::NewsCorrelationService::instance().cached_signals();
-                    existing.append(fp_sigs);
-                    nlp_self->side_panel_->update_signals(existing);
-                });
-        }
-    });
+                }
+                geo_json.append(obj);
+            }
+            if (geo_json.size() >= 3) {
+                services::NewsCorrelationService::instance().detect_focal_points(
+                    geo_json, [nlp_self](bool fp_ok, QVector<services::FocalPoint> points) {
+                        if (!nlp_self || !fp_ok || points.isEmpty())
+                            return;
+                        LOG_INFO("NewsScreen", QString("Detected %1 focal points").arg(points.size()));
+                        // Focal points shown as part of signals in side panel
+                        // Convert to CorrelationSignal for display
+                        QVector<services::CorrelationSignal> fp_sigs;
+                        for (const auto& fp : points) {
+                            services::CorrelationSignal sig;
+                            sig.type = "geo_convergence";
+                            sig.severity = fp.severity;
+                            sig.value = fp.event_count;
+                            sig.detail = QString("Focal: %1 events at (%2, %3)")
+                                             .arg(fp.event_count)
+                                             .arg(fp.lat, 0, 'f', 1)
+                                             .arg(fp.lon, 0, 'f', 1);
+                            fp_sigs.append(sig);
+                        }
+                        // Append to existing signals in side panel
+                        auto existing = services::NewsCorrelationService::instance().cached_signals();
+                        existing.append(fp_sigs);
+                        nlp_self->side_panel_->update_signals(existing);
+                    });
+            }
+        });
 
     // Correlation signals
-    services::NewsCorrelationService::instance().detect_signals(filtered, [nlp_self](bool ok, QVector<services::CorrelationSignal> sigs) {
-        if (!nlp_self || !ok) return;
-        nlp_self->side_panel_->update_signals(sigs);
+    services::NewsCorrelationService::instance().detect_signals(
+        filtered, [nlp_self](bool ok, QVector<services::CorrelationSignal> sigs) {
+            if (!nlp_self || !ok)
+                return;
+            nlp_self->side_panel_->update_signals(sigs);
 
-        // Compute CII for top mentioned countries
-        auto ner = services::NewsNlpService::instance().cached_ner();
-        for (int i = 0; i < std::min(5, static_cast<int>(ner.top_countries.size())); ++i) {
-            QString code = ner.top_countries[i].name;
-            services::NewsCorrelationService::instance().compute_instability(code, sigs,
-                [nlp_self, code](bool ok2, services::InstabilityScore score) {
-                    if (!nlp_self || !ok2) return;
-                    nlp_self->side_panel_->update_instability(code, score);
-                });
-        }
-    });
+            // Compute CII for top mentioned countries
+            auto ner = services::NewsNlpService::instance().cached_ner();
+            for (int i = 0; i < std::min(5, static_cast<int>(ner.top_countries.size())); ++i) {
+                QString code = ner.top_countries[i].name;
+                services::NewsCorrelationService::instance().compute_instability(
+                    code, sigs, [nlp_self, code](bool ok2, services::InstabilityScore score) {
+                        if (!nlp_self || !ok2)
+                            return;
+                        nlp_self->side_panel_->update_instability(code, score);
+                    });
+            }
+        });
 
     // Prediction markets (fetch once per refresh cycle)
-    services::NewsCorrelationService::instance().fetch_predictions([nlp_self](bool ok, QVector<services::PredictionMarket> preds) {
-        if (!nlp_self || !ok) return;
-        nlp_self->side_panel_->update_predictions(preds);
-    });
+    services::NewsCorrelationService::instance().fetch_predictions(
+        [nlp_self](bool ok, QVector<services::PredictionMarket> preds) {
+            if (!nlp_self || !ok)
+                return;
+            nlp_self->side_panel_->update_predictions(preds);
+        });
 }
 
 void NewsScreen::update_monitors() {
@@ -769,23 +776,20 @@ void NewsScreen::compute_deviations() {
     }
 
     // Sort by z-score descending
-    std::sort(deviations.begin(), deviations.end(),
-              [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::sort(deviations.begin(), deviations.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
 
     side_panel_->update_deviations(deviations);
 
     // Persist baselines via correlation service (Fix #5)
-    services::NewsCorrelationService::instance().update_baseline(current_counts,
-        [](bool /*ok*/, QMap<QString, services::CategoryBaseline> /*baselines*/) {
+    services::NewsCorrelationService::instance().update_baseline(
+        current_counts, [](bool /*ok*/, QMap<QString, services::CategoryBaseline> /*baselines*/) {
             // Baselines saved to Python cache; no UI action needed
         });
 }
 
 void NewsScreen::sort_articles(QVector<services::NewsArticle>& articles) const {
     if (sort_mode_ == "NEWEST") {
-        std::sort(articles.begin(), articles.end(), [](const auto& a, const auto& b) {
-            return a.sort_ts > b.sort_ts;
-        });
+        std::sort(articles.begin(), articles.end(), [](const auto& a, const auto& b) { return a.sort_ts > b.sort_ts; });
     } else {
         std::sort(articles.begin(), articles.end(), [](const auto& a, const auto& b) {
             if (a.priority != b.priority)
@@ -796,11 +800,16 @@ void NewsScreen::sort_articles(QVector<services::NewsArticle>& articles) const {
 }
 
 int64_t NewsScreen::time_window_seconds() const {
-    if (time_range_ == "1H") return 3600;
-    if (time_range_ == "6H") return 21600;
-    if (time_range_ == "24H") return 86400;
-    if (time_range_ == "48H") return 172800;
-    if (time_range_ == "7D") return 604800;
+    if (time_range_ == "1H")
+        return 3600;
+    if (time_range_ == "6H")
+        return 21600;
+    if (time_range_ == "24H")
+        return 86400;
+    if (time_range_ == "48H")
+        return 172800;
+    if (time_range_ == "7D")
+        return 604800;
     return 86400;
 }
 

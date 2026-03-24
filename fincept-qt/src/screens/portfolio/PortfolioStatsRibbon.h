@@ -19,7 +19,7 @@ class PortfolioStatsRibbon : public QWidget {
     struct MetricCell {
         QLabel* label = nullptr;
         QLabel* value = nullptr;
-        QLabel* sub   = nullptr;
+        QLabel* sub = nullptr;
     };
 
     MetricCell add_cell(const QString& label_text, const char* value_color);

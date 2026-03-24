@@ -15,8 +15,7 @@ namespace fincept::python {
 
 // Scripts that require NumPy 1.x environment (same list as Tauri's python.rs)
 static const QStringList kNumpy1Scripts = {
-    "vectorbt", "backtesting", "gluonts", "functime",
-    "pyportfolioopt", "financepy", "ffn", "ffn_wrapper",
+    "vectorbt", "backtesting", "gluonts", "functime", "pyportfolioopt", "financepy", "ffn", "ffn_wrapper",
 };
 
 PythonRunner& PythonRunner::instance() {
@@ -209,19 +208,22 @@ void PythonRunner::start_next() {
             script_path = temp_file;
             // Always use venv-numpy2 for notebook code
             QString venv2 = PythonSetupManager::instance().python_path("venv-numpy2");
-            if (QFileInfo::exists(venv2)) python_exe = venv2;
+            if (QFileInfo::exists(venv2))
+                python_exe = venv2;
         } else {
             script_path = scripts_dir_ + "/" + req.script;
             // Route to correct venv based on script name
             QString venv_name = select_venv_for_script(req.script);
             QString venv_py = PythonSetupManager::instance().python_path(venv_name);
-            if (QFileInfo::exists(venv_py)) python_exe = venv_py;
+            if (QFileInfo::exists(venv_py))
+                python_exe = venv_py;
         }
 
         auto* proc = new QProcess(this);
         QStringList full_args;
         full_args << script_path;
-        if (!is_code) full_args.append(req.args);
+        if (!is_code)
+            full_args.append(req.args);
 
         // Set environment for clean Python execution
         QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
@@ -285,7 +287,8 @@ void PythonRunner::start_next() {
             Q_UNUSED(err);
             QString error_msg = proc->errorString();
             proc->deleteLater();
-            if (is_code && !temp_file.isEmpty()) QFile::remove(temp_file);
+            if (is_code && !temp_file.isEmpty())
+                QFile::remove(temp_file);
             cb({false, {}, "Process error: " + error_msg, -1});
 
             --active_count_;

@@ -68,8 +68,8 @@ TrademarksScreen::TrademarksScreen(QWidget* parent) : QWidget(parent) {
     vl->addWidget(title);
 
     auto* updated = new QLabel("Last updated: January 1, 2026");
-    updated->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
-                               .arg(colors::TEXT_TERTIARY, MF));
+    updated->setStyleSheet(
+        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
     vl->addWidget(updated);
     vl->addSpacing(12);
 
@@ -109,9 +109,8 @@ TrademarksScreen::TrademarksScreen(QWidget* parent) : QWidget(parent) {
 
     pvl->addWidget(heading("4", "COPYRIGHT NOTICE"));
     pvl->addWidget(body("Copyright 2024-2026 Fincept Corporation. All rights reserved."));
-    pvl->addWidget(body(
-        "This software is licensed under AGPL-3.0-or-later for open source use, "
-        "with a separate commercial license available for enterprise deployment."));
+    pvl->addWidget(body("This software is licensed under AGPL-3.0-or-later for open source use, "
+                        "with a separate commercial license available for enterprise deployment."));
 
     pvl->addWidget(heading("5", "DATA PROVIDER ACKNOWLEDGMENTS"));
     pvl->addWidget(bullet("Market data provided by various exchanges and data vendors"));

@@ -1,5 +1,6 @@
 // src/screens/portfolio/PortfolioSectorPanel.cpp
 #include "screens/portfolio/PortfolioSectorPanel.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QChart>
@@ -40,15 +41,29 @@ QColor PortfolioSectorPanel::sector_color(int index) {
 // Simple sector inference from symbol (placeholder — real mapping would use a service)
 QString PortfolioSectorPanel::infer_sector(const QString& symbol) {
     static const QHash<QString, QString> known = {
-        {"AAPL", "Technology"}, {"MSFT", "Technology"}, {"GOOGL", "Technology"},
-        {"AMZN", "Technology"}, {"NVDA", "Technology"}, {"META", "Technology"},
-        {"TSLA", "Consumer Cyclical"}, {"JPM", "Financial Services"},
-        {"JNJ", "Healthcare"}, {"UNH", "Healthcare"}, {"PFE", "Healthcare"},
-        {"XOM", "Energy"}, {"CVX", "Energy"}, {"BRK-B", "Financial Services"},
-        {"V", "Financial Services"}, {"MA", "Financial Services"},
-        {"WMT", "Consumer Defensive"}, {"PG", "Consumer Defensive"},
-        {"DIS", "Communication"}, {"NFLX", "Communication"},
-        {"SPY", "US Equity"}, {"QQQ", "US Equity"}, {"BTC-USD", "Cryptocurrency"},
+        {"AAPL", "Technology"},
+        {"MSFT", "Technology"},
+        {"GOOGL", "Technology"},
+        {"AMZN", "Technology"},
+        {"NVDA", "Technology"},
+        {"META", "Technology"},
+        {"TSLA", "Consumer Cyclical"},
+        {"JPM", "Financial Services"},
+        {"JNJ", "Healthcare"},
+        {"UNH", "Healthcare"},
+        {"PFE", "Healthcare"},
+        {"XOM", "Energy"},
+        {"CVX", "Energy"},
+        {"BRK-B", "Financial Services"},
+        {"V", "Financial Services"},
+        {"MA", "Financial Services"},
+        {"WMT", "Consumer Defensive"},
+        {"PG", "Consumer Defensive"},
+        {"DIS", "Communication"},
+        {"NFLX", "Communication"},
+        {"SPY", "US Equity"},
+        {"QQQ", "US Equity"},
+        {"BTC-USD", "Cryptocurrency"},
         {"ETH-USD", "Cryptocurrency"},
     };
     auto it = known.find(symbol.toUpper());
@@ -73,8 +88,8 @@ void PortfolioSectorPanel::build_ui() {
     sector_layout->setSpacing(4);
 
     auto* sector_header = new QLabel("SECTOR ALLOCATION");
-    sector_header->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;")
-                                 .arg(ui::colors::TEXT_SECONDARY));
+    sector_header->setStyleSheet(
+        QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY));
     sector_layout->addWidget(sector_header);
 
     auto* donut_row = new QHBoxLayout;
@@ -113,8 +128,8 @@ void PortfolioSectorPanel::build_ui() {
 
     auto* corr_header = new QHBoxLayout;
     auto* corr_title = new QLabel("CORRELATION");
-    corr_title->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;")
-                               .arg(ui::colors::TEXT_SECONDARY));
+    corr_title->setStyleSheet(
+        QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY));
     corr_header->addWidget(corr_title);
 
     auto* corr_note = new QLabel("(day change proxy)");
@@ -144,7 +159,8 @@ void PortfolioSectorPanel::update_donut() {
     auto* chart = donut_view_->chart();
     chart->removeAllSeries();
 
-    if (holdings_.isEmpty()) return;
+    if (holdings_.isEmpty())
+        return;
 
     // Group by sector
     QHash<QString, double> sector_weights;
@@ -165,8 +181,7 @@ void PortfolioSectorPanel::update_donut() {
     QVector<QPair<QString, double>> sorted;
     for (auto it = sector_weights.begin(); it != sector_weights.end(); ++it)
         sorted.append({it.key(), it.value()});
-    std::sort(sorted.begin(), sorted.end(),
-              [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
 
     for (int i = 0; i < sorted.size(); ++i) {
         auto* slice = series->append(sorted[i].first, sorted[i].second);
@@ -194,16 +209,14 @@ void PortfolioSectorPanel::update_donut() {
         swatch->setStyleSheet(QString("background:%1;").arg(sector_color(i).name()));
         row->addWidget(swatch);
 
-        auto* name = new QLabel(QString("%1 (%2)")
-            .arg(sorted[i].first).arg(sector_counts[sorted[i].first]));
+        auto* name = new QLabel(QString("%1 (%2)").arg(sorted[i].first).arg(sector_counts[sorted[i].first]));
         name->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_PRIMARY));
         row->addWidget(name);
 
         row->addStretch();
 
         auto* weight = new QLabel(QString("%1%").arg(QString::number(sorted[i].second, 'f', 1)));
-        weight->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;")
-                              .arg(ui::colors::TEXT_SECONDARY));
+        weight->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY));
         row->addWidget(weight);
 
         legend_layout->addLayout(row);
@@ -226,8 +239,7 @@ void PortfolioSectorPanel::update_correlation() {
 
     // Take top 6 by weight
     auto sorted = holdings_;
-    std::sort(sorted.begin(), sorted.end(),
-              [](const auto& a, const auto& b) { return a.weight > b.weight; });
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.weight > b.weight; });
     int n = static_cast<int>(std::min(qsizetype{6}, sorted.size()));
 
     auto* grid = new QGridLayout(corr_widget_);
@@ -240,16 +252,14 @@ void PortfolioSectorPanel::update_correlation() {
     for (int i = 0; i < n; ++i) {
         auto* lbl = new QLabel(sorted[i].symbol.left(4));
         lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet(QString("color:%1; font-size:7px; font-weight:700;")
-                           .arg(ui::colors::TEXT_SECONDARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:7px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
         grid->addWidget(lbl, 0, i + 1);
     }
 
     // Matrix cells
     for (int r = 0; r < n; ++r) {
         auto* row_label = new QLabel(sorted[r].symbol.left(4));
-        row_label->setStyleSheet(QString("color:%1; font-size:7px; font-weight:700;")
-                                 .arg(ui::colors::TEXT_SECONDARY));
+        row_label->setStyleSheet(QString("color:%1; font-size:7px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
         grid->addWidget(row_label, r + 1, 0);
 
         for (int c = 0; c < n; ++c) {
@@ -280,8 +290,11 @@ void PortfolioSectorPanel::update_correlation() {
             const char* text_color = (r == c) ? "#000000" : ui::colors::TEXT_PRIMARY;
             cell->setStyleSheet(QString("background:rgba(%1,%2,%3,%4); color:%5;"
                                         "font-size:7px; font-weight:600;")
-                                .arg(bg.red()).arg(bg.green()).arg(bg.blue())
-                                .arg(bg.alpha()).arg(text_color));
+                                    .arg(bg.red())
+                                    .arg(bg.green())
+                                    .arg(bg.blue())
+                                    .arg(bg.alpha())
+                                    .arg(text_color));
 
             grid->addWidget(cell, r + 1, c + 1);
         }

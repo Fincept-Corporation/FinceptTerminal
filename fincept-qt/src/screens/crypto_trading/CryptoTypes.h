@@ -79,10 +79,10 @@ inline constexpr int TRADES_POLL_INTERVAL_MS = 5000;
 inline constexpr int CLOCK_UPDATE_MS = 1000;
 
 // Obsidian Design System Colors
-inline const QColor COLOR_BUY = QColor("#16a34a");      // POSITIVE
-inline const QColor COLOR_SELL = QColor("#dc2626");     // NEGATIVE
-inline const QColor COLOR_DIM = QColor("#808080");      // TEXT_SECONDARY
-inline const QColor COLOR_ACCENT = QColor("#d97706");   // AMBER
+inline const QColor COLOR_BUY = QColor("#16a34a");    // POSITIVE
+inline const QColor COLOR_SELL = QColor("#dc2626");   // NEGATIVE
+inline const QColor COLOR_DIM = QColor("#808080");    // TEXT_SECONDARY
+inline const QColor COLOR_ACCENT = QColor("#d97706"); // AMBER
 
 // Background layers
 inline const QColor BG_BASE = QColor("#080808");

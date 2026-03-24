@@ -42,8 +42,8 @@ void FileManagerScreen::build_ui() {
 
     // ── Header bar ───────────────────────────────────────────────────────────
     auto* header = new QWidget;
-    header->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
-                              .arg(colors::BG_RAISED, colors::BORDER_DIM));
+    header->setStyleSheet(
+        QString("background: %1; border-bottom: 1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_DIM));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(14, 10, 14, 10);
 
@@ -60,17 +60,15 @@ void FileManagerScreen::build_ui() {
     hhl->addStretch();
 
     stats_label_ = new QLabel("0 files | 0 B");
-    stats_label_->setStyleSheet(QString("color: %1; font-size: 11px; %2")
-                                    .arg(colors::TEXT_DIM, MF));
+    stats_label_->setStyleSheet(QString("color: %1; font-size: 11px; %2").arg(colors::TEXT_DIM, MF));
     hhl->addWidget(stats_label_);
 
     refresh_btn_ = new QPushButton("REFRESH");
     refresh_btn_->setCursor(Qt::PointingHandCursor);
-    refresh_btn_->setStyleSheet(
-        QString("QPushButton { background: transparent; color: %1; border: 1px solid %2; "
-                "padding: 4px 12px; font-size: 11px; %3 }"
-                "QPushButton:hover { color: #e5e5e5; background: %4; }")
-            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, MF, colors::BG_HOVER));
+    refresh_btn_->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %2; "
+                                        "padding: 4px 12px; font-size: 11px; %3 }"
+                                        "QPushButton:hover { color: #e5e5e5; background: %4; }")
+                                    .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, MF, colors::BG_HOVER));
     connect(refresh_btn_, &QPushButton::clicked, this, &FileManagerScreen::load_files);
     hhl->addWidget(refresh_btn_);
 
@@ -255,8 +253,7 @@ void FileManagerScreen::delete_file(const QString& file_id) {
         return;
 
     auto reply = QMessageBox::question(
-        this, "Delete File",
-        QString("Delete \"%1\"? This cannot be undone.").arg(file["originalName"].toString()),
+        this, "Delete File", QString("Delete \"%1\"? This cannot be undone.").arg(file["originalName"].toString()),
         QMessageBox::Yes | QMessageBox::No);
 
     if (reply != QMessageBox::Yes)
@@ -335,13 +332,12 @@ void FileManagerScreen::render_files() {
                                     .arg(MF));
         info_vl->addWidget(name_lbl);
 
-        auto* meta_lbl = new QLabel(
-            format_size(file["size"].toInteger()) + "  |  " +
-            QDateTime::fromString(file["uploadedAt"].toString(), Qt::ISODate)
-                .toLocalTime()
-                .toString("yyyy-MM-dd HH:mm"));
-        meta_lbl->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent; %2")
-                                    .arg(colors::TEXT_DIM, MF));
+        auto* meta_lbl = new QLabel(format_size(file["size"].toInteger()) + "  |  " +
+                                    QDateTime::fromString(file["uploadedAt"].toString(), Qt::ISODate)
+                                        .toLocalTime()
+                                        .toString("yyyy-MM-dd HH:mm"));
+        meta_lbl->setStyleSheet(
+            QString("color: %1; font-size: 10px; background: transparent; %2").arg(colors::TEXT_DIM, MF));
         info_vl->addWidget(meta_lbl);
 
         hl->addWidget(info, 1);
@@ -350,11 +346,10 @@ void FileManagerScreen::render_files() {
         auto* dl_btn = new QPushButton("SAVE");
         dl_btn->setCursor(Qt::PointingHandCursor);
         dl_btn->setFixedSize(60, 26);
-        dl_btn->setStyleSheet(
-            QString("QPushButton { background: transparent; color: %1; border: 1px solid %2; "
-                    "font-size: 10px; font-weight: 700; %3 }"
-                    "QPushButton:hover { color: #38bdf8; background: #111111; }")
-                .arg(colors::CYAN, colors::BORDER_DIM, MF));
+        dl_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %2; "
+                                      "font-size: 10px; font-weight: 700; %3 }"
+                                      "QPushButton:hover { color: #38bdf8; background: #111111; }")
+                                  .arg(colors::CYAN, colors::BORDER_DIM, MF));
         QString fid = file["id"].toString();
         connect(dl_btn, &QPushButton::clicked, this, [this, fid]() { download_file(fid); });
         hl->addWidget(dl_btn);
@@ -363,11 +358,10 @@ void FileManagerScreen::render_files() {
         auto* del_btn = new QPushButton("DEL");
         del_btn->setCursor(Qt::PointingHandCursor);
         del_btn->setFixedSize(50, 26);
-        del_btn->setStyleSheet(
-            QString("QPushButton { background: transparent; color: %1; border: 1px solid %2; "
-                    "font-size: 10px; font-weight: 700; %3 }"
-                    "QPushButton:hover { color: #ef4444; background: rgba(239,68,68,0.1); }")
-                .arg(colors::TEXT_DIM, colors::BORDER_DIM, MF));
+        del_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %2; "
+                                       "font-size: 10px; font-weight: 700; %3 }"
+                                       "QPushButton:hover { color: #ef4444; background: rgba(239,68,68,0.1); }")
+                                   .arg(colors::TEXT_DIM, colors::BORDER_DIM, MF));
         connect(del_btn, &QPushButton::clicked, this, [this, fid]() { delete_file(fid); });
         hl->addWidget(del_btn);
 
@@ -379,8 +373,7 @@ void FileManagerScreen::render_files() {
         auto* empty = new QLabel(files_.isEmpty() ? "No files yet. Click UPLOAD FILES to get started."
                                                   : "No files match your search.");
         empty->setAlignment(Qt::AlignCenter);
-        empty->setStyleSheet(QString("color: %1; font-size: 13px; padding: 40px; %2")
-                                 .arg(colors::TEXT_DIM, MF));
+        empty->setStyleSheet(QString("color: %1; font-size: 13px; padding: 40px; %2").arg(colors::TEXT_DIM, MF));
         file_layout_->addWidget(empty);
     }
 
@@ -421,7 +414,7 @@ QString FileManagerScreen::file_type_color(const QString& mime) {
         return "#ca8a04"; // yellow
     if (mime.contains("pdf"))
         return "#dc2626"; // red
-    return "#808080"; // gray default
+    return "#808080";     // gray default
 }
 
 } // namespace fincept::screens

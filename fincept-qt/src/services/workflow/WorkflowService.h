@@ -1,7 +1,7 @@
 #pragma once
 
-#include "screens/node_editor/NodeEditorTypes.h"
 #include "core/result/Result.h"
+#include "screens/node_editor/NodeEditorTypes.h"
 
 #include <QObject>
 #include <QTimer>

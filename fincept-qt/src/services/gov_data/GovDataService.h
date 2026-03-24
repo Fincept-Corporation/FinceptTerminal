@@ -28,7 +28,7 @@ struct GovProviderInfo {
 
 struct GovDataResult {
     bool success = false;
-    QJsonObject data;     // Full parsed JSON response
+    QJsonObject data; // Full parsed JSON response
     QString error;
 };
 
@@ -44,8 +44,8 @@ class GovDataService : public QObject {
     /// @param command  Sub-command passed as first arg
     /// @param args     Additional arguments
     /// @param request_id  Caller-chosen id to match response
-    void execute(const QString& script, const QString& command,
-                 const QStringList& args, const QString& request_id = {});
+    void execute(const QString& script, const QString& command, const QStringList& args,
+                 const QString& request_id = {});
 
     /// Get the static provider list
     static const QVector<GovProviderInfo>& providers();

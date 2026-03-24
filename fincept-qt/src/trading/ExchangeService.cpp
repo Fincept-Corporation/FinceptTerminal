@@ -134,12 +134,14 @@ void ExchangeService::poll_prices() {
     // Run the blocking fetch_tickers() in a background thread (P1: never block UI)
     QPointer<ExchangeService> self = this;
     QtConcurrent::run([self, symbols, watched_snapshot, exchange_id]() {
-        if (!self) return;
+        if (!self)
+            return;
 
         // fetch_tickers uses call_script which does blocking QProcess — safe in background thread
         auto tickers = self->fetch_tickers(symbols);
 
-        if (!self) return;
+        if (!self)
+            return;
 
         // Process results: update cache and feed OrderMatcher (all outside UI thread)
         // Collect callbacks to invoke on UI thread
@@ -177,34 +179,42 @@ void ExchangeService::poll_prices() {
             results.append(std::move(r));
         }
 
-        if (!self) return;
+        if (!self)
+            return;
 
         // Post cache update + callback invocation back to UI thread
-        QMetaObject::invokeMethod(self, [self, results]() {
-            if (!self) return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, results]() {
+                if (!self)
+                    return;
 
-            for (const auto& r : results) {
-                {
-                    QMutexLocker lock(&self->mutex_);
-                    self->price_cache_[r.ticker.symbol] = r.ticker;
+                for (const auto& r : results) {
+                    {
+                        QMutexLocker lock(&self->mutex_);
+                        self->price_cache_[r.ticker.symbol] = r.ticker;
+                    }
+
+                    // Copy callbacks out, release mutex, then invoke
+                    QVector<PriceUpdateCallback> cbs;
+                    {
+                        QMutexLocker lock(&self->mutex_);
+                        cbs.reserve(self->price_callbacks_.size());
+                        for (auto cb_it = self->price_callbacks_.constBegin();
+                             cb_it != self->price_callbacks_.constEnd(); ++cb_it)
+                            cbs.append(cb_it.value());
+                    }
+                    for (const auto& cb : cbs) {
+                        try {
+                            cb(r.ticker.symbol, r.ticker);
+                        } catch (...) {
+                        }
+                    }
                 }
 
-                // Copy callbacks out, release mutex, then invoke
-                QVector<PriceUpdateCallback> cbs;
-                {
-                    QMutexLocker lock(&self->mutex_);
-                    cbs.reserve(self->price_callbacks_.size());
-                    for (auto cb_it = self->price_callbacks_.constBegin();
-                         cb_it != self->price_callbacks_.constEnd(); ++cb_it)
-                        cbs.append(cb_it.value());
-                }
-                for (const auto& cb : cbs) {
-                    try { cb(r.ticker.symbol, r.ticker); } catch (...) {}
-                }
-            }
-
-            self->poll_in_progress_ = false;
-        }, Qt::QueuedConnection);
+                self->poll_in_progress_ = false;
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -287,16 +297,17 @@ void ExchangeService::start_daemon() {
                 LOG_WARN(TAG, "Daemon stderr: " + err);
         }
     });
-    connect(daemon_process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-            this, [this](int code, QProcess::ExitStatus status) {
-        LOG_WARN(TAG, QString("Daemon exited (code=%1, status=%2), will restart on next call")
-                     .arg(code).arg(status));
-        daemon_ready_ = false;
-        if (daemon_process_) {
-            daemon_process_->deleteLater();
-            daemon_process_ = nullptr;
-        }
-    });
+    connect(daemon_process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+            [this](int code, QProcess::ExitStatus status) {
+                LOG_WARN(
+                    TAG,
+                    QString("Daemon exited (code=%1, status=%2), will restart on next call").arg(code).arg(status));
+                daemon_ready_ = false;
+                if (daemon_process_) {
+                    daemon_process_->deleteLater();
+                    daemon_process_ = nullptr;
+                }
+            });
 
     QStringList args;
     args << "-u" << "-B" << script_path;
@@ -311,8 +322,7 @@ void ExchangeService::stop_daemon() {
         // Give it a moment to exit cleanly, then force kill
         auto* proc = daemon_process_;
         daemon_process_ = nullptr;
-        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                proc, &QObject::deleteLater);
+        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), proc, &QObject::deleteLater);
         QTimer::singleShot(2000, proc, [proc]() {
             if (proc->state() != QProcess::NotRunning)
                 proc->kill();
@@ -325,14 +335,17 @@ bool ExchangeService::is_daemon_running() const {
 }
 
 void ExchangeService::drain_daemon_buffer() {
-    if (!daemon_process_) return;
+    if (!daemon_process_)
+        return;
     while (daemon_process_->canReadLine()) {
         QString line = QString::fromUtf8(daemon_process_->readLine()).trimmed();
-        if (line.isEmpty() || line[0] != '{') continue;
+        if (line.isEmpty() || line[0] != '{')
+            continue;
 
         QJsonParseError err;
         auto doc = QJsonDocument::fromJson(line.toUtf8(), &err);
-        if (err.error != QJsonParseError::NoError) continue;
+        if (err.error != QJsonParseError::NoError)
+            continue;
 
         auto obj = doc.object();
         QString id = obj.value("id").toString();
@@ -341,7 +354,7 @@ void ExchangeService::drain_daemon_buffer() {
         if (id == "__init__") {
             daemon_ready_ = true;
             LOG_INFO(TAG, "Exchange daemon ready (pid=" +
-                     obj.value("data").toObject().value("pid").toVariant().toString() + ")");
+                              obj.value("data").toObject().value("pid").toVariant().toString() + ")");
             // Send credentials if we have them
             if (!credentials_.api_key.isEmpty()) {
                 QJsonObject creds;
@@ -410,26 +423,30 @@ QJsonObject ExchangeService::daemon_call(const QString& method, const QJsonObjec
     QByteArray data = QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n";
 
     // Send credentials if needed, then send the request — both on main thread
-    QMetaObject::invokeMethod(this, [this, data]() {
-        if (!daemon_process_) return;
-        // Send credentials if not yet sent
-        if (!credentials_sent_to_daemon_ && !credentials_.api_key.isEmpty()) {
-            QJsonObject creds;
-            creds["api_key"] = credentials_.api_key;
-            creds["secret"] = credentials_.secret;
-            if (!credentials_.password.isEmpty())
-                creds["password"] = credentials_.password;
+    QMetaObject::invokeMethod(
+        this,
+        [this, data]() {
+            if (!daemon_process_)
+                return;
+            // Send credentials if not yet sent
+            if (!credentials_sent_to_daemon_ && !credentials_.api_key.isEmpty()) {
+                QJsonObject creds;
+                creds["api_key"] = credentials_.api_key;
+                creds["secret"] = credentials_.secret;
+                if (!credentials_.password.isEmpty())
+                    creds["password"] = credentials_.password;
 
-            QJsonObject cred_req;
-            cred_req["id"] = "__creds__";
-            cred_req["method"] = "set_credentials";
-            cred_req["exchange"] = exchange_id_;
-            cred_req["args"] = creds;
-            daemon_process_->write(QJsonDocument(cred_req).toJson(QJsonDocument::Compact) + "\n");
-            credentials_sent_to_daemon_ = true;
-        }
-        daemon_process_->write(data);
-    }, Qt::BlockingQueuedConnection);
+                QJsonObject cred_req;
+                cred_req["id"] = "__creds__";
+                cred_req["method"] = "set_credentials";
+                cred_req["exchange"] = exchange_id_;
+                cred_req["args"] = creds;
+                daemon_process_->write(QJsonDocument(cred_req).toJson(QJsonDocument::Compact) + "\n");
+                credentials_sent_to_daemon_ = true;
+            }
+            daemon_process_->write(data);
+        },
+        Qt::BlockingQueuedConnection);
 
     // Wait for response using QWaitCondition (proper cross-thread signaling)
     QMutexLocker lock(&daemon_mutex_);
@@ -445,7 +462,8 @@ QJsonObject ExchangeService::daemon_call(const QString& method, const QJsonObjec
             // Unwrap: {"id":"...", "success":true, "data":{...}}
             if (resp.value("success").toBool(false) && resp.contains("data")) {
                 auto d = resp.value("data");
-                if (d.isObject()) return d.toObject();
+                if (d.isObject())
+                    return d.toObject();
             }
             if (resp.contains("error"))
                 return resp;
@@ -509,8 +527,7 @@ void ExchangeService::stop_ws_stream() {
 
         proc->terminate();
         // Non-blocking cleanup: kill after timeout if still running, then deleteLater
-        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                proc, &QObject::deleteLater);
+        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), proc, &QObject::deleteLater);
         // If terminate doesn't work within 3s, force kill
         QTimer::singleShot(3000, proc, [proc]() {
             if (proc->state() != QProcess::NotRunning) {
@@ -574,7 +591,10 @@ void ExchangeService::handle_ws_line(const QString& line) {
                 cbs.append(it.value());
         }
         for (const auto& cb : cbs) {
-            try { cb(ticker.symbol, ticker); } catch (...) {}
+            try {
+                cb(ticker.symbol, ticker);
+            } catch (...) {
+            }
         }
         return;
     }
@@ -589,7 +609,10 @@ void ExchangeService::handle_ws_line(const QString& line) {
                 cbs.append(it.value());
         }
         for (const auto& cb : cbs) {
-            try { cb(ob.symbol, ob); } catch (...) {}
+            try {
+                cb(ob.symbol, ob);
+            } catch (...) {
+            }
         }
         return;
     }
@@ -608,7 +631,10 @@ void ExchangeService::handle_ws_line(const QString& line) {
                 cbs.append(it.value());
         }
         for (const auto& cb : cbs) {
-            try { cb(sym, c); } catch (...) {}
+            try {
+                cb(sym, c);
+            } catch (...) {
+            }
         }
         return;
     }
@@ -628,13 +654,17 @@ void ExchangeService::handle_ws_line(const QString& line) {
                 cbs.append(it.value());
         }
         for (const auto& cb : cbs) {
-            try { cb(td.symbol, td); } catch (...) {}
+            try {
+                cb(td.symbol, td);
+            } catch (...) {
+            }
         }
     }
 }
 
 void ExchangeService::drain_ws_buffer() {
-    if (!ws_process_) return;
+    if (!ws_process_)
+        return;
 
     // Process up to 50 lines OR 4ms, whichever comes first.
     // Old limit of 8 lines caused unbounded buffer buildup during volatility.
@@ -865,7 +895,8 @@ TickerData ExchangeService::fetch_ticker(const QString& symbol) {
 QVector<TickerData> ExchangeService::fetch_tickers(const QStringList& symbols) {
     if (is_daemon_running()) {
         QJsonArray sym_arr;
-        for (const auto& s : symbols) sym_arr.append(s);
+        for (const auto& s : symbols)
+            sym_arr.append(s);
         auto j = daemon_call("fetch_tickers", {{"symbols", sym_arr}});
         if (!j.contains("error") && j.contains("tickers")) {
             QVector<TickerData> result;
@@ -925,7 +956,8 @@ QVector<Candle> ExchangeService::fetch_ohlcv(const QString& symbol, const QStrin
 QVector<MarketInfo> ExchangeService::fetch_markets(const QString& type) {
     if (is_daemon_running()) {
         QJsonObject args;
-        if (!type.isEmpty()) args["type"] = type;
+        if (!type.isEmpty())
+            args["type"] = type;
         auto j = daemon_call("fetch_markets", args);
         if (!j.contains("error") && j.contains("markets")) {
             QVector<MarketInfo> result;
@@ -1078,7 +1110,8 @@ QJsonObject ExchangeService::place_exchange_order(const QString& symbol, const Q
         args["side"] = side;
         args["type"] = type;
         args["amount"] = amount;
-        if (price > 0) args["price"] = price;
+        if (price > 0)
+            args["price"] = price;
         auto j = daemon_call("place_order", args);
         if (!j.contains("error"))
             return j;
@@ -1102,7 +1135,8 @@ QJsonObject ExchangeService::cancel_exchange_order(const QString& order_id, cons
 QJsonObject ExchangeService::fetch_positions_live(const QString& symbol) {
     if (is_daemon_running()) {
         QJsonObject args;
-        if (!symbol.isEmpty()) args["symbol"] = symbol;
+        if (!symbol.isEmpty())
+            args["symbol"] = symbol;
         auto j = daemon_call("fetch_positions", args);
         if (!j.contains("error"))
             return j;
@@ -1116,7 +1150,8 @@ QJsonObject ExchangeService::fetch_positions_live(const QString& symbol) {
 QJsonObject ExchangeService::fetch_open_orders_live(const QString& symbol) {
     if (is_daemon_running()) {
         QJsonObject args;
-        if (!symbol.isEmpty()) args["symbol"] = symbol;
+        if (!symbol.isEmpty())
+            args["symbol"] = symbol;
         auto j = daemon_call("fetch_open_orders", args);
         if (!j.contains("error"))
             return j;

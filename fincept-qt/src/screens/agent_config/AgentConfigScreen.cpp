@@ -27,10 +27,10 @@ struct ViewMeta {
 };
 
 static constexpr ViewMeta kViews[] = {
-    {services::AgentViewMode::Agents, "AGENTS"},       {services::AgentViewMode::Create, "CREATE"},
-    {services::AgentViewMode::Teams, "TEAMS"},          {services::AgentViewMode::Workflows, "WORKFLOWS"},
-    {services::AgentViewMode::Planner, "PLANNER"},      {services::AgentViewMode::Tools, "TOOLS"},
-    {services::AgentViewMode::Chat, "CHAT"},            {services::AgentViewMode::System, "SYSTEM"},
+    {services::AgentViewMode::Agents, "AGENTS"},   {services::AgentViewMode::Create, "CREATE"},
+    {services::AgentViewMode::Teams, "TEAMS"},     {services::AgentViewMode::Workflows, "WORKFLOWS"},
+    {services::AgentViewMode::Planner, "PLANNER"}, {services::AgentViewMode::Tools, "TOOLS"},
+    {services::AgentViewMode::Chat, "CHAT"},       {services::AgentViewMode::System, "SYSTEM"},
 };
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -58,12 +58,12 @@ void AgentConfigScreen::build_ui() {
     // Index 0: AGENTS view
     view_stack_->addWidget(new AgentsViewPanel);
 
-    view_stack_->addWidget(new CreateAgentPanel);           // 1
-    view_stack_->addWidget(new TeamsViewPanel);             // 2
-    view_stack_->addWidget(new WorkflowsViewPanel);        // 3
-    view_stack_->addWidget(new PlannerViewPanel);          // 4
-    view_stack_->addWidget(new ToolsViewPanel);             // 5
-    view_stack_->addWidget(new AgentChatPanel);            // 6
+    view_stack_->addWidget(new CreateAgentPanel);   // 1
+    view_stack_->addWidget(new TeamsViewPanel);     // 2
+    view_stack_->addWidget(new WorkflowsViewPanel); // 3
+    view_stack_->addWidget(new PlannerViewPanel);   // 4
+    view_stack_->addWidget(new ToolsViewPanel);     // 5
+    view_stack_->addWidget(new AgentChatPanel);     // 6
 
     // Index 7: SYSTEM view
     view_stack_->addWidget(new SystemViewPanel);
@@ -75,9 +75,8 @@ void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
     auto* nav_bar = new QWidget;
     nav_bar->setObjectName("AgentNavBar");
     nav_bar->setFixedHeight(40);
-    nav_bar->setStyleSheet(
-        QString("QWidget#AgentNavBar { background: %1; border-bottom: 1px solid %2; }")
-            .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    nav_bar->setStyleSheet(QString("QWidget#AgentNavBar { background: %1; border-bottom: 1px solid %2; }")
+                               .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
 
     auto* hl = new QHBoxLayout(nav_bar);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -85,9 +84,8 @@ void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
 
     // Title
     auto* title = new QLabel("AGENT STUDIO");
-    title->setStyleSheet(
-        QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;padding-right:16px;")
-            .arg(ui::colors::AMBER));
+    title->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;padding-right:16px;")
+                             .arg(ui::colors::AMBER));
     hl->addWidget(title);
 
     // Separator
@@ -150,11 +148,10 @@ QPushButton* AgentConfigScreen::make_nav_btn(const QString& text, services::Agen
     btn->setChecked(mode == services::AgentViewMode::Agents);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setStyleSheet(
-        QString(
-            "QPushButton { background: transparent; color: %1; font-size: 11px; font-weight: 600; "
-            "letter-spacing: 1px; padding: 8px 12px; border: none; border-bottom: 2px solid transparent; }"
-            "QPushButton:hover { color: %2; }"
-            "QPushButton:checked { color: %2; border-bottom: 2px solid %2; }")
+        QString("QPushButton { background: transparent; color: %1; font-size: 11px; font-weight: 600; "
+                "letter-spacing: 1px; padding: 8px 12px; border: none; border-bottom: 2px solid transparent; }"
+                "QPushButton:hover { color: %2; }"
+                "QPushButton:checked { color: %2; border-bottom: 2px solid %2; }")
             .arg(ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
 
     connect(btn, &QPushButton::clicked, this, [this, mode]() { set_view(mode); });
@@ -183,11 +180,10 @@ void AgentConfigScreen::setup_connections() {
                 agent_count_label_->setText(QString("%1 agents").arg(agents.size()));
             });
 
-    connect(&svc, &services::AgentService::error_occurred, this,
-            [this](const QString& ctx, const QString& msg) {
-                status_label_->setText(QString("ERROR [%1]: %2").arg(ctx, msg.left(60)));
-                status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
-            });
+    connect(&svc, &services::AgentService::error_occurred, this, [this](const QString& ctx, const QString& msg) {
+        status_label_->setText(QString("ERROR [%1]: %2").arg(ctx, msg.left(60)));
+        status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
+    });
 
     // Reset status on successful operations
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {

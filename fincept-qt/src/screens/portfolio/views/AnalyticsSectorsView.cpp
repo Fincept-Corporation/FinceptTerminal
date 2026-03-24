@@ -1,5 +1,6 @@
 // src/screens/portfolio/views/AnalyticsSectorsView.cpp
 #include "screens/portfolio/views/AnalyticsSectorsView.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QChart>
@@ -15,9 +16,8 @@
 namespace fincept::screens {
 
 static const QColor kSectorPalette[] = {
-    QColor("#0891b2"), QColor("#16a34a"), QColor("#d97706"), QColor("#ca8a04"),
-    QColor("#9333ea"), QColor("#84cc16"), QColor("#0d9488"), QColor("#f97316"),
-    QColor("#60a5fa"), QColor("#f43f5e"), QColor("#a78bfa"), QColor("#fbbf24"),
+    QColor("#0891b2"), QColor("#16a34a"), QColor("#d97706"), QColor("#ca8a04"), QColor("#9333ea"), QColor("#84cc16"),
+    QColor("#0d9488"), QColor("#f97316"), QColor("#60a5fa"), QColor("#f43f5e"), QColor("#a78bfa"), QColor("#fbbf24"),
     QColor("#2dd4bf"), QColor("#fb923c"), QColor("#818cf8"), QColor("#e879f9"),
 };
 
@@ -27,15 +27,27 @@ QColor AnalyticsSectorsView::sector_color(int index) {
 
 QString AnalyticsSectorsView::infer_sector(const QString& symbol) {
     static const QHash<QString, QString> known = {
-        {"AAPL", "Technology"}, {"MSFT", "Technology"}, {"GOOGL", "Technology"},
-        {"AMZN", "Technology"}, {"NVDA", "Technology"}, {"META", "Technology"},
-        {"TSLA", "Consumer Cyclical"}, {"JPM", "Financial Services"},
-        {"JNJ", "Healthcare"}, {"UNH", "Healthcare"}, {"PFE", "Healthcare"},
-        {"XOM", "Energy"}, {"CVX", "Energy"},
-        {"V", "Financial Services"}, {"MA", "Financial Services"},
-        {"WMT", "Consumer Defensive"}, {"DIS", "Communication"},
-        {"SPY", "US Equity"}, {"QQQ", "US Equity"},
-        {"BTC-USD", "Cryptocurrency"}, {"ETH-USD", "Cryptocurrency"},
+        {"AAPL", "Technology"},
+        {"MSFT", "Technology"},
+        {"GOOGL", "Technology"},
+        {"AMZN", "Technology"},
+        {"NVDA", "Technology"},
+        {"META", "Technology"},
+        {"TSLA", "Consumer Cyclical"},
+        {"JPM", "Financial Services"},
+        {"JNJ", "Healthcare"},
+        {"UNH", "Healthcare"},
+        {"PFE", "Healthcare"},
+        {"XOM", "Energy"},
+        {"CVX", "Energy"},
+        {"V", "Financial Services"},
+        {"MA", "Financial Services"},
+        {"WMT", "Consumer Defensive"},
+        {"DIS", "Communication"},
+        {"SPY", "US Equity"},
+        {"QQQ", "US Equity"},
+        {"BTC-USD", "Cryptocurrency"},
+        {"ETH-USD", "Cryptocurrency"},
     };
     auto it = known.find(symbol.toUpper());
     return it != known.end() ? *it : "Other";
@@ -51,15 +63,14 @@ void AnalyticsSectorsView::build_ui() {
 
     tabs_ = new QTabWidget;
     tabs_->setDocumentMode(true);
-    tabs_->setStyleSheet(QString(
-        "QTabWidget::pane { border:0; background:%1; }"
-        "QTabBar::tab { background:%2; color:%3; padding:8px 18px; border:0;"
-        "  border-bottom:2px solid transparent; font-size:10px; font-weight:700;"
-        "  letter-spacing:1px; text-transform:uppercase; }"
-        "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
-        "QTabBar::tab:hover { color:%5; }")
-        .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
-             ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+    tabs_->setStyleSheet(QString("QTabWidget::pane { border:0; background:%1; }"
+                                 "QTabBar::tab { background:%2; color:%3; padding:8px 18px; border:0;"
+                                 "  border-bottom:2px solid transparent; font-size:10px; font-weight:700;"
+                                 "  letter-spacing:1px; text-transform:uppercase; }"
+                                 "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
+                                 "QTabBar::tab:hover { color:%5; }")
+                             .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
+                                  ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
 
     // ── Overview tab ─────────────────────────────────────────────────────────
     auto* overview_w = new QWidget;
@@ -87,14 +98,13 @@ void AnalyticsSectorsView::build_ui() {
     sector_table_->setShowGrid(false);
     sector_table_->verticalHeader()->setVisible(false);
     sector_table_->horizontalHeader()->setStretchLastSection(true);
-    sector_table_->setStyleSheet(QString(
-        "QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
-        "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
-        "QHeaderView::section { background:%4; color:%5; border:none;"
-        "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
-        "  font-weight:700; letter-spacing:0.5px; }")
-        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-             ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+    sector_table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
+                                         "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
+                                         "QHeaderView::section { background:%4; color:%5; border:none;"
+                                         "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
+                                         "  font-weight:700; letter-spacing:0.5px; }")
+                                     .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
+                                          ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
     overview_layout->addWidget(sector_table_, 1);
 
     tabs_->addTab(overview_w, "OVERVIEW");
@@ -112,8 +122,7 @@ void AnalyticsSectorsView::build_ui() {
     layout->addWidget(tabs_);
 }
 
-void AnalyticsSectorsView::set_data(const portfolio::PortfolioSummary& summary,
-                                      const QString& currency) {
+void AnalyticsSectorsView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     summary_ = summary;
     currency_ = currency;
     update_overview();
@@ -169,23 +178,23 @@ void AnalyticsSectorsView::update_overview() {
 
         auto set_cell = [&](int col, const QString& text, const char* color = nullptr) {
             auto* item = new QTableWidgetItem(text);
-            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter)
-                                            : (Qt::AlignRight | Qt::AlignVCenter));
-            if (color) item->setForeground(QColor(color));
+            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
+            if (color)
+                item->setForeground(QColor(color));
             sector_table_->setItem(r, col, item);
         };
 
         set_cell(0, QString("\u25CF %1").arg(s.name));
         // Color the swatch in the name
         auto* name_item = sector_table_->item(r, 0);
-        if (name_item) name_item->setForeground(sector_color(r));
+        if (name_item)
+            name_item->setForeground(sector_color(r));
 
         set_cell(1, QString::number(s.count), ui::colors::TEXT_SECONDARY);
         set_cell(2, QString("%1%").arg(QString::number(s.weight, 'f', 1)), ui::colors::AMBER);
 
         const char* pnl_color = s.pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        set_cell(3, QString("%1%2").arg(s.pnl >= 0 ? "+" : "")
-                     .arg(QString::number(s.pnl, 'f', 2)), pnl_color);
+        set_cell(3, QString("%1%2").arg(s.pnl >= 0 ? "+" : "").arg(QString::number(s.pnl, 'f', 2)), pnl_color);
 
         // Allocation bar (text representation)
         int bar_len = static_cast<int>(s.weight / 5.0);
@@ -203,8 +212,8 @@ void AnalyticsSectorsView::update_analytics() {
     layout->setSpacing(8);
 
     auto* title = new QLabel("SECTOR PERFORMANCE ANALYSIS");
-    title->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;")
-                         .arg(ui::colors::AMBER));
+    title->setStyleSheet(
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     layout->addWidget(title);
 
     auto sectors = compute_sectors();
@@ -220,8 +229,7 @@ void AnalyticsSectorsView::update_analytics() {
 
         auto* name = new QLabel(s.name);
         name->setFixedWidth(150);
-        name->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;")
-                            .arg(ui::colors::TEXT_PRIMARY));
+        name->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
         row->addWidget(name);
 
         // Weight bar
@@ -243,13 +251,12 @@ void AnalyticsSectorsView::update_analytics() {
         auto* weight_lbl = new QLabel(QString("%1%").arg(QString::number(s.weight, 'f', 1)));
         weight_lbl->setFixedWidth(50);
         weight_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        weight_lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;")
-                                  .arg(ui::colors::TEXT_SECONDARY));
+        weight_lbl->setStyleSheet(
+            QString("color:%1; font-size:10px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY));
         row->addWidget(weight_lbl);
 
         const char* pnl_color = s.pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        auto* pnl_lbl = new QLabel(QString("%1%2")
-            .arg(s.pnl >= 0 ? "+" : "").arg(QString::number(s.pnl, 'f', 2)));
+        auto* pnl_lbl = new QLabel(QString("%1%2").arg(s.pnl >= 0 ? "+" : "").arg(QString::number(s.pnl, 'f', 2)));
         pnl_lbl->setFixedWidth(80);
         pnl_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         pnl_lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;").arg(pnl_color));
@@ -270,8 +277,8 @@ void AnalyticsSectorsView::update_correlation() {
     layout->setSpacing(8);
 
     auto* title = new QLabel("FULL CORRELATION MATRIX");
-    title->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;")
-                         .arg(ui::colors::AMBER));
+    title->setStyleSheet(
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     layout->addWidget(title);
 
     auto* note = new QLabel("Based on day-change proxy (requires historical data for precise calculation)");
@@ -288,8 +295,7 @@ void AnalyticsSectorsView::update_correlation() {
 
     // Sort by weight, take top 10
     auto sorted = summary_.holdings;
-    std::sort(sorted.begin(), sorted.end(),
-              [](const auto& a, const auto& b) { return a.weight > b.weight; });
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.weight > b.weight; });
     int n = static_cast<int>(std::min(qsizetype{10}, sorted.size()));
 
     auto* grid = new QGridLayout;
@@ -302,15 +308,13 @@ void AnalyticsSectorsView::update_correlation() {
         auto* lbl = new QLabel(sorted[i].symbol.left(5));
         lbl->setAlignment(Qt::AlignCenter);
         lbl->setFixedHeight(22);
-        lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700;")
-                           .arg(ui::colors::TEXT_SECONDARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
         grid->addWidget(lbl, 0, i + 1);
     }
 
     for (int r = 0; r < n; ++r) {
         auto* row_lbl = new QLabel(sorted[r].symbol.left(5));
-        row_lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700;")
-                               .arg(ui::colors::TEXT_SECONDARY));
+        row_lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
         grid->addWidget(row_lbl, r + 1, 0);
 
         for (int c = 0; c < n; ++c) {
@@ -340,7 +344,11 @@ void AnalyticsSectorsView::update_correlation() {
             const char* tc = (r == c) ? "#000" : ui::colors::TEXT_PRIMARY;
             cell->setStyleSheet(QString("background:rgba(%1,%2,%3,%4); color:%5;"
                                         "font-size:8px; font-weight:600;")
-                .arg(bg.red()).arg(bg.green()).arg(bg.blue()).arg(bg.alpha()).arg(tc));
+                                    .arg(bg.red())
+                                    .arg(bg.green())
+                                    .arg(bg.blue())
+                                    .arg(bg.alpha())
+                                    .arg(tc));
 
             grid->addWidget(cell, r + 1, c + 1);
         }

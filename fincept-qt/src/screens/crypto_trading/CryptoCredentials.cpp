@@ -96,11 +96,10 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     btn_row->addStretch();
 
     auto* save_btn = new QPushButton("SAVE & CONNECT");
-    save_btn->setStyleSheet(
-        "QPushButton { background: rgba(217,119,6,0.1); color: #d97706; border: 1px solid #78350f; "
-        "padding: 6px 16px; font-weight: 700; font-size: 12px; "
-        "font-family: 'Consolas', 'Courier New', monospace; }"
-        "QPushButton:hover { background: #d97706; color: #080808; }");
+    save_btn->setStyleSheet("QPushButton { background: rgba(217,119,6,0.1); color: #d97706; border: 1px solid #78350f; "
+                            "padding: 6px 16px; font-weight: 700; font-size: 12px; "
+                            "font-family: 'Consolas', 'Courier New', monospace; }"
+                            "QPushButton:hover { background: #d97706; color: #080808; }");
     connect(save_btn, &QPushButton::clicked, this, &CryptoCredentials::on_save);
     btn_row->addWidget(save_btn);
 

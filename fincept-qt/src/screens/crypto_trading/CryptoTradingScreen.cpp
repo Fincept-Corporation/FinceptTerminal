@@ -42,10 +42,14 @@ CryptoTradingScreen::CryptoTradingScreen(QWidget* parent) : QWidget(parent) {
 
 CryptoTradingScreen::~CryptoTradingScreen() {
     auto& es = ExchangeService::instance();
-    if (ws_price_cb_id_ >= 0) es.remove_price_callback(ws_price_cb_id_);
-    if (ws_ob_cb_id_ >= 0)    es.remove_orderbook_callback(ws_ob_cb_id_);
-    if (ws_candle_cb_id_ >= 0) es.remove_candle_callback(ws_candle_cb_id_);
-    if (ws_trade_cb_id_ >= 0)  es.remove_trade_callback(ws_trade_cb_id_);
+    if (ws_price_cb_id_ >= 0)
+        es.remove_price_callback(ws_price_cb_id_);
+    if (ws_ob_cb_id_ >= 0)
+        es.remove_orderbook_callback(ws_ob_cb_id_);
+    if (ws_candle_cb_id_ >= 0)
+        es.remove_candle_callback(ws_candle_cb_id_);
+    if (ws_trade_cb_id_ >= 0)
+        es.remove_trade_callback(ws_trade_cb_id_);
 }
 
 // ============================================================================
@@ -54,26 +58,41 @@ CryptoTradingScreen::~CryptoTradingScreen() {
 
 void CryptoTradingScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (ticker_timer_)      ticker_timer_->start();
-    if (ob_timer_)          ob_timer_->start();
-    if (portfolio_timer_)   portfolio_timer_->start();
-    if (watchlist_timer_)   watchlist_timer_->start();
-    if (market_info_timer_) market_info_timer_->start();
-    if (clock_timer_)       clock_timer_->start();
-    if (ws_flush_timer_)    ws_flush_timer_->start();
+    if (ticker_timer_)
+        ticker_timer_->start();
+    if (ob_timer_)
+        ob_timer_->start();
+    if (portfolio_timer_)
+        portfolio_timer_->start();
+    if (watchlist_timer_)
+        watchlist_timer_->start();
+    if (market_info_timer_)
+        market_info_timer_->start();
+    if (clock_timer_)
+        clock_timer_->start();
+    if (ws_flush_timer_)
+        ws_flush_timer_->start();
     LOG_INFO(TAG, "Screen visible — timers started");
 }
 
 void CryptoTradingScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
-    if (ticker_timer_)      ticker_timer_->stop();
-    if (ob_timer_)          ob_timer_->stop();
-    if (portfolio_timer_)   portfolio_timer_->stop();
-    if (watchlist_timer_)   watchlist_timer_->stop();
-    if (market_info_timer_) market_info_timer_->stop();
-    if (live_data_timer_)   live_data_timer_->stop();
-    if (clock_timer_)       clock_timer_->stop();
-    if (ws_flush_timer_)    ws_flush_timer_->stop();
+    if (ticker_timer_)
+        ticker_timer_->stop();
+    if (ob_timer_)
+        ob_timer_->stop();
+    if (portfolio_timer_)
+        portfolio_timer_->stop();
+    if (watchlist_timer_)
+        watchlist_timer_->stop();
+    if (market_info_timer_)
+        market_info_timer_->stop();
+    if (live_data_timer_)
+        live_data_timer_->stop();
+    if (clock_timer_)
+        clock_timer_->stop();
+    if (ws_flush_timer_)
+        ws_flush_timer_->stop();
     LOG_INFO(TAG, "Screen hidden — timers stopped");
 }
 
@@ -103,7 +122,8 @@ void CryptoTradingScreen::setup_ui() {
     exchange_btn_->setFixedHeight(22);
     exchange_btn_->setCursor(Qt::PointingHandCursor);
     exchange_menu_ = new QMenu(exchange_btn_);
-    for (const auto& ex : {"kraken", "binance", "bybit", "okx", "coinbase", "bitget", "gate", "kucoin", "mexc", "htx"}) {
+    for (const auto& ex :
+         {"kraken", "binance", "bybit", "okx", "coinbase", "bitget", "gate", "kucoin", "mexc", "htx"}) {
         exchange_menu_->addAction(ex, this, [this, ex]() { on_exchange_changed(ex); });
     }
     exchange_btn_->setMenu(exchange_menu_);
@@ -123,9 +143,8 @@ void CryptoTradingScreen::setup_ui() {
     completer->setCaseSensitivity(Qt::CaseInsensitive);
     completer->setFilterMode(Qt::MatchContains);
     symbol_input_->setCompleter(completer);
-    connect(symbol_input_, &QLineEdit::returnPressed, this, [this]() {
-        on_symbol_selected(symbol_input_->text().trimmed().toUpper());
-    });
+    connect(symbol_input_, &QLineEdit::returnPressed, this,
+            [this]() { on_symbol_selected(symbol_input_->text().trimmed().toUpper()); });
     cmd_layout->addWidget(symbol_input_);
 
     // Separator
@@ -300,23 +319,30 @@ void CryptoTradingScreen::init_exchange() {
     // WS price callback → accumulate into pending buffers (flushed at 10fps by ws_flush_timer_)
     // This coalesces ~50 msgs/sec into ~10 UI updates/sec
     ws_price_cb_id_ = es.on_price_update([this](const QString& symbol, const TickerData& ticker) {
-        QMetaObject::invokeMethod(this, [this, symbol, ticker]() {
-            pending_tickers_[symbol] = ticker;  // latest wins per symbol
-            if (symbol == selected_symbol_) {
-                pending_primary_ticker_ = ticker;
-                has_pending_primary_ = true;
-            }
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this,
+            [this, symbol, ticker]() {
+                pending_tickers_[symbol] = ticker; // latest wins per symbol
+                if (symbol == selected_symbol_) {
+                    pending_primary_ticker_ = ticker;
+                    has_pending_primary_ = true;
+                }
+            },
+            Qt::QueuedConnection);
     });
 
     // WS orderbook callback
     ws_ob_cb_id_ = es.on_orderbook_update([this](const QString& symbol, const OrderBookData& ob) {
         if (symbol == selected_symbol_) {
-            QMetaObject::invokeMethod(this, [this, ob]() {
-                orderbook_->set_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
-                bottom_panel_->set_depth_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
-                if (ob_timer_) ob_timer_->stop();
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                this,
+                [this, ob]() {
+                    orderbook_->set_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
+                    bottom_panel_->set_depth_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
+                    if (ob_timer_)
+                        ob_timer_->stop();
+                },
+                Qt::QueuedConnection);
         }
     });
 
@@ -335,9 +361,8 @@ void CryptoTradingScreen::init_exchange() {
             entry.price = trade.price;
             entry.amount = trade.amount;
             entry.timestamp = trade.timestamp;
-            QMetaObject::invokeMethod(this, [this, entry]() {
-                bottom_panel_->add_trade_entry(entry);
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                this, [this, entry]() { bottom_panel_->add_trade_entry(entry); }, Qt::QueuedConnection);
         }
     });
 
@@ -350,7 +375,8 @@ void CryptoTradingScreen::load_portfolio() {
         portfolio_ = *existing;
         portfolio_id_ = portfolio_.id;
     } else {
-        portfolio_ = pt_create_portfolio("Crypto Paper", DEFAULT_PAPER_BALANCE, "USD", 1.0, "cross", 0.001, exchange_id_);
+        portfolio_ =
+            pt_create_portfolio("Crypto Paper", DEFAULT_PAPER_BALANCE, "USD", 1.0, "cross", 0.001, exchange_id_);
         portfolio_id_ = portfolio_.id;
     }
     ExchangeService::instance().watch_symbol(selected_symbol_, portfolio_id_);
@@ -362,58 +388,79 @@ void CryptoTradingScreen::load_portfolio() {
 // ============================================================================
 
 void CryptoTradingScreen::async_fetch_candles(const QString& symbol, const QString& timeframe) {
-    if (candles_fetching_.exchange(true)) return;
+    if (candles_fetching_.exchange(true))
+        return;
     QPointer<CryptoTradingScreen> self = this;
     QtConcurrent::run([self, symbol, timeframe]() {
         auto candles = ExchangeService::instance().fetch_ohlcv(symbol, timeframe, OHLCV_FETCH_COUNT);
-        if (!self) return;
+        if (!self)
+            return;
         self->candles_fetching_ = false;
-        QMetaObject::invokeMethod(self, [self, candles]() {
-            if (!self) return;
-            self->chart_->set_candles(candles);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, candles]() {
+                if (!self)
+                    return;
+                self->chart_->set_candles(candles);
+            },
+            Qt::QueuedConnection);
     });
 }
 
 void CryptoTradingScreen::async_fetch_live_positions() {
     QPointer<CryptoTradingScreen> self = this;
     QtConcurrent::run([self]() {
-        if (!self) return;
+        if (!self)
+            return;
         auto result = ExchangeService::instance().fetch_positions_live(self->selected_symbol_);
-        QMetaObject::invokeMethod(self, [self, result]() {
-            if (!self) return;
-            if (result.contains("positions"))
-                self->bottom_panel_->set_live_positions(result.value("positions").toArray());
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
+                if (result.contains("positions"))
+                    self->bottom_panel_->set_live_positions(result.value("positions").toArray());
+            },
+            Qt::QueuedConnection);
     });
 }
 
 void CryptoTradingScreen::async_fetch_live_orders() {
     QPointer<CryptoTradingScreen> self = this;
     QtConcurrent::run([self]() {
-        if (!self) return;
+        if (!self)
+            return;
         auto result = ExchangeService::instance().fetch_open_orders_live(self->selected_symbol_);
-        QMetaObject::invokeMethod(self, [self, result]() {
-            if (!self) return;
-            if (result.contains("orders"))
-                self->bottom_panel_->set_live_orders(result.value("orders").toArray());
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
+                if (result.contains("orders"))
+                    self->bottom_panel_->set_live_orders(result.value("orders").toArray());
+            },
+            Qt::QueuedConnection);
     });
 }
 
 void CryptoTradingScreen::async_fetch_live_balance() {
     QPointer<CryptoTradingScreen> self = this;
     QtConcurrent::run([self]() {
-        if (!self) return;
+        if (!self)
+            return;
         auto result = ExchangeService::instance().fetch_balance();
-        QMetaObject::invokeMethod(self, [self, result]() {
-            if (!self) return;
-            double total = result.value("total").toObject().value("USDT").toDouble();
-            double free = result.value("free").toObject().value("USDT").toDouble();
-            double used = result.value("used").toObject().value("USDT").toDouble();
-            self->bottom_panel_->set_live_balance(free, total, used);
-            self->order_entry_->set_balance(free);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
+                double total = result.value("total").toObject().value("USDT").toDouble();
+                double free = result.value("free").toObject().value("USDT").toDouble();
+                double used = result.value("used").toObject().value("USDT").toDouble();
+                self->bottom_panel_->set_live_balance(free, total, used);
+                self->order_entry_->set_balance(free);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -432,7 +479,8 @@ void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
 }
 
 void CryptoTradingScreen::on_symbol_selected(const QString& symbol) {
-    if (symbol.isEmpty() || symbol == selected_symbol_) return;
+    if (symbol.isEmpty() || symbol == selected_symbol_)
+        return;
     switch_symbol(symbol);
 }
 
@@ -495,7 +543,8 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
                 price_opt = price;
 
             std::optional<double> stop_opt;
-            if (stop_price > 0) stop_opt = stop_price;
+            if (stop_price > 0)
+                stop_opt = stop_price;
 
             auto order = pt_place_order(portfolio_id_, selected_symbol_, side, order_type, qty, price_opt, stop_opt);
             if (order_type == "market") {
@@ -510,12 +559,17 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
         } else {
             QPointer<CryptoTradingScreen> self = this;
             QtConcurrent::run([self, side, order_type, qty, price]() {
-                if (!self) return;
+                if (!self)
+                    return;
                 ExchangeService::instance().place_exchange_order(self->selected_symbol_, side, order_type, qty, price);
-                QMetaObject::invokeMethod(self, [self]() {
-                    if (!self) return;
-                    self->refresh_live_data();
-                }, Qt::QueuedConnection);
+                QMetaObject::invokeMethod(
+                    self,
+                    [self]() {
+                        if (!self)
+                            return;
+                        self->refresh_live_data();
+                    },
+                    Qt::QueuedConnection);
             });
         }
     } catch (const std::exception& e) {
@@ -535,12 +589,17 @@ void CryptoTradingScreen::on_cancel_order(const QString& order_id) {
     } else {
         QPointer<CryptoTradingScreen> self = this;
         QtConcurrent::run([self, order_id]() {
-            if (!self) return;
+            if (!self)
+                return;
             ExchangeService::instance().cancel_exchange_order(order_id, self->selected_symbol_);
-            QMetaObject::invokeMethod(self, [self]() {
-                if (!self) return;
-                self->refresh_live_data();
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                self,
+                [self]() {
+                    if (!self)
+                        return;
+                    self->refresh_live_data();
+                },
+                Qt::QueuedConnection);
         });
     }
 }
@@ -553,12 +612,17 @@ void CryptoTradingScreen::on_search_requested(const QString& filter) {
     Q_UNUSED(filter);
     QPointer<CryptoTradingScreen> self = this;
     QtConcurrent::run([self]() {
-        if (!self) return;
+        if (!self)
+            return;
         auto markets = ExchangeService::instance().fetch_markets("spot");
-        QMetaObject::invokeMethod(self, [self, markets]() {
-            if (!self) return;
-            self->watchlist_->set_search_results(markets);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, markets]() {
+                if (!self)
+                    return;
+                self->watchlist_->set_search_results(markets);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -574,8 +638,8 @@ void CryptoTradingScreen::flush_ws_updates() {
     // Flush primary symbol ticker → header bar + order entry
     if (has_pending_primary_) {
         const auto& t = pending_primary_ticker_;
-        ticker_bar_->update_data(t.last, t.percentage, t.high, t.low,
-                                 t.base_volume, ExchangeService::instance().is_ws_connected());
+        ticker_bar_->update_data(t.last, t.percentage, t.high, t.low, t.base_volume,
+                                 ExchangeService::instance().is_ws_connected());
         if (t.bid > 0 && t.ask > 0)
             ticker_bar_->update_bid_ask(t.bid, t.ask, std::abs(t.ask - t.bid));
         order_entry_->set_current_price(t.last);
@@ -594,7 +658,8 @@ void CryptoTradingScreen::flush_ws_updates() {
         // Feed WS prices into paper trading engine (position prices + order triggers)
         if (trading_mode_ == TradingMode::Paper && !portfolio_id_.isEmpty()) {
             for (const auto& ticker : batch) {
-                if (ticker.last <= 0) continue;
+                if (ticker.last <= 0)
+                    continue;
                 // Update position current_price and unrealized P&L
                 pt_update_position_price(portfolio_id_, ticker.symbol, ticker.last);
                 // Check limit/stop order fills
@@ -621,11 +686,12 @@ void CryptoTradingScreen::flush_ws_updates() {
 // ============================================================================
 
 void CryptoTradingScreen::refresh_ticker() {
-    if (!initialized_) return;
+    if (!initialized_)
+        return;
     const auto cached = ExchangeService::instance().get_cached_price(selected_symbol_);
     if (cached.last > 0) {
-        ticker_bar_->update_data(cached.last, cached.percentage, cached.high, cached.low,
-                                 cached.base_volume, ExchangeService::instance().is_ws_connected());
+        ticker_bar_->update_data(cached.last, cached.percentage, cached.high, cached.low, cached.base_volume,
+                                 ExchangeService::instance().is_ws_connected());
         if (cached.bid > 0 && cached.ask > 0)
             ticker_bar_->update_bid_ask(cached.bid, cached.ask, std::abs(cached.ask - cached.bid));
         order_entry_->set_current_price(cached.last);
@@ -633,22 +699,30 @@ void CryptoTradingScreen::refresh_ticker() {
 }
 
 void CryptoTradingScreen::refresh_orderbook() {
-    if (!initialized_) return;
+    if (!initialized_)
+        return;
     QPointer<CryptoTradingScreen> self = this;
     QtConcurrent::run([self]() {
-        if (!self) return;
+        if (!self)
+            return;
         auto ob = ExchangeService::instance().fetch_orderbook(self->selected_symbol_, OB_MAX_DISPLAY_LEVELS);
-        QMetaObject::invokeMethod(self, [self, ob]() {
-            if (!self) return;
-            self->orderbook_->set_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
-            self->bottom_panel_->set_depth_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, ob]() {
+                if (!self)
+                    return;
+                self->orderbook_->set_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
+                self->bottom_panel_->set_depth_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
+            },
+            Qt::QueuedConnection);
     });
 }
 
 void CryptoTradingScreen::refresh_portfolio() {
-    if (portfolio_id_.isEmpty()) return;
-    if (trading_mode_ == TradingMode::Live) return;
+    if (portfolio_id_.isEmpty())
+        return;
+    if (trading_mode_ == TradingMode::Live)
+        return;
 
     try {
         portfolio_ = pt_get_portfolio(portfolio_id_);
@@ -667,23 +741,31 @@ void CryptoTradingScreen::refresh_portfolio() {
 }
 
 void CryptoTradingScreen::refresh_watchlist() {
-    if (!initialized_) return;
+    if (!initialized_)
+        return;
     QPointer<CryptoTradingScreen> self = this;
     QtConcurrent::run([self]() {
-        if (!self) return;
+        if (!self)
+            return;
         auto tickers = ExchangeService::instance().fetch_tickers(self->watchlist_symbols_);
-        QMetaObject::invokeMethod(self, [self, tickers]() {
-            if (!self) return;
-            self->watchlist_->update_prices(tickers);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, tickers]() {
+                if (!self)
+                    return;
+                self->watchlist_->update_prices(tickers);
+            },
+            Qt::QueuedConnection);
     });
 }
 
 void CryptoTradingScreen::refresh_market_info() {
-    if (!initialized_) return;
+    if (!initialized_)
+        return;
     QPointer<CryptoTradingScreen> self = this;
     QtConcurrent::run([self]() {
-        if (!self) return;
+        if (!self)
+            return;
         auto fr = ExchangeService::instance().fetch_funding_rate(self->selected_symbol_);
         auto oi = ExchangeService::instance().fetch_open_interest(self->selected_symbol_);
         MarketInfoData info;
@@ -694,10 +776,14 @@ void CryptoTradingScreen::refresh_market_info() {
         info.open_interest = oi.open_interest;
         info.open_interest_value = oi.open_interest_value;
         info.has_data = true;
-        QMetaObject::invokeMethod(self, [self, info]() {
-            if (!self) return;
-            self->bottom_panel_->set_market_info(info);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, info]() {
+                if (!self)
+                    return;
+                self->bottom_panel_->set_market_info(info);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -706,8 +792,10 @@ void CryptoTradingScreen::refresh_candles() {
 }
 
 void CryptoTradingScreen::refresh_live_data() {
-    if (trading_mode_ != TradingMode::Live) return;
-    if (live_fetching_.exchange(true)) return;
+    if (trading_mode_ != TradingMode::Live)
+        return;
+    if (live_fetching_.exchange(true))
+        return;
 
     async_fetch_live_positions();
     async_fetch_live_orders();

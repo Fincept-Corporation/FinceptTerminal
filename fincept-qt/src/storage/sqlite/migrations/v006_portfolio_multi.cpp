@@ -96,8 +96,8 @@ Result<void> apply_v006(QSqlDatabase& db) {
     // ── Migrate existing portfolio_holdings into new schema ────────────────────
     {
         QSqlQuery check(db);
-        if (check.exec("SELECT COUNT(*) FROM portfolio_holdings WHERE active = 1")
-            && check.next() && check.value(0).toInt() > 0) {
+        if (check.exec("SELECT COUNT(*) FROM portfolio_holdings WHERE active = 1") && check.next() &&
+            check.value(0).toInt() > 0) {
 
             // Create a "Default" portfolio for existing holdings
             QString default_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -121,7 +121,7 @@ Result<void> apply_v006(QSqlDatabase& db) {
             holdings.exec("SELECT symbol, shares, avg_cost, added_at FROM portfolio_holdings WHERE active = 1");
             while (holdings.next()) {
                 QString txn_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-                double qty   = holdings.value(1).toDouble();
+                double qty = holdings.value(1).toDouble();
                 double price = holdings.value(2).toDouble();
 
                 QSqlQuery txn(db);

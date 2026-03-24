@@ -2,6 +2,8 @@
 // Specialized panel for US Treasury data: Prices, Auctions, Summary
 #pragma once
 
+#include "services/gov_data/GovDataService.h"
+
 #include <QComboBox>
 #include <QDateEdit>
 #include <QLabel>
@@ -10,8 +12,6 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <QWidget>
-
-#include "services/gov_data/GovDataService.h"
 
 namespace fincept::screens {
 

@@ -49,8 +49,7 @@ void ExcelScreen::hideEvent(QHideEvent* event) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void ExcelScreen::build_ui() {
-    setStyleSheet(
-        QString("QWidget { background:#000000; color:%1; }").arg(colors::TEXT_PRIMARY));
+    setStyleSheet(QString("QWidget { background:#000000; color:%1; }").arg(colors::TEXT_PRIMARY));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -64,15 +63,13 @@ void ExcelScreen::build_ui() {
     sheet_tabs_->setTabPosition(QTabWidget::South);
     sheet_tabs_->setMovable(true);
     sheet_tabs_->setTabsClosable(false); // We handle close via button
-    sheet_tabs_->setStyleSheet(
-        QString(
-            "QTabWidget::pane { border:none; background:#1a1a1a; }"
-            "QTabBar { background:#2d2d2d; }"
-            "QTabBar::tab { background:#404040; color:#a3a3a3; border:1px solid #525252;"
-            "  padding:4px 14px; font-family:%1; font-size:10px; margin-right:2px; }"
-            "QTabBar::tab:selected { background:%2; color:#fff; border-color:%2; }"
-            "QTabBar::tab:hover { background:#525252; }")
-            .arg(fonts::DATA_FAMILY, kAccent));
+    sheet_tabs_->setStyleSheet(QString("QTabWidget::pane { border:none; background:#1a1a1a; }"
+                                       "QTabBar { background:#2d2d2d; }"
+                                       "QTabBar::tab { background:#404040; color:#a3a3a3; border:1px solid #525252;"
+                                       "  padding:4px 14px; font-family:%1; font-size:10px; margin-right:2px; }"
+                                       "QTabBar::tab:selected { background:%2; color:#fff; border-color:%2; }"
+                                       "QTabBar::tab:hover { background:#525252; }")
+                                   .arg(fonts::DATA_FAMILY, kAccent));
 
     // Add initial sheet
     auto* sheet1 = new SpreadsheetWidget("Sheet1", 100, 26, sheet_tabs_);
@@ -85,16 +82,14 @@ void ExcelScreen::build_ui() {
     // Status bar
     auto* status_bar = new QWidget(this);
     status_bar->setFixedHeight(24);
-    status_bar->setStyleSheet(
-        QString("background:#1a1a1a; border-top:1px solid #2d2d2d;"));
+    status_bar->setStyleSheet(QString("background:#1a1a1a; border-top:1px solid #2d2d2d;"));
 
     auto* status_hl = new QHBoxLayout(status_bar);
     status_hl->setContentsMargins(12, 0, 12, 0);
     status_hl->setSpacing(12);
 
     status_label_ = new QLabel(this);
-    status_label_->setStyleSheet(
-        QString("color:#a3a3a3; font-family:%1; font-size:9px;").arg(fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(QString("color:#a3a3a3; font-family:%1; font-size:9px;").arg(fonts::DATA_FAMILY));
     status_hl->addWidget(status_label_);
     status_hl->addStretch();
 
@@ -114,21 +109,19 @@ QWidget* ExcelScreen::build_toolbar() {
 
     // Title
     auto* title = new QLabel("EXCEL SPREADSHEET", bar);
-    title->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:11px; font-weight:700; margin-right:12px;")
-            .arg(kAccent, fonts::DATA_FAMILY));
+    title->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:700; margin-right:12px;")
+                             .arg(kAccent, fonts::DATA_FAMILY));
     hl->addWidget(title);
 
     // Button factory
     auto make_btn = [&](const QString& text, const QString& tooltip = {}) -> QPushButton* {
         auto* btn = new QPushButton(text, bar);
         btn->setToolTip(tooltip);
-        btn->setStyleSheet(
-            QString("QPushButton { background:#404040; color:#fff; border:none;"
-                    " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
-                    "QPushButton:hover { background:#525252; }"
-                    "QPushButton:pressed { background:%2; }")
-                .arg(fonts::DATA_FAMILY, kAccent));
+        btn->setStyleSheet(QString("QPushButton { background:#404040; color:#fff; border:none;"
+                                   " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
+                                   "QPushButton:hover { background:#525252; }"
+                                   "QPushButton:pressed { background:%2; }")
+                               .arg(fonts::DATA_FAMILY, kAccent));
         return btn;
     };
 
@@ -159,11 +152,10 @@ QWidget* ExcelScreen::build_toolbar() {
     hl->addWidget(rename_btn);
 
     auto* del_btn = make_btn("DELETE", "Delete current sheet");
-    del_btn->setStyleSheet(
-        QString("QPushButton { background:#404040; color:#fff; border:none;"
-                " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
-                "QPushButton:hover { background:#ef4444; }")
-            .arg(fonts::DATA_FAMILY));
+    del_btn->setStyleSheet(QString("QPushButton { background:#404040; color:#fff; border:none;"
+                                   " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
+                                   "QPushButton:hover { background:#ef4444; }")
+                               .arg(fonts::DATA_FAMILY));
     connect(del_btn, &QPushButton::clicked, this, &ExcelScreen::on_delete_sheet);
     hl->addWidget(del_btn);
 
@@ -172,8 +164,7 @@ QWidget* ExcelScreen::build_toolbar() {
     // File name label
     auto* fname_label = new QLabel(file_name_, bar);
     fname_label->setObjectName("excelFileName");
-    fname_label->setStyleSheet(
-        QString("color:#a3a3a3; font-family:%1; font-size:10px;").arg(fonts::DATA_FAMILY));
+    fname_label->setStyleSheet(QString("color:#a3a3a3; font-family:%1; font-size:10px;").arg(fonts::DATA_FAMILY));
     hl->addWidget(fname_label);
 
     return bar;
@@ -184,10 +175,10 @@ QWidget* ExcelScreen::build_toolbar() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void ExcelScreen::on_import() {
-    QString path = QFileDialog::getOpenFileName(
-        this, "Import Spreadsheet", {},
-        "Spreadsheet Files (*.xlsx *.xls *.csv);;All Files (*)");
-    if (path.isEmpty()) return;
+    QString path = QFileDialog::getOpenFileName(this, "Import Spreadsheet", {},
+                                                "Spreadsheet Files (*.xlsx *.xls *.csv);;All Files (*)");
+    if (path.isEmpty())
+        return;
 
     QXlsx::Document xlsx(path);
     QStringList sheet_names = xlsx.sheetNames();
@@ -230,7 +221,8 @@ void ExcelScreen::on_import() {
     file_name_ = QFileInfo(path).fileName();
     file_path_ = path;
     auto* fname = findChild<QLabel*>("excelFileName");
-    if (fname) fname->setText(file_name_);
+    if (fname)
+        fname->setText(file_name_);
 
     sheet_counter_ = sheet_names.size() + 1;
     update_status();
@@ -242,19 +234,21 @@ void ExcelScreen::on_import() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void ExcelScreen::on_export() {
-    QString path = QFileDialog::getSaveFileName(
-        this, "Export as XLSX", file_name_,
-        "Excel Files (*.xlsx)");
-    if (path.isEmpty()) return;
+    QString path = QFileDialog::getSaveFileName(this, "Export as XLSX", file_name_, "Excel Files (*.xlsx)");
+    if (path.isEmpty())
+        return;
 
     QXlsx::Document xlsx;
 
     for (int i = 0; i < sheet_tabs_->count(); ++i) {
         auto* sheet = qobject_cast<SpreadsheetWidget*>(sheet_tabs_->widget(i));
-        if (!sheet) continue;
+        if (!sheet)
+            continue;
 
-        if (i > 0) xlsx.addSheet(sheet->sheet_name());
-        else xlsx.selectSheet(xlsx.sheetNames().first());
+        if (i > 0)
+            xlsx.addSheet(sheet->sheet_name());
+        else
+            xlsx.selectSheet(xlsx.sheetNames().first());
 
         // Rename sheet
         xlsx.renameSheet(xlsx.sheetNames().last(), sheet->sheet_name());
@@ -263,7 +257,8 @@ void ExcelScreen::on_export() {
         for (int r = 0; r < data.size(); ++r) {
             for (int c = 0; c < data[r].size(); ++c) {
                 const QString& val = data[r][c];
-                if (val.isEmpty()) continue;
+                if (val.isEmpty())
+                    continue;
 
                 // Write formulas as formulas, numbers as numbers
                 bool ok = false;
@@ -283,7 +278,8 @@ void ExcelScreen::on_export() {
         file_name_ = QFileInfo(path).fileName();
         file_path_ = path;
         auto* fname = findChild<QLabel*>("excelFileName");
-        if (fname) fname->setText(file_name_);
+        if (fname)
+            fname->setText(file_name_);
         LOG_INFO("ExcelScreen", QString("Exported to %1").arg(path));
     } else {
         LOG_ERROR("ExcelScreen", "Failed to save XLSX file");
@@ -296,15 +292,16 @@ void ExcelScreen::on_export() {
 
 void ExcelScreen::on_export_csv() {
     auto* sheet = current_sheet();
-    if (!sheet) return;
+    if (!sheet)
+        return;
 
-    QString path = QFileDialog::getSaveFileName(
-        this, "Export CSV", sheet->sheet_name() + ".csv",
-        "CSV Files (*.csv)");
-    if (path.isEmpty()) return;
+    QString path = QFileDialog::getSaveFileName(this, "Export CSV", sheet->sheet_name() + ".csv", "CSV Files (*.csv)");
+    if (path.isEmpty())
+        return;
 
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return;
 
     QTextStream out(&file);
     auto data = sheet->get_data();
@@ -356,10 +353,8 @@ void ExcelScreen::on_delete_sheet() {
     int idx = sheet_tabs_->currentIndex();
     QString name = sheet_tabs_->tabText(idx);
 
-    auto reply = QMessageBox::question(
-        this, "Delete Sheet",
-        QString("Delete \"%1\"? This cannot be undone.").arg(name),
-        QMessageBox::Yes | QMessageBox::No);
+    auto reply = QMessageBox::question(this, "Delete Sheet", QString("Delete \"%1\"? This cannot be undone.").arg(name),
+                                       QMessageBox::Yes | QMessageBox::No);
 
     if (reply == QMessageBox::Yes) {
         auto* w = sheet_tabs_->widget(idx);
@@ -371,17 +366,18 @@ void ExcelScreen::on_delete_sheet() {
 
 void ExcelScreen::on_rename_sheet() {
     int idx = sheet_tabs_->currentIndex();
-    if (idx < 0) return;
+    if (idx < 0)
+        return;
 
     bool ok = false;
     QString current = sheet_tabs_->tabText(idx);
-    QString name = QInputDialog::getText(this, "Rename Sheet",
-        "New name:", QLineEdit::Normal, current, &ok);
+    QString name = QInputDialog::getText(this, "Rename Sheet", "New name:", QLineEdit::Normal, current, &ok);
 
     if (ok && !name.trimmed().isEmpty()) {
         sheet_tabs_->setTabText(idx, name.trimmed());
         auto* sheet = qobject_cast<SpreadsheetWidget*>(sheet_tabs_->widget(idx));
-        if (sheet) sheet->set_sheet_name(name.trimmed());
+        if (sheet)
+            sheet->set_sheet_name(name.trimmed());
         update_status();
     }
 }
@@ -417,7 +413,8 @@ void ExcelScreen::update_status() {
                     .arg(sheet->row_count())
                     .arg(sheet->col_count());
     }
-    if (status_label_) status_label_->setText(info);
+    if (status_label_)
+        status_label_->setText(info);
 }
 
 } // namespace fincept::screens

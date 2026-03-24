@@ -1,64 +1,64 @@
 #include "app/MainWindow.h"
 
+#include "ai_chat/AiChatScreen.h"
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
 #include "screens/ComingSoonScreen.h"
 #include "screens/about/AboutScreen.h"
+#include "screens/agent_config/AgentConfigScreen.h"
+#include "screens/ai_quant_lab/AIQuantLabScreen.h"
+#include "screens/akshare/AkShareScreen.h"
+#include "screens/algo_trading/AlgoTradingScreen.h"
+#include "screens/alpha_arena/AlphaArenaScreen.h"
+#include "screens/alt_investments/AltInvestmentsScreen.h"
+#include "screens/asia_markets/AsiaMarketsScreen.h"
 #include "screens/auth/ForgotPasswordScreen.h"
 #include "screens/auth/LoginScreen.h"
 #include "screens/auth/PricingScreen.h"
 #include "screens/auth/RegisterScreen.h"
-#include "screens/crypto_trading/CryptoTradingScreen.h"
-#include "screens/equity_trading/EquityTradingScreen.h"
-#include "screens/data_sources/DataSourcesScreen.h"
-#include "screens/dashboard/DashboardScreen.h"
-#include "screens/dbnomics/DBnomicsScreen.h"
-#include "screens/docs/DocsScreen.h"
-#include "screens/gov_data/GovDataScreen.h"
-#include "screens/akshare/AkShareScreen.h"
-#include "screens/alpha_arena/AlphaArenaScreen.h"
-#include "screens/alt_investments/AltInvestmentsScreen.h"
-#include "screens/asia_markets/AsiaMarketsScreen.h"
-#include "screens/data_mapping/DataMappingScreen.h"
-#include "screens/code_editor/CodeEditorScreen.h"
-#include "screens/derivatives/DerivativesScreen.h"
-#include "screens/economics/EconomicsScreen.h"
-#include "screens/polymarket/PolymarketScreen.h"
-#include "screens/excel/ExcelScreen.h"
-#include "screens/ai_quant_lab/AIQuantLabScreen.h"
-#include "screens/algo_trading/AlgoTradingScreen.h"
 #include "screens/backtesting/BacktestingScreen.h"
+#include "screens/code_editor/CodeEditorScreen.h"
+#include "screens/crypto_trading/CryptoTradingScreen.h"
+#include "screens/dashboard/DashboardScreen.h"
+#include "screens/data_mapping/DataMappingScreen.h"
+#include "screens/data_sources/DataSourcesScreen.h"
+#include "screens/dbnomics/DBnomicsScreen.h"
+#include "screens/derivatives/DerivativesScreen.h"
+#include "screens/docs/DocsScreen.h"
+#include "screens/economics/EconomicsScreen.h"
 #include "screens/equity_research/EquityResearchScreen.h"
+#include "screens/equity_trading/EquityTradingScreen.h"
+#include "screens/excel/ExcelScreen.h"
+#include "screens/file_manager/FileManagerScreen.h"
+#include "screens/forum/ForumScreen.h"
 #include "screens/geopolitics/GeopoliticsScreen.h"
+#include "screens/gov_data/GovDataScreen.h"
+#include "screens/info/ContactScreen.h"
+#include "screens/info/HelpScreen.h"
+#include "screens/info/PrivacyScreen.h"
+#include "screens/info/TermsScreen.h"
+#include "screens/info/TrademarksScreen.h"
 #include "screens/ma_analytics/MAAnalyticsScreen.h"
 #include "screens/maritime/MaritimeScreen.h"
 #include "screens/markets/MarketsScreen.h"
 #include "screens/mcp_servers/McpServersScreen.h"
 #include "screens/news/NewsScreen.h"
+#include "screens/node_editor/NodeEditorScreen.h"
 #include "screens/notes/NotesScreen.h"
+#include "screens/payment/PaymentProcessingScreen.h"
+#include "screens/payment/PaymentSuccessScreen.h"
+#include "screens/polymarket/PolymarketScreen.h"
 #include "screens/portfolio/PortfolioScreen.h"
 #include "screens/profile/ProfileScreen.h"
 #include "screens/quantlib/QuantLibScreen.h"
+#include "screens/relationship_map/RelationshipMapScreen.h"
 #include "screens/report_builder/ReportBuilderScreen.h"
 #include "screens/settings/SettingsScreen.h"
 #include "screens/support/SupportScreen.h"
 #include "screens/surface_analytics/SurfaceAnalyticsScreen.h"
 #include "screens/trade_viz/TradeVizScreen.h"
 #include "screens/watchlist/WatchlistScreen.h"
-#include "screens/forum/ForumScreen.h"
-#include "screens/agent_config/AgentConfigScreen.h"
-#include "screens/node_editor/NodeEditorScreen.h"
-#include "screens/file_manager/FileManagerScreen.h"
-#include "screens/info/ContactScreen.h"
-#include "screens/info/HelpScreen.h"
-#include "screens/info/PrivacyScreen.h"
-#include "screens/info/TermsScreen.h"
-#include "screens/info/TrademarksScreen.h"
-#include "screens/payment/PaymentProcessingScreen.h"
-#include "screens/payment/PaymentSuccessScreen.h"
-#include "screens/relationship_map/RelationshipMapScreen.h"
-#include "ai_chat/AiChatScreen.h"
 #include "ui/navigation/FKeyBar.h"
 #include "ui/navigation/NavigationBar.h"
 #include "ui/navigation/StatusBar.h"
@@ -139,14 +139,19 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // ── Keyboard shortcuts ────────────────────────────────────────────────────
     auto* sc_fullscreen = new QShortcut(QKeySequence(Qt::Key_F11), this);
     connect(sc_fullscreen, &QShortcut::activated, this, [this]() {
-        if (isFullScreen()) showNormal(); else showFullScreen();
+        if (isFullScreen())
+            showNormal();
+        else
+            showFullScreen();
     });
 
     auto* sc_focus = new QShortcut(QKeySequence(Qt::Key_F10), this);
     connect(sc_focus, &QShortcut::activated, this, [this]() {
         focus_mode_ = !focus_mode_;
-        if (tab_bar_widget_)    tab_bar_widget_->setVisible(!focus_mode_);
-        if (status_bar_widget_) status_bar_widget_->setVisible(!focus_mode_);
+        if (tab_bar_widget_)
+            tab_bar_widget_->setVisible(!focus_mode_);
+        if (status_bar_widget_)
+            status_bar_widget_->setVisible(!focus_mode_);
     });
 
     auto* sc_refresh = new QShortcut(QKeySequence(Qt::Key_F5), this);
@@ -158,7 +163,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     auto* sc_screenshot = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this);
     connect(sc_screenshot, &QShortcut::activated, this, [this]() {
         QScreen* scr = this->screen();
-        if (!scr) scr = QApplication::primaryScreen();
+        if (!scr)
+            scr = QApplication::primaryScreen();
         QPixmap px = scr->grabWindow(winId());
         const QString path = QFileDialog::getSaveFileName(
             this, "Save Screenshot",
@@ -175,11 +181,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         if (action == "logout") {
             auth::AuthManager::instance().logout();
         } else if (action == "fullscreen") {
-            if (isFullScreen()) showNormal(); else showFullScreen();
+            if (isFullScreen())
+                showNormal();
+            else
+                showFullScreen();
         } else if (action == "focus_mode") {
             focus_mode_ = !focus_mode_;
-            if (tab_bar_widget_)    tab_bar_widget_->setVisible(!focus_mode_);
-            if (status_bar_widget_) status_bar_widget_->setVisible(!focus_mode_);
+            if (tab_bar_widget_)
+                tab_bar_widget_->setVisible(!focus_mode_);
+            if (status_bar_widget_)
+                status_bar_widget_->setVisible(!focus_mode_);
         } else if (action == "always_on_top") {
             always_on_top_ = !always_on_top_;
             Qt::WindowFlags flags = windowFlags();
@@ -194,7 +205,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
                 QMetaObject::invokeMethod(w, "refresh", Qt::QueuedConnection);
         } else if (action == "screenshot") {
             QScreen* scr = this->screen();
-            if (!scr) scr = QApplication::primaryScreen();
+            if (!scr)
+                scr = QApplication::primaryScreen();
             QPixmap px = scr->grabWindow(winId());
             QString path = QFileDialog::getSaveFileName(
                 this, "Save Screenshot",
@@ -273,7 +285,7 @@ void MainWindow::setup_auth_screens() {
 
     // ── Payment navigation ───────────────────────────────────────────────────
     connect(pay_processing, &screens::PaymentProcessingScreen::payment_completed, this, [this, pay_success]() {
-        auth_stack_->setCurrentIndex(5); // show success
+        auth_stack_->setCurrentIndex(5);     // show success
         pay_success->show_success("", 0, 0); // details come from refreshed session
     });
     connect(pay_processing, &screens::PaymentProcessingScreen::navigate_back, this, &MainWindow::show_pricing);

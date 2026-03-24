@@ -24,15 +24,15 @@ struct SetupStatus {
     bool venv_numpy1_ready = false;
     bool venv_numpy2_ready = false;
     bool needs_setup = true;
-    bool needs_package_sync = false;  // true if requirements files changed since last install
+    bool needs_package_sync = false; // true if requirements files changed since last install
     QString python_version;
     QString install_dir;
 };
 
 /// Progress emitted during setup
 struct SetupProgress {
-    QString step;      // "uv", "python", "venv", "packages-numpy1", "packages-numpy2", "complete"
-    int progress;      // 0-100
+    QString step; // "uv", "python", "venv", "packages-numpy1", "packages-numpy2", "complete"
+    int progress; // 0-100
     QString message;
     bool is_error = false;
 };
@@ -78,8 +78,7 @@ class PythonSetupManager : public QObject {
     QString find_requirements_file(const QString& filename) const;
 
     // Helpers
-    bool run_command(const QString& program, const QStringList& args,
-                     const QStringList& env_vars = {}) const;
+    bool run_command(const QString& program, const QStringList& args, const QStringList& env_vars = {}) const;
     QString download_file(const QString& url, const QString& dest_path) const;
 
     // Requirements hash tracking — detect when requirements change across app versions

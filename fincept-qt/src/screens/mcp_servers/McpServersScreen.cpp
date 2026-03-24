@@ -16,101 +16,100 @@
 namespace {
 using namespace fincept::ui;
 
-static const QString kStyle = QStringLiteral(
-    "#mcpScreen { background: %1; }"
+static const QString kStyle =
+    QStringLiteral("#mcpScreen { background: %1; }"
 
-    "#mcpHeader { background: %2; border-bottom: 2px solid %3; }"
-    "#mcpHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
-    "#mcpHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
+                   "#mcpHeader { background: %2; border-bottom: 2px solid %3; }"
+                   "#mcpHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
+                   "#mcpHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
 
-    "#mcpViewBtn { background: transparent; color: %5; border: 1px solid %8; "
-    "  font-size: 9px; font-weight: 700; padding: 4px 12px; }"
-    "#mcpViewBtn:hover { color: %4; }"
-    "#mcpViewBtn[active=\"true\"] { background: %3; color: %1; border-color: %3; }"
+                   "#mcpViewBtn { background: transparent; color: %5; border: 1px solid %8; "
+                   "  font-size: 9px; font-weight: 700; padding: 4px 12px; }"
+                   "#mcpViewBtn:hover { color: %4; }"
+                   "#mcpViewBtn[active=\"true\"] { background: %3; color: %1; border-color: %3; }"
 
-    "#mcpSearchInput { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "#mcpSearchInput:focus { border-color: %9; }"
+                   "#mcpSearchInput { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "#mcpSearchInput:focus { border-color: %9; }"
 
-    "#mcpRefreshBtn { background: %7; color: %5; border: 1px solid %8; "
-    "  padding: 4px 10px; font-size: 9px; font-weight: 700; }"
-    "#mcpRefreshBtn:hover { color: %4; }"
+                   "#mcpRefreshBtn { background: %7; color: %5; border: 1px solid %8; "
+                   "  padding: 4px 10px; font-size: 9px; font-weight: 700; }"
+                   "#mcpRefreshBtn:hover { color: %4; }"
 
-    "#mcpList { background: %1; border: none; outline: none; font-size: 11px; }"
-    "#mcpList::item { color: %5; padding: 8px 10px; border-bottom: 1px solid %8; }"
-    "#mcpList::item:hover { color: %4; background: %12; }"
-    "#mcpList::item:selected { color: %3; background: rgba(217,119,6,0.1); "
-    "  border-left: 2px solid %3; }"
+                   "#mcpList { background: %1; border: none; outline: none; font-size: 11px; }"
+                   "#mcpList::item { color: %5; padding: 8px 10px; border-bottom: 1px solid %8; }"
+                   "#mcpList::item:hover { color: %4; background: %12; }"
+                   "#mcpList::item:selected { color: %3; background: rgba(217,119,6,0.1); "
+                   "  border-left: 2px solid %3; }"
 
-    "#mcpDetailPanel { background: %7; border-left: 1px solid %8; }"
-    "#mcpDetailTitle { color: %4; font-size: 13px; font-weight: 700; background: transparent; }"
-    "#mcpDetailLabel { color: %5; font-size: 9px; font-weight: 700; "
-    "  letter-spacing: 0.5px; background: transparent; }"
-    "#mcpDetailValue { color: %13; font-size: 11px; background: transparent; }"
+                   "#mcpDetailPanel { background: %7; border-left: 1px solid %8; }"
+                   "#mcpDetailTitle { color: %4; font-size: 13px; font-weight: 700; background: transparent; }"
+                   "#mcpDetailLabel { color: %5; font-size: 9px; font-weight: 700; "
+                   "  letter-spacing: 0.5px; background: transparent; }"
+                   "#mcpDetailValue { color: %13; font-size: 11px; background: transparent; }"
 
-    "#mcpStatusRunning { color: %6; font-size: 11px; font-weight: 700; "
-    "  background: rgba(22,163,74,0.15); padding: 2px 8px; }"
-    "#mcpStatusStopped { color: %14; font-size: 11px; font-weight: 700; "
-    "  background: rgba(220,38,38,0.15); padding: 2px 8px; }"
-    "#mcpStatusError { color: %14; font-size: 11px; font-weight: 700; "
-    "  background: rgba(220,38,38,0.15); padding: 2px 8px; }"
+                   "#mcpStatusRunning { color: %6; font-size: 11px; font-weight: 700; "
+                   "  background: rgba(22,163,74,0.15); padding: 2px 8px; }"
+                   "#mcpStatusStopped { color: %14; font-size: 11px; font-weight: 700; "
+                   "  background: rgba(220,38,38,0.15); padding: 2px 8px; }"
+                   "#mcpStatusError { color: %14; font-size: 11px; font-weight: 700; "
+                   "  background: rgba(220,38,38,0.15); padding: 2px 8px; }"
 
-    "#mcpActionBtn { background: %3; color: %1; border: none; padding: 5px 14px; "
-    "  font-size: 9px; font-weight: 700; }"
-    "#mcpActionBtn:hover { background: #FF8800; }"
-    "#mcpActionBtn:disabled { background: %10; color: %11; }"
+                   "#mcpActionBtn { background: %3; color: %1; border: none; padding: 5px 14px; "
+                   "  font-size: 9px; font-weight: 700; }"
+                   "#mcpActionBtn:hover { background: #FF8800; }"
+                   "#mcpActionBtn:disabled { background: %10; color: %11; }"
 
-    "#mcpDangerBtn { background: rgba(220,38,38,0.1); color: %14; border: 1px solid %14; "
-    "  padding: 5px 14px; font-size: 9px; font-weight: 700; }"
-    "#mcpDangerBtn:hover { background: rgba(220,38,38,0.2); }"
+                   "#mcpDangerBtn { background: rgba(220,38,38,0.1); color: %14; border: 1px solid %14; "
+                   "  padding: 5px 14px; font-size: 9px; font-weight: 700; }"
+                   "#mcpDangerBtn:hover { background: rgba(220,38,38,0.2); }"
 
-    "#mcpSecondaryBtn { background: %7; color: %5; border: 1px solid %8; "
-    "  padding: 5px 14px; font-size: 9px; font-weight: 700; }"
-    "#mcpSecondaryBtn:hover { color: %4; }"
+                   "#mcpSecondaryBtn { background: %7; color: %5; border: 1px solid %8; "
+                   "  padding: 5px 14px; font-size: 9px; font-weight: 700; }"
+                   "#mcpSecondaryBtn:hover { color: %4; }"
 
-    "#mcpInstallBtn { background: %6; color: %1; border: none; padding: 4px 12px; "
-    "  font-size: 9px; font-weight: 700; }"
-    "#mcpInstallBtn:hover { background: #22c55e; }"
+                   "#mcpInstallBtn { background: %6; color: %1; border: none; padding: 4px 12px; "
+                   "  font-size: 9px; font-weight: 700; }"
+                   "#mcpInstallBtn:hover { background: #22c55e; }"
 
-    "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
-    "  font-size: 11px; }"
-    "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
-    "QHeaderView::section { background: %2; color: %5; border: none; "
-    "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
-    "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
+                   "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
+                   "  font-size: 11px; }"
+                   "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
+                   "QHeaderView::section { background: %2; color: %5; border: none; "
+                   "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
+                   "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
 
-    "QTextEdit { background: %1; color: %13; border: none; font-size: 10px; }"
+                   "QTextEdit { background: %1; color: %13; border: none; font-size: 10px; }"
 
-    "#mcpMarketplaceCard { background: %7; border: 1px solid %8; padding: 10px; }"
-    "#mcpMarketplaceCard:hover { border-color: %9; }"
-    "#mcpCardTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
-    "#mcpCardDesc { color: %5; font-size: 10px; background: transparent; }"
-    "#mcpCardCategory { color: %3; font-size: 8px; font-weight: 700; "
-    "  background: rgba(217,119,6,0.1); padding: 1px 6px; }"
+                   "#mcpMarketplaceCard { background: %7; border: 1px solid %8; padding: 10px; }"
+                   "#mcpMarketplaceCard:hover { border-color: %9; }"
+                   "#mcpCardTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#mcpCardDesc { color: %5; font-size: 10px; background: transparent; }"
+                   "#mcpCardCategory { color: %3; font-size: 8px; font-weight: 700; "
+                   "  background: rgba(217,119,6,0.1); padding: 1px 6px; }"
 
-    "#mcpStatusBar { background: %2; border-top: 1px solid %8; }"
-    "#mcpStatusText { color: %5; font-size: 9px; background: transparent; }"
-    "#mcpStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
+                   "#mcpStatusBar { background: %2; border-top: 1px solid %8; }"
+                   "#mcpStatusText { color: %5; font-size: 9px; background: transparent; }"
+                   "#mcpStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
 
-    "QSplitter::handle { background: %8; }"
-    "QScrollBar:vertical { background: %1; width: 6px; }"
-    "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-)
-    .arg(colors::BG_BASE)         // %1
-    .arg(colors::BG_RAISED)       // %2
-    .arg(colors::AMBER)           // %3
-    .arg(colors::TEXT_PRIMARY)    // %4
-    .arg(colors::TEXT_SECONDARY)  // %5
-    .arg(colors::POSITIVE)        // %6
-    .arg(colors::BG_SURFACE)      // %7
-    .arg(colors::BORDER_DIM)      // %8
-    .arg(colors::BORDER_BRIGHT)   // %9
-    .arg(colors::AMBER_DIM)       // %10
-    .arg(colors::TEXT_DIM)         // %11
-    .arg(colors::BG_HOVER)        // %12
-    .arg(colors::CYAN)             // %13
-    .arg(colors::NEGATIVE)        // %14
+                   "QSplitter::handle { background: %8; }"
+                   "QScrollBar:vertical { background: %1; width: 6px; }"
+                   "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
+                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(colors::BG_BASE)        // %1
+        .arg(colors::BG_RAISED)      // %2
+        .arg(colors::AMBER)          // %3
+        .arg(colors::TEXT_PRIMARY)   // %4
+        .arg(colors::TEXT_SECONDARY) // %5
+        .arg(colors::POSITIVE)       // %6
+        .arg(colors::BG_SURFACE)     // %7
+        .arg(colors::BORDER_DIM)     // %8
+        .arg(colors::BORDER_BRIGHT)  // %9
+        .arg(colors::AMBER_DIM)      // %10
+        .arg(colors::TEXT_DIM)       // %11
+        .arg(colors::BG_HOVER)       // %12
+        .arg(colors::CYAN)           // %13
+        .arg(colors::NEGATIVE)       // %14
     ;
 } // namespace
 
@@ -130,38 +129,34 @@ struct MarketplaceServer {
 };
 
 static QList<MarketplaceServer> g_marketplace = {
-    {"Filesystem", "Read/write files and directories",
-     "npx", "-y @modelcontextprotocol/server-filesystem /path/to/dir", "utilities"},
-    {"GitHub", "GitHub API integration — repos, issues, PRs",
-     "npx", "-y @modelcontextprotocol/server-github", "developer"},
-    {"PostgreSQL", "PostgreSQL database query and schema exploration",
-     "npx", "-y @modelcontextprotocol/server-postgres postgres://localhost/mydb", "database"},
-    {"Brave Search", "Web search via Brave Search API",
-     "npx", "-y @modelcontextprotocol/server-brave-search", "search"},
-    {"Puppeteer", "Browser automation and web scraping",
-     "npx", "-y @modelcontextprotocol/server-puppeteer", "automation"},
-    {"SQLite", "SQLite database operations",
-     "npx", "-y @modelcontextprotocol/server-sqlite /path/to/db.sqlite", "database"},
-    {"Memory", "Knowledge graph-based persistent memory",
-     "npx", "-y @modelcontextprotocol/server-memory", "utilities"},
-    {"Fetch", "HTTP fetch and web content retrieval",
-     "npx", "-y @modelcontextprotocol/server-fetch", "utilities"},
-    {"Sequential Thinking", "Dynamic problem-solving via thought sequences",
-     "npx", "-y @modelcontextprotocol/server-sequential-thinking", "reasoning"},
-    {"Google Maps", "Google Maps Platform integration",
-     "npx", "-y @modelcontextprotocol/server-google-maps", "location"},
-    {"Slack", "Slack workspace integration",
-     "npx", "-y @modelcontextprotocol/server-slack", "communication"},
-    {"Sentry", "Sentry issue tracking and error monitoring",
-     "npx", "-y @modelcontextprotocol/server-sentry", "developer"},
-    {"Playwright", "Browser testing and automation with Playwright",
-     "npx", "-y @executeautomation/playwright-mcp-server", "automation"},
-    {"Context7", "Up-to-date library documentation provider",
-     "npx", "-y @upstash/context7-mcp", "developer"},
-    {"Everything", "Local file search via Everything SDK",
-     "npx", "-y @modelcontextprotocol/server-everything", "utilities"},
-    {"Linear", "Linear project management integration",
-     "npx", "-y @modelcontextprotocol/server-linear", "productivity"},
+    {"Filesystem", "Read/write files and directories", "npx", "-y @modelcontextprotocol/server-filesystem /path/to/dir",
+     "utilities"},
+    {"GitHub", "GitHub API integration — repos, issues, PRs", "npx", "-y @modelcontextprotocol/server-github",
+     "developer"},
+    {"PostgreSQL", "PostgreSQL database query and schema exploration", "npx",
+     "-y @modelcontextprotocol/server-postgres postgres://localhost/mydb", "database"},
+    {"Brave Search", "Web search via Brave Search API", "npx", "-y @modelcontextprotocol/server-brave-search",
+     "search"},
+    {"Puppeteer", "Browser automation and web scraping", "npx", "-y @modelcontextprotocol/server-puppeteer",
+     "automation"},
+    {"SQLite", "SQLite database operations", "npx", "-y @modelcontextprotocol/server-sqlite /path/to/db.sqlite",
+     "database"},
+    {"Memory", "Knowledge graph-based persistent memory", "npx", "-y @modelcontextprotocol/server-memory", "utilities"},
+    {"Fetch", "HTTP fetch and web content retrieval", "npx", "-y @modelcontextprotocol/server-fetch", "utilities"},
+    {"Sequential Thinking", "Dynamic problem-solving via thought sequences", "npx",
+     "-y @modelcontextprotocol/server-sequential-thinking", "reasoning"},
+    {"Google Maps", "Google Maps Platform integration", "npx", "-y @modelcontextprotocol/server-google-maps",
+     "location"},
+    {"Slack", "Slack workspace integration", "npx", "-y @modelcontextprotocol/server-slack", "communication"},
+    {"Sentry", "Sentry issue tracking and error monitoring", "npx", "-y @modelcontextprotocol/server-sentry",
+     "developer"},
+    {"Playwright", "Browser testing and automation with Playwright", "npx",
+     "-y @executeautomation/playwright-mcp-server", "automation"},
+    {"Context7", "Up-to-date library documentation provider", "npx", "-y @upstash/context7-mcp", "developer"},
+    {"Everything", "Local file search via Everything SDK", "npx", "-y @modelcontextprotocol/server-everything",
+     "utilities"},
+    {"Linear", "Linear project management integration", "npx", "-y @modelcontextprotocol/server-linear",
+     "productivity"},
 };
 
 // ── Constructor ─────────────────────────────────────────────────────────────
@@ -454,14 +449,17 @@ void McpServersScreen::on_view_changed(int view) {
     const QStringList names = {"MARKETPLACE", "INSTALLED", "TOOLS"};
     status_view_->setText(names[view]);
 
-    if (view == 1) refresh_installed();
-    if (view == 2) refresh_tools();
+    if (view == 1)
+        refresh_installed();
+    if (view == 2)
+        refresh_tools();
 
     LOG_INFO("McpServers", "View: " + names[view]);
 }
 
 void McpServersScreen::on_install_server(int index) {
-    if (index < 0 || index >= g_marketplace.size()) return;
+    if (index < 0 || index >= g_marketplace.size())
+        return;
 
     const auto& ms = g_marketplace[index];
 
@@ -485,7 +483,8 @@ void McpServersScreen::on_install_server(int index) {
 }
 
 void McpServersScreen::on_start_server() {
-    if (selected_server_id_.isEmpty()) return;
+    if (selected_server_id_.isEmpty())
+        return;
     auto result = McpManager::instance().start_server(selected_server_id_);
     if (result.is_ok()) {
         LOG_INFO("McpServers", "Started: " + selected_server_id_);
@@ -496,7 +495,8 @@ void McpServersScreen::on_start_server() {
 }
 
 void McpServersScreen::on_stop_server() {
-    if (selected_server_id_.isEmpty()) return;
+    if (selected_server_id_.isEmpty())
+        return;
     auto result = McpManager::instance().stop_server(selected_server_id_);
     if (result.is_ok()) {
         LOG_INFO("McpServers", "Stopped: " + selected_server_id_);
@@ -507,7 +507,8 @@ void McpServersScreen::on_stop_server() {
 }
 
 void McpServersScreen::on_remove_server() {
-    if (selected_server_id_.isEmpty()) return;
+    if (selected_server_id_.isEmpty())
+        return;
 
     McpManager::instance().stop_server(selected_server_id_);
     auto result = McpManager::instance().remove_server(selected_server_id_);
@@ -521,7 +522,8 @@ void McpServersScreen::on_remove_server() {
 }
 
 void McpServersScreen::on_toggle_autostart() {
-    if (selected_server_id_.isEmpty()) return;
+    if (selected_server_id_.isEmpty())
+        return;
 
     auto servers = McpManager::instance().get_servers();
     for (auto& s : servers) {
@@ -536,7 +538,8 @@ void McpServersScreen::on_toggle_autostart() {
 }
 
 void McpServersScreen::on_server_selected(QListWidgetItem* item) {
-    if (!item) return;
+    if (!item)
+        return;
     selected_server_id_ = item->data(Qt::UserRole).toString();
 
     auto servers = McpManager::instance().get_servers();
@@ -562,9 +565,12 @@ void McpServersScreen::on_server_selected(QListWidgetItem* item) {
 }
 
 void McpServersScreen::on_refresh() {
-    if (active_view_ == 0) populate_marketplace();
-    else if (active_view_ == 1) refresh_installed();
-    else refresh_tools();
+    if (active_view_ == 0)
+        populate_marketplace();
+    else if (active_view_ == 1)
+        refresh_installed();
+    else
+        refresh_tools();
 }
 
 void McpServersScreen::on_search_changed(const QString& text) {
@@ -580,8 +586,8 @@ void McpServersScreen::on_view_logs() {
     logs_view_->setVisible(!logs_view_->isVisible());
     if (logs_view_->isVisible()) {
         logs_view_->setPlainText("Server logs are available in the application log file.\n"
-                                  "Path: %APPDATA%/fincept-terminal/logs/\n\n"
-                                  "MCP server stdio output is captured by McpClient.");
+                                 "Path: %APPDATA%/fincept-terminal/logs/\n\n"
+                                 "MCP server stdio output is captured by McpClient.");
     }
 }
 
@@ -638,7 +644,8 @@ void McpServersScreen::refresh_installed() {
 
     for (const auto& s : servers) {
         bool running = (s.status == ServerStatus::Running);
-        if (running) running_count++;
+        if (running)
+            running_count++;
 
         QString status_icon = running ? "[RUN]" : "[OFF]";
         auto* item = new QListWidgetItem(status_icon + " " + s.name + "\n" + s.description);

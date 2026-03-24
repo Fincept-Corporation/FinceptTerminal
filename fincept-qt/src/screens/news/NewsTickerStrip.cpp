@@ -9,9 +9,7 @@
 namespace fincept::screens {
 
 NewsTickerStrip::NewsTickerStrip(QWidget* parent)
-    : QWidget(parent)
-    , ticker_font_(ui::fonts::DATA_FAMILY, 10)
-    , ticker_fm_(ticker_font_) {
+    : QWidget(parent), ticker_font_(ui::fonts::DATA_FAMILY, 10), ticker_fm_(ticker_font_) {
     setObjectName("newsTickerStrip");
     setFixedHeight(22);
 
@@ -30,8 +28,7 @@ void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& breakin
     total_width_ = 0;
 
     for (const auto& article : breaking_articles) {
-        if (article.priority != services::Priority::FLASH &&
-            article.priority != services::Priority::URGENT &&
+        if (article.priority != services::Priority::FLASH && article.priority != services::Priority::URGENT &&
             article.priority != services::Priority::BREAKING)
             continue;
 
@@ -44,8 +41,8 @@ void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& breakin
         entry.tag_width = ticker_fm_.horizontalAdvance(entry.tag_text);
         entry.source_width = ticker_fm_.horizontalAdvance(entry.source_text);
         entry.headline_width = ticker_fm_.horizontalAdvance(entry.headline_text);
-        entry.total_width = entry.tag_width + SEGMENT_GAP + entry.source_width + SEGMENT_GAP
-                            + entry.headline_width + ITEM_SPACING;
+        entry.total_width =
+            entry.tag_width + SEGMENT_GAP + entry.source_width + SEGMENT_GAP + entry.headline_width + ITEM_SPACING;
 
         total_width_ += entry.total_width;
         entries_.append(entry);

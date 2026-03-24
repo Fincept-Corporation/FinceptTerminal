@@ -1,5 +1,6 @@
 // src/screens/portfolio/PortfolioHeatmap.cpp
 #include "screens/portfolio/PortfolioHeatmap.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QGridLayout>
@@ -17,8 +18,8 @@ PortfolioHeatmap::PortfolioHeatmap(QWidget* parent) : QWidget(parent) {
 }
 
 void PortfolioHeatmap::build_ui() {
-    setStyleSheet(QString("background:%1; border-right:1px solid %2;")
-                  .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    setStyleSheet(
+        QString("background:%1; border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(6, 6, 6, 6);
@@ -27,8 +28,8 @@ void PortfolioHeatmap::build_ui() {
     // Header: title + mode buttons
     auto* header = new QHBoxLayout;
     auto* title = new QLabel("HOLDINGS");
-    title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;")
-                         .arg(ui::colors::TEXT_SECONDARY));
+    title->setStyleSheet(
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
     header->addWidget(title);
     header->addStretch();
 
@@ -37,18 +38,17 @@ void PortfolioHeatmap::build_ui() {
         btn->setFixedSize(36, 18);
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(QString(
-            "QPushButton { background:transparent; color:%1; border:1px solid %2;"
-            "  font-size:8px; font-weight:700; }"
-            "QPushButton:checked { background:%3; color:#000; border-color:%3; }")
-            .arg(ui::colors::TEXT_TERTIARY, ui::colors::BORDER_DIM, ui::colors::AMBER));
+        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                                   "  font-size:8px; font-weight:700; }"
+                                   "QPushButton:checked { background:%3; color:#000; border-color:%3; }")
+                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::BORDER_DIM, ui::colors::AMBER));
         header->addWidget(btn);
         return btn;
     };
 
-    pnl_btn_    = make_mode_btn("PNL");
+    pnl_btn_ = make_mode_btn("PNL");
     weight_btn_ = make_mode_btn("WT");
-    day_btn_    = make_mode_btn("DAY");
+    day_btn_ = make_mode_btn("DAY");
     pnl_btn_->setChecked(true);
 
     auto set_mode = [this](portfolio::HeatmapMode m) {
@@ -59,9 +59,9 @@ void PortfolioHeatmap::build_ui() {
         rebuild_blocks();
         emit mode_changed(m);
     };
-    connect(pnl_btn_,    &QPushButton::clicked, this, [=]() { set_mode(portfolio::HeatmapMode::Pnl); });
+    connect(pnl_btn_, &QPushButton::clicked, this, [=]() { set_mode(portfolio::HeatmapMode::Pnl); });
     connect(weight_btn_, &QPushButton::clicked, this, [=]() { set_mode(portfolio::HeatmapMode::Weight); });
-    connect(day_btn_,    &QPushButton::clicked, this, [=]() { set_mode(portfolio::HeatmapMode::DayChange); });
+    connect(day_btn_, &QPushButton::clicked, this, [=]() { set_mode(portfolio::HeatmapMode::DayChange); });
 
     layout->addLayout(header);
 
@@ -80,8 +80,8 @@ void PortfolioHeatmap::build_ui() {
 
     // Selected holding detail
     detail_panel_ = new QWidget;
-    detail_panel_->setStyleSheet(QString("background:%1; border:1px solid %2; padding:4px;")
-                                 .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    detail_panel_->setStyleSheet(
+        QString("background:%1; border:1px solid %2; padding:4px;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     detail_panel_->setVisible(false);
 
     auto* dp_layout = new QVBoxLayout(detail_panel_);
@@ -89,8 +89,7 @@ void PortfolioHeatmap::build_ui() {
     dp_layout->setSpacing(2);
 
     detail_symbol_ = new QLabel;
-    detail_symbol_->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700;")
-                                  .arg(ui::colors::CYAN));
+    detail_symbol_->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700;").arg(ui::colors::CYAN));
     dp_layout->addWidget(detail_symbol_);
 
     auto add_detail_row = [&](QLabel*& lbl, const QString& prefix) {
@@ -100,8 +99,7 @@ void PortfolioHeatmap::build_ui() {
         row->addWidget(lab);
         lbl = new QLabel("--");
         lbl->setAlignment(Qt::AlignRight);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;")
-                           .arg(ui::colors::TEXT_PRIMARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
         row->addWidget(lbl);
         dp_layout->addLayout(row);
     };
@@ -119,8 +117,8 @@ void PortfolioHeatmap::build_ui() {
 
     // Risk gauge
     auto* risk_header = new QLabel("RISK SCORE");
-    risk_header->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;")
-                               .arg(ui::colors::TEXT_TERTIARY));
+    risk_header->setStyleSheet(
+        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY));
     layout->addWidget(risk_header);
 
     risk_bar_ = new QWidget;
@@ -130,14 +128,13 @@ void PortfolioHeatmap::build_ui() {
 
     risk_value_ = new QLabel("--");
     risk_value_->setAlignment(Qt::AlignCenter);
-    risk_value_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;")
-                               .arg(ui::colors::TEXT_SECONDARY));
+    risk_value_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY));
     layout->addWidget(risk_value_);
 
     // Top movers
     auto* movers_header = new QLabel("TOP MOVERS");
-    movers_header->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;")
-                                 .arg(ui::colors::TEXT_TERTIARY));
+    movers_header->setStyleSheet(
+        QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY));
     layout->addWidget(movers_header);
 
     top_gainer_ = new QLabel;
@@ -156,8 +153,7 @@ void PortfolioHeatmap::build_ui() {
         row->addWidget(lab);
         lbl = new QLabel("--");
         lbl->setAlignment(Qt::AlignRight);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;")
-                           .arg(ui::colors::TEXT_SECONDARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY));
         row->addWidget(lbl);
         layout->addLayout(row);
     };
@@ -180,11 +176,10 @@ void PortfolioHeatmap::set_metrics(const portfolio::ComputedMetrics& metrics) {
     update_risk_gauge();
 
     stat_conc_->setText(metrics.concentration_top3.has_value()
-        ? QString("%1%").arg(QString::number(*metrics.concentration_top3, 'f', 1))
-        : "--");
-    stat_vol_->setText(metrics.volatility.has_value()
-        ? QString("%1%").arg(QString::number(*metrics.volatility, 'f', 1))
-        : "--");
+                            ? QString("%1%").arg(QString::number(*metrics.concentration_top3, 'f', 1))
+                            : "--");
+    stat_vol_->setText(metrics.volatility.has_value() ? QString("%1%").arg(QString::number(*metrics.volatility, 'f', 1))
+                                                      : "--");
 }
 
 void PortfolioHeatmap::set_selected_symbol(const QString& symbol) {
@@ -200,9 +195,15 @@ void PortfolioHeatmap::set_currency(const QString& currency) {
 QColor PortfolioHeatmap::block_color(const portfolio::HoldingWithQuote& h) const {
     double val = 0;
     switch (mode_) {
-        case portfolio::HeatmapMode::Pnl:       val = h.unrealized_pnl_percent; break;
-        case portfolio::HeatmapMode::Weight:     val = h.weight;                 break;
-        case portfolio::HeatmapMode::DayChange:  val = h.day_change_percent;     break;
+        case portfolio::HeatmapMode::Pnl:
+            val = h.unrealized_pnl_percent;
+            break;
+        case portfolio::HeatmapMode::Weight:
+            val = h.weight;
+            break;
+        case portfolio::HeatmapMode::DayChange:
+            val = h.day_change_percent;
+            break;
     }
 
     if (mode_ == portfolio::HeatmapMode::Weight) {
@@ -214,8 +215,8 @@ QColor PortfolioHeatmap::block_color(const portfolio::HoldingWithQuote& h) const
     // Green/Red gradient by value
     double intensity = std::min(std::abs(val) / 10.0, 1.0);
     int alpha = static_cast<int>(intensity * 160) + 40;
-    return val >= 0 ? QColor(22, 163, 74, alpha)   // green
-                    : QColor(220, 38, 38, alpha);  // red
+    return val >= 0 ? QColor(22, 163, 74, alpha)  // green
+                    : QColor(220, 38, 38, alpha); // red
 }
 
 void PortfolioHeatmap::rebuild_blocks() {
@@ -244,24 +245,25 @@ void PortfolioHeatmap::rebuild_blocks() {
         block->setCursor(Qt::PointingHandCursor);
 
         QColor bg = block_color(h);
-        QString border_style = selected
-            ? QString("border:2px solid %1;").arg(ui::colors::AMBER)
-            : QString("border:1px solid %1;").arg(ui::colors::BORDER_DIM);
+        QString border_style = selected ? QString("border:2px solid %1;").arg(ui::colors::AMBER)
+                                        : QString("border:1px solid %1;").arg(ui::colors::BORDER_DIM);
 
-        block->setStyleSheet(QString(
-            "QPushButton { background:rgba(%1,%2,%3,%4); %5"
-            "  text-align:left; padding:4px 6px; }"
-            "QPushButton:hover { border-color:%6; }")
-            .arg(bg.red()).arg(bg.green()).arg(bg.blue()).arg(bg.alpha())
-            .arg(border_style, ui::colors::AMBER));
+        block->setStyleSheet(QString("QPushButton { background:rgba(%1,%2,%3,%4); %5"
+                                     "  text-align:left; padding:4px 6px; }"
+                                     "QPushButton:hover { border-color:%6; }")
+                                 .arg(bg.red())
+                                 .arg(bg.green())
+                                 .arg(bg.blue())
+                                 .arg(bg.alpha())
+                                 .arg(border_style, ui::colors::AMBER));
 
         // Content
         double chg_val = mode_ == portfolio::HeatmapMode::DayChange ? h.day_change_percent
-                       : mode_ == portfolio::HeatmapMode::Pnl      ? h.unrealized_pnl_percent
-                       : h.weight;
+                         : mode_ == portfolio::HeatmapMode::Pnl     ? h.unrealized_pnl_percent
+                                                                    : h.weight;
         QString chg_str = mode_ == portfolio::HeatmapMode::Weight
-            ? QString("%1%").arg(QString::number(chg_val, 'f', 1))
-            : QString("%1%2%").arg(chg_val >= 0 ? "+" : "").arg(QString::number(chg_val, 'f', 1));
+                              ? QString("%1%").arg(QString::number(chg_val, 'f', 1))
+                              : QString("%1%2%").arg(chg_val >= 0 ? "+" : "").arg(QString::number(chg_val, 'f', 1));
 
         block->setText(QString("%1\n%2").arg(h.symbol, chg_str));
 
@@ -274,7 +276,10 @@ void PortfolioHeatmap::rebuild_blocks() {
 
         grid->addWidget(block, row, col);
         col++;
-        if (col >= 2) { col = 0; row++; }
+        if (col >= 2) {
+            col = 0;
+            row++;
+        }
     }
 
     grid->setRowStretch(row + 1, 1); // push blocks up
@@ -283,7 +288,10 @@ void PortfolioHeatmap::rebuild_blocks() {
 void PortfolioHeatmap::update_detail() {
     const portfolio::HoldingWithQuote* found = nullptr;
     for (const auto& h : holdings_) {
-        if (h.symbol == selected_symbol_) { found = &h; break; }
+        if (h.symbol == selected_symbol_) {
+            found = &h;
+            break;
+        }
     }
 
     if (!found) {
@@ -294,37 +302,38 @@ void PortfolioHeatmap::update_detail() {
     detail_panel_->setVisible(true);
     const auto& h = *found;
     auto fmt = [](double v, int dp = 2) { return QString::number(v, 'f', dp); };
-    auto color = [](double v) -> const char* {
-        return v >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-    };
+    auto color = [](double v) -> const char* { return v >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE; };
 
     detail_symbol_->setText(h.symbol);
     detail_price_->setText(fmt(h.current_price));
     detail_change_->setText(QString("%1%2%").arg(h.day_change_percent >= 0 ? "+" : "").arg(fmt(h.day_change_percent)));
-    detail_change_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(color(h.day_change_percent)));
+    detail_change_->setStyleSheet(
+        QString("color:%1; font-size:9px; font-weight:600;").arg(color(h.day_change_percent)));
     detail_qty_->setText(fmt(h.quantity, h.quantity == std::floor(h.quantity) ? 0 : 2));
     detail_cost_->setText(fmt(h.avg_buy_price));
     detail_mv_->setText(fmt(h.market_value));
     detail_mv_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::WARNING));
     detail_pnl_->setText(QString("%1%2").arg(h.unrealized_pnl >= 0 ? "+" : "").arg(fmt(h.unrealized_pnl)));
     detail_pnl_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(color(h.unrealized_pnl)));
-    detail_pnl_pct_->setText(QString("%1%2%").arg(h.unrealized_pnl_percent >= 0 ? "+" : "").arg(fmt(h.unrealized_pnl_percent)));
-    detail_pnl_pct_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:600;").arg(color(h.unrealized_pnl_percent)));
+    detail_pnl_pct_->setText(
+        QString("%1%2%").arg(h.unrealized_pnl_percent >= 0 ? "+" : "").arg(fmt(h.unrealized_pnl_percent)));
+    detail_pnl_pct_->setStyleSheet(
+        QString("color:%1; font-size:9px; font-weight:600;").arg(color(h.unrealized_pnl_percent)));
     detail_weight_->setText(QString("%1%").arg(fmt(h.weight, 1)));
 }
 
 void PortfolioHeatmap::update_risk_gauge() {
     double rs = metrics_.risk_score.value_or(0);
-    const char* rs_color = rs < 30 ? ui::colors::POSITIVE
-                         : rs < 60 ? ui::colors::WARNING
-                                   : ui::colors::NEGATIVE;
+    const char* rs_color = rs < 30 ? ui::colors::POSITIVE : rs < 60 ? ui::colors::WARNING : ui::colors::NEGATIVE;
 
     // Use a colored inner bar proportional to score
     double pct = std::min(rs / 100.0, 1.0);
     int bar_width = static_cast<int>(pct * risk_bar_->width());
-    risk_bar_->setStyleSheet(QString(
-        "background: qlineargradient(x1:0, x2:1, stop:0 %1, stop:%2 %1, stop:%3 transparent);")
-        .arg(rs_color).arg(pct).arg(std::min(pct + 0.01, 1.0)));
+    risk_bar_->setStyleSheet(
+        QString("background: qlineargradient(x1:0, x2:1, stop:0 %1, stop:%2 %1, stop:%3 transparent);")
+            .arg(rs_color)
+            .arg(pct)
+            .arg(std::min(pct + 0.01, 1.0)));
 
     risk_value_->setText(QString::number(rs, 'f', 0));
     risk_value_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(rs_color));
@@ -337,20 +346,22 @@ void PortfolioHeatmap::update_top_movers() {
         return;
     }
 
-    auto best = std::max_element(holdings_.begin(), holdings_.end(),
-        [](const auto& a, const auto& b) { return a.day_change_percent < b.day_change_percent; });
-    auto worst = std::min_element(holdings_.begin(), holdings_.end(),
-        [](const auto& a, const auto& b) { return a.day_change_percent < b.day_change_percent; });
+    auto best = std::max_element(holdings_.begin(), holdings_.end(), [](const auto& a, const auto& b) {
+        return a.day_change_percent < b.day_change_percent;
+    });
+    auto worst = std::min_element(holdings_.begin(), holdings_.end(), [](const auto& a, const auto& b) {
+        return a.day_change_percent < b.day_change_percent;
+    });
 
     top_gainer_->setText(QString("\u25B2 %1  %2%3%")
-        .arg(best->symbol)
-        .arg(best->day_change_percent >= 0 ? "+" : "")
-        .arg(QString::number(best->day_change_percent, 'f', 2)));
+                             .arg(best->symbol)
+                             .arg(best->day_change_percent >= 0 ? "+" : "")
+                             .arg(QString::number(best->day_change_percent, 'f', 2)));
 
     top_loser_->setText(QString("\u25BC %1  %2%3%")
-        .arg(worst->symbol)
-        .arg(worst->day_change_percent >= 0 ? "+" : "")
-        .arg(QString::number(worst->day_change_percent, 'f', 2)));
+                            .arg(worst->symbol)
+                            .arg(worst->day_change_percent >= 0 ? "+" : "")
+                            .arg(QString::number(worst->day_change_percent, 'f', 2)));
 }
 
 } // namespace fincept::screens

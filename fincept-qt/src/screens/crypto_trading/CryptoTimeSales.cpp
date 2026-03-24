@@ -48,7 +48,8 @@ void CryptoTimeSales::add_trade(const TradeEntry& trade) {
             trades_.resize(MAX_TIME_SALES_TRADES);
     }
     cache_dirty_ = true;
-    if (repaint_timer_ && !repaint_timer_->isActive()) repaint_timer_->start();
+    if (repaint_timer_ && !repaint_timer_->isActive())
+        repaint_timer_->start();
 }
 
 void CryptoTimeSales::set_trades(const QVector<TradeEntry>& trades) {
@@ -59,7 +60,8 @@ void CryptoTimeSales::set_trades(const QVector<TradeEntry>& trades) {
             trades_.resize(MAX_TIME_SALES_TRADES);
     }
     cache_dirty_ = true;
-    if (repaint_timer_ && !repaint_timer_->isActive()) repaint_timer_->start();
+    if (repaint_timer_ && !repaint_timer_->isActive())
+        repaint_timer_->start();
 }
 
 void CryptoTimeSales::resizeEvent(QResizeEvent* event) {
@@ -78,7 +80,8 @@ void CryptoTimeSales::paintEvent(QPaintEvent* /*event*/) {
 void CryptoTimeSales::rebuild_cache() {
     const int w = width();
     const int h = height();
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0)
+        return;
 
     cache_ = QPixmap(w, h);
     cache_.fill(kBgBase);
@@ -118,8 +121,7 @@ void CryptoTimeSales::rebuild_cache() {
 
         // Price
         p.setPen(price_color);
-        p.drawText(QRect(74, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
-                   QString::number(t.price, 'f', 2));
+        p.drawText(QRect(74, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, QString::number(t.price, 'f', 2));
 
         // Quantity
         p.setPen(kTextSec);
@@ -128,8 +130,7 @@ void CryptoTimeSales::rebuild_cache() {
 
         // Side indicator
         p.setPen(price_color);
-        p.drawText(QRect(w - 30, y, 26, ROW_H), Qt::AlignCenter | Qt::AlignVCenter,
-                   is_buy ? "B" : "S");
+        p.drawText(QRect(w - 30, y, 26, ROW_H), Qt::AlignCenter | Qt::AlignVCenter, is_buy ? "B" : "S");
     }
 
     if (count == 0) {

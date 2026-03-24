@@ -1,5 +1,6 @@
 // src/screens/forum/ForumThreadPanel.cpp
 #include "screens/forum/ForumThreadPanel.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
@@ -15,23 +16,28 @@ static QString M(int sz = 12) {
 }
 
 static QString rel_time(const QString& iso) {
-    if (iso.isEmpty()) return {};
+    if (iso.isEmpty())
+        return {};
     auto dt = QDateTime::fromString(iso, Qt::ISODate);
-    if (!dt.isValid()) dt = QDateTime::fromString(iso.left(19), "yyyy-MM-ddTHH:mm:ss");
-    if (!dt.isValid()) return iso.left(10);
+    if (!dt.isValid())
+        dt = QDateTime::fromString(iso.left(19), "yyyy-MM-ddTHH:mm:ss");
+    if (!dt.isValid())
+        return iso.left(10);
     qint64 sec = dt.secsTo(QDateTime::currentDateTimeUtc());
-    if (sec < 0) sec = 0;
-    if (sec < 60)    return QString("%1s ago").arg(sec);
-    if (sec < 3600)  return QString("%1m ago").arg(sec / 60);
-    if (sec < 86400) return QString("%1h ago").arg(sec / 3600);
+    if (sec < 0)
+        sec = 0;
+    if (sec < 60)
+        return QString("%1s ago").arg(sec);
+    if (sec < 3600)
+        return QString("%1m ago").arg(sec / 60);
+    if (sec < 86400)
+        return QString("%1h ago").arg(sec / 3600);
     return QString("%1d ago").arg(sec / 86400);
 }
 
 static QString det_color(const QString& s) {
-    static const char* pal[] = {
-        "#d97706","#06b6d4","#10b981","#8b5cf6","#f97316",
-        "#3b82f6","#ec4899","#14b8a6","#84cc16","#ef4444"
-    };
+    static const char* pal[] = {"#d97706", "#06b6d4", "#10b981", "#8b5cf6", "#f97316",
+                                "#3b82f6", "#ec4899", "#14b8a6", "#84cc16", "#ef4444"};
     return pal[qHash(s) % 10];
 }
 
@@ -54,8 +60,7 @@ void ForumThreadPanel::build_ui() {
         auto* vl = new QVBoxLayout(load_page);
         spin_lbl_ = new QLabel("⣾");
         spin_lbl_->setAlignment(Qt::AlignCenter);
-        spin_lbl_->setStyleSheet(
-            QString("color:#d97706;font-size:24px;background:transparent;%1").arg(M(24)));
+        spin_lbl_->setStyleSheet(QString("color:#d97706;font-size:24px;background:transparent;%1").arg(M(24)));
         vl->addStretch();
         vl->addWidget(spin_lbl_);
         vl->addStretch();
@@ -65,7 +70,7 @@ void ForumThreadPanel::build_ui() {
     spin_timer_ = new QTimer(this);
     spin_timer_->setInterval(90);
     connect(spin_timer_, &QTimer::timeout, this, [this]() {
-        static const QString f[] = {"⣾","⣽","⣻","⢿","⡿","⣟","⣯","⣷"};
+        static const QString f[] = {"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"};
         spin_lbl_->setText(f[spin_frame_++ % 8]);
     });
 
@@ -87,13 +92,11 @@ void ForumThreadPanel::build_ui() {
     auto* back_btn = new QPushButton("←  BACK TO FEED");
     back_btn->setCursor(Qt::PointingHandCursor);
     back_btn->setFixedHeight(32);
-    back_btn->setStyleSheet(
-        QString("QPushButton{background:transparent;color:#333333;border:none;"
-                "font-size:11px;font-weight:700;letter-spacing:0.5px;padding:0 4px;%1}"
-                "QPushButton:hover{color:#888888;}").arg(M(11)));
-    connect(back_btn, &QPushButton::clicked, this, [this]() {
-        emit back_requested();
-    });
+    back_btn->setStyleSheet(QString("QPushButton{background:transparent;color:#333333;border:none;"
+                                    "font-size:11px;font-weight:700;letter-spacing:0.5px;padding:0 4px;%1}"
+                                    "QPushButton:hover{color:#888888;}")
+                                .arg(M(11)));
+    connect(back_btn, &QPushButton::clicked, this, [this]() { emit back_requested(); });
 
     bb_hl->addWidget(back_btn);
     bb_hl->addStretch();
@@ -103,11 +106,10 @@ void ForumThreadPanel::build_ui() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(
-        "QScrollArea{border:none;background:#080808;}"
-        "QScrollBar:vertical{width:4px;background:transparent;margin:0;}"
-        "QScrollBar::handle:vertical{background:#151515;min-height:30px;}"
-        "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}");
+    scroll->setStyleSheet("QScrollArea{border:none;background:#080808;}"
+                          "QScrollBar:vertical{width:4px;background:transparent;margin:0;}"
+                          "QScrollBar::handle:vertical{background:#151515;min-height:30px;}"
+                          "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}");
 
     auto* sw = new QWidget;
     sw->setStyleSheet("background:#080808;");
@@ -137,14 +139,13 @@ void ForumThreadPanel::build_ui() {
     chip_hl->setSpacing(10);
 
     t_cat_chip_ = new QLabel;
-    t_cat_chip_->setStyleSheet(
-        QString("color:#d97706;font-size:9px;font-weight:700;letter-spacing:0.8px;"
-                "background:transparent;border:1px solid rgba(217,119,6,0.4);"
-                "padding:2px 8px;%1").arg(M(9)));
+    t_cat_chip_->setStyleSheet(QString("color:#d97706;font-size:9px;font-weight:700;letter-spacing:0.8px;"
+                                       "background:transparent;border:1px solid rgba(217,119,6,0.4);"
+                                       "padding:2px 8px;%1")
+                                   .arg(M(9)));
 
     t_meta_lbl_ = new QLabel;
-    t_meta_lbl_->setStyleSheet(
-        QString("color:#666666;font-size:10px;background:transparent;%1").arg(M(10)));
+    t_meta_lbl_->setStyleSheet(QString("color:#666666;font-size:10px;background:transparent;%1").arg(M(10)));
 
     chip_hl->addWidget(t_cat_chip_);
     chip_hl->addStretch();
@@ -154,9 +155,9 @@ void ForumThreadPanel::build_ui() {
     // Title — large
     t_title_lbl_ = new QLabel;
     t_title_lbl_->setWordWrap(true);
-    t_title_lbl_->setStyleSheet(
-        QString("color:#e5e5e5;font-size:18px;font-weight:700;line-height:1.3;"
-                "background:transparent;%1").arg(M(18)));
+    t_title_lbl_->setStyleSheet(QString("color:#e5e5e5;font-size:18px;font-weight:700;line-height:1.3;"
+                                        "background:transparent;%1")
+                                    .arg(M(18)));
     hdr_vl->addWidget(t_title_lbl_);
 
     // Author row with avatar
@@ -164,10 +165,10 @@ void ForumThreadPanel::build_ui() {
     t_author_lbl_->setTextFormat(Qt::RichText);
     t_author_lbl_->setTextInteractionFlags(Qt::TextBrowserInteraction);
     t_author_lbl_->setOpenExternalLinks(false);
-    t_author_lbl_->setStyleSheet(
-        QString("color:#444444;font-size:11px;background:transparent;%1").arg(M(11)));
+    t_author_lbl_->setStyleSheet(QString("color:#444444;font-size:11px;background:transparent;%1").arg(M(11)));
     connect(t_author_lbl_, &QLabel::linkActivated, this, [this](const QString& link) {
-        if (link.startsWith("author:")) emit author_clicked(link.mid(7));
+        if (link.startsWith("author:"))
+            emit author_clicked(link.mid(7));
     });
     hdr_vl->addWidget(t_author_lbl_);
 
@@ -187,9 +188,9 @@ void ForumThreadPanel::build_ui() {
     t_body_lbl_->setTextFormat(Qt::PlainText);
     t_body_lbl_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     t_body_lbl_->setMaximumWidth(800);
-    t_body_lbl_->setStyleSheet(
-        QString("color:#777777;font-size:13px;line-height:1.8;background:transparent;"
-                "padding:24px 32px;%1").arg(M(13)));
+    t_body_lbl_->setStyleSheet(QString("color:#777777;font-size:13px;line-height:1.8;background:transparent;"
+                                       "padding:24px 32px;%1")
+                                   .arg(M(13)));
 
     body_outer_hl->addStretch();
     body_outer_hl->addWidget(t_body_lbl_, 1);
@@ -214,11 +215,11 @@ void ForumThreadPanel::build_ui() {
     auto* up_btn = new QPushButton("▲  UPVOTE");
     up_btn->setFixedSize(90, 26);
     up_btn->setCursor(Qt::PointingHandCursor);
-    up_btn->setStyleSheet(
-        QString("QPushButton{background:transparent;color:#666666;"
-                "border:1px solid #161616;font-size:10px;font-weight:700;%1}"
-                "QPushButton:hover{color:#d97706;border-color:rgba(217,119,6,0.4);"
-                "background:rgba(217,119,6,0.06);}").arg(M(10)));
+    up_btn->setStyleSheet(QString("QPushButton{background:transparent;color:#666666;"
+                                  "border:1px solid #161616;font-size:10px;font-weight:700;%1}"
+                                  "QPushButton:hover{color:#d97706;border-color:rgba(217,119,6,0.4);"
+                                  "background:rgba(217,119,6,0.06);}")
+                              .arg(M(10)));
     connect(up_btn, &QPushButton::clicked, this, [this]() {
         if (!current_.post.post_uuid.isEmpty())
             emit vote_post(current_.post.post_uuid, "up");
@@ -231,8 +232,7 @@ void ForumThreadPanel::build_ui() {
     t_replies_lbl_->setStyleSheet(
         QString("color:#606060;font-size:11px;background:transparent;padding:0 8px;%1").arg(M(11)));
     t_views_lbl_ = new QLabel("◉ 0 views");
-    t_views_lbl_->setStyleSheet(
-        QString("color:#1c1c1c;font-size:11px;background:transparent;%1").arg(M(11)));
+    t_views_lbl_->setStyleSheet(QString("color:#1c1c1c;font-size:11px;background:transparent;%1").arg(M(11)));
 
     eng_hl->addWidget(up_btn);
     eng_hl->addWidget(t_likes_lbl_);
@@ -258,9 +258,9 @@ void ForumThreadPanel::build_ui() {
     auto* chi = new QHBoxLayout(com_hdr_inner);
     chi->setContentsMargins(32, 0, 32, 0);
     auto* ch_lbl = new QLabel("REPLIES");
-    ch_lbl->setStyleSheet(
-        QString("color:#555555;font-size:9px;font-weight:700;letter-spacing:1.5px;"
-                "background:transparent;%1").arg(M(9)));
+    ch_lbl->setStyleSheet(QString("color:#555555;font-size:9px;font-weight:700;letter-spacing:1.5px;"
+                                  "background:transparent;%1")
+                              .arg(M(9)));
     chi->addWidget(ch_lbl);
 
     com_hdr_hl->addStretch();
@@ -306,24 +306,25 @@ void ForumThreadPanel::build_ui() {
 
     t_reply_input_ = new QLineEdit;
     t_reply_input_->setPlaceholderText("write a reply...");
-    t_reply_input_->setStyleSheet(
-        QString("QLineEdit{background:#0a0a0a;color:#888888;border:1px solid #161616;"
-                "padding:5px 12px;font-size:12px;%1}"
-                "QLineEdit:focus{border-color:#666666;color:#e5e5e5;}"
-                "QLineEdit::placeholder{color:#555555;}").arg(M(12)));
+    t_reply_input_->setStyleSheet(QString("QLineEdit{background:#0a0a0a;color:#888888;border:1px solid #161616;"
+                                          "padding:5px 12px;font-size:12px;%1}"
+                                          "QLineEdit:focus{border-color:#666666;color:#e5e5e5;}"
+                                          "QLineEdit::placeholder{color:#555555;}")
+                                      .arg(M(12)));
 
     auto* send_btn = new QPushButton("REPLY  ↵");
     send_btn->setFixedSize(80, 30);
     send_btn->setCursor(Qt::PointingHandCursor);
-    send_btn->setStyleSheet(
-        QString("QPushButton{background:rgba(217,119,6,0.1);color:#444444;"
-                "border:1px solid #1a1a1a;font-size:10px;font-weight:700;%1}"
-                "QPushButton:hover{background:rgba(217,119,6,0.2);color:#d97706;"
-                "border-color:rgba(217,119,6,0.5);}").arg(M(10)));
+    send_btn->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:#444444;"
+                                    "border:1px solid #1a1a1a;font-size:10px;font-weight:700;%1}"
+                                    "QPushButton:hover{background:rgba(217,119,6,0.2);color:#d97706;"
+                                    "border-color:rgba(217,119,6,0.5);}")
+                                .arg(M(10)));
 
     auto submit = [this]() {
         QString txt = t_reply_input_->text().trimmed();
-        if (txt.isEmpty() || current_.post.post_uuid.isEmpty()) return;
+        if (txt.isEmpty() || current_.post.post_uuid.isEmpty())
+            return;
         emit comment_submitted(current_.post.post_uuid, txt);
         t_reply_input_->clear();
     };
@@ -362,44 +363,40 @@ void ForumThreadPanel::show_post(const services::ForumPostDetail& detail) {
     spin_timer_->stop();
     current_ = detail;
 
-    QString cc = detail.post.category_color.isEmpty()
-                     ? det_color(detail.post.category_name)
-                     : detail.post.category_color;
+    QString cc =
+        detail.post.category_color.isEmpty() ? det_color(detail.post.category_name) : detail.post.category_color;
 
     t_cat_chip_->setText(detail.post.category_name.toUpper());
-    t_cat_chip_->setStyleSheet(
-        QString("color:%1;font-size:9px;font-weight:700;letter-spacing:0.8px;"
-                "background:transparent;border:1px solid %1;"
-                "padding:2px 8px;%2").arg(cc, M(9)));
+    t_cat_chip_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;letter-spacing:0.8px;"
+                                       "background:transparent;border:1px solid %1;"
+                                       "padding:2px 8px;%2")
+                                   .arg(cc, M(9)));
 
     t_meta_lbl_->setText(rel_time(detail.post.created_at));
     t_title_lbl_->setText(detail.post.title);
 
     // Author
     QString avc = det_color(detail.post.author_display_name);
-    QString ini = detail.post.author_display_name.isEmpty() ? "?"
-                : detail.post.author_display_name.left(2).toUpper();
-    t_author_lbl_->setText(
-        QString("<span style='background:%1;color:#080808;font-size:10px;"
-                "font-family:Consolas;padding:2px 5px;font-weight:700;'>%2</span>"
-                "&nbsp;&nbsp;"
-                "<a href='author:%3' style='color:#555555;text-decoration:none;"
-                "font-family:Consolas;font-size:12px;'>%4</a>")
-            .arg(avc, ini, detail.post.author_name,
-                 detail.post.author_display_name));
+    QString ini = detail.post.author_display_name.isEmpty() ? "?" : detail.post.author_display_name.left(2).toUpper();
+    t_author_lbl_->setText(QString("<span style='background:%1;color:#080808;font-size:10px;"
+                                   "font-family:Consolas;padding:2px 5px;font-weight:700;'>%2</span>"
+                                   "&nbsp;&nbsp;"
+                                   "<a href='author:%3' style='color:#555555;text-decoration:none;"
+                                   "font-family:Consolas;font-size:12px;'>%4</a>")
+                               .arg(avc, ini, detail.post.author_name, detail.post.author_display_name));
 
     t_body_lbl_->setText(detail.post.content);
 
     // Engagement
     QString lc = detail.post.likes > 0 ? "#d97706" : "#2a2a2a";
-    t_likes_lbl_->setText(
-        QString("<span style='color:%1;font-family:Consolas;font-size:11px;'>"
-                "▲ %2</span>").arg(lc).arg(detail.post.likes));
+    t_likes_lbl_->setText(QString("<span style='color:%1;font-family:Consolas;font-size:11px;'>"
+                                  "▲ %2</span>")
+                              .arg(lc)
+                              .arg(detail.post.likes));
     t_likes_lbl_->setTextFormat(Qt::RichText);
 
     t_replies_lbl_->setText(
-        QString("◆ %1 %2").arg(detail.total_comments)
-            .arg(detail.total_comments == 1 ? "reply" : "replies"));
+        QString("◆ %1 %2").arg(detail.total_comments).arg(detail.total_comments == 1 ? "reply" : "replies"));
     t_views_lbl_->setText(QString("◉ %1 views").arg(detail.post.views));
 
     rebuild_comments();
@@ -409,7 +406,8 @@ void ForumThreadPanel::show_post(const services::ForumPostDetail& detail) {
 void ForumThreadPanel::rebuild_comments() {
     while (t_comments_vl_->count() > 0) {
         auto* item = t_comments_vl_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
@@ -423,9 +421,9 @@ void ForumThreadPanel::rebuild_comments() {
         icon->setStyleSheet("color:#111111;font-size:18px;background:transparent;");
         auto* nl = new QLabel("NO REPLIES YET");
         nl->setAlignment(Qt::AlignCenter);
-        nl->setStyleSheet(
-            QString("color:#555555;font-size:10px;font-weight:700;letter-spacing:1.5px;"
-                    "background:transparent;%1").arg(M(10)));
+        nl->setStyleSheet(QString("color:#555555;font-size:10px;font-weight:700;letter-spacing:1.5px;"
+                                  "background:transparent;%1")
+                              .arg(M(10)));
         nvl->addWidget(icon);
         nvl->addWidget(nl);
         t_comments_vl_->addWidget(noc);
@@ -436,10 +434,8 @@ void ForumThreadPanel::rebuild_comments() {
         const auto& c = current_.comments[i];
 
         auto* row = new QWidget;
-        row->setStyleSheet(
-            i % 2 == 0
-                ? "background:#080808;border-bottom:1px solid #0d0d0d;"
-                : "background:#090909;border-bottom:1px solid #0d0d0d;");
+        row->setStyleSheet(i % 2 == 0 ? "background:#080808;border-bottom:1px solid #0d0d0d;"
+                                      : "background:#090909;border-bottom:1px solid #0d0d0d;");
         auto* rvl = new QVBoxLayout(row);
         rvl->setContentsMargins(32, 10, 32, 8);
         rvl->setSpacing(5);
@@ -454,31 +450,26 @@ void ForumThreadPanel::rebuild_comments() {
         // Thread accent
         auto* tline = new QWidget;
         tline->setFixedSize(2, 18);
-        tline->setStyleSheet(
-            QString("background:%1;").arg(det_color(c.author_display_name)));
+        tline->setStyleSheet(QString("background:%1;").arg(det_color(c.author_display_name)));
 
         // Avatar
         auto* cav = new QLabel(c.author_display_name.left(2).toUpper());
         cav->setFixedSize(20, 20);
         cav->setAlignment(Qt::AlignCenter);
-        cav->setStyleSheet(
-            QString("color:#080808;font-size:9px;font-weight:700;background:%1;%2")
-                .arg(det_color(c.author_display_name), M(9)));
+        cav->setStyleSheet(QString("color:#080808;font-size:9px;font-weight:700;background:%1;%2")
+                               .arg(det_color(c.author_display_name), M(9)));
 
         auto* cname = new QLabel(c.author_display_name.left(20));
         cname->setStyleSheet(
-            QString("color:#555555;font-size:11px;font-weight:600;background:transparent;%1")
-                .arg(M(11)));
+            QString("color:#555555;font-size:11px;font-weight:600;background:transparent;%1").arg(M(11)));
 
         auto* ctime = new QLabel(rel_time(c.created_at));
-        ctime->setStyleSheet(
-            QString("color:#555555;font-size:10px;background:transparent;%1").arg(M(10)));
+        ctime->setStyleSheet(QString("color:#555555;font-size:10px;background:transparent;%1").arg(M(10)));
 
         bool voted = (c.user_vote == "up");
         auto* clikes = new QLabel(QString("▲ %1").arg(c.likes));
-        clikes->setStyleSheet(
-            QString("color:%1;font-size:10px;background:transparent;%2")
-                .arg(voted || c.likes > 0 ? "#d97706" : "#1e1e1e", M(10)));
+        clikes->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;%2")
+                                  .arg(voted || c.likes > 0 ? "#d97706" : "#1e1e1e", M(10)));
 
         hrh->addWidget(tline);
         hrh->addSpacing(2);
@@ -495,9 +486,9 @@ void ForumThreadPanel::rebuild_comments() {
         cbody->setWordWrap(true);
         cbody->setTextFormat(Qt::PlainText);
         cbody->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-        cbody->setStyleSheet(
-            QString("color:#666666;font-size:12px;line-height:1.5;background:transparent;"
-                    "padding-left:28px;%1").arg(M(12)));
+        cbody->setStyleSheet(QString("color:#666666;font-size:12px;line-height:1.5;background:transparent;"
+                                     "padding-left:28px;%1")
+                                 .arg(M(12)));
         rvl->addWidget(cbody);
 
         // Actions
@@ -512,16 +503,15 @@ void ForumThreadPanel::rebuild_comments() {
             b->setFixedHeight(16);
             b->setCursor(Qt::PointingHandCursor);
             bool a = (c.user_vote == vt);
-            b->setStyleSheet(
-                a ? QString("QPushButton{background:transparent;color:%1;border:none;"
-                            "font-size:10px;font-weight:700;padding:0;%2}").arg(col, M(10))
-                  : QString("QPushButton{background:transparent;color:#555555;border:none;"
-                            "font-size:10px;padding:0;%1}"
-                            "QPushButton:hover{color:%2;}").arg(M(10), col));
+            b->setStyleSheet(a ? QString("QPushButton{background:transparent;color:%1;border:none;"
+                                         "font-size:10px;font-weight:700;padding:0;%2}")
+                                     .arg(col, M(10))
+                               : QString("QPushButton{background:transparent;color:#555555;border:none;"
+                                         "font-size:10px;padding:0;%1}"
+                                         "QPushButton:hover{color:%2;}")
+                                     .arg(M(10), col));
             auto uuid = c.comment_uuid;
-            connect(b, &QPushButton::clicked, this, [this, uuid, vt]() {
-                emit vote_comment(uuid, vt);
-            });
+            connect(b, &QPushButton::clicked, this, [this, uuid, vt]() { emit vote_comment(uuid, vt); });
             return b;
         };
         arh->addWidget(mk_act("▲ upvote", "#d97706", "up"));

@@ -1,6 +1,7 @@
 // src/screens/algo_trading/ScannerPanel.h
 #pragma once
 #include "services/algo_trading/AlgoTradingTypes.h"
+
 #include <QComboBox>
 #include <QJsonArray>
 #include <QLabel>

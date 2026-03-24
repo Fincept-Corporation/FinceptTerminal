@@ -26,19 +26,19 @@ class McpServersSection : public QWidget {
     void on_tab_changed(int idx);
 
   private:
-    QStackedWidget* tab_stack_     = nullptr;
+    QStackedWidget* tab_stack_ = nullptr;
 
     // Servers tab
-    QListWidget*    server_list_   = nullptr;
-    QPushButton*    add_btn_       = nullptr;
-    QPushButton*    remove_btn_    = nullptr;
-    QPushButton*    start_btn_     = nullptr;
-    QPushButton*    stop_btn_      = nullptr;
-    QLabel*         detail_lbl_    = nullptr;
-    QLabel*         status_lbl_    = nullptr;
+    QListWidget* server_list_ = nullptr;
+    QPushButton* add_btn_ = nullptr;
+    QPushButton* remove_btn_ = nullptr;
+    QPushButton* start_btn_ = nullptr;
+    QPushButton* stop_btn_ = nullptr;
+    QLabel* detail_lbl_ = nullptr;
+    QLabel* status_lbl_ = nullptr;
 
     // Tools tab
-    QTableWidget*   tools_table_   = nullptr;
+    QTableWidget* tools_table_ = nullptr;
 
     void build_ui();
     QWidget* build_servers_tab();

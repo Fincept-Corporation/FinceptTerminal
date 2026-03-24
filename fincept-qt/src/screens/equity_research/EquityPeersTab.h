@@ -25,9 +25,9 @@ class EquityPeersTab : public QWidget {
     void populate_table(const QVector<services::equity::PeerData>& peers);
     QStringList default_peers(const QString& symbol) const;
 
-    QString  current_symbol_;
-    QLineEdit* peers_edit_    = nullptr;
-    QLabel*    status_label_  = nullptr;
+    QString current_symbol_;
+    QLineEdit* peers_edit_ = nullptr;
+    QLabel* status_label_ = nullptr;
     QTableWidget* peer_table_ = nullptr;
 
     ui::LoadingOverlay* loading_overlay_ = nullptr;

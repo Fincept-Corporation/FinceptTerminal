@@ -31,26 +31,26 @@ class ForumThreadPanel : public QWidget {
     void build_ui();
     void rebuild_comments();
 
-    QStackedWidget* stack_          = nullptr; // 0=loading, 1=thread
-    QWidget*        thread_page_    = nullptr;
+    QStackedWidget* stack_ = nullptr; // 0=loading, 1=thread
+    QWidget* thread_page_ = nullptr;
 
     // Thread header
-    QLabel*         t_cat_chip_     = nullptr;
-    QLabel*         t_title_lbl_    = nullptr;
-    QLabel*         t_author_lbl_   = nullptr;
-    QLabel*         t_meta_lbl_     = nullptr;
-    QLabel*         t_body_lbl_     = nullptr;
-    QLabel*         t_likes_lbl_    = nullptr;
-    QLabel*         t_replies_lbl_  = nullptr;
-    QLabel*         t_views_lbl_    = nullptr;
-    QWidget*        t_comments_w_   = nullptr;
-    QVBoxLayout*    t_comments_vl_  = nullptr;
-    QLineEdit*      t_reply_input_  = nullptr;
+    QLabel* t_cat_chip_ = nullptr;
+    QLabel* t_title_lbl_ = nullptr;
+    QLabel* t_author_lbl_ = nullptr;
+    QLabel* t_meta_lbl_ = nullptr;
+    QLabel* t_body_lbl_ = nullptr;
+    QLabel* t_likes_lbl_ = nullptr;
+    QLabel* t_replies_lbl_ = nullptr;
+    QLabel* t_views_lbl_ = nullptr;
+    QWidget* t_comments_w_ = nullptr;
+    QVBoxLayout* t_comments_vl_ = nullptr;
+    QLineEdit* t_reply_input_ = nullptr;
 
     // Spinner
-    QLabel*         spin_lbl_       = nullptr;
-    QTimer*         spin_timer_     = nullptr;
-    int             spin_frame_     = 0;
+    QLabel* spin_lbl_ = nullptr;
+    QTimer* spin_timer_ = nullptr;
+    int spin_frame_ = 0;
 
     services::ForumPostDetail current_;
 };

@@ -33,38 +33,38 @@ class PortfolioHeatmap : public QWidget {
     void update_top_movers();
 
     // Mode buttons
-    QPushButton* pnl_btn_    = nullptr;
+    QPushButton* pnl_btn_ = nullptr;
     QPushButton* weight_btn_ = nullptr;
-    QPushButton* day_btn_    = nullptr;
+    QPushButton* day_btn_ = nullptr;
 
     // Blocks container
     QWidget* blocks_container_ = nullptr;
 
     // Selected holding detail
-    QWidget* detail_panel_     = nullptr;
-    QLabel*  detail_symbol_    = nullptr;
-    QLabel*  detail_price_     = nullptr;
-    QLabel*  detail_change_    = nullptr;
-    QLabel*  detail_qty_       = nullptr;
-    QLabel*  detail_cost_      = nullptr;
-    QLabel*  detail_mv_        = nullptr;
-    QLabel*  detail_pnl_       = nullptr;
-    QLabel*  detail_pnl_pct_   = nullptr;
-    QLabel*  detail_weight_    = nullptr;
+    QWidget* detail_panel_ = nullptr;
+    QLabel* detail_symbol_ = nullptr;
+    QLabel* detail_price_ = nullptr;
+    QLabel* detail_change_ = nullptr;
+    QLabel* detail_qty_ = nullptr;
+    QLabel* detail_cost_ = nullptr;
+    QLabel* detail_mv_ = nullptr;
+    QLabel* detail_pnl_ = nullptr;
+    QLabel* detail_pnl_pct_ = nullptr;
+    QLabel* detail_weight_ = nullptr;
 
     // Risk gauge
-    QLabel* risk_label_   = nullptr;
-    QWidget* risk_bar_    = nullptr;
-    QLabel* risk_value_   = nullptr;
+    QLabel* risk_label_ = nullptr;
+    QWidget* risk_bar_ = nullptr;
+    QLabel* risk_value_ = nullptr;
 
     // Top movers
-    QLabel* top_gainer_   = nullptr;
-    QLabel* top_loser_    = nullptr;
+    QLabel* top_gainer_ = nullptr;
+    QLabel* top_loser_ = nullptr;
 
     // Quick stats
-    QLabel* stat_holdings_   = nullptr;
-    QLabel* stat_conc_       = nullptr;
-    QLabel* stat_vol_        = nullptr;
+    QLabel* stat_holdings_ = nullptr;
+    QLabel* stat_conc_ = nullptr;
+    QLabel* stat_vol_ = nullptr;
 
     // State
     QVector<portfolio::HoldingWithQuote> holdings_;

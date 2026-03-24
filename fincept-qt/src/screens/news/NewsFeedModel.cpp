@@ -27,32 +27,32 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
         const auto& article = articles_[row];
 
         switch (role) {
-        case Qt::DisplayRole:
-            return article.headline;
-        case ArticleRole:
-            return QVariant::fromValue(article);
-        case ViewModeRole:
-            return view_mode_;
-        case IsNewRole:
-            return !seen_ids_.contains(article.id);
-        case MonitorColorRole:
-            return monitor_color_for(article.id);
-        case IsSelectedRole:
-            return article.id == selected_id_;
-        case SourceTierRole:
-            return article.tier;
-        case ThreatLevelRole:
-            return static_cast<int>(article.threat.level);
-        case SourceFlagRole:
-            return static_cast<int>(article.source_flag);
-        case LanguageRole:
-            return article.lang;
-        case HasGeoRole:
-            return geo_article_ids_.contains(article.id);
-        case PulsePhaseRole:
-            return (!seen_ids_.contains(article.id)) ? pulse_phase_ : -1;
-        default:
-            return {};
+            case Qt::DisplayRole:
+                return article.headline;
+            case ArticleRole:
+                return QVariant::fromValue(article);
+            case ViewModeRole:
+                return view_mode_;
+            case IsNewRole:
+                return !seen_ids_.contains(article.id);
+            case MonitorColorRole:
+                return monitor_color_for(article.id);
+            case IsSelectedRole:
+                return article.id == selected_id_;
+            case SourceTierRole:
+                return article.tier;
+            case ThreatLevelRole:
+                return static_cast<int>(article.threat.level);
+            case SourceFlagRole:
+                return static_cast<int>(article.source_flag);
+            case LanguageRole:
+                return article.lang;
+            case HasGeoRole:
+                return geo_article_ids_.contains(article.id);
+            case PulsePhaseRole:
+                return (!seen_ids_.contains(article.id)) ? pulse_phase_ : -1;
+            default:
+                return {};
         }
     }
 
@@ -62,28 +62,28 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
     const auto& cluster = clusters_[row];
 
     switch (role) {
-    case Qt::DisplayRole:
-        return cluster.lead_article.headline;
-    case ClusterRole:
-        return QVariant::fromValue(cluster);
-    case ArticleRole:
-        return QVariant::fromValue(cluster.lead_article);
-    case ViewModeRole:
-        return view_mode_;
-    case IsNewRole:
-        return !seen_ids_.contains(cluster.lead_article.id);
-    case MonitorColorRole:
-        return monitor_color_for(cluster.lead_article.id);
-    case IsSelectedRole:
-        return cluster.lead_article.id == selected_id_;
-    case SourceTierRole:
-        return cluster.tier;
-    case VelocityTextRole:
-        if (cluster.velocity == "rising" && cluster.source_count > 1)
-            return QString("+%1 src").arg(cluster.source_count);
-        return QString();
-    default:
-        return {};
+        case Qt::DisplayRole:
+            return cluster.lead_article.headline;
+        case ClusterRole:
+            return QVariant::fromValue(cluster);
+        case ArticleRole:
+            return QVariant::fromValue(cluster.lead_article);
+        case ViewModeRole:
+            return view_mode_;
+        case IsNewRole:
+            return !seen_ids_.contains(cluster.lead_article.id);
+        case MonitorColorRole:
+            return monitor_color_for(cluster.lead_article.id);
+        case IsSelectedRole:
+            return cluster.lead_article.id == selected_id_;
+        case SourceTierRole:
+            return cluster.tier;
+        case VelocityTextRole:
+            if (cluster.velocity == "rising" && cluster.source_count > 1)
+                return QString("+%1 src").arg(cluster.source_count);
+            return QString();
+        default:
+            return {};
     }
 }
 
@@ -122,7 +122,7 @@ void NewsFeedModel::set_selected_id(const QString& article_id) {
 }
 
 void NewsFeedModel::set_monitor_matches(const QMap<QString, QVector<services::NewsArticle>>& matches,
-                                         const QVector<services::NewsMonitor>& monitors) {
+                                        const QVector<services::NewsMonitor>& monitors) {
     article_monitor_color_.clear();
     for (const auto& monitor : monitors) {
         if (!monitor.enabled)
@@ -222,8 +222,9 @@ void NewsFeedModel::advance_pulse() {
     pulse_phase_ = (pulse_phase_ + 1) % 4;
     // Only emit for unseen articles (optimization)
     for (int i = 0; i < rowCount(); ++i) {
-        QString aid = (view_mode_ == "WIRE" && i < articles_.size()) ? articles_[i].id
-                      : (i < clusters_.size() ? clusters_[i].lead_article.id : QString());
+        QString aid = (view_mode_ == "WIRE" && i < articles_.size())
+                          ? articles_[i].id
+                          : (i < clusters_.size() ? clusters_[i].lead_article.id : QString());
         if (!aid.isEmpty() && !seen_ids_.contains(aid))
             emit dataChanged(index(i, 0), index(i, 0), {PulsePhaseRole});
     }

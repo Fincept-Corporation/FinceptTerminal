@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QObject>
 #include <QTimer>
+
 #include <functional>
 
 namespace fincept::services::equity {
@@ -16,7 +17,7 @@ class EquityResearchService : public QObject {
 
     // ── Async API — results delivered via signals ─────────────────────────────
     void search_symbols(const QString& query);
-    void schedule_search(const QString& query);  // debounced entry point
+    void schedule_search(const QString& query); // debounced entry point
 
     /// Fetches quote + info + historical in parallel (three Python calls)
     void load_symbol(const QString& symbol, const QString& period = "1y");
@@ -27,8 +28,8 @@ class EquityResearchService : public QObject {
     void fetch_news(const QString& symbol, int count = 20);
 
     /// TALIpp tab: fetch historical then run equity_talipp.py
-    void compute_talipp(const QString& symbol, const QString& indicator,
-                        const QVariantMap& params, const QString& period = "2y");
+    void compute_talipp(const QString& symbol, const QString& indicator, const QVariantMap& params,
+                        const QString& period = "2y");
 
   signals:
     void search_results_loaded(QVector<fincept::services::equity::SearchResult> results);
@@ -47,40 +48,50 @@ class EquityResearchService : public QObject {
     Q_DISABLE_COPY(EquityResearchService)
 
     // ── Python helpers ────────────────────────────────────────────────────────
-    void run_python(const QString& script, const QStringList& args,
-                    std::function<void(bool, const QString&)> cb);
+    void run_python(const QString& script, const QStringList& args, std::function<void(bool, const QString&)> cb);
 
     // ── Parsers ───────────────────────────────────────────────────────────────
-    QuoteData      parse_quote(const QJsonObject& obj) const;
-    StockInfo      parse_info(const QJsonObject& obj) const;
+    QuoteData parse_quote(const QJsonObject& obj) const;
+    StockInfo parse_info(const QJsonObject& obj) const;
     QVector<Candle> parse_candles(const QJsonArray& arr) const;
     FinancialsData parse_financials(const QJsonObject& obj) const;
     TechnicalsData parse_technicals(const QString& symbol, const QJsonArray& rows) const;
-    TechSignal     score_indicator(const QString& name, double value,
-                                   double sma20, double sma50) const;
+    TechSignal score_indicator(const QString& name, double value, double sma20, double sma50) const;
     QVector<PeerData> parse_peers(const QJsonArray& arr) const;
     QVector<NewsArticle> parse_news(const QJsonArray& arr) const;
 
     // ── Cache structures ──────────────────────────────────────────────────────
-    static constexpr qint64 kQuoteTtlSec      = 30;
-    static constexpr qint64 kInfoTtlSec       = 300;
+    static constexpr qint64 kQuoteTtlSec = 30;
+    static constexpr qint64 kInfoTtlSec = 300;
     static constexpr qint64 kHistoricalTtlSec = 120;
-    static constexpr qint64 kNewsTtlSec       = 180;
+    static constexpr qint64 kNewsTtlSec = 180;
 
-    struct CachedQuote   { QuoteData data;          qint64 ts = 0; };
-    struct CachedInfo    { StockInfo data;           qint64 ts = 0; };
-    struct CachedCandles { QVector<Candle> data;     qint64 ts = 0; };
-    struct CachedNews    { QVector<NewsArticle> data; qint64 ts = 0; };
+    struct CachedQuote {
+        QuoteData data;
+        qint64 ts = 0;
+    };
+    struct CachedInfo {
+        StockInfo data;
+        qint64 ts = 0;
+    };
+    struct CachedCandles {
+        QVector<Candle> data;
+        qint64 ts = 0;
+    };
+    struct CachedNews {
+        QVector<NewsArticle> data;
+        qint64 ts = 0;
+    };
 
-    QHash<QString, CachedQuote>   quote_cache_;
-    QHash<QString, CachedInfo>    info_cache_;
+    QHash<QString, CachedQuote> quote_cache_;
+    QHash<QString, CachedInfo> info_cache_;
     QHash<QString, CachedCandles> candle_cache_;
-    QHash<QString, CachedNews>    news_cache_;
+    QHash<QString, CachedNews> news_cache_;
 
     // ── Debounce ──────────────────────────────────────────────────────────────
     static constexpr int kDebounceMs = 350;
-    QTimer*  search_debounce_  = nullptr;
-    QString  pending_query_;
+    QTimer* search_debounce_ = nullptr;
+    QString pending_query_;
 };
 
 } // namespace fincept::services::equity

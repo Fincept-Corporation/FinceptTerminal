@@ -62,41 +62,41 @@ class PortfolioScreen : public QWidget {
     const portfolio::HoldingWithQuote* find_holding(const QString& symbol) const;
 
     // Sub-widgets
-    PortfolioCommandBar*  command_bar_   = nullptr;
-    PortfolioStatsRibbon* stats_ribbon_  = nullptr;
-    PortfolioStatusBar*   status_bar_    = nullptr;
-    QStackedWidget*       content_stack_ = nullptr;
+    PortfolioCommandBar* command_bar_ = nullptr;
+    PortfolioStatsRibbon* stats_ribbon_ = nullptr;
+    PortfolioStatusBar* status_bar_ = nullptr;
+    QStackedWidget* content_stack_ = nullptr;
 
     // Content pages
-    QWidget* empty_state_   = nullptr;
+    QWidget* empty_state_ = nullptr;
     QWidget* loading_state_ = nullptr;
-    QWidget* main_view_     = nullptr;
+    QWidget* main_view_ = nullptr;
 
     // Main view sub-widgets
-    PortfolioHeatmap*      heatmap_      = nullptr;
-    PortfolioPerfChart*    perf_chart_   = nullptr;
-    PortfolioSectorPanel*  sector_panel_ = nullptr;
-    PortfolioBlotter*      blotter_      = nullptr;
-    PortfolioOrderPanel*   order_panel_  = nullptr;
+    PortfolioHeatmap* heatmap_ = nullptr;
+    PortfolioPerfChart* perf_chart_ = nullptr;
+    PortfolioSectorPanel* sector_panel_ = nullptr;
+    PortfolioBlotter* blotter_ = nullptr;
+    PortfolioOrderPanel* order_panel_ = nullptr;
     PortfolioDetailWrapper* detail_wrapper_ = nullptr;
-    PortfolioFFNView*       ffn_view_       = nullptr;
-    PortfolioAiPanel*       ai_panel_       = nullptr;
-    PortfolioAgentPanel*    agent_panel_    = nullptr;
+    PortfolioFFNView* ffn_view_ = nullptr;
+    PortfolioAiPanel* ai_panel_ = nullptr;
+    PortfolioAgentPanel* agent_panel_ = nullptr;
 
     // State
-    QVector<portfolio::Portfolio>  portfolios_;
-    QString                       selected_id_;
-    QString                       selected_symbol_;
-    portfolio::PortfolioSummary   current_summary_;
-    portfolio::ComputedMetrics    current_metrics_;
-    bool                          summary_loaded_ = false;
-    bool                          order_panel_visible_ = false;
-    bool                          show_ffn_ = false;
+    QVector<portfolio::Portfolio> portfolios_;
+    QString selected_id_;
+    QString selected_symbol_;
+    portfolio::PortfolioSummary current_summary_;
+    portfolio::ComputedMetrics current_metrics_;
+    bool summary_loaded_ = false;
+    bool order_panel_visible_ = false;
+    bool show_ffn_ = false;
     std::optional<portfolio::DetailView> active_detail_;
 
     // Refresh timer (P3)
-    QTimer* refresh_timer_      = nullptr;
-    int     refresh_interval_ms_ = 60000;
+    QTimer* refresh_timer_ = nullptr;
+    int refresh_interval_ms_ = 60000;
 };
 
 } // namespace fincept::screens

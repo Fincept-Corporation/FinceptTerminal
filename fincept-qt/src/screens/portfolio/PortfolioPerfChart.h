@@ -30,8 +30,8 @@ class PortfolioPerfChart : public QWidget {
 
     // Info bar
     QLabel* period_change_label_ = nullptr;
-    QLabel* total_return_label_  = nullptr;
-    QLabel* nav_label_           = nullptr;
+    QLabel* total_return_label_ = nullptr;
+    QLabel* nav_label_ = nullptr;
 
     // Chart
     QChartView* chart_view_ = nullptr;

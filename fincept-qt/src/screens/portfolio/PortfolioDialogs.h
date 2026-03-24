@@ -22,9 +22,9 @@ class CreatePortfolioDialog : public QDialog {
     QString currency() const;
 
   private:
-    QLineEdit* name_edit_     = nullptr;
-    QLineEdit* owner_edit_    = nullptr;
-    QComboBox* currency_cb_   = nullptr;
+    QLineEdit* name_edit_ = nullptr;
+    QLineEdit* owner_edit_ = nullptr;
+    QComboBox* currency_cb_ = nullptr;
 };
 
 /// Confirmation dialog for deleting a portfolio.
@@ -41,13 +41,13 @@ class AddAssetDialog : public QDialog {
     explicit AddAssetDialog(QWidget* parent = nullptr);
 
     QString symbol() const;
-    double  quantity() const;
-    double  price() const;
+    double quantity() const;
+    double price() const;
 
   private:
-    QLineEdit* symbol_edit_   = nullptr;
+    QLineEdit* symbol_edit_ = nullptr;
     QLineEdit* quantity_edit_ = nullptr;
-    QLineEdit* price_edit_    = nullptr;
+    QLineEdit* price_edit_ = nullptr;
 };
 
 /// Dialog for selling an asset.
@@ -61,7 +61,7 @@ class SellAssetDialog : public QDialog {
 
   private:
     QLineEdit* quantity_edit_ = nullptr;
-    QLineEdit* price_edit_    = nullptr;
+    QLineEdit* price_edit_ = nullptr;
 };
 
 /// Dialog for editing an existing transaction.
@@ -70,24 +70,23 @@ class EditTransactionDialog : public QDialog {
   public:
     explicit EditTransactionDialog(const portfolio::Transaction& txn, QWidget* parent = nullptr);
 
-    double  quantity() const;
-    double  price() const;
+    double quantity() const;
+    double price() const;
     QString date() const;
     QString notes() const;
 
   private:
     QLineEdit* quantity_edit_ = nullptr;
-    QLineEdit* price_edit_    = nullptr;
-    QLineEdit* date_edit_     = nullptr;
-    QLineEdit* notes_edit_    = nullptr;
+    QLineEdit* price_edit_ = nullptr;
+    QLineEdit* date_edit_ = nullptr;
+    QLineEdit* notes_edit_ = nullptr;
 };
 
 /// Dialog for mapping symbols to sectors.
 class SectorMappingDialog : public QDialog {
     Q_OBJECT
   public:
-    explicit SectorMappingDialog(const QVector<portfolio::HoldingWithQuote>& holdings,
-                                  QWidget* parent = nullptr);
+    explicit SectorMappingDialog(const QVector<portfolio::HoldingWithQuote>& holdings, QWidget* parent = nullptr);
 
     QHash<QString, QString> sector_map() const;
 
@@ -99,8 +98,7 @@ class SectorMappingDialog : public QDialog {
 class ImportPortfolioDialog : public QDialog {
     Q_OBJECT
   public:
-    explicit ImportPortfolioDialog(const QVector<portfolio::Portfolio>& portfolios,
-                                   QWidget* parent = nullptr);
+    explicit ImportPortfolioDialog(const QVector<portfolio::Portfolio>& portfolios, QWidget* parent = nullptr);
 
     QString file_path() const;
     portfolio::ImportMode mode() const;
@@ -109,11 +107,11 @@ class ImportPortfolioDialog : public QDialog {
   private:
     void browse_file();
 
-    QLineEdit*    file_edit_     = nullptr;
-    QRadioButton* new_radio_     = nullptr;
-    QRadioButton* merge_radio_   = nullptr;
-    QComboBox*    target_cb_     = nullptr;
-    QLabel*       status_label_  = nullptr;
+    QLineEdit* file_edit_ = nullptr;
+    QRadioButton* new_radio_ = nullptr;
+    QRadioButton* merge_radio_ = nullptr;
+    QComboBox* target_cb_ = nullptr;
+    QLabel* status_label_ = nullptr;
 };
 
 } // namespace fincept::screens

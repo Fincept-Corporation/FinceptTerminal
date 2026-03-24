@@ -61,7 +61,7 @@ struct AgentSystemInfo {
 // ── Tools ───────────────────────────────────────────────────────────────────
 
 struct AgentToolsInfo {
-    QJsonObject tools;      // category -> [tool names]
+    QJsonObject tools; // category -> [tool names]
     QStringList categories;
     int total_count = 0;
 };

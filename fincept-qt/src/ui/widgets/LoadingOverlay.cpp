@@ -1,5 +1,6 @@
 // src/ui/widgets/LoadingOverlay.cpp
 #include "ui/widgets/LoadingOverlay.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QPainter>
@@ -8,9 +9,7 @@
 
 namespace fincept::ui {
 
-static const char* SPIN_FRAMES[] = {
-    "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
-};
+static const char* SPIN_FRAMES[] = {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"};
 static constexpr int SPIN_FRAME_COUNT = 10;
 
 LoadingOverlay::LoadingOverlay(QWidget* parent) : QWidget(parent) {
@@ -25,15 +24,13 @@ LoadingOverlay::LoadingOverlay(QWidget* parent) : QWidget(parent) {
     spinner_label_ = new QLabel(SPIN_FRAMES[0]);
     spinner_label_->setAlignment(Qt::AlignCenter);
     spinner_label_->setStyleSheet(
-        QString("color:%1; font-size:32px; background:transparent; border:0;")
-        .arg(ui::colors::AMBER));
+        QString("color:%1; font-size:32px; background:transparent; border:0;").arg(ui::colors::AMBER));
 
     message_label_ = new QLabel("LOADING…");
     message_label_->setAlignment(Qt::AlignCenter);
-    message_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:2px; "
-                "background:transparent; border:0;")
-        .arg(ui::colors::AMBER));
+    message_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:2px; "
+                                          "background:transparent; border:0;")
+                                      .arg(ui::colors::AMBER));
 
     vl->addWidget(spinner_label_);
     vl->addWidget(message_label_);
@@ -74,7 +71,7 @@ void LoadingOverlay::resizeEvent(QResizeEvent* e) {
 void LoadingOverlay::paintEvent(QPaintEvent*) {
     QPainter p(this);
     // Dark semi-transparent background
-    QColor bg(15, 17, 21, 210);  // ~#0f1115 at 82% opacity
+    QColor bg(15, 17, 21, 210); // ~#0f1115 at 82% opacity
     p.fillRect(rect(), bg);
 }
 

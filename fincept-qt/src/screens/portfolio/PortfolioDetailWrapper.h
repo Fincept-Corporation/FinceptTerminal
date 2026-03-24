@@ -18,11 +18,8 @@ class PortfolioDetailWrapper : public QWidget {
   public:
     explicit PortfolioDetailWrapper(QWidget* parent = nullptr);
 
-    void show_view(portfolio::DetailView view,
-                   const portfolio::PortfolioSummary& summary,
-                   const QString& currency);
-    void update_data(const portfolio::PortfolioSummary& summary,
-                     const QString& currency);
+    void show_view(portfolio::DetailView view, const portfolio::PortfolioSummary& summary, const QString& currency);
+    void update_data(const portfolio::PortfolioSummary& summary, const QString& currency);
 
   signals:
     void back_requested();
@@ -32,10 +29,10 @@ class PortfolioDetailWrapper : public QWidget {
     QWidget* get_or_create_view(portfolio::DetailView view);
     QString view_title(portfolio::DetailView view) const;
 
-    QLabel*         title_label_    = nullptr;
-    QLabel*         portfolio_label_ = nullptr;
-    QPushButton*    back_btn_       = nullptr;
-    QStackedWidget* view_stack_     = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* portfolio_label_ = nullptr;
+    QPushButton* back_btn_ = nullptr;
+    QStackedWidget* view_stack_ = nullptr;
 
     // Lazily created views
     QHash<int, QWidget*> views_;

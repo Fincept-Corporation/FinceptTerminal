@@ -4,6 +4,7 @@
 
 #include <QHash>
 #include <QObject>
+
 #include <functional>
 
 namespace fincept::services::geo {
@@ -15,8 +16,8 @@ class GeopoliticsService : public QObject {
     static GeopoliticsService& instance();
 
     // ── Conflict Monitor (HTTP API) ─────────────────────────────────────────
-    void fetch_events(const QString& country = {}, const QString& city = {},
-                      const QString& category = {}, int limit = 100);
+    void fetch_events(const QString& country = {}, const QString& city = {}, const QString& category = {},
+                      int limit = 100);
     void fetch_unique_countries();
     void fetch_unique_categories();
     void fetch_unique_cities();
@@ -49,14 +50,17 @@ class GeopoliticsService : public QObject {
     explicit GeopoliticsService(QObject* parent = nullptr);
     Q_DISABLE_COPY(GeopoliticsService)
 
-    void run_python(const QString& script, const QStringList& args,
-                    const QString& context,
+    void run_python(const QString& script, const QStringList& args, const QString& context,
                     std::function<void(bool, const QString&)> cb);
 
     // Cache
     static constexpr qint64 kEventsTtlSec = 120;
     static constexpr qint64 kRefDataTtlSec = 600;
-    struct CachedEvents { QVector<NewsEvent> data; int total = 0; qint64 ts = 0; };
+    struct CachedEvents {
+        QVector<NewsEvent> data;
+        int total = 0;
+        qint64 ts = 0;
+    };
     CachedEvents events_cache_;
     qint64 countries_ts_ = 0;
     qint64 categories_ts_ = 0;

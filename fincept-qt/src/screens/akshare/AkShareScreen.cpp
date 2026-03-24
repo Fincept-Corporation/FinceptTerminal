@@ -16,105 +16,104 @@
 namespace {
 using namespace fincept::ui;
 
-static const QString kStyle = QStringLiteral(
-    "#akScreen { background: %1; }"
+static const QString kStyle =
+    QStringLiteral("#akScreen { background: %1; }"
 
-    "#akHeader { background: %2; border-bottom: 2px solid %3; }"
-    "#akHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
-    "#akHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
-    "#akHeaderBadge { color: %6; font-size: 8px; font-weight: 700; "
-    "  background: rgba(22,163,74,0.2); padding: 2px 6px; }"
+                   "#akHeader { background: %2; border-bottom: 2px solid %3; }"
+                   "#akHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
+                   "#akHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
+                   "#akHeaderBadge { color: %6; font-size: 8px; font-weight: 700; "
+                   "  background: rgba(22,163,74,0.2); padding: 2px 6px; }"
 
-    "#akSourceGrid { background: %1; }"
-    "#akSourceBtn { background: %7; color: %5; border: 1px solid %8; "
-    "  font-size: 9px; font-weight: 700; padding: 6px 4px; text-align: center; }"
-    "#akSourceBtn:hover { color: %4; border-color: %9; }"
-    "#akSourceBtn[active=\"true\"] { background: rgba(217,119,6,0.15); "
-    "  color: %3; border-color: %3; }"
+                   "#akSourceGrid { background: %1; }"
+                   "#akSourceBtn { background: %7; color: %5; border: 1px solid %8; "
+                   "  font-size: 9px; font-weight: 700; padding: 6px 4px; text-align: center; }"
+                   "#akSourceBtn:hover { color: %4; border-color: %9; }"
+                   "#akSourceBtn[active=\"true\"] { background: rgba(217,119,6,0.15); "
+                   "  color: %3; border-color: %3; }"
 
-    "#akEndpointPanel { background: %7; border-right: 1px solid %8; }"
-    "#akSearchInput { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "#akSearchInput:focus { border-color: %9; }"
-    "#akEndpointCount { color: %5; font-size: 9px; font-weight: 700; background: transparent; }"
-    "#akEndpointList { background: %1; border: none; outline: none; font-size: 11px; }"
-    "#akEndpointList::item { color: %5; padding: 4px 8px; border-bottom: 1px solid %8; }"
-    "#akEndpointList::item:hover { color: %4; background: %10; }"
-    "#akEndpointList::item:selected { color: %3; background: rgba(217,119,6,0.1); "
-    "  border-left: 2px solid %3; }"
+                   "#akEndpointPanel { background: %7; border-right: 1px solid %8; }"
+                   "#akSearchInput { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "#akSearchInput:focus { border-color: %9; }"
+                   "#akEndpointCount { color: %5; font-size: 9px; font-weight: 700; background: transparent; }"
+                   "#akEndpointList { background: %1; border: none; outline: none; font-size: 11px; }"
+                   "#akEndpointList::item { color: %5; padding: 4px 8px; border-bottom: 1px solid %8; }"
+                   "#akEndpointList::item:hover { color: %4; background: %10; }"
+                   "#akEndpointList::item:selected { color: %3; background: rgba(217,119,6,0.1); "
+                   "  border-left: 2px solid %3; }"
 
-    "#akParamsPanel { background: %7; border-bottom: 1px solid %8; }"
-    "#akParamLabel { color: %5; font-size: 9px; font-weight: 700; background: transparent; }"
-    "#akParamInput { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 3px 6px; font-size: 11px; }"
-    "#akParamInput:focus { border-color: %9; }"
-    "QComboBox { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 3px 6px; font-size: 11px; }"
-    "QComboBox::drop-down { border: none; width: 16px; }"
-    "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
-    "  selection-background-color: %3; }"
+                   "#akParamsPanel { background: %7; border-bottom: 1px solid %8; }"
+                   "#akParamLabel { color: %5; font-size: 9px; font-weight: 700; background: transparent; }"
+                   "#akParamInput { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 3px 6px; font-size: 11px; }"
+                   "#akParamInput:focus { border-color: %9; }"
+                   "QComboBox { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 3px 6px; font-size: 11px; }"
+                   "QComboBox::drop-down { border: none; width: 16px; }"
+                   "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
+                   "  selection-background-color: %3; }"
 
-    "#akExecBtn { background: %3; color: %1; border: none; padding: 4px 16px; "
-    "  font-size: 9px; font-weight: 700; }"
-    "#akExecBtn:hover { background: #FF8800; }"
-    "#akExecBtn:disabled { background: %11; color: %12; }"
+                   "#akExecBtn { background: %3; color: %1; border: none; padding: 4px 16px; "
+                   "  font-size: 9px; font-weight: 700; }"
+                   "#akExecBtn:hover { background: #FF8800; }"
+                   "#akExecBtn:disabled { background: %11; color: %12; }"
 
-    "#akViewToggle { background: %7; color: %5; border: 1px solid %8; "
-    "  padding: 4px 10px; font-size: 9px; font-weight: 700; }"
-    "#akViewToggle:hover { color: %4; }"
+                   "#akViewToggle { background: %7; color: %5; border: 1px solid %8; "
+                   "  padding: 4px 10px; font-size: 9px; font-weight: 700; }"
+                   "#akViewToggle:hover { color: %4; }"
 
-    "#akRefreshBtn { background: %7; color: %5; border: 1px solid %8; "
-    "  padding: 4px 10px; font-size: 9px; font-weight: 700; }"
-    "#akRefreshBtn:hover { color: %4; }"
-    "#akRefreshBtn:disabled { color: %12; }"
+                   "#akRefreshBtn { background: %7; color: %5; border: 1px solid %8; "
+                   "  padding: 4px 10px; font-size: 9px; font-weight: 700; }"
+                   "#akRefreshBtn:hover { color: %4; }"
+                   "#akRefreshBtn:disabled { color: %12; }"
 
-    "#akDataPanel { background: %1; }"
-    "#akDataStatus { color: %5; font-size: 11px; background: transparent; }"
-    "#akRecordCount { color: %13; font-size: 9px; font-weight: 700; background: transparent; }"
+                   "#akDataPanel { background: %1; }"
+                   "#akDataStatus { color: %5; font-size: 11px; background: transparent; }"
+                   "#akRecordCount { color: %13; font-size: 9px; font-weight: 700; background: transparent; }"
 
-    "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
-    "  font-size: 11px; }"
-    "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
-    "QTableWidget::item:selected { background: rgba(217,119,6,0.1); color: %3; }"
-    "QHeaderView::section { background: %2; color: %5; border: none; "
-    "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
-    "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
+                   "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
+                   "  font-size: 11px; }"
+                   "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
+                   "QTableWidget::item:selected { background: rgba(217,119,6,0.1); color: %3; }"
+                   "QHeaderView::section { background: %2; color: %5; border: none; "
+                   "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
+                   "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
 
-    "#akJsonView { background: %1; color: %13; border: none; font-size: 11px; }"
+                   "#akJsonView { background: %1; color: %13; border: none; font-size: 11px; }"
 
-    "#akErrorPanel { background: rgba(220,38,38,0.1); border: 1px solid %14; }"
-    "#akErrorText { color: %14; font-size: 10px; background: transparent; }"
-    "#akErrorLabel { color: %14; font-size: 9px; font-weight: 700; background: transparent; }"
+                   "#akErrorPanel { background: rgba(220,38,38,0.1); border: 1px solid %14; }"
+                   "#akErrorText { color: %14; font-size: 10px; background: transparent; }"
+                   "#akErrorLabel { color: %14; font-size: 9px; font-weight: 700; background: transparent; }"
 
-    "#akStatusBar { background: %2; border-top: 1px solid %8; }"
-    "#akStatusText { color: %5; font-size: 9px; background: transparent; }"
-    "#akStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
+                   "#akStatusBar { background: %2; border-top: 1px solid %8; }"
+                   "#akStatusText { color: %5; font-size: 9px; background: transparent; }"
+                   "#akStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
 
-    "#akEmptyState { color: %12; font-size: 13px; background: transparent; }"
+                   "#akEmptyState { color: %12; font-size: 13px; background: transparent; }"
 
-    "QScrollBar:vertical { background: %1; width: 6px; }"
-    "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-    "QScrollBar:horizontal { background: %1; height: 6px; }"
-    "QScrollBar::handle:horizontal { background: %8; min-width: 20px; }"
-    "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }"
+                   "QScrollBar:vertical { background: %1; width: 6px; }"
+                   "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
+                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+                   "QScrollBar:horizontal { background: %1; height: 6px; }"
+                   "QScrollBar::handle:horizontal { background: %8; min-width: 20px; }"
+                   "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }"
 
-    "QSplitter::handle { background: %8; }"
-)
-    .arg(colors::BG_BASE)         // %1
-    .arg(colors::BG_RAISED)       // %2
-    .arg(colors::AMBER)           // %3
-    .arg(colors::TEXT_PRIMARY)    // %4
-    .arg(colors::TEXT_SECONDARY)  // %5
-    .arg(colors::POSITIVE)        // %6
-    .arg(colors::BG_SURFACE)      // %7
-    .arg(colors::BORDER_DIM)      // %8
-    .arg(colors::BORDER_BRIGHT)   // %9
-    .arg(colors::BG_HOVER)        // %10
-    .arg(colors::AMBER_DIM)       // %11
-    .arg(colors::TEXT_DIM)         // %12
-    .arg(colors::CYAN)             // %13
-    .arg(colors::NEGATIVE)        // %14
+                   "QSplitter::handle { background: %8; }")
+        .arg(colors::BG_BASE)        // %1
+        .arg(colors::BG_RAISED)      // %2
+        .arg(colors::AMBER)          // %3
+        .arg(colors::TEXT_PRIMARY)   // %4
+        .arg(colors::TEXT_SECONDARY) // %5
+        .arg(colors::POSITIVE)       // %6
+        .arg(colors::BG_SURFACE)     // %7
+        .arg(colors::BORDER_DIM)     // %8
+        .arg(colors::BORDER_BRIGHT)  // %9
+        .arg(colors::BG_HOVER)       // %10
+        .arg(colors::AMBER_DIM)      // %11
+        .arg(colors::TEXT_DIM)       // %12
+        .arg(colors::CYAN)           // %13
+        .arg(colors::NEGATIVE)       // %14
     ;
 } // namespace
 
@@ -472,7 +471,8 @@ QWidget* AkShareScreen::create_status_bar() {
 // ── Slots ───────────────────────────────────────────────────────────────────
 
 void AkShareScreen::on_source_clicked(int index) {
-    if (index == active_source_) return;
+    if (index == active_source_)
+        return;
     active_source_ = index;
     active_endpoint_.clear();
 
@@ -498,7 +498,8 @@ void AkShareScreen::on_source_clicked(int index) {
 }
 
 void AkShareScreen::on_endpoint_clicked(QListWidgetItem* item) {
-    if (!item) return;
+    if (!item)
+        return;
     active_endpoint_ = item->data(Qt::UserRole).toString();
     status_endpoint_->setText(active_endpoint_);
     refresh_btn_->setEnabled(true);
@@ -510,15 +511,15 @@ void AkShareScreen::on_endpoint_clicked(QListWidgetItem* item) {
 void AkShareScreen::on_search_changed(const QString& text) {
     for (int i = 0; i < endpoint_list_->count(); ++i) {
         auto* item = endpoint_list_->item(i);
-        bool match = text.isEmpty() ||
-                     item->text().contains(text, Qt::CaseInsensitive) ||
+        bool match = text.isEmpty() || item->text().contains(text, Qt::CaseInsensitive) ||
                      item->data(Qt::UserRole).toString().contains(text, Qt::CaseInsensitive);
         item->setHidden(!match);
     }
 }
 
 void AkShareScreen::on_execute() {
-    if (loading_ || active_source_ < 0 || active_endpoint_.isEmpty()) return;
+    if (loading_ || active_source_ < 0 || active_endpoint_.isEmpty())
+        return;
 
     QStringList args;
     // Some endpoints need parameters — pass them if non-empty
@@ -554,36 +555,36 @@ void AkShareScreen::load_endpoints(const AkShareSource& source) {
 
     QPointer<AkShareScreen> self = this;
 
-    python::PythonRunner::instance().run(
-        source.script, {"get_all_endpoints"},
-        [self, script = source.script](const python::PythonResult& result) {
-            if (!self) return;
+    python::PythonRunner::instance().run(source.script, {"get_all_endpoints"},
+                                         [self, script = source.script](const python::PythonResult& result) {
+                                             if (!self)
+                                                 return;
 
-            self->set_loading(false);
+                                             self->set_loading(false);
 
-            if (!result.success) {
-                self->data_status_->setText("Failed to load endpoints");
-                LOG_ERROR("AkShare", "Endpoint load failed: " + result.error);
-                return;
-            }
+                                             if (!result.success) {
+                                                 self->data_status_->setText("Failed to load endpoints");
+                                                 LOG_ERROR("AkShare", "Endpoint load failed: " + result.error);
+                                                 return;
+                                             }
 
-            QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) {
-                self->data_status_->setText("No endpoint data returned");
-                return;
-            }
+                                             QString json_str = python::extract_json(result.output);
+                                             if (json_str.isEmpty()) {
+                                                 self->data_status_->setText("No endpoint data returned");
+                                                 return;
+                                             }
 
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-            if (doc.isNull() || !doc.isObject()) {
-                self->data_status_->setText("Invalid endpoint data");
-                return;
-            }
+                                             QJsonParseError err;
+                                             auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+                                             if (doc.isNull() || !doc.isObject()) {
+                                                 self->data_status_->setText("Invalid endpoint data");
+                                                 return;
+                                             }
 
-            auto obj = doc.object();
-            self->endpoint_cache_[script] = obj;
-            self->populate_endpoint_list(obj);
-        });
+                                             auto obj = doc.object();
+                                             self->endpoint_cache_[script] = obj;
+                                             self->populate_endpoint_list(obj);
+                                         });
 }
 
 void AkShareScreen::populate_endpoint_list(const QJsonObject& result) {
@@ -649,74 +650,73 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
 
     QPointer<AkShareScreen> self = this;
 
-    python::PythonRunner::instance().run(
-        script, full_args,
-        [self, endpoint](const python::PythonResult& result) {
-            if (!self) return;
+    python::PythonRunner::instance().run(script, full_args, [self, endpoint](const python::PythonResult& result) {
+        if (!self)
+            return;
 
-            self->set_loading(false);
+        self->set_loading(false);
 
-            if (!result.success) {
-                self->display_error(result.error.isEmpty() ? "Query failed" : result.error);
-                return;
-            }
+        if (!result.success) {
+            self->display_error(result.error.isEmpty() ? "Query failed" : result.error);
+            return;
+        }
 
-            QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) {
-                self->display_error("No data returned from " + endpoint);
-                return;
-            }
+        QString json_str = python::extract_json(result.output);
+        if (json_str.isEmpty()) {
+            self->display_error("No data returned from " + endpoint);
+            return;
+        }
 
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-            if (doc.isNull()) {
-                self->display_error("JSON parse error: " + err.errorString());
-                return;
-            }
+        QJsonParseError err;
+        auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+        if (doc.isNull()) {
+            self->display_error("JSON parse error: " + err.errorString());
+            return;
+        }
 
-            auto obj = doc.isObject() ? doc.object() : QJsonObject();
+        auto obj = doc.isObject() ? doc.object() : QJsonObject();
 
-            // Check for error in response
-            if (obj.contains("error")) {
-                self->display_error(obj["error"].toString());
-                return;
-            }
-            if (obj.contains("success") && !obj["success"].toBool()) {
-                self->display_error(obj.value("error").toString("Query returned failure"));
-                return;
-            }
+        // Check for error in response
+        if (obj.contains("error")) {
+            self->display_error(obj["error"].toString());
+            return;
+        }
+        if (obj.contains("success") && !obj["success"].toBool()) {
+            self->display_error(obj.value("error").toString("Query returned failure"));
+            return;
+        }
 
-            // Extract data array
-            QJsonArray data_array;
-            if (obj.contains("data")) {
-                if (obj["data"].isArray()) {
-                    data_array = obj["data"].toArray();
-                } else if (obj["data"].isObject()) {
-                    // Single object result — wrap in array
-                    data_array.append(obj["data"]);
-                } else {
-                    // Scalar value
-                    QJsonObject wrapper;
-                    wrapper["value"] = obj["data"];
-                    data_array.append(wrapper);
-                }
-            } else if (doc.isArray()) {
-                data_array = doc.array();
+        // Extract data array
+        QJsonArray data_array;
+        if (obj.contains("data")) {
+            if (obj["data"].isArray()) {
+                data_array = obj["data"].toArray();
+            } else if (obj["data"].isObject()) {
+                // Single object result — wrap in array
+                data_array.append(obj["data"]);
             } else {
-                // Treat entire response as single-row data
-                data_array.append(obj);
+                // Scalar value
+                QJsonObject wrapper;
+                wrapper["value"] = obj["data"];
+                data_array.append(wrapper);
             }
+        } else if (doc.isArray()) {
+            data_array = doc.array();
+        } else {
+            // Treat entire response as single-row data
+            data_array.append(obj);
+        }
 
-            int count = data_array.size();
-            self->record_count_->setText(QString::number(count) + " records");
-            self->record_count_->show();
-            self->data_status_->setText(endpoint);
+        int count = data_array.size();
+        self->record_count_->setText(QString::number(count) + " records");
+        self->record_count_->show();
+        self->data_status_->setText(endpoint);
 
-            self->display_table_data(data_array);
-            self->display_json_data(data_array);
+        self->display_table_data(data_array);
+        self->display_json_data(data_array);
 
-            LOG_INFO("AkShare", "Query " + endpoint + ": " + QString::number(count) + " records");
-        });
+        LOG_INFO("AkShare", "Query " + endpoint + ": " + QString::number(count) + " records");
+    });
 }
 
 // ── Display ─────────────────────────────────────────────────────────────────

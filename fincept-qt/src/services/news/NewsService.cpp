@@ -14,7 +14,7 @@
 #include <QXmlStreamReader>
 
 #ifdef HAS_QT_WEBSOCKETS
-#include <QtWebSockets/QWebSocket>
+#    include <QtWebSockets/QWebSocket>
 #endif
 
 #include <algorithm>
@@ -183,8 +183,9 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
                 state->service->cache_ = all;
                 state->service->cache_ts_ = QDateTime::currentSecsSinceEpoch();
 
-                LOG_INFO("NewsService",
-                         QString("Progressive fetch complete: %1 articles, %2 sources").arg(all.size()).arg(sources.size()));
+                LOG_INFO(
+                    "NewsService",
+                    QString("Progressive fetch complete: %1 articles, %2 sources").arg(all.size()).arg(sources.size()));
 
                 state->callback(true, all);
                 emit state->service->articles_updated(all);
@@ -258,8 +259,7 @@ void NewsService::summarize_headlines(const QVector<NewsArticle>& articles, int 
     QString sig = headlines.join("|").left(500);
 
     auto now = QDateTime::currentSecsSinceEpoch();
-    if (!summary_cache_.summary.isEmpty() &&
-        summary_cache_.headline_signature == sig &&
+    if (!summary_cache_.summary.isEmpty() && summary_cache_.headline_signature == sig &&
         (now - summary_cache_.cached_at) < SUMMARY_CACHE_TTL_SEC) {
         cb(true, summary_cache_.summary);
         return;
@@ -300,7 +300,8 @@ void NewsService::summarize_headlines(const QVector<NewsArticle>& articles, int 
 
 #ifdef HAS_QT_WEBSOCKETS
 void NewsService::connect_live_feed(const QString& ws_url) {
-    if (live_ws_) return; // already connected
+    if (live_ws_)
+        return; // already connected
 
     live_ws_ = new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this);
 
@@ -322,7 +323,8 @@ void NewsService::connect_live_feed(const QString& ws_url) {
     connect(live_ws_, &QWebSocket::textMessageReceived, this, [this](const QString& msg) {
         // Parse incoming JSON article
         auto doc = QJsonDocument::fromJson(msg.toUtf8());
-        if (!doc.isObject()) return;
+        if (!doc.isObject())
+            return;
 
         auto obj = doc.object();
         NewsArticle article;
@@ -336,7 +338,8 @@ void NewsService::connect_live_feed(const QString& ws_url) {
         article.time = QDateTime::fromSecsSinceEpoch(article.sort_ts).toString("MMM dd, HH:mm");
         article.tier = obj["tier"].toInt(2);
 
-        if (article.headline.isEmpty()) return;
+        if (article.headline.isEmpty())
+            return;
 
         enrich_article(article);
 
@@ -351,7 +354,8 @@ void NewsService::connect_live_feed(const QString& ws_url) {
 }
 
 void NewsService::disconnect_live_feed() {
-    if (!live_ws_) return;
+    if (!live_ws_)
+        return;
     live_ws_->close();
     live_ws_->deleteLater();
     live_ws_ = nullptr;
@@ -365,7 +369,9 @@ bool NewsService::is_live_connected() const {
 // No WebSocket support — stubs
 void NewsService::connect_live_feed(const QString&) {}
 void NewsService::disconnect_live_feed() {}
-bool NewsService::is_live_connected() const { return false; }
+bool NewsService::is_live_connected() const {
+    return false;
+}
 #endif
 
 // ── Auto-refresh ────────────────────────────────────────────────────────────
@@ -596,20 +602,32 @@ void NewsService::enrich_article(NewsArticle& article) {
         int cjk = 0, cyrillic = 0, arabic = 0, devanagari = 0, latin = 0;
         for (const auto& ch : s) {
             ushort u = ch.unicode();
-            if (u >= 0x4e00 && u <= 0x9fff) cjk++;
-            else if (u >= 0x3040 && u <= 0x30ff) return "ja"; // kana = definitely Japanese
-            else if (u >= 0xac00 && u <= 0xd7af) return "ko"; // hangul = Korean
-            else if (u >= 0x0400 && u <= 0x04ff) cyrillic++;
-            else if (u >= 0x0600 && u <= 0x06ff) arabic++;
-            else if (u >= 0x0900 && u <= 0x097f) devanagari++;
-            else if ((u >= 0x41 && u <= 0x5a) || (u >= 0x61 && u <= 0x7a)) latin++;
+            if (u >= 0x4e00 && u <= 0x9fff)
+                cjk++;
+            else if (u >= 0x3040 && u <= 0x30ff)
+                return "ja"; // kana = definitely Japanese
+            else if (u >= 0xac00 && u <= 0xd7af)
+                return "ko"; // hangul = Korean
+            else if (u >= 0x0400 && u <= 0x04ff)
+                cyrillic++;
+            else if (u >= 0x0600 && u <= 0x06ff)
+                arabic++;
+            else if (u >= 0x0900 && u <= 0x097f)
+                devanagari++;
+            else if ((u >= 0x41 && u <= 0x5a) || (u >= 0x61 && u <= 0x7a))
+                latin++;
         }
         int total = s.size();
-        if (total == 0) return "en";
-        if (cjk * 10 > total) return "zh";
-        if (cyrillic * 10 > total) return "ru";
-        if (arabic * 10 > total) return "ar";
-        if (devanagari * 10 > total) return "hi";
+        if (total == 0)
+            return "en";
+        if (cjk * 10 > total)
+            return "zh";
+        if (cyrillic * 10 > total)
+            return "ru";
+        if (arabic * 10 > total)
+            return "ar";
+        if (devanagari * 10 > total)
+            return "hi";
         return "en";
     };
     article.lang = detect_lang(article.headline);
@@ -630,7 +648,12 @@ ThreatClassification NewsService::classify_threat(const NewsArticle& article) {
     tc.confidence = 0.3; // base confidence from keyword matching
 
     // Critical — immediate, high-impact events
-    struct PatternScore { const char* pattern; const char* category; ThreatLevel level; double conf; };
+    struct PatternScore {
+        const char* pattern;
+        const char* category;
+        ThreatLevel level;
+        double conf;
+    };
     static const PatternScore critical_patterns[] = {
         {"nuclear strike", "conflict", ThreatLevel::CRITICAL, 0.95},
         {"nuclear attack", "conflict", ThreatLevel::CRITICAL, 0.95},
@@ -670,22 +693,14 @@ ThreatClassification NewsService::classify_threat(const NewsArticle& article) {
 
     // Medium patterns
     static const PatternScore medium_patterns[] = {
-        {"protest", "conflict", ThreatLevel::MEDIUM, 0.6},
-        {"riot", "conflict", ThreatLevel::MEDIUM, 0.7},
-        {"tension", "conflict", ThreatLevel::MEDIUM, 0.5},
-        {"escalat", "conflict", ThreatLevel::MEDIUM, 0.65},
-        {"tariff", "regulatory", ThreatLevel::MEDIUM, 0.65},
-        {"regulation", "regulatory", ThreatLevel::MEDIUM, 0.5},
-        {"antitrust", "regulatory", ThreatLevel::MEDIUM, 0.6},
-        {"investigat", "regulatory", ThreatLevel::MEDIUM, 0.55},
-        {"layoff", "market", ThreatLevel::MEDIUM, 0.6},
-        {"recession", "market", ThreatLevel::MEDIUM, 0.65},
-        {"inflation", "market", ThreatLevel::MEDIUM, 0.55},
-        {"selloff", "market", ThreatLevel::MEDIUM, 0.6},
-        {"sell-off", "market", ThreatLevel::MEDIUM, 0.6},
-        {"volatil", "market", ThreatLevel::MEDIUM, 0.5},
-        {"wildfire", "natural", ThreatLevel::MEDIUM, 0.6},
-        {"flood", "natural", ThreatLevel::MEDIUM, 0.6},
+        {"protest", "conflict", ThreatLevel::MEDIUM, 0.6},     {"riot", "conflict", ThreatLevel::MEDIUM, 0.7},
+        {"tension", "conflict", ThreatLevel::MEDIUM, 0.5},     {"escalat", "conflict", ThreatLevel::MEDIUM, 0.65},
+        {"tariff", "regulatory", ThreatLevel::MEDIUM, 0.65},   {"regulation", "regulatory", ThreatLevel::MEDIUM, 0.5},
+        {"antitrust", "regulatory", ThreatLevel::MEDIUM, 0.6}, {"investigat", "regulatory", ThreatLevel::MEDIUM, 0.55},
+        {"layoff", "market", ThreatLevel::MEDIUM, 0.6},        {"recession", "market", ThreatLevel::MEDIUM, 0.65},
+        {"inflation", "market", ThreatLevel::MEDIUM, 0.55},    {"selloff", "market", ThreatLevel::MEDIUM, 0.6},
+        {"sell-off", "market", ThreatLevel::MEDIUM, 0.6},      {"volatil", "market", ThreatLevel::MEDIUM, 0.5},
+        {"wildfire", "natural", ThreatLevel::MEDIUM, 0.6},     {"flood", "natural", ThreatLevel::MEDIUM, 0.6},
     };
 
     // Check patterns in priority order — first critical, then high, then medium
@@ -750,9 +765,12 @@ SourceFlag NewsService::source_flag_for(const QString& source) {
 
 QString NewsService::source_flag_label(SourceFlag flag) {
     switch (flag) {
-        case SourceFlag::STATE_MEDIA: return "STATE MEDIA";
-        case SourceFlag::CAUTION: return "CAUTION";
-        default: return {};
+        case SourceFlag::STATE_MEDIA:
+            return "STATE MEDIA";
+        case SourceFlag::CAUTION:
+            return "CAUTION";
+        default:
+            return {};
     }
 }
 
@@ -834,15 +852,15 @@ QVector<RSSFeed> NewsService::default_feeds() {
 
         // Tier 2 — Major Financial (additional)
         {"cnbc-world", "CNBC World",
-         "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362",
-         "MARKETS", "GLOBAL", "CNBC", 2},
+         "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362", "MARKETS", "GLOBAL",
+         "CNBC", 2},
         {"cnbc-tech", "CNBC Technology",
-         "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910",
-         "TECH", "US", "CNBC", 2},
+         "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910", "TECH", "US", "CNBC",
+         2},
         {"investing-news", "Investing.com", "https://www.investing.com/rss/news.rss", "MARKETS", "GLOBAL",
          "INVESTING.COM", 2},
-        {"economist", "The Economist", "https://www.economist.com/finance-and-economics/rss.xml", "ECONOMIC",
-         "GLOBAL", "ECONOMIST", 2},
+        {"economist", "The Economist", "https://www.economist.com/finance-and-economics/rss.xml", "ECONOMIC", "GLOBAL",
+         "ECONOMIST", 2},
 
         // Tier 2 — Crypto
         {"coindesk", "CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/", "CRYPTO", "GLOBAL", "COINDESK", 2},
@@ -865,8 +883,8 @@ QVector<RSSFeed> NewsService::default_feeds() {
 
         // Tier 2 — Asia & India (additional)
         {"livemint", "LiveMint", "https://www.livemint.com/rss/markets", "MARKETS", "INDIA", "LIVEMINT", 2},
-        {"et-markets", "Economic Times", "https://economictimes.indiatimes.com/rssfeedstopstories.cms",
-         "MARKETS", "INDIA", "ECONOMIC TIMES", 2},
+        {"et-markets", "Economic Times", "https://economictimes.indiatimes.com/rssfeedstopstories.cms", "MARKETS",
+         "INDIA", "ECONOMIC TIMES", 2},
         {"moneycontrol", "MoneyControl", "https://www.moneycontrol.com/rss/latestnews.xml", "MARKETS", "INDIA",
          "MONEYCONTROL", 2},
         {"channel-news-asia", "CNA", "https://www.channelnewsasia.com/rssfeeds/8395986", "MARKETS", "ASIA", "CNA", 2},
@@ -875,8 +893,8 @@ QVector<RSSFeed> NewsService::default_feeds() {
         {"finextra", "Finextra", "https://www.finextra.com/rss/headlines.aspx", "TECH", "GLOBAL", "FINEXTRA", 2},
 
         // Tier 3 — Economic / Macro
-        {"zero-hedge", "ZeroHedge", "https://feeds.feedburner.com/zerohedge/feed", "ECONOMIC", "GLOBAL",
-         "ZEROHEDGE", 3},
+        {"zero-hedge", "ZeroHedge", "https://feeds.feedburner.com/zerohedge/feed", "ECONOMIC", "GLOBAL", "ZEROHEDGE",
+         3},
         {"calculated-risk", "Calculated Risk", "https://feeds.feedburner.com/CalculatedRisk", "ECONOMIC", "US",
          "CALCULATED RISK", 3},
         {"wolfstreet", "Wolf Street", "https://wolfstreet.com/feed/", "ECONOMIC", "US", "WOLF STREET", 3},
@@ -889,8 +907,8 @@ QVector<RSSFeed> NewsService::default_feeds() {
         {"arstechnica", "Ars Technica", "https://feeds.arstechnica.com/arstechnica/index", "TECH", "GLOBAL",
          "ARS TECHNICA", 3},
         {"theverge", "The Verge", "https://www.theverge.com/rss/index.xml", "TECH", "GLOBAL", "THE VERGE", 3},
-        {"mit-tech", "MIT Tech Review", "https://www.technologyreview.com/feed/", "TECH", "GLOBAL",
-         "MIT TECH REVIEW", 3},
+        {"mit-tech", "MIT Tech Review", "https://www.technologyreview.com/feed/", "TECH", "GLOBAL", "MIT TECH REVIEW",
+         3},
 
         // Tier 3 — ESG
         {"carbon-brief", "Carbon Brief", "https://www.carbonbrief.org/feed/", "ENERGY", "GLOBAL", "CARBON BRIEF", 3},
@@ -988,22 +1006,32 @@ QString relative_time(int64_t unix_ts) {
 
 QString threat_level_string(ThreatLevel t) {
     switch (t) {
-        case ThreatLevel::CRITICAL: return "CRITICAL";
-        case ThreatLevel::HIGH: return "HIGH";
-        case ThreatLevel::MEDIUM: return "MEDIUM";
-        case ThreatLevel::LOW: return "LOW";
-        case ThreatLevel::INFO: return "INFO";
+        case ThreatLevel::CRITICAL:
+            return "CRITICAL";
+        case ThreatLevel::HIGH:
+            return "HIGH";
+        case ThreatLevel::MEDIUM:
+            return "MEDIUM";
+        case ThreatLevel::LOW:
+            return "LOW";
+        case ThreatLevel::INFO:
+            return "INFO";
     }
     return "INFO";
 }
 
 QString threat_level_color(ThreatLevel t) {
     switch (t) {
-        case ThreatLevel::CRITICAL: return "#dc2626";
-        case ThreatLevel::HIGH: return "#f97316";
-        case ThreatLevel::MEDIUM: return "#eab308";
-        case ThreatLevel::LOW: return "#22c55e";
-        case ThreatLevel::INFO: return "#525252";
+        case ThreatLevel::CRITICAL:
+            return "#dc2626";
+        case ThreatLevel::HIGH:
+            return "#f97316";
+        case ThreatLevel::MEDIUM:
+            return "#eab308";
+        case ThreatLevel::LOW:
+            return "#22c55e";
+        case ThreatLevel::INFO:
+            return "#525252";
     }
     return "#525252";
 }

@@ -57,16 +57,15 @@ void CryptoTickerBar::set_symbol(const QString& symbol) {
     symbol_label_->setText(symbol);
 }
 
-void CryptoTickerBar::update_data(double price, double change_pct, double high,
-                                  double low, double volume, bool ws_connected) {
+void CryptoTickerBar::update_data(double price, double change_pct, double high, double low, double volume,
+                                  bool ws_connected) {
     if (price <= 0)
         return;
 
     price_label_->setText(QString("$%1").arg(price, 0, 'f', 2));
 
     const bool positive = change_pct >= 0;
-    change_label_->setText(
-        QString("%1%2%").arg(positive ? "+" : "").arg(change_pct, 0, 'f', 2));
+    change_label_->setText(QString("%1%2%").arg(positive ? "+" : "").arg(change_pct, 0, 'f', 2));
 
     // Only update style on state flip — P7
     if (positive != last_positive_) {

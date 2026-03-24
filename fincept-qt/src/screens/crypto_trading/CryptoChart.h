@@ -51,8 +51,8 @@ class CryptoChart : public QWidget {
     // Axis range cache
     double last_min_price_ = -1;
     double last_max_price_ = -1;
-    qint64 last_min_time_  = -1;
-    qint64 last_max_time_  = -1;
+    qint64 last_min_time_ = -1;
+    qint64 last_max_time_ = -1;
 };
 
 } // namespace fincept::screens::crypto

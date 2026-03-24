@@ -20,17 +20,16 @@ namespace fincept::screens {
 
 static const char* FONT = "'Consolas','Courier New',monospace";
 
-static const char* COMBO_SS =
-    "QComboBox { background: #111111; color: #e5e5e5; border: 1px solid #1a1a1a;"
-    "  padding: 2px 8px; font-size: 11px; font-family: 'Consolas','Courier New',monospace;"
-    "  min-width: 100px; }"
-    "QComboBox:hover { border-color: #333333; }"
-    "QComboBox::drop-down { border: none; width: 16px; }"
-    "QComboBox::down-arrow { image: none; border-left: 4px solid transparent;"
-    "  border-right: 4px solid transparent; border-top: 5px solid #808080; }"
-    "QComboBox QAbstractItemView { background: #0a0a0a; color: #e5e5e5;"
-    "  border: 1px solid #1a1a1a; selection-background-color: #161616;"
-    "  selection-color: #d97706; font-family: 'Consolas','Courier New',monospace; }";
+static const char* COMBO_SS = "QComboBox { background: #111111; color: #e5e5e5; border: 1px solid #1a1a1a;"
+                              "  padding: 2px 8px; font-size: 11px; font-family: 'Consolas','Courier New',monospace;"
+                              "  min-width: 100px; }"
+                              "QComboBox:hover { border-color: #333333; }"
+                              "QComboBox::drop-down { border: none; width: 16px; }"
+                              "QComboBox::down-arrow { image: none; border-left: 4px solid transparent;"
+                              "  border-right: 4px solid transparent; border-top: 5px solid #808080; }"
+                              "QComboBox QAbstractItemView { background: #0a0a0a; color: #e5e5e5;"
+                              "  border: 1px solid #1a1a1a; selection-background-color: #161616;"
+                              "  selection-color: #d97706; font-family: 'Consolas','Courier New',monospace; }";
 
 static const char* TABLE_SS =
     "QTableWidget { background: #080808; color: #e5e5e5; border: none;"
@@ -50,27 +49,20 @@ static const char* TABLE_SS =
 struct TradePartner {
     const char* name;
     const char* abbrev;
-    double imports;   // $M — imports from this partner
-    double exports;   // $M — exports to this partner
+    double imports; // $M — imports from this partner
+    double exports; // $M — exports to this partner
 };
 
 // US bilateral trade data (2024 estimates, $M)
 static const TradePartner g_partners[] = {
-    {"Mexico",         "Mex.",    437898.0, 345098.0},
-    {"Canada",         "Can.",    406282.0, 297329.0},
-    {"China",          "China",   427230.0, 177093.0},
-    {"Germany",        "Ger.",    145632.0,  90342.5},
-    {"Japan",          "Jpn.",    138420.0,  94699.0},
-    {"South Korea",    "S.Kor.",  115210.0,  88830.2},
-    {"Vietnam",        "Viet.",   109450.0,  42081.8},
-    {"United Kingdom", "UK",       67342.0,  73428.6},
-    {"India",          "India",    87120.0,  45012.1},
-    {"Ireland",        "Ire.",     82340.0,  44515.1},
-    {"Netherlands",    "Neth.",    56120.0,  52126.2},
-    {"France",         "Fr.",      62340.0,  45550.2},
-    {"Italy",          "Itl.",     67230.0,  37358.7},
-    {"Singapore",      "Sing.",    48120.0,  51015.2},
-    {"Switzerland",    "Switz.",   54230.0,  38722.6},
+    {"Mexico", "Mex.", 437898.0, 345098.0},      {"Canada", "Can.", 406282.0, 297329.0},
+    {"China", "China", 427230.0, 177093.0},      {"Germany", "Ger.", 145632.0, 90342.5},
+    {"Japan", "Jpn.", 138420.0, 94699.0},        {"South Korea", "S.Kor.", 115210.0, 88830.2},
+    {"Vietnam", "Viet.", 109450.0, 42081.8},     {"United Kingdom", "UK", 67342.0, 73428.6},
+    {"India", "India", 87120.0, 45012.1},        {"Ireland", "Ire.", 82340.0, 44515.1},
+    {"Netherlands", "Neth.", 56120.0, 52126.2},  {"France", "Fr.", 62340.0, 45550.2},
+    {"Italy", "Itl.", 67230.0, 37358.7},         {"Singapore", "Sing.", 48120.0, 51015.2},
+    {"Switzerland", "Switz.", 54230.0, 38722.6},
 };
 static constexpr int NUM_PARTNERS = 15;
 
@@ -92,7 +84,8 @@ class TradeFlowChordWidget : public QWidget {
         const int cx = w / 2;
         const int cy = h / 2;
         const int radius = std::min(cx, cy) - 65;
-        if (radius < 60) return;
+        if (radius < 60)
+            return;
 
         // ── Concentric grid rings ────────────────────────────────────────────
         QPen grid_pen(QColor(26, 26, 26), 1);
@@ -115,7 +108,8 @@ class TradeFlowChordWidget : public QWidget {
         for (int i = 0; i < NUM_PARTNERS; ++i) {
             max_val = std::max(max_val, std::max(g_partners[i].imports, g_partners[i].exports));
         }
-        if (max_val < 1.0) max_val = 1.0;
+        if (max_val < 1.0)
+            max_val = 1.0;
 
         // ── Import arcs (partner → US center) — amber/orange bundles ─────────
         // Draw back-to-front so top partners render on top
@@ -129,7 +123,8 @@ class TradeFlowChordWidget : public QWidget {
             double dx = px - cx;
             double dy = py - cy;
             double len = std::sqrt(dx * dx + dy * dy);
-            if (len < 1.0) continue;
+            if (len < 1.0)
+                continue;
             double nx = -dy / len;
             double ny = dx / len;
 
@@ -164,7 +159,8 @@ class TradeFlowChordWidget : public QWidget {
             double dx = px - cx;
             double dy = py - cy;
             double len = std::sqrt(dx * dx + dy * dy);
-            if (len < 1.0) continue;
+            if (len < 1.0)
+                continue;
             double nx = -dy / len;
             double ny = dx / len;
 
@@ -283,10 +279,10 @@ QWidget* TradeVizScreen::build_tab_bar() {
         bool active;
     };
     Tab tabs[] = {
-        {"21)", "Table",    false},
+        {"21)", "Table", false},
         {"22)", "Settings", false},
-        {"23)", "Export",   false},
-        {"24)", "Notes",    false},
+        {"23)", "Export", false},
+        {"24)", "Notes", false},
     };
 
     for (const auto& t : tabs) {
@@ -335,9 +331,9 @@ QWidget* TradeVizScreen::build_filter_bar() {
     // Country selector
     country_combo_ = new QComboBox;
     country_combo_->setStyleSheet(COMBO_SS);
-    country_combo_->addItems({"United States", "China", "Germany", "Japan", "United Kingdom",
-                              "France", "India", "Italy", "Canada", "South Korea",
-                              "Mexico", "Brazil", "Australia", "Netherlands", "Switzerland"});
+    country_combo_->addItems({"United States", "China", "Germany", "Japan", "United Kingdom", "France", "India",
+                              "Italy", "Canada", "South Korea", "Mexico", "Brazil", "Australia", "Netherlands",
+                              "Switzerland"});
     country_combo_->setCurrentIndex(0);
     hl->addWidget(country_combo_);
 
@@ -425,9 +421,8 @@ QWidget* TradeVizScreen::build_partner_table() {
     partner_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     partner_table_->setShowGrid(false);
     partner_table_->setAlternatingRowColors(true);
-    partner_table_->setStyleSheet(
-        partner_table_->styleSheet() +
-        " QTableWidget { alternate-background-color: #0c0c0c; }");
+    partner_table_->setStyleSheet(partner_table_->styleSheet() +
+                                  " QTableWidget { alternate-background-color: #0c0c0c; }");
 
     auto* hdr = partner_table_->horizontalHeader();
     hdr->setSectionResizeMode(0, QHeaderView::Fixed);
@@ -456,8 +451,7 @@ void TradeVizScreen::populate_partner_table() {
         name->setFont(QFont(FONT, 13, QFont::Bold));
         partner_table_->setItem(i, 1, name);
 
-        auto* val = new QTableWidgetItem(
-            QString::number(total, 'f', 2));
+        auto* val = new QTableWidgetItem(QString::number(total, 'f', 2));
         val->setForeground(QColor("#e5e5e5"));
         val->setFont(QFont(FONT, 13, QFont::Bold));
         val->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -481,12 +475,14 @@ void TradeVizScreen::update_clock() {
 
 void TradeVizScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (clock_timer_) clock_timer_->start();
+    if (clock_timer_)
+        clock_timer_->start();
 }
 
 void TradeVizScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
-    if (clock_timer_) clock_timer_->stop();
+    if (clock_timer_)
+        clock_timer_->stop();
 }
 
 // ============================================================================
@@ -518,9 +514,8 @@ void TradeVizScreen::setup_ui() {
 
     // ── Main content: chord diagram (left) + partner table (right) ───────────
     auto* splitter = new QSplitter(Qt::Horizontal);
-    splitter->setStyleSheet(
-        "QSplitter { background: #080808; }"
-        "QSplitter::handle { background: #1a1a1a; width: 1px; }");
+    splitter->setStyleSheet("QSplitter { background: #080808; }"
+                            "QSplitter::handle { background: #1a1a1a; width: 1px; }");
 
     splitter->addWidget(new TradeFlowChordWidget);
     splitter->addWidget(build_partner_table());

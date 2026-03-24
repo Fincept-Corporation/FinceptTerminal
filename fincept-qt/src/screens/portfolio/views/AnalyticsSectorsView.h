@@ -27,14 +27,14 @@ class AnalyticsSectorsView : public QWidget {
     QTabWidget* tabs_ = nullptr;
 
     // Overview tab
-    QChartView*   sector_chart_    = nullptr;
-    QTableWidget* sector_table_    = nullptr;
+    QChartView* sector_chart_ = nullptr;
+    QTableWidget* sector_table_ = nullptr;
 
     // Analytics tab
-    QWidget*      analytics_panel_ = nullptr;
+    QWidget* analytics_panel_ = nullptr;
 
     // Correlation tab
-    QWidget*      corr_panel_      = nullptr;
+    QWidget* corr_panel_ = nullptr;
 
     // Data
     portfolio::PortfolioSummary summary_;
@@ -43,9 +43,9 @@ class AnalyticsSectorsView : public QWidget {
     // Sector helpers
     struct SectorInfo {
         QString name;
-        double  weight = 0;
-        double  pnl    = 0;
-        int     count  = 0;
+        double weight = 0;
+        double pnl = 0;
+        int count = 0;
         QVector<portfolio::HoldingWithQuote> holdings;
     };
     QVector<SectorInfo> compute_sectors() const;

@@ -1,5 +1,6 @@
 // EquityCredentials.cpp — broker API key dialog
 #include "screens/equity_trading/EquityCredentials.h"
+
 #include "screens/equity_trading/EquityTypes.h"
 
 #include <QHBoxLayout>
@@ -12,14 +13,12 @@ EquityCredentials::EquityCredentials(const QString& broker_id, QWidget* parent)
     : QDialog(parent), broker_id_(broker_id) {
     setWindowTitle(QString("Connect Broker — %1").arg(broker_id.toUpper()));
     setFixedSize(380, 300);
-    setStyleSheet(
-        "QDialog { background: #0a0a0a; color: #e5e5e5; }"
-        "QLabel { color: #808080; font-size: 11px; font-weight: 700; }"
-        "QLineEdit { background: #080808; border: 1px solid #222222; color: #e5e5e5; "
-        "  padding: 6px; font-size: 12px; }"
-        "QLineEdit:focus { border-color: #d97706; }"
-        "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; }"
-    );
+    setStyleSheet("QDialog { background: #0a0a0a; color: #e5e5e5; }"
+                  "QLabel { color: #808080; font-size: 11px; font-weight: 700; }"
+                  "QLineEdit { background: #080808; border: 1px solid #222222; color: #e5e5e5; "
+                  "  padding: 6px; font-size: 12px; }"
+                  "QLineEdit:focus { border-color: #d97706; }"
+                  "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; }");
 
     auto* layout = new QVBoxLayout(this);
     layout->setSpacing(8);
@@ -47,14 +46,12 @@ EquityCredentials::EquityCredentials(const QString& broker_id, QWidget* parent)
     // Buttons
     auto* btn_row = new QHBoxLayout;
     auto* save_btn = new QPushButton("CONNECT");
-    save_btn->setStyleSheet(
-        "background: rgba(217,119,6,0.15); color: #d97706; border: 1px solid #92400e;");
+    save_btn->setStyleSheet("background: rgba(217,119,6,0.15); color: #d97706; border: 1px solid #92400e;");
     save_btn->setCursor(Qt::PointingHandCursor);
     connect(save_btn, &QPushButton::clicked, this, &EquityCredentials::on_save);
 
     auto* clear_btn = new QPushButton("CLEAR");
-    clear_btn->setStyleSheet(
-        "background: rgba(220,38,38,0.1); color: #dc2626; border: 1px solid #7f1d1d;");
+    clear_btn->setStyleSheet("background: rgba(220,38,38,0.1); color: #dc2626; border: 1px solid #7f1d1d;");
     clear_btn->setCursor(Qt::PointingHandCursor);
     connect(clear_btn, &QPushButton::clicked, this, &EquityCredentials::on_clear);
 

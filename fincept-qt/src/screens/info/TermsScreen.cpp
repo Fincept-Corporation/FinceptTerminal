@@ -24,7 +24,8 @@ static QLabel* section_heading(const QString& number, const QString& title) {
 static QLabel* body_text(const QString& text) {
     auto* lbl = new QLabel(text);
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color: #e5e5e5; font-size: 12px; line-height: 1.5; background: transparent; %1").arg(MF));
+    lbl->setStyleSheet(
+        QString("color: #e5e5e5; font-size: 12px; line-height: 1.5; background: transparent; %1").arg(MF));
     return lbl;
 }
 
@@ -69,8 +70,8 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
     vl->addWidget(title);
 
     auto* updated = new QLabel("Last updated: January 1, 2026");
-    updated->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2")
-                               .arg(colors::TEXT_TERTIARY, MF));
+    updated->setStyleSheet(
+        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY, MF));
     vl->addWidget(updated);
     vl->addSpacing(12);
 
@@ -83,21 +84,19 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
 
     // Section 1
     pvl->addWidget(section_heading("1", "ACCEPTANCE OF TERMS"));
-    pvl->addWidget(body_text(
-        "By accessing or using Fincept Terminal (\"the Service\"), you agree to be bound by these "
-        "Terms of Service. If you do not agree to these terms, do not use the Service."));
+    pvl->addWidget(body_text("By accessing or using Fincept Terminal (\"the Service\"), you agree to be bound by these "
+                             "Terms of Service. If you do not agree to these terms, do not use the Service."));
 
     // Section 2
     pvl->addWidget(section_heading("2", "DESCRIPTION OF SERVICE"));
-    pvl->addWidget(body_text(
-        "Fincept Terminal is a desktop financial intelligence terminal providing market data, "
-        "analytics, trading tools, and AI-powered research capabilities."));
+    pvl->addWidget(body_text("Fincept Terminal is a desktop financial intelligence terminal providing market data, "
+                             "analytics, trading tools, and AI-powered research capabilities."));
 
     // Section 3
     pvl->addWidget(section_heading("3", "USER ACCOUNTS AND REGISTRATION"));
-    pvl->addWidget(body_text(
-        "To access certain features, you must create an account. You are responsible for maintaining "
-        "the confidentiality of your account credentials and for all activities under your account."));
+    pvl->addWidget(
+        body_text("To access certain features, you must create an account. You are responsible for maintaining "
+                  "the confidentiality of your account credentials and for all activities under your account."));
 
     // Section 4
     pvl->addWidget(section_heading("4", "ACCEPTABLE USE POLICY"));
@@ -110,34 +109,31 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
 
     // Section 5
     pvl->addWidget(section_heading("5", "DATA AND PRIVACY"));
-    pvl->addWidget(body_text(
-        "Your use of the Service is also governed by our Privacy Policy. By using the Service, "
-        "you consent to the collection and use of information as described therein."));
+    pvl->addWidget(body_text("Your use of the Service is also governed by our Privacy Policy. By using the Service, "
+                             "you consent to the collection and use of information as described therein."));
 
     // Section 6
     pvl->addWidget(section_heading("6", "SUBSCRIPTION AND BILLING"));
-    pvl->addWidget(body_text(
-        "Certain features require a paid subscription. Subscriptions are billed in advance. "
-        "Refunds are handled according to our refund policy. Credits expire according to plan terms."));
+    pvl->addWidget(
+        body_text("Certain features require a paid subscription. Subscriptions are billed in advance. "
+                  "Refunds are handled according to our refund policy. Credits expire according to plan terms."));
 
     // Section 7
     pvl->addWidget(section_heading("7", "DISCLAIMERS AND LIMITATIONS"));
-    pvl->addWidget(body_text(
-        "The Service is provided \"as is\" without warranty of any kind. Fincept Corporation shall not "
-        "be liable for any indirect, incidental, special, or consequential damages. Financial data "
-        "and analytics are for informational purposes only and do not constitute investment advice."));
+    pvl->addWidget(
+        body_text("The Service is provided \"as is\" without warranty of any kind. Fincept Corporation shall not "
+                  "be liable for any indirect, incidental, special, or consequential damages. Financial data "
+                  "and analytics are for informational purposes only and do not constitute investment advice."));
 
     // Section 8
     pvl->addWidget(section_heading("8", "TERMINATION"));
-    pvl->addWidget(body_text(
-        "We may terminate or suspend your account at any time for violation of these terms. "
-        "Upon termination, your right to use the Service will immediately cease."));
+    pvl->addWidget(body_text("We may terminate or suspend your account at any time for violation of these terms. "
+                             "Upon termination, your right to use the Service will immediately cease."));
 
     // Section 9
     pvl->addWidget(section_heading("9", "CHANGES TO TERMS"));
-    pvl->addWidget(body_text(
-        "We reserve the right to modify these terms at any time. Continued use of the Service "
-        "after changes constitutes acceptance of the modified terms."));
+    pvl->addWidget(body_text("We reserve the right to modify these terms at any time. Continued use of the Service "
+                             "after changes constitutes acceptance of the modified terms."));
 
     // Section 10
     pvl->addWidget(section_heading("10", "CONTACT INFORMATION"));

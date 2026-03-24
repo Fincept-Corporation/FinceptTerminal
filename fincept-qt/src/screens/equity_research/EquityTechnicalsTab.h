@@ -1,7 +1,6 @@
 // src/screens/equity_research/EquityTechnicalsTab.h
 #pragma once
 #include "services/equity/EquityResearchModels.h"
-
 #include "ui/widgets/LoadingOverlay.h"
 
 #include <QFrame>
@@ -34,16 +33,16 @@ class EquityTechnicalsTab : public QWidget {
     QString current_symbol_;
 
     // TECHNICAL RATING panel
-    QLabel* rating_label_    = nullptr;   // "STRONG BUY" etc
-    QProgressBar* gauge_bar_ = nullptr;   // sell|neutral|buy gauge
-    QLabel* buy_count_       = nullptr;
-    QLabel* neutral_count_   = nullptr;
-    QLabel* sell_count_      = nullptr;
-    QLabel* total_label_     = nullptr;
+    QLabel* rating_label_ = nullptr;    // "STRONG BUY" etc
+    QProgressBar* gauge_bar_ = nullptr; // sell|neutral|buy gauge
+    QLabel* buy_count_ = nullptr;
+    QLabel* neutral_count_ = nullptr;
+    QLabel* sell_count_ = nullptr;
+    QLabel* total_label_ = nullptr;
 
     // KEY INDICATORS panel — 8 fixed mini cards
     // Stored as pairs (name_lbl, value_lbl, signal_lbl) — built dynamically
-    QWidget* key_grid_       = nullptr;
+    QWidget* key_grid_ = nullptr;
 
     // Scrollable section container
     QWidget* sections_container_ = nullptr;

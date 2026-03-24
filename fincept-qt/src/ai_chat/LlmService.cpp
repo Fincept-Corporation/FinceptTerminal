@@ -5,10 +5,11 @@
 //   nlohmann/json → QJsonObject/QJsonArray
 
 #include "ai_chat/LlmService.h"
+
+#include "core/logging/Logger.h"
 #include "mcp/McpService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/SettingsRepository.h"
-#include "core/logging/Logger.h"
 
 #include <QEventLoop>
 #include <QJsonDocument>
@@ -52,16 +53,16 @@ void LlmService::ensure_config() {
 
     provider_ = model_ = api_key_ = base_url_ = system_prompt_ = {};
     temperature_ = 0.7;
-    max_tokens_  = 4096;
+    max_tokens_ = 4096;
 
     auto providers = LlmConfigRepository::instance().list_providers();
     if (providers.is_ok()) {
         for (const auto& c : providers.value()) {
             if (c.is_active) {
                 provider_ = c.provider.toLower();
-                api_key_  = c.api_key;
+                api_key_ = c.api_key;
                 base_url_ = c.base_url;
-                model_    = c.model;
+                model_ = c.model;
                 break;
             }
         }
@@ -69,16 +70,16 @@ void LlmService::ensure_config() {
         if (provider_.isEmpty() && !providers.value().isEmpty()) {
             const auto& c = providers.value().first();
             provider_ = c.provider.toLower();
-            api_key_  = c.api_key;
+            api_key_ = c.api_key;
             base_url_ = c.base_url;
-            model_    = c.model;
+            model_ = c.model;
         }
     }
 
     // Fallback: if no provider configured, use Fincept with session API key
     if (provider_.isEmpty()) {
         provider_ = "fincept";
-        model_    = "fincept-llm";
+        model_ = "fincept-llm";
         base_url_ = "https://api.fincept.in/research/llm";
         LOG_INFO(TAG, "No LLM provider configured — using Fincept default");
     }
@@ -92,9 +93,26 @@ void LlmService::ensure_config() {
 
     auto gs = LlmConfigRepository::instance().get_global_settings();
     if (gs.is_ok()) {
-        temperature_   = gs.value().temperature;
-        max_tokens_    = gs.value().max_tokens;
+        temperature_ = gs.value().temperature;
+        max_tokens_ = gs.value().max_tokens;
         system_prompt_ = gs.value().system_prompt;
+    }
+
+    // Inject default system prompt when user hasn't configured one.
+    // This tells the model it is running inside the Fincept Terminal and
+    // should use the provided tools (navigation, market data, portfolio, etc.)
+    // rather than declining requests it can actually fulfil via a tool call.
+    if (system_prompt_.trimmed().isEmpty()) {
+        system_prompt_ = "You are Fincept AI, the intelligent assistant embedded inside the "
+                         "Fincept Terminal — a professional desktop financial intelligence application. "
+                         "You have access to a set of tools that let you interact with the terminal "
+                         "directly: navigate to any screen, fetch live market data, manage watchlists, "
+                         "query portfolios, execute trades on paper, run Python analytics, and more. "
+                         "ALWAYS use the available tools when the user asks you to perform an action "
+                         "that a tool can fulfil (e.g. 'go to news', 'show me BTC price', "
+                         "'open settings'). Never tell the user you cannot navigate or open screens — "
+                         "use the navigate_to_tab tool instead. "
+                         "Be concise, accurate, and finance-focused in your responses.";
     }
 
     config_loaded_ = true;
@@ -151,14 +169,20 @@ QString LlmService::get_endpoint_url() const {
         return base + "/v1/chat/completions";
     }
 
-    if (p == "openai")                    return "https://api.openai.com/v1/chat/completions";
-    if (p == "anthropic")                 return "https://api.anthropic.com/v1/messages";
-    if (p == "gemini" || p == "google")   return "https://generativelanguage.googleapis.com/v1beta/models/"
-                                                  + model_ + ":generateContent";
-    if (p == "groq")                      return "https://api.groq.com/openai/v1/chat/completions";
-    if (p == "deepseek")                  return "https://api.deepseek.com/v1/chat/completions";
-    if (p == "openrouter")                return "https://openrouter.ai/api/v1/chat/completions";
-    if (p == "ollama")                    return "http://localhost:11434/v1/chat/completions";
+    if (p == "openai")
+        return "https://api.openai.com/v1/chat/completions";
+    if (p == "anthropic")
+        return "https://api.anthropic.com/v1/messages";
+    if (p == "gemini" || p == "google")
+        return "https://generativelanguage.googleapis.com/v1beta/models/" + model_ + ":generateContent";
+    if (p == "groq")
+        return "https://api.groq.com/openai/v1/chat/completions";
+    if (p == "deepseek")
+        return "https://api.deepseek.com/v1/chat/completions";
+    if (p == "openrouter")
+        return "https://openrouter.ai/api/v1/chat/completions";
+    if (p == "ollama")
+        return "http://localhost:11434/v1/chat/completions";
     return {};
 }
 
@@ -193,11 +217,9 @@ QMap<QString, QString> LlmService::get_headers() const {
 // Request builders
 // ============================================================================
 
-QJsonObject LlmService::build_openai_request(
-    const QString& user_message,
-    const std::vector<ConversationMessage>& history,
-    bool stream, bool with_tools)
-{
+QJsonObject LlmService::build_openai_request(const QString& user_message,
+                                             const std::vector<ConversationMessage>& history, bool stream,
+                                             bool with_tools) {
     QJsonArray messages;
     if (!system_prompt_.isEmpty())
         messages.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
@@ -206,10 +228,10 @@ QJsonObject LlmService::build_openai_request(
     messages.append(QJsonObject{{"role", "user"}, {"content", user_message}});
 
     QJsonObject req;
-    req["model"]       = model_;
-    req["messages"]    = messages;
+    req["model"] = model_;
+    req["messages"] = messages;
     req["temperature"] = temperature_;
-    req["max_tokens"]  = max_tokens_;
+    req["max_tokens"] = max_tokens_;
     if (stream)
         req["stream"] = true;
 
@@ -221,11 +243,8 @@ QJsonObject LlmService::build_openai_request(
     return req;
 }
 
-QJsonObject LlmService::build_anthropic_request(
-    const QString& user_message,
-    const std::vector<ConversationMessage>& history,
-    bool stream)
-{
+QJsonObject LlmService::build_anthropic_request(const QString& user_message,
+                                                const std::vector<ConversationMessage>& history, bool stream) {
     QJsonArray messages;
     for (const auto& m : history) {
         if (m.role != "system")
@@ -234,8 +253,8 @@ QJsonObject LlmService::build_anthropic_request(
     messages.append(QJsonObject{{"role", "user"}, {"content", user_message}});
 
     QJsonObject req;
-    req["model"]      = model_;
-    req["messages"]   = messages;
+    req["model"] = model_;
+    req["messages"] = messages;
     req["max_tokens"] = max_tokens_;
     if (temperature_ != 0.7)
         req["temperature"] = temperature_;
@@ -243,47 +262,54 @@ QJsonObject LlmService::build_anthropic_request(
         req["system"] = system_prompt_;
     if (stream)
         req["stream"] = true;
+
+    // Anthropic tool format: array of {name, description, input_schema}
+    // (no "type":"function" wrapper like OpenAI)
+    if (!stream) {
+        QJsonArray ant_tools;
+        auto all_tools = mcp::McpService::instance().get_all_tools();
+        for (const auto& tool : all_tools) {
+            QString fn_name = tool.server_id + "__" + tool.name;
+            QJsonObject schema = tool.input_schema;
+            if (schema.isEmpty()) {
+                schema["type"] = "object";
+                schema["properties"] = QJsonObject();
+            }
+            ant_tools.append(
+                QJsonObject{{"name", fn_name}, {"description", tool.description}, {"input_schema", schema}});
+        }
+        if (!ant_tools.isEmpty())
+            req["tools"] = ant_tools;
+    }
     return req;
 }
 
-QJsonObject LlmService::build_gemini_request(
-    const QString& user_message,
-    const std::vector<ConversationMessage>& history)
-{
+QJsonObject LlmService::build_gemini_request(const QString& user_message,
+                                             const std::vector<ConversationMessage>& history) {
     QJsonArray contents;
     for (const auto& m : history) {
-        if (m.role == "system") continue;
+        if (m.role == "system")
+            continue;
         QString role = (m.role == "assistant") ? "model" : "user";
-        contents.append(QJsonObject{
-            {"role", role},
-            {"parts", QJsonArray{QJsonObject{{"text", m.content}}}}
-        });
+        contents.append(QJsonObject{{"role", role}, {"parts", QJsonArray{QJsonObject{{"text", m.content}}}}});
     }
-    contents.append(QJsonObject{
-        {"role", "user"},
-        {"parts", QJsonArray{QJsonObject{{"text", user_message}}}}
-    });
+    contents.append(QJsonObject{{"role", "user"}, {"parts", QJsonArray{QJsonObject{{"text", user_message}}}}});
 
     QJsonObject gen_cfg;
-    gen_cfg["temperature"]     = temperature_;
+    gen_cfg["temperature"] = temperature_;
     gen_cfg["maxOutputTokens"] = max_tokens_;
 
     QJsonObject req;
-    req["contents"]         = contents;
+    req["contents"] = contents;
     req["generationConfig"] = gen_cfg;
     if (!system_prompt_.isEmpty()) {
-        req["systemInstruction"] = QJsonObject{
-            {"parts", QJsonArray{QJsonObject{{"text", system_prompt_}}}}
-        };
+        req["systemInstruction"] = QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", system_prompt_}}}}};
     }
     return req;
 }
 
-QJsonObject LlmService::build_fincept_request(
-    const QString& user_message,
-    const std::vector<ConversationMessage>& history,
-    bool with_tools)
-{
+QJsonObject LlmService::build_fincept_request(const QString& user_message,
+                                              const std::vector<ConversationMessage>& history, bool with_tools) {
     QString prompt;
     if (!system_prompt_.isEmpty())
         prompt += "System: " + system_prompt_ + "\n\n";
@@ -296,9 +322,9 @@ QJsonObject LlmService::build_fincept_request(
     prompt += "User: " + user_message;
 
     QJsonObject req;
-    req["prompt"]      = prompt;
+    req["prompt"] = prompt;
     req["temperature"] = temperature_;
-    req["max_tokens"]  = max_tokens_;
+    req["max_tokens"] = max_tokens_;
 
     if (with_tools) {
         QJsonArray all_tools = mcp::McpService::instance().format_tools_for_openai();
@@ -324,12 +350,8 @@ QJsonObject LlmService::build_fincept_request(
 // Blocking HTTP POST (runs on background thread, uses its own NAM + event loop)
 // ============================================================================
 
-LlmService::HttpResult LlmService::blocking_post(
-    const QString& url,
-    const QJsonObject& body,
-    const QMap<QString, QString>& headers,
-    int timeout_ms)
-{
+LlmService::HttpResult LlmService::blocking_post(const QString& url, const QJsonObject& body,
+                                                 const QMap<QString, QString>& headers, int timeout_ms) {
     HttpResult result;
 
     // Each background thread call needs its own QNetworkAccessManager
@@ -362,7 +384,7 @@ LlmService::HttpResult LlmService::blocking_post(
     }
 
     result.status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    result.body   = reply->readAll();
+    result.body = reply->readAll();
 
     if (result.status >= 200 && result.status < 300) {
         result.success = true;
@@ -380,17 +402,18 @@ LlmService::HttpResult LlmService::blocking_post(
                 // OpenAI: {"error":{"message":"..."}} or {"error":"..."}
                 if (server_msg.isEmpty() && ej.contains("error")) {
                     QJsonValue ev = ej["error"];
-                    if (ev.isString()) server_msg = ev.toString();
-                    else if (ev.isObject()) server_msg = ev.toObject()["message"].toString();
+                    if (ev.isString())
+                        server_msg = ev.toString();
+                    else if (ev.isObject())
+                        server_msg = ev.toObject()["message"].toString();
                 }
                 // Anthropic: {"error":{"type":"...","message":"..."}}
                 if (server_msg.isEmpty() && ej.contains("detail"))
                     server_msg = ej["detail"].toString();
             }
         }
-        result.error = server_msg.isEmpty()
-            ? QString("HTTP %1: %2").arg(result.status).arg(reply->errorString())
-            : QString("HTTP %1: %2").arg(result.status).arg(server_msg);
+        result.error = server_msg.isEmpty() ? QString("HTTP %1: %2").arg(result.status).arg(reply->errorString())
+                                            : QString("HTTP %1: %2").arg(result.status).arg(server_msg);
     }
 
     reply->deleteLater();
@@ -401,10 +424,7 @@ LlmService::HttpResult LlmService::blocking_post(
 // Non-streaming request
 // ============================================================================
 
-LlmResponse LlmService::do_request(
-    const QString& user_message,
-    const std::vector<ConversationMessage>& history)
-{
+LlmResponse LlmService::do_request(const QString& user_message, const std::vector<ConversationMessage>& history) {
     LlmResponse resp;
 
     QString url = get_endpoint_url();
@@ -448,8 +468,80 @@ LlmResponse LlmService::do_request(
 
     if (provider_ == "anthropic") {
         QJsonArray content = rj["content"].toArray();
-        if (!content.isEmpty())
-            resp.content = content[0].toObject()["text"].toString();
+        QString stop_reason = rj["stop_reason"].toString();
+
+        // Check for tool_use blocks
+        if (stop_reason == "tool_use") {
+            LOG_INFO(TAG, "Anthropic requested tool_use");
+
+            // Build follow-up messages: original + assistant turn + tool results
+            QJsonArray loop_msgs;
+            if (!system_prompt_.isEmpty()) {
+            } // system is top-level in Anthropic, not in messages
+            for (const auto& h : history)
+                if (h.role != "system")
+                    loop_msgs.append(QJsonObject{{"role", h.role}, {"content", h.content}});
+            loop_msgs.append(QJsonObject{{"role", "user"}, {"content", user_message}});
+            // Assistant message with the tool_use content blocks
+            loop_msgs.append(QJsonObject{{"role", "assistant"}, {"content", content}});
+
+            // Execute each tool_use block and collect results
+            QJsonArray tool_results;
+            for (const auto& block_val : content) {
+                QJsonObject block = block_val.toObject();
+                if (block["type"].toString() != "tool_use")
+                    continue;
+                QString tool_id = block["id"].toString();
+                QString tool_name = block["name"].toString();
+                QJsonObject input = block["input"].toObject();
+
+                LOG_INFO(TAG, "Executing Anthropic tool: " + tool_name);
+                auto tr = mcp::McpService::instance().execute_openai_function(tool_name, input);
+                tool_results.append(QJsonObject{
+                    {"type", "tool_result"},
+                    {"tool_use_id", tool_id},
+                    {"content", QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact))}});
+            }
+
+            // Follow-up: user turn with tool_result blocks
+            loop_msgs.append(QJsonObject{{"role", "user"}, {"content", tool_results}});
+
+            // Build follow-up request (no tools to avoid infinite loop)
+            QJsonObject fu;
+            fu["model"] = model_;
+            fu["messages"] = loop_msgs;
+            fu["max_tokens"] = max_tokens_;
+            if (temperature_ != 0.7)
+                fu["temperature"] = temperature_;
+            if (!system_prompt_.isEmpty())
+                fu["system"] = system_prompt_;
+
+            auto fu_http = blocking_post(url, fu, hdr);
+            if (fu_http.success) {
+                auto fu_doc = QJsonDocument::fromJson(fu_http.body);
+                if (!fu_doc.isNull()) {
+                    QJsonArray fu_content = fu_doc.object()["content"].toArray();
+                    for (const auto& b : fu_content) {
+                        if (b.toObject()["type"].toString() == "text") {
+                            resp.content = b.toObject()["text"].toString();
+                            break;
+                        }
+                    }
+                }
+            } else {
+                resp.error = "Anthropic tool follow-up failed: " + fu_http.error;
+                return resp;
+            }
+        } else {
+            // Normal text response — find first text block
+            for (const auto& block_val : content) {
+                QJsonObject block = block_val.toObject();
+                if (block["type"].toString() == "text") {
+                    resp.content = block["text"].toString();
+                    break;
+                }
+            }
+        }
 
     } else if (provider_ == "gemini" || provider_ == "google") {
         QJsonArray cands = rj["candidates"].toArray();
@@ -469,12 +561,10 @@ LlmResponse LlmService::do_request(
             QString tool_results;
             for (const auto& tc_val : tcs) {
                 QJsonObject tc = tc_val.toObject();
-                QString fn_name = tc.contains("function")
-                    ? tc["function"].toObject()["name"].toString()
-                    : tc["name"].toString();
-                QString args_str = tc.contains("function")
-                    ? tc["function"].toObject()["arguments"].toString()
-                    : tc["arguments"].toString("{}");
+                QString fn_name =
+                    tc.contains("function") ? tc["function"].toObject()["name"].toString() : tc["name"].toString();
+                QString args_str = tc.contains("function") ? tc["function"].toObject()["arguments"].toString()
+                                                           : tc["arguments"].toString("{}");
 
                 QJsonObject fn_args = QJsonDocument::fromJson(args_str.toUtf8()).object();
                 auto tool_res = mcp::McpService::instance().execute_openai_function(fn_name, fn_args);
@@ -494,29 +584,35 @@ LlmResponse LlmService::do_request(
 
             // Follow-up request with tool results
             if (!tool_results.isEmpty()) {
-                QString follow_prompt = "User asked: \"" + user_message + "\"\n\n"
-                    "I retrieved this data:\n" + tool_results +
-                    "\n\nPlease provide a clear, concise summary of this data in natural language.";
+                QString follow_prompt = "User asked: \"" + user_message +
+                                        "\"\n\n"
+                                        "I retrieved this data:\n" +
+                                        tool_results +
+                                        "\n\nPlease provide a clear, concise summary of this data in natural language.";
 
-                QJsonObject follow_body{{"prompt", follow_prompt},
-                                        {"temperature", temperature_},
-                                        {"max_tokens", max_tokens_}};
+                QJsonObject follow_body{
+                    {"prompt", follow_prompt}, {"temperature", temperature_}, {"max_tokens", max_tokens_}};
                 auto fu = blocking_post(url, follow_body, hdr);
                 if (fu.success) {
                     auto fu_doc = QJsonDocument::fromJson(fu.body);
                     if (!fu_doc.isNull()) {
-                        QJsonObject fu_d = fu_doc.object().contains("data")
-                            ? fu_doc.object()["data"].toObject()
-                            : fu_doc.object();
-                        for (const QString& k : {"response","content","answer","text"}) {
-                            if (fu_d.contains(k)) { resp.content = fu_d[k].toString(); break; }
+                        QJsonObject fu_d =
+                            fu_doc.object().contains("data") ? fu_doc.object()["data"].toObject() : fu_doc.object();
+                        for (const QString& k : {"response", "content", "answer", "text"}) {
+                            if (fu_d.contains(k)) {
+                                resp.content = fu_d[k].toString();
+                                break;
+                            }
                         }
                     }
                 }
             }
         } else {
-            for (const QString& k : {"response","content","answer","text","result"}) {
-                if (data.contains(k)) { resp.content = data[k].toString(); break; }
+            for (const QString& k : {"response", "content", "answer", "text", "result"}) {
+                if (data.contains(k)) {
+                    resp.content = data[k].toString();
+                    break;
+                }
             }
             if (resp.content.isEmpty() && data.contains("ai_response")) {
                 QJsonValue ai = data["ai_response"];
@@ -532,7 +628,7 @@ LlmResponse LlmService::do_request(
         QJsonArray choices = rj["choices"].toArray();
         if (!choices.isEmpty()) {
             QJsonObject msg = choices[0].toObject()["message"].toObject();
-            QJsonArray tcs  = msg["tool_calls"].toArray();
+            QJsonArray tcs = msg["tool_calls"].toArray();
 
             if (!tcs.isEmpty()) {
                 LOG_INFO(TAG, QString("LLM requested %1 tool calls").arg(tcs.size()));
@@ -540,10 +636,10 @@ LlmResponse LlmService::do_request(
                 // Build initial messages array for tool loop
                 QJsonArray loop_msgs;
                 if (!system_prompt_.isEmpty())
-                    loop_msgs.append(QJsonObject{{"role","system"},{"content",system_prompt_}});
+                    loop_msgs.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
                 for (const auto& h : history)
-                    loop_msgs.append(QJsonObject{{"role",h.role},{"content",h.content}});
-                loop_msgs.append(QJsonObject{{"role","user"},{"content",user_message}});
+                    loop_msgs.append(QJsonObject{{"role", h.role}, {"content", h.content}});
+                loop_msgs.append(QJsonObject{{"role", "user"}, {"content", user_message}});
                 loop_msgs.append(msg); // assistant message with tool_calls
 
                 // Execute tool calls and append results
@@ -551,16 +647,16 @@ LlmResponse LlmService::do_request(
                     QJsonObject tc = tc_val.toObject();
                     QString call_id = tc["id"].toString();
                     QString fn_name = tc["function"].toObject()["name"].toString();
-                    QJsonObject fn_args = QJsonDocument::fromJson(
-                        tc["function"].toObject()["arguments"].toString("{}").toUtf8()).object();
+                    QJsonObject fn_args =
+                        QJsonDocument::fromJson(tc["function"].toObject()["arguments"].toString("{}").toUtf8())
+                            .object();
 
                     LOG_INFO(TAG, "Executing tool: " + fn_name);
                     auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fn_args);
                     loop_msgs.append(QJsonObject{
-                        {"role",         "tool"},
+                        {"role", "tool"},
                         {"tool_call_id", call_id},
-                        {"content",      QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact))}
-                    });
+                        {"content", QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact))}});
                 }
 
                 resp = do_tool_loop(loop_msgs, url, hdr);
@@ -583,20 +679,17 @@ LlmResponse LlmService::do_request(
 // Tool-call follow-up loop (OpenAI-compatible)
 // ============================================================================
 
-LlmResponse LlmService::do_tool_loop(
-    QJsonArray loop_messages,
-    const QString& url,
-    const QMap<QString, QString>& headers)
-{
+LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
+                                     const QMap<QString, QString>& headers) {
     LlmResponse resp;
     static constexpr int MAX_ROUNDS = 5;
 
     for (int round = 0; round < MAX_ROUNDS; ++round) {
         QJsonObject fu;
-        fu["model"]       = model_;
-        fu["messages"]    = loop_messages;
+        fu["model"] = model_;
+        fu["messages"] = loop_messages;
         fu["temperature"] = temperature_;
-        fu["max_tokens"]  = max_tokens_;
+        fu["max_tokens"] = max_tokens_;
 
         QJsonArray tools = mcp::McpService::instance().format_tools_for_openai();
         if (!tools.isEmpty())
@@ -609,31 +702,36 @@ LlmResponse LlmService::do_tool_loop(
         }
 
         auto doc = QJsonDocument::fromJson(http.body);
-        if (doc.isNull()) { resp.error = "Parse error in tool follow-up"; return resp; }
+        if (doc.isNull()) {
+            resp.error = "Parse error in tool follow-up";
+            return resp;
+        }
         QJsonObject rj = doc.object();
 
         QJsonArray choices = rj["choices"].toArray();
-        if (choices.isEmpty()) { resp.error = "No choices in tool follow-up"; return resp; }
+        if (choices.isEmpty()) {
+            resp.error = "No choices in tool follow-up";
+            return resp;
+        }
 
         QJsonObject msg = choices[0].toObject()["message"].toObject();
-        QJsonArray tcs  = msg["tool_calls"].toArray();
+        QJsonArray tcs = msg["tool_calls"].toArray();
 
         if (!tcs.isEmpty()) {
             // Another round
             loop_messages.append(msg);
             for (const auto& tc_val : tcs) {
                 QJsonObject tc = tc_val.toObject();
-                QString cid    = tc["id"].toString();
-                QString fname  = tc["function"].toObject()["name"].toString();
-                QJsonObject fa = QJsonDocument::fromJson(
-                    tc["function"].toObject()["arguments"].toString("{}").toUtf8()).object();
+                QString cid = tc["id"].toString();
+                QString fname = tc["function"].toObject()["name"].toString();
+                QJsonObject fa =
+                    QJsonDocument::fromJson(tc["function"].toObject()["arguments"].toString("{}").toUtf8()).object();
 
                 auto tr = mcp::McpService::instance().execute_openai_function(fname, fa);
                 loop_messages.append(QJsonObject{
-                    {"role",         "tool"},
+                    {"role", "tool"},
                     {"tool_call_id", cid},
-                    {"content",      QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact))}
-                });
+                    {"content", QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact))}});
             }
             continue;
         }
@@ -653,11 +751,8 @@ LlmResponse LlmService::do_tool_loop(
 // Streaming request (SSE)
 // ============================================================================
 
-LlmResponse LlmService::do_streaming_request(
-    const QString& user_message,
-    const std::vector<ConversationMessage>& history,
-    StreamCallback on_chunk)
-{
+LlmResponse LlmService::do_streaming_request(const QString& user_message,
+                                             const std::vector<ConversationMessage>& history, StreamCallback on_chunk) {
     // Gemini and Fincept: fall back to non-streaming + replay
     if (provider_ == "gemini" || provider_ == "google" || provider_ == "fincept") {
         auto resp = do_request(user_message, history);
@@ -676,9 +771,10 @@ LlmResponse LlmService::do_streaming_request(
     }
 
     auto hdr = get_headers();
-    QJsonObject req_body = (provider_ == "anthropic")
-        ? build_anthropic_request(user_message, history, true)
-        : build_openai_request(user_message, history, true, false);
+    // Send tools for OpenAI-compatible streaming; Anthropic streaming doesn't
+    // support tool_choice in the same SSE flow so we handle that separately.
+    QJsonObject req_body = (provider_ == "anthropic") ? build_anthropic_request(user_message, history, true)
+                                                      : build_openai_request(user_message, history, true, true);
 
     // Use dedicated NAM on this background thread
     QNetworkAccessManager nam;
@@ -694,6 +790,7 @@ LlmResponse LlmService::do_streaming_request(
     QByteArray partial_line;
     QString accumulated;
     bool done = false;
+    bool tool_call_detected = false;
 
     QEventLoop loop;
     QTimer timeout;
@@ -710,7 +807,8 @@ LlmResponse LlmService::do_streaming_request(
         partial_line += reply->readAll();
         while (true) {
             int nl = partial_line.indexOf('\n');
-            if (nl < 0) break;
+            if (nl < 0)
+                break;
             QByteArray raw_line = partial_line.left(nl);
             partial_line.remove(0, nl + 1);
 
@@ -724,10 +822,34 @@ LlmResponse LlmService::do_streaming_request(
 
             QString data = line.mid(6); // remove "data: "
             if (data == "[DONE]") {
-                on_chunk("", true);
+                if (!tool_call_detected)
+                    on_chunk("", true);
                 done = true;
                 loop.quit();
                 return;
+            }
+
+            // Detect tool_calls finish_reason in OpenAI-compatible SSE
+            if (!tool_call_detected && provider_ != "anthropic") {
+                auto doc = QJsonDocument::fromJson(data.toUtf8());
+                if (!doc.isNull() && doc.isObject()) {
+                    QJsonArray choices = doc.object()["choices"].toArray();
+                    if (!choices.isEmpty()) {
+                        QString finish = choices[0].toObject()["finish_reason"].toString();
+                        if (finish == "tool_calls") {
+                            tool_call_detected = true;
+                            loop.quit();
+                            return;
+                        }
+                        // Also detect tool_calls delta (model is streaming a tool call)
+                        QJsonObject delta = choices[0].toObject()["delta"].toObject();
+                        if (!delta["tool_calls"].isUndefined() && !delta["tool_calls"].isNull()) {
+                            tool_call_detected = true;
+                            loop.quit();
+                            return;
+                        }
+                    }
+                }
             }
 
             QString chunk = parse_sse_chunk(data, provider_);
@@ -740,6 +862,19 @@ LlmResponse LlmService::do_streaming_request(
 
     loop.exec();
     timeout.stop();
+
+    // If the model requested tool calls, fall back to non-streaming do_request
+    // which already handles the full tool-call/follow-up loop correctly.
+    if (tool_call_detected) {
+        LOG_INFO(TAG, "Tool call detected in stream — falling back to tool loop");
+        reply->abort();
+        reply->deleteLater();
+        auto tool_resp = do_request(user_message, history);
+        if (tool_resp.success && !tool_resp.content.isEmpty())
+            on_chunk(tool_resp.content, false);
+        on_chunk("", true);
+        return tool_resp;
+    }
 
     int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     if (reply->error() != QNetworkReply::NoError) {
@@ -796,13 +931,13 @@ void LlmService::parse_usage(LlmResponse& resp, const QJsonObject& rj, const QSt
         return;
     QJsonObject u = rj["usage"].toObject();
     if (provider == "anthropic") {
-        resp.prompt_tokens     = u["input_tokens"].toInt();
+        resp.prompt_tokens = u["input_tokens"].toInt();
         resp.completion_tokens = u["output_tokens"].toInt();
-        resp.total_tokens      = resp.prompt_tokens + resp.completion_tokens;
+        resp.total_tokens = resp.prompt_tokens + resp.completion_tokens;
     } else {
-        resp.prompt_tokens     = u["prompt_tokens"].toInt();
+        resp.prompt_tokens = u["prompt_tokens"].toInt();
         resp.completion_tokens = u["completion_tokens"].toInt();
-        resp.total_tokens      = u["total_tokens"].toInt();
+        resp.total_tokens = u["total_tokens"].toInt();
     }
 }
 
@@ -810,61 +945,71 @@ void LlmService::parse_usage(LlmResponse& resp, const QJsonObject& rj, const QSt
 // Dynamic model fetching
 // ============================================================================
 
-QString LlmService::get_models_url(const QString& provider, const QString& api_key,
-                                    const QString& base_url) {
+QString LlmService::get_models_url(const QString& provider, const QString& api_key, const QString& base_url) {
     const QString p = provider.toLower();
 
     // Custom base_url (except fincept)
     if (!base_url.isEmpty() && p != "fincept") {
         QString base = base_url;
-        if (base.endsWith('/')) base.chop(1);
-        if (p == "anthropic") return base + "/v1/models?limit=1000";
+        if (base.endsWith('/'))
+            base.chop(1);
+        if (p == "anthropic")
+            return base + "/v1/models?limit=1000";
         return base + "/v1/models";
     }
 
-    if (p == "openai")      return "https://api.openai.com/v1/models";
-    if (p == "anthropic")   return "https://api.anthropic.com/v1/models?limit=1000";
+    if (p == "openai")
+        return "https://api.openai.com/v1/models";
+    if (p == "anthropic")
+        return "https://api.anthropic.com/v1/models?limit=1000";
     if (p == "gemini" || p == "google") {
         QString url = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=100";
-        if (!api_key.isEmpty()) url += "&key=" + api_key;
+        if (!api_key.isEmpty())
+            url += "&key=" + api_key;
         return url;
     }
-    if (p == "groq")        return "https://api.groq.com/openai/v1/models";
-    if (p == "deepseek")    return "https://api.deepseek.com/models";
-    if (p == "openrouter")  return "https://openrouter.ai/api/v1/models";
+    if (p == "groq")
+        return "https://api.groq.com/openai/v1/models";
+    if (p == "deepseek")
+        return "https://api.deepseek.com/models";
+    if (p == "openrouter")
+        return "https://openrouter.ai/api/v1/models";
     if (p == "ollama") {
         QString base = base_url.isEmpty() ? "http://localhost:11434" : base_url;
-        if (base.endsWith('/')) base.chop(1);
+        if (base.endsWith('/'))
+            base.chop(1);
         return base + "/api/tags";
     }
     return {};
 }
 
-QMap<QString, QString> LlmService::get_models_headers(const QString& provider,
-                                                       const QString& api_key) {
+QMap<QString, QString> LlmService::get_models_headers(const QString& provider, const QString& api_key) {
     QMap<QString, QString> h;
     const QString p = provider.toLower();
 
     if (p == "anthropic") {
-        if (!api_key.isEmpty()) h["x-api-key"] = api_key;
+        if (!api_key.isEmpty())
+            h["x-api-key"] = api_key;
         h["anthropic-version"] = "2023-06-01";
     } else if (p == "gemini" || p == "google") {
         // Key is in URL query param
-        if (!api_key.isEmpty()) h["x-goog-api-key"] = api_key;
+        if (!api_key.isEmpty())
+            h["x-goog-api-key"] = api_key;
     } else if (p == "ollama" || p == "fincept") {
         // No auth needed
     } else {
         // OpenAI-compatible: OpenAI, Groq, DeepSeek, OpenRouter
-        if (!api_key.isEmpty()) h["Authorization"] = "Bearer " + api_key;
+        if (!api_key.isEmpty())
+            h["Authorization"] = "Bearer " + api_key;
     }
     return h;
 }
 
-QStringList LlmService::parse_models_response(const QString& provider,
-                                                const QByteArray& body) {
+QStringList LlmService::parse_models_response(const QString& provider, const QByteArray& body) {
     QStringList models;
     auto doc = QJsonDocument::fromJson(body);
-    if (doc.isNull() || !doc.isObject()) return models;
+    if (doc.isNull() || !doc.isObject())
+        return models;
     QJsonObject root = doc.object();
     const QString p = provider.toLower();
 
@@ -877,21 +1022,28 @@ QStringList LlmService::parse_models_response(const QString& provider,
             QJsonArray methods = m["supportedGenerationMethods"].toArray();
             bool can_generate = false;
             for (const auto& method : methods) {
-                if (method.toString() == "generateContent") { can_generate = true; break; }
+                if (method.toString() == "generateContent") {
+                    can_generate = true;
+                    break;
+                }
             }
-            if (!can_generate) continue;
+            if (!can_generate)
+                continue;
 
             QString name = m["name"].toString();
             // Strip "models/" prefix
-            if (name.startsWith("models/")) name = name.mid(7);
-            if (!name.isEmpty()) models.append(name);
+            if (name.startsWith("models/"))
+                name = name.mid(7);
+            if (!name.isEmpty())
+                models.append(name);
         }
     } else if (p == "ollama") {
         // {"models": [{"name": "llama3:8b", ...}]}
         QJsonArray arr = root["models"].toArray();
         for (const auto& v : arr) {
             QString name = v.toObject()["name"].toString();
-            if (!name.isEmpty()) models.append(name);
+            if (!name.isEmpty())
+                models.append(name);
         }
     } else {
         // OpenAI-compatible: OpenAI, Anthropic, Groq, DeepSeek, OpenRouter
@@ -899,7 +1051,8 @@ QStringList LlmService::parse_models_response(const QString& provider,
         QJsonArray arr = root["data"].toArray();
         for (const auto& v : arr) {
             QString id = v.toObject()["id"].toString();
-            if (!id.isEmpty()) models.append(id);
+            if (!id.isEmpty())
+                models.append(id);
         }
     }
 
@@ -907,8 +1060,7 @@ QStringList LlmService::parse_models_response(const QString& provider,
     return models;
 }
 
-void LlmService::fetch_models(const QString& provider, const QString& api_key,
-                                const QString& base_url) {
+void LlmService::fetch_models(const QString& provider, const QString& api_key, const QString& base_url) {
     QString url = get_models_url(provider, api_key, base_url);
     if (url.isEmpty()) {
         emit models_fetched(provider, {}, "Unknown provider: " + provider);
@@ -946,7 +1098,8 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key,
             int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             if (reply->error() != QNetworkReply::NoError || status < 200 || status >= 300) {
                 error = reply->errorString();
-                if (error.isEmpty()) error = "HTTP " + QString::number(status);
+                if (error.isEmpty())
+                    error = "HTTP " + QString::number(status);
             } else {
                 models = parse_models_response(provider, reply->readAll());
                 if (models.isEmpty())
@@ -957,10 +1110,13 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key,
         reply->deleteLater();
 
         if (self) {
-            QMetaObject::invokeMethod(self, [self, provider, models, error]() {
-                if (self)
-                    emit self->models_fetched(provider, models, error);
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                self,
+                [self, provider, models, error]() {
+                    if (self)
+                        emit self->models_fetched(provider, models, error);
+                },
+                Qt::QueuedConnection);
         }
     });
 }
@@ -969,10 +1125,7 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key,
 // Public API
 // ============================================================================
 
-LlmResponse LlmService::chat(
-    const QString& user_message,
-    const std::vector<ConversationMessage>& history)
-{
+LlmResponse LlmService::chat(const QString& user_message, const std::vector<ConversationMessage>& history) {
     QMutexLocker lock(&mutex_);
     ensure_config();
 
@@ -981,34 +1134,40 @@ LlmResponse LlmService::chat(
 
     // Take config snapshot — release lock before blocking network call
     QString p = provider_, k = api_key_, b = base_url_, m = model_, sp = system_prompt_;
-    double  t = temperature_;
-    int     mx = max_tokens_;
+    double t = temperature_;
+    int mx = max_tokens_;
     lock.unlock();
 
     // Restore snapshot into members for use by helper methods
     // (helpers read member variables, so we need them set)
     // This is safe because chat() is always called from a background thread.
-    provider_ = p; api_key_ = k; base_url_ = b; model_ = m;
-    system_prompt_ = sp; temperature_ = t; max_tokens_ = mx;
+    provider_ = p;
+    api_key_ = k;
+    base_url_ = b;
+    model_ = m;
+    system_prompt_ = sp;
+    temperature_ = t;
+    max_tokens_ = mx;
 
     return do_request(user_message, history);
 }
 
-void LlmService::chat_streaming(
-    const QString& user_message,
-    const std::vector<ConversationMessage>& history,
-    StreamCallback on_chunk)
-{
+void LlmService::chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
+                                StreamCallback on_chunk) {
     // Snapshot config under lock
     QString p, k, b, m, sp;
-    double  t;
-    int     mx;
+    double t;
+    int mx;
     {
         QMutexLocker lock(&mutex_);
         ensure_config();
-        p  = provider_;  k  = api_key_;
-        b  = base_url_;  m  = model_;
-        sp = system_prompt_; t = temperature_; mx = max_tokens_;
+        p = provider_;
+        k = api_key_;
+        b = base_url_;
+        m = model_;
+        sp = system_prompt_;
+        t = temperature_;
+        mx = max_tokens_;
     }
 
     if (p.isEmpty()) {
@@ -1021,23 +1180,29 @@ void LlmService::chat_streaming(
     std::vector<ConversationMessage> history_copy = history;
 
     QPointer<LlmService> self = this;
-    QtConcurrent::run([self, p, k, b, m, sp, t, mx,
-                       user_message, history_copy, on_chunk]() {
-        if (!self) return;
+    QtConcurrent::run([self, p, k, b, m, sp, t, mx, user_message, history_copy, on_chunk]() {
+        if (!self)
+            return;
 
         // Set config snapshot on this thread
-        self->provider_      = p;  self->api_key_  = k;
-        self->base_url_      = b;  self->model_    = m;
-        self->system_prompt_ = sp; self->temperature_ = t;
-        self->max_tokens_    = mx;
+        self->provider_ = p;
+        self->api_key_ = k;
+        self->base_url_ = b;
+        self->model_ = m;
+        self->system_prompt_ = sp;
+        self->temperature_ = t;
+        self->max_tokens_ = mx;
 
         auto resp = self->do_streaming_request(user_message, history_copy, on_chunk);
 
         if (self) {
-            QMetaObject::invokeMethod(self, [self, resp]() {
-                if (self)
-                    emit self->finished_streaming(resp);
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                self,
+                [self, resp]() {
+                    if (self)
+                        emit self->finished_streaming(resp);
+                },
+                Qt::QueuedConnection);
         }
     });
 }

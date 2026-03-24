@@ -12,9 +12,8 @@ class EquityTickerBar : public QWidget {
     explicit EquityTickerBar(QWidget* parent = nullptr);
 
     void set_symbol(const QString& symbol);
-    void update_quote(double ltp, double change, double change_pct,
-                      double high, double low, double volume,
-                      double bid, double ask);
+    void update_quote(double ltp, double change, double change_pct, double high, double low, double volume, double bid,
+                      double ask);
 
   private:
     QLabel* symbol_label_ = nullptr;

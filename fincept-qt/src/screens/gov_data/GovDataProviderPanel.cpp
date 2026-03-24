@@ -25,16 +25,13 @@ using namespace fincept::ui;
 // Constructor
 // ─────────────────────────────────────────────────────────────────────────────
 
-GovDataProviderPanel::GovDataProviderPanel(const QString& script,
-                                             const QString& provider_color,
-                                             const QString& org_label,
-                                             QWidget* parent)
+GovDataProviderPanel::GovDataProviderPanel(const QString& script, const QString& provider_color,
+                                           const QString& org_label, QWidget* parent)
     : QWidget(parent), script_(script), color_(provider_color), org_label_(org_label) {
     build_ui();
 
-    connect(&services::GovDataService::instance(),
-            &services::GovDataService::result_ready,
-            this, &GovDataProviderPanel::on_result);
+    connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
+            &GovDataProviderPanel::on_result);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,45 +112,41 @@ void GovDataProviderPanel::build_ui() {
     root->addWidget(content_stack_, 1);
 
     // Style all tables
-    const QString table_style = QString(
-        "QTableWidget { background:%1; color:%2; border:none; gridline-color:%3;"
-        "  font-family:%4; font-size:12px; }"
-        "QTableWidget::item { padding:6px 8px; border-bottom:1px solid %3; }"
-        "QTableWidget::item:selected { background:%5; }"
-        "QTableWidget::item:alternate { background:%6; }"
-        "QHeaderView::section { background:%7; color:%8; border:none; border-bottom:1px solid %3;"
-        "  font-family:%4; font-size:10px; font-weight:700; padding:6px 8px; }")
-        .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM,
-             fonts::DATA_FAMILY, colors::BG_HOVER, colors::ROW_ALT,
-             colors::BG_RAISED, color_);
+    const QString table_style =
+        QString("QTableWidget { background:%1; color:%2; border:none; gridline-color:%3;"
+                "  font-family:%4; font-size:12px; }"
+                "QTableWidget::item { padding:6px 8px; border-bottom:1px solid %3; }"
+                "QTableWidget::item:selected { background:%5; }"
+                "QTableWidget::item:alternate { background:%6; }"
+                "QHeaderView::section { background:%7; color:%8; border:none; border-bottom:1px solid %3;"
+                "  font-family:%4; font-size:10px; font-weight:700; padding:6px 8px; }")
+            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM, fonts::DATA_FAMILY, colors::BG_HOVER,
+                 colors::ROW_ALT, colors::BG_RAISED, color_);
 
     orgs_table_->setStyleSheet(table_style);
     datasets_table_->setStyleSheet(table_style);
     resources_table_->setStyleSheet(table_style);
 
-    status_label_->setStyleSheet(
-        QString("QLabel { color:%1; font-family:%2; font-size:12px; }")
-            .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(QString("QLabel { color:%1; font-family:%2; font-size:12px; }")
+                                     .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
 }
 
 QWidget* GovDataProviderPanel::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(38);
     bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;")
-            .arg(colors::BG_RAISED, colors::BORDER_MED));
+        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_MED));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(8, 0, 8, 0);
     hl->setSpacing(4);
 
-    const QString btn_style =
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                " font-family:%3; font-size:10px; font-weight:700; padding:4px 10px; }"
-                "QPushButton:hover { background:%4; }"
-                "QPushButton:checked { background:%5; color:%6; border-color:%5; }")
-            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, fonts::DATA_FAMILY,
-                 colors::BG_HOVER, color_, colors::TEXT_PRIMARY);
+    const QString btn_style = QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                                      " font-family:%3; font-size:10px; font-weight:700; padding:4px 10px; }"
+                                      "QPushButton:hover { background:%4; }"
+                                      "QPushButton:checked { background:%5; color:%6; border-color:%5; }")
+                                  .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, fonts::DATA_FAMILY, colors::BG_HOVER,
+                                       color_, colors::TEXT_PRIMARY);
 
     // Back button
     back_btn_ = new QPushButton("< BACK", bar);
@@ -192,19 +185,17 @@ QWidget* GovDataProviderPanel::build_toolbar() {
         QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
                 " font-family:%4; font-size:11px; padding:4px 8px; }"
                 "QLineEdit:focus { border-color:%5; }")
-            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM,
-                 fonts::DATA_FAMILY, color_));
+            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM, fonts::DATA_FAMILY, color_));
     connect(search_input_, &QLineEdit::returnPressed, this, &GovDataProviderPanel::on_search);
     hl->addWidget(search_input_);
 
     // Fetch button
     fetch_btn_ = new QPushButton("FETCH", bar);
-    fetch_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:%2; border:none;"
-                " font-family:%3; font-size:10px; font-weight:700; padding:4px 12px; }"
-                "QPushButton:hover { background:%4; }")
-            .arg(color_, colors::TEXT_PRIMARY, fonts::DATA_FAMILY,
-                 color_)); // same color, opacity handled in code
+    fetch_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+                                      " font-family:%3; font-size:10px; font-weight:700; padding:4px 12px; }"
+                                      "QPushButton:hover { background:%4; }")
+                                  .arg(color_, colors::TEXT_PRIMARY, fonts::DATA_FAMILY,
+                                       color_)); // same color, opacity handled in code
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataProviderPanel::on_search);
     hl->addWidget(fetch_btn_);
 
@@ -225,16 +216,13 @@ QWidget* GovDataProviderPanel::build_toolbar() {
 
 void GovDataProviderPanel::load_initial_data() {
     show_loading("Loading " + org_label_.toLower() + "...");
-    services::GovDataService::instance().execute(
-        script_, "publishers", {}, "gov_orgs_" + script_);
+    services::GovDataService::instance().execute(script_, "publishers", {}, "gov_orgs_" + script_);
 }
 
-void GovDataProviderPanel::on_result(const QString& request_id,
-                                       const services::GovDataResult& result) {
+void GovDataProviderPanel::on_result(const QString& request_id, const services::GovDataResult& result) {
     // Filter results for this panel's script
-    if (!request_id.contains(script_) && !request_id.startsWith("gov_search_" + script_)
-        && !request_id.startsWith("gov_datasets_" + script_)
-        && !request_id.startsWith("gov_resources_" + script_)) {
+    if (!request_id.contains(script_) && !request_id.startsWith("gov_search_" + script_) &&
+        !request_id.startsWith("gov_datasets_" + script_) && !request_id.startsWith("gov_resources_" + script_)) {
         return;
     }
 
@@ -277,13 +265,14 @@ void GovDataProviderPanel::populate_orgs(const QJsonArray& data) {
     for (int i = 0; i < data.size(); ++i) {
         const auto obj = data[i].toObject();
         QString name = obj["display_name"].toString();
-        if (name.isEmpty()) name = obj["name"].toString();
-        if (name.isEmpty()) name = obj["id"].toString();
+        if (name.isEmpty())
+            name = obj["name"].toString();
+        if (name.isEmpty())
+            name = obj["id"].toString();
 
         auto* name_item = new QTableWidgetItem(name);
-        name_item->setData(Qt::UserRole, obj["id"].toString().isEmpty()
-                                             ? obj["name"].toString()
-                                             : obj["id"].toString());
+        name_item->setData(Qt::UserRole,
+                           obj["id"].toString().isEmpty() ? obj["name"].toString() : obj["id"].toString());
         name_item->setForeground(QColor(color_));
         orgs_table_->setItem(i, 0, name_item);
 
@@ -301,12 +290,12 @@ void GovDataProviderPanel::populate_datasets(const QJsonArray& data, int total_c
     for (int i = 0; i < data.size(); ++i) {
         const auto obj = data[i].toObject();
         QString title = obj["title"].toString();
-        if (title.isEmpty()) title = obj["name"].toString();
+        if (title.isEmpty())
+            title = obj["name"].toString();
 
         auto* title_item = new QTableWidgetItem(title);
-        title_item->setData(Qt::UserRole, obj["id"].toString().isEmpty()
-                                              ? obj["name"].toString()
-                                              : obj["id"].toString());
+        title_item->setData(Qt::UserRole,
+                            obj["id"].toString().isEmpty() ? obj["name"].toString() : obj["id"].toString());
         datasets_table_->setItem(i, 0, title_item);
 
         int num_res = obj["num_resources"].toInt(0);
@@ -316,25 +305,28 @@ void GovDataProviderPanel::populate_datasets(const QJsonArray& data, int total_c
         datasets_table_->setItem(i, 1, res_item);
 
         QString modified = obj["metadata_modified"].toString();
-        if (modified.length() > 10) modified = modified.left(10);
+        if (modified.length() > 10)
+            modified = modified.left(10);
         datasets_table_->setItem(i, 2, new QTableWidgetItem(modified));
 
         // Tags
         QStringList tags;
         const auto tags_arr = obj["tags"].toArray();
         for (const auto& t : tags_arr) {
-            if (t.isString()) tags << t.toString();
-            else if (t.isObject()) tags << t.toObject()["name"].toString();
+            if (t.isString())
+                tags << t.toString();
+            else if (t.isObject())
+                tags << t.toObject()["name"].toString();
         }
         QString tags_str = tags.mid(0, 3).join(", ");
-        if (tags.size() > 3) tags_str += QString(" +%1").arg(tags.size() - 3);
+        if (tags.size() > 3)
+            tags_str += QString(" +%1").arg(tags.size() - 3);
         datasets_table_->setItem(i, 3, new QTableWidgetItem(tags_str));
     }
 
     // Update status
     if (status_label_) {
-        status_label_->setText(QString("Showing %1 of %2 datasets")
-                                   .arg(data.size()).arg(total_count));
+        status_label_->setText(QString("Showing %1 of %2 datasets").arg(data.size()).arg(total_count));
     }
 }
 
@@ -345,7 +337,8 @@ void GovDataProviderPanel::populate_resources(const QJsonArray& data) {
     for (int i = 0; i < data.size(); ++i) {
         const auto obj = data[i].toObject();
         QString name = obj["name"].toString();
-        if (name.isEmpty()) name = obj["id"].toString();
+        if (name.isEmpty())
+            name = obj["id"].toString();
         resources_table_->setItem(i, 0, new QTableWidgetItem(name));
 
         QString format = obj["format"].toString().toUpper();
@@ -357,39 +350,45 @@ void GovDataProviderPanel::populate_resources(const QJsonArray& data) {
         double size_bytes = obj["size"].toDouble(0);
         QString size_str = "-";
         if (size_bytes > 0) {
-            if (size_bytes < 1024) size_str = QString::number(size_bytes, 'f', 0) + " B";
+            if (size_bytes < 1024)
+                size_str = QString::number(size_bytes, 'f', 0) + " B";
             else if (size_bytes < 1024 * 1024)
                 size_str = QString::number(size_bytes / 1024, 'f', 1) + " KB";
-            else size_str = QString::number(size_bytes / (1024 * 1024), 'f', 1) + " MB";
+            else
+                size_str = QString::number(size_bytes / (1024 * 1024), 'f', 1) + " MB";
         }
         resources_table_->setItem(i, 2, new QTableWidgetItem(size_str));
 
         QString modified = obj["last_modified"].toString();
-        if (modified.length() > 10) modified = modified.left(10);
+        if (modified.length() > 10)
+            modified = modified.left(10);
         resources_table_->setItem(i, 3, new QTableWidgetItem(modified));
 
         // URL link
         QString url = obj["url"].toString();
         auto* url_item = new QTableWidgetItem(url.isEmpty() ? "-" : "OPEN");
         url_item->setData(Qt::UserRole, url);
-        if (!url.isEmpty()) url_item->setForeground(QColor(color_));
+        if (!url.isEmpty())
+            url_item->setForeground(QColor(color_));
         url_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 4, url_item);
     }
 
     // Enable URL click
-    connect(resources_table_, &QTableWidget::cellClicked, this,
-            [this](int row, int col) {
-                if (col == 4) {
-                    auto* item = resources_table_->item(row, 4);
-                    if (!item) return;
-                    QString url = item->data(Qt::UserRole).toString();
-                    if (!url.isEmpty()) {
-                        QDesktopServices::openUrl(QUrl(url));
-                    }
+    connect(
+        resources_table_, &QTableWidget::cellClicked, this,
+        [this](int row, int col) {
+            if (col == 4) {
+                auto* item = resources_table_->item(row, 4);
+                if (!item)
+                    return;
+                QString url = item->data(Qt::UserRole).toString();
+                if (!url.isEmpty()) {
+                    QDesktopServices::openUrl(QUrl(url));
                 }
-            },
-            Qt::UniqueConnection);
+            }
+        },
+        Qt::UniqueConnection);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -420,31 +419,32 @@ void GovDataProviderPanel::on_view_changed(int index) {
 
 void GovDataProviderPanel::on_org_clicked(int row) {
     auto* item = orgs_table_->item(row, 0);
-    if (!item) return;
+    if (!item)
+        return;
     selected_org_ = item->data(Qt::UserRole).toString();
 
     show_loading("Loading datasets...");
-    services::GovDataService::instance().execute(
-        script_, "datasets", {selected_org_, "100"}, "gov_datasets_" + script_);
+    services::GovDataService::instance().execute(script_, "datasets", {selected_org_, "100"},
+                                                 "gov_datasets_" + script_);
 }
 
 void GovDataProviderPanel::on_dataset_clicked(int row) {
     auto* item = datasets_table_->item(row, 0);
-    if (!item) return;
+    if (!item)
+        return;
     selected_dataset_ = item->data(Qt::UserRole).toString();
 
     show_loading("Loading resources...");
-    services::GovDataService::instance().execute(
-        script_, "resources", {selected_dataset_}, "gov_resources_" + script_);
+    services::GovDataService::instance().execute(script_, "resources", {selected_dataset_}, "gov_resources_" + script_);
 }
 
 void GovDataProviderPanel::on_search() {
     QString query = search_input_->text().trimmed();
-    if (query.isEmpty()) return;
+    if (query.isEmpty())
+        return;
 
     show_loading("Searching...");
-    services::GovDataService::instance().execute(
-        script_, "search", {query, "50"}, "gov_search_" + script_);
+    services::GovDataService::instance().execute(script_, "search", {query, "50"}, "gov_search_" + script_);
 }
 
 void GovDataProviderPanel::on_back() {
@@ -470,24 +470,21 @@ void GovDataProviderPanel::update_toolbar_state() {
 void GovDataProviderPanel::show_loading(const QString& message) {
     status_label_->setText(message);
     status_label_->setStyleSheet(
-        QString("QLabel { color:%1; font-family:%2; font-size:13px; }")
-            .arg(color_, fonts::DATA_FAMILY));
+        QString("QLabel { color:%1; font-family:%2; font-size:13px; }").arg(color_, fonts::DATA_FAMILY));
     content_stack_->setCurrentIndex(3);
 }
 
 void GovDataProviderPanel::show_error(const QString& message) {
     status_label_->setText("Error: " + message);
     status_label_->setStyleSheet(
-        QString("QLabel { color:%1; font-family:%2; font-size:12px; }")
-            .arg(colors::RED, fonts::DATA_FAMILY));
+        QString("QLabel { color:%1; font-family:%2; font-size:12px; }").arg(colors::RED, fonts::DATA_FAMILY));
     content_stack_->setCurrentIndex(3);
 }
 
 void GovDataProviderPanel::show_empty(const QString& message) {
     status_label_->setText(message);
-    status_label_->setStyleSheet(
-        QString("QLabel { color:%1; font-family:%2; font-size:12px; }")
-            .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(QString("QLabel { color:%1; font-family:%2; font-size:12px; }")
+                                     .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
     content_stack_->setCurrentIndex(3);
 }
 
@@ -502,8 +499,7 @@ void GovDataProviderPanel::on_export_csv() {
     if (current_view_ == Orgs && orgs_table_->rowCount() > 0) {
         table = orgs_table_;
         default_name = "gov_" + org_label_.toLower() + ".csv";
-    } else if ((current_view_ == Datasets || current_view_ == Search)
-               && datasets_table_->rowCount() > 0) {
+    } else if ((current_view_ == Datasets || current_view_ == Search) && datasets_table_->rowCount() > 0) {
         table = datasets_table_;
         default_name = "gov_datasets.csv";
     } else if (current_view_ == Resources && resources_table_->rowCount() > 0) {
@@ -511,14 +507,16 @@ void GovDataProviderPanel::on_export_csv() {
         default_name = "gov_resources.csv";
     }
 
-    if (!table) return;
+    if (!table)
+        return;
 
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", default_name,
-                                                 "CSV Files (*.csv)");
-    if (path.isEmpty()) return;
+    QString path = QFileDialog::getSaveFileName(this, "Export CSV", default_name, "CSV Files (*.csv)");
+    if (path.isEmpty())
+        return;
 
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return;
 
     QTextStream out(&file);
     // Header

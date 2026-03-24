@@ -21,9 +21,9 @@ struct RiskCheckResult {
 /// Comprehensive risk limits configuration.
 struct RiskLimits {
     // Position limits
-    double max_position_size = 1000;        // max shares per position
-    double max_position_value = 50000;      // max $ value per position
-    double max_portfolio_exposure = 0.25;   // max % of portfolio
+    double max_position_size = 1000;      // max shares per position
+    double max_position_value = 50000;    // max $ value per position
+    double max_portfolio_exposure = 0.25; // max % of portfolio
     int max_total_positions = 20;
 
     // Order limits
@@ -34,7 +34,7 @@ struct RiskLimits {
     // Loss limits
     double daily_loss_limit = 5000;
     double weekly_loss_limit = 15000;
-    double per_position_stop_loss = 0.05;   // 5%
+    double per_position_stop_loss = 0.05; // 5%
 
     // Asset restrictions
     QStringList allowed_asset_classes = {"equity", "etf", "crypto"};
@@ -63,13 +63,11 @@ class RiskManager : public QObject {
     static RiskManager& instance();
 
     /// Validate an order against all risk limits.
-    QVector<RiskCheckResult> validate_order(const QString& symbol, const QString& side,
-                                            double quantity, double price,
+    QVector<RiskCheckResult> validate_order(const QString& symbol, const QString& side, double quantity, double price,
                                             bool paper_trading = true) const;
 
     /// Check if all validations pass.
-    bool is_order_allowed(const QString& symbol, const QString& side,
-                          double quantity, double price,
+    bool is_order_allowed(const QString& symbol, const QString& side, double quantity, double price,
                           bool paper_trading = true) const;
 
     /// Get/set risk limits.

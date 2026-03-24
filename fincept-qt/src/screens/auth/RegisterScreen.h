@@ -7,7 +7,7 @@
 
 namespace fincept::screens {
 
-/// Registration screen — name, email, phone, password, OTP verification.
+/// Registration screen — Obsidian design, compact form + OTP verification.
 class RegisterScreen : public QWidget {
     Q_OBJECT
   public:
@@ -16,10 +16,12 @@ class RegisterScreen : public QWidget {
   signals:
     void navigate_login();
 
+  protected:
+    void paintEvent(QPaintEvent* event) override;
+
   private:
     QStackedWidget* pages_ = nullptr;
 
-    // Form fields
     QLineEdit* first_name_ = nullptr;
     QLineEdit* last_name_ = nullptr;
     QLineEdit* email_ = nullptr;
@@ -29,14 +31,12 @@ class RegisterScreen : public QWidget {
     QPushButton* register_btn_ = nullptr;
     QLabel* error_label_ = nullptr;
 
-    // Password strength labels
     QLabel* pw_len_ = nullptr;
     QLabel* pw_up_ = nullptr;
     QLabel* pw_low_ = nullptr;
     QLabel* pw_num_ = nullptr;
     QLabel* pw_spec_ = nullptr;
 
-    // OTP page
     QLineEdit* otp_input_ = nullptr;
     QPushButton* verify_btn_ = nullptr;
     QLabel* otp_error_ = nullptr;

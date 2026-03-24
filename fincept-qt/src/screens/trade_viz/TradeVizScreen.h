@@ -33,11 +33,11 @@ class TradeVizScreen : public QWidget {
 
     // ── Widgets ──────────────────────────────────────────────────────────────
     QTableWidget* partner_table_ = nullptr;
-    QLabel*       clock_label_   = nullptr;
-    QComboBox*    country_combo_ = nullptr;
-    QComboBox*    order_combo_   = nullptr;
-    QComboBox*    period_combo_  = nullptr;
-    QComboBox*    year_combo_    = nullptr;
+    QLabel* clock_label_ = nullptr;
+    QComboBox* country_combo_ = nullptr;
+    QComboBox* order_combo_ = nullptr;
+    QComboBox* period_combo_ = nullptr;
+    QComboBox* year_combo_ = nullptr;
 
     // ── Timers ───────────────────────────────────────────────────────────────
     QTimer* clock_timer_ = nullptr;

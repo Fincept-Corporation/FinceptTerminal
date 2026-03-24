@@ -22,16 +22,16 @@ class PortfolioStatusBar : public QWidget {
   private:
     void update_clock();
 
-    QLabel* brand_label_    = nullptr;
+    QLabel* brand_label_ = nullptr;
     QLabel* portfolio_label_ = nullptr;
-    QLabel* live_label_     = nullptr;
+    QLabel* live_label_ = nullptr;
     QLabel* positions_label_ = nullptr;
-    QLabel* nav_label_      = nullptr;
-    QLabel* pnl_label_      = nullptr;
-    QLabel* time_label_     = nullptr;
-    QLabel* tz_label_       = nullptr;
+    QLabel* nav_label_ = nullptr;
+    QLabel* pnl_label_ = nullptr;
+    QLabel* time_label_ = nullptr;
+    QLabel* tz_label_ = nullptr;
 
-    QTimer* clock_timer_    = nullptr;
+    QTimer* clock_timer_ = nullptr;
 };
 
 } // namespace fincept::screens

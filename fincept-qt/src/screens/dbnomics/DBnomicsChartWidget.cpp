@@ -146,8 +146,7 @@ void DBnomicsChartWidget::clear() {
     chart->setTitle("NO DATA — SELECT A SERIES FROM THE LEFT PANEL");
 }
 
-void DBnomicsChartWidget::set_data(const QVector<services::DbnDataPoint>& series,
-                                   services::DbnChartType chart_type) {
+void DBnomicsChartWidget::set_data(const QVector<services::DbnDataPoint>& series, services::DbnChartType chart_type) {
     clear();
     chart_view_->chart()->setTitle({});
     if (series.isEmpty())
@@ -208,8 +207,7 @@ void DBnomicsChartWidget::resizeEvent(QResizeEvent* event) {
 }
 
 // ── render_line_area ─────────────────────────────────────────────────────────
-void DBnomicsChartWidget::render_line_area(const QVector<services::DbnDataPoint>& series,
-                                           services::DbnChartType type) {
+void DBnomicsChartWidget::render_line_area(const QVector<services::DbnDataPoint>& series, services::DbnChartType type) {
     QChart* chart = chart_view_->chart();
     double y_min = std::numeric_limits<double>::max();
     double y_max = -std::numeric_limits<double>::max();

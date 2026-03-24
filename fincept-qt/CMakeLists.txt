@@ -78,9 +78,8 @@ set(CORE_SOURCES
 set(NETWORK_SOURCES
     src/network/http/HttpClient.cpp
 )
-if(HAS_WEBSOCKETS)
-    list(APPEND NETWORK_SOURCES src/network/websocket/WebSocketClient.cpp)
-endif()
+# WebSocketClient is always compiled; it stubs out when HAS_QT_WEBSOCKETS is not defined
+list(APPEND NETWORK_SOURCES src/network/websocket/WebSocketClient.cpp)
 
 # Auth
 set(AUTH_SOURCES
@@ -227,6 +226,7 @@ set(SERVICE_SOURCES
     src/services/workflow/ParameterProcessor.cpp
     src/services/workflow/adapters/ServiceBridges.cpp
     src/services/polymarket/PolymarketService.cpp
+    src/services/polymarket/PolymarketWebSocket.cpp
 )
 
 # UI framework
@@ -415,6 +415,15 @@ set(SCREEN_SOURCES
 
     # Polymarket
     src/screens/polymarket/PolymarketScreen.cpp
+    src/screens/polymarket/PolymarketCommandBar.cpp
+    src/screens/polymarket/PolymarketMarketCard.cpp
+    src/screens/polymarket/PolymarketBrowsePanel.cpp
+    src/screens/polymarket/PolymarketDetailPanel.cpp
+    src/screens/polymarket/PolymarketOrderBook.cpp
+    src/screens/polymarket/PolymarketPriceChart.cpp
+    src/screens/polymarket/PolymarketLeaderboard.cpp
+    src/screens/polymarket/PolymarketActivityFeed.cpp
+    src/screens/polymarket/PolymarketStatusBar.cpp
 
     # Alpha Arena
     src/screens/alpha_arena/AlphaArenaScreen.cpp
@@ -659,7 +668,16 @@ set_source_files_properties(
     src/screens/notes/NotesScreen.cpp
     src/screens/payment/PaymentProcessingScreen.cpp
     src/screens/payment/PaymentSuccessScreen.cpp
+    src/screens/polymarket/PolymarketActivityFeed.cpp
+    src/screens/polymarket/PolymarketBrowsePanel.cpp
+    src/screens/polymarket/PolymarketCommandBar.cpp
+    src/screens/polymarket/PolymarketDetailPanel.cpp
+    src/screens/polymarket/PolymarketLeaderboard.cpp
+    src/screens/polymarket/PolymarketMarketCard.cpp
+    src/screens/polymarket/PolymarketOrderBook.cpp
+    src/screens/polymarket/PolymarketPriceChart.cpp
     src/screens/polymarket/PolymarketScreen.cpp
+    src/screens/polymarket/PolymarketStatusBar.cpp
     src/screens/portfolio/PortfolioAgentPanel.cpp
     src/screens/portfolio/PortfolioAiPanel.cpp
     src/screens/portfolio/PortfolioBlotter.cpp

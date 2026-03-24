@@ -19,9 +19,8 @@ class EquityOrderBook : public QWidget {
   public:
     explicit EquityOrderBook(QWidget* parent = nullptr);
 
-    void set_data(const QVector<QPair<double, double>>& bids,
-                  const QVector<QPair<double, double>>& asks,
-                  double spread, double spread_pct);
+    void set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks, double spread,
+                  double spread_pct);
 
   signals:
     void price_clicked(double price);

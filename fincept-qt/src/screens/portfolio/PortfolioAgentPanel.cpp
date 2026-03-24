@@ -1,5 +1,6 @@
 // src/screens/portfolio/PortfolioAgentPanel.cpp
 #include "screens/portfolio/PortfolioAgentPanel.h"
+
 #include "ai_chat/LlmService.h"
 #include "core/logging/Logger.h"
 #include "storage/repositories/AgentConfigRepository.h"
@@ -22,9 +23,7 @@ PortfolioAgentPanel::PortfolioAgentPanel(QWidget* parent) : QWidget(parent) {
 }
 
 void PortfolioAgentPanel::build_ui() {
-    setStyleSheet(QString(
-        "background:%1; border:1px solid #00D4AA;")
-        .arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1; border:1px solid #00D4AA;").arg(ui::colors::BG_BASE));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -56,9 +55,8 @@ void PortfolioAgentPanel::build_ui() {
     close_btn_ = new QPushButton("\u2715");
     close_btn_->setFixedSize(18, 18);
     close_btn_->setCursor(Qt::PointingHandCursor);
-    close_btn_->setStyleSheet(
-        "QPushButton { background:none; border:none; color:#787878; font-size:11px; }"
-        "QPushButton:hover { color:#e5e5e5; }");
+    close_btn_->setStyleSheet("QPushButton { background:none; border:none; color:#787878; font-size:11px; }"
+                              "QPushButton:hover { color:#e5e5e5; }");
     connect(close_btn_, &QPushButton::clicked, this, [this]() {
         hide();
         emit close_requested();
@@ -69,8 +67,7 @@ void PortfolioAgentPanel::build_ui() {
 
     // ── Agent selector ───────────────────────────────────────────────────────
     auto* selector = new QWidget;
-    selector->setStyleSheet(QString("background:%1; border-bottom:1px solid #1A1A1A;")
-                            .arg(ui::colors::BG_SURFACE));
+    selector->setStyleSheet(QString("background:%1; border-bottom:1px solid #1A1A1A;").arg(ui::colors::BG_SURFACE));
     auto* sel_layout = new QVBoxLayout(selector);
     sel_layout->setContentsMargins(12, 8, 12, 8);
     sel_layout->setSpacing(4);
@@ -81,12 +78,11 @@ void PortfolioAgentPanel::build_ui() {
 
     agent_cb_ = new QComboBox;
     agent_cb_->setFixedHeight(26);
-    agent_cb_->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid #2A2A2A;"
-        "  padding:0 8px; font-size:10px; }"
-        "QComboBox::drop-down { border:none; }"
-        "QComboBox QAbstractItemView { background:%1; color:%2; }")
-        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY));
+    agent_cb_->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid #2A2A2A;"
+                                     "  padding:0 8px; font-size:10px; }"
+                                     "QComboBox::drop-down { border:none; }"
+                                     "QComboBox QAbstractItemView { background:%1; color:%2; }")
+                                 .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY));
     connect(agent_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
         QString id = agent_cb_->currentData().toString();
         if (result_cache_.contains(id))
@@ -100,12 +96,11 @@ void PortfolioAgentPanel::build_ui() {
     run_btn_ = new QPushButton("\U0001F916 RUN AGENT ON PORTFOLIO");
     run_btn_->setFixedHeight(26);
     run_btn_->setCursor(Qt::PointingHandCursor);
-    run_btn_->setStyleSheet(
-        "QPushButton { background:rgba(0,212,170,0.13); color:#00D4AA;"
-        "  border:1px solid rgba(0,212,170,0.27); font-size:9px; font-weight:700;"
-        "  letter-spacing:0.5px; margin-top:6px; }"
-        "QPushButton:hover { background:rgba(0,212,170,0.22); }"
-        "QPushButton:disabled { color:#555; }");
+    run_btn_->setStyleSheet("QPushButton { background:rgba(0,212,170,0.13); color:#00D4AA;"
+                            "  border:1px solid rgba(0,212,170,0.27); font-size:9px; font-weight:700;"
+                            "  letter-spacing:0.5px; margin-top:6px; }"
+                            "QPushButton:hover { background:rgba(0,212,170,0.22); }"
+                            "QPushButton:disabled { color:#555; }");
     connect(run_btn_, &QPushButton::clicked, this, [this]() { run_agent(true); });
     sel_layout->addWidget(run_btn_);
 
@@ -114,10 +109,9 @@ void PortfolioAgentPanel::build_ui() {
     // ── Content ──────────────────────────────────────────────────────────────
     content_ = new QTextBrowser;
     content_->setOpenExternalLinks(true);
-    content_->setStyleSheet(QString(
-        "QTextBrowser { background:%1; color:%2; border:none; padding:12px;"
-        "  font-size:11px; line-height:1.6; }")
-        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY));
+    content_->setStyleSheet(QString("QTextBrowser { background:%1; color:%2; border:none; padding:12px;"
+                                    "  font-size:11px; line-height:1.6; }")
+                                .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY));
     content_->setPlaceholderText("Select an agent above and click Run.");
     layout->addWidget(content_, 1);
 }
@@ -154,10 +148,12 @@ void PortfolioAgentPanel::reload_agents() {
 }
 
 void PortfolioAgentPanel::run_agent(bool force) {
-    if (running_ || summary_.holdings.isEmpty()) return;
+    if (running_ || summary_.holdings.isEmpty())
+        return;
 
     QString agent_id = agent_cb_->currentData().toString();
-    if (agent_id.isEmpty()) return;
+    if (agent_id.isEmpty())
+        return;
 
     if (!force && result_cache_.contains(agent_id)) {
         content_->setHtml(result_cache_[agent_id]);
@@ -178,7 +174,8 @@ void PortfolioAgentPanel::run_agent(bool force) {
     }
 
     auto agent_cfg = agent_r.value();
-    QString instructions = "You are a professional portfolio analyst. Analyze the provided portfolio data and give actionable insights.";
+    QString instructions =
+        "You are a professional portfolio analyst. Analyze the provided portfolio data and give actionable insights.";
 
     // Parse config JSON for custom instructions
     auto cfg_doc = QJsonDocument::fromJson(agent_cfg.config_json.toUtf8());
@@ -196,19 +193,19 @@ void PortfolioAgentPanel::run_agent(bool force) {
     // Build portfolio context
     QStringList lines;
     lines << QString("Portfolio: %1 | NAV: %2 %3")
-        .arg(summary_.portfolio.name, summary_.portfolio.currency)
-        .arg(QString::number(summary_.total_market_value, 'f', 2));
+                 .arg(summary_.portfolio.name, summary_.portfolio.currency)
+                 .arg(QString::number(summary_.total_market_value, 'f', 2));
     lines << QString("Total P&L: %1% | Positions: %2")
-        .arg(QString::number(summary_.total_unrealized_pnl_percent, 'f', 2))
-        .arg(summary_.total_positions);
+                 .arg(QString::number(summary_.total_unrealized_pnl_percent, 'f', 2))
+                 .arg(summary_.total_positions);
 
     for (const auto& h : summary_.holdings) {
         lines << QString("%1: %2 units @ %3 | P&L: %4% | Weight: %5%")
-            .arg(h.symbol)
-            .arg(QString::number(h.quantity, 'f', 2))
-            .arg(QString::number(h.current_price, 'f', 2))
-            .arg(QString::number(h.unrealized_pnl_percent, 'f', 2))
-            .arg(QString::number(h.weight, 'f', 1));
+                     .arg(h.symbol)
+                     .arg(QString::number(h.quantity, 'f', 2))
+                     .arg(QString::number(h.current_price, 'f', 2))
+                     .arg(QString::number(h.unrealized_pnl_percent, 'f', 2))
+                     .arg(QString::number(h.weight, 'f', 1));
     }
     lines << "" << instructions;
 
@@ -218,30 +215,35 @@ void PortfolioAgentPanel::run_agent(bool force) {
     QtConcurrent::run([self, prompt, agent_id]() {
         auto response = ai_chat::LlmService::instance().chat(prompt, {});
 
-        if (!self) return;
-        QMetaObject::invokeMethod(self, [self, response, agent_id]() {
-            if (!self) return;
-            self->running_ = false;
-            self->run_btn_->setEnabled(true);
-            self->status_lbl_->clear();
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, response, agent_id]() {
+                if (!self)
+                    return;
+                self->running_ = false;
+                self->run_btn_->setEnabled(true);
+                self->status_lbl_->clear();
 
-            if (response.success) {
-                QString html = response.content;
-                html.replace("&", "&amp;");
-                html.replace("<", "&lt;");
-                html.replace(">", "&gt;");
-                html.replace("\n", "<br>");
-                static const QRegularExpression bold_re("\\*\\*(.+?)\\*\\*");
-                html.replace(bold_re, "<b>\\1</b>");
-                html = QString("<div style='font-size:11px; line-height:1.6; color:#e5e5e5;'>%1</div>").arg(html);
+                if (response.success) {
+                    QString html = response.content;
+                    html.replace("&", "&amp;");
+                    html.replace("<", "&lt;");
+                    html.replace(">", "&gt;");
+                    html.replace("\n", "<br>");
+                    static const QRegularExpression bold_re("\\*\\*(.+?)\\*\\*");
+                    html.replace(bold_re, "<b>\\1</b>");
+                    html = QString("<div style='font-size:11px; line-height:1.6; color:#e5e5e5;'>%1</div>").arg(html);
 
-                self->result_cache_[agent_id] = html;
-                self->content_->setHtml(html);
-                self->run_btn_->setText("\U0001F916 RE-RUN AGENT");
-            } else {
-                self->content_->setPlainText("Agent run failed: " + response.error);
-            }
-        }, Qt::QueuedConnection);
+                    self->result_cache_[agent_id] = html;
+                    self->content_->setHtml(html);
+                    self->run_btn_->setText("\U0001F916 RE-RUN AGENT");
+                } else {
+                    self->content_->setPlainText("Agent run failed: " + response.error);
+                }
+            },
+            Qt::QueuedConnection);
     });
 }
 

@@ -61,8 +61,8 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
     vl->setSpacing(12);
 
     auto* title = new QLabel("CHOOSE TEMPLATE");
-    title->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 1px;")
-                             .arg(ui::colors::AMBER));
+    title->setStyleSheet(
+        QString("color: %1; font-size: 11px; font-weight: bold; letter-spacing: 1px;").arg(ui::colors::AMBER));
     vl->addWidget(title);
 
     auto* sub = new QLabel("Select a template to reset your dashboard. Current layout will be replaced.");
@@ -91,9 +91,8 @@ TemplatePicker::TemplatePicker(QWidget* parent) : QDialog(parent) {
         cl->addWidget(preview, 0, Qt::AlignHCenter);
 
         auto* name_lbl = new QLabel(tmpl.display_name);
-        name_lbl->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                .arg(ui::colors::TEXT_PRIMARY));
+        name_lbl->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+                                    .arg(ui::colors::TEXT_PRIMARY));
         cl->addWidget(name_lbl);
 
         auto* desc_lbl = new QLabel(tmpl.description);

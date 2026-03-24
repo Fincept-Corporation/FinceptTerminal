@@ -1,12 +1,13 @@
 // src/screens/portfolio/PortfolioScreen.cpp
 #include "screens/portfolio/PortfolioScreen.h"
-#include "screens/portfolio/PortfolioBlotter.h"
-#include "screens/portfolio/PortfolioCommandBar.h"
+
 #include "screens/portfolio/PortfolioAgentPanel.h"
 #include "screens/portfolio/PortfolioAiPanel.h"
+#include "screens/portfolio/PortfolioBlotter.h"
+#include "screens/portfolio/PortfolioCommandBar.h"
 #include "screens/portfolio/PortfolioDetailWrapper.h"
-#include "screens/portfolio/PortfolioFFNView.h"
 #include "screens/portfolio/PortfolioDialogs.h"
+#include "screens/portfolio/PortfolioFFNView.h"
 #include "screens/portfolio/PortfolioHeatmap.h"
 #include "screens/portfolio/PortfolioOrderPanel.h"
 #include "screens/portfolio/PortfolioPerfChart.h"
@@ -31,22 +32,14 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
 
     // Connect to PortfolioService signals
     auto& svc = services::PortfolioService::instance();
-    connect(&svc, &services::PortfolioService::portfolios_loaded,
-            this, &PortfolioScreen::on_portfolios_loaded);
-    connect(&svc, &services::PortfolioService::summary_loaded,
-            this, &PortfolioScreen::on_summary_loaded);
-    connect(&svc, &services::PortfolioService::summary_error,
-            this, &PortfolioScreen::on_summary_error);
-    connect(&svc, &services::PortfolioService::metrics_computed,
-            this, &PortfolioScreen::on_metrics_computed);
-    connect(&svc, &services::PortfolioService::portfolio_created,
-            this, &PortfolioScreen::on_portfolio_created);
-    connect(&svc, &services::PortfolioService::portfolio_deleted,
-            this, &PortfolioScreen::on_portfolio_deleted);
-    connect(&svc, &services::PortfolioService::asset_added,
-            this, &PortfolioScreen::on_asset_changed);
-    connect(&svc, &services::PortfolioService::asset_sold,
-            this, &PortfolioScreen::on_asset_changed);
+    connect(&svc, &services::PortfolioService::portfolios_loaded, this, &PortfolioScreen::on_portfolios_loaded);
+    connect(&svc, &services::PortfolioService::summary_loaded, this, &PortfolioScreen::on_summary_loaded);
+    connect(&svc, &services::PortfolioService::summary_error, this, &PortfolioScreen::on_summary_error);
+    connect(&svc, &services::PortfolioService::metrics_computed, this, &PortfolioScreen::on_metrics_computed);
+    connect(&svc, &services::PortfolioService::portfolio_created, this, &PortfolioScreen::on_portfolio_created);
+    connect(&svc, &services::PortfolioService::portfolio_deleted, this, &PortfolioScreen::on_portfolio_deleted);
+    connect(&svc, &services::PortfolioService::asset_added, this, &PortfolioScreen::on_asset_changed);
+    connect(&svc, &services::PortfolioService::asset_sold, this, &PortfolioScreen::on_asset_changed);
 
     // Refresh timer (P3: only set interval, don't start)
     refresh_timer_ = new QTimer(this);
@@ -69,22 +62,15 @@ void PortfolioScreen::build_ui() {
     command_bar_ = new PortfolioCommandBar(this);
     layout->addWidget(command_bar_);
 
-    connect(command_bar_, &PortfolioCommandBar::portfolio_selected,
-            this, &PortfolioScreen::on_portfolio_selected);
-    connect(command_bar_, &PortfolioCommandBar::create_requested,
-            this, &PortfolioScreen::on_create_requested);
-    connect(command_bar_, &PortfolioCommandBar::delete_requested,
-            this, &PortfolioScreen::on_delete_requested);
-    connect(command_bar_, &PortfolioCommandBar::refresh_requested,
-            this, &PortfolioScreen::request_refresh);
-    connect(command_bar_, &PortfolioCommandBar::refresh_interval_changed,
-            this, &PortfolioScreen::on_refresh_interval_changed);
-    connect(command_bar_, &PortfolioCommandBar::detail_view_selected,
-            this, &PortfolioScreen::on_detail_view_selected);
-    connect(command_bar_, &PortfolioCommandBar::buy_requested,
-            this, &PortfolioScreen::on_buy_requested);
-    connect(command_bar_, &PortfolioCommandBar::sell_requested,
-            this, &PortfolioScreen::on_sell_requested);
+    connect(command_bar_, &PortfolioCommandBar::portfolio_selected, this, &PortfolioScreen::on_portfolio_selected);
+    connect(command_bar_, &PortfolioCommandBar::create_requested, this, &PortfolioScreen::on_create_requested);
+    connect(command_bar_, &PortfolioCommandBar::delete_requested, this, &PortfolioScreen::on_delete_requested);
+    connect(command_bar_, &PortfolioCommandBar::refresh_requested, this, &PortfolioScreen::request_refresh);
+    connect(command_bar_, &PortfolioCommandBar::refresh_interval_changed, this,
+            &PortfolioScreen::on_refresh_interval_changed);
+    connect(command_bar_, &PortfolioCommandBar::detail_view_selected, this, &PortfolioScreen::on_detail_view_selected);
+    connect(command_bar_, &PortfolioCommandBar::buy_requested, this, &PortfolioScreen::on_buy_requested);
+    connect(command_bar_, &PortfolioCommandBar::sell_requested, this, &PortfolioScreen::on_sell_requested);
     connect(command_bar_, &PortfolioCommandBar::ffn_toggled, this, [this]() {
         show_ffn_ = !show_ffn_;
         if (show_ffn_) {
@@ -103,7 +89,7 @@ void PortfolioScreen::build_ui() {
     content_stack_ = new QStackedWidget(this);
     layout->addWidget(content_stack_, 1);
 
-    empty_state_   = build_empty_state();
+    empty_state_ = build_empty_state();
     loading_state_ = build_loading_state();
 
     // Main view: heatmap (left) + center (chart/sector/blotter) + order panel (right)
@@ -125,10 +111,10 @@ void PortfolioScreen::build_ui() {
     });
 
     content_stack_->addWidget(empty_state_);    // index 0
-    content_stack_->addWidget(loading_state_);   // index 1
-    content_stack_->addWidget(main_view_);       // index 2
-    content_stack_->addWidget(detail_wrapper_);  // index 3
-    content_stack_->addWidget(ffn_view_);        // index 4
+    content_stack_->addWidget(loading_state_);  // index 1
+    content_stack_->addWidget(main_view_);      // index 2
+    content_stack_->addWidget(detail_wrapper_); // index 3
+    content_stack_->addWidget(ffn_view_);       // index 4
 
     content_stack_->setCurrentIndex(0);
 
@@ -142,35 +128,36 @@ void PortfolioScreen::build_ui() {
 
     // Wire export/import/AI/Agent signals from CommandBar
     connect(command_bar_, &PortfolioCommandBar::export_csv_requested, this, [this]() {
-        if (selected_id_.isEmpty()) return;
-        QString path = QFileDialog::getSaveFileName(this, "Export CSV", "portfolio.csv",
-                                                     "CSV Files (*.csv)");
+        if (selected_id_.isEmpty())
+            return;
+        QString path = QFileDialog::getSaveFileName(this, "Export CSV", "portfolio.csv", "CSV Files (*.csv)");
         if (!path.isEmpty())
             services::PortfolioService::instance().export_csv(selected_id_, path);
     });
     connect(command_bar_, &PortfolioCommandBar::export_json_requested, this, [this]() {
-        if (selected_id_.isEmpty()) return;
-        QString path = QFileDialog::getSaveFileName(this, "Export JSON", "portfolio.json",
-                                                     "JSON Files (*.json)");
+        if (selected_id_.isEmpty())
+            return;
+        QString path = QFileDialog::getSaveFileName(this, "Export JSON", "portfolio.json", "JSON Files (*.json)");
         if (!path.isEmpty())
             services::PortfolioService::instance().export_json(selected_id_, path);
     });
     connect(command_bar_, &PortfolioCommandBar::import_requested, this, [this]() {
         ImportPortfolioDialog dlg(portfolios_, this);
         if (dlg.exec() == QDialog::Accepted) {
-            services::PortfolioService::instance().import_json(
-                dlg.file_path(), dlg.mode(), dlg.merge_target_id());
+            services::PortfolioService::instance().import_json(dlg.file_path(), dlg.mode(), dlg.merge_target_id());
         }
     });
     connect(command_bar_, &PortfolioCommandBar::ai_analyze_requested, this, [this]() {
-        if (!summary_loaded_) return;
+        if (!summary_loaded_)
+            return;
         ai_panel_->set_summary(current_summary_);
         ai_panel_->move(width() - 492, 42);
         ai_panel_->setFixedHeight(height() - 100);
         ai_panel_->show_panel();
     });
     connect(command_bar_, &PortfolioCommandBar::agent_run_requested, this, [this]() {
-        if (!summary_loaded_) return;
+        if (!summary_loaded_)
+            return;
         agent_panel_->set_summary(current_summary_);
         agent_panel_->move(width() - 984, 42);
         agent_panel_->setFixedHeight(height() - 100);
@@ -178,12 +165,11 @@ void PortfolioScreen::build_ui() {
     });
 
     // Wire import completion
-    connect(&services::PortfolioService::instance(),
-            &services::PortfolioService::import_complete,
-            this, [this](portfolio::ImportResult result) {
-        if (!result.portfolio_id.isEmpty())
-            on_portfolio_selected(result.portfolio_id);
-    });
+    connect(&services::PortfolioService::instance(), &services::PortfolioService::import_complete, this,
+            [this](portfolio::ImportResult result) {
+                if (!result.portfolio_id.isEmpty())
+                    on_portfolio_selected(result.portfolio_id);
+            });
 }
 
 QWidget* PortfolioScreen::build_empty_state() {
@@ -200,8 +186,8 @@ QWidget* PortfolioScreen::build_empty_state() {
 
     auto* title = new QLabel("NO PORTFOLIO SELECTED");
     title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;")
-                         .arg(ui::colors::TEXT_SECONDARY));
+    title->setStyleSheet(
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
     layout->addWidget(title);
 
     auto* sub = new QLabel("Select a portfolio or create a new one");
@@ -217,38 +203,32 @@ QWidget* PortfolioScreen::build_empty_state() {
     auto* create_btn = new QPushButton("CREATE NEW");
     create_btn->setFixedSize(120, 32);
     create_btn->setCursor(Qt::PointingHandCursor);
-    create_btn->setStyleSheet(QString(
-        "QPushButton { background:%1; color:#000; border:none;"
-        "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
-        "QPushButton:hover { background:%2; }")
-        .arg(ui::colors::AMBER, ui::colors::WARNING));
+    create_btn->setStyleSheet(QString("QPushButton { background:%1; color:#000; border:none;"
+                                      "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                      "QPushButton:hover { background:%2; }")
+                                  .arg(ui::colors::AMBER, ui::colors::WARNING));
     connect(create_btn, &QPushButton::clicked, this, &PortfolioScreen::on_create_requested);
     btn_row->addWidget(create_btn);
 
     auto* import_btn = new QPushButton("IMPORT JSON");
     import_btn->setFixedSize(120, 32);
     import_btn->setCursor(Qt::PointingHandCursor);
-    import_btn->setStyleSheet(QString(
-        "QPushButton { background:transparent; color:%1; border:1px solid %2;"
-        "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
-        "QPushButton:hover { background:%3; color:%4; }")
-        .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED,
-             ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
-    connect(import_btn, &QPushButton::clicked,
-            command_bar_, &PortfolioCommandBar::import_requested);
+    import_btn->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                "QPushButton:hover { background:%3; color:%4; }")
+            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER, ui::colors::TEXT_PRIMARY));
+    connect(import_btn, &QPushButton::clicked, command_bar_, &PortfolioCommandBar::import_requested);
     btn_row->addWidget(import_btn);
 
     auto* demo_btn = new QPushButton("LOAD DEMO PORTFOLIO");
     demo_btn->setFixedSize(160, 32);
     demo_btn->setCursor(Qt::PointingHandCursor);
-    demo_btn->setStyleSheet(QString(
-        "QPushButton { background:transparent; color:%1; border:1px solid %1;"
-        "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
-        "QPushButton:hover { background:%1; color:#000; }")
-        .arg(ui::colors::CYAN));
-    connect(demo_btn, &QPushButton::clicked, this, [this]() {
-        load_demo_portfolio();
-    });
+    demo_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
+                                    "  font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                    "QPushButton:hover { background:%1; color:#000; }")
+                                .arg(ui::colors::CYAN));
+    connect(demo_btn, &QPushButton::clicked, this, [this]() { load_demo_portfolio(); });
     btn_row->addWidget(demo_btn);
 
     layout->addLayout(btn_row);
@@ -269,8 +249,8 @@ QWidget* PortfolioScreen::build_loading_state() {
 
     auto* text = new QLabel("Loading portfolio data...");
     text->setAlignment(Qt::AlignCenter);
-    text->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600; letter-spacing:0.5px;")
-                        .arg(ui::colors::TEXT_SECONDARY));
+    text->setStyleSheet(
+        QString("color:%1; font-size:11px; font-weight:600; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY));
     layout->addWidget(text);
     return w;
 }
@@ -391,7 +371,10 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
         double max_w = -1;
         QString top;
         for (const auto& h : summary.holdings) {
-            if (h.weight > max_w) { max_w = h.weight; top = h.symbol; }
+            if (h.weight > max_w) {
+                max_w = h.weight;
+                top = h.symbol;
+            }
         }
         on_symbol_selected(top);
     }
@@ -437,15 +420,17 @@ void PortfolioScreen::on_asset_changed(QString portfolio_id) {
 void PortfolioScreen::on_create_requested() {
     CreatePortfolioDialog dlg(this);
     if (dlg.exec() == QDialog::Accepted) {
-        services::PortfolioService::instance().create_portfolio(
-            dlg.name(), dlg.owner(), dlg.currency());
+        services::PortfolioService::instance().create_portfolio(dlg.name(), dlg.owner(), dlg.currency());
     }
 }
 
 void PortfolioScreen::on_delete_requested(const QString& id) {
     QString name;
     for (const auto& p : portfolios_) {
-        if (p.id == id) { name = p.name; break; }
+        if (p.id == id) {
+            name = p.name;
+            break;
+        }
     }
 
     ConfirmDeleteDialog dlg(name, this);
@@ -461,8 +446,7 @@ void PortfolioScreen::on_detail_view_selected(portfolio::DetailView view) {
     } else {
         active_detail_ = view;
         // Show the detail view with current data
-        detail_wrapper_->show_view(view, current_summary_,
-                                   current_summary_.portfolio.currency);
+        detail_wrapper_->show_view(view, current_summary_, current_summary_.portfolio.currency);
     }
     command_bar_->set_detail_view(active_detail_);
     update_content_state();
@@ -492,8 +476,7 @@ QWidget* PortfolioScreen::build_main_view() {
 
     // Left: Heatmap (220px)
     heatmap_ = new PortfolioHeatmap;
-    connect(heatmap_, &PortfolioHeatmap::symbol_selected,
-            this, &PortfolioScreen::on_symbol_selected);
+    connect(heatmap_, &PortfolioHeatmap::symbol_selected, this, &PortfolioScreen::on_symbol_selected);
     h_layout->addWidget(heatmap_);
 
     // Center: chart + sector (top), blotter (bottom)
@@ -505,8 +488,7 @@ QWidget* PortfolioScreen::build_main_view() {
     // Top: perf chart + sector panel side by side
     auto* top_split = new QSplitter(Qt::Horizontal);
     top_split->setHandleWidth(1);
-    top_split->setStyleSheet(QString("QSplitter::handle { background:%1; }")
-                             .arg(ui::colors::BORDER_DIM));
+    top_split->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
 
     perf_chart_ = new PortfolioPerfChart;
     sector_panel_ = new PortfolioSectorPanel;
@@ -526,8 +508,7 @@ QWidget* PortfolioScreen::build_main_view() {
 
     // Bottom: positions blotter
     blotter_ = new PortfolioBlotter;
-    connect(blotter_, &PortfolioBlotter::symbol_selected,
-            this, &PortfolioScreen::on_symbol_selected);
+    connect(blotter_, &PortfolioBlotter::symbol_selected, this, &PortfolioScreen::on_symbol_selected);
     center_layout->addWidget(blotter_, 58); // 58% of vertical space
 
     h_layout->addWidget(center, 1); // center takes remaining space
@@ -535,22 +516,20 @@ QWidget* PortfolioScreen::build_main_view() {
     // Right: Order panel (hidden by default)
     order_panel_ = new PortfolioOrderPanel;
     order_panel_->setVisible(false);
-    connect(order_panel_, &PortfolioOrderPanel::close_requested,
-            this, &PortfolioScreen::on_order_panel_close);
+    connect(order_panel_, &PortfolioOrderPanel::close_requested, this, &PortfolioScreen::on_order_panel_close);
     connect(order_panel_, &PortfolioOrderPanel::buy_submitted, this, [this]() {
         AddAssetDialog dlg(this);
         if (dlg.exec() == QDialog::Accepted) {
-            services::PortfolioService::instance().add_asset(
-                selected_id_, dlg.symbol(), dlg.quantity(), dlg.price());
+            services::PortfolioService::instance().add_asset(selected_id_, dlg.symbol(), dlg.quantity(), dlg.price());
         }
     });
     connect(order_panel_, &PortfolioOrderPanel::sell_submitted, this, [this]() {
         auto* h = find_holding(selected_symbol_);
-        if (!h) return;
+        if (!h)
+            return;
         SellAssetDialog dlg(h->symbol, h->quantity, this);
         if (dlg.exec() == QDialog::Accepted) {
-            services::PortfolioService::instance().sell_asset(
-                selected_id_, h->symbol, dlg.quantity(), dlg.price());
+            services::PortfolioService::instance().sell_asset(selected_id_, h->symbol, dlg.quantity(), dlg.price());
         }
     });
     h_layout->addWidget(order_panel_);
@@ -559,7 +538,8 @@ QWidget* PortfolioScreen::build_main_view() {
 }
 
 void PortfolioScreen::update_main_view_data() {
-    if (!heatmap_) return;
+    if (!heatmap_)
+        return;
 
     QString currency = current_summary_.portfolio.currency;
 
@@ -623,34 +603,27 @@ void PortfolioScreen::load_demo_portfolio() {
     auto& svc = services::PortfolioService::instance();
 
     // Create the demo portfolio
-    svc.create_portfolio("Demo Portfolio", "Fincept User", "USD",
-                         "Sample portfolio for demonstration");
+    svc.create_portfolio("Demo Portfolio", "Fincept User", "USD", "Sample portfolio for demonstration");
 
     // We'll add assets once the portfolio is created (via the portfolio_created signal).
     // Disconnect any previous one-shot, connect a one-shot to add demo holdings.
     QMetaObject::Connection* conn = new QMetaObject::Connection;
-    *conn = connect(&svc, &services::PortfolioService::portfolio_created,
-                    this, [this, conn](portfolio::Portfolio p) {
+    *conn = connect(&svc, &services::PortfolioService::portfolio_created, this, [this, conn](portfolio::Portfolio p) {
         disconnect(*conn);
         delete conn;
 
         auto& svc = services::PortfolioService::instance();
 
         // Demo holdings: diversified mix of major stocks
-        struct DemoHolding { const char* symbol; double qty; double price; };
+        struct DemoHolding {
+            const char* symbol;
+            double qty;
+            double price;
+        };
         static const DemoHolding demo[] = {
-            {"AAPL",    15,  178.50},
-            {"MSFT",    12,  375.20},
-            {"GOOGL",    8, 141.80},
-            {"NVDA",    10,  480.00},
-            {"AMZN",     6,  178.25},
-            {"TSLA",     5,  245.00},
-            {"JPM",     20,  195.50},
-            {"JNJ",     15,  155.75},
-            {"XOM",     25,  105.30},
-            {"V",       10,  280.00},
-            {"UNH",      4,  525.60},
-            {"PG",      12,  158.90},
+            {"AAPL", 15, 178.50}, {"MSFT", 12, 375.20}, {"GOOGL", 8, 141.80}, {"NVDA", 10, 480.00},
+            {"AMZN", 6, 178.25},  {"TSLA", 5, 245.00},  {"JPM", 20, 195.50},  {"JNJ", 15, 155.75},
+            {"XOM", 25, 105.30},  {"V", 10, 280.00},    {"UNH", 4, 525.60},   {"PG", 12, 158.90},
         };
 
         for (const auto& h : demo) {

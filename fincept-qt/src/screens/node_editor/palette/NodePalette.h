@@ -1,9 +1,9 @@
 #pragma once
 
-#include <QWidget>
 #include <QLineEdit>
-#include <QVBoxLayout>
 #include <QMap>
+#include <QVBoxLayout>
+#include <QWidget>
 
 namespace fincept::workflow {
 

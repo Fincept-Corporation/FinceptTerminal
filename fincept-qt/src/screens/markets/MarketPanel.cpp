@@ -94,7 +94,8 @@ void MarketPanel::refresh() {
 
     QPointer<MarketPanel> self = this;
     services::MarketDataService::instance().fetch_quotes(symbols_, [self](bool ok, QVector<services::QuoteData> q) {
-        if (!self) return;
+        if (!self)
+            return;
         self->skeleton_timer_->stop();
         if (!ok) {
             self->status_label_->setText("FAIL");

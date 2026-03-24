@@ -6,25 +6,84 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QPainter>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
 
-ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(QString("background: %1;").arg(ui::colors::DARK));
+// ── Obsidian Styles ──────────────────────────────────────────────────────────
 
+static const char* CARD_STYLE = "background: #0a0a0a; border: 1px solid #1a1a1a;";
+
+static const char* INPUT_STYLE = "QLineEdit {"
+                                 "  background: #0a0a0a; color: #e5e5e5;"
+                                 "  border: 1px solid #1a1a1a;"
+                                 "  padding: 6px 10px; font-size: 15px;"
+                                 "  font-family: 'Consolas','Courier New',monospace;"
+                                 "  selection-background-color: #d97706; selection-color: #080808;"
+                                 "}"
+                                 "QLineEdit:focus { border: 1px solid #333333; }"
+                                 "QLineEdit::placeholder { color: #404040; }";
+
+static const char* BTN_PRIMARY = "QPushButton {"
+                                 "  background: rgba(217,119,6,0.1); color: #d97706;"
+                                 "  border: 1px solid #78350f;"
+                                 "  padding: 0 16px; font-size: 14px; font-weight: 700;"
+                                 "  font-family: 'Consolas','Courier New',monospace;"
+                                 "}"
+                                 "QPushButton:hover { background: #d97706; color: #080808; }"
+                                 "QPushButton:disabled { color: #404040; background: #111111; border-color: #1a1a1a; }";
+
+static const char* BTN_STANDARD = "QPushButton {"
+                                  "  background: #111111; color: #808080;"
+                                  "  border: 1px solid #1a1a1a;"
+                                  "  padding: 0 12px; font-size: 14px; font-weight: 700;"
+                                  "  font-family: 'Consolas','Courier New',monospace;"
+                                  "}"
+                                  "QPushButton:hover { color: #e5e5e5; background: #161616; }";
+
+static const char* LINK_STYLE = "QPushButton {"
+                                "  color: #808080; background: transparent; border: none;"
+                                "  font-size: 13px; font-weight: 400;"
+                                "  font-family: 'Consolas','Courier New',monospace;"
+                                "}"
+                                "QPushButton:hover { color: #e5e5e5; }";
+
+static const char* LABEL_STYLE = "color: #808080; font-size: 13px; font-weight: 700;"
+                                 "background: transparent; letter-spacing: 0.5px;"
+                                 "font-family: 'Consolas','Courier New',monospace;";
+
+static const char* MUTED_STYLE = "color: #525252; font-size: 13px; background: transparent;"
+                                 "font-family: 'Consolas','Courier New',monospace;";
+
+static QFrame* make_separator() {
+    auto* sep = new QFrame;
+    sep->setFixedHeight(1);
+    sep->setStyleSheet("background: #1a1a1a; border: none;");
+    return sep;
+}
+
+// ── Constructor ──────────────────────────────────────────────────────────────
+
+ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
     auto* root = new QVBoxLayout(this);
-    root->setAlignment(Qt::AlignCenter);
+    root->setContentsMargins(0, 0, 0, 0);
+
+    auto* overlay = new QVBoxLayout;
+    overlay->setAlignment(Qt::AlignCenter);
+    root->addLayout(overlay, 1);
 
     pages_ = new QStackedWidget;
-    pages_->setFixedSize(380, 400);
+    pages_->setMinimumWidth(480);
+    pages_->setMaximumWidth(620);
+    pages_->setStyleSheet("background: transparent;");
 
     build_email_page();
     build_otp_sent_page();
     build_reset_page();
     build_success_page();
 
-    root->addWidget(pages_);
+    overlay->addWidget(pages_, 0, Qt::AlignCenter);
 
     auto& auth = auth::AuthManager::instance();
     connect(&auth, &auth::AuthManager::forgot_password_sent, this, [this]() { pages_->setCurrentIndex(1); });
@@ -39,192 +98,259 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
     });
 }
 
+// ── Background ───────────────────────────────────────────────────────────────
+
+void ForgotPasswordScreen::paintEvent(QPaintEvent* /*event*/) {
+    QPainter p(this);
+    p.fillRect(rect(), QColor(0x08, 0x08, 0x08));
+
+    p.setPen(QPen(QColor(0x12, 0x12, 0x12), 1));
+    const int step = 24;
+    for (int x = 0; x < width(); x += step)
+        p.drawLine(x, 0, x, height());
+    for (int y = 0; y < height(); y += step)
+        p.drawLine(0, y, width(), y);
+}
+
+// ── Email Page ───────────────────────────────────────────────────────────────
+
 void ForgotPasswordScreen::build_email_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 4px;")
-                            .arg(ui::colors::PANEL, ui::colors::BORDER));
+    page->setStyleSheet(CARD_STYLE);
 
     auto* vl = new QVBoxLayout(page);
-    vl->setContentsMargins(24, 24, 24, 24);
-    vl->setSpacing(12);
+    vl->setContentsMargins(28, 22, 28, 22);
+    vl->setSpacing(10);
 
+    // Header
     auto* header = new QWidget;
-    header->setStyleSheet("background: transparent;");
+    header->setFixedHeight(38);
+    header->setStyleSheet("background: #111111; border: none;");
     auto* hl = new QHBoxLayout(header);
-    hl->setContentsMargins(0, 0, 0, 0);
+    hl->setContentsMargins(14, 0, 14, 0);
+
     auto* back = new QPushButton("<");
-    back->setFixedSize(28, 28);
-    back->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; font-size: 16px; }")
-                            .arg(ui::colors::MUTED));
+    back->setFixedSize(24, 24);
+    back->setStyleSheet("QPushButton { color: #808080; background: transparent; border: none;"
+                        "  font-size: 16px; font-family: 'Consolas','Courier New',monospace; }"
+                        "QPushButton:hover { color: #e5e5e5; }");
     connect(back, &QPushButton::clicked, this, &ForgotPasswordScreen::navigate_login);
     hl->addWidget(back);
-    auto* title = new QLabel("Reset Password");
-    title->setStyleSheet(
-        QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
+
+    auto* title = new QLabel("RESET PASSWORD");
+    title->setStyleSheet("color: #d97706; font-size: 14px; font-weight: 700;"
+                         "background: transparent; letter-spacing: 1px;"
+                         "font-family: 'Consolas','Courier New',monospace;");
     hl->addWidget(title);
     hl->addStretch();
     vl->addWidget(header);
 
     auto* sub = new QLabel("Enter your email and we'll send a verification code.");
     sub->setWordWrap(true);
-    sub->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::MUTED));
+    sub->setStyleSheet(MUTED_STYLE);
     vl->addWidget(sub);
 
-    auto* lbl = new QLabel("Email");
-    lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::WHITE));
+    vl->addWidget(make_separator());
+
+    auto* lbl = new QLabel("EMAIL");
+    lbl->setStyleSheet(LABEL_STYLE);
     vl->addWidget(lbl);
 
     email_input_ = new QLineEdit;
-    email_input_->setPlaceholderText("Enter your email");
-    email_input_->setFixedHeight(32);
+    email_input_->setPlaceholderText("user@domain.com");
+    email_input_->setFixedHeight(34);
+    email_input_->setStyleSheet(INPUT_STYLE);
     vl->addWidget(email_input_);
 
     error_label_ = new QLabel;
     error_label_->setWordWrap(true);
-    error_label_->setStyleSheet("color: #FF4444; font-size: 12px; background: rgba(255,0,0,0.1); padding: 6px;");
+    error_label_->setStyleSheet("color: #dc2626; font-size: 13px;"
+                                "background: rgba(220,38,38,0.08);"
+                                "border: 1px solid #7f1d1d; padding: 6px 8px;"
+                                "font-family: 'Consolas','Courier New',monospace;");
     error_label_->hide();
     vl->addWidget(error_label_);
 
-    auto* send_btn = new QPushButton("Send Code");
+    auto* send_btn = new QPushButton("  SEND CODE  ");
     send_btn->setFixedHeight(32);
+    send_btn->setStyleSheet(BTN_PRIMARY);
     connect(send_btn, &QPushButton::clicked, this, &ForgotPasswordScreen::on_send_code);
     connect(email_input_, &QLineEdit::returnPressed, this, &ForgotPasswordScreen::on_send_code);
     vl->addWidget(send_btn);
 
-    auto* sep = new QFrame;
-    sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER));
-    vl->addWidget(sep);
+    vl->addWidget(make_separator());
 
-    auto* back_login = new QPushButton("Remember your password? Sign In");
-    back_login->setStyleSheet(
-        "QPushButton { color: #4488FF; background: transparent; border: none; font-size: 12px; }");
+    auto* back_login = new QPushButton("REMEMBER YOUR PASSWORD? SIGN IN");
+    back_login->setStyleSheet(LINK_STYLE);
     connect(back_login, &QPushButton::clicked, this, &ForgotPasswordScreen::navigate_login);
     vl->addWidget(back_login, 0, Qt::AlignCenter);
 
     vl->addStretch();
-
     pages_->addWidget(page);
 }
+
+// ── OTP Sent Page ────────────────────────────────────────────────────────────
 
 void ForgotPasswordScreen::build_otp_sent_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 4px;")
-                            .arg(ui::colors::PANEL, ui::colors::BORDER));
+    page->setStyleSheet(CARD_STYLE);
 
     auto* vl = new QVBoxLayout(page);
-    vl->setContentsMargins(24, 24, 24, 24);
-    vl->setSpacing(12);
-    vl->setAlignment(Qt::AlignCenter);
+    vl->setContentsMargins(28, 22, 28, 22);
+    vl->setSpacing(10);
 
-    auto* title = new QLabel("Check Your Email");
-    title->setStyleSheet(
-        QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
-    title->setAlignment(Qt::AlignCenter);
-    vl->addWidget(title);
+    auto* header = new QWidget;
+    header->setFixedHeight(38);
+    header->setStyleSheet("background: #111111; border: none;");
+    auto* hl = new QHBoxLayout(header);
+    hl->setContentsMargins(14, 0, 14, 0);
+
+    auto* title = new QLabel("CHECK YOUR EMAIL");
+    title->setStyleSheet("color: #d97706; font-size: 14px; font-weight: 700;"
+                         "background: transparent; letter-spacing: 1px;"
+                         "font-family: 'Consolas','Courier New',monospace;");
+    hl->addWidget(title);
+    hl->addStretch();
+    vl->addWidget(header);
 
     auto* sub = new QLabel("We've sent a verification code. Enter it on the next screen to reset your password.");
     sub->setWordWrap(true);
-    sub->setAlignment(Qt::AlignCenter);
-    sub->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::MUTED));
+    sub->setStyleSheet(MUTED_STYLE);
     vl->addWidget(sub);
 
-    auto* cont_btn = new QPushButton("I Have the Code");
+    vl->addWidget(make_separator());
+
+    auto* cont_btn = new QPushButton("  I HAVE THE CODE  ");
     cont_btn->setFixedHeight(32);
+    cont_btn->setStyleSheet(BTN_PRIMARY);
     connect(cont_btn, &QPushButton::clicked, this, [this]() { pages_->setCurrentIndex(2); });
     vl->addWidget(cont_btn);
 
-    auto* resend = new QPushButton("Didn't receive? Resend");
-    resend->setStyleSheet("QPushButton { color: #4488FF; background: transparent; border: none; font-size: 12px; }");
+    auto* resend = new QPushButton("DIDN'T RECEIVE? RESEND");
+    resend->setStyleSheet(LINK_STYLE);
     connect(resend, &QPushButton::clicked, this, &ForgotPasswordScreen::on_resend);
     vl->addWidget(resend, 0, Qt::AlignCenter);
 
+    vl->addStretch();
     pages_->addWidget(page);
 }
 
+// ── Reset Page ───────────────────────────────────────────────────────────────
+
 void ForgotPasswordScreen::build_reset_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 4px;")
-                            .arg(ui::colors::PANEL, ui::colors::BORDER));
+    page->setStyleSheet(CARD_STYLE);
 
     auto* vl = new QVBoxLayout(page);
-    vl->setContentsMargins(24, 24, 24, 24);
+    vl->setContentsMargins(28, 22, 28, 22);
     vl->setSpacing(10);
 
-    auto* title = new QLabel("Reset Password");
-    title->setStyleSheet(
-        QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
-    vl->addWidget(title);
+    auto* header = new QWidget;
+    header->setFixedHeight(38);
+    header->setStyleSheet("background: #111111; border: none;");
+    auto* hl = new QHBoxLayout(header);
+    hl->setContentsMargins(14, 0, 14, 0);
 
-    auto add_field = [&](const QString& label, const QString& placeholder, bool is_password = false) -> QLineEdit* {
+    auto* title = new QLabel("RESET PASSWORD");
+    title->setStyleSheet("color: #d97706; font-size: 14px; font-weight: 700;"
+                         "background: transparent; letter-spacing: 1px;"
+                         "font-family: 'Consolas','Courier New',monospace;");
+    hl->addWidget(title);
+    hl->addStretch();
+    vl->addWidget(header);
+
+    vl->addWidget(make_separator());
+
+    auto add_field = [&](const char* label, const char* placeholder, bool is_password = false) -> QLineEdit* {
         auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::WHITE));
+        lbl->setStyleSheet(LABEL_STYLE);
         vl->addWidget(lbl);
         auto* input = new QLineEdit;
         input->setPlaceholderText(placeholder);
-        input->setFixedHeight(32);
+        input->setFixedHeight(34);
+        input->setStyleSheet(INPUT_STYLE);
         if (is_password)
             input->setEchoMode(QLineEdit::Password);
         vl->addWidget(input);
         return input;
     };
 
-    otp_input_ = add_field("Verification Code", "Enter code from email");
-    new_password_ = add_field("New Password", "Min 8 characters", true);
-    confirm_password_ = add_field("Confirm Password", "Re-enter password", true);
+    otp_input_ = add_field("VERIFICATION CODE", "enter code from email");
+    new_password_ = add_field("NEW PASSWORD", "min 8 characters", true);
+    confirm_password_ = add_field("CONFIRM PASSWORD", "re-enter password", true);
 
-    // Reuse the error label from page 0 by adding another one here
     auto* err = new QLabel;
     err->setWordWrap(true);
-    err->setStyleSheet("color: #FF4444; font-size: 12px; background: rgba(255,0,0,0.1); padding: 6px;");
+    err->setStyleSheet("color: #dc2626; font-size: 13px;"
+                       "background: rgba(220,38,38,0.08);"
+                       "border: 1px solid #7f1d1d; padding: 6px 8px;"
+                       "font-family: 'Consolas','Courier New',monospace;");
     err->hide();
     vl->addWidget(err);
-    // We'll use error_label_ for all pages (it's on page 0), but for this page we need a local one
-    // So let's just connect the signal to show errors on this label too
     connect(&auth::AuthManager::instance(), &auth::AuthManager::password_reset_failed, this, [err](const QString& e) {
         err->setText(e);
         err->show();
     });
 
-    auto* reset_btn = new QPushButton("Reset Password");
+    auto* reset_btn = new QPushButton("  RESET PASSWORD  ");
     reset_btn->setFixedHeight(32);
+    reset_btn->setStyleSheet(BTN_PRIMARY);
     connect(reset_btn, &QPushButton::clicked, this, &ForgotPasswordScreen::on_reset_password);
     vl->addWidget(reset_btn);
 
     vl->addStretch();
-
     pages_->addWidget(page);
 }
 
+// ── Success Page ─────────────────────────────────────────────────────────────
+
 void ForgotPasswordScreen::build_success_page() {
     auto* page = new QWidget;
-    page->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 4px;")
-                            .arg(ui::colors::PANEL, ui::colors::BORDER));
+    page->setStyleSheet(CARD_STYLE);
 
     auto* vl = new QVBoxLayout(page);
-    vl->setContentsMargins(24, 24, 24, 24);
-    vl->setSpacing(12);
+    vl->setContentsMargins(28, 22, 28, 22);
+    vl->setSpacing(10);
     vl->setAlignment(Qt::AlignCenter);
 
-    auto* title = new QLabel("Password Reset");
-    title->setStyleSheet(
-        QString("color: %1; font-size: 20px; font-weight: 300; background: transparent;").arg(ui::colors::WHITE));
-    title->setAlignment(Qt::AlignCenter);
-    vl->addWidget(title);
+    auto* header = new QWidget;
+    header->setFixedHeight(38);
+    header->setStyleSheet("background: #111111; border: none;");
+    auto* hl = new QHBoxLayout(header);
+    hl->setContentsMargins(14, 0, 14, 0);
 
-    auto* sub = new QLabel("Your password has been successfully reset. You can now sign in with your new password.");
+    auto* title = new QLabel("PASSWORD RESET");
+    title->setStyleSheet("color: #16a34a; font-size: 14px; font-weight: 700;"
+                         "background: transparent; letter-spacing: 1px;"
+                         "font-family: 'Consolas','Courier New',monospace;");
+    hl->addWidget(title);
+    hl->addStretch();
+
+    auto* status = new QLabel("SUCCESS");
+    status->setStyleSheet("color: #16a34a; font-size: 12px; font-weight: 700;"
+                          "background: transparent; letter-spacing: 0.5px;"
+                          "font-family: 'Consolas','Courier New',monospace;");
+    hl->addWidget(status);
+    vl->addWidget(header);
+
+    auto* sub = new QLabel("Your password has been reset. You can now sign in with your new password.");
     sub->setWordWrap(true);
     sub->setAlignment(Qt::AlignCenter);
-    sub->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::GREEN));
+    sub->setStyleSheet(MUTED_STYLE);
     vl->addWidget(sub);
 
-    auto* login_btn = new QPushButton("Continue to Login");
+    vl->addWidget(make_separator());
+
+    auto* login_btn = new QPushButton("  CONTINUE TO LOGIN  ");
     login_btn->setFixedHeight(32);
+    login_btn->setStyleSheet(BTN_PRIMARY);
     connect(login_btn, &QPushButton::clicked, this, &ForgotPasswordScreen::navigate_login);
     vl->addWidget(login_btn);
 
     pages_->addWidget(page);
 }
+
+// ── Actions ──────────────────────────────────────────────────────────────────
 
 void ForgotPasswordScreen::on_send_code() {
     error_label_->hide();
@@ -242,14 +368,8 @@ void ForgotPasswordScreen::on_reset_password() {
     QString otp = otp_input_->text().trimmed();
     QString pw = new_password_->text();
     QString cpw = confirm_password_->text();
-
-    if (otp.isEmpty())
+    if (otp.isEmpty() || pw.length() < 8 || pw != cpw)
         return;
-    if (pw.length() < 8)
-        return;
-    if (pw != cpw)
-        return;
-
     auth::AuthManager::instance().reset_password(email_input_->text().trimmed(), otp, pw);
 }
 

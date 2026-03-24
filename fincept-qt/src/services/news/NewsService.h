@@ -27,8 +27,8 @@ enum class ThreatLevel { CRITICAL, HIGH, MEDIUM, LOW, INFO };
 /// Source credibility flags.
 enum class SourceFlag {
     NONE = 0,
-    STATE_MEDIA = 1,  // Government-controlled outlet
-    CAUTION = 2,      // Known for sensationalism or low editorial standards
+    STATE_MEDIA = 1, // Government-controlled outlet
+    CAUTION = 2,     // Known for sensationalism or low editorial standards
 };
 
 struct ThreatClassification {
@@ -50,11 +50,11 @@ struct NewsArticle {
     Impact impact = Impact::LOW;
     QStringList tickers;
     QString link;
-    int64_t sort_ts = 0;    // unix seconds
-    int tier = 4;            // 1=wire, 2=major, 3=specialty, 4=blog
+    int64_t sort_ts = 0; // unix seconds
+    int tier = 4;        // 1=wire, 2=major, 3=specialty, 4=blog
     ThreatClassification threat;
     SourceFlag source_flag = SourceFlag::NONE;
-    QString lang;            // ISO language code (e.g., "en", "fr", "ar")
+    QString lang; // ISO language code (e.g., "en", "fr", "ar")
 };
 
 struct SentimentAnalysis {

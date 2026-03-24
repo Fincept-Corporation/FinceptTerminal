@@ -35,8 +35,7 @@ void ToolsViewPanel::build_ui() {
 
     auto* splitter = new QSplitter(Qt::Horizontal);
     splitter->setHandleWidth(1);
-    splitter->setStyleSheet(
-        QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
+    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
 
     splitter->addWidget(build_selected_panel());
     splitter->addWidget(build_browser_panel());
@@ -63,14 +62,12 @@ QWidget* ToolsViewPanel::build_selected_panel() {
     // Header
     auto* header = new QHBoxLayout;
     auto* title = new QLabel("SELECTED");
-    title->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER));
+    title->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER));
     header->addWidget(title);
 
     selected_count_ = new QLabel("0");
-    selected_count_->setStyleSheet(
-        QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-            .arg(ui::colors::CYAN, ui::colors::BG_RAISED));
+    selected_count_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
+                                       .arg(ui::colors::CYAN, ui::colors::BG_RAISED));
     header->addWidget(selected_count_);
     header->addStretch();
 
@@ -90,22 +87,20 @@ QWidget* ToolsViewPanel::build_selected_panel() {
     vl->addLayout(header);
 
     selected_list_ = new QListWidget;
-    selected_list_->setStyleSheet(
-        QString("QListWidget { background:%1;border:1px solid %2;color:%3;font-size:12px; }"
-                "QListWidget::item { padding:4px 8px;border-bottom:1px solid %2; }"
-                "QListWidget::item:selected { background:%4; }"
-                "QListWidget::item:hover { background:%5; }")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
-                 ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
+    selected_list_->setStyleSheet(QString("QListWidget { background:%1;border:1px solid %2;color:%3;font-size:12px; }"
+                                          "QListWidget::item { padding:4px 8px;border-bottom:1px solid %2; }"
+                                          "QListWidget::item:selected { background:%4; }"
+                                          "QListWidget::item:hover { background:%5; }")
+                                      .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
+                                           ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
     vl->addWidget(selected_list_, 1);
 
     // Remove button
     auto* remove_btn = new QPushButton("REMOVE SELECTED");
     remove_btn->setCursor(Qt::PointingHandCursor);
-    remove_btn->setStyleSheet(
-        QString("QPushButton { background:%1;color:%2;border:1px solid %3;padding:5px;"
-                "font-size:10px;font-weight:600; } QPushButton:hover { background:%3; }")
-            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+    remove_btn->setStyleSheet(QString("QPushButton { background:%1;color:%2;border:1px solid %3;padding:5px;"
+                                      "font-size:10px;font-weight:600; } QPushButton:hover { background:%3; }")
+                                  .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
     connect(remove_btn, &QPushButton::clicked, this, [this]() {
         auto* item = selected_list_->currentItem();
         if (item)
@@ -134,9 +129,8 @@ QWidget* ToolsViewPanel::build_browser_panel() {
     header->addWidget(title);
 
     total_count_ = new QLabel;
-    total_count_->setStyleSheet(
-        QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-            .arg(ui::colors::CYAN, ui::colors::BG_RAISED));
+    total_count_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
+                                    .arg(ui::colors::CYAN, ui::colors::BG_RAISED));
     header->addWidget(total_count_);
     header->addStretch();
     vl->addLayout(header);
@@ -153,25 +147,23 @@ QWidget* ToolsViewPanel::build_browser_panel() {
     tool_tree_ = new QTreeWidget;
     tool_tree_->setHeaderHidden(true);
     tool_tree_->setRootIsDecorated(true);
-    tool_tree_->setStyleSheet(
-        QString("QTreeWidget { background:%1;border:1px solid %2;color:%3;font-size:12px; }"
-                "QTreeWidget::item { padding:3px 4px; }"
-                "QTreeWidget::item:selected { background:%4; }"
-                "QTreeWidget::item:hover { background:%5; }"
-                "QTreeWidget::branch:has-children:!has-siblings:closed,"
-                "QTreeWidget::branch:closed:has-children:has-siblings { image:none; }")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
-                 ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
+    tool_tree_->setStyleSheet(QString("QTreeWidget { background:%1;border:1px solid %2;color:%3;font-size:12px; }"
+                                      "QTreeWidget::item { padding:3px 4px; }"
+                                      "QTreeWidget::item:selected { background:%4; }"
+                                      "QTreeWidget::item:hover { background:%5; }"
+                                      "QTreeWidget::branch:has-children:!has-siblings:closed,"
+                                      "QTreeWidget::branch:closed:has-children:has-siblings { image:none; }")
+                                  .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
+                                       ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
     vl->addWidget(tool_tree_, 1);
 
     // Add button
     auto* add_btn = new QPushButton("ADD TO SELECTED");
     add_btn->setCursor(Qt::PointingHandCursor);
-    add_btn->setStyleSheet(
-        QString("QPushButton { background:%1;color:%2;border:none;padding:8px;"
-                "font-size:11px;font-weight:700;letter-spacing:1px; }"
-                "QPushButton:hover { background:%3; }")
-            .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE));
+    add_btn->setStyleSheet(QString("QPushButton { background:%1;color:%2;border:none;padding:8px;"
+                                   "font-size:11px;font-weight:700;letter-spacing:1px; }"
+                                   "QPushButton:hover { background:%3; }")
+                               .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE));
     connect(add_btn, &QPushButton::clicked, this, [this]() {
         auto* item = tool_tree_->currentItem();
         if (item && !item->childCount()) // leaf = tool, not category
@@ -183,10 +175,9 @@ QWidget* ToolsViewPanel::build_browser_panel() {
     auto* btn_row = new QHBoxLayout;
     copy_btn_ = new QPushButton("COPY NAME");
     copy_btn_->setCursor(Qt::PointingHandCursor);
-    copy_btn_->setStyleSheet(
-        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:6px;"
-                "font-size:10px;font-weight:600;}QPushButton:hover{background:%3;}")
-            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
+    copy_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:6px;"
+                                     "font-size:10px;font-weight:600;}QPushButton:hover{background:%3;}")
+                                 .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
     connect(copy_btn_, &QPushButton::clicked, this, [this]() {
         auto* item = tool_tree_->currentItem();
         if (item && !item->childCount())

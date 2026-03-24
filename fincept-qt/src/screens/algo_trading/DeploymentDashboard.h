@@ -1,6 +1,7 @@
 // src/screens/algo_trading/DeploymentDashboard.h
 #pragma once
 #include "services/algo_trading/AlgoTradingTypes.h"
+
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -20,8 +21,7 @@ class DeploymentDashboard : public QWidget {
   private:
     void build_ui();
     void connect_service();
-    QWidget* build_deployment_card(const fincept::services::algo::AlgoDeployment& d,
-                                   QWidget* parent);
+    QWidget* build_deployment_card(const fincept::services::algo::AlgoDeployment& d, QWidget* parent);
     void update_summary(const QVector<fincept::services::algo::AlgoDeployment>& deployments);
 
     // Summary stats

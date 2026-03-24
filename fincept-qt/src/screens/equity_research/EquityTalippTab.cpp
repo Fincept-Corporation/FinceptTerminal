@@ -11,153 +11,172 @@
 #include <QHBoxLayout>
 #include <QLineSeries>
 #include <QPen>
-#include <QValueAxis>
 #include <QVBoxLayout>
+#include <QValueAxis>
 
 namespace fincept::screens {
 
 // ── Static category/indicator data (matches reference INDICATORS object) ──────
 const QList<EquityTalippTab::CategoryDef>& EquityTalippTab::categories() {
     static const QList<CategoryDef> cats = {
-        { "trend", "TREND", "#22d3ee", {
-            {"sma",   "SMA",           "prices"},
-            {"ema",   "EMA",           "prices"},
-            {"wma",   "WMA",           "prices"},
-            {"dema",  "DEMA",          "prices"},
-            {"tema",  "TEMA",          "prices"},
-            {"hma",   "HMA",           "prices"},
-            {"kama",  "KAMA",          "prices"},
-            {"alma",  "ALMA",          "prices"},
-            {"t3",    "T3",            "prices"},
-            {"zlema", "ZLEMA",         "prices"},
-        }},
-        { "trend_advanced", "TREND+", "#60a5fa", {
-            {"adx",           "ADX",           "ohlcv"},
-            {"aroon",         "Aroon",         "ohlcv"},
-            {"ichimoku",      "Ichimoku",      "ohlcv"},
-            {"parabolic_sar", "Parabolic SAR", "ohlcv"},
-            {"supertrend",    "SuperTrend",    "ohlcv"},
-        }},
-        { "momentum", "MOMENTUM", "#d97706", {
-            {"rsi",       "RSI",         "prices"},
-            {"macd",      "MACD",        "prices"},
-            {"stoch",     "Stochastic",  "ohlcv"},
-            {"stoch_rsi", "StochRSI",    "prices"},
-            {"cci",       "CCI",         "ohlcv"},
-            {"roc",       "ROC",         "prices"},
-            {"tsi",       "TSI",         "prices"},
-            {"williams",  "Williams %R", "ohlcv"},
-        }},
-        { "volatility", "VOLATILITY", "#eab308", {
-            {"atr",              "ATR",               "ohlcv"},
-            {"bb",               "Bollinger Bands",   "prices"},
-            {"keltner",          "Keltner Channels",  "ohlcv"},
-            {"donchian",         "Donchian Channels", "ohlcv"},
-            {"chandelier_stop",  "Chandelier Stop",   "ohlcv"},
-            {"natr",             "NATR",              "ohlcv"},
-        }},
-        { "volume", "VOLUME", "#22c55e", {
-            {"obv",         "OBV",         "ohlcv"},
-            {"vwap",        "VWAP",        "ohlcv"},
-            {"vwma",        "VWMA",        "ohlcv"},
-            {"mfi",         "MFI",         "ohlcv"},
-            {"chaikin_osc", "Chaikin Osc", "ohlcv"},
-            {"force_index", "Force Index", "ohlcv"},
-        }},
-        { "specialized", "SPECIAL", "#a855f7", {
-            {"ao",            "Awesome Osc",    "ohlcv"},
-            {"accu_dist",     "Accum/Dist",     "ohlcv"},
-            {"bop",           "Balance of Pwr", "ohlcv"},
-            {"chop",          "CHOP",           "ohlcv"},
-            {"coppock_curve", "Coppock Curve",  "prices"},
-            {"dpo",           "DPO",            "prices"},
-            {"emv",           "EMV",            "ohlcv"},
-            {"ibs",           "IBS",            "ohlcv"},
-            {"kst",           "KST",            "prices"},
-            {"kvo",           "KVO",            "ohlcv"},
-            {"mass_index",    "Mass Index",     "ohlcv"},
-            {"mcginley",      "McGinley",       "prices"},
-            {"mean_dev",      "Mean Dev",       "prices"},
-            {"smma",          "SMMA",           "prices"},
-            {"sobv",          "Smoothed OBV",   "ohlcv"},
-            {"stc",           "STC",            "prices"},
-            {"std_dev",       "Std Dev",        "prices"},
-            {"trix",          "TRIX",           "prices"},
-            {"ttm",           "TTM Squeeze",    "ohlcv"},
-            {"uo",            "Ultimate Osc",   "ohlcv"},
-            {"vtx",           "Vortex",         "ohlcv"},
-            {"zigzag",        "ZigZag",         "ohlcv"},
-        }},
+        {"trend",
+         "TREND",
+         "#22d3ee",
+         {
+             {"sma", "SMA", "prices"},
+             {"ema", "EMA", "prices"},
+             {"wma", "WMA", "prices"},
+             {"dema", "DEMA", "prices"},
+             {"tema", "TEMA", "prices"},
+             {"hma", "HMA", "prices"},
+             {"kama", "KAMA", "prices"},
+             {"alma", "ALMA", "prices"},
+             {"t3", "T3", "prices"},
+             {"zlema", "ZLEMA", "prices"},
+         }},
+        {"trend_advanced",
+         "TREND+",
+         "#60a5fa",
+         {
+             {"adx", "ADX", "ohlcv"},
+             {"aroon", "Aroon", "ohlcv"},
+             {"ichimoku", "Ichimoku", "ohlcv"},
+             {"parabolic_sar", "Parabolic SAR", "ohlcv"},
+             {"supertrend", "SuperTrend", "ohlcv"},
+         }},
+        {"momentum",
+         "MOMENTUM",
+         "#d97706",
+         {
+             {"rsi", "RSI", "prices"},
+             {"macd", "MACD", "prices"},
+             {"stoch", "Stochastic", "ohlcv"},
+             {"stoch_rsi", "StochRSI", "prices"},
+             {"cci", "CCI", "ohlcv"},
+             {"roc", "ROC", "prices"},
+             {"tsi", "TSI", "prices"},
+             {"williams", "Williams %R", "ohlcv"},
+         }},
+        {"volatility",
+         "VOLATILITY",
+         "#eab308",
+         {
+             {"atr", "ATR", "ohlcv"},
+             {"bb", "Bollinger Bands", "prices"},
+             {"keltner", "Keltner Channels", "ohlcv"},
+             {"donchian", "Donchian Channels", "ohlcv"},
+             {"chandelier_stop", "Chandelier Stop", "ohlcv"},
+             {"natr", "NATR", "ohlcv"},
+         }},
+        {"volume",
+         "VOLUME",
+         "#22c55e",
+         {
+             {"obv", "OBV", "ohlcv"},
+             {"vwap", "VWAP", "ohlcv"},
+             {"vwma", "VWMA", "ohlcv"},
+             {"mfi", "MFI", "ohlcv"},
+             {"chaikin_osc", "Chaikin Osc", "ohlcv"},
+             {"force_index", "Force Index", "ohlcv"},
+         }},
+        {"specialized",
+         "SPECIAL",
+         "#a855f7",
+         {
+             {"ao", "Awesome Osc", "ohlcv"},
+             {"accu_dist", "Accum/Dist", "ohlcv"},
+             {"bop", "Balance of Pwr", "ohlcv"},
+             {"chop", "CHOP", "ohlcv"},
+             {"coppock_curve", "Coppock Curve", "prices"},
+             {"dpo", "DPO", "prices"},
+             {"emv", "EMV", "ohlcv"},
+             {"ibs", "IBS", "ohlcv"},
+             {"kst", "KST", "prices"},
+             {"kvo", "KVO", "ohlcv"},
+             {"mass_index", "Mass Index", "ohlcv"},
+             {"mcginley", "McGinley", "prices"},
+             {"mean_dev", "Mean Dev", "prices"},
+             {"smma", "SMMA", "prices"},
+             {"sobv", "Smoothed OBV", "ohlcv"},
+             {"stc", "STC", "prices"},
+             {"std_dev", "Std Dev", "prices"},
+             {"trix", "TRIX", "prices"},
+             {"ttm", "TTM Squeeze", "ohlcv"},
+             {"uo", "Ultimate Osc", "ohlcv"},
+             {"vtx", "Vortex", "ohlcv"},
+             {"zigzag", "ZigZag", "ohlcv"},
+         }},
     };
     return cats;
 }
 
 const QMap<QString, QList<QPair<QString, double>>>& EquityTalippTab::param_defs() {
     static const QMap<QString, QList<QPair<QString, double>>> m = {
-        {"sma",            {{"period", 20}}},
-        {"ema",            {{"period", 20}}},
-        {"wma",            {{"period", 20}}},
-        {"dema",           {{"period", 20}}},
-        {"tema",           {{"period", 20}}},
-        {"hma",            {{"period", 20}}},
-        {"kama",           {{"period", 10}}},
-        {"alma",           {{"period", 20}, {"offset", 0.85}, {"sigma", 6.0}}},
-        {"t3",             {{"period", 5},  {"vfactor", 0.7}}},
-        {"zlema",          {{"period", 20}}},
-        {"adx",            {{"period", 14}}},
-        {"aroon",          {{"period", 14}}},
-        {"ichimoku",       {{"tenkan", 9}, {"kijun", 26}, {"senkou_b", 52}}},
-        {"parabolic_sar",  {{"acceleration", 0.02}, {"maximum", 0.2}}},
-        {"supertrend",     {{"period", 7}, {"multiplier", 3.0}}},
-        {"rsi",            {{"period", 14}}},
-        {"macd",           {{"fast", 12}, {"slow", 26}, {"signal", 9}}},
-        {"stoch",          {{"k_period", 14}, {"d_period", 3}}},
-        {"stoch_rsi",      {{"period", 14}}},
-        {"cci",            {{"period", 20}}},
-        {"roc",            {{"period", 10}}},
-        {"tsi",            {{"long_period", 25}, {"short_period", 13}}},
-        {"williams",       {{"period", 14}}},
-        {"atr",            {{"period", 14}}},
-        {"bb",             {{"period", 20}, {"stddev", 2.0}}},
-        {"keltner",        {{"period", 20}, {"multiplier", 2.0}}},
-        {"donchian",       {{"period", 20}}},
-        {"chandelier_stop",{{"period", 22}, {"multiplier", 3.0}}},
-        {"natr",           {{"period", 14}}},
-        {"obv",            {}},
-        {"vwap",           {}},
-        {"vwma",           {{"period", 20}}},
-        {"mfi",            {{"period", 14}}},
-        {"chaikin_osc",    {{"fast", 3}, {"slow", 10}}},
-        {"force_index",    {{"period", 13}}},
-        {"ao",             {}},
-        {"accu_dist",      {}},
-        {"bop",            {}},
-        {"chop",           {{"period", 14}}},
-        {"coppock_curve",  {{"roc1", 14}, {"roc2", 11}, {"wma", 10}}},
-        {"dpo",            {{"period", 20}}},
-        {"emv",            {{"period", 14}}},
-        {"ibs",            {}},
-        {"kst",            {}},
-        {"kvo",            {{"fast", 34}, {"slow", 55}, {"signal", 13}}},
-        {"mass_index",     {{"fast", 9}, {"slow", 25}}},
-        {"mcginley",       {{"period", 14}}},
-        {"mean_dev",       {{"period", 14}}},
-        {"smma",           {{"period", 20}}},
-        {"sobv",           {{"period", 10}}},
-        {"stc",            {{"period", 12}, {"fast", 26}, {"slow", 50}}},
-        {"std_dev",        {{"period", 20}}},
-        {"trix",           {{"period", 15}}},
-        {"ttm",            {{"period", 20}}},
-        {"uo",             {{"fast", 7}, {"medium", 14}, {"slow", 28}}},
-        {"vtx",            {{"period", 14}}},
-        {"zigzag",         {{"deviation", 5.0}}},
+        {"sma", {{"period", 20}}},
+        {"ema", {{"period", 20}}},
+        {"wma", {{"period", 20}}},
+        {"dema", {{"period", 20}}},
+        {"tema", {{"period", 20}}},
+        {"hma", {{"period", 20}}},
+        {"kama", {{"period", 10}}},
+        {"alma", {{"period", 20}, {"offset", 0.85}, {"sigma", 6.0}}},
+        {"t3", {{"period", 5}, {"vfactor", 0.7}}},
+        {"zlema", {{"period", 20}}},
+        {"adx", {{"period", 14}}},
+        {"aroon", {{"period", 14}}},
+        {"ichimoku", {{"tenkan", 9}, {"kijun", 26}, {"senkou_b", 52}}},
+        {"parabolic_sar", {{"acceleration", 0.02}, {"maximum", 0.2}}},
+        {"supertrend", {{"period", 7}, {"multiplier", 3.0}}},
+        {"rsi", {{"period", 14}}},
+        {"macd", {{"fast", 12}, {"slow", 26}, {"signal", 9}}},
+        {"stoch", {{"k_period", 14}, {"d_period", 3}}},
+        {"stoch_rsi", {{"period", 14}}},
+        {"cci", {{"period", 20}}},
+        {"roc", {{"period", 10}}},
+        {"tsi", {{"long_period", 25}, {"short_period", 13}}},
+        {"williams", {{"period", 14}}},
+        {"atr", {{"period", 14}}},
+        {"bb", {{"period", 20}, {"stddev", 2.0}}},
+        {"keltner", {{"period", 20}, {"multiplier", 2.0}}},
+        {"donchian", {{"period", 20}}},
+        {"chandelier_stop", {{"period", 22}, {"multiplier", 3.0}}},
+        {"natr", {{"period", 14}}},
+        {"obv", {}},
+        {"vwap", {}},
+        {"vwma", {{"period", 20}}},
+        {"mfi", {{"period", 14}}},
+        {"chaikin_osc", {{"fast", 3}, {"slow", 10}}},
+        {"force_index", {{"period", 13}}},
+        {"ao", {}},
+        {"accu_dist", {}},
+        {"bop", {}},
+        {"chop", {{"period", 14}}},
+        {"coppock_curve", {{"roc1", 14}, {"roc2", 11}, {"wma", 10}}},
+        {"dpo", {{"period", 20}}},
+        {"emv", {{"period", 14}}},
+        {"ibs", {}},
+        {"kst", {}},
+        {"kvo", {{"fast", 34}, {"slow", 55}, {"signal", 13}}},
+        {"mass_index", {{"fast", 9}, {"slow", 25}}},
+        {"mcginley", {{"period", 14}}},
+        {"mean_dev", {{"period", 14}}},
+        {"smma", {{"period", 20}}},
+        {"sobv", {{"period", 10}}},
+        {"stc", {{"period", 12}, {"fast", 26}, {"slow", 50}}},
+        {"std_dev", {{"period", 20}}},
+        {"trix", {{"period", 15}}},
+        {"ttm", {{"period", 20}}},
+        {"uo", {{"fast", 7}, {"medium", 14}, {"slow", 28}}},
+        {"vtx", {{"period", 14}}},
+        {"zigzag", {{"deviation", 5.0}}},
     };
     return m;
 }
 
 QString EquityTalippTab::cat_color(const QString& cat_id) {
     for (const auto& c : categories())
-        if (c.id == cat_id) return c.color;
+        if (c.id == cat_id)
+            return c.color;
     return ui::colors::AMBER;
 }
 
@@ -165,12 +184,12 @@ QString EquityTalippTab::cat_color(const QString& cat_id) {
 EquityTalippTab::EquityTalippTab(QWidget* parent) : QWidget(parent) {
     build_ui();
     auto& svc = services::equity::EquityResearchService::instance();
-    connect(&svc, &services::equity::EquityResearchService::talipp_result,
-            this, &EquityTalippTab::on_talipp_result);
+    connect(&svc, &services::equity::EquityResearchService::talipp_result, this, &EquityTalippTab::on_talipp_result);
 }
 
 void EquityTalippTab::set_symbol(const QString& symbol) {
-    if (symbol == current_symbol_) return;
+    if (symbol == current_symbol_)
+        return;
     current_symbol_ = symbol;
     data_points_lbl_->setText("—  data points  |  TALIpp Engine");
     status_label_->setText("Select an indicator and click CALCULATE.");
@@ -194,15 +213,12 @@ void EquityTalippTab::build_ui() {
 
     for (const auto& cat : categories()) {
         auto* btn = new QPushButton(cat.label);
-        btn->setStyleSheet(
-            QString("QPushButton { background:transparent; color:#6b7280; "
-                    "border:1px solid %1; padding:5px 14px; font-size:10px; font-weight:700; }"
-                    "QPushButton:hover { border-color:%2; color:%2; }")
-            .arg(ui::colors::BORDER_DIM, cat.color));
+        btn->setStyleSheet(QString("QPushButton { background:transparent; color:#6b7280; "
+                                   "border:1px solid %1; padding:5px 14px; font-size:10px; font-weight:700; }"
+                                   "QPushButton:hover { border-color:%2; color:%2; }")
+                               .arg(ui::colors::BORDER_DIM, cat.color));
         btn->setProperty("cat_id", cat.id);
-        connect(btn, &QPushButton::clicked, this, [this, id = cat.id]() {
-            on_category_clicked(id);
-        });
+        connect(btn, &QPushButton::clicked, this, [this, id = cat.id]() { on_category_clicked(id); });
         cat_buttons_[cat.id] = btn;
         cat_row->addWidget(btn);
     }
@@ -212,15 +228,15 @@ void EquityTalippTab::build_ui() {
     // ── Indicator selector + params + run ─────────────────────────────────────
     auto* ctrl_frame = new QFrame;
     ctrl_frame->setStyleSheet(
-        QString("QFrame { background:%1; border:1px solid %2; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("QFrame { background:%1; border:1px solid %2; }").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* cl = new QHBoxLayout(ctrl_frame);
     cl->setContentsMargins(12, 10, 12, 10);
     cl->setSpacing(12);
 
     indicator_combo_ = new QComboBox;
     indicator_combo_->setMinimumWidth(200);
-    indicator_combo_->setStyleSheet(QString(R"(
+    indicator_combo_->setStyleSheet(
+        QString(R"(
         QComboBox {
             background:%1; color:%2; border:1px solid %3;
             padding:5px 10px; font-size:12px;
@@ -230,8 +246,8 @@ void EquityTalippTab::build_ui() {
             background:%1; color:%2; border:1px solid %3;
             selection-background-color:%4;
         }
-    )").arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY,
-            ui::colors::BORDER_DIM, ui::colors::AMBER));
+    )")
+            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER));
     cl->addWidget(indicator_combo_);
 
     param_widget_ = new QWidget;
@@ -244,17 +260,15 @@ void EquityTalippTab::build_ui() {
     cl->addStretch();
 
     data_points_lbl_ = new QLabel("—  data points  |  TALIpp Engine");
-    data_points_lbl_->setStyleSheet(
-        "color:#6b7280; font-size:10px; background:transparent; border:0;");
+    data_points_lbl_->setStyleSheet("color:#6b7280; font-size:10px; background:transparent; border:0;");
     cl->addWidget(data_points_lbl_);
 
     compute_btn_ = new QPushButton("▶  CALCULATE");
-    compute_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:%2; border:0; padding:6px 18px; "
-                "font-size:10px; font-weight:700; }"
-                "QPushButton:hover { background:#b45309; }"
-                "QPushButton:disabled { background:#374151; color:#6b7280; }")
-        .arg(ui::colors::AMBER, ui::colors::BG_BASE));
+    compute_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:0; padding:6px 18px; "
+                                        "font-size:10px; font-weight:700; }"
+                                        "QPushButton:hover { background:#b45309; }"
+                                        "QPushButton:disabled { background:#374151; color:#6b7280; }")
+                                    .arg(ui::colors::AMBER, ui::colors::BG_BASE));
     connect(compute_btn_, &QPushButton::clicked, this, &EquityTalippTab::on_compute_clicked);
     cl->addWidget(compute_btn_);
     vl->addWidget(ctrl_frame);
@@ -262,8 +276,7 @@ void EquityTalippTab::build_ui() {
     // ── Empty state ───────────────────────────────────────────────────────────
     empty_widget_ = new QFrame;
     empty_widget_->setStyleSheet(
-        QString("QFrame { background:%1; border:1px solid %2; }")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("QFrame { background:%1; border:1px solid %2; }").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* ew_vl = new QVBoxLayout(empty_widget_);
     ew_vl->setAlignment(Qt::AlignCenter);
     ew_vl->setSpacing(8);
@@ -273,10 +286,8 @@ void EquityTalippTab::build_ui() {
     ew_icon->setStyleSheet("color:#374151; font-size:32px; background:transparent; border:0;");
     status_label_ = new QLabel("Select an indicator and click CALCULATE");
     status_label_->setAlignment(Qt::AlignCenter);
-    status_label_->setStyleSheet(
-        "color:#6b7280; font-size:13px; background:transparent; border:0;");
-    auto* ew_sub = new QLabel(
-        "50+ indicators across 6 categories — powered by TALIpp incremental engine");
+    status_label_->setStyleSheet("color:#6b7280; font-size:13px; background:transparent; border:0;");
+    auto* ew_sub = new QLabel("50+ indicators across 6 categories — powered by TALIpp incremental engine");
     ew_sub->setAlignment(Qt::AlignCenter);
     ew_sub->setStyleSheet("color:#374151; font-size:10px; background:transparent; border:0;");
     ew_vl->addWidget(ew_icon);
@@ -302,15 +313,13 @@ void EquityTalippTab::build_ui() {
     chart_view_->setRenderHint(QPainter::Antialiasing, false);
     chart_view_->setMinimumHeight(300);
     chart_view_->setStyleSheet(
-        QString("background:%1; border:1px solid %2;")
-        .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     rw_vl->addWidget(chart_view_, 1);
 
     results_widget_->hide();
     vl->addWidget(results_widget_, 1);
 
-    connect(indicator_combo_, &QComboBox::currentTextChanged,
-            this, &EquityTalippTab::on_indicator_changed);
+    connect(indicator_combo_, &QComboBox::currentTextChanged, this, &EquityTalippTab::on_indicator_changed);
 
     on_category_clicked("trend");
 }
@@ -322,13 +331,11 @@ void EquityTalippTab::on_category_clicked(const QString& cat_id) {
     for (auto it = cat_buttons_.begin(); it != cat_buttons_.end(); ++it) {
         bool active = (it.key() == cat_id);
         QString color = cat_color(it.key());
-        it.value()->setStyleSheet(
-            QString("QPushButton { background:%1; color:%2; border:1px solid %3; "
-                    "padding:5px 14px; font-size:10px; font-weight:700; }"
-                    "QPushButton:hover { border-color:%3; }")
-            .arg(active ? color : "transparent",
-                 active ? ui::colors::BG_BASE : "#6b7280",
-                 active ? color : ui::colors::BORDER_DIM));
+        it.value()->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:1px solid %3; "
+                                          "padding:5px 14px; font-size:10px; font-weight:700; }"
+                                          "QPushButton:hover { border-color:%3; }")
+                                      .arg(active ? color : "transparent", active ? ui::colors::BG_BASE : "#6b7280",
+                                           active ? color : ui::colors::BORDER_DIM));
     }
 
     rebuild_indicator_combo(cat_id);
@@ -338,7 +345,8 @@ void EquityTalippTab::rebuild_indicator_combo(const QString& cat_id) {
     indicator_combo_->blockSignals(true);
     indicator_combo_->clear();
     for (const auto& cat : categories()) {
-        if (cat.id != cat_id) continue;
+        if (cat.id != cat_id)
+            continue;
         for (const auto& item : cat.items)
             indicator_combo_->addItem(item.label, item.id);
         break;
@@ -360,23 +368,21 @@ void EquityTalippTab::rebuild_param_form(const QString& indicator_id) {
         param_form_->removeRow(0);
 
     const auto& defs = param_defs();
-    if (!defs.contains(indicator_id)) return;
+    if (!defs.contains(indicator_id))
+        return;
 
     for (const auto& [name, default_val] : defs[indicator_id]) {
         auto* spin = new QDoubleSpinBox;
         spin->setObjectName(name);
         spin->setValue(default_val);
         spin->setRange(0.001, 9999);
-        spin->setDecimals(name.contains("period") || name == "fast" ||
-                          name == "slow" || name == "signal" ? 0 : 3);
+        spin->setDecimals(name.contains("period") || name == "fast" || name == "slow" || name == "signal" ? 0 : 3);
         spin->setFixedWidth(72);
-        spin->setStyleSheet(
-            QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3; "
-                    "padding:3px 6px; font-size:11px; }")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM));
+        spin->setStyleSheet(QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3; "
+                                    "padding:3px 6px; font-size:11px; }")
+                                .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM));
         auto* lbl = new QLabel(name + ":");
-        lbl->setStyleSheet(
-            "color:#9ca3af; font-size:10px; background:transparent; border:0;");
+        lbl->setStyleSheet("color:#9ca3af; font-size:10px; background:transparent; border:0;");
         param_form_->addRow(lbl, spin);
     }
 }
@@ -394,9 +400,10 @@ void EquityTalippTab::on_compute_clicked() {
         status_label_->setText("No symbol loaded. Search for a symbol first.");
         return;
     }
-    QString id    = indicator_combo_->currentData().toString();
+    QString id = indicator_combo_->currentData().toString();
     QString label = indicator_combo_->currentText();
-    if (id.isEmpty()) return;
+    if (id.isEmpty())
+        return;
 
     compute_btn_->setEnabled(false);
     compute_btn_->setText("COMPUTING…");
@@ -405,37 +412,35 @@ void EquityTalippTab::on_compute_clicked() {
     empty_widget_->show();
     results_widget_->hide();
 
-    services::equity::EquityResearchService::instance().compute_talipp(
-        current_symbol_, id, collect_params(), "2y");
+    services::equity::EquityResearchService::instance().compute_talipp(current_symbol_, id, collect_params(), "2y");
 }
 
 // ── rebuild_last_values ───────────────────────────────────────────────────────
-void EquityTalippTab::rebuild_last_values(const QString& indicator_id,
-                                           const QVector<double>& values) {
+void EquityTalippTab::rebuild_last_values(const QString& indicator_id, const QVector<double>& values) {
     auto* hl = qobject_cast<QHBoxLayout*>(last_values_area_->layout());
-    if (!hl) return;
+    if (!hl)
+        return;
     while (hl->count() > 0) {
         auto* item = hl->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
     auto make_lv = [&](const QString& lbl, const QString& val, const QString& color) {
         auto* w = new QFrame;
-        w->setStyleSheet(
-            QString("QFrame { background:%1; border:1px solid %2; }")
-            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        w->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; }")
+                             .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
         auto* wl = new QVBoxLayout(w);
         wl->setContentsMargins(12, 8, 12, 8);
         wl->setSpacing(2);
         auto* l = new QLabel(lbl);
-        l->setStyleSheet(
-            "color:#6b7280; font-size:9px; letter-spacing:0.5px; "
-            "background:transparent; border:0;");
+        l->setStyleSheet("color:#6b7280; font-size:9px; letter-spacing:0.5px; "
+                         "background:transparent; border:0;");
         auto* v = new QLabel(val);
-        v->setStyleSheet(
-            QString("color:%1; font-size:15px; font-weight:700; font-family:monospace; "
-                    "background:transparent; border:0;").arg(color));
+        v->setStyleSheet(QString("color:%1; font-size:15px; font-weight:700; font-family:monospace; "
+                                 "background:transparent; border:0;")
+                             .arg(color));
         wl->addWidget(l);
         wl->addWidget(v);
         hl->addWidget(w);
@@ -443,23 +448,18 @@ void EquityTalippTab::rebuild_last_values(const QString& indicator_id,
 
     if (!values.isEmpty()) {
         double last = values.last();
-        make_lv("LAST",
-                !qIsNaN(last) ? QString::number(last, 'f', 4) : "N/A",
-                ui::colors::AMBER);
+        make_lv("LAST", !qIsNaN(last) ? QString::number(last, 'f', 4) : "N/A", ui::colors::AMBER);
     }
 
     for (auto* spin : param_widget_->findChildren<QDoubleSpinBox*>())
-        make_lv(spin->objectName().toUpper(),
-                QString::number(spin->value(), 'f', 0),
-                "#6b7280");
+        make_lv(spin->objectName().toUpper(), QString::number(spin->value(), 'f', 0), "#6b7280");
 
     hl->addStretch();
 }
 
 // ── rebuild_chart ─────────────────────────────────────────────────────────────
-void EquityTalippTab::rebuild_chart(const QString& /*indicator_id*/,
-                                     const QVector<double>& values,
-                                     const QVector<qint64>& timestamps) {
+void EquityTalippTab::rebuild_chart(const QString& /*indicator_id*/, const QVector<double>& values,
+                                    const QVector<qint64>& timestamps) {
     QString color = cat_color(active_category_);
     QString label = indicator_combo_->currentText();
 
@@ -506,9 +506,7 @@ void EquityTalippTab::rebuild_chart(const QString& /*indicator_id*/,
 }
 
 // ── on_talipp_result ──────────────────────────────────────────────────────────
-void EquityTalippTab::on_talipp_result(QString indicator,
-                                        QVector<double> values,
-                                        QVector<qint64> timestamps) {
+void EquityTalippTab::on_talipp_result(QString indicator, QVector<double> values, QVector<qint64> timestamps) {
     compute_btn_->setEnabled(true);
     compute_btn_->setText("▶  CALCULATE");
     loading_overlay_->hide_loading();

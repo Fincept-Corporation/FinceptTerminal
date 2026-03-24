@@ -21,7 +21,7 @@ class McpServersScreen : public QWidget {
     explicit McpServersScreen(QWidget* parent = nullptr);
 
   private slots:
-    void on_view_changed(int view);   // 0=marketplace, 1=installed, 2=tools
+    void on_view_changed(int view); // 0=marketplace, 1=installed, 2=tools
     void on_install_server(int index);
     void on_start_server();
     void on_stop_server();

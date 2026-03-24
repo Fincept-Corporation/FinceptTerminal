@@ -43,7 +43,7 @@ struct ForumComment {
     QString author_name;
     QString author_display_name;
     int parent_comment_id = 0; // 0 = top-level
-    QString user_vote; // null/"up"/"down"
+    QString user_vote;         // null/"up"/"down"
 };
 
 struct ForumProfile {

@@ -291,8 +291,8 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
         double new_filled = order.filled_qty + qty;
         QString new_status = (new_filled >= order.quantity) ? "filled" : "partial";
         double prev_avg = order.avg_price.value_or(0.0);
-        double new_avg = (new_filled > 0.0) ? (prev_avg * order.filled_qty + fill_price * qty) / new_filled
-                                             : fill_price;
+        double new_avg =
+            (new_filled > 0.0) ? (prev_avg * order.filled_qty + fill_price * qty) / new_filled : fill_price;
         repo().update_order_fill(order_id, new_filled, new_avg, new_status, now);
 
         // 9. Create trade record
@@ -312,15 +312,14 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
         db.commit();
 
         // Emit event (outside transaction — non-critical)
-        EventBus::instance().publish("paper_trading.order_filled",
-                                     {{"trade_id", trade.id},
-                                      {"portfolio_id", trade.portfolio_id},
-                                      {"symbol", trade.symbol},
-                                      {"side", trade.side},
-                                      {"price", trade.price},
-                                      {"quantity", trade.quantity},
-                                      {"pnl", trade.pnl},
-                                      {"fee", trade.fee}});
+        EventBus::instance().publish("paper_trading.order_filled", {{"trade_id", trade.id},
+                                                                    {"portfolio_id", trade.portfolio_id},
+                                                                    {"symbol", trade.symbol},
+                                                                    {"side", trade.side},
+                                                                    {"price", trade.price},
+                                                                    {"quantity", trade.quantity},
+                                                                    {"pnl", trade.pnl},
+                                                                    {"fee", trade.fee}});
 
         return trade;
     } catch (...) {

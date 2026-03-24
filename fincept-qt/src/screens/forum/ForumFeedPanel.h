@@ -42,37 +42,37 @@ class ForumFeedPanel : public QWidget {
     void show_skeleton();
     void pulse_skeleton();
 
-    QScrollArea* scroll_             = nullptr;
-    QWidget*     content_w_          = nullptr;
-    QVBoxLayout* content_vl_         = nullptr;
+    QScrollArea* scroll_ = nullptr;
+    QWidget* content_w_ = nullptr;
+    QVBoxLayout* content_vl_ = nullptr;
 
     // Dashboard sections
-    QWidget*     stats_section_      = nullptr;
-    QWidget*     profile_section_    = nullptr;
-    QWidget*     cats_section_       = nullptr;
-    QWidget*     contrib_section_    = nullptr;
+    QWidget* stats_section_ = nullptr;
+    QWidget* profile_section_ = nullptr;
+    QWidget* cats_section_ = nullptr;
+    QWidget* contrib_section_ = nullptr;
 
     // Posts section
-    QLabel*      posts_header_lbl_   = nullptr;
-    QLabel*      posts_count_lbl_    = nullptr;
-    QWidget*     posts_container_    = nullptr;
-    QVBoxLayout* posts_vl_           = nullptr;
+    QLabel* posts_header_lbl_ = nullptr;
+    QLabel* posts_count_lbl_ = nullptr;
+    QWidget* posts_container_ = nullptr;
+    QVBoxLayout* posts_vl_ = nullptr;
 
     // Skeleton
-    QWidget*     skeleton_w_         = nullptr;
-    QTimer*      skeleton_timer_     = nullptr;
+    QWidget* skeleton_w_ = nullptr;
+    QTimer* skeleton_timer_ = nullptr;
 
     // Data
     services::ForumPostsPage page_;
-    services::ForumStats     stats_;
-    services::ForumProfile   profile_;
+    services::ForumStats stats_;
+    services::ForumProfile profile_;
     QVector<services::ForumCategory> categories_;
-    int     active_cat_id_ = 0;
+    int active_cat_id_ = 0;
     QString active_uuid_;
     QString cat_color_;
-    bool    stats_loaded_    = false;
-    bool    profile_loaded_  = false;
-    bool    cats_loaded_     = false;
+    bool stats_loaded_ = false;
+    bool profile_loaded_ = false;
+    bool cats_loaded_ = false;
 };
 
 } // namespace fincept::screens

@@ -12,16 +12,14 @@ class NewsFeedDelegate : public QStyledItemDelegate {
   public:
     explicit NewsFeedDelegate(QObject* parent = nullptr);
 
-    void paint(QPainter* painter, const QStyleOptionViewItem& option,
-               const QModelIndex& index) const override;
-    QSize sizeHint(const QStyleOptionViewItem& option,
-                   const QModelIndex& index) const override;
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 
   private:
-    void paint_wire_row(QPainter* painter, const QRect& rect,
-                        const QModelIndex& index, bool selected, bool hovered) const;
-    void paint_cluster_card(QPainter* painter, const QRect& rect,
-                            const QModelIndex& index, bool selected, bool hovered) const;
+    void paint_wire_row(QPainter* painter, const QRect& rect, const QModelIndex& index, bool selected,
+                        bool hovered) const;
+    void paint_cluster_card(QPainter* painter, const QRect& rect, const QModelIndex& index, bool selected,
+                            bool hovered) const;
 
     QFont data_font_;
     QFont bold_font_;

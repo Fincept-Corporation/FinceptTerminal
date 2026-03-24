@@ -124,8 +124,8 @@ class CryptoTradingScreen : public QWidget {
 
     // ── WS update coalescing (10fps UI flush) ──
     QTimer* ws_flush_timer_ = nullptr;
-    QHash<QString, trading::TickerData> pending_tickers_;  // accumulated since last flush
-    trading::TickerData pending_primary_ticker_;            // latest for selected symbol
+    QHash<QString, trading::TickerData> pending_tickers_; // accumulated since last flush
+    trading::TickerData pending_primary_ticker_;          // latest for selected symbol
     bool has_pending_primary_ = false;
     void flush_ws_updates();
 };

@@ -3,6 +3,8 @@
 
 # ── CMake build output ───────────────────────────────────────
 fincept-qt/build/
+fincept-qt/build-*/
+fincept-qt/build_*/
 fincept-qt/tmpqt/
 tmpqt/
 CMakeCache.txt

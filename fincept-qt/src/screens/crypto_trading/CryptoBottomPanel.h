@@ -36,8 +36,7 @@ class CryptoBottomPanel : public QWidget {
 
     // New widget forwarding
     void add_trade_entry(const TradeEntry& trade);
-    void set_depth_data(const QVector<QPair<double, double>>& bids,
-                        const QVector<QPair<double, double>>& asks,
+    void set_depth_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
                         double spread, double spread_pct);
 
   signals:

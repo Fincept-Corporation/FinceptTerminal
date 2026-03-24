@@ -32,8 +32,7 @@ void WorkflowsViewPanel::build_ui() {
 
     auto* splitter = new QSplitter(Qt::Horizontal);
     splitter->setHandleWidth(1);
-    splitter->setStyleSheet(
-        QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
+    splitter->setStyleSheet(QString("QSplitter::handle { background:%1; }").arg(ui::colors::BORDER_DIM));
 
     splitter->addWidget(build_workflow_cards());
     splitter->addWidget(build_results_panel());
@@ -46,37 +45,32 @@ void WorkflowsViewPanel::build_ui() {
 
 // ── Helper: workflow card ────────────────────────────────────────────────────
 
-QPushButton* WorkflowsViewPanel::make_workflow_card(const QString& title, const QString& desc,
-                                                     const char* color, const QString& action_text,
-                                                     QVBoxLayout* parent_layout) {
+QPushButton* WorkflowsViewPanel::make_workflow_card(const QString& title, const QString& desc, const char* color,
+                                                    const QString& action_text, QVBoxLayout* parent_layout) {
     auto* card = new QFrame;
-    card->setStyleSheet(
-        QString("QFrame { background:%1;border:1px solid %2;padding:12px; }")
-            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    card->setStyleSheet(QString("QFrame { background:%1;border:1px solid %2;padding:12px; }")
+                            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
 
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(6);
 
     auto* title_lbl = new QLabel(title);
-    title_lbl->setStyleSheet(
-        QString("color:%1;font-size:12px;font-weight:700;letter-spacing:1px;").arg(color));
+    title_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;letter-spacing:1px;").arg(color));
     vl->addWidget(title_lbl);
 
     auto* desc_lbl = new QLabel(desc);
     desc_lbl->setWordWrap(true);
-    desc_lbl->setStyleSheet(
-        QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY));
+    desc_lbl->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY));
     vl->addWidget(desc_lbl);
 
     auto* btn = new QPushButton(action_text);
     btn->setCursor(Qt::PointingHandCursor);
-    btn->setStyleSheet(
-        QString("QPushButton { background:%1;color:%2;border:none;padding:6px;font-size:10px;"
-                "font-weight:700;letter-spacing:1px; }"
-                "QPushButton:hover { opacity:0.8; }"
-                "QPushButton:disabled { background:%3;color:%4; }")
-            .arg(color, ui::colors::BG_BASE, ui::colors::BG_RAISED, ui::colors::TEXT_TERTIARY));
+    btn->setStyleSheet(QString("QPushButton { background:%1;color:%2;border:none;padding:6px;font-size:10px;"
+                               "font-weight:700;letter-spacing:1px; }"
+                               "QPushButton:hover { opacity:0.8; }"
+                               "QPushButton:disabled { background:%3;color:%4; }")
+                           .arg(color, ui::colors::BG_BASE, ui::colors::BG_RAISED, ui::colors::TEXT_TERTIARY));
     vl->addWidget(btn);
 
     parent_layout->addWidget(card);
@@ -89,11 +83,10 @@ QWidget* WorkflowsViewPanel::build_workflow_cards() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(
-        QString("QScrollArea { background:%1;border:none; }"
-                "QScrollBar:vertical { background:%1;width:6px; }"
-                "QScrollBar::handle:vertical { background:%2;min-height:30px; }")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
+    scroll->setStyleSheet(QString("QScrollArea { background:%1;border:none; }"
+                                  "QScrollBar:vertical { background:%1;width:6px; }"
+                                  "QScrollBar::handle:vertical { background:%2;min-height:30px; }")
+                              .arg(ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
 
     auto* content = new QWidget;
     auto* vl = new QVBoxLayout(content);
@@ -101,15 +94,13 @@ QWidget* WorkflowsViewPanel::build_workflow_cards() {
     vl->setSpacing(12);
 
     auto* title = new QLabel("FINANCIAL WORKFLOWS");
-    title->setStyleSheet(
-        QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;").arg(ui::colors::AMBER));
+    title->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;").arg(ui::colors::AMBER));
     vl->addWidget(title);
 
     // ── Stock Analysis ───────────────────────────────────────────────────────
     auto* stock_card = new QFrame;
-    stock_card->setStyleSheet(
-        QString("QFrame { background:%1;border:1px solid %2;padding:12px; }")
-            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    stock_card->setStyleSheet(QString("QFrame { background:%1;border:1px solid %2;padding:12px; }")
+                                  .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* scl = new QVBoxLayout(stock_card);
     scl->setSpacing(6);
 
@@ -120,8 +111,7 @@ QWidget* WorkflowsViewPanel::build_workflow_cards() {
 
     auto* stock_desc = new QLabel("Comprehensive stock analysis including fundamentals, technicals, and sentiment.");
     stock_desc->setWordWrap(true);
-    stock_desc->setStyleSheet(
-        QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY));
+    stock_desc->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY));
     scl->addWidget(stock_desc);
 
     auto* sym_row = new QHBoxLayout;
@@ -138,11 +128,10 @@ QWidget* WorkflowsViewPanel::build_workflow_cards() {
 
     auto* analyze_btn = new QPushButton("ANALYZE");
     analyze_btn->setCursor(Qt::PointingHandCursor);
-    analyze_btn->setStyleSheet(
-        QString("QPushButton { background:%1;color:%2;border:none;padding:6px 12px;"
-                "font-size:10px;font-weight:700;letter-spacing:1px; }"
-                "QPushButton:hover { background:%3; }")
-            .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE));
+    analyze_btn->setStyleSheet(QString("QPushButton { background:%1;color:%2;border:none;padding:6px 12px;"
+                                       "font-size:10px;font-weight:700;letter-spacing:1px; }"
+                                       "QPushButton:hover { background:%3; }")
+                                   .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE));
     connect(analyze_btn, &QPushButton::clicked, this, [this]() {
         QString sym = symbol_input_->text().trimmed().toUpper();
         if (!sym.isEmpty())
@@ -158,40 +147,37 @@ QWidget* WorkflowsViewPanel::build_workflow_cards() {
     grid->setSpacing(8);
 
     // Use a temporary QVBoxLayout wrapper to collect cards via make_workflow_card
-    auto* col00 = new QVBoxLayout; col00->setContentsMargins(0,0,0,0);
-    auto* col01 = new QVBoxLayout; col01->setContentsMargins(0,0,0,0);
-    auto* col10 = new QVBoxLayout; col10->setContentsMargins(0,0,0,0);
-    auto* col11 = new QVBoxLayout; col11->setContentsMargins(0,0,0,0);
+    auto* col00 = new QVBoxLayout;
+    col00->setContentsMargins(0, 0, 0, 0);
+    auto* col01 = new QVBoxLayout;
+    col01->setContentsMargins(0, 0, 0, 0);
+    auto* col10 = new QVBoxLayout;
+    col10->setContentsMargins(0, 0, 0, 0);
+    auto* col11 = new QVBoxLayout;
+    col11->setContentsMargins(0, 0, 0, 0);
 
     // Portfolio Rebalancing
-    auto* rebal_btn = make_workflow_card(
-        "PORTFOLIO REBALANCING",
-        "Optimize portfolio allocation and suggest rebalancing trades.",
-        ui::colors::CYAN, "REBALANCE", col00);
+    auto* rebal_btn =
+        make_workflow_card("PORTFOLIO REBALANCING", "Optimize portfolio allocation and suggest rebalancing trades.",
+                           ui::colors::CYAN, "REBALANCE", col00);
     connect(rebal_btn, &QPushButton::clicked, this, [this]() { run_workflow("portfolio_rebal"); });
     grid->addLayout(col00, 0, 0);
 
     // Risk Assessment
-    auto* risk_btn = make_workflow_card(
-        "RISK ASSESSMENT",
-        "Analyze portfolio risk metrics, VaR, and stress testing.",
-        ui::colors::NEGATIVE, "ASSESS RISK", col01);
+    auto* risk_btn = make_workflow_card("RISK ASSESSMENT", "Analyze portfolio risk metrics, VaR, and stress testing.",
+                                        ui::colors::NEGATIVE, "ASSESS RISK", col01);
     connect(risk_btn, &QPushButton::clicked, this, [this]() { run_workflow("risk_assessment"); });
     grid->addLayout(col01, 0, 1);
 
     // Multi-Query
-    auto* mq_btn = make_workflow_card(
-        "MULTI-QUERY",
-        "Execute a query across multiple agents simultaneously.",
-        ui::colors::INFO, "EXECUTE", col10);
+    auto* mq_btn = make_workflow_card("MULTI-QUERY", "Execute a query across multiple agents simultaneously.",
+                                      ui::colors::INFO, "EXECUTE", col10);
     connect(mq_btn, &QPushButton::clicked, this, [this]() { run_workflow("execute_multi_query"); });
     grid->addLayout(col10, 1, 0);
 
     // Session & Memory
-    auto* sess_btn = make_workflow_card(
-        "SESSION & MEMORY",
-        "Save agent sessions and manage memory storage.",
-        ui::colors::WARNING, "SAVE SESSION", col11);
+    auto* sess_btn = make_workflow_card("SESSION & MEMORY", "Save agent sessions and manage memory storage.",
+                                        ui::colors::WARNING, "SAVE SESSION", col11);
     connect(sess_btn, &QPushButton::clicked, this, [this]() { run_workflow("save_session"); });
     grid->addLayout(col11, 1, 1);
 
@@ -221,8 +207,7 @@ QWidget* WorkflowsViewPanel::build_results_panel() {
     vl->addWidget(workflow_title_);
 
     result_status_ = new QLabel;
-    result_status_->setStyleSheet(
-        QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+    result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
     vl->addWidget(result_status_);
 
     result_display_ = new QTextEdit;
@@ -231,8 +216,7 @@ QWidget* WorkflowsViewPanel::build_results_panel() {
         QString("QTextEdit { background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px; }"
                 "QScrollBar:vertical { background:%1;width:6px; }"
                 "QScrollBar::handle:vertical { background:%4;min-height:20px; }")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-                 ui::colors::BORDER_BRIGHT));
+            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
     vl->addWidget(result_display_, 1);
 
     return panel;
@@ -251,13 +235,11 @@ void WorkflowsViewPanel::setup_connections() {
         if (r.success) {
             result_display_->setPlainText(r.response);
             result_status_->setText(QString("Completed in %1ms").arg(r.execution_time_ms));
-            result_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE));
+            result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE));
         } else {
             result_display_->setPlainText("Error: " + r.error);
             result_status_->setText("FAILED");
-            result_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+            result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
         }
     });
 }
@@ -272,8 +254,7 @@ void WorkflowsViewPanel::run_workflow(const QString& type, const QJsonObject& pa
     result_display_->clear();
     workflow_title_->setText(QString("WORKFLOW: %1").arg(type.toUpper()));
     result_status_->setText("Executing...");
-    result_status_->setStyleSheet(
-        QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::AMBER));
+    result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::AMBER));
 
     services::AgentService::instance().run_workflow(type, params);
 }

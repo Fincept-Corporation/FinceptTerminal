@@ -3,8 +3,8 @@
 #include <QSettings>
 
 #ifdef Q_OS_WIN
-#    include <windows.h>
 #    include <wincred.h>
+#    include <windows.h>
 #    pragma comment(lib, "Advapi32.lib")
 #endif
 

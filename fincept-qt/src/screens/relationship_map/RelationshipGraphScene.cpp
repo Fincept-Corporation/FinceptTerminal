@@ -20,14 +20,22 @@ namespace fincept::relmap {
 
 static QSizeF node_size(NodeCategory cat) {
     switch (cat) {
-    case NodeCategory::Company:       return {220, 120};
-    case NodeCategory::Peer:          return {160, 80};
-    case NodeCategory::Institutional: return {150, 60};
-    case NodeCategory::FundFamily:    return {170, 80};
-    case NodeCategory::Insider:       return {150, 65};
-    case NodeCategory::Event:         return {150, 55};
-    case NodeCategory::SupplyChain:   return {160, 65};
-    case NodeCategory::Metrics:       return {160, 80};
+        case NodeCategory::Company:
+            return {220, 120};
+        case NodeCategory::Peer:
+            return {160, 80};
+        case NodeCategory::Institutional:
+            return {150, 60};
+        case NodeCategory::FundFamily:
+            return {170, 80};
+        case NodeCategory::Insider:
+            return {150, 65};
+        case NodeCategory::Event:
+            return {150, 55};
+        case NodeCategory::SupplyChain:
+            return {160, 65};
+        case NodeCategory::Metrics:
+            return {160, 80};
     }
     return {150, 60};
 }
@@ -83,12 +91,18 @@ class GraphNodeItem : public QGraphicsRectItem {
             auto* val = new QGraphicsTextItem(this);
             QString formatted;
             double v = data.value;
-            if (v >= 1e12) formatted = QString("$%1T").arg(v / 1e12, 0, 'f', 1);
-            else if (v >= 1e9) formatted = QString("$%1B").arg(v / 1e9, 0, 'f', 1);
-            else if (v >= 1e6) formatted = QString("$%1M").arg(v / 1e6, 0, 'f', 1);
-            else if (v > 100) formatted = QString("$%1").arg(v, 0, 'f', 0);
-            else if (v > 0 && v <= 100) formatted = QString("%1%").arg(v, 0, 'f', 1);
-            else formatted = QString::number(v, 'f', 2);
+            if (v >= 1e12)
+                formatted = QString("$%1T").arg(v / 1e12, 0, 'f', 1);
+            else if (v >= 1e9)
+                formatted = QString("$%1B").arg(v / 1e9, 0, 'f', 1);
+            else if (v >= 1e6)
+                formatted = QString("$%1M").arg(v / 1e6, 0, 'f', 1);
+            else if (v > 100)
+                formatted = QString("$%1").arg(v, 0, 'f', 0);
+            else if (v > 0 && v <= 100)
+                formatted = QString("%1%").arg(v, 0, 'f', 1);
+            else
+                formatted = QString::number(v, 'f', 2);
 
             val->setPlainText(formatted);
             val->setFont(mono_bold);
@@ -120,8 +134,7 @@ class GraphNodeItem : public QGraphicsRectItem {
 
 // ── Scene ────────────────────────────────────────────────────────────────────
 
-RelationshipGraphScene::RelationshipGraphScene(QObject* parent)
-    : QGraphicsScene(parent) {
+RelationshipGraphScene::RelationshipGraphScene(QObject* parent) : QGraphicsScene(parent) {
     setBackgroundBrush(QBrush(QColor("#080808")));
 }
 
@@ -130,9 +143,7 @@ void RelationshipGraphScene::clear_graph() {
     node_positions_.clear();
 }
 
-void RelationshipGraphScene::build_graph(const RelationshipData& data,
-                                          const FilterState& filters,
-                                          LayoutMode layout) {
+void RelationshipGraphScene::build_graph(const RelationshipData& data, const FilterState& filters, LayoutMode layout) {
     clear_graph();
 
     QVector<GraphNode> nodes;
@@ -177,7 +188,8 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data,
     // 3. Institutional holders
     if (filters.show_institutional) {
         for (const auto& h : data.institutional_holders) {
-            if (h.percentage < filters.min_ownership) continue;
+            if (h.percentage < filters.min_ownership)
+                continue;
             QString hid = "inst-" + h.name.left(20).replace(' ', '-');
             GraphNode n;
             n.id = hid;
@@ -188,7 +200,8 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data,
             n.properties["Shares"] = QString::number(h.shares, 'f', 0);
             n.properties["Value"] = QString("$%1M").arg(h.value / 1e6, 0, 'f', 1);
             nodes.append(n);
-            edges.append({hid, company_id, EdgeCategory::Ownership, QString("%1%").arg(h.percentage, 0, 'f', 1), h.percentage / 10.0});
+            edges.append({hid, company_id, EdgeCategory::Ownership, QString("%1%").arg(h.percentage, 0, 'f', 1),
+                          h.percentage / 10.0});
         }
     }
 
@@ -260,8 +273,7 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data,
     // Add edge items first (under nodes)
     for (const auto& edge : edges) {
         if (node_positions_.contains(edge.source_id) && node_positions_.contains(edge.target_id)) {
-            add_edge_item(node_positions_[edge.source_id], node_positions_[edge.target_id],
-                          edge.category, edge.label);
+            add_edge_item(node_positions_[edge.source_id], node_positions_[edge.target_id], edge.category, edge.label);
         }
     }
 
@@ -279,9 +291,7 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data,
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 
-void RelationshipGraphScene::apply_layout(QVector<GraphNode>& nodes,
-                                           const QVector<GraphEdge>&,
-                                           LayoutMode mode) {
+void RelationshipGraphScene::apply_layout(QVector<GraphNode>& nodes, const QVector<GraphEdge>&, LayoutMode mode) {
     node_positions_.clear();
     QPointF center(0, 0);
 
@@ -289,21 +299,38 @@ void RelationshipGraphScene::apply_layout(QVector<GraphNode>& nodes,
     QVector<int> company_idx, peer_idx, inst_idx, insider_idx, metrics_idx, event_idx, sc_idx;
     for (int i = 0; i < nodes.size(); ++i) {
         switch (nodes[i].category) {
-        case NodeCategory::Company:       company_idx.append(i); break;
-        case NodeCategory::Peer:          peer_idx.append(i); break;
-        case NodeCategory::Institutional: inst_idx.append(i); break;
-        case NodeCategory::Insider:       insider_idx.append(i); break;
-        case NodeCategory::Metrics:       metrics_idx.append(i); break;
-        case NodeCategory::Event:         event_idx.append(i); break;
-        case NodeCategory::SupplyChain:   sc_idx.append(i); break;
-        case NodeCategory::FundFamily:    inst_idx.append(i); break; // group with institutional
+            case NodeCategory::Company:
+                company_idx.append(i);
+                break;
+            case NodeCategory::Peer:
+                peer_idx.append(i);
+                break;
+            case NodeCategory::Institutional:
+                inst_idx.append(i);
+                break;
+            case NodeCategory::Insider:
+                insider_idx.append(i);
+                break;
+            case NodeCategory::Metrics:
+                metrics_idx.append(i);
+                break;
+            case NodeCategory::Event:
+                event_idx.append(i);
+                break;
+            case NodeCategory::SupplyChain:
+                sc_idx.append(i);
+                break;
+            case NodeCategory::FundFamily:
+                inst_idx.append(i);
+                break; // group with institutional
         }
     }
 
     QVector<QPointF> positions(nodes.size());
 
     // Company at center
-    for (int i : company_idx) positions[i] = center;
+    for (int i : company_idx)
+        positions[i] = center;
 
     if (mode == LayoutMode::Layered || mode == LayoutMode::Radial) {
         // Concentric rings
@@ -317,7 +344,8 @@ void RelationshipGraphScene::apply_layout(QVector<GraphNode>& nodes,
         // Force-like: spread randomly then iterate
         double spread = 200.0;
         for (int i = 0; i < nodes.size(); ++i) {
-            if (nodes[i].category == NodeCategory::Company) continue;
+            if (nodes[i].category == NodeCategory::Company)
+                continue;
             double angle = (double)i / nodes.size() * 2 * M_PI;
             double r = spread + (i % 3) * 150;
             positions[i] = QPointF(r * qCos(angle), r * qSin(angle));
@@ -329,11 +357,10 @@ void RelationshipGraphScene::apply_layout(QVector<GraphNode>& nodes,
     }
 }
 
-void RelationshipGraphScene::place_in_ring(const QVector<int>& indices,
-                                            QVector<QPointF>& positions,
-                                            double radius, double start_angle,
-                                            const QPointF& center) {
-    if (indices.isEmpty()) return;
+void RelationshipGraphScene::place_in_ring(const QVector<int>& indices, QVector<QPointF>& positions, double radius,
+                                           double start_angle, const QPointF& center) {
+    if (indices.isEmpty())
+        return;
     double step = 2 * M_PI / std::max((int)indices.size(), 1);
     // Limit arc to avoid overlapping with other rings
     double arc = std::min(2 * M_PI, step * indices.size());
@@ -355,8 +382,8 @@ void RelationshipGraphScene::add_node_item(const GraphNode& node, const QPointF&
     addItem(item);
 }
 
-void RelationshipGraphScene::add_edge_item(const QPointF& from, const QPointF& to,
-                                            EdgeCategory cat, const QString& label) {
+void RelationshipGraphScene::add_edge_item(const QPointF& from, const QPointF& to, EdgeCategory cat,
+                                           const QString& label) {
     QPainterPath path;
     path.moveTo(from);
 
@@ -396,8 +423,7 @@ void RelationshipGraphScene::add_edge_item(const QPointF& from, const QPointF& t
 
 // ── View ─────────────────────────────────────────────────────────────────────
 
-RelationshipGraphView::RelationshipGraphView(QGraphicsScene* scene, QWidget* parent)
-    : QGraphicsView(scene, parent) {
+RelationshipGraphView::RelationshipGraphView(QGraphicsScene* scene, QWidget* parent) : QGraphicsView(scene, parent) {
     setRenderHint(QPainter::Antialiasing);
     setDragMode(QGraphicsView::ScrollHandDrag);
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);

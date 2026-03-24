@@ -484,7 +484,7 @@ void AuthManager::auto_configure_fincept_llm() {
     // SettingsRepository at runtime by LlmService::ensure_config())
     LlmConfig fincept_llm;
     fincept_llm.provider = "fincept";
-    fincept_llm.model    = "fincept-llm";
+    fincept_llm.model = "fincept-llm";
     fincept_llm.base_url = "https://api.fincept.in/research/llm";
 
     LlmConfigRepository::instance().save_provider(fincept_llm);

@@ -253,9 +253,7 @@ void NewsSidePanel::update_sentiment(int bullish, int bearish, int neutral) {
     }
 
     double score = total > 0 ? static_cast<double>(bullish - bearish) / total : 0.0;
-    sentiment_score_->setText(QString("%1%2")
-                                  .arg(score >= 0 ? "+" : "")
-                                  .arg(score, 0, 'f', 2));
+    sentiment_score_->setText(QString("%1%2").arg(score >= 0 ? "+" : "").arg(score, 0, 'f', 2));
 }
 
 void NewsSidePanel::update_top_stories(const QVector<services::NewsArticle>& top) {
@@ -281,9 +279,7 @@ void NewsSidePanel::update_top_stories(const QVector<services::NewsArticle>& top
         // Priority dot via left border color
         btn->setStyleSheet(QString("border-left: 3px solid %1;").arg(pcolor));
 
-        connect(btn, &QPushButton::clicked, this, [this, article]() {
-            emit article_clicked(article);
-        });
+        connect(btn, &QPushButton::clicked, this, [this, article]() { emit article_clicked(article); });
 
         top_stories_layout_->addWidget(btn);
     }
@@ -304,16 +300,14 @@ void NewsSidePanel::update_categories(const QMap<QString, int>& counts) {
         btn->setText(QString("%1  %2").arg(it.key(), -10).arg(it.value()));
 
         QString cat = it.key();
-        connect(btn, &QPushButton::clicked, this, [this, cat]() {
-            emit category_clicked(cat);
-        });
+        connect(btn, &QPushButton::clicked, this, [this, cat]() { emit category_clicked(cat); });
 
         categories_layout_->addWidget(btn);
     }
 }
 
 void NewsSidePanel::update_monitors(const QVector<services::NewsMonitor>& monitors,
-                                     const QMap<QString, QVector<services::NewsArticle>>& matches) {
+                                    const QMap<QString, QVector<services::NewsArticle>>& matches) {
     while (monitors_layout_->count() > 0) {
         auto* item = monitors_layout_->takeAt(0);
         if (item->widget())
@@ -346,9 +340,7 @@ void NewsSidePanel::update_monitors(const QVector<services::NewsMonitor>& monito
         toggle->setFixedSize(28, 18);
         toggle->setCursor(Qt::PointingHandCursor);
         QString mid = monitor.id;
-        connect(toggle, &QPushButton::clicked, this, [this, mid]() {
-            emit monitor_toggled(mid);
-        });
+        connect(toggle, &QPushButton::clicked, this, [this, mid]() { emit monitor_toggled(mid); });
         hl->addWidget(toggle);
 
         // Delete button
@@ -356,9 +348,7 @@ void NewsSidePanel::update_monitors(const QVector<services::NewsMonitor>& monito
         del_btn->setObjectName("newsMonitorDeleteBtn");
         del_btn->setFixedSize(18, 18);
         del_btn->setCursor(Qt::PointingHandCursor);
-        connect(del_btn, &QPushButton::clicked, this, [this, mid]() {
-            emit monitor_deleted(mid);
-        });
+        connect(del_btn, &QPushButton::clicked, this, [this, mid]() { emit monitor_deleted(mid); });
         hl->addWidget(del_btn);
 
         monitors_layout_->addWidget(row);
@@ -405,7 +395,8 @@ void NewsSidePanel::update_deviations(const QVector<QPair<QString, double>>& dev
 void NewsSidePanel::update_entities(const services::NerResult& ner) {
     while (entities_layout_->count() > 0) {
         auto* item = entities_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
     bool has_data = false;
@@ -438,7 +429,8 @@ void NewsSidePanel::update_entities(const services::NerResult& ner) {
 void NewsSidePanel::update_locations(const QVector<services::ArticleGeo>& geo) {
     while (locations_layout_->count() > 0) {
         auto* item = locations_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
@@ -456,9 +448,8 @@ void NewsSidePanel::update_locations(const QVector<services::ArticleGeo>& geo) {
     }
 
     auto sorted = loc_counts.keys();
-    std::sort(sorted.begin(), sorted.end(), [&](const QString& a, const QString& b) {
-        return loc_counts[a] > loc_counts[b];
-    });
+    std::sort(sorted.begin(), sorted.end(),
+              [&](const QString& a, const QString& b) { return loc_counts[a] > loc_counts[b]; });
 
     for (int i = 0; i < std::min(8, static_cast<int>(sorted.size())); ++i) {
         auto* lbl = new QLabel(QString("%1  %2").arg(sorted[i].left(18), -18).arg(loc_counts[sorted[i]]), this);
@@ -470,7 +461,8 @@ void NewsSidePanel::update_locations(const QVector<services::ArticleGeo>& geo) {
 void NewsSidePanel::update_signals(const QVector<services::CorrelationSignal>& sigs) {
     while (signals_layout_->count() > 0) {
         auto* item = signals_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
@@ -482,8 +474,7 @@ void NewsSidePanel::update_signals(const QVector<services::CorrelationSignal>& s
 
     for (int i = 0; i < std::min(8, static_cast<int>(sigs.size())); ++i) {
         const auto& sig = sigs[i];
-        QString color = sig.severity == "critical" ? "#dc2626"
-                        : (sig.severity == "high" ? "#f97316" : "#eab308");
+        QString color = sig.severity == "critical" ? "#dc2626" : (sig.severity == "high" ? "#f97316" : "#eab308");
         auto* lbl = new QLabel(sig.detail.left(35), this);
         lbl->setObjectName("newsDeviationCategory");
         lbl->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(color));
@@ -502,20 +493,22 @@ void NewsSidePanel::update_instability(const QString& country, const services::I
         if (w && w->property("country").toString() == country) {
             auto* lbl = qobject_cast<QLabel*>(w);
             if (lbl) {
-                QString color = score.level == "CRITICAL" ? "#dc2626"
-                                : (score.level == "HIGH" ? "#f97316"
-                                   : (score.level == "ELEVATED" ? "#eab308" : "#22c55e"));
+                QString color =
+                    score.level == "CRITICAL"
+                        ? "#dc2626"
+                        : (score.level == "HIGH" ? "#f97316" : (score.level == "ELEVATED" ? "#eab308" : "#22c55e"));
                 lbl->setText(QString("%1  %2  %3").arg(country, -4).arg(score.cii_score, 3).arg(score.level));
-                lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700; background: transparent;").arg(color));
+                lbl->setStyleSheet(
+                    QString("color: %1; font-size: 11px; font-weight: 700; background: transparent;").arg(color));
             }
             return;
         }
     }
 
     // New entry
-    QString color = score.level == "CRITICAL" ? "#dc2626"
-                    : (score.level == "HIGH" ? "#f97316"
-                       : (score.level == "ELEVATED" ? "#eab308" : "#22c55e"));
+    QString color = score.level == "CRITICAL"
+                        ? "#dc2626"
+                        : (score.level == "HIGH" ? "#f97316" : (score.level == "ELEVATED" ? "#eab308" : "#22c55e"));
     auto* lbl = new QLabel(QString("%1  %2  %3").arg(country, -4).arg(score.cii_score, 3).arg(score.level), this);
     lbl->setObjectName("newsDeviationScore");
     lbl->setProperty("country", country);
@@ -526,7 +519,8 @@ void NewsSidePanel::update_instability(const QString& country, const services::I
 void NewsSidePanel::update_predictions(const QVector<services::PredictionMarket>& predictions) {
     while (predictions_layout_->count() > 0) {
         auto* item = predictions_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 

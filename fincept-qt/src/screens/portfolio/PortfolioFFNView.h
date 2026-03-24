@@ -37,9 +37,9 @@ class PortfolioFFNView : public QWidget {
 
     // Other tabs
     QWidget* optimization_panel_ = nullptr;
-    QWidget* rebased_panel_      = nullptr;
-    QWidget* drawdowns_panel_    = nullptr;
-    QWidget* rolling_panel_      = nullptr;
+    QWidget* rebased_panel_ = nullptr;
+    QWidget* drawdowns_panel_ = nullptr;
+    QWidget* rolling_panel_ = nullptr;
 
     // Back button
     QPushButton* back_btn_ = nullptr;

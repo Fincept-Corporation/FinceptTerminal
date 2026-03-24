@@ -27,8 +27,7 @@ using namespace fincept::ui;
 
 SpreadsheetItem::SpreadsheetItem() : QTableWidgetItem(QTableWidgetItem::UserType) {}
 
-SpreadsheetItem::SpreadsheetItem(const QString& text)
-    : QTableWidgetItem(QTableWidgetItem::UserType), raw_text_(text) {}
+SpreadsheetItem::SpreadsheetItem(const QString& text) : QTableWidgetItem(QTableWidgetItem::UserType), raw_text_(text) {}
 
 void SpreadsheetItem::setData(int role, const QVariant& value) {
     if (role == Qt::EditRole) {
@@ -70,9 +69,11 @@ void SpreadsheetItem::parse_cell_ref(const QString& ref, int& row, int& col) {
 }
 
 double SpreadsheetItem::resolve_cell_value(int row, int col) const {
-    if (!tableWidget()) return 0.0;
+    if (!tableWidget())
+        return 0.0;
     auto* item = tableWidget()->item(row, col);
-    if (!item) return 0.0;
+    if (!item)
+        return 0.0;
 
     QVariant val = item->data(Qt::DisplayRole);
     bool ok = false;
@@ -85,10 +86,13 @@ QVector<double> SpreadsheetItem::resolve_range(const QString& from, const QStrin
     parse_cell_ref(from, r1, c1);
     parse_cell_ref(to, r2, c2);
 
-    if (r1 < 0 || c1 < 0 || r2 < 0 || c2 < 0) return {};
+    if (r1 < 0 || c1 < 0 || r2 < 0 || c2 < 0)
+        return {};
 
-    if (r1 > r2) std::swap(r1, r2);
-    if (c1 > c2) std::swap(c1, c2);
+    if (r1 > r2)
+        std::swap(r1, r2);
+    if (c1 > c2)
+        std::swap(c1, c2);
 
     QVector<double> values;
     for (int r = r1; r <= r2; ++r) {
@@ -101,18 +105,19 @@ QVector<double> SpreadsheetItem::resolve_range(const QString& from, const QStrin
 }
 
 QVariant SpreadsheetItem::evaluate_formula() const {
-    if (!tableWidget()) return "#ERR";
+    if (!tableWidget())
+        return "#ERR";
 
     QString expr = raw_text_.mid(1).trimmed().toUpper();
 
     // ── Function calls: SUM, AVG/AVERAGE, MIN, MAX, COUNT ────────────────
-    static QRegularExpression func_re(
-        "^(SUM|AVG|AVERAGE|MIN|MAX|COUNT)\\(([A-Z]+\\d+):([A-Z]+\\d+)\\)$");
+    static QRegularExpression func_re("^(SUM|AVG|AVERAGE|MIN|MAX|COUNT)\\(([A-Z]+\\d+):([A-Z]+\\d+)\\)$");
     auto fm = func_re.match(expr);
     if (fm.hasMatch()) {
         QString func = fm.captured(1);
         auto values = resolve_range(fm.captured(2), fm.captured(3));
-        if (values.isEmpty()) return 0.0;
+        if (values.isEmpty())
+            return 0.0;
 
         if (func == "SUM")
             return std::accumulate(values.begin(), values.end(), 0.0);
@@ -132,7 +137,8 @@ QVariant SpreadsheetItem::evaluate_formula() const {
     if (cm.hasMatch()) {
         int r, c;
         parse_cell_ref(expr, r, c);
-        if (r >= 0 && c >= 0) return resolve_cell_value(r, c);
+        if (r >= 0 && c >= 0)
+            return resolve_cell_value(r, c);
     }
 
     // ── Simple arithmetic with cell refs: =A1+B1, =A1*2, etc. ───────────
@@ -180,37 +186,47 @@ QVariant SpreadsheetItem::evaluate_formula() const {
             if (!num_buf.isEmpty()) {
                 bool ok;
                 double v = num_buf.toDouble(&ok);
-                if (ok) nums.append(v);
-                else return false;
+                if (ok)
+                    nums.append(v);
+                else
+                    return false;
                 num_buf.clear();
             }
             return true;
         };
 
         auto apply_op = [&]() {
-            if (ops.isEmpty() || nums.size() < 2) return;
+            if (ops.isEmpty() || nums.size() < 2)
+                return;
             double b = nums.takeLast();
             double a = nums.takeLast();
             QChar op = ops.takeLast();
-            if (op == '+') nums.append(a + b);
-            else if (op == '-') nums.append(a - b);
-            else if (op == '*') nums.append(a * b);
-            else if (op == '/') nums.append(b != 0 ? a / b : 0);
+            if (op == '+')
+                nums.append(a + b);
+            else if (op == '-')
+                nums.append(a - b);
+            else if (op == '*')
+                nums.append(a * b);
+            else if (op == '/')
+                nums.append(b != 0 ? a / b : 0);
         };
 
         auto precedence = [](QChar op) -> int {
-            if (op == '+' || op == '-') return 1;
-            if (op == '*' || op == '/') return 2;
+            if (op == '+' || op == '-')
+                return 1;
+            if (op == '*' || op == '/')
+                return 2;
             return 0;
         };
 
         for (int i = 0; i < eval_expr.length(); ++i) {
             QChar ch = eval_expr[i];
-            if (ch.isDigit() || ch == '.' || ch == 'e' || ch == 'E'
-                || (ch == '-' && (i == 0 || eval_expr[i-1] == '('))) {
+            if (ch.isDigit() || ch == '.' || ch == 'e' || ch == 'E' ||
+                (ch == '-' && (i == 0 || eval_expr[i - 1] == '('))) {
                 num_buf += ch;
             } else if (ch == '+' || ch == '-' || ch == '*' || ch == '/') {
-                if (!flush_num()) return QVariant("#ERR");
+                if (!flush_num())
+                    return QVariant("#ERR");
                 while (!ops.isEmpty() && precedence(ops.last()) >= precedence(ch)) {
                     apply_op();
                 }
@@ -218,14 +234,17 @@ QVariant SpreadsheetItem::evaluate_formula() const {
             } else if (ch == '(') {
                 ops.append(ch);
             } else if (ch == ')') {
-                if (!flush_num()) return QVariant("#ERR");
+                if (!flush_num())
+                    return QVariant("#ERR");
                 while (!ops.isEmpty() && ops.last() != '(') {
                     apply_op();
                 }
-                if (!ops.isEmpty()) ops.removeLast(); // remove '('
+                if (!ops.isEmpty())
+                    ops.removeLast(); // remove '('
             }
         }
-        if (!flush_num()) return QVariant("#ERR");
+        if (!flush_num())
+            return QVariant("#ERR");
         while (!ops.isEmpty()) {
             apply_op();
         }
@@ -247,8 +266,7 @@ QVariant SpreadsheetItem::evaluate_formula() const {
 // SpreadsheetWidget
 // ═════════════════════════════════════════════════════════════════════════════
 
-SpreadsheetWidget::SpreadsheetWidget(const QString& sheet_name, int rows, int cols,
-                                       QWidget* parent)
+SpreadsheetWidget::SpreadsheetWidget(const QString& sheet_name, int rows, int cols, QWidget* parent)
     : QWidget(parent), sheet_name_(sheet_name) {
     build_ui(rows, cols);
 }
@@ -264,8 +282,7 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
     auto* formula_row = new QWidget(this);
     formula_row->setFixedHeight(28);
     formula_row->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;")
-            .arg(colors::BG_RAISED, colors::BORDER_MED));
+        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_MED));
 
     auto* fhl = new QHBoxLayout(formula_row);
     fhl->setContentsMargins(8, 0, 8, 0);
@@ -274,16 +291,14 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
     cell_ref_label_ = new QLabel("A1", formula_row);
     cell_ref_label_->setFixedWidth(50);
     cell_ref_label_->setAlignment(Qt::AlignCenter);
-    cell_ref_label_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:11px; font-weight:700;"
-                " border-right:1px solid %3; padding-right:6px;")
-            .arg(colors::AMBER, fonts::DATA_FAMILY, colors::BORDER_MED));
+    cell_ref_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:700;"
+                                           " border-right:1px solid %3; padding-right:6px;")
+                                       .arg(colors::AMBER, fonts::DATA_FAMILY, colors::BORDER_MED));
     fhl->addWidget(cell_ref_label_);
 
     auto* fx_label = new QLabel("fx", formula_row);
-    fx_label->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:11px; font-weight:700;")
-            .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+    fx_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:700;")
+                                .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
     fhl->addWidget(fx_label);
 
     formula_bar_ = new QLineEdit(formula_row);
@@ -292,8 +307,7 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
                 " font-family:%3; font-size:11px; padding:2px 4px; }"
                 "QLineEdit:focus { background:%4; }")
             .arg(colors::BG_RAISED, colors::TEXT_PRIMARY, fonts::DATA_FAMILY, colors::BG_HOVER));
-    connect(formula_bar_, &QLineEdit::returnPressed,
-            this, &SpreadsheetWidget::on_formula_bar_return);
+    connect(formula_bar_, &QLineEdit::returnPressed, this, &SpreadsheetWidget::on_formula_bar_return);
     fhl->addWidget(formula_bar_, 1);
 
     root->addWidget(formula_row);
@@ -303,7 +317,8 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
     setup_headers(cols);
 
     table_->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    table_->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed | QAbstractItemView::AnyKeyPressed);
+    table_->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed |
+                            QAbstractItemView::AnyKeyPressed);
     table_->verticalHeader()->setDefaultSectionSize(22);
     table_->horizontalHeader()->setDefaultSectionSize(80);
     table_->horizontalHeader()->setMinimumSectionSize(30);
@@ -323,23 +338,21 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
     connect(table_, &QTableWidget::customContextMenuRequested, this, &SpreadsheetWidget::on_context_menu);
 
     // Dark theme styling
-    table_->setStyleSheet(
-        QString(
-            "QTableWidget { background:%1; color:%2; gridline-color:%3;"
-            "  font-family:%4; font-size:11px; border:none; }"
-            "QTableWidget::item { padding:2px 4px; }"
-            "QTableWidget::item:selected { background:%5; }"
-            "QHeaderView::section { background:%6; color:%7; border:none;"
-            "  border-right:1px solid %3; border-bottom:1px solid %3;"
-            "  font-family:%4; font-size:10px; font-weight:600; padding:3px 4px; }"
-            "QTableCornerButton::section { background:%6; border:none; }")
-            .arg("#1a1a1a",       // cell bg
-                 "#d4d4d4",       // cell text
-                 "#404040",       // gridlines
-                 fonts::DATA_FAMILY,
-                 "#3f3f3f",       // selection bg
-                 "#2d2d2d",       // header bg
-                 "#a3a3a3"));     // header text
+    table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                                  "  font-family:%4; font-size:11px; border:none; }"
+                                  "QTableWidget::item { padding:2px 4px; }"
+                                  "QTableWidget::item:selected { background:%5; }"
+                                  "QHeaderView::section { background:%6; color:%7; border:none;"
+                                  "  border-right:1px solid %3; border-bottom:1px solid %3;"
+                                  "  font-family:%4; font-size:10px; font-weight:600; padding:3px 4px; }"
+                                  "QTableCornerButton::section { background:%6; border:none; }")
+                              .arg("#1a1a1a", // cell bg
+                                   "#d4d4d4", // cell text
+                                   "#404040", // gridlines
+                                   fonts::DATA_FAMILY,
+                                   "#3f3f3f",   // selection bg
+                                   "#2d2d2d",   // header bg
+                                   "#a3a3a3")); // header text
 
     root->addWidget(table_, 1);
 }
@@ -429,7 +442,8 @@ void SpreadsheetWidget::recalculate() {
 // ── Slots ────────────────────────────────────────────────────────────────────
 
 void SpreadsheetWidget::on_cell_changed(int row, int col) {
-    if (updating_formula_bar_) return;
+    if (updating_formula_bar_)
+        return;
 
     auto* item = dynamic_cast<SpreadsheetItem*>(table_->item(row, col));
     if (item) {
@@ -446,7 +460,8 @@ void SpreadsheetWidget::on_cell_changed(int row, int col) {
 }
 
 void SpreadsheetWidget::on_current_cell_changed(int row, int col, int, int) {
-    if (row < 0 || col < 0) return;
+    if (row < 0 || col < 0)
+        return;
 
     updating_formula_bar_ = true;
     cell_ref_label_->setText(column_label(col) + QString::number(row + 1));
@@ -459,7 +474,8 @@ void SpreadsheetWidget::on_current_cell_changed(int row, int col, int, int) {
 void SpreadsheetWidget::on_formula_bar_return() {
     int row = table_->currentRow();
     int col = table_->currentColumn();
-    if (row < 0 || col < 0) return;
+    if (row < 0 || col < 0)
+        return;
 
     updating_formula_bar_ = true;
     set_cell(row, col, formula_bar_->text());
@@ -477,28 +493,30 @@ void SpreadsheetWidget::on_formula_bar_return() {
 
 void SpreadsheetWidget::on_context_menu(const QPoint& pos) {
     QMenu menu(this);
-    menu.setStyleSheet(
-        QString("QMenu { background:%1; color:%2; border:1px solid %3;"
-                " font-family:%4; font-size:11px; }"
-                "QMenu::item { padding:6px 20px; }"
-                "QMenu::item:selected { background:%5; }"
-                "QMenu::separator { height:1px; background:%3; margin:4px 8px; }")
-            .arg("#2d2d2d", "#d4d4d4", "#404040", fonts::DATA_FAMILY, "#404040"));
+    menu.setStyleSheet(QString("QMenu { background:%1; color:%2; border:1px solid %3;"
+                               " font-family:%4; font-size:11px; }"
+                               "QMenu::item { padding:6px 20px; }"
+                               "QMenu::item:selected { background:%5; }"
+                               "QMenu::separator { height:1px; background:%3; margin:4px 8px; }")
+                           .arg("#2d2d2d", "#d4d4d4", "#404040", fonts::DATA_FAMILY, "#404040"));
 
     menu.addAction("Cut", this, [this]() {
         auto* item = table_->currentItem();
-        if (!item) return;
+        if (!item)
+            return;
         QApplication::clipboard()->setText(item->data(Qt::DisplayRole).toString());
         set_cell(table_->currentRow(), table_->currentColumn(), "");
     });
     menu.addAction("Copy", this, [this]() {
         auto* item = table_->currentItem();
-        if (!item) return;
+        if (!item)
+            return;
         QApplication::clipboard()->setText(item->data(Qt::DisplayRole).toString());
     });
     menu.addAction("Paste", this, [this]() {
         QString text = QApplication::clipboard()->text();
-        if (text.isEmpty()) return;
+        if (text.isEmpty())
+            return;
         set_cell(table_->currentRow(), table_->currentColumn(), text);
         recalculate();
     });
@@ -530,7 +548,8 @@ void SpreadsheetWidget::on_context_menu(const QPoint& pos) {
 
 void SpreadsheetWidget::insert_row_above() {
     int row = table_->currentRow();
-    if (row < 0) row = 0;
+    if (row < 0)
+        row = 0;
     table_->insertRow(row);
     for (int c = 0; c < table_->columnCount(); ++c) {
         table_->setItem(row, c, new SpreadsheetItem());
@@ -547,7 +566,8 @@ void SpreadsheetWidget::insert_row_below() {
 
 void SpreadsheetWidget::insert_col_left() {
     int col = table_->currentColumn();
-    if (col < 0) col = 0;
+    if (col < 0)
+        col = 0;
     table_->insertColumn(col);
     for (int r = 0; r < table_->rowCount(); ++r) {
         table_->setItem(r, col, new SpreadsheetItem());
@@ -569,7 +589,8 @@ void SpreadsheetWidget::delete_selected_rows() {
     QVector<int> rows;
     for (const auto& range : ranges) {
         for (int r = range.topRow(); r <= range.bottomRow(); ++r) {
-            if (!rows.contains(r)) rows.append(r);
+            if (!rows.contains(r))
+                rows.append(r);
         }
     }
     std::sort(rows.begin(), rows.end(), std::greater<int>());
@@ -583,7 +604,8 @@ void SpreadsheetWidget::delete_selected_cols() {
     QVector<int> cols;
     for (const auto& range : ranges) {
         for (int c = range.leftColumn(); c <= range.rightColumn(); ++c) {
-            if (!cols.contains(c)) cols.append(c);
+            if (!cols.contains(c))
+                cols.append(c);
         }
     }
     std::sort(cols.begin(), cols.end(), std::greater<int>());

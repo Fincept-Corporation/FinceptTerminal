@@ -5,9 +5,7 @@
 
 namespace fincept::workflow {
 
-QJsonValue ExpressionEngine::evaluate(const QJsonValue& param_value,
-                                       const QJsonObject& context)
-{
+QJsonValue ExpressionEngine::evaluate(const QJsonValue& param_value, const QJsonObject& context) {
     if (!param_value.isString())
         return param_value;
 
@@ -32,10 +30,14 @@ QJsonValue ExpressionEngine::evaluate(const QJsonValue& param_value,
         QJsonValue resolved = resolve_expression(expr, context);
 
         QString replacement;
-        if (resolved.isString())      replacement = resolved.toString();
-        else if (resolved.isDouble()) replacement = QString::number(resolved.toDouble());
-        else if (resolved.isBool())   replacement = resolved.toBool() ? "true" : "false";
-        else                          replacement = "null";
+        if (resolved.isString())
+            replacement = resolved.toString();
+        else if (resolved.isDouble())
+            replacement = QString::number(resolved.toDouble());
+        else if (resolved.isBool())
+            replacement = resolved.toBool() ? "true" : "false";
+        else
+            replacement = "null";
 
         result.replace(match.captured(0), replacement);
     }
@@ -43,9 +45,7 @@ QJsonValue ExpressionEngine::evaluate(const QJsonValue& param_value,
     return QJsonValue(result);
 }
 
-QJsonObject ExpressionEngine::resolve_params(const QJsonObject& params,
-                                              const QJsonObject& context)
-{
+QJsonObject ExpressionEngine::resolve_params(const QJsonObject& params, const QJsonObject& context) {
     QJsonObject resolved;
     for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
         resolved[it.key()] = evaluate(it.value(), context);
@@ -53,9 +53,7 @@ QJsonObject ExpressionEngine::resolve_params(const QJsonObject& params,
     return resolved;
 }
 
-QJsonValue ExpressionEngine::resolve_expression(const QString& expr,
-                                                 const QJsonObject& context)
-{
+QJsonValue ExpressionEngine::resolve_expression(const QString& expr, const QJsonObject& context) {
     // Support dotted paths: $input.key.nested
     // The context is the merged upstream output
     QString path = expr;

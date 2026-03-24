@@ -7,7 +7,7 @@
 
 namespace fincept::screens {
 
-/// 4-step password reset: email → OTP sent → reset form → success.
+/// 4-step password reset — Obsidian design.
 class ForgotPasswordScreen : public QWidget {
     Q_OBJECT
   public:
@@ -15,6 +15,9 @@ class ForgotPasswordScreen : public QWidget {
 
   signals:
     void navigate_login();
+
+  protected:
+    void paintEvent(QPaintEvent* event) override;
 
   private:
     QStackedWidget* pages_ = nullptr;

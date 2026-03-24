@@ -20,82 +20,81 @@ using namespace fincept::ui;
 
 // ── Stylesheet constants (applied once at screen level) ─────────────────────
 
-static const QString kScreenStyle = QStringLiteral(
-    "#derivScreen { background: %1; }"
-    "#derivHeader { background: %2; border-bottom: 2px solid %3; }"
-    "#derivHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
-    "#derivHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
-    "#derivHeaderBadge { color: %6; font-size: 8px; font-weight: 700; background: rgba(22,163,74,0.2); "
-    "  padding: 2px 6px; }"
-    "#derivInstrBar { background: %1; }"
-    "#derivInstrBtn { background: transparent; color: %5; border: none; font-size: 9px; "
-    "  font-weight: 700; letter-spacing: 0.5px; padding: 6px 12px; }"
-    "#derivInstrBtn:hover { color: %4; background: %7; }"
-    "#derivInstrBtn[active=\"true\"] { background: %3; color: %1; }"
-    "#derivPanel { background: %8; border: 1px solid %9; }"
-    "#derivPanelHeader { background: %2; border-bottom: 1px solid %9; }"
-    "#derivPanelTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
-    "#derivPanelIcon { color: %3; font-size: 14px; background: transparent; }"
-    "#derivLabel { color: %5; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; "
-    "  background: transparent; }"
-    "#derivInput { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
-    "  font-size: 12px; }"
-    "#derivInput:focus { border-color: %10; }"
-    "QDoubleSpinBox { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
-    "  font-size: 12px; }"
-    "QDoubleSpinBox:focus { border-color: %10; }"
-    "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; }"
-    "QDateEdit { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
-    "  font-size: 12px; }"
-    "QDateEdit:focus { border-color: %10; }"
-    "QDateEdit::drop-down { border: none; width: 20px; }"
-    "QComboBox { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
-    "  font-size: 12px; }"
-    "QComboBox:focus { border-color: %10; }"
-    "QComboBox::drop-down { border: none; width: 20px; }"
-    "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %9; "
-    "  selection-background-color: %3; }"
-    "#derivCalcBtn { background: %3; color: %1; border: none; padding: 6px 16px; "
-    "  font-size: 9px; font-weight: 700; }"
-    "#derivCalcBtn:hover { background: #FF8800; }"
-    "#derivCalcBtn:disabled { background: %11; color: %12; }"
-    "#derivCalcBtnAlt { background: %13; color: %1; border: none; padding: 6px 16px; "
-    "  font-size: 9px; font-weight: 700; }"
-    "#derivCalcBtnAlt:hover { background: #00F5FF; }"
-    "#derivCalcBtnAlt:disabled { background: %11; color: %12; }"
-    "#derivResultsPanel { background: %8; border: 1px solid %9; }"
-    "#derivResultsHeader { background: %2; border-bottom: 1px solid %9; }"
-    "#derivResultsTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
-    "#derivResultLabel { color: %5; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; "
-    "  background: transparent; }"
-    "#derivResultValue { color: %13; font-size: 13px; font-weight: 700; background: transparent; }"
-    "#derivResultBigValue { color: %3; font-size: 16px; font-weight: 700; background: transparent; }"
-    "#derivResultCard { background: %2; padding: 8px; }"
-    "#derivErrorPanel { background: rgba(220,38,38,0.1); border: 1px solid %14; }"
-    "#derivErrorText { color: %14; font-size: 10px; background: transparent; }"
-    "#derivErrorLabel { color: %14; font-size: 9px; font-weight: 700; background: transparent; }"
-    "#derivStatusBar { background: %2; border-top: 1px solid %9; }"
-    "#derivStatusText { color: %5; font-size: 9px; background: transparent; }"
-    "#derivStatusEngine { color: %13; font-size: 9px; background: transparent; }"
-    "QScrollArea { background: %1; border: none; }"
-    "QScrollBar:vertical { background: %1; width: 6px; }"
-    "QScrollBar::handle:vertical { background: %9; min-height: 20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-)
-    .arg(colors::BG_BASE)        // %1
-    .arg(colors::BG_RAISED)      // %2
-    .arg(colors::AMBER)          // %3
-    .arg(colors::TEXT_PRIMARY)   // %4
-    .arg(colors::TEXT_SECONDARY) // %5
-    .arg(colors::POSITIVE)       // %6
-    .arg(colors::BG_HOVER)       // %7
-    .arg(colors::BG_SURFACE)     // %8
-    .arg(colors::BORDER_DIM)     // %9
-    .arg(colors::BORDER_BRIGHT)  // %10
-    .arg(colors::AMBER_DIM)      // %11
-    .arg(colors::TEXT_DIM)        // %12
-    .arg(colors::CYAN)            // %13
-    .arg(colors::NEGATIVE)       // %14
+static const QString kScreenStyle =
+    QStringLiteral("#derivScreen { background: %1; }"
+                   "#derivHeader { background: %2; border-bottom: 2px solid %3; }"
+                   "#derivHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
+                   "#derivHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
+                   "#derivHeaderBadge { color: %6; font-size: 8px; font-weight: 700; background: rgba(22,163,74,0.2); "
+                   "  padding: 2px 6px; }"
+                   "#derivInstrBar { background: %1; }"
+                   "#derivInstrBtn { background: transparent; color: %5; border: none; font-size: 9px; "
+                   "  font-weight: 700; letter-spacing: 0.5px; padding: 6px 12px; }"
+                   "#derivInstrBtn:hover { color: %4; background: %7; }"
+                   "#derivInstrBtn[active=\"true\"] { background: %3; color: %1; }"
+                   "#derivPanel { background: %8; border: 1px solid %9; }"
+                   "#derivPanelHeader { background: %2; border-bottom: 1px solid %9; }"
+                   "#derivPanelTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#derivPanelIcon { color: %3; font-size: 14px; background: transparent; }"
+                   "#derivLabel { color: %5; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; "
+                   "  background: transparent; }"
+                   "#derivInput { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
+                   "  font-size: 12px; }"
+                   "#derivInput:focus { border-color: %10; }"
+                   "QDoubleSpinBox { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
+                   "  font-size: 12px; }"
+                   "QDoubleSpinBox:focus { border-color: %10; }"
+                   "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; }"
+                   "QDateEdit { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
+                   "  font-size: 12px; }"
+                   "QDateEdit:focus { border-color: %10; }"
+                   "QDateEdit::drop-down { border: none; width: 20px; }"
+                   "QComboBox { background: %1; color: %4; border: 1px solid %9; padding: 4px 8px; "
+                   "  font-size: 12px; }"
+                   "QComboBox:focus { border-color: %10; }"
+                   "QComboBox::drop-down { border: none; width: 20px; }"
+                   "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %9; "
+                   "  selection-background-color: %3; }"
+                   "#derivCalcBtn { background: %3; color: %1; border: none; padding: 6px 16px; "
+                   "  font-size: 9px; font-weight: 700; }"
+                   "#derivCalcBtn:hover { background: #FF8800; }"
+                   "#derivCalcBtn:disabled { background: %11; color: %12; }"
+                   "#derivCalcBtnAlt { background: %13; color: %1; border: none; padding: 6px 16px; "
+                   "  font-size: 9px; font-weight: 700; }"
+                   "#derivCalcBtnAlt:hover { background: #00F5FF; }"
+                   "#derivCalcBtnAlt:disabled { background: %11; color: %12; }"
+                   "#derivResultsPanel { background: %8; border: 1px solid %9; }"
+                   "#derivResultsHeader { background: %2; border-bottom: 1px solid %9; }"
+                   "#derivResultsTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#derivResultLabel { color: %5; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; "
+                   "  background: transparent; }"
+                   "#derivResultValue { color: %13; font-size: 13px; font-weight: 700; background: transparent; }"
+                   "#derivResultBigValue { color: %3; font-size: 16px; font-weight: 700; background: transparent; }"
+                   "#derivResultCard { background: %2; padding: 8px; }"
+                   "#derivErrorPanel { background: rgba(220,38,38,0.1); border: 1px solid %14; }"
+                   "#derivErrorText { color: %14; font-size: 10px; background: transparent; }"
+                   "#derivErrorLabel { color: %14; font-size: 9px; font-weight: 700; background: transparent; }"
+                   "#derivStatusBar { background: %2; border-top: 1px solid %9; }"
+                   "#derivStatusText { color: %5; font-size: 9px; background: transparent; }"
+                   "#derivStatusEngine { color: %13; font-size: 9px; background: transparent; }"
+                   "QScrollArea { background: %1; border: none; }"
+                   "QScrollBar:vertical { background: %1; width: 6px; }"
+                   "QScrollBar::handle:vertical { background: %9; min-height: 20px; }"
+                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(colors::BG_BASE)        // %1
+        .arg(colors::BG_RAISED)      // %2
+        .arg(colors::AMBER)          // %3
+        .arg(colors::TEXT_PRIMARY)   // %4
+        .arg(colors::TEXT_SECONDARY) // %5
+        .arg(colors::POSITIVE)       // %6
+        .arg(colors::BG_HOVER)       // %7
+        .arg(colors::BG_SURFACE)     // %8
+        .arg(colors::BORDER_DIM)     // %9
+        .arg(colors::BORDER_BRIGHT)  // %10
+        .arg(colors::AMBER_DIM)      // %11
+        .arg(colors::TEXT_DIM)       // %12
+        .arg(colors::CYAN)           // %13
+        .arg(colors::NEGATIVE)       // %14
     ;
 
 // ── Constructor ─────────────────────────────────────────────────────────────
@@ -253,13 +252,11 @@ QWidget* DerivativesScreen::create_bonds_panel() {
     bond_freq_ = create_combo({"Annual", "Semi-Annual", "Quarterly"});
     bond_freq_->setCurrentIndex(1);
 
-    bl->addWidget(create_two_col(
-        create_input_row("ISSUE DATE", bond_issue_date_),
-        create_input_row("SETTLEMENT DATE", bond_settle_date_)));
+    bl->addWidget(create_two_col(create_input_row("ISSUE DATE", bond_issue_date_),
+                                 create_input_row("SETTLEMENT DATE", bond_settle_date_)));
     bl->addWidget(create_input_row("MATURITY DATE", bond_maturity_date_));
-    bl->addWidget(create_two_col(
-        create_input_row("COUPON RATE (%)", bond_coupon_),
-        create_input_row("YTM (%)", bond_ytm_)));
+    bl->addWidget(
+        create_two_col(create_input_row("COUPON RATE (%)", bond_coupon_), create_input_row("YTM (%)", bond_ytm_)));
     bl->addWidget(create_input_row("PAYMENT FREQUENCY", bond_freq_));
 
     auto* calc_btn = create_calc_button("CALCULATE BOND PRICE");
@@ -299,13 +296,11 @@ QWidget* DerivativesScreen::create_bonds_panel() {
     bond_clean_price_ = create_spin(102.0, 0, 10000, 2);
 
     // Reuse same date/coupon/freq inputs — display-only labels for dates
-    ybl->addWidget(create_two_col(
-        create_input_row("ISSUE DATE", create_date(QDate(2023, 1, 1))),
-        create_input_row("SETTLEMENT DATE", create_date(QDate::currentDate()))));
+    ybl->addWidget(create_two_col(create_input_row("ISSUE DATE", create_date(QDate(2023, 1, 1))),
+                                  create_input_row("SETTLEMENT DATE", create_date(QDate::currentDate()))));
     ybl->addWidget(create_input_row("MATURITY DATE", create_date(QDate(2029, 1, 1))));
-    ybl->addWidget(create_two_col(
-        create_input_row("COUPON RATE (%)", create_spin(5.0, 0, 100, 2, "%")),
-        create_input_row("CLEAN PRICE", bond_clean_price_)));
+    ybl->addWidget(create_two_col(create_input_row("COUPON RATE (%)", create_spin(5.0, 0, 100, 2, "%")),
+                                  create_input_row("CLEAN PRICE", bond_clean_price_)));
 
     auto* ytm_freq = create_combo({"Annual", "Semi-Annual", "Quarterly"});
     ytm_freq->setCurrentIndex(1);
@@ -362,15 +357,12 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
     opt_div_ = create_spin(2.0, 0, 100, 2, "%");
     opt_type_ = create_combo({"Call", "Put"});
 
-    bbl->addWidget(create_two_col(
-        create_input_row("SPOT PRICE", opt_spot_),
-        create_input_row("STRIKE PRICE", opt_strike_)));
-    bbl->addWidget(create_two_col(
-        create_input_row("TIME TO EXPIRY (years)", opt_time_),
-        create_input_row("VOLATILITY (%)", opt_vol_)));
-    bbl->addWidget(create_two_col(
-        create_input_row("RISK-FREE RATE (%)", opt_rate_),
-        create_input_row("DIVIDEND YIELD (%)", opt_div_)));
+    bbl->addWidget(
+        create_two_col(create_input_row("SPOT PRICE", opt_spot_), create_input_row("STRIKE PRICE", opt_strike_)));
+    bbl->addWidget(create_two_col(create_input_row("TIME TO EXPIRY (years)", opt_time_),
+                                  create_input_row("VOLATILITY (%)", opt_vol_)));
+    bbl->addWidget(create_two_col(create_input_row("RISK-FREE RATE (%)", opt_rate_),
+                                  create_input_row("DIVIDEND YIELD (%)", opt_div_)));
     bbl->addWidget(create_input_row("OPTION TYPE", opt_type_));
 
     auto* bs_btn = create_calc_button("CALCULATE PRICE & GREEKS");
@@ -416,16 +408,13 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
     auto* iv_div = create_spin(2.0, 0, 100, 2, "%");
     auto* iv_type = create_combo({"Call", "Put"});
 
-    ivbl->addWidget(create_two_col(
-        create_input_row("SPOT PRICE", iv_spot),
-        create_input_row("STRIKE PRICE", iv_strike)));
+    ivbl->addWidget(
+        create_two_col(create_input_row("SPOT PRICE", iv_spot), create_input_row("STRIKE PRICE", iv_strike)));
     ivbl->addWidget(create_input_row("MARKET OPTION PRICE", opt_market_price_));
-    ivbl->addWidget(create_two_col(
-        create_input_row("TIME TO EXPIRY (years)", iv_time),
-        create_input_row("RISK-FREE RATE (%)", iv_rate)));
-    ivbl->addWidget(create_two_col(
-        create_input_row("DIVIDEND YIELD (%)", iv_div),
-        create_input_row("OPTION TYPE", iv_type)));
+    ivbl->addWidget(create_two_col(create_input_row("TIME TO EXPIRY (years)", iv_time),
+                                   create_input_row("RISK-FREE RATE (%)", iv_rate)));
+    ivbl->addWidget(
+        create_two_col(create_input_row("DIVIDEND YIELD (%)", iv_div), create_input_row("OPTION TYPE", iv_type)));
 
     auto* iv_btn = create_calc_button("CALCULATE IMPLIED VOL");
     connect(iv_btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate_secondary);
@@ -476,16 +465,13 @@ QWidget* DerivativesScreen::create_fx_options_panel() {
     fx_type_ = create_combo({"Call", "Put"});
     fx_notional_ = create_spin(1000000, 0, 1e12, 0);
 
-    bl->addWidget(create_two_col(
-        create_input_row("SPOT FX RATE", fx_spot_),
-        create_input_row("STRIKE FX RATE", fx_strike_)));
-    bl->addWidget(create_three_col(
-        create_input_row("VOLATILITY (%)", fx_vol_),
-        create_input_row("DOMESTIC RATE (%)", fx_dom_rate_),
-        create_input_row("FOREIGN RATE (%)", fx_for_rate_)));
-    bl->addWidget(create_two_col(
-        create_input_row("TIME TO EXPIRY (years)", fx_time_),
-        create_input_row("NOTIONAL", fx_notional_)));
+    bl->addWidget(
+        create_two_col(create_input_row("SPOT FX RATE", fx_spot_), create_input_row("STRIKE FX RATE", fx_strike_)));
+    bl->addWidget(create_three_col(create_input_row("VOLATILITY (%)", fx_vol_),
+                                   create_input_row("DOMESTIC RATE (%)", fx_dom_rate_),
+                                   create_input_row("FOREIGN RATE (%)", fx_for_rate_)));
+    bl->addWidget(create_two_col(create_input_row("TIME TO EXPIRY (years)", fx_time_),
+                                 create_input_row("NOTIONAL", fx_notional_)));
     bl->addWidget(create_input_row("OPTION TYPE", fx_type_));
 
     auto* btn = create_calc_button("CALCULATE FX OPTION PRICE");
@@ -533,13 +519,11 @@ QWidget* DerivativesScreen::create_swaps_panel() {
     swap_discount_ = create_spin(3.5, -20, 100, 2, "%");
     swap_notional_ = create_spin(1000000, 0, 1e12, 0);
 
-    bl->addWidget(create_two_col(
-        create_input_row("EFFECTIVE DATE", swap_eff_date_),
-        create_input_row("MATURITY DATE", swap_mat_date_)));
-    bl->addWidget(create_three_col(
-        create_input_row("FIXED RATE (%)", swap_fixed_rate_),
-        create_input_row("FREQUENCY", swap_freq_),
-        create_input_row("DISCOUNT RATE (%)", swap_discount_)));
+    bl->addWidget(create_two_col(create_input_row("EFFECTIVE DATE", swap_eff_date_),
+                                 create_input_row("MATURITY DATE", swap_mat_date_)));
+    bl->addWidget(create_three_col(create_input_row("FIXED RATE (%)", swap_fixed_rate_),
+                                   create_input_row("FREQUENCY", swap_freq_),
+                                   create_input_row("DISCOUNT RATE (%)", swap_discount_)));
     bl->addWidget(create_input_row("NOTIONAL AMOUNT", swap_notional_));
 
     auto* btn = create_calc_button("CALCULATE SWAP VALUE");
@@ -585,13 +569,11 @@ QWidget* DerivativesScreen::create_credit_panel() {
     cds_spread_ = create_spin(150.0, 0, 10000, 1);
     cds_notional_ = create_spin(10000000, 0, 1e12, 0);
 
-    bl->addWidget(create_two_col(
-        create_input_row("VALUATION DATE", cds_val_date_),
-        create_input_row("MATURITY DATE", cds_mat_date_)));
-    bl->addWidget(create_three_col(
-        create_input_row("RECOVERY RATE (%)", cds_recovery_),
-        create_input_row("SPREAD (BPS)", cds_spread_),
-        create_input_row("NOTIONAL", cds_notional_)));
+    bl->addWidget(create_two_col(create_input_row("VALUATION DATE", cds_val_date_),
+                                 create_input_row("MATURITY DATE", cds_mat_date_)));
+    bl->addWidget(create_three_col(create_input_row("RECOVERY RATE (%)", cds_recovery_),
+                                   create_input_row("SPREAD (BPS)", cds_spread_),
+                                   create_input_row("NOTIONAL", cds_notional_)));
 
     auto* btn = create_calc_button("CALCULATE CDS VALUE");
     connect(btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate);
@@ -686,14 +668,15 @@ QWidget* DerivativesScreen::create_three_col(QWidget* a, QWidget* b, QWidget* c)
     return w;
 }
 
-QDoubleSpinBox* DerivativesScreen::create_spin(double val, double min_val, double max_val,
-                                                int decimals, const QString& suffix) {
+QDoubleSpinBox* DerivativesScreen::create_spin(double val, double min_val, double max_val, int decimals,
+                                               const QString& suffix) {
     auto* spin = new QDoubleSpinBox;
     spin->setRange(min_val, max_val);
     spin->setDecimals(decimals);
     spin->setValue(val);
     spin->setButtonSymbols(QAbstractSpinBox::NoButtons);
-    if (!suffix.isEmpty()) spin->setSuffix(" " + suffix);
+    if (!suffix.isEmpty())
+        spin->setSuffix(" " + suffix);
     return spin;
 }
 
@@ -738,101 +721,148 @@ void DerivativesScreen::on_instrument_changed(int index) {
 }
 
 void DerivativesScreen::on_calculate() {
-    if (loading_) return;
+    if (loading_)
+        return;
 
     switch (active_instrument_) {
-    case 0: { // Bonds — price from YTM
-        int freq_val = (bond_freq_->currentIndex() == 0) ? 1 : (bond_freq_->currentIndex() == 1) ? 2 : 4;
-        run_pricing("bond_price", {
-            "--issue-date", bond_issue_date_->date().toString("yyyy-MM-dd"),
-            "--settlement-date", bond_settle_date_->date().toString("yyyy-MM-dd"),
-            "--maturity-date", bond_maturity_date_->date().toString("yyyy-MM-dd"),
-            "--coupon-rate", QString::number(bond_coupon_->value()),
-            "--ytm", QString::number(bond_ytm_->value()),
-            "--freq", QString::number(freq_val),
-        });
-        break;
-    }
-    case 1: { // Equity options — price + greeks
-        run_pricing("option_price", {
-            "--spot", QString::number(opt_spot_->value()),
-            "--strike", QString::number(opt_strike_->value()),
-            "--time", QString::number(opt_time_->value()),
-            "--rate", QString::number(opt_rate_->value()),
-            "--vol", QString::number(opt_vol_->value()),
-            "--div-yield", QString::number(opt_div_->value()),
-            "--type", opt_type_->currentText().toLower(),
-        });
-        break;
-    }
-    case 2: { // FX options
-        run_pricing("fx_option_price", {
-            "--spot", QString::number(fx_spot_->value()),
-            "--strike", QString::number(fx_strike_->value()),
-            "--time", QString::number(fx_time_->value()),
-            "--domestic-rate", QString::number(fx_dom_rate_->value()),
-            "--foreign-rate", QString::number(fx_for_rate_->value()),
-            "--vol", QString::number(fx_vol_->value()),
-            "--type", fx_type_->currentText().toLower(),
-            "--notional", QString::number(fx_notional_->value(), 'f', 0),
-        });
-        break;
-    }
-    case 3: { // Swaps
-        int freq_val = (swap_freq_->currentIndex() == 0) ? 1 : (swap_freq_->currentIndex() == 1) ? 2 : 4;
-        run_pricing("swap_value", {
-            "--effective-date", swap_eff_date_->date().toString("yyyy-MM-dd"),
-            "--maturity-date", swap_mat_date_->date().toString("yyyy-MM-dd"),
-            "--fixed-rate", QString::number(swap_fixed_rate_->value()),
-            "--freq", QString::number(freq_val),
-            "--notional", QString::number(swap_notional_->value(), 'f', 0),
-            "--discount-rate", QString::number(swap_discount_->value()),
-        });
-        break;
-    }
-    case 4: { // Credit (CDS)
-        run_pricing("cds_value", {
-            "--valuation-date", cds_val_date_->date().toString("yyyy-MM-dd"),
-            "--maturity-date", cds_mat_date_->date().toString("yyyy-MM-dd"),
-            "--recovery-rate", QString::number(cds_recovery_->value()),
-            "--notional", QString::number(cds_notional_->value(), 'f', 0),
-            "--spread-bps", QString::number(cds_spread_->value()),
-        });
-        break;
-    }
+        case 0: { // Bonds — price from YTM
+            int freq_val = (bond_freq_->currentIndex() == 0) ? 1 : (bond_freq_->currentIndex() == 1) ? 2 : 4;
+            run_pricing("bond_price", {
+                                          "--issue-date",
+                                          bond_issue_date_->date().toString("yyyy-MM-dd"),
+                                          "--settlement-date",
+                                          bond_settle_date_->date().toString("yyyy-MM-dd"),
+                                          "--maturity-date",
+                                          bond_maturity_date_->date().toString("yyyy-MM-dd"),
+                                          "--coupon-rate",
+                                          QString::number(bond_coupon_->value()),
+                                          "--ytm",
+                                          QString::number(bond_ytm_->value()),
+                                          "--freq",
+                                          QString::number(freq_val),
+                                      });
+            break;
+        }
+        case 1: { // Equity options — price + greeks
+            run_pricing("option_price", {
+                                            "--spot",
+                                            QString::number(opt_spot_->value()),
+                                            "--strike",
+                                            QString::number(opt_strike_->value()),
+                                            "--time",
+                                            QString::number(opt_time_->value()),
+                                            "--rate",
+                                            QString::number(opt_rate_->value()),
+                                            "--vol",
+                                            QString::number(opt_vol_->value()),
+                                            "--div-yield",
+                                            QString::number(opt_div_->value()),
+                                            "--type",
+                                            opt_type_->currentText().toLower(),
+                                        });
+            break;
+        }
+        case 2: { // FX options
+            run_pricing("fx_option_price", {
+                                               "--spot",
+                                               QString::number(fx_spot_->value()),
+                                               "--strike",
+                                               QString::number(fx_strike_->value()),
+                                               "--time",
+                                               QString::number(fx_time_->value()),
+                                               "--domestic-rate",
+                                               QString::number(fx_dom_rate_->value()),
+                                               "--foreign-rate",
+                                               QString::number(fx_for_rate_->value()),
+                                               "--vol",
+                                               QString::number(fx_vol_->value()),
+                                               "--type",
+                                               fx_type_->currentText().toLower(),
+                                               "--notional",
+                                               QString::number(fx_notional_->value(), 'f', 0),
+                                           });
+            break;
+        }
+        case 3: { // Swaps
+            int freq_val = (swap_freq_->currentIndex() == 0) ? 1 : (swap_freq_->currentIndex() == 1) ? 2 : 4;
+            run_pricing("swap_value", {
+                                          "--effective-date",
+                                          swap_eff_date_->date().toString("yyyy-MM-dd"),
+                                          "--maturity-date",
+                                          swap_mat_date_->date().toString("yyyy-MM-dd"),
+                                          "--fixed-rate",
+                                          QString::number(swap_fixed_rate_->value()),
+                                          "--freq",
+                                          QString::number(freq_val),
+                                          "--notional",
+                                          QString::number(swap_notional_->value(), 'f', 0),
+                                          "--discount-rate",
+                                          QString::number(swap_discount_->value()),
+                                      });
+            break;
+        }
+        case 4: { // Credit (CDS)
+            run_pricing("cds_value", {
+                                         "--valuation-date",
+                                         cds_val_date_->date().toString("yyyy-MM-dd"),
+                                         "--maturity-date",
+                                         cds_mat_date_->date().toString("yyyy-MM-dd"),
+                                         "--recovery-rate",
+                                         QString::number(cds_recovery_->value()),
+                                         "--notional",
+                                         QString::number(cds_notional_->value(), 'f', 0),
+                                         "--spread-bps",
+                                         QString::number(cds_spread_->value()),
+                                     });
+            break;
+        }
     }
 }
 
 void DerivativesScreen::on_calculate_secondary() {
-    if (loading_) return;
+    if (loading_)
+        return;
 
     switch (active_instrument_) {
-    case 0: { // Bond YTM from price
-        // Read from the YTM panel's own inputs (children of panel_stack_ page 0)
-        // The bond_clean_price_ spin is the dedicated input for this
-        int freq_val = (bond_freq_->currentIndex() == 0) ? 1 : (bond_freq_->currentIndex() == 1) ? 2 : 4;
-        run_pricing("bond_ytm", {
-            "--issue-date", bond_issue_date_->date().toString("yyyy-MM-dd"),
-            "--settlement-date", bond_settle_date_->date().toString("yyyy-MM-dd"),
-            "--maturity-date", bond_maturity_date_->date().toString("yyyy-MM-dd"),
-            "--coupon-rate", QString::number(bond_coupon_->value()),
-            "--clean-price", QString::number(bond_clean_price_->value()),
-            "--freq", QString::number(freq_val),
-        });
-        break;
-    }
-    case 1: { // Implied volatility
-        run_pricing("implied_vol", {
-            "--spot", QString::number(opt_spot_->value()),
-            "--strike", QString::number(opt_strike_->value()),
-            "--time", QString::number(opt_time_->value()),
-            "--rate", QString::number(opt_rate_->value()),
-            "--market-price", QString::number(opt_market_price_->value()),
-            "--div-yield", QString::number(opt_div_->value()),
-            "--type", opt_type_->currentText().toLower(),
-        });
-        break;
-    }
+        case 0: { // Bond YTM from price
+            // Read from the YTM panel's own inputs (children of panel_stack_ page 0)
+            // The bond_clean_price_ spin is the dedicated input for this
+            int freq_val = (bond_freq_->currentIndex() == 0) ? 1 : (bond_freq_->currentIndex() == 1) ? 2 : 4;
+            run_pricing("bond_ytm", {
+                                        "--issue-date",
+                                        bond_issue_date_->date().toString("yyyy-MM-dd"),
+                                        "--settlement-date",
+                                        bond_settle_date_->date().toString("yyyy-MM-dd"),
+                                        "--maturity-date",
+                                        bond_maturity_date_->date().toString("yyyy-MM-dd"),
+                                        "--coupon-rate",
+                                        QString::number(bond_coupon_->value()),
+                                        "--clean-price",
+                                        QString::number(bond_clean_price_->value()),
+                                        "--freq",
+                                        QString::number(freq_val),
+                                    });
+            break;
+        }
+        case 1: { // Implied volatility
+            run_pricing("implied_vol", {
+                                           "--spot",
+                                           QString::number(opt_spot_->value()),
+                                           "--strike",
+                                           QString::number(opt_strike_->value()),
+                                           "--time",
+                                           QString::number(opt_time_->value()),
+                                           "--rate",
+                                           QString::number(opt_rate_->value()),
+                                           "--market-price",
+                                           QString::number(opt_market_price_->value()),
+                                           "--div-yield",
+                                           QString::number(opt_div_->value()),
+                                           "--type",
+                                           opt_type_->currentText().toLower(),
+                                       });
+            break;
+        }
     }
 }
 
@@ -848,9 +878,9 @@ void DerivativesScreen::run_pricing(const QString& command, const QStringList& a
     QPointer<DerivativesScreen> self = this;
 
     python::PythonRunner::instance().run(
-        "derivatives_pricing.py", full_args,
-        [self](const python::PythonResult& result) {
-            if (!self) return;
+        "derivatives_pricing.py", full_args, [self](const python::PythonResult& result) {
+            if (!self)
+                return;
 
             self->loading_ = false;
 
@@ -1045,9 +1075,11 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
         auto* r2l = new QHBoxLayout(row2);
         r2l->setContentsMargins(0, 0, 0, 0);
         r2l->setSpacing(8);
-        r2l->addWidget(make_card("BREAKEVEN SPREAD", QString::number(result["breakeven_spread_bps"].toDouble(), 'f', 2) + " bps"));
+        r2l->addWidget(
+            make_card("BREAKEVEN SPREAD", QString::number(result["breakeven_spread_bps"].toDouble(), 'f', 2) + " bps"));
         r2l->addWidget(make_card("HAZARD RATE", QString::number(result["hazard_rate"].toDouble(), 'f', 4) + "%"));
-        r2l->addWidget(make_card("SURVIVAL PROB", QString::number(result["survival_probability"].toDouble(), 'f', 2) + "%"));
+        r2l->addWidget(
+            make_card("SURVIVAL PROB", QString::number(result["survival_probability"].toDouble(), 'f', 2) + "%"));
         vl->addWidget(row2);
     }
     // Generic fallback — display all keys

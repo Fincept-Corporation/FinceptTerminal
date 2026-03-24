@@ -15,18 +15,18 @@ namespace fincept::services {
 // ── Signal Types ────────────────────────────────────────────────────────────
 
 struct CorrelationSignal {
-    QString type;       // velocity_spike, keyword_spike, triangulation, etc.
+    QString type; // velocity_spike, keyword_spike, triangulation, etc.
     QString category;
     QString detail;
-    QString severity;   // critical, high, medium, low
+    QString severity; // critical, high, medium, low
     double value = 0;
     QStringList sources;
 };
 
 struct InstabilityScore {
     QString country;
-    int cii_score = 0;  // 0-100
-    QString level;      // CRITICAL, HIGH, ELEVATED, STABLE
+    int cii_score = 0; // 0-100
+    QString level;     // CRITICAL, HIGH, ELEVATED, STABLE
     int baseline = 0;
     QMap<QString, double> signal_contributions;
 };
@@ -74,8 +74,7 @@ class NewsCorrelationService : public QObject {
     void detect_signals(const QVector<NewsArticle>& articles, SignalsCallback cb);
 
     /// Compute Country Instability Index for a country.
-    void compute_instability(const QString& country_code,
-                             const QVector<CorrelationSignal>& sigs,
+    void compute_instability(const QString& country_code, const QVector<CorrelationSignal>& sigs,
                              InstabilityCallback cb);
 
     /// Detect geographic focal points from geolocated articles.

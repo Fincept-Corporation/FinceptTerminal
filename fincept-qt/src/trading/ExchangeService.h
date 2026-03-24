@@ -103,9 +103,9 @@ class ExchangeService : public QObject {
     QProcess* daemon_process_ = nullptr;
     std::atomic<bool> daemon_ready_{false};
     std::atomic<int> daemon_req_id_{0};
-    QHash<QString, QJsonObject> daemon_responses_;  // id -> response
+    QHash<QString, QJsonObject> daemon_responses_; // id -> response
     QMutex daemon_mutex_;
-    QWaitCondition daemon_response_ready_;  // signaled when any response arrives
+    QWaitCondition daemon_response_ready_; // signaled when any response arrives
     bool credentials_sent_to_daemon_ = false;
 
     static TickerData parse_ticker(const QJsonObject& j);

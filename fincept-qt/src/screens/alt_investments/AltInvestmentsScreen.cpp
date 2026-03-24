@@ -16,77 +16,76 @@
 namespace {
 using namespace fincept::ui;
 
-static const QString kStyle = QStringLiteral(
-    "#altScreen { background: %1; }"
+static const QString kStyle =
+    QStringLiteral("#altScreen { background: %1; }"
 
-    "#altHeader { background: %2; border-bottom: 2px solid %3; }"
-    "#altHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
-    "#altHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
-    "#altHeaderBadge { color: %6; font-size: 8px; font-weight: 700; "
-    "  background: rgba(22,163,74,0.2); padding: 2px 6px; }"
+                   "#altHeader { background: %2; border-bottom: 2px solid %3; }"
+                   "#altHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
+                   "#altHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
+                   "#altHeaderBadge { color: %6; font-size: 8px; font-weight: 700; "
+                   "  background: rgba(22,163,74,0.2); padding: 2px 6px; }"
 
-    "#altLeftPanel { background: %7; border-right: 1px solid %8; }"
-    "#altCatBtn { background: transparent; color: %5; border: none; text-align: left; "
-    "  font-size: 11px; padding: 8px 12px; border-bottom: 1px solid %8; }"
-    "#altCatBtn:hover { color: %4; background: %12; }"
-    "#altCatBtn[active=\"true\"] { color: %3; background: rgba(217,119,6,0.1); "
-    "  border-left: 3px solid %3; }"
+                   "#altLeftPanel { background: %7; border-right: 1px solid %8; }"
+                   "#altCatBtn { background: transparent; color: %5; border: none; text-align: left; "
+                   "  font-size: 11px; padding: 8px 12px; border-bottom: 1px solid %8; }"
+                   "#altCatBtn:hover { color: %4; background: %12; }"
+                   "#altCatBtn[active=\"true\"] { color: %3; background: rgba(217,119,6,0.1); "
+                   "  border-left: 3px solid %3; }"
 
-    "#altCenterPanel { background: %1; }"
-    "#altCenterTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#altCenterPanel { background: %1; }"
+                   "#altCenterTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
 
-    "#altPanel { background: %7; border: 1px solid %8; }"
-    "#altPanelHeader { background: %2; border-bottom: 1px solid %8; }"
-    "#altPanelTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
-    "#altLabel { color: %5; font-size: 9px; font-weight: 700; "
-    "  letter-spacing: 0.5px; background: transparent; }"
+                   "#altPanel { background: %7; border: 1px solid %8; }"
+                   "#altPanelHeader { background: %2; border-bottom: 1px solid %8; }"
+                   "#altPanelTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
+                   "#altLabel { color: %5; font-size: 9px; font-weight: 700; "
+                   "  letter-spacing: 0.5px; background: transparent; }"
 
-    "QLineEdit { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "QLineEdit:focus { border-color: %9; }"
-    "QDoubleSpinBox { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; }"
-    "QComboBox { background: %1; color: %4; border: 1px solid %8; "
-    "  padding: 4px 8px; font-size: 11px; }"
-    "QComboBox::drop-down { border: none; width: 16px; }"
-    "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
-    "  selection-background-color: %3; }"
+                   "QLineEdit { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "QLineEdit:focus { border-color: %9; }"
+                   "QDoubleSpinBox { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; }"
+                   "QComboBox { background: %1; color: %4; border: 1px solid %8; "
+                   "  padding: 4px 8px; font-size: 11px; }"
+                   "QComboBox::drop-down { border: none; width: 16px; }"
+                   "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
+                   "  selection-background-color: %3; }"
 
-    "#altAnalyzeBtn { background: %3; color: %1; border: none; padding: 6px 20px; "
-    "  font-size: 10px; font-weight: 700; }"
-    "#altAnalyzeBtn:hover { background: #FF8800; }"
-    "#altAnalyzeBtn:disabled { background: %10; color: %11; }"
+                   "#altAnalyzeBtn { background: %3; color: %1; border: none; padding: 6px 20px; "
+                   "  font-size: 10px; font-weight: 700; }"
+                   "#altAnalyzeBtn:hover { background: #FF8800; }"
+                   "#altAnalyzeBtn:disabled { background: %10; color: %11; }"
 
-    "#altRightPanel { background: %7; border-left: 1px solid %8; }"
-    "#altVerdictBadge { font-size: 12px; font-weight: 700; padding: 4px 12px; }"
-    "#altVerdictRating { color: %13; font-size: 16px; font-weight: 700; background: transparent; }"
-    "#altVerdictRec { color: %4; font-size: 11px; background: transparent; }"
-    "QTextEdit { background: %1; color: %13; border: none; font-size: 11px; }"
+                   "#altRightPanel { background: %7; border-left: 1px solid %8; }"
+                   "#altVerdictBadge { font-size: 12px; font-weight: 700; padding: 4px 12px; }"
+                   "#altVerdictRating { color: %13; font-size: 16px; font-weight: 700; background: transparent; }"
+                   "#altVerdictRec { color: %4; font-size: 11px; background: transparent; }"
+                   "QTextEdit { background: %1; color: %13; border: none; font-size: 11px; }"
 
-    "#altStatusBar { background: %2; border-top: 1px solid %8; }"
-    "#altStatusText { color: %5; font-size: 9px; background: transparent; }"
-    "#altStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
+                   "#altStatusBar { background: %2; border-top: 1px solid %8; }"
+                   "#altStatusText { color: %5; font-size: 9px; background: transparent; }"
+                   "#altStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
 
-    "QSplitter::handle { background: %8; }"
-    "QScrollBar:vertical { background: %1; width: 6px; }"
-    "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
-    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-)
-    .arg(colors::BG_BASE)         // %1
-    .arg(colors::BG_RAISED)       // %2
-    .arg(colors::AMBER)           // %3
-    .arg(colors::TEXT_PRIMARY)    // %4
-    .arg(colors::TEXT_SECONDARY)  // %5
-    .arg(colors::POSITIVE)        // %6
-    .arg(colors::BG_SURFACE)      // %7
-    .arg(colors::BORDER_DIM)      // %8
-    .arg(colors::BORDER_BRIGHT)   // %9
-    .arg(colors::AMBER_DIM)       // %10
-    .arg(colors::TEXT_DIM)         // %11
-    .arg(colors::BG_HOVER)        // %12
-    .arg(colors::CYAN)             // %13
-    .arg(colors::NEGATIVE)        // %14
+                   "QSplitter::handle { background: %8; }"
+                   "QScrollBar:vertical { background: %1; width: 6px; }"
+                   "QScrollBar::handle:vertical { background: %8; min-height: 20px; }"
+                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(colors::BG_BASE)        // %1
+        .arg(colors::BG_RAISED)      // %2
+        .arg(colors::AMBER)          // %3
+        .arg(colors::TEXT_PRIMARY)   // %4
+        .arg(colors::TEXT_SECONDARY) // %5
+        .arg(colors::POSITIVE)       // %6
+        .arg(colors::BG_SURFACE)     // %7
+        .arg(colors::BORDER_DIM)     // %8
+        .arg(colors::BORDER_BRIGHT)  // %9
+        .arg(colors::AMBER_DIM)      // %10
+        .arg(colors::TEXT_DIM)       // %11
+        .arg(colors::BG_HOVER)       // %12
+        .arg(colors::CYAN)           // %13
+        .arg(colors::NEGATIVE)       // %14
     ;
 } // namespace
 
@@ -98,53 +97,83 @@ using namespace fincept::ui;
 
 static QList<AltCategory> build_categories() {
     return {
-        {"bonds", "Bonds & Fixed Income", "#0088FF", {
-            {"high_yield_bond", "High-Yield Bonds"},
-            {"emerging_market_bond", "Emerging Market Bonds"},
-            {"convertible_bond", "Convertible Bonds"},
-            {"preferred_stock", "Preferred Stocks"},
-        }},
-        {"real_estate", "Real Estate", "#9D4EDD", {
-            {"real_estate", "Direct Property"},
-            {"reit", "REITs"},
-        }},
-        {"hedge_funds", "Hedge Funds", "#FFD700", {
-            {"hedge_fund", "Long/Short Equity"},
-            {"managed_futures", "Managed Futures"},
-            {"market_neutral", "Market Neutral"},
-        }},
-        {"commodities", "Commodities", "#FF8800", {
-            {"precious_metals", "Precious Metals"},
-            {"natural_resources", "Natural Resources"},
-        }},
-        {"private_capital", "Private Capital", "#E91E63", {
-            {"private_equity", "Private Equity / VC"},
-        }},
-        {"annuities", "Annuities", "#4CAF50", {
-            {"fixed_annuity", "Fixed Annuity"},
-            {"variable_annuity", "Variable Annuity"},
-            {"equity_indexed_annuity", "Equity-Indexed Annuity"},
-            {"inflation_annuity", "Inflation Annuity"},
-        }},
-        {"structured", "Structured Products", "#00ACC1", {
-            {"structured_product", "Structured Notes"},
-            {"leveraged_fund", "Leveraged Funds"},
-        }},
-        {"inflation", "Inflation Protected", "#FFA726", {
-            {"tips", "TIPS"},
-            {"i_bond", "I-Bonds"},
-            {"stable_value", "Stable Value Funds"},
-        }},
-        {"strategies", "Strategies", "#00E5FF", {
-            {"covered_call", "Covered Calls"},
-            {"sri_fund", "SRI Funds"},
-            {"asset_location", "Asset Location"},
-            {"performance", "Performance Analysis"},
-            {"risk", "Risk Analysis"},
-        }},
-        {"crypto", "Digital Assets", "#FF5722", {
-            {"digital_asset", "Cryptocurrency"},
-        }},
+        {"bonds",
+         "Bonds & Fixed Income",
+         "#0088FF",
+         {
+             {"high_yield_bond", "High-Yield Bonds"},
+             {"emerging_market_bond", "Emerging Market Bonds"},
+             {"convertible_bond", "Convertible Bonds"},
+             {"preferred_stock", "Preferred Stocks"},
+         }},
+        {"real_estate",
+         "Real Estate",
+         "#9D4EDD",
+         {
+             {"real_estate", "Direct Property"},
+             {"reit", "REITs"},
+         }},
+        {"hedge_funds",
+         "Hedge Funds",
+         "#FFD700",
+         {
+             {"hedge_fund", "Long/Short Equity"},
+             {"managed_futures", "Managed Futures"},
+             {"market_neutral", "Market Neutral"},
+         }},
+        {"commodities",
+         "Commodities",
+         "#FF8800",
+         {
+             {"precious_metals", "Precious Metals"},
+             {"natural_resources", "Natural Resources"},
+         }},
+        {"private_capital",
+         "Private Capital",
+         "#E91E63",
+         {
+             {"private_equity", "Private Equity / VC"},
+         }},
+        {"annuities",
+         "Annuities",
+         "#4CAF50",
+         {
+             {"fixed_annuity", "Fixed Annuity"},
+             {"variable_annuity", "Variable Annuity"},
+             {"equity_indexed_annuity", "Equity-Indexed Annuity"},
+             {"inflation_annuity", "Inflation Annuity"},
+         }},
+        {"structured",
+         "Structured Products",
+         "#00ACC1",
+         {
+             {"structured_product", "Structured Notes"},
+             {"leveraged_fund", "Leveraged Funds"},
+         }},
+        {"inflation",
+         "Inflation Protected",
+         "#FFA726",
+         {
+             {"tips", "TIPS"},
+             {"i_bond", "I-Bonds"},
+             {"stable_value", "Stable Value Funds"},
+         }},
+        {"strategies",
+         "Strategies",
+         "#00E5FF",
+         {
+             {"covered_call", "Covered Calls"},
+             {"sri_fund", "SRI Funds"},
+             {"asset_location", "Asset Location"},
+             {"performance", "Performance Analysis"},
+             {"risk", "Risk Analysis"},
+         }},
+        {"crypto",
+         "Digital Assets",
+         "#FF5722",
+         {
+             {"digital_asset", "Cryptocurrency"},
+         }},
     };
 }
 
@@ -231,8 +260,8 @@ QWidget* AltInvestmentsScreen::create_left_panel() {
 
     auto* title = new QLabel("ASSET CLASSES");
     title->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700; "
-                                  "letter-spacing: 0.5px; background: transparent; "
-                                  "padding: 8px 12px; border-bottom: 1px solid %2;")
+                                 "letter-spacing: 0.5px; background: transparent; "
+                                 "padding: 8px 12px; border-bottom: 1px solid %2;")
                              .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM));
     vl->addWidget(title);
 
@@ -269,8 +298,8 @@ QWidget* AltInvestmentsScreen::create_center_panel() {
 
     analyzer_combo_ = new QComboBox;
     analyzer_combo_->setFixedWidth(200);
-    connect(analyzer_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &AltInvestmentsScreen::on_analyzer_changed);
+    connect(analyzer_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &AltInvestmentsScreen::on_analyzer_changed);
     top_row->addWidget(analyzer_combo_);
     vl->addLayout(top_row);
 
@@ -317,8 +346,10 @@ QWidget* AltInvestmentsScreen::create_center_panel() {
         sp->setValue(val);
         sp->setDecimals(dec);
         sp->setButtonSymbols(QAbstractSpinBox::NoButtons);
-        if (!prefix.isEmpty()) sp->setPrefix(prefix);
-        if (!suffix.isEmpty()) sp->setSuffix(suffix);
+        if (!prefix.isEmpty())
+            sp->setPrefix(prefix);
+        if (!suffix.isEmpty())
+            sp->setSuffix(suffix);
         return sp;
     };
 
@@ -391,8 +422,8 @@ QWidget* AltInvestmentsScreen::create_right_panel() {
 
     auto* title = new QLabel("ANALYSIS VERDICT");
     title->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700; "
-                                  "letter-spacing: 0.5px; background: transparent; "
-                                  "padding: 8px 12px; border-bottom: 1px solid %2;")
+                                 "letter-spacing: 0.5px; background: transparent; "
+                                 "padding: 8px 12px; border-bottom: 1px solid %2;")
                              .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM));
     vl->addWidget(title);
 
@@ -406,7 +437,7 @@ QWidget* AltInvestmentsScreen::create_right_panel() {
     verdict_badge_->setObjectName("altVerdictBadge");
     verdict_badge_->setAlignment(Qt::AlignCenter);
     verdict_badge_->setStyleSheet(QString("color: %1; background: %2; "
-                                           "font-size: 12px; font-weight: 700; padding: 4px 12px;")
+                                          "font-size: 12px; font-weight: 700; padding: 4px 12px;")
                                       .arg(colors::TEXT_DIM, colors::BG_RAISED));
     val->addWidget(verdict_badge_);
 
@@ -460,7 +491,8 @@ QWidget* AltInvestmentsScreen::create_status_bar() {
 // ── Slots ───────────────────────────────────────────────────────────────────
 
 void AltInvestmentsScreen::on_category_changed(int index) {
-    if (index < 0 || index >= categories_.size()) return;
+    if (index < 0 || index >= categories_.size())
+        return;
     active_category_ = index;
 
     for (int i = 0; i < cat_btns_.size(); ++i) {
@@ -496,19 +528,22 @@ void AltInvestmentsScreen::on_category_changed(int index) {
         input_type_->addItems({"default"});
     }
 
-    if (analyzer_combo_->count() > 0) on_analyzer_changed(0);
+    if (analyzer_combo_->count() > 0)
+        on_analyzer_changed(0);
 
     LOG_INFO("AltInvestments", "Category: " + categories_[index].name);
 }
 
 void AltInvestmentsScreen::on_analyzer_changed(int index) {
-    if (index < 0 || index >= categories_[active_category_].analyzers.size()) return;
+    if (index < 0 || index >= categories_[active_category_].analyzers.size())
+        return;
     active_analyzer_ = index;
     status_analyzer_->setText(categories_[active_category_].analyzers[index].name);
 }
 
 void AltInvestmentsScreen::on_analyze() {
-    if (loading_) return;
+    if (loading_)
+        return;
 
     const auto& analyzer = categories_[active_category_].analyzers[active_analyzer_];
 
@@ -531,47 +566,47 @@ void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObjec
     set_loading(true);
     verdict_badge_->setText("ANALYZING...");
     verdict_badge_->setStyleSheet(QString("color: %1; background: rgba(217,119,6,0.15); "
-                                           "font-size: 12px; font-weight: 700; padding: 4px 12px;")
+                                          "font-size: 12px; font-weight: 700; padding: 4px 12px;")
                                       .arg(colors::AMBER));
 
     QString data_json = QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact));
 
     QPointer<AltInvestmentsScreen> self = this;
 
-    python::PythonRunner::instance().run(
-        "Analytics/alternateInvestment/cli.py",
-        {command, "--data", data_json},
-        [self, command](const python::PythonResult& result) {
-            if (!self) return;
-            self->set_loading(false);
+    python::PythonRunner::instance().run("Analytics/alternateInvestment/cli.py", {command, "--data", data_json},
+                                         [self, command](const python::PythonResult& result) {
+                                             if (!self)
+                                                 return;
+                                             self->set_loading(false);
 
-            if (!result.success) {
-                self->display_error(result.error.isEmpty() ? "Analysis failed" : result.error);
-                return;
-            }
+                                             if (!result.success) {
+                                                 self->display_error(result.error.isEmpty() ? "Analysis failed"
+                                                                                            : result.error);
+                                                 return;
+                                             }
 
-            QString json_str = python::extract_json(result.output);
-            if (json_str.isEmpty()) {
-                self->display_error("No results from analysis");
-                return;
-            }
+                                             QString json_str = python::extract_json(result.output);
+                                             if (json_str.isEmpty()) {
+                                                 self->display_error("No results from analysis");
+                                                 return;
+                                             }
 
-            QJsonParseError err;
-            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
-            if (doc.isNull() || !doc.isObject()) {
-                self->display_error("Invalid response format");
-                return;
-            }
+                                             QJsonParseError err;
+                                             auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+                                             if (doc.isNull() || !doc.isObject()) {
+                                                 self->display_error("Invalid response format");
+                                                 return;
+                                             }
 
-            auto obj = doc.object();
-            if (obj.contains("error")) {
-                self->display_error(obj["error"].toString());
-                return;
-            }
+                                             auto obj = doc.object();
+                                             if (obj.contains("error")) {
+                                                 self->display_error(obj["error"].toString());
+                                                 return;
+                                             }
 
-            self->display_verdict(obj);
-            LOG_INFO("AltInvestments", "Analysis complete: " + command);
-        });
+                                             self->display_verdict(obj);
+                                             LOG_INFO("AltInvestments", "Analysis complete: " + command);
+                                         });
 }
 
 // ── Display ─────────────────────────────────────────────────────────────────
@@ -600,7 +635,7 @@ void AltInvestmentsScreen::display_verdict(const QJsonObject& result) {
 
     verdict_badge_->setText(category.toUpper());
     verdict_badge_->setStyleSheet(QString("color: %1; background: %2; "
-                                           "font-size: 12px; font-weight: 700; padding: 4px 12px;")
+                                          "font-size: 12px; font-weight: 700; padding: 4px 12px;")
                                       .arg(badge_color, badge_bg));
 
     // Rating
@@ -646,7 +681,7 @@ void AltInvestmentsScreen::display_verdict(const QJsonObject& result) {
 void AltInvestmentsScreen::display_error(const QString& error) {
     verdict_badge_->setText("ERROR");
     verdict_badge_->setStyleSheet(QString("color: %1; background: rgba(220,38,38,0.15); "
-                                           "font-size: 12px; font-weight: 700; padding: 4px 12px;")
+                                          "font-size: 12px; font-weight: 700; padding: 4px 12px;")
                                       .arg(colors::NEGATIVE));
     verdict_rating_->clear();
     verdict_recommendation_->setText(error);

@@ -1,4 +1,5 @@
 #include "services/workflow/ParameterProcessor.h"
+
 #include "services/workflow/ExpressionEngine.h"
 
 #include <QJsonArray>
@@ -8,16 +9,19 @@
 
 namespace fincept::workflow {
 
-QJsonValue ParameterProcessor::convert(const QJsonValue& raw, const QString& target_type)
-{
+QJsonValue ParameterProcessor::convert(const QJsonValue& raw, const QString& target_type) {
     if (target_type == "string") {
-        if (raw.isString()) return raw;
-        if (raw.isDouble()) return QString::number(raw.toDouble());
-        if (raw.isBool())   return raw.toBool() ? "true" : "false";
+        if (raw.isString())
+            return raw;
+        if (raw.isDouble())
+            return QString::number(raw.toDouble());
+        if (raw.isBool())
+            return raw.toBool() ? "true" : "false";
         return raw.toString();
     }
     if (target_type == "number") {
-        if (raw.isDouble()) return raw;
+        if (raw.isDouble())
+            return raw;
         if (raw.isString()) {
             bool ok = false;
             double v = raw.toString().toDouble(&ok);
@@ -26,22 +30,29 @@ QJsonValue ParameterProcessor::convert(const QJsonValue& raw, const QString& tar
         return QJsonValue{};
     }
     if (target_type == "boolean") {
-        if (raw.isBool()) return raw;
-        if (raw.isString()) return raw.toString().toLower() == "true";
-        if (raw.isDouble()) return raw.toDouble() != 0.0;
+        if (raw.isBool())
+            return raw;
+        if (raw.isString())
+            return raw.toString().toLower() == "true";
+        if (raw.isDouble())
+            return raw.toDouble() != 0.0;
         return false;
     }
     if (target_type == "json" || target_type == "object") {
-        if (raw.isObject()) return raw;
+        if (raw.isObject())
+            return raw;
         if (raw.isString()) {
             QJsonDocument doc = QJsonDocument::fromJson(raw.toString().toUtf8());
-            if (doc.isObject()) return QJsonValue(doc.object());
-            if (doc.isArray())  return QJsonValue(doc.array());
+            if (doc.isObject())
+                return QJsonValue(doc.object());
+            if (doc.isArray())
+                return QJsonValue(doc.array());
         }
         return QJsonValue{};
     }
     if (target_type == "array") {
-        if (raw.isArray()) return raw;
+        if (raw.isArray())
+            return raw;
         if (raw.isString()) {
             // Comma-separated to array
             QJsonArray arr;
@@ -54,34 +65,34 @@ QJsonValue ParameterProcessor::convert(const QJsonValue& raw, const QString& tar
     return raw; // passthrough for unknown types
 }
 
-bool ParameterProcessor::validate(const QJsonValue& value, const ParamDef& def, QString* error)
-{
-    if (def.required && (value.isNull() || value.isUndefined() ||
-        (value.isString() && value.toString().isEmpty()))) {
-        if (error) *error = QString("'%1' is required").arg(def.label);
+bool ParameterProcessor::validate(const QJsonValue& value, const ParamDef& def, QString* error) {
+    if (def.required && (value.isNull() || value.isUndefined() || (value.isString() && value.toString().isEmpty()))) {
+        if (error)
+            *error = QString("'%1' is required").arg(def.label);
         return false;
     }
 
-    if (value.isNull() || value.isUndefined()) return true; // optional + empty is OK
+    if (value.isNull() || value.isUndefined())
+        return true; // optional + empty is OK
 
     if (def.type == "string" || def.type == "expression" || def.type == "code") {
         if (!value.isString() && !value.isDouble() && !value.isBool()) {
-            if (error) *error = QString("'%1' must be a string").arg(def.label);
+            if (error)
+                *error = QString("'%1' must be a string").arg(def.label);
             return false;
         }
-    }
-    else if (def.type == "number") {
+    } else if (def.type == "number") {
         if (!value.isDouble() && !(value.isString() && !value.toString().isEmpty())) {
-            if (error) *error = QString("'%1' must be a number").arg(def.label);
+            if (error)
+                *error = QString("'%1' must be a number").arg(def.label);
             return false;
         }
-    }
-    else if (def.type == "boolean") {
+    } else if (def.type == "boolean") {
         // Any value can be boolean-ified
-    }
-    else if (def.type == "select") {
+    } else if (def.type == "select") {
         if (!def.options.isEmpty() && !def.options.contains(value.toString())) {
-            if (error) *error = QString("'%1' must be one of: %2").arg(def.label, def.options.join(", "));
+            if (error)
+                *error = QString("'%1' must be one of: %2").arg(def.label, def.options.join(", "));
             return false;
         }
     }
@@ -89,25 +100,22 @@ bool ParameterProcessor::validate(const QJsonValue& value, const ParamDef& def, 
     return true;
 }
 
-bool ParameterProcessor::validate_all(const QJsonObject& params, const QVector<ParamDef>& defs,
-                                       QStringList* errors)
-{
+bool ParameterProcessor::validate_all(const QJsonObject& params, const QVector<ParamDef>& defs, QStringList* errors) {
     bool all_ok = true;
     for (const auto& def : defs) {
         QJsonValue val = params.value(def.key);
         QString err;
         if (!validate(val, def, &err)) {
             all_ok = false;
-            if (errors) errors->append(err);
+            if (errors)
+                errors->append(err);
         }
     }
     return all_ok;
 }
 
-QJsonObject ParameterProcessor::process(const QJsonObject& raw_params,
-                                         const QVector<ParamDef>& defs,
-                                         const QJsonObject& context)
-{
+QJsonObject ParameterProcessor::process(const QJsonObject& raw_params, const QVector<ParamDef>& defs,
+                                        const QJsonObject& context) {
     QJsonObject result;
     for (const auto& def : defs) {
         QJsonValue raw = raw_params.value(def.key);
@@ -125,31 +133,29 @@ QJsonObject ParameterProcessor::process(const QJsonObject& raw_params,
     return result;
 }
 
-RoutedRequest ParameterProcessor::build_request(const QJsonObject& params,
-                                                 const QVector<ParamDef>& defs,
-                                                 const QString& base_url)
-{
+RoutedRequest ParameterProcessor::build_request(const QJsonObject& params, const QVector<ParamDef>& defs,
+                                                const QString& base_url) {
     RoutedRequest req;
     req.url = base_url;
     req.method = params.value("method").toString("GET");
 
     for (const auto& def : defs) {
         QJsonValue val = params.value(def.key);
-        if (val.isUndefined() || val.isNull()) continue;
+        if (val.isUndefined() || val.isNull())
+            continue;
 
         // Simple routing by key convention
-        if (def.key == "url" || def.key == "method") continue; // already handled
+        if (def.key == "url" || def.key == "method")
+            continue; // already handled
         if (def.key.startsWith("header_") || def.key == "headers") {
             if (val.isObject()) {
                 for (auto it = val.toObject().constBegin(); it != val.toObject().constEnd(); ++it)
                     req.headers[it.key()] = it.value();
             }
-        }
-        else if (def.key == "body" || def.type == "json") {
+        } else if (def.key == "body" || def.type == "json") {
             if (val.isObject())
                 req.body = val.toObject();
-        }
-        else {
+        } else {
             // Default: add to query string
             req.query[def.key] = val;
         }
@@ -168,8 +174,7 @@ RoutedRequest ParameterProcessor::build_request(const QJsonObject& params,
     return req;
 }
 
-QJsonValue ParameterProcessor::extract_path(const QJsonObject& obj, const QString& path)
-{
+QJsonValue ParameterProcessor::extract_path(const QJsonObject& obj, const QString& path) {
     QStringList parts = path.split('.');
     QJsonValue current = QJsonValue(obj);
 
@@ -183,8 +188,7 @@ QJsonValue ParameterProcessor::extract_path(const QJsonObject& obj, const QStrin
                 current = current.toArray().at(idx);
             else
                 return {};
-        }
-        else
+        } else
             return {};
     }
     return current;

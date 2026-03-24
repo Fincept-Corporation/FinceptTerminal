@@ -1,11 +1,12 @@
 // src/screens/portfolio/views/QuantStatsView.cpp
 #include "screens/portfolio/views/QuantStatsView.h"
+
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
 #include "ui/theme/Theme.h"
 
-using fincept::python::PythonRunner;
 using fincept::python::PythonResult;
+using fincept::python::PythonRunner;
 
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -30,15 +31,14 @@ void QuantStatsView::build_ui() {
 
     tabs_ = new QTabWidget;
     tabs_->setDocumentMode(true);
-    tabs_->setStyleSheet(QString(
-        "QTabWidget::pane { border:0; background:%1; }"
-        "QTabBar::tab { background:%2; color:%3; padding:6px 14px; border:0;"
-        "  border-bottom:2px solid transparent; font-size:9px; font-weight:700;"
-        "  letter-spacing:0.5px; }"
-        "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
-        "QTabBar::tab:hover { color:%5; }")
-        .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
-             ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+    tabs_->setStyleSheet(QString("QTabWidget::pane { border:0; background:%1; }"
+                                 "QTabBar::tab { background:%2; color:%3; padding:6px 14px; border:0;"
+                                 "  border-bottom:2px solid transparent; font-size:9px; font-weight:700;"
+                                 "  letter-spacing:0.5px; }"
+                                 "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
+                                 "QTabBar::tab:hover { color:%5; }")
+                             .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
+                                  ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
 
     // ── Metrics tab ──────────────────────────────────────────────────────────
     auto* metrics_w = new QWidget;
@@ -46,8 +46,8 @@ void QuantStatsView::build_ui() {
     metrics_layout->setContentsMargins(12, 8, 12, 8);
 
     auto* metrics_title = new QLabel("KEY PERFORMANCE INDICATORS");
-    metrics_title->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;")
-                                 .arg(ui::colors::AMBER));
+    metrics_title->setStyleSheet(
+        QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     metrics_layout->addWidget(metrics_title);
 
     metrics_table_ = new QTableWidget;
@@ -60,14 +60,13 @@ void QuantStatsView::build_ui() {
     metrics_table_->horizontalHeader()->setStretchLastSection(true);
     metrics_table_->setColumnWidth(0, 200);
     metrics_table_->setColumnWidth(1, 120);
-    metrics_table_->setStyleSheet(QString(
-        "QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
-        "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
-        "QHeaderView::section { background:%4; color:%5; border:none;"
-        "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
-        "  font-weight:700; letter-spacing:0.5px; }")
-        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-             ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+    metrics_table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
+                                          "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
+                                          "QHeaderView::section { background:%4; color:%5; border:none;"
+                                          "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
+                                          "  font-weight:700; letter-spacing:0.5px; }")
+                                      .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
+                                           ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
     metrics_layout->addWidget(metrics_table_, 1);
     tabs_->addTab(metrics_w, "METRICS");
 
@@ -93,8 +92,8 @@ void QuantStatsView::build_ui() {
     mc_layout->setSpacing(8);
 
     auto* mc_title = new QLabel("MONTE CARLO SIMULATION");
-    mc_title->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;")
-                            .arg(ui::colors::AMBER));
+    mc_title->setStyleSheet(
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     mc_layout->addWidget(mc_title);
 
     auto* mc_desc = new QLabel("Simulate 1,000+ portfolio return paths to estimate probability distributions\n"
@@ -106,13 +105,12 @@ void QuantStatsView::build_ui() {
     mc_run_btn_ = new QPushButton("\u25B6 RUN MONTE CARLO (1000 paths)");
     mc_run_btn_->setFixedHeight(28);
     mc_run_btn_->setCursor(Qt::PointingHandCursor);
-    mc_run_btn_->setStyleSheet(QString(
-        "QPushButton { background:%1; color:#000; border:none;"
-        "  padding:0 16px; font-size:10px; font-weight:700; }"
-        "QPushButton:hover { background:%2; }"
-        "QPushButton:disabled { background:%3; color:%4; }")
-        .arg(ui::colors::AMBER, ui::colors::WARNING,
-             ui::colors::BG_RAISED, ui::colors::TEXT_TERTIARY));
+    mc_run_btn_->setStyleSheet(
+        QString("QPushButton { background:%1; color:#000; border:none;"
+                "  padding:0 16px; font-size:10px; font-weight:700; }"
+                "QPushButton:hover { background:%2; }"
+                "QPushButton:disabled { background:%3; color:%4; }")
+            .arg(ui::colors::AMBER, ui::colors::WARNING, ui::colors::BG_RAISED, ui::colors::TEXT_TERTIARY));
     connect(mc_run_btn_, &QPushButton::clicked, this, &QuantStatsView::run_monte_carlo);
     mc_layout->addWidget(mc_run_btn_);
 
@@ -129,8 +127,7 @@ void QuantStatsView::build_ui() {
     layout->addWidget(tabs_);
 }
 
-void QuantStatsView::set_data(const portfolio::PortfolioSummary& summary,
-                                const QString& currency) {
+void QuantStatsView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     summary_ = summary;
     currency_ = currency;
     update_metrics();
@@ -167,25 +164,27 @@ void QuantStatsView::update_metrics() {
     double rf = 4.0;
     double sharpe = ann_vol > 0.01 ? (pnl_pct - rf) / ann_vol : 0;
     double sortino = (neg_n > 0 && std::sqrt(neg_sq / neg_n) > 0.01)
-        ? (pnl_pct - rf) / (std::sqrt(neg_sq / neg_n) * std::sqrt(252.0)) : 0;
+                         ? (pnl_pct - rf) / (std::sqrt(neg_sq / neg_n) * std::sqrt(252.0))
+                         : 0;
     double max_dd = pnl_pct < 0 ? std::abs(pnl_pct) : 0;
     double calmar = max_dd > 0.1 ? pnl_pct / max_dd : 0;
 
     QVector<MetricDef> metrics = {
-        {"Total Return",           pnl_pct,    10.2,  "pct"},
-        {"Annualized Return",      pnl_pct,    10.2,  "pct"},
-        {"Annualized Volatility",  ann_vol,    15.5,  "pct"},
-        {"Sharpe Ratio",           sharpe,     0.85,  "ratio"},
-        {"Sortino Ratio",          sortino,    1.10,  "ratio"},
-        {"Calmar Ratio",           calmar,     0.65,  "ratio"},
-        {"Max Drawdown",           max_dd,     -20.5, "pct"},
-        {"Daily Value at Risk",    summary_.total_market_value * daily_vol * 1.645 / 100.0, 0, "currency"},
-        {"Best Day",               day_chg > 0 ? day_chg : 0, 4.2,  "pct"},
-        {"Worst Day",              day_chg < 0 ? day_chg : 0, -3.8, "pct"},
-        {"Win Rate",               summary_.gainers > 0 ? summary_.gainers * 100.0 / summary_.total_positions : 0, 55.0, "pct"},
-        {"Gain/Loss Ratio",        summary_.losers > 0 ? static_cast<double>(summary_.gainers) / summary_.losers : 0, 1.2, "ratio"},
-        {"Positive Positions",     static_cast<double>(summary_.gainers), 0, "ratio"},
-        {"Negative Positions",     static_cast<double>(summary_.losers),  0, "ratio"},
+        {"Total Return", pnl_pct, 10.2, "pct"},
+        {"Annualized Return", pnl_pct, 10.2, "pct"},
+        {"Annualized Volatility", ann_vol, 15.5, "pct"},
+        {"Sharpe Ratio", sharpe, 0.85, "ratio"},
+        {"Sortino Ratio", sortino, 1.10, "ratio"},
+        {"Calmar Ratio", calmar, 0.65, "ratio"},
+        {"Max Drawdown", max_dd, -20.5, "pct"},
+        {"Daily Value at Risk", summary_.total_market_value * daily_vol * 1.645 / 100.0, 0, "currency"},
+        {"Best Day", day_chg > 0 ? day_chg : 0, 4.2, "pct"},
+        {"Worst Day", day_chg < 0 ? day_chg : 0, -3.8, "pct"},
+        {"Win Rate", summary_.gainers > 0 ? summary_.gainers * 100.0 / summary_.total_positions : 0, 55.0, "pct"},
+        {"Gain/Loss Ratio", summary_.losers > 0 ? static_cast<double>(summary_.gainers) / summary_.losers : 0, 1.2,
+         "ratio"},
+        {"Positive Positions", static_cast<double>(summary_.gainers), 0, "ratio"},
+        {"Negative Positions", static_cast<double>(summary_.losers), 0, "ratio"},
     };
 
     metrics_table_->setRowCount(metrics.size());
@@ -196,9 +195,9 @@ void QuantStatsView::update_metrics() {
 
         auto set = [&](int col, const QString& text, const char* color = nullptr) {
             auto* item = new QTableWidgetItem(text);
-            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter)
-                                            : (Qt::AlignRight | Qt::AlignVCenter));
-            if (color) item->setForeground(QColor(color));
+            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
+            if (color)
+                item->setForeground(QColor(color));
             metrics_table_->setItem(r, col, item);
         };
 
@@ -213,8 +212,8 @@ void QuantStatsView::update_metrics() {
         };
 
         const char* val_color = (strcmp(m.format, "pct") == 0 || strcmp(m.format, "ratio") == 0)
-            ? (m.value >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE)
-            : ui::colors::CYAN;
+                                    ? (m.value >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE)
+                                    : ui::colors::CYAN;
 
         set(1, fmt_val(m.value), val_color);
         set(2, m.benchmark != 0 ? fmt_val(m.benchmark) : "--", ui::colors::TEXT_TERTIARY);
@@ -227,7 +226,8 @@ void QuantStatsView::run_quantstats() {
 }
 
 void QuantStatsView::run_monte_carlo() {
-    if (mc_running_ || summary_.holdings.isEmpty()) return;
+    if (mc_running_ || summary_.holdings.isEmpty())
+        return;
     mc_running_ = true;
     mc_run_btn_->setEnabled(false);
     mc_status_->setText("Running 1000 simulation paths...");
@@ -249,24 +249,25 @@ void QuantStatsView::run_monte_carlo() {
 
     QPointer<QuantStatsView> self = this;
 
-    PythonRunner::instance().run("quantstats_monte_carlo", {args_str},
-        [self](PythonResult result) {
-            if (!self) return;
-            QMetaObject::invokeMethod(self, [self, result]() {
-                if (!self) return;
+    PythonRunner::instance().run("quantstats_monte_carlo", {args_str}, [self](PythonResult result) {
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
                 self->mc_running_ = false;
                 self->mc_run_btn_->setEnabled(true);
 
                 if (!result.success) {
                     self->mc_status_->setText("Monte Carlo simulation failed.");
-                    self->mc_status_->setStyleSheet(
-                        QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE));
+                    self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE));
                     return;
                 }
 
                 self->mc_status_->setText("Monte Carlo complete — 1000 paths simulated");
-                self->mc_status_->setStyleSheet(
-                    QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE));
+                self->mc_status_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE));
 
                 // Parse and display results
                 if (self->mc_results_->layout())
@@ -281,11 +282,10 @@ void QuantStatsView::run_monte_carlo() {
                     auto add_result = [&](const QString& label, const QString& key, const char* color) {
                         auto* row = new QHBoxLayout;
                         auto* lbl = new QLabel(label);
-                        lbl->setStyleSheet(QString("color:%1; font-size:10px;")
-                                           .arg(ui::colors::TEXT_SECONDARY));
+                        lbl->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_SECONDARY));
                         row->addWidget(lbl);
-                        auto* val = new QLabel(root.contains(key)
-                            ? QString::number(root[key].toDouble(), 'f', 2) + "%" : "--");
+                        auto* val =
+                            new QLabel(root.contains(key) ? QString::number(root[key].toDouble(), 'f', 2) + "%" : "--");
                         val->setAlignment(Qt::AlignRight);
                         val->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700;").arg(color));
                         row->addWidget(val);
@@ -305,8 +305,9 @@ void QuantStatsView::run_monte_carlo() {
                 }
 
                 layout->addStretch();
-            }, Qt::QueuedConnection);
-        });
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 } // namespace fincept::screens

@@ -3,13 +3,13 @@
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
 
+#include <QApplication>
 #include <QDateTime>
 #include <QPushButton>
-#include <QApplication>
 #include <QScrollBar>
 
 #if defined(Q_OS_WIN)
-#include <windows.h>
+#    include <windows.h>
 #endif
 
 namespace fincept::screens {
@@ -46,7 +46,7 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
     // Skeleton loading widget
     build_skeleton();
 
-    stack->addWidget(list_view_);       // index 0 = feed
+    stack->addWidget(list_view_);        // index 0 = feed
     stack->addWidget(skeleton_overlay_); // index 1 = skeleton
     stack->setCurrentIndex(0);
     stack_ = stack;
@@ -57,8 +57,7 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
     connect(list_view_, &QListView::clicked, this, &NewsFeedPanel::on_item_clicked);
 
     // Scroll-to-bottom detection for lazy loading
-    connect(list_view_->verticalScrollBar(), &QScrollBar::valueChanged,
-            this, &NewsFeedPanel::check_scroll_position);
+    connect(list_view_->verticalScrollBar(), &QScrollBar::valueChanged, this, &NewsFeedPanel::check_scroll_position);
 
     // Banner dismiss timer
     banner_dismiss_timer_ = new QTimer(this);

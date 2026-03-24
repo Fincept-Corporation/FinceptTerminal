@@ -2,8 +2,8 @@
 
 #include "screens/node_editor/NodeEditorTypes.h"
 
-#include <QObject>
 #include <QMap>
+#include <QObject>
 #include <QVector>
 
 #include <functional>

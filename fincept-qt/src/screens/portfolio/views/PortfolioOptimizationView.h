@@ -42,19 +42,19 @@ class PortfolioOptimizationView : public QWidget {
     QTabWidget* tabs_ = nullptr;
 
     // Optimize tab widgets
-    QComboBox*    method_cb_      = nullptr;
-    QComboBox*    returns_cb_     = nullptr;
-    QComboBox*    risk_model_cb_  = nullptr;
-    QPushButton*  run_btn_        = nullptr;
-    QLabel*       status_label_   = nullptr;
-    QTableWidget* result_table_   = nullptr;
+    QComboBox* method_cb_ = nullptr;
+    QComboBox* returns_cb_ = nullptr;
+    QComboBox* risk_model_cb_ = nullptr;
+    QPushButton* run_btn_ = nullptr;
+    QLabel* status_label_ = nullptr;
+    QTableWidget* result_table_ = nullptr;
 
     // Frontier tab
-    QChartView*   frontier_chart_ = nullptr;
+    QChartView* frontier_chart_ = nullptr;
 
     // Allocation tab
-    QChartView*   alloc_chart_    = nullptr;
-    QTableWidget* alloc_table_    = nullptr;
+    QChartView* alloc_chart_ = nullptr;
+    QTableWidget* alloc_table_ = nullptr;
 
     // Strategies tab
     QTableWidget* strategies_table_ = nullptr;

@@ -1,5 +1,6 @@
 // src/screens/portfolio/views/CustomIndexView.cpp
 #include "screens/portfolio/views/CustomIndexView.h"
+
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
 
@@ -15,10 +16,8 @@
 namespace fincept::screens {
 
 static const QStringList kMethods = {
-    "Price Weighted",       "Market Cap Weighted",  "Equal Weighted",
-    "Float Adjusted",       "Fundamental Weighted", "Modified Market Cap",
-    "Factor Weighted",      "Risk Parity",          "Geometric Mean",
-    "Capped Weighted",
+    "Price Weighted",      "Market Cap Weighted", "Equal Weighted", "Float Adjusted", "Fundamental Weighted",
+    "Modified Market Cap", "Factor Weighted",     "Risk Parity",    "Geometric Mean", "Capped Weighted",
 };
 
 static const QStringList kMethodDescriptions = {
@@ -44,15 +43,14 @@ void CustomIndexView::build_ui() {
 
     tabs_ = new QTabWidget;
     tabs_->setDocumentMode(true);
-    tabs_->setStyleSheet(QString(
-        "QTabWidget::pane { border:0; background:%1; }"
-        "QTabBar::tab { background:%2; color:%3; padding:6px 14px; border:0;"
-        "  border-bottom:2px solid transparent; font-size:9px; font-weight:700;"
-        "  letter-spacing:0.5px; }"
-        "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
-        "QTabBar::tab:hover { color:%5; }")
-        .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
-             ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+    tabs_->setStyleSheet(QString("QTabWidget::pane { border:0; background:%1; }"
+                                 "QTabBar::tab { background:%2; color:%3; padding:6px 14px; border:0;"
+                                 "  border-bottom:2px solid transparent; font-size:9px; font-weight:700;"
+                                 "  letter-spacing:0.5px; }"
+                                 "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
+                                 "QTabBar::tab:hover { color:%5; }")
+                             .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
+                                  ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
 
     tabs_->addTab(build_create_panel(), "CREATE INDEX");
     tabs_->addTab(build_index_list_panel(), "MY INDICES");
@@ -68,8 +66,8 @@ QWidget* CustomIndexView::build_create_panel() {
     layout->setSpacing(10);
 
     auto* title = new QLabel("CREATE CUSTOM INDEX");
-    title->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;")
-                         .arg(ui::colors::AMBER));
+    title->setStyleSheet(
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     layout->addWidget(title);
 
     // Config row
@@ -78,8 +76,7 @@ QWidget* CustomIndexView::build_create_panel() {
 
     auto add_field = [&](const QString& label, QWidget* widget) {
         auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;")
-                           .arg(ui::colors::TEXT_TERTIARY));
+        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::TEXT_TERTIARY));
         config->addWidget(lbl);
         config->addWidget(widget);
     };
@@ -87,21 +84,20 @@ QWidget* CustomIndexView::build_create_panel() {
     name_edit_ = new QLineEdit;
     name_edit_->setPlaceholderText("My Custom Index");
     name_edit_->setFixedSize(160, 24);
-    name_edit_->setStyleSheet(QString(
-        "QLineEdit { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:10px; }"
-        "QLineEdit:focus { border-color:%4; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY,
-             ui::colors::BORDER_DIM, ui::colors::AMBER));
+    name_edit_->setStyleSheet(
+        QString("QLineEdit { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:10px; }"
+                "QLineEdit:focus { border-color:%4; }")
+            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::AMBER));
     add_field("NAME:", name_edit_);
 
     method_cb_ = new QComboBox;
     method_cb_->addItems(kMethods);
     method_cb_->setFixedHeight(24);
-    method_cb_->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:10px; }"
-        "QComboBox::drop-down { border:none; }"
-        "QComboBox QAbstractItemView { background:%1; color:%2; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM));
+    method_cb_->setStyleSheet(
+        QString("QComboBox { background:%1; color:%2; border:1px solid %3; padding:0 8px; font-size:10px; }"
+                "QComboBox::drop-down { border:none; }"
+                "QComboBox QAbstractItemView { background:%1; color:%2; }")
+            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM));
     add_field("METHOD:", method_cb_);
 
     base_edit_ = new QLineEdit("1000");
@@ -114,11 +110,10 @@ QWidget* CustomIndexView::build_create_panel() {
     create_btn_ = new QPushButton("CREATE INDEX");
     create_btn_->setFixedHeight(26);
     create_btn_->setCursor(Qt::PointingHandCursor);
-    create_btn_->setStyleSheet(QString(
-        "QPushButton { background:%1; color:#000; border:none;"
-        "  padding:0 16px; font-size:10px; font-weight:700; }"
-        "QPushButton:hover { background:%2; }")
-        .arg(ui::colors::AMBER, ui::colors::WARNING));
+    create_btn_->setStyleSheet(QString("QPushButton { background:%1; color:#000; border:none;"
+                                       "  padding:0 16px; font-size:10px; font-weight:700; }"
+                                       "QPushButton:hover { background:%2; }")
+                                   .arg(ui::colors::AMBER, ui::colors::WARNING));
     connect(create_btn_, &QPushButton::clicked, this, &CustomIndexView::create_index);
     config->addWidget(create_btn_);
 
@@ -128,8 +123,7 @@ QWidget* CustomIndexView::build_create_panel() {
     auto* method_desc = new QLabel;
     method_desc->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
     method_desc->setText(kMethodDescriptions[0]);
-    connect(method_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [method_desc](int idx) {
+    connect(method_cb_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [method_desc](int idx) {
         if (idx >= 0 && idx < kMethodDescriptions.size())
             method_desc->setText(kMethodDescriptions[idx]);
     });
@@ -137,8 +131,8 @@ QWidget* CustomIndexView::build_create_panel() {
 
     // Constituents table (from portfolio holdings)
     auto* const_title = new QLabel("CONSTITUENTS (from portfolio holdings)");
-    const_title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;")
-                               .arg(ui::colors::TEXT_SECONDARY));
+    const_title->setStyleSheet(
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_SECONDARY));
     layout->addWidget(const_title);
 
     const_table_ = new QTableWidget;
@@ -149,13 +143,13 @@ QWidget* CustomIndexView::build_create_panel() {
     const_table_->setShowGrid(false);
     const_table_->verticalHeader()->setVisible(false);
     const_table_->horizontalHeader()->setStretchLastSection(true);
-    const_table_->setStyleSheet(QString(
-        "QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
-        "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
-        "QHeaderView::section { background:%4; color:%5; border:none;"
-        "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px; font-weight:700; }")
-        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-             ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+    const_table_->setStyleSheet(
+        QString("QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
+                "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
+                "QHeaderView::section { background:%4; color:%5; border:none;"
+                "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px; font-weight:700; }")
+            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::BG_SURFACE,
+                 ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
     layout->addWidget(const_table_, 1);
 
     return w;
@@ -167,8 +161,8 @@ QWidget* CustomIndexView::build_index_list_panel() {
     layout->setContentsMargins(16, 12, 16, 12);
 
     auto* title = new QLabel("MY CUSTOM INDICES");
-    title->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;")
-                         .arg(ui::colors::AMBER));
+    title->setStyleSheet(
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     layout->addWidget(title);
 
     index_list_table_ = new QTableWidget;
@@ -179,17 +173,17 @@ QWidget* CustomIndexView::build_index_list_panel() {
     index_list_table_->setShowGrid(false);
     index_list_table_->verticalHeader()->setVisible(false);
     index_list_table_->horizontalHeader()->setStretchLastSection(true);
-    index_list_table_->setStyleSheet(QString(
-        "QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
-        "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
-        "QTableWidget::item:selected { background:%7; color:%8; }"
-        "QHeaderView::section { background:%4; color:%5; border:none;"
-        "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px; font-weight:700; }")
-        .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM,
-             ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY, ui::colors::AMBER,
-             ui::colors::AMBER_DIM, ui::colors::AMBER));
+    index_list_table_->setStyleSheet(
+        QString("QTableWidget { background:%1; color:%2; border:none; font-size:11px; }"
+                "QTableWidget::item { padding:4px 8px; border-bottom:1px solid %3; }"
+                "QTableWidget::item:selected { background:%7; color:%8; }"
+                "QHeaderView::section { background:%4; color:%5; border:none;"
+                "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px; font-weight:700; }")
+            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::BG_SURFACE,
+                 ui::colors::TEXT_SECONDARY, ui::colors::AMBER, ui::colors::AMBER_DIM, ui::colors::AMBER));
 
-    auto* empty_msg = new QLabel("No custom indices created yet.\nGo to CREATE INDEX tab to build one from your portfolio.");
+    auto* empty_msg =
+        new QLabel("No custom indices created yet.\nGo to CREATE INDEX tab to build one from your portfolio.");
     empty_msg->setAlignment(Qt::AlignCenter);
     empty_msg->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY));
 
@@ -205,8 +199,8 @@ QWidget* CustomIndexView::build_performance_panel() {
     layout->setContentsMargins(16, 12, 16, 12);
 
     auto* title = new QLabel("INDEX PERFORMANCE");
-    title->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;")
-                         .arg(ui::colors::AMBER));
+    title->setStyleSheet(
+        QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     layout->addWidget(title);
 
     auto* chart = new QChart;
@@ -229,8 +223,7 @@ QWidget* CustomIndexView::build_performance_panel() {
     return w;
 }
 
-void CustomIndexView::set_data(const portfolio::PortfolioSummary& summary,
-                                 const QString& currency) {
+void CustomIndexView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     summary_ = summary;
     currency_ = currency;
     update_constituents();
@@ -251,9 +244,9 @@ void CustomIndexView::update_constituents() {
 
         auto set = [&](int col, const QString& text, const char* color = nullptr) {
             auto* item = new QTableWidgetItem(text);
-            item->setTextAlignment(col == 1 ? (Qt::AlignLeft | Qt::AlignVCenter)
-                                            : (Qt::AlignRight | Qt::AlignVCenter));
-            if (color) item->setForeground(QColor(color));
+            item->setTextAlignment(col == 1 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
+            if (color)
+                item->setForeground(QColor(color));
             const_table_->setItem(r, col, item);
         };
 
@@ -266,10 +259,10 @@ void CustomIndexView::update_constituents() {
 
 void CustomIndexView::create_index() {
     QString name = name_edit_->text().trimmed();
-    if (name.isEmpty()) return;
+    if (name.isEmpty())
+        return;
 
-    LOG_INFO("CustomIndex", QString("Creating index '%1' with method '%2'")
-             .arg(name, method_cb_->currentText()));
+    LOG_INFO("CustomIndex", QString("Creating index '%1' with method '%2'").arg(name, method_cb_->currentText()));
 
     // TODO: Persist to database via a CustomIndexRepository (future enhancement)
     // For now, just log the creation

@@ -50,9 +50,9 @@ struct PortDef {
 struct ParamDef {
     QString key;
     QString label;
-    QString type;           // "string", "number", "boolean", "select", "code", "json", "expression"
+    QString type; // "string", "number", "boolean", "select", "code", "json", "expression"
     QJsonValue default_value;
-    QStringList options;    // for "select" type
+    QStringList options; // for "select" type
     QString placeholder;
     bool required = false;
 };
@@ -60,23 +60,20 @@ struct ParamDef {
 // ── Node type definition (registered in NodeRegistry) ──────────────────
 
 struct NodeTypeDef {
-    QString type_id;        // e.g. "trigger.manual"
-    QString display_name;   // e.g. "Manual Trigger"
-    QString category;       // e.g. "Triggers"
+    QString type_id;      // e.g. "trigger.manual"
+    QString display_name; // e.g. "Manual Trigger"
+    QString category;     // e.g. "Triggers"
     QString description;
-    QString icon_text;      // 1-2 char icon, e.g. ">>"
-    QString accent_color;   // category color for header
+    QString icon_text;    // 1-2 char icon, e.g. ">>"
+    QString accent_color; // category color for header
     int version = 1;
     QVector<PortDef> inputs;
     QVector<PortDef> outputs;
     QVector<ParamDef> parameters;
 
     /// Async executor: receives params + inputs, calls callback with result.
-    using ExecuteFn = std::function<void(
-        const QJsonObject& params,
-        const QVector<QJsonValue>& inputs,
-        std::function<void(bool success, QJsonValue output, QString error)> callback
-    )>;
+    using ExecuteFn = std::function<void(const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                                         std::function<void(bool success, QJsonValue output, QString error)> callback)>;
     ExecuteFn execute;
 };
 
@@ -84,8 +81,8 @@ struct NodeTypeDef {
 
 struct NodeDef {
     QString id;
-    QString type;           // registry key
-    QString name;           // user label
+    QString type; // registry key
+    QString name; // user label
     int type_version = 1;
     double x = 0.0;
     double y = 0.0;

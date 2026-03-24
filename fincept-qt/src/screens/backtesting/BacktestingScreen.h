@@ -58,8 +58,9 @@ class BacktestingScreen : public QWidget {
     QJsonObject gather_args();
     QJsonObject gather_strategy_params();
 
-    // Provider state
+    // Provider state (cached to avoid repeated heap allocation)
     QVector<services::backtest::Provider> providers_;
+    QVector<services::backtest::CommandDef> commands_;
     QVector<services::backtest::Strategy> strategies_;
     int active_provider_ = 0;
     int active_command_ = 0;
@@ -103,6 +104,7 @@ class BacktestingScreen : public QWidget {
     // Indicator config
     QComboBox* indicator_combo_ = nullptr;
     // Indicator signals config
+    QComboBox* ind_signal_indicator_combo_ = nullptr;
     QComboBox* ind_signal_mode_combo_ = nullptr;
     // Labels config
     QComboBox* labels_type_combo_ = nullptr;

@@ -60,7 +60,7 @@ class AlphaArenaScreen : public QWidget {
 
     // State
     QString competition_id_;
-    QString competition_status_;  // created, running, paused, completed, failed
+    QString competition_status_; // created, running, paused, completed, failed
     int cycle_count_ = 0;
     bool is_auto_running_ = false;
     bool loading_ = false;

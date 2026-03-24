@@ -22,9 +22,7 @@ NewsCommandBar::NewsCommandBar(QWidget* parent) : QWidget(parent) {
     search_input_->setFixedHeight(22);
     root->addWidget(search_input_);
 
-    connect(search_input_, &QLineEdit::textChanged, this, [this](const QString& text) {
-        emit search_changed(text);
-    });
+    connect(search_input_, &QLineEdit::textChanged, this, [this](const QString& text) { emit search_changed(text); });
 
     root->addSpacing(8);
 

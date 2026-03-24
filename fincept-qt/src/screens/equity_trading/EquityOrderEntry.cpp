@@ -1,5 +1,6 @@
 // EquityOrderEntry.cpp — BUY/SELL form with equity-specific product types
 #include "screens/equity_trading/EquityOrderEntry.h"
+
 #include "screens/equity_trading/EquityTypes.h"
 
 #include <QHBoxLayout>
@@ -72,7 +73,8 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
         type_btns_[i]->setObjectName("eqOeTypeBtn");
         type_btns_[i]->setFixedHeight(20);
         type_btns_[i]->setCursor(Qt::PointingHandCursor);
-        if (i == 0) type_btns_[i]->setProperty("active", true);
+        if (i == 0)
+            type_btns_[i]->setProperty("active", true);
         connect(type_btns_[i], &QPushButton::clicked, this, [this, i]() { set_order_type(i); });
         type_row->addWidget(type_btns_[i]);
     }
@@ -235,24 +237,22 @@ void EquityOrderEntry::set_order_type(int idx) {
         type_btns_[i]->style()->unpolish(type_btns_[i]);
         type_btns_[i]->style()->polish(type_btns_[i]);
     }
-    price_edit_->setEnabled(idx == 1 || idx == 3);       // Limit, SL-Limit
-    stop_price_edit_->setEnabled(idx == 2 || idx == 3);  // SL, SL-Limit
+    price_edit_->setEnabled(idx == 1 || idx == 3);      // Limit, SL-Limit
+    stop_price_edit_->setEnabled(idx == 2 || idx == 3); // SL, SL-Limit
     update_cost_preview();
 }
 
 void EquityOrderEntry::set_balance(double balance) {
     balance_ = balance;
-    balance_label_->setText(QString("%1%2")
-                                .arg(currency_symbol(exchange_currency(current_exchange_)))
-                                .arg(balance, 0, 'f', 2));
+    balance_label_->setText(
+        QString("%1%2").arg(currency_symbol(exchange_currency(current_exchange_))).arg(balance, 0, 'f', 2));
     update_cost_preview();
 }
 
 void EquityOrderEntry::set_current_price(double price) {
     current_price_ = price;
-    market_price_label_->setText(QString("MKT: %1%2")
-                                    .arg(currency_symbol(exchange_currency(current_exchange_)))
-                                    .arg(price, 0, 'f', 2));
+    market_price_label_->setText(
+        QString("MKT: %1%2").arg(currency_symbol(exchange_currency(current_exchange_))).arg(price, 0, 'f', 2));
     update_cost_preview();
 }
 
@@ -291,12 +291,8 @@ void EquityOrderEntry::on_submit() {
     order.exchange = exchange_combo_->currentText();
     order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
 
-    static const trading::OrderType type_map[] = {
-        trading::OrderType::Market,
-        trading::OrderType::Limit,
-        trading::OrderType::StopLoss,
-        trading::OrderType::StopLossLimit
-    };
+    static const trading::OrderType type_map[] = {trading::OrderType::Market, trading::OrderType::Limit,
+                                                  trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
     order.order_type = type_map[active_type_];
     order.quantity = qty;
     order.price = price_edit_->text().toDouble();
@@ -305,11 +301,8 @@ void EquityOrderEntry::on_submit() {
     order.take_profit = tp_edit_->text().toDouble();
 
     // Product type from combo
-    static const trading::ProductType prod_map[] = {
-        trading::ProductType::Intraday,
-        trading::ProductType::Delivery,
-        trading::ProductType::Margin
-    };
+    static const trading::ProductType prod_map[] = {trading::ProductType::Intraday, trading::ProductType::Delivery,
+                                                    trading::ProductType::Margin};
     order.product_type = prod_map[product_combo_->currentIndex()];
 
     emit order_submitted(order);
@@ -320,7 +313,8 @@ void EquityOrderEntry::update_cost_preview() {
     double price = current_price_;
     if (active_type_ == 1 || active_type_ == 3) {
         const double limit_p = price_edit_->text().toDouble();
-        if (limit_p > 0) price = limit_p;
+        if (limit_p > 0)
+            price = limit_p;
     }
     const QString sym = currency_symbol(exchange_currency(current_exchange_));
     if (qty > 0 && price > 0)

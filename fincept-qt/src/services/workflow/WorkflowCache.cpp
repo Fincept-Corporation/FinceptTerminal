@@ -1,20 +1,20 @@
 #include "services/workflow/WorkflowCache.h"
+
 #include "core/logging/Logger.h"
 
 #include <QDateTime>
 #include <QMutexLocker>
+
 #include <algorithm>
 
 namespace fincept::workflow {
 
-WorkflowCache& WorkflowCache::instance()
-{
+WorkflowCache& WorkflowCache::instance() {
     static WorkflowCache s;
     return s;
 }
 
-WorkflowCache::WorkflowCache() : QObject(nullptr)
-{
+WorkflowCache::WorkflowCache() : QObject(nullptr) {
     // Cleanup expired entries every 60s
     cleanup_timer_ = new QTimer(this);
     cleanup_timer_->setInterval(60000);
@@ -22,9 +22,11 @@ WorkflowCache::WorkflowCache() : QObject(nullptr)
     cleanup_timer_->start();
 }
 
-QJsonValue WorkflowCache::get(const QString& key) const
-{
-    if (!enabled_) { misses_++; return {}; }
+QJsonValue WorkflowCache::get(const QString& key) const {
+    if (!enabled_) {
+        misses_++;
+        return {};
+    }
 
     QMutexLocker lock(&mutex_);
     auto it = entries_.constFind(key);
@@ -44,9 +46,9 @@ QJsonValue WorkflowCache::get(const QString& key) const
     return it->data;
 }
 
-void WorkflowCache::put(const QString& key, const QJsonValue& value, int ttl_ms)
-{
-    if (!enabled_) return;
+void WorkflowCache::put(const QString& key, const QJsonValue& value, int ttl_ms) {
+    if (!enabled_)
+        return;
 
     QMutexLocker lock(&mutex_);
 
@@ -71,26 +73,25 @@ void WorkflowCache::put(const QString& key, const QJsonValue& value, int ttl_ms)
     entries_.insert(key, entry);
 }
 
-bool WorkflowCache::has(const QString& key) const
-{
-    if (!enabled_) return false;
+bool WorkflowCache::has(const QString& key) const {
+    if (!enabled_)
+        return false;
 
     QMutexLocker lock(&mutex_);
     auto it = entries_.constFind(key);
-    if (it == entries_.constEnd()) return false;
+    if (it == entries_.constEnd())
+        return false;
 
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     return (now - it->timestamp_ms <= it->ttl_ms);
 }
 
-void WorkflowCache::remove(const QString& key)
-{
+void WorkflowCache::remove(const QString& key) {
     QMutexLocker lock(&mutex_);
     entries_.remove(key);
 }
 
-void WorkflowCache::invalidate_prefix(const QString& prefix)
-{
+void WorkflowCache::invalidate_prefix(const QString& prefix) {
     QMutexLocker lock(&mutex_);
     QStringList to_remove;
     for (auto it = entries_.constBegin(); it != entries_.constEnd(); ++it) {
@@ -101,12 +102,10 @@ void WorkflowCache::invalidate_prefix(const QString& prefix)
         entries_.remove(key);
 
     if (!to_remove.isEmpty())
-        LOG_DEBUG("WorkflowCache", QString("Invalidated %1 entries with prefix: %2")
-                  .arg(to_remove.size()).arg(prefix));
+        LOG_DEBUG("WorkflowCache", QString("Invalidated %1 entries with prefix: %2").arg(to_remove.size()).arg(prefix));
 }
 
-void WorkflowCache::clear()
-{
+void WorkflowCache::clear() {
     QMutexLocker lock(&mutex_);
     int count = entries_.size();
     entries_.clear();
@@ -115,20 +114,17 @@ void WorkflowCache::clear()
     LOG_INFO("WorkflowCache", QString("Cleared %1 entries").arg(count));
 }
 
-int WorkflowCache::size() const
-{
+int WorkflowCache::size() const {
     QMutexLocker lock(&mutex_);
     return entries_.size();
 }
 
-double WorkflowCache::hit_rate() const
-{
+double WorkflowCache::hit_rate() const {
     int total = hits_ + misses_;
     return total > 0 ? static_cast<double>(hits_) / total : 0.0;
 }
 
-void WorkflowCache::cleanup_expired()
-{
+void WorkflowCache::cleanup_expired() {
     QMutexLocker lock(&mutex_);
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     QStringList expired;

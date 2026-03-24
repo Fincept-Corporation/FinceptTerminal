@@ -14,8 +14,8 @@ class EquityCredentials : public QDialog {
     explicit EquityCredentials(const QString& broker_id, QWidget* parent = nullptr);
 
   signals:
-    void credentials_saved(const QString& broker_id, const QString& api_key,
-                           const QString& api_secret, const QString& auth_code);
+    void credentials_saved(const QString& broker_id, const QString& api_key, const QString& api_secret,
+                           const QString& auth_code);
 
   private slots:
     void on_save();

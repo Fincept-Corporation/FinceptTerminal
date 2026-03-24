@@ -16,15 +16,13 @@ namespace fincept::screens {
 
 static QLabel* section_hdr(const QString& text) {
     auto* lbl = new QLabel(text);
-    lbl->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding:6px 0 2px 0;")
-            .arg(ui::colors::AMBER));
+    lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding:6px 0 2px 0;")
+                           .arg(ui::colors::AMBER));
     return lbl;
 }
 
-static const QString kInput =
-    QString("background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:12px;")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED);
+static const QString kInput = QString("background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:12px;")
+                                  .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED);
 
 AgentsViewPanel::AgentsViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("AgentsViewPanel");
@@ -56,8 +54,8 @@ QWidget* AgentsViewPanel::build_agent_list_panel() {
     auto* panel = new QWidget;
     panel->setMinimumWidth(200);
     panel->setMaximumWidth(300);
-    panel->setStyleSheet(QString("background:%1;border-right:1px solid %2;")
-                             .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    panel->setStyleSheet(
+        QString("background:%1;border-right:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
@@ -67,9 +65,8 @@ QWidget* AgentsViewPanel::build_agent_list_panel() {
     title->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER));
     hdr->addWidget(title);
     list_count_label_ = new QLabel("0");
-    list_count_label_->setStyleSheet(
-        QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
-            .arg(ui::colors::CYAN, ui::colors::BG_RAISED));
+    list_count_label_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
+                                         .arg(ui::colors::CYAN, ui::colors::BG_RAISED));
     hdr->addWidget(list_count_label_);
     hdr->addStretch();
     vl->addLayout(hdr);
@@ -83,22 +80,20 @@ QWidget* AgentsViewPanel::build_agent_list_panel() {
     vl->addWidget(category_combo_);
 
     agent_list_ = new QListWidget;
-    agent_list_->setStyleSheet(
-        QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:12px;}"
-                "QListWidget::item{padding:6px 8px;border-bottom:1px solid %2;}"
-                "QListWidget::item:selected{background:%4;}"
-                "QListWidget::item:hover{background:%5;}")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
-                 ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
+    agent_list_->setStyleSheet(QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:12px;}"
+                                       "QListWidget::item{padding:6px 8px;border-bottom:1px solid %2;}"
+                                       "QListWidget::item:selected{background:%4;}"
+                                       "QListWidget::item:hover{background:%5;}")
+                                   .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
+                                        ui::colors::AMBER_DIM, ui::colors::BG_HOVER));
     vl->addWidget(agent_list_, 1);
 
     auto* refresh_btn = new QPushButton("REFRESH");
     refresh_btn->setCursor(Qt::PointingHandCursor);
-    refresh_btn->setStyleSheet(
-        QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:6px;"
-                "font-size:10px;font-weight:600;letter-spacing:1px;}"
-                "QPushButton:hover{background:%3;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::AMBER, ui::colors::AMBER_DIM));
+    refresh_btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:6px;"
+                                       "font-size:10px;font-weight:600;letter-spacing:1px;}"
+                                       "QPushButton:hover{background:%3;}")
+                                   .arg(ui::colors::BG_RAISED, ui::colors::AMBER, ui::colors::AMBER_DIM));
     connect(refresh_btn, &QPushButton::clicked, this, []() {
         services::AgentService::instance().clear_cache();
         services::AgentService::instance().discover_agents();
@@ -118,8 +113,8 @@ QWidget* AgentsViewPanel::build_config_panel() {
     // Toggle bar
     auto* toggle_bar = new QWidget;
     toggle_bar->setFixedHeight(32);
-    toggle_bar->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                                  .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    toggle_bar->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* tbl = new QHBoxLayout(toggle_bar);
     tbl->setContentsMargins(8, 0, 8, 0);
 
@@ -127,8 +122,9 @@ QWidget* AgentsViewPanel::build_config_panel() {
     json_toggle_btn_->setCheckable(true);
     json_toggle_btn_->setCursor(Qt::PointingHandCursor);
     json_toggle_btn_->setStyleSheet(
-        QString("QPushButton{background:transparent;color:%1;border:none;font-size:10px;font-weight:600;padding:4px 8px;}"
-                "QPushButton:checked{color:%2;}")
+        QString(
+            "QPushButton{background:transparent;color:%1;border:none;font-size:10px;font-weight:600;padding:4px 8px;}"
+            "QPushButton:checked{color:%2;}")
             .arg(ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
     tbl->addWidget(json_toggle_btn_);
     tbl->addStretch();
@@ -149,11 +145,10 @@ QWidget* AgentsViewPanel::build_config_panel() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(
-        QString("QScrollArea{background:%1;border:none;}"
-                "QScrollBar:vertical{background:%1;width:6px;}"
-                "QScrollBar::handle:vertical{background:%2;min-height:30px;}")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
+    scroll->setStyleSheet(QString("QScrollArea{background:%1;border:none;}"
+                                  "QScrollBar:vertical{background:%1;width:6px;}"
+                                  "QScrollBar::handle:vertical{background:%2;min-height:30px;}")
+                              .arg(ui::colors::BG_BASE, ui::colors::BORDER_BRIGHT));
 
     form_widget_ = new QWidget;
     auto* vl = new QVBoxLayout(form_widget_);
@@ -166,7 +161,8 @@ QWidget* AgentsViewPanel::build_config_panel() {
 
     agent_desc_label_ = new QLabel;
     agent_desc_label_->setWordWrap(true);
-    agent_desc_label_->setStyleSheet(QString("color:%1;font-size:12px;padding-bottom:8px;").arg(ui::colors::TEXT_SECONDARY));
+    agent_desc_label_->setStyleSheet(
+        QString("color:%1;font-size:12px;padding-bottom:8px;").arg(ui::colors::TEXT_SECONDARY));
     vl->addWidget(agent_desc_label_);
 
     // MODEL
@@ -220,10 +216,9 @@ QWidget* AgentsViewPanel::build_config_panel() {
     vl->addWidget(section_hdr("TOOLS"));
     tools_list_ = new QListWidget;
     tools_list_->setMaximumHeight(100);
-    tools_list_->setStyleSheet(
-        QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:11px;}"
-                "QListWidget::item{padding:2px 6px;}")
-            .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY));
+    tools_list_->setStyleSheet(QString("QListWidget{background:%1;border:1px solid %2;color:%3;font-size:11px;}"
+                                       "QListWidget::item{padding:2px 6px;}")
+                                   .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY));
     vl->addWidget(tools_list_);
 
     // FEATURES (expanded)
@@ -279,17 +274,15 @@ QWidget* AgentsViewPanel::build_config_panel() {
     auto* jl = new QVBoxLayout(json_widget_);
     jl->setContentsMargins(8, 8, 8, 8);
     json_editor_ = new QPlainTextEdit;
-    json_editor_->setStyleSheet(
-        QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;"
-                "font-size:12px;font-family:'Consolas','Courier New',monospace;}")
-            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM));
+    json_editor_->setStyleSheet(QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;"
+                                        "font-size:12px;font-family:'Consolas','Courier New',monospace;}")
+                                    .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM));
     jl->addWidget(json_editor_);
     auto* apply_btn = new QPushButton("APPLY JSON");
     apply_btn->setCursor(Qt::PointingHandCursor);
-    apply_btn->setStyleSheet(
-        QString("QPushButton{background:%1;color:%2;border:none;padding:8px;font-size:11px;"
-                "font-weight:700;}QPushButton:hover{background:%3;}")
-            .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE));
+    apply_btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;padding:8px;font-size:11px;"
+                                     "font-weight:700;}QPushButton:hover{background:%3;}")
+                                 .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE));
     connect(apply_btn, &QPushButton::clicked, this, [this, stack]() {
         // Parse JSON from editor and switch back to form
         QJsonDocument doc = QJsonDocument::fromJson(json_editor_->toPlainText().toUtf8());
@@ -307,8 +300,7 @@ QWidget* AgentsViewPanel::build_config_panel() {
         json_mode_ = checked;
         if (checked) {
             // Sync form → JSON
-            json_editor_->setPlainText(
-                QJsonDocument(build_config_from_editor()).toJson(QJsonDocument::Indented));
+            json_editor_->setPlainText(QJsonDocument(build_config_from_editor()).toJson(QJsonDocument::Indented));
         }
         stack->setCurrentIndex(checked ? 1 : 0);
     });
@@ -323,8 +315,8 @@ QWidget* AgentsViewPanel::build_query_panel() {
     auto* panel = new QWidget;
     panel->setMinimumWidth(300);
     panel->setMaximumWidth(450);
-    panel->setStyleSheet(QString("background:%1;border-left:1px solid %2;")
-                             .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    panel->setStyleSheet(
+        QString("background:%1;border-left:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(12, 8, 12, 8);
     vl->setSpacing(6);
@@ -354,18 +346,18 @@ QWidget* AgentsViewPanel::build_query_panel() {
     query_input_ = new QPlainTextEdit;
     query_input_->setPlaceholderText("Enter a query to test this agent...");
     query_input_->setMaximumHeight(80);
-    query_input_->setStyleSheet(QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px;}")
-                                    .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+    query_input_->setStyleSheet(
+        QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px;}")
+            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
     vl->addWidget(query_input_);
 
     run_btn_ = new QPushButton("RUN AGENT");
     run_btn_->setCursor(Qt::PointingHandCursor);
-    run_btn_->setStyleSheet(
-        QString("QPushButton{background:%1;color:%2;border:none;padding:8px;font-size:11px;"
-                "font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%3;}"
-                "QPushButton:disabled{background:%4;color:%5;}")
-            .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE,
-                 ui::colors::BG_RAISED, ui::colors::TEXT_TERTIARY));
+    run_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;padding:8px;font-size:11px;"
+                                    "font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%3;}"
+                                    "QPushButton:disabled{background:%4;color:%5;}")
+                                .arg(ui::colors::AMBER, ui::colors::BG_BASE, ui::colors::ORANGE, ui::colors::BG_RAISED,
+                                     ui::colors::TEXT_TERTIARY));
     vl->addWidget(run_btn_);
 
     // Routing info
@@ -380,7 +372,8 @@ QWidget* AgentsViewPanel::build_query_panel() {
     vl->addWidget(result_status_);
 
     auto* rh = new QLabel("RESULT");
-    rh->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;").arg(ui::colors::TEXT_SECONDARY));
+    rh->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
+                          .arg(ui::colors::TEXT_SECONDARY));
     vl->addWidget(rh);
 
     result_display_ = new QTextEdit;
@@ -432,14 +425,15 @@ void AgentsViewPanel::setup_connections() {
 
     connect(&svc, &services::AgentService::routing_result, this, [this](services::RoutingResult r) {
         if (r.success) {
-            routing_info_label_->setText(
-                QString("Routed → %1 (intent: %2, confidence: %3%)")
-                    .arg(r.agent_id, r.intent).arg(int(r.confidence * 100)));
+            routing_info_label_->setText(QString("Routed → %1 (intent: %2, confidence: %3%)")
+                                             .arg(r.agent_id, r.intent)
+                                             .arg(int(r.confidence * 100)));
             routing_info_label_->show();
         }
     });
 
-    connect(category_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AgentsViewPanel::on_category_changed);
+    connect(category_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &AgentsViewPanel::on_category_changed);
     connect(agent_list_, &QListWidget::currentRowChanged, this, &AgentsViewPanel::on_agent_selected);
     connect(run_btn_, &QPushButton::clicked, this, &AgentsViewPanel::run_query);
     connect(save_btn_, &QPushButton::clicked, this, &AgentsViewPanel::save_current_config);
@@ -471,13 +465,17 @@ void AgentsViewPanel::on_category_changed(int index) {
     } else {
         QVector<services::AgentInfo> f;
         for (const auto& a : all_agents_)
-            if (a.category == cat) f.append(a);
+            if (a.category == cat)
+                f.append(a);
         populate_agent_list(f);
     }
 }
 
 void AgentsViewPanel::on_agent_selected(int row) {
-    if (row < 0 || row >= filtered_agents_.size()) { selected_agent_idx_ = -1; return; }
+    if (row < 0 || row >= filtered_agents_.size()) {
+        selected_agent_idx_ = -1;
+        return;
+    }
     selected_agent_idx_ = row;
     load_agent_into_editor(filtered_agents_[row]);
 }
@@ -489,7 +487,8 @@ void AgentsViewPanel::load_agent_into_editor(const services::AgentInfo& agent) {
     QJsonObject config = agent.config;
     QJsonObject model = config["model"].toObject();
     int pi = provider_combo_->findText(model["provider"].toString(agent.provider));
-    if (pi >= 0) provider_combo_->setCurrentIndex(pi);
+    if (pi >= 0)
+        provider_combo_->setCurrentIndex(pi);
     model_id_edit_->setText(model["model_id"].toString());
     temperature_spin_->setValue(model["temperature"].toDouble(0.7));
     max_tokens_spin_->setValue(model["max_tokens"].toInt(4096));
@@ -537,7 +536,8 @@ QJsonObject AgentsViewPanel::build_config_from_editor() const {
 }
 
 void AgentsViewPanel::save_current_config() {
-    if (selected_agent_idx_ < 0 || selected_agent_idx_ >= filtered_agents_.size()) return;
+    if (selected_agent_idx_ < 0 || selected_agent_idx_ >= filtered_agents_.size())
+        return;
     const auto& agent = filtered_agents_[selected_agent_idx_];
     AgentConfig db;
     db.id = agent.id;
@@ -551,7 +551,8 @@ void AgentsViewPanel::save_current_config() {
 }
 
 void AgentsViewPanel::delete_current_config() {
-    if (selected_agent_idx_ < 0 || selected_agent_idx_ >= filtered_agents_.size()) return;
+    if (selected_agent_idx_ < 0 || selected_agent_idx_ >= filtered_agents_.size())
+        return;
     services::AgentService::instance().delete_config(filtered_agents_[selected_agent_idx_].id);
     result_status_->setText("Config deleted");
     result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::WARNING));
@@ -559,7 +560,8 @@ void AgentsViewPanel::delete_current_config() {
 
 void AgentsViewPanel::run_query() {
     QString q = query_input_->toPlainText().trimmed();
-    if (q.isEmpty() || executing_) return;
+    if (q.isEmpty() || executing_)
+        return;
 
     executing_ = true;
     run_btn_->setEnabled(false);

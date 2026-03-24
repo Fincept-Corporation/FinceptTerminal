@@ -45,16 +45,14 @@ void PaymentSuccessScreen::build_ui() {
     // Success icon
     auto* icon = new QLabel("[OK]", center);
     icon->setAlignment(Qt::AlignCenter);
-    icon->setStyleSheet(QString("color: %1; font-size: 32px; font-weight: 700; %2")
-                            .arg(colors::POSITIVE, MF));
+    icon->setStyleSheet(QString("color: %1; font-size: 32px; font-weight: 700; %2").arg(colors::POSITIVE, MF));
     cl->addWidget(icon);
 
     // Title
     title_label_ = new QLabel("PAYMENT SUCCESSFUL", center);
     title_label_->setAlignment(Qt::AlignCenter);
     title_label_->setStyleSheet(
-        QString("color: %1; font-size: 20px; font-weight: 700; letter-spacing: 1px; %2")
-            .arg(colors::POSITIVE, MF));
+        QString("color: %1; font-size: 20px; font-weight: 700; letter-spacing: 1px; %2").arg(colors::POSITIVE, MF));
     cl->addWidget(title_label_);
 
     cl->addSpacing(8);
@@ -75,14 +73,14 @@ void PaymentSuccessScreen::build_ui() {
 
     amount_label_ = new QLabel("Amount: —", panel);
     amount_label_->setAlignment(Qt::AlignCenter);
-    amount_label_->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent; %2")
-                                     .arg(colors::AMBER, MF));
+    amount_label_->setStyleSheet(
+        QString("color: %1; font-size: 13px; background: transparent; %2").arg(colors::AMBER, MF));
     pvl->addWidget(amount_label_);
 
     validity_label_ = new QLabel("Validity: —", panel);
     validity_label_->setAlignment(Qt::AlignCenter);
-    validity_label_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
-                                       .arg(colors::TEXT_SECONDARY, MF));
+    validity_label_->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: transparent; %2").arg(colors::TEXT_SECONDARY, MF));
     pvl->addWidget(validity_label_);
 
     cl->addWidget(panel);
@@ -92,19 +90,17 @@ void PaymentSuccessScreen::build_ui() {
     // Countdown
     countdown_label_ = new QLabel("Redirecting to dashboard in 5s...", center);
     countdown_label_->setAlignment(Qt::AlignCenter);
-    countdown_label_->setStyleSheet(QString("color: %1; font-size: 11px; %2")
-                                        .arg(colors::TEXT_TERTIARY, MF));
+    countdown_label_->setStyleSheet(QString("color: %1; font-size: 11px; %2").arg(colors::TEXT_TERTIARY, MF));
     cl->addWidget(countdown_label_);
 
     // Dashboard button
     dashboard_btn_ = new QPushButton("GO TO DASHBOARD", center);
     dashboard_btn_->setFixedHeight(40);
     dashboard_btn_->setCursor(Qt::PointingHandCursor);
-    dashboard_btn_->setStyleSheet(
-        QString("QPushButton { background: %1; color: %2; border: none; "
-                "font-size: 13px; font-weight: 700; letter-spacing: 1px; %3 }"
-                "QPushButton:hover { background: #15803d; }")
-            .arg(colors::POSITIVE, colors::TEXT_PRIMARY, MF));
+    dashboard_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: none; "
+                                          "font-size: 13px; font-weight: 700; letter-spacing: 1px; %3 }"
+                                          "QPushButton:hover { background: #15803d; }")
+                                      .arg(colors::POSITIVE, colors::TEXT_PRIMARY, MF));
     connect(dashboard_btn_, &QPushButton::clicked, this, [this]() {
         redirect_timer_->stop();
         emit navigate_dashboard();

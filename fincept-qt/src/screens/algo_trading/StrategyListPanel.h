@@ -1,6 +1,7 @@
 // src/screens/algo_trading/StrategyListPanel.h
 #pragma once
 #include "services/algo_trading/AlgoTradingTypes.h"
+
 #include <QLabel>
 #include <QLineEdit>
 #include <QVBoxLayout>

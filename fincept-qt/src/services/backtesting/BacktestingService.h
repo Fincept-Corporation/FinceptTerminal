@@ -13,8 +13,7 @@ class BacktestingService : public QObject {
     static BacktestingService& instance();
 
     /// Execute a backtesting command on a specific provider
-    void execute(const QString& provider, const QString& command,
-                 const QJsonObject& args);
+    void execute(const QString& provider, const QString& command, const QJsonObject& args);
 
     /// List available strategies from Fincept provider (dynamic)
     void list_strategies();

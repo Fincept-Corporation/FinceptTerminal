@@ -7,8 +7,7 @@
 
 namespace fincept::screens {
 
-PortfolioSparkline::PortfolioSparkline(int w, int h, QWidget* parent)
-    : QWidget(parent) {
+PortfolioSparkline::PortfolioSparkline(int w, int h, QWidget* parent) : QWidget(parent) {
     setFixedSize(w, h);
     setAttribute(Qt::WA_OpaquePaintEvent);
 }

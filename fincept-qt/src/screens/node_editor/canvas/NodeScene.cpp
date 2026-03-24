@@ -1,23 +1,21 @@
 #include "screens/node_editor/canvas/NodeScene.h"
+
+#include "core/logging/Logger.h"
+#include "screens/node_editor/canvas/EdgeItem.h"
 #include "screens/node_editor/canvas/NodeItem.h"
 #include "screens/node_editor/canvas/PortItem.h"
-#include "screens/node_editor/canvas/EdgeItem.h"
 #include "screens/node_editor/canvas/TempEdge.h"
 #include "services/workflow/NodeRegistry.h"
-#include "core/logging/Logger.h"
 
 #include <QUuid>
 
 namespace fincept::workflow {
 
-NodeScene::NodeScene(QObject* parent)
-    : QGraphicsScene(parent)
-{
+NodeScene::NodeScene(QObject* parent) : QGraphicsScene(parent) {
     setSceneRect(-5000, -5000, 10000, 10000);
 }
 
-NodeItem* NodeScene::add_node(const NodeDef& def, const NodeTypeDef& type_def)
-{
+NodeItem* NodeScene::add_node(const NodeDef& def, const NodeTypeDef& type_def) {
     auto* item = new NodeItem(def, type_def);
     addItem(item);
     nodes_.insert(def.id, item);
@@ -45,32 +43,31 @@ NodeItem* NodeScene::add_node(const NodeDef& def, const NodeTypeDef& type_def)
     return item;
 }
 
-EdgeItem* NodeScene::add_edge(const EdgeDef& def)
-{
+EdgeItem* NodeScene::add_edge(const EdgeDef& def) {
     auto* src_node = find_node(def.source_node);
     auto* tgt_node = find_node(def.target_node);
-    if (!src_node || !tgt_node) return nullptr;
+    if (!src_node || !tgt_node)
+        return nullptr;
 
     auto* src_port = src_node->find_port(def.source_port);
     auto* tgt_port = tgt_node->find_port(def.target_port);
-    if (!src_port || !tgt_port) return nullptr;
+    if (!src_port || !tgt_port)
+        return nullptr;
 
     auto* edge = new EdgeItem(def.id, src_port, tgt_port);
     addItem(edge);
     edges_.insert(def.id, edge);
 
-    connect(edge, &EdgeItem::edge_selected, this, [this](const QString& id) {
-        Q_UNUSED(id);
-    });
+    connect(edge, &EdgeItem::edge_selected, this, [this](const QString& id) { Q_UNUSED(id); });
 
     emit edge_added(def.id);
     return edge;
 }
 
-void NodeScene::remove_node(const QString& node_id)
-{
+void NodeScene::remove_node(const QString& node_id) {
     auto* item = find_node(node_id);
-    if (!item) return;
+    if (!item)
+        return;
 
     // Remove all connected edges first
     QStringList edge_ids;
@@ -92,10 +89,10 @@ void NodeScene::remove_node(const QString& node_id)
     LOG_INFO("NodeEditor", QString("Removed node: %1").arg(node_id));
 }
 
-void NodeScene::remove_edge(const QString& edge_id)
-{
+void NodeScene::remove_edge(const QString& edge_id) {
     auto it = edges_.find(edge_id);
-    if (it == edges_.end()) return;
+    if (it == edges_.end())
+        return;
 
     auto* edge = it.value();
     edges_.erase(it);
@@ -105,8 +102,7 @@ void NodeScene::remove_edge(const QString& edge_id)
     emit edge_removed(edge_id);
 }
 
-void NodeScene::clear_all()
-{
+void NodeScene::clear_all() {
     QStringList node_ids = nodes_.keys();
     for (const auto& id : node_ids)
         remove_node(id);
@@ -114,8 +110,7 @@ void NodeScene::clear_all()
     edges_.clear();
 }
 
-WorkflowDef NodeScene::serialize() const
-{
+WorkflowDef NodeScene::serialize() const {
     WorkflowDef wf;
     for (auto it = nodes_.constBegin(); it != nodes_.constEnd(); ++it) {
         NodeDef nd = it.value()->node_def();
@@ -135,8 +130,7 @@ WorkflowDef NodeScene::serialize() const
     return wf;
 }
 
-void NodeScene::deserialize(const WorkflowDef& workflow)
-{
+void NodeScene::deserialize(const WorkflowDef& workflow) {
     clear_all();
 
     auto& registry = NodeRegistry::instance();
@@ -152,14 +146,12 @@ void NodeScene::deserialize(const WorkflowDef& workflow)
         add_edge(ed);
 }
 
-NodeItem* NodeScene::find_node(const QString& id) const
-{
+NodeItem* NodeScene::find_node(const QString& id) const {
     auto it = nodes_.constFind(id);
     return it != nodes_.constEnd() ? it.value() : nullptr;
 }
 
-QVector<NodeItem*> NodeScene::node_items() const
-{
+QVector<NodeItem*> NodeScene::node_items() const {
     QVector<NodeItem*> result;
     result.reserve(nodes_.size());
     for (auto it = nodes_.constBegin(); it != nodes_.constEnd(); ++it)
@@ -167,28 +159,26 @@ QVector<NodeItem*> NodeScene::node_items() const
     return result;
 }
 
-void NodeScene::start_temp_edge(PortItem* from)
-{
+void NodeScene::start_temp_edge(PortItem* from) {
     cancel_temp_edge();
     temp_edge_ = new TempEdge(from);
     addItem(temp_edge_);
 }
 
-void NodeScene::update_temp_edge(const QPointF& scene_pos)
-{
+void NodeScene::update_temp_edge(const QPointF& scene_pos) {
     if (temp_edge_)
         temp_edge_->update_target(scene_pos);
 }
 
-void NodeScene::finish_temp_edge(PortItem* target)
-{
-    if (!temp_edge_) return;
+void NodeScene::finish_temp_edge(PortItem* target) {
+    if (!temp_edge_)
+        return;
 
     auto* source = temp_edge_->source_port();
     if (source->can_connect_to(target)) {
         // Determine which is output and which is input
         PortItem* out_port = (source->def().direction == PortDirection::Output) ? source : target;
-        PortItem* in_port  = (source->def().direction == PortDirection::Output) ? target : source;
+        PortItem* in_port = (source->def().direction == PortDirection::Output) ? target : source;
 
         EdgeDef ed;
         ed.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -202,8 +192,7 @@ void NodeScene::finish_temp_edge(PortItem* target)
     cancel_temp_edge();
 }
 
-void NodeScene::cancel_temp_edge()
-{
+void NodeScene::cancel_temp_edge() {
     if (temp_edge_) {
         removeItem(temp_edge_);
         delete temp_edge_;
@@ -211,10 +200,10 @@ void NodeScene::cancel_temp_edge()
     }
 }
 
-void NodeScene::adjust_edges_for_node(const QString& node_id)
-{
+void NodeScene::adjust_edges_for_node(const QString& node_id) {
     auto* node = find_node(node_id);
-    if (!node) return;
+    if (!node)
+        return;
 
     for (auto* port : node->input_ports())
         for (auto* edge : port->edges())
@@ -224,10 +213,10 @@ void NodeScene::adjust_edges_for_node(const QString& node_id)
             edge->adjust();
 }
 
-void NodeScene::set_edges_animated(const QString& node_id, bool animated)
-{
+void NodeScene::set_edges_animated(const QString& node_id, bool animated) {
     auto* node = find_node(node_id);
-    if (!node) return;
+    if (!node)
+        return;
 
     for (auto* port : node->input_ports())
         for (auto* edge : port->edges())
@@ -237,8 +226,7 @@ void NodeScene::set_edges_animated(const QString& node_id, bool animated)
             edge->set_animated(animated);
 }
 
-void NodeScene::stop_all_edge_animations()
-{
+void NodeScene::stop_all_edge_animations() {
     for (auto it = edges_.constBegin(); it != edges_.constEnd(); ++it)
         it.value()->set_animated(false);
 }

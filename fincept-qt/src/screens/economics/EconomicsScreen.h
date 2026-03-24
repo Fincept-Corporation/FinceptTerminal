@@ -21,8 +21,8 @@ namespace fincept::screens {
 struct EconSource {
     QString id;
     QString name;
-    QString script;        // Python script name
-    QString color;         // source accent color
+    QString script; // Python script name
+    QString color;  // source accent color
     bool needs_api_key;
     QString default_indicator;
 };

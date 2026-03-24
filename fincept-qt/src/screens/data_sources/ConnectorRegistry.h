@@ -27,14 +27,16 @@ class ConnectorRegistry {
 
     const ConnectorConfig* get(const QString& id) const {
         auto it = by_id_.find(id);
-        if (it == by_id_.end()) return nullptr;
+        if (it == by_id_.end())
+            return nullptr;
         return &configs_[it.value()];
     }
 
     QVector<ConnectorConfig> by_category(Category cat) const {
         QVector<ConnectorConfig> result;
         for (const auto& c : configs_)
-            if (c.category == cat) result.append(c);
+            if (c.category == cat)
+                result.append(c);
         return result;
     }
 

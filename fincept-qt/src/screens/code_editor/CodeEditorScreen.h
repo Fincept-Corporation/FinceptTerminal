@@ -30,7 +30,7 @@ struct CellOutput {
 
 struct NotebookCell {
     QString id;
-    QString cell_type;  // "code" or "markdown"
+    QString cell_type; // "code" or "markdown"
     QString source;
     QVector<CellOutput> outputs;
     int execution_count = 0;

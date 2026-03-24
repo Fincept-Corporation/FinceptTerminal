@@ -1,5 +1,6 @@
 // src/screens/portfolio/PortfolioPerfChart.cpp
 #include "screens/portfolio/PortfolioPerfChart.h"
+
 #include "ui/theme/Theme.h"
 
 #include <QAreaSeries>
@@ -34,8 +35,8 @@ void PortfolioPerfChart::build_ui() {
     header->setContentsMargins(8, 4, 8, 4);
 
     auto* title = new QLabel("PERFORMANCE");
-    title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;")
-                         .arg(ui::colors::TEXT_SECONDARY));
+    title->setStyleSheet(
+        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
     header->addWidget(title);
     header->addStretch();
 
@@ -44,19 +45,16 @@ void PortfolioPerfChart::build_ui() {
         btn->setFixedSize(28, 18);
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(QString(
-            "QPushButton { background:transparent; color:%1; border:none;"
-            "  font-size:8px; font-weight:700; }"
-            "QPushButton:checked { color:%2; border-bottom:1px solid %2; }"
-            "QPushButton:hover { color:%3; }")
-            .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+        btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
+                                   "  font-size:8px; font-weight:700; }"
+                                   "QPushButton:checked { color:%2; border-bottom:1px solid %2; }"
+                                   "QPushButton:hover { color:%3; }")
+                               .arg(ui::colors::TEXT_TERTIARY, ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
 
         if (p == current_period_)
             btn->setChecked(true);
 
-        connect(btn, &QPushButton::clicked, this, [this, period = p]() {
-            set_period(period);
-        });
+        connect(btn, &QPushButton::clicked, this, [this, period = p]() { set_period(period); });
 
         header->addWidget(btn);
         period_btns_.append(btn);
@@ -70,8 +68,8 @@ void PortfolioPerfChart::build_ui() {
     info_bar->setSpacing(12);
 
     period_change_label_ = new QLabel;
-    period_change_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;")
-                                        .arg(ui::colors::TEXT_PRIMARY));
+    period_change_label_->setStyleSheet(
+        QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
     info_bar->addWidget(period_change_label_);
 
     auto* sep1 = new QLabel("|");
@@ -79,8 +77,8 @@ void PortfolioPerfChart::build_ui() {
     info_bar->addWidget(sep1);
 
     total_return_label_ = new QLabel;
-    total_return_label_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;")
-                                       .arg(ui::colors::TEXT_PRIMARY));
+    total_return_label_->setStyleSheet(
+        QString("color:%1; font-size:14px; font-weight:700;").arg(ui::colors::TEXT_PRIMARY));
     info_bar->addWidget(total_return_label_);
 
     auto* sep2 = new QLabel("|");
@@ -88,8 +86,7 @@ void PortfolioPerfChart::build_ui() {
     info_bar->addWidget(sep2);
 
     nav_label_ = new QLabel;
-    nav_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;")
-                              .arg(ui::colors::WARNING));
+    nav_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(ui::colors::WARNING));
     info_bar->addWidget(nav_label_);
 
     info_bar->addStretch();
@@ -125,9 +122,7 @@ void PortfolioPerfChart::set_period(const QString& period) {
 }
 
 QColor PortfolioPerfChart::chart_color() const {
-    return summary_.total_unrealized_pnl >= 0
-        ? QColor(ui::colors::POSITIVE)
-        : QColor(ui::colors::NEGATIVE);
+    return summary_.total_unrealized_pnl >= 0 ? QColor(ui::colors::POSITIVE) : QColor(ui::colors::NEGATIVE);
 }
 
 void PortfolioPerfChart::update_chart() {
@@ -213,21 +208,15 @@ void PortfolioPerfChart::update_chart() {
     double pnl_pct = summary_.total_unrealized_pnl_percent;
     const char* pnl_color = pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
 
-    period_change_label_->setText(QString("PERIOD %1%2%")
-        .arg(pnl_pct >= 0 ? "+" : "")
-        .arg(QString::number(pnl_pct, 'f', 2)));
-    period_change_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:600;").arg(pnl_color));
+    period_change_label_->setText(
+        QString("PERIOD %1%2%").arg(pnl_pct >= 0 ? "+" : "").arg(QString::number(pnl_pct, 'f', 2)));
+    period_change_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(pnl_color));
 
-    total_return_label_->setText(QString("TOTAL RETURN %1%2%")
-        .arg(pnl_pct >= 0 ? "+" : "")
-        .arg(QString::number(pnl_pct, 'f', 2)));
-    total_return_label_->setStyleSheet(
-        QString("color:%1; font-size:14px; font-weight:700;").arg(pnl_color));
+    total_return_label_->setText(
+        QString("TOTAL RETURN %1%2%").arg(pnl_pct >= 0 ? "+" : "").arg(QString::number(pnl_pct, 'f', 2)));
+    total_return_label_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(pnl_color));
 
-    nav_label_->setText(QString("NAV %1 %2")
-        .arg(currency_)
-        .arg(QString::number(summary_.total_market_value, 'f', 2)));
+    nav_label_->setText(QString("NAV %1 %2").arg(currency_).arg(QString::number(summary_.total_market_value, 'f', 2)));
 }
 
 } // namespace fincept::screens

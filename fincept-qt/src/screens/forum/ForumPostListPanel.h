@@ -32,18 +32,18 @@ class ForumPostListPanel : public QWidget {
     void pulse_skeleton();
 
     // Header bar
-    QLabel*      channel_label_   = nullptr;  // "# general"
-    QLabel*      count_label_     = nullptr;
-    QWidget*     filter_bar_      = nullptr;
+    QLabel* channel_label_ = nullptr; // "# general"
+    QLabel* count_label_ = nullptr;
+    QWidget* filter_bar_ = nullptr;
 
     // Feed
-    QWidget*     feed_container_  = nullptr;
-    QVBoxLayout* feed_layout_     = nullptr;
-    QScrollArea* scroll_          = nullptr;
+    QWidget* feed_container_ = nullptr;
+    QVBoxLayout* feed_layout_ = nullptr;
+    QScrollArea* scroll_ = nullptr;
 
     // Skeleton
-    QWidget*     skeleton_widget_ = nullptr;
-    QTimer*      skeleton_timer_  = nullptr;
+    QWidget* skeleton_widget_ = nullptr;
+    QTimer* skeleton_timer_ = nullptr;
 
     services::ForumPostsPage current_page_;
     QString active_uuid_;

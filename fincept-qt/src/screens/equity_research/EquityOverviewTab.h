@@ -1,7 +1,6 @@
 // src/screens/equity_research/EquityOverviewTab.h
 #pragma once
 #include "services/equity/EquityResearchModels.h"
-
 #include "ui/widgets/LoadingOverlay.h"
 
 #include <QChartView>
@@ -26,9 +25,9 @@ class EquityOverviewTab : public QWidget {
     void build_ui();
 
     // Column builders
-    QWidget* build_col1();           // Trading + Valuation + Share Stats
-    QWidget* build_chart_panel();    // Chart (spans 2 cols)
-    QWidget* build_col4();           // Analyst + 52W Range + Profitability + Growth
+    QWidget* build_col1();        // Trading + Valuation + Share Stats
+    QWidget* build_chart_panel(); // Chart (spans 2 cols)
+    QWidget* build_col4();        // Analyst + 52W Range + Profitability + Growth
 
     // Panel builders
     QWidget* build_trading_panel();
@@ -55,70 +54,70 @@ class EquityOverviewTab : public QWidget {
     QString current_period_ = "1y";
 
     // ── Trading panel ──────────────────────────────────────────────────────────
-    QLabel* open_val_       = nullptr;
-    QLabel* high_val_       = nullptr;
-    QLabel* low_val_        = nullptr;
+    QLabel* open_val_ = nullptr;
+    QLabel* high_val_ = nullptr;
+    QLabel* low_val_ = nullptr;
     QLabel* prev_close_val_ = nullptr;
-    QLabel* vol_val_        = nullptr;
+    QLabel* vol_val_ = nullptr;
 
     // ── Valuation panel ────────────────────────────────────────────────────────
-    QLabel* mktcap_val_  = nullptr;
-    QLabel* pe_val_      = nullptr;
-    QLabel* fwd_pe_val_  = nullptr;
-    QLabel* peg_val_     = nullptr;
-    QLabel* pb_val_      = nullptr;
-    QLabel* div_val_     = nullptr;
-    QLabel* beta_val_    = nullptr;
+    QLabel* mktcap_val_ = nullptr;
+    QLabel* pe_val_ = nullptr;
+    QLabel* fwd_pe_val_ = nullptr;
+    QLabel* peg_val_ = nullptr;
+    QLabel* pb_val_ = nullptr;
+    QLabel* div_val_ = nullptr;
+    QLabel* beta_val_ = nullptr;
 
     // ── Share stats panel ──────────────────────────────────────────────────────
-    QLabel* shares_out_val_    = nullptr;
-    QLabel* float_val_         = nullptr;
-    QLabel* insiders_val_      = nullptr;
-    QLabel* institutions_val_  = nullptr;
-    QLabel* short_pct_val_     = nullptr;
+    QLabel* shares_out_val_ = nullptr;
+    QLabel* float_val_ = nullptr;
+    QLabel* insiders_val_ = nullptr;
+    QLabel* institutions_val_ = nullptr;
+    QLabel* short_pct_val_ = nullptr;
 
     // ── Chart ──────────────────────────────────────────────────────────────────
-    QChartView*  chart_view_ = nullptr;
-    QPushButton* btn_1m_     = nullptr;
-    QPushButton* btn_3m_     = nullptr;
-    QPushButton* btn_6m_     = nullptr;
-    QPushButton* btn_1y_     = nullptr;
-    QPushButton* btn_5y_     = nullptr;
+    QChartView* chart_view_ = nullptr;
+    QPushButton* btn_1m_ = nullptr;
+    QPushButton* btn_3m_ = nullptr;
+    QPushButton* btn_6m_ = nullptr;
+    QPushButton* btn_1y_ = nullptr;
+    QPushButton* btn_5y_ = nullptr;
 
     // ── Analyst panel ──────────────────────────────────────────────────────────
-    QLabel* target_high_val_   = nullptr;
-    QLabel* target_mean_val_   = nullptr;
-    QLabel* target_low_val_    = nullptr;
+    QLabel* target_high_val_ = nullptr;
+    QLabel* target_mean_val_ = nullptr;
+    QLabel* target_low_val_ = nullptr;
     QLabel* analyst_count_val_ = nullptr;
-    QLabel* rec_key_label_     = nullptr;
+    QLabel* rec_key_label_ = nullptr;
 
     // ── 52 Week Range panel ────────────────────────────────────────────────────
-    QLabel* w52h_val_    = nullptr;
-    QLabel* w52l_val_    = nullptr;
+    QLabel* w52h_val_ = nullptr;
+    QLabel* w52l_val_ = nullptr;
     QLabel* avg_vol_val_ = nullptr;
 
     // ── Profitability panel ────────────────────────────────────────────────────
     QLabel* gross_margin_val_ = nullptr;
-    QLabel* op_margin_val_    = nullptr;
-    QLabel* profit_margin_val_= nullptr;
-    QLabel* roa_val_          = nullptr;
-    QLabel* roe_val_          = nullptr;
+    QLabel* op_margin_val_ = nullptr;
+    QLabel* profit_margin_val_ = nullptr;
+    QLabel* roa_val_ = nullptr;
+    QLabel* roe_val_ = nullptr;
 
     // ── Growth panel ──────────────────────────────────────────────────────────
-    QLabel* rev_growth_val_      = nullptr;
+    QLabel* rev_growth_val_ = nullptr;
     QLabel* earnings_growth_val_ = nullptr;
 
     // ── Company description ────────────────────────────────────────────────────
     QLabel* company_desc_ = nullptr;
 
     // ── Company info ───────────────────────────────────────────────────────────
-    QLabel* company_emp_      = nullptr;
-    QLabel* company_web_      = nullptr;
+    QLabel* company_emp_ = nullptr;
+    QLabel* company_web_ = nullptr;
     QLabel* company_currency_ = nullptr;
 
     // ── Financial health ───────────────────────────────────────────────────────
-    QLabel* cash_val_    = nullptr;
-    QLabel* debt_val_    = nullptr;
+    QLabel* cash_val_ = nullptr;
+    QLabel* debt_val_ = nullptr;
     QLabel* free_cf_val_ = nullptr;
 
     // Cached data
@@ -126,9 +125,9 @@ class EquityOverviewTab : public QWidget {
     services::equity::QuoteData cached_quote_;
 
     ui::LoadingOverlay* loading_overlay_ = nullptr;
-    bool info_loaded_      = false;
-    bool quote_loaded_     = false;
-    bool historical_loaded_= false;
+    bool info_loaded_ = false;
+    bool quote_loaded_ = false;
+    bool historical_loaded_ = false;
 };
 
 } // namespace fincept::screens

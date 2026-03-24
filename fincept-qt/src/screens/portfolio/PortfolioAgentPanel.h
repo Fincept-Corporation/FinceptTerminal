@@ -27,11 +27,11 @@ class PortfolioAgentPanel : public QWidget {
     void build_ui();
     void run_agent(bool force = false);
 
-    QPushButton*  close_btn_    = nullptr;
-    QLabel*       status_lbl_   = nullptr;
-    QComboBox*    agent_cb_     = nullptr;
-    QPushButton*  run_btn_      = nullptr;
-    QTextBrowser* content_      = nullptr;
+    QPushButton* close_btn_ = nullptr;
+    QLabel* status_lbl_ = nullptr;
+    QComboBox* agent_cb_ = nullptr;
+    QPushButton* run_btn_ = nullptr;
+    QTextBrowser* content_ = nullptr;
 
     portfolio::PortfolioSummary summary_;
     bool running_ = false;

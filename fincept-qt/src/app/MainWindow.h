@@ -2,8 +2,8 @@
 #include "app/ScreenRouter.h"
 
 #include <QMainWindow>
-#include <QStackedWidget>
 #include <QShortcut>
+#include <QStackedWidget>
 
 namespace fincept {
 
@@ -26,7 +26,7 @@ class MainWindow : public QMainWindow {
     // View state
     bool focus_mode_ = false;
     bool always_on_top_ = false;
-    QWidget* tab_bar_widget_ = nullptr;   // kept to hide/show in focus mode
+    QWidget* tab_bar_widget_ = nullptr; // kept to hide/show in focus mode
     QWidget* status_bar_widget_ = nullptr;
 
     void setup_auth_screens();

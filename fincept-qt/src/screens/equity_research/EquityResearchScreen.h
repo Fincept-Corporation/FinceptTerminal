@@ -45,31 +45,31 @@ class EquityResearchScreen : public QWidget {
     void load_symbol(const QString& symbol);
 
     // Search widgets
-    QWidget*     search_container_ = nullptr;
-    QLineEdit*   search_edit_      = nullptr;
-    QListWidget* suggest_list_     = nullptr;
+    QWidget* search_container_ = nullptr;
+    QLineEdit* search_edit_ = nullptr;
+    QListWidget* suggest_list_ = nullptr;
 
     // Quote bar
-    QLabel* sym_label_    = nullptr;
-    QLabel* price_label_  = nullptr;
+    QLabel* sym_label_ = nullptr;
+    QLabel* price_label_ = nullptr;
     QLabel* change_label_ = nullptr;
-    QLabel* vol_label_    = nullptr;
-    QLabel* hl_label_     = nullptr;
+    QLabel* vol_label_ = nullptr;
+    QLabel* hl_label_ = nullptr;
     QLabel* mktcap_label_ = nullptr;
-    QLabel* rec_label_    = nullptr;
+    QLabel* rec_label_ = nullptr;
 
     // Tabs
-    QTabWidget*          tab_widget_     = nullptr;
-    EquityOverviewTab*   overview_tab_   = nullptr;
+    QTabWidget* tab_widget_ = nullptr;
+    EquityOverviewTab* overview_tab_ = nullptr;
     EquityFinancialsTab* financials_tab_ = nullptr;
-    EquityAnalysisTab*   analysis_tab_   = nullptr;
+    EquityAnalysisTab* analysis_tab_ = nullptr;
     EquityTechnicalsTab* technicals_tab_ = nullptr;
-    EquityTalippTab*     talipp_tab_     = nullptr;
-    EquityPeersTab*      peers_tab_      = nullptr;
-    EquityNewsTab*       news_tab_       = nullptr;
+    EquityTalippTab* talipp_tab_ = nullptr;
+    EquityPeersTab* peers_tab_ = nullptr;
+    EquityNewsTab* news_tab_ = nullptr;
 
-    QTimer*  refresh_timer_  = nullptr;
-    QString  current_symbol_;
+    QTimer* refresh_timer_ = nullptr;
+    QString current_symbol_;
 
     QVector<services::equity::SearchResult> last_search_results_;
 };

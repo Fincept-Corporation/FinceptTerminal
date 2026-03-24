@@ -1,29 +1,29 @@
 // DataSourcesScreen.cpp — gallery + connection management for 78 data source types
 #include "screens/data_sources/DataSourcesScreen.h"
-#include "screens/data_sources/ConnectorRegistry.h"
 
 #include "core/logging/Logger.h"
+#include "screens/data_sources/ConnectorRegistry.h"
 #include "storage/repositories/DataSourceRepository.h"
 #include "ui/theme/StyleSheets.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
+#include <QEventLoop>
+#include <QFile>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMutexLocker>
-#include <QPointer>
-#include <QScrollArea>
-#include <QTextEdit>
-#include <QEventLoop>
-#include <QFile>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPointer>
+#include <QScrollArea>
 #include <QTcpSocket>
+#include <QTextEdit>
 #include <QUuid>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
@@ -86,8 +86,7 @@ void DataSourcesScreen::setup_ui() {
         "  font-size: 11px; font-weight: 700; border: none; border-bottom: 1px solid #1a1a1a; padding: 0 6px; }"
         "#dsAddBtn { background: rgba(217,119,6,0.1); color: #d97706; border: 1px solid #92400e; "
         "  padding: 4px 12px; font-weight: 700; font-size: 11px; }"
-        "#dsAddBtn:hover { background: #d97706; color: #080808; }"
-    );
+        "#dsAddBtn:hover { background: #d97706; color: #080808; }");
 
     auto* main_layout = new QVBoxLayout(this);
     main_layout->setContentsMargins(0, 0, 0, 0);
@@ -139,17 +138,19 @@ void DataSourcesScreen::setup_ui() {
     auto* row2 = new QHBoxLayout;
     row2->setSpacing(2);
 
-    const char* cat_labels[] = {"ALL", "Databases", "APIs", "Files", "Streaming",
+    const char* cat_labels[] = {"ALL",   "Databases",   "APIs",        "Files",  "Streaming",
                                 "Cloud", "Time Series", "Market Data", "Search", "Warehouses"};
     // "ALL" is index -1, categories are 0-8
     for (int i = 0; i < 10; ++i) {
         auto* btn = new QPushButton(cat_labels[i]);
         btn->setObjectName("dsCatBtn");
         btn->setCursor(Qt::PointingHandCursor);
-        if (i == 0) btn->setProperty("active", true);
+        if (i == 0)
+            btn->setProperty("active", true);
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_category_filter(i); });
         row2->addWidget(btn);
-        if (i > 0) category_btns_[i - 1] = btn;
+        if (i > 0)
+            category_btns_[i - 1] = btn;
     }
     row2->addStretch();
     top_layout->addLayout(row2);
@@ -228,9 +229,7 @@ void DataSourcesScreen::build_gallery() {
         if (!show_all_categories_ && cfg.category != active_category_)
             continue;
         // Text filter
-        if (!filter.isEmpty() &&
-            !cfg.name.toLower().contains(filter) &&
-            !cfg.type.toLower().contains(filter) &&
+        if (!filter.isEmpty() && !cfg.name.toLower().contains(filter) && !cfg.type.toLower().contains(filter) &&
             !cfg.description.toLower().contains(filter))
             continue;
 
@@ -275,7 +274,10 @@ void DataSourcesScreen::build_gallery() {
 
         grid->addWidget(card, row, col);
         ++visible;
-        if (++col >= COLS) { col = 0; ++row; }
+        if (++col >= COLS) {
+            col = 0;
+            ++row;
+        }
     }
 
     // Spacer at bottom
@@ -289,7 +291,8 @@ void DataSourcesScreen::build_gallery() {
 
 void DataSourcesScreen::build_connections_table() {
     auto result = DataSourceRepository::instance().list_all();
-    if (result.is_err()) return;
+    if (result.is_err())
+        return;
     const auto& sources = result.value();
 
     connections_table_->setRowCount(sources.size());
@@ -340,15 +343,13 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
     auto* dlg = new QDialog(this);
     dlg->setWindowTitle(QString("Configure %1").arg(config.name));
     dlg->setFixedSize(420, 500);
-    dlg->setStyleSheet(
-        "QDialog { background: #0a0a0a; color: #e5e5e5; }"
-        "QLabel { color: #808080; font-size: 11px; font-weight: 700; }"
-        "QLineEdit, QTextEdit, QComboBox { background: #080808; border: 1px solid #222222; "
-        "  color: #e5e5e5; padding: 6px; font-size: 12px; }"
-        "QLineEdit:focus, QTextEdit:focus { border-color: #d97706; }"
-        "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; }"
-        "QCheckBox { color: #e5e5e5; font-size: 12px; }"
-    );
+    dlg->setStyleSheet("QDialog { background: #0a0a0a; color: #e5e5e5; }"
+                       "QLabel { color: #808080; font-size: 11px; font-weight: 700; }"
+                       "QLineEdit, QTextEdit, QComboBox { background: #080808; border: 1px solid #222222; "
+                       "  color: #e5e5e5; padding: 6px; font-size: 12px; }"
+                       "QLineEdit:focus, QTextEdit:focus { border-color: #d97706; }"
+                       "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; }"
+                       "QCheckBox { color: #e5e5e5; font-size: 12px; }");
 
     auto* layout = new QVBoxLayout(dlg);
     layout->setSpacing(6);
@@ -393,8 +394,10 @@ void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const 
         } else {
             auto* le = new QLineEdit;
             le->setPlaceholderText(f.placeholder);
-            if (f.type == FieldType::Password) le->setEchoMode(QLineEdit::Password);
-            if (!f.default_value.isEmpty()) le->setText(f.default_value);
+            if (f.type == FieldType::Password)
+                le->setEchoMode(QLineEdit::Password);
+            if (!f.default_value.isEmpty())
+                le->setText(f.default_value);
             field_widgets[f.name] = le;
             layout->addWidget(le);
         }
@@ -481,7 +484,8 @@ void DataSourcesScreen::on_view_connections() {
 
 void DataSourcesScreen::on_category_filter(int idx) {
     show_all_categories_ = (idx == 0);
-    if (idx > 0) active_category_ = static_cast<Category>(idx - 1);
+    if (idx > 0)
+        active_category_ = static_cast<Category>(idx - 1);
 
     // Update button styles
     for (int i = 0; i < 9; ++i) {
@@ -500,7 +504,8 @@ void DataSourcesScreen::on_search_changed(const QString& /*text*/) {
 
 void DataSourcesScreen::on_connector_clicked(const QString& connector_id) {
     const auto* cfg = ConnectorRegistry::instance().get(connector_id);
-    if (cfg) show_config_dialog(*cfg);
+    if (cfg)
+        show_config_dialog(*cfg);
 }
 
 void DataSourcesScreen::on_connection_add() {
@@ -515,7 +520,8 @@ void DataSourcesScreen::on_connection_delete(const QString& conn_id) {
 
 void DataSourcesScreen::on_connection_test(const QString& conn_id) {
     auto get_result = DataSourceRepository::instance().get(conn_id);
-    if (get_result.is_err()) return;
+    if (get_result.is_err())
+        return;
     const auto ds = get_result.value();
     LOG_INFO(TAG, QString("Testing connection: %1 (%2)").arg(ds.display_name, ds.provider));
 
@@ -555,8 +561,7 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
                 message = QString("Connected to %1:%2").arg(host).arg(port);
                 socket.disconnectFromHost();
             } else {
-                message = QString("Failed to connect to %1:%2 — %3")
-                              .arg(host).arg(port).arg(socket.errorString());
+                message = QString("Failed to connect to %1:%2 — %3").arg(host).arg(port).arg(socket.errorString());
             }
         } else if (!url.isEmpty() || !baseUrl.isEmpty()) {
             // HTTP reachability test for URL-based connectors
@@ -573,7 +578,8 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
                 reply->error() == QNetworkReply::AuthenticationRequiredError) {
                 success = true;
                 message = QString("Reachable: %1 (HTTP %2)")
-                              .arg(target).arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
+                              .arg(target)
+                              .arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
             } else {
                 message = QString("Failed: %1 — %2").arg(target, reply->errorString());
             }
@@ -582,8 +588,7 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
             // For MongoDB-style connection strings, do a URL reachability check
             success = true;
             message = "Config saved (connection string present — manual verification recommended)";
-        } else if (!cfg.value("apiKey").toString().isEmpty() ||
-                   !cfg.value("apiToken").toString().isEmpty() ||
+        } else if (!cfg.value("apiKey").toString().isEmpty() || !cfg.value("apiToken").toString().isEmpty() ||
                    !cfg.value("token").toString().isEmpty()) {
             // API key connectors — we just validate the key is non-empty
             success = true;
@@ -601,27 +606,32 @@ void DataSourcesScreen::on_connection_test(const QString& conn_id) {
             message = "No testable configuration found";
         }
 
-        if (!self) return;
-        QMetaObject::invokeMethod(self, [self, id, success, message, display]() {
-            if (!self) return;
-            LOG_INFO("DataSources", QString("Test %1: %2 — %3")
-                                        .arg(display, success ? "OK" : "FAIL", message));
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, id, success, message, display]() {
+                if (!self)
+                    return;
+                LOG_INFO("DataSources", QString("Test %1: %2 — %3").arg(display, success ? "OK" : "FAIL", message));
 
-            // Update status in connections table
-            for (int row = 0; row < self->connections_table_->rowCount(); ++row) {
-                auto* item = self->connections_table_->item(row, 0);
-                if (!item) continue;
-                // Match by display name (col 0)
-                if (item->text() == display) {
-                    auto* status_item = self->connections_table_->item(row, 4);
-                    if (status_item) {
-                        status_item->setText(success ? "CONNECTED" : "ERROR");
-                        status_item->setForeground(success ? COLOR_BUY : COLOR_SELL);
+                // Update status in connections table
+                for (int row = 0; row < self->connections_table_->rowCount(); ++row) {
+                    auto* item = self->connections_table_->item(row, 0);
+                    if (!item)
+                        continue;
+                    // Match by display name (col 0)
+                    if (item->text() == display) {
+                        auto* status_item = self->connections_table_->item(row, 4);
+                        if (status_item) {
+                            status_item->setText(success ? "CONNECTED" : "ERROR");
+                            status_item->setForeground(success ? COLOR_BUY : COLOR_SELL);
+                        }
+                        break;
                     }
-                    break;
                 }
-            }
-        }, Qt::QueuedConnection);
+            },
+            Qt::QueuedConnection);
     });
 }
 

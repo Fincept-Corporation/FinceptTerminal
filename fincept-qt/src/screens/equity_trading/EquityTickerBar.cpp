@@ -57,20 +57,19 @@ void EquityTickerBar::set_symbol(const QString& symbol) {
     symbol_label_->setText(symbol);
 }
 
-void EquityTickerBar::update_quote(double ltp, double change, double change_pct,
-                                   double high, double low, double volume,
+void EquityTickerBar::update_quote(double ltp, double change, double change_pct, double high, double low, double volume,
                                    double bid, double ask) {
-    if (ltp <= 0) return;
+    if (ltp <= 0)
+        return;
 
     price_label_->setText(QString("%1%2").arg(currency_sym_).arg(ltp, 0, 'f', 2));
 
     const bool positive = change_pct >= 0;
-    change_label_->setText(
-        QString("%1%2 (%3%4%)")
-            .arg(positive ? "+" : "")
-            .arg(change, 0, 'f', 2)
-            .arg(positive ? "+" : "")
-            .arg(change_pct, 0, 'f', 2));
+    change_label_->setText(QString("%1%2 (%3%4%)")
+                               .arg(positive ? "+" : "")
+                               .arg(change, 0, 'f', 2)
+                               .arg(positive ? "+" : "")
+                               .arg(change_pct, 0, 'f', 2));
 
     if (positive != last_positive_) {
         change_label_->setStyleSheet(

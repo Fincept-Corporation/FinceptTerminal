@@ -26,9 +26,8 @@ static const QString kScript = "congress_gov_data.py";
 
 GovDataCongressPanel::GovDataCongressPanel(QWidget* parent) : QWidget(parent) {
     build_ui();
-    connect(&services::GovDataService::instance(),
-            &services::GovDataService::result_ready,
-            this, &GovDataCongressPanel::on_result);
+    connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
+            &GovDataCongressPanel::on_result);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,23 +43,21 @@ void GovDataCongressPanel::build_ui() {
 
     content_stack_ = new QStackedWidget(this);
 
-    const QString table_style = QString(
-        "QTableWidget { background:%1; color:%2; border:none; gridline-color:%3;"
-        "  font-family:%4; font-size:12px; }"
-        "QTableWidget::item { padding:6px 8px; border-bottom:1px solid %3; }"
-        "QTableWidget::item:selected { background:%5; }"
-        "QTableWidget::item:alternate { background:%6; }"
-        "QHeaderView::section { background:%7; color:%8; border:none; border-bottom:1px solid %3;"
-        "  font-family:%4; font-size:10px; font-weight:700; padding:6px 8px; }")
-        .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM,
-             fonts::DATA_FAMILY, colors::BG_HOVER, colors::ROW_ALT,
-             colors::BG_RAISED, kColor);
+    const QString table_style =
+        QString("QTableWidget { background:%1; color:%2; border:none; gridline-color:%3;"
+                "  font-family:%4; font-size:12px; }"
+                "QTableWidget::item { padding:6px 8px; border-bottom:1px solid %3; }"
+                "QTableWidget::item:selected { background:%5; }"
+                "QTableWidget::item:alternate { background:%6; }"
+                "QHeaderView::section { background:%7; color:%8; border:none; border-bottom:1px solid %3;"
+                "  font-family:%4; font-size:10px; font-weight:700; padding:6px 8px; }")
+            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM, fonts::DATA_FAMILY, colors::BG_HOVER,
+                 colors::ROW_ALT, colors::BG_RAISED, kColor);
 
     // Page 0: Bills table
     bills_table_ = new QTableWidget(this);
     bills_table_->setColumnCount(6);
-    bills_table_->setHorizontalHeaderLabels(
-        {"CONGRESS", "TYPE", "NUMBER", "TITLE", "LATEST ACTION", "DATE"});
+    bills_table_->setHorizontalHeaderLabels({"CONGRESS", "TYPE", "NUMBER", "TITLE", "LATEST ACTION", "DATE"});
     bills_table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     bills_table_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     for (int c : {0, 1, 2, 5}) {
@@ -81,10 +78,9 @@ void GovDataCongressPanel::build_ui() {
     // Page 1: Bill detail (rich text)
     detail_browser_ = new QTextBrowser(this);
     detail_browser_->setOpenExternalLinks(true);
-    detail_browser_->setStyleSheet(
-        QString("QTextBrowser { background:%1; color:%2; border:none;"
-                " font-family:%3; font-size:13px; padding:16px; }")
-            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, fonts::DATA_FAMILY));
+    detail_browser_->setStyleSheet(QString("QTextBrowser { background:%1; color:%2; border:none;"
+                                           " font-family:%3; font-size:13px; padding:16px; }")
+                                       .arg(colors::BG_BASE, colors::TEXT_PRIMARY, fonts::DATA_FAMILY));
     content_stack_->addWidget(detail_browser_);
 
     // Page 2: Summary table
@@ -102,9 +98,8 @@ void GovDataCongressPanel::build_ui() {
     status_label_ = new QLabel(this);
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setWordWrap(true);
-    status_label_->setStyleSheet(
-        QString("QLabel { color:%1; font-family:%2; font-size:12px; }")
-            .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(QString("QLabel { color:%1; font-family:%2; font-size:12px; }")
+                                     .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
     content_stack_->addWidget(status_label_);
 
     root->addWidget(content_stack_, 1);
@@ -114,20 +109,18 @@ QWidget* GovDataCongressPanel::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(38);
     bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;")
-            .arg(colors::BG_RAISED, colors::BORDER_MED));
+        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_MED));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(8, 0, 8, 0);
     hl->setSpacing(4);
 
-    const QString btn_style =
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                " font-family:%3; font-size:10px; font-weight:700; padding:4px 10px; }"
-                "QPushButton:hover { background:%4; }"
-                "QPushButton:checked { background:%5; color:%6; border-color:%5; }")
-            .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, fonts::DATA_FAMILY,
-                 colors::BG_HOVER, kColor, colors::TEXT_PRIMARY);
+    const QString btn_style = QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                                      " font-family:%3; font-size:10px; font-weight:700; padding:4px 10px; }"
+                                      "QPushButton:hover { background:%4; }"
+                                      "QPushButton:checked { background:%5; color:%6; border-color:%5; }")
+                                  .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, fonts::DATA_FAMILY, colors::BG_HOVER,
+                                       kColor, colors::TEXT_PRIMARY);
 
     // Back button (shown in detail view)
     back_btn_ = new QPushButton("< BACK", bar);
@@ -154,9 +147,8 @@ QWidget* GovDataCongressPanel::build_toolbar() {
 
     // Congress number
     auto* cong_label = new QLabel("CONGRESS:", bar);
-    cong_label->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:9px; font-weight:700;")
-            .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+    cong_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px; font-weight:700;")
+                                  .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
 
     congress_num_ = new QSpinBox(bar);
     congress_num_->setRange(1, 200);
@@ -199,10 +191,9 @@ QWidget* GovDataCongressPanel::build_toolbar() {
 
     // Fetch
     fetch_btn_ = new QPushButton("FETCH", bar);
-    fetch_btn_->setStyleSheet(
-        QString("QPushButton { background:%1; color:%2; border:none;"
-                " font-family:%3; font-size:10px; font-weight:700; padding:4px 12px; }")
-            .arg(kColor, colors::TEXT_PRIMARY, fonts::DATA_FAMILY));
+    fetch_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+                                      " font-family:%3; font-size:10px; font-weight:700; padding:4px 12px; }")
+                                  .arg(kColor, colors::TEXT_PRIMARY, fonts::DATA_FAMILY));
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataCongressPanel::on_fetch_bills);
     hl->addWidget(fetch_btn_);
 
@@ -237,17 +228,15 @@ void GovDataCongressPanel::on_fetch_bills() {
 
     if (current_view_ == SummaryView) {
         show_loading("Loading Congress summary...");
-        services::GovDataService::instance().execute(
-            kScript, "summary",
-            {QString::number(congress)},
-            "gov_congress_summary");
+        services::GovDataService::instance().execute(kScript, "summary", {QString::number(congress)},
+                                                     "gov_congress_summary");
     } else {
         show_loading("Loading bills...");
         QStringList args;
         args << QString::number(congress);
-        if (!bill_type.isEmpty()) args << bill_type;
-        services::GovDataService::instance().execute(
-            kScript, "bills", args, "gov_congress_bills");
+        if (!bill_type.isEmpty())
+            args << bill_type;
+        services::GovDataService::instance().execute(kScript, "bills", args, "gov_congress_bills");
     }
 }
 
@@ -255,7 +244,8 @@ void GovDataCongressPanel::on_bill_clicked(int row) {
     auto* type_item = bills_table_->item(row, 1);
     auto* num_item = bills_table_->item(row, 2);
     auto* cong_item = bills_table_->item(row, 0);
-    if (!type_item || !num_item || !cong_item) return;
+    if (!type_item || !num_item || !cong_item)
+        return;
 
     QString bill_type = type_item->data(Qt::UserRole).toString();
     QString bill_num = num_item->text();
@@ -264,9 +254,7 @@ void GovDataCongressPanel::on_bill_clicked(int row) {
     show_loading("Loading bill detail...");
     back_btn_->setVisible(true);
     services::GovDataService::instance().execute(
-        kScript, "bill_info",
-        {QString::number(congress), bill_type.toLower(), bill_num},
-        "gov_congress_detail");
+        kScript, "bill_info", {QString::number(congress), bill_type.toLower(), bill_num}, "gov_congress_detail");
 }
 
 void GovDataCongressPanel::on_back_to_list() {
@@ -275,9 +263,9 @@ void GovDataCongressPanel::on_back_to_list() {
     current_view_ = Bills;
 }
 
-void GovDataCongressPanel::on_result(const QString& request_id,
-                                       const services::GovDataResult& result) {
-    if (!request_id.startsWith("gov_congress_")) return;
+void GovDataCongressPanel::on_result(const QString& request_id, const services::GovDataResult& result) {
+    if (!request_id.startsWith("gov_congress_"))
+        return;
 
     if (!result.success) {
         show_error(result.error);
@@ -308,27 +296,26 @@ void GovDataCongressPanel::populate_bills(const QJsonObject& data) {
     for (int i = 0; i < bills.size(); ++i) {
         const auto b = bills[i].toObject();
 
-        bills_table_->setItem(i, 0,
-            new QTableWidgetItem(QString::number(b["congress"].toInt())));
+        bills_table_->setItem(i, 0, new QTableWidgetItem(QString::number(b["congress"].toInt())));
 
         auto* type_item = new QTableWidgetItem(b["bill_type"].toString().toUpper());
         type_item->setForeground(QColor(kColor));
         type_item->setData(Qt::UserRole, b["bill_type"].toString());
         bills_table_->setItem(i, 1, type_item);
 
-        bills_table_->setItem(i, 2,
-            new QTableWidgetItem(QString::number(b["bill_number"].toInt())));
+        bills_table_->setItem(i, 2, new QTableWidgetItem(QString::number(b["bill_number"].toInt())));
 
         // Title (truncate for display)
         QString title = b["title"].toString();
-        if (title.length() > 120) title = title.left(120) + "...";
+        if (title.length() > 120)
+            title = title.left(120) + "...";
         bills_table_->setItem(i, 3, new QTableWidgetItem(title));
 
-        bills_table_->setItem(i, 4,
-            new QTableWidgetItem(b["latest_action"].toString("-")));
+        bills_table_->setItem(i, 4, new QTableWidgetItem(b["latest_action"].toString("-")));
 
         QString date = b["latest_action_date"].toString(b["update_date"].toString());
-        if (date.length() > 10) date = date.left(10);
+        if (date.length() > 10)
+            date = date.left(10);
         bills_table_->setItem(i, 5, new QTableWidgetItem(date));
     }
 
@@ -385,29 +372,29 @@ void GovDataCongressPanel::populate_summary(const QJsonObject& data) {
 void GovDataCongressPanel::show_loading(const QString& message) {
     status_label_->setText(message);
     status_label_->setStyleSheet(
-        QString("QLabel { color:%1; font-family:%2; font-size:13px; }")
-            .arg(kColor, fonts::DATA_FAMILY));
+        QString("QLabel { color:%1; font-family:%2; font-size:13px; }").arg(kColor, fonts::DATA_FAMILY));
     content_stack_->setCurrentIndex(3);
 }
 
 void GovDataCongressPanel::show_error(const QString& message) {
     status_label_->setText("Error: " + message);
     status_label_->setStyleSheet(
-        QString("QLabel { color:%1; font-family:%2; font-size:12px; }")
-            .arg(colors::RED, fonts::DATA_FAMILY));
+        QString("QLabel { color:%1; font-family:%2; font-size:12px; }").arg(colors::RED, fonts::DATA_FAMILY));
     content_stack_->setCurrentIndex(3);
 }
 
 void GovDataCongressPanel::on_export_csv() {
     QTableWidget* table = (current_view_ == SummaryView) ? summary_table_ : bills_table_;
-    if (!table || table->rowCount() == 0) return;
+    if (!table || table->rowCount() == 0)
+        return;
 
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV",
-        "congress_data.csv", "CSV Files (*.csv)");
-    if (path.isEmpty()) return;
+    QString path = QFileDialog::getSaveFileName(this, "Export CSV", "congress_data.csv", "CSV Files (*.csv)");
+    if (path.isEmpty())
+        return;
 
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return;
 
     QTextStream out(&file);
     QStringList headers;

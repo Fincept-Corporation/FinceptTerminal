@@ -1,15 +1,14 @@
 // src/ui/widgets/WorldMapWidget.cpp
 #include "ui/widgets/WorldMapWidget.h"
 
-#include <QGeoView/QGVGlobal.h>
-#include <QGeoView/QGVMap.h>
 #include <QGeoView/QGVCamera.h>
+#include <QGeoView/QGVGlobal.h>
 #include <QGeoView/QGVLayer.h>
 #include <QGeoView/QGVLayerOSM.h>
-#include <QGeoView/QGVWidgetZoom.h>
+#include <QGeoView/QGVMap.h>
 #include <QGeoView/QGVWidgetScale.h>
+#include <QGeoView/QGVWidgetZoom.h>
 #include <QGeoView/Raster/QGVIcon.h>
-
 #include <QGraphicsView>
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
@@ -21,12 +20,12 @@ namespace fincept::ui {
 
 // ── One-time network manager setup for QGeoView tile loading ────────────────
 static void ensure_network_manager() {
-    if (QGV::getNetworkManager()) return;
+    if (QGV::getNetworkManager())
+        return;
 
     auto* nam = new QNetworkAccessManager(qApp);
     auto* cache = new QNetworkDiskCache(nam);
-    QString cache_dir = QStandardPaths::writableLocation(
-        QStandardPaths::CacheLocation) + "/map_tiles";
+    QString cache_dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/map_tiles";
     cache->setCacheDirectory(cache_dir);
     cache->setMaximumCacheSize(100 * 1024 * 1024); // 100 MB
     nam->setCache(cache);
@@ -49,8 +48,7 @@ WorldMapWidget::WorldMapWidget(QWidget* parent) : QWidget(parent) {
     }
 
     // Use CartoDB Dark Matter tiles (same as the Tauri/React geopolitics map)
-    auto* tiles = new QGVLayerOSM(
-        QStringLiteral("https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png"));
+    auto* tiles = new QGVLayerOSM(QStringLiteral("https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png"));
     map_->addItem(tiles);
 
     // Zoom controls
@@ -72,7 +70,8 @@ WorldMapWidget::WorldMapWidget(QWidget* parent) : QWidget(parent) {
 
 QImage WorldMapWidget::make_marker_image(const QColor& color, double radius) const {
     int size = static_cast<int>(radius * 4);
-    if (size < 8) size = 8;
+    if (size < 8)
+        size = 8;
     QImage img(size, size, QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::transparent);
 
@@ -102,7 +101,8 @@ QImage WorldMapWidget::make_marker_image(const QColor& color, double radius) con
 // ── Pin management ──────────────────────────────────────────────────────────
 
 void WorldMapWidget::rebuild_markers() {
-    if (!map_ready_ || !marker_layer_) return;
+    if (!map_ready_ || !marker_layer_)
+        return;
 
     // Remove all existing markers from the layer
     while (marker_layer_->countItems() > 0) {
@@ -114,8 +114,7 @@ void WorldMapWidget::rebuild_markers() {
     // Add new markers
     for (const auto& pin : pins_) {
         auto* icon = new QGVIcon();
-        icon->setGeometry(QGV::GeoPos(pin.latitude, pin.longitude),
-                          QSizeF(20, 20));
+        icon->setGeometry(QGV::GeoPos(pin.latitude, pin.longitude), QSizeF(20, 20));
         icon->loadImage(make_marker_image(pin.color, pin.radius));
         icon->setFlags(QGV::ItemFlag::IgnoreScale | QGV::ItemFlag::IgnoreAzimuth);
         marker_layer_->addItem(icon);
@@ -139,23 +138,27 @@ void WorldMapWidget::clear_pins() {
 
 void WorldMapWidget::fly_to(double lat, double lng, int zoom) {
     Q_UNUSED(zoom);
-    if (!map_ready_) return;
+    if (!map_ready_)
+        return;
     double d = 5.0;
-    auto target = QGV::GeoRect(
-        QGV::GeoPos(lat + d, lng - d * 1.5),
-        QGV::GeoPos(lat - d, lng + d * 1.5));
+    auto target = QGV::GeoRect(QGV::GeoPos(lat + d, lng - d * 1.5), QGV::GeoPos(lat - d, lng + d * 1.5));
     map_->flyTo(QGVCameraActions(map_).scaleTo(target));
 }
 
 void WorldMapWidget::fit_to_pins() {
-    if (!map_ready_ || pins_.isEmpty()) return;
+    if (!map_ready_ || pins_.isEmpty())
+        return;
 
     double min_lat = 90, max_lat = -90, min_lng = 180, max_lng = -180;
     for (const auto& pin : pins_) {
-        if (pin.latitude < min_lat) min_lat = pin.latitude;
-        if (pin.latitude > max_lat) max_lat = pin.latitude;
-        if (pin.longitude < min_lng) min_lng = pin.longitude;
-        if (pin.longitude > max_lng) max_lng = pin.longitude;
+        if (pin.latitude < min_lat)
+            min_lat = pin.latitude;
+        if (pin.latitude > max_lat)
+            max_lat = pin.latitude;
+        if (pin.longitude < min_lng)
+            min_lng = pin.longitude;
+        if (pin.longitude > max_lng)
+            max_lng = pin.longitude;
     }
 
     // Add padding (at least 2 degrees, or 20% of the span)
@@ -164,9 +167,8 @@ void WorldMapWidget::fit_to_pins() {
     double lat_pad = std::max(lat_span * 0.2, 2.0);
     double lng_pad = std::max(lng_span * 0.2, 2.0);
 
-    auto target = QGV::GeoRect(
-        QGV::GeoPos(max_lat + lat_pad, min_lng - lng_pad),
-        QGV::GeoPos(min_lat - lat_pad, max_lng + lng_pad));
+    auto target = QGV::GeoRect(QGV::GeoPos(max_lat + lat_pad, min_lng - lng_pad),
+                               QGV::GeoPos(min_lat - lat_pad, max_lng + lng_pad));
     map_->flyTo(QGVCameraActions(map_).scaleTo(target));
 }
 

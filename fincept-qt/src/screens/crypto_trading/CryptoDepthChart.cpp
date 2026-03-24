@@ -43,9 +43,8 @@ void CryptoDepthChart::hideEvent(QHideEvent* e) {
         repaint_timer_->stop();
 }
 
-void CryptoDepthChart::set_data(const QVector<QPair<double, double>>& bids,
-                                 const QVector<QPair<double, double>>& asks,
-                                 double spread, double /*spread_pct*/) {
+void CryptoDepthChart::set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
+                                double spread, double /*spread_pct*/) {
     {
         QMutexLocker lock(&mutex_);
         bids_ = bids;
@@ -53,7 +52,8 @@ void CryptoDepthChart::set_data(const QVector<QPair<double, double>>& bids,
         spread_ = spread;
     }
     cache_dirty_ = true;
-    if (repaint_timer_ && !repaint_timer_->isActive()) repaint_timer_->start();
+    if (repaint_timer_ && !repaint_timer_->isActive())
+        repaint_timer_->start();
 }
 
 void CryptoDepthChart::resizeEvent(QResizeEvent* event) {
@@ -72,7 +72,8 @@ void CryptoDepthChart::paintEvent(QPaintEvent* /*event*/) {
 void CryptoDepthChart::rebuild_cache() {
     const int w = width();
     const int h = height();
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0)
+        return;
 
     cache_ = QPixmap(w, h);
     cache_.fill(kBgBase);
@@ -133,8 +134,10 @@ void CryptoDepthChart::rebuild_cache() {
         max_price = std::max(max_price, a.first);
         max_vol = std::max(max_vol, a.second);
     }
-    if (!bid_cum.isEmpty()) max_price = std::max(max_price, bid_cum.first().first);
-    if (!ask_cum.isEmpty()) min_price = std::min(min_price, ask_cum.first().first);
+    if (!bid_cum.isEmpty())
+        max_price = std::max(max_price, bid_cum.first().first);
+    if (!ask_cum.isEmpty())
+        min_price = std::min(min_price, ask_cum.first().first);
 
     if (max_price <= min_price || max_vol <= 0) {
         cache_dirty_ = false;
@@ -145,9 +148,7 @@ void CryptoDepthChart::rebuild_cache() {
     auto map_x = [&](double price) -> int {
         return margin_l + static_cast<int>((price - min_price) / (max_price - min_price) * plot_w);
     };
-    auto map_y = [&](double vol) -> int {
-        return margin_t + plot_h - static_cast<int>(vol / max_vol * plot_h);
-    };
+    auto map_y = [&](double vol) -> int { return margin_t + plot_h - static_cast<int>(vol / max_vol * plot_h); };
 
     // Grid lines
     p.setPen(QPen(kBorderDim, 1));
@@ -169,8 +170,8 @@ void CryptoDepthChart::rebuild_cache() {
         p.setPen(QPen(kBidLine, 1.5));
         // Draw just the top edge
         for (int i = 0; i + 1 < bid_cum.size(); ++i)
-            p.drawLine(map_x(bid_cum[i].first), map_y(bid_cum[i].second),
-                       map_x(bid_cum[i + 1].first), map_y(bid_cum[i + 1].second));
+            p.drawLine(map_x(bid_cum[i].first), map_y(bid_cum[i].second), map_x(bid_cum[i + 1].first),
+                       map_y(bid_cum[i + 1].second));
     }
 
     // Ask area (right side, red)
@@ -185,8 +186,8 @@ void CryptoDepthChart::rebuild_cache() {
         p.fillPath(ask_path, kAskFill);
         p.setPen(QPen(kAskLine, 1.5));
         for (int i = 0; i + 1 < ask_cum.size(); ++i)
-            p.drawLine(map_x(ask_cum[i].first), map_y(ask_cum[i].second),
-                       map_x(ask_cum[i + 1].first), map_y(ask_cum[i + 1].second));
+            p.drawLine(map_x(ask_cum[i].first), map_y(ask_cum[i].second), map_x(ask_cum[i + 1].first),
+                       map_y(ask_cum[i + 1].second));
     }
 
     // Spread vertical line (amber dashed)
@@ -203,9 +204,12 @@ void CryptoDepthChart::rebuild_cache() {
         const double vol = max_vol * (4 - i) / 4;
         const int y = margin_t + plot_h * i / 4;
         QString label;
-        if (vol >= 1e6)      label = QString("%1M").arg(vol / 1e6, 0, 'f', 1);
-        else if (vol >= 1e3) label = QString("%1K").arg(vol / 1e3, 0, 'f', 1);
-        else                 label = QString::number(vol, 'f', 1);
+        if (vol >= 1e6)
+            label = QString("%1M").arg(vol / 1e6, 0, 'f', 1);
+        else if (vol >= 1e3)
+            label = QString("%1K").arg(vol / 1e3, 0, 'f', 1);
+        else
+            label = QString::number(vol, 'f', 1);
         p.drawText(QRect(0, y - 8, margin_l - 4, 16), Qt::AlignRight | Qt::AlignVCenter, label);
     }
 
@@ -213,8 +217,7 @@ void CryptoDepthChart::rebuild_cache() {
     for (int i = 0; i <= 4; ++i) {
         const double price = min_price + (max_price - min_price) * i / 4;
         const int x = map_x(price);
-        p.drawText(QRect(x - 30, margin_t + plot_h + 2, 60, 16),
-                   Qt::AlignCenter, QString::number(price, 'f', 0));
+        p.drawText(QRect(x - 30, margin_t + plot_h + 2, 60, 16), Qt::AlignCenter, QString::number(price, 'f', 0));
     }
 
     cache_dirty_ = false;

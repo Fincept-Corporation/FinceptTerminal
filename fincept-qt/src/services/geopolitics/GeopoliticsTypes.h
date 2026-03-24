@@ -23,15 +23,24 @@ struct NewsEvent {
 };
 
 inline QColor category_color(const QString& cat) {
-    if (cat == "armed_conflict")    return QColor(255, 0, 0);
-    if (cat == "terrorism")         return QColor(255, 69, 0);
-    if (cat == "protests")          return QColor(255, 215, 0);
-    if (cat == "civilian_violence") return QColor(255, 100, 100);
-    if (cat == "riots")             return QColor(255, 165, 0);
-    if (cat == "political_violence")return QColor(147, 51, 234);
-    if (cat == "crisis")            return QColor(0, 229, 255);
-    if (cat == "explosions")        return QColor(255, 20, 147);
-    if (cat == "strategic")         return QColor(100, 149, 237);
+    if (cat == "armed_conflict")
+        return QColor(255, 0, 0);
+    if (cat == "terrorism")
+        return QColor(255, 69, 0);
+    if (cat == "protests")
+        return QColor(255, 215, 0);
+    if (cat == "civilian_violence")
+        return QColor(255, 100, 100);
+    if (cat == "riots")
+        return QColor(255, 165, 0);
+    if (cat == "political_violence")
+        return QColor(147, 51, 234);
+    if (cat == "crisis")
+        return QColor(0, 229, 255);
+    if (cat == "explosions")
+        return QColor(255, 20, 147);
+    if (cat == "strategic")
+        return QColor(100, 149, 237);
     return QColor(136, 136, 136); // unclassified
 }
 
@@ -65,8 +74,8 @@ struct UniqueCategory {
 struct RelationshipNode {
     QString id;
     QString label;
-    QString type;      // country, conflict, organization, crisis
-    QString severity;  // low, medium, high, critical
+    QString type;     // country, conflict, organization, crisis
+    QString severity; // low, medium, high, critical
     int dataset_count = 0;
     QStringList connections;
 };
@@ -74,15 +83,15 @@ struct RelationshipNode {
 // ── Critical regions for HDX monitoring ─────────────────────────────────────
 
 inline QStringList critical_regions() {
-    return {"Ukraine", "Gaza", "Sudan", "Yemen", "Syria",
-            "Afghanistan", "Myanmar", "Ethiopia", "Haiti", "Somalia", "Venezuela"};
+    return {"Ukraine", "Gaza",     "Sudan", "Yemen",   "Syria",    "Afghanistan",
+            "Myanmar", "Ethiopia", "Haiti", "Somalia", "Venezuela"};
 }
 
 // ── Event categories ────────────────────────────────────────────────────────
 
 inline QStringList event_categories() {
-    return {"armed_conflict", "terrorism", "protests", "civilian_violence",
-            "riots", "political_violence", "crisis", "explosions", "strategic"};
+    return {"armed_conflict",     "terrorism", "protests",   "civilian_violence", "riots",
+            "political_violence", "crisis",    "explosions", "strategic"};
 }
 
 } // namespace fincept::services::geo

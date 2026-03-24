@@ -27,15 +27,15 @@ class PortfolioOrderPanel : public QWidget {
     void build_ui();
     void update_display();
 
-    QPushButton* buy_tab_    = nullptr;
-    QPushButton* sell_tab_   = nullptr;
+    QPushButton* buy_tab_ = nullptr;
+    QPushButton* sell_tab_ = nullptr;
     QPushButton* submit_btn_ = nullptr;
-    QPushButton* close_btn_  = nullptr;
+    QPushButton* close_btn_ = nullptr;
 
-    QLabel* symbol_label_  = nullptr;
-    QLabel* price_label_   = nullptr;
-    QLabel* qty_label_     = nullptr;
-    QLabel* mv_label_      = nullptr;
+    QLabel* symbol_label_ = nullptr;
+    QLabel* price_label_ = nullptr;
+    QLabel* qty_label_ = nullptr;
+    QLabel* mv_label_ = nullptr;
 
     QString side_ = "BUY";
     QString currency_ = "USD";

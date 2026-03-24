@@ -20,8 +20,7 @@ class ParameterWidgetFactory {
     /// Create a labeled widget for the given parameter.
     /// The returned widget contains a label + editor.
     /// When the value changes, on_change is called.
-    static QWidget* create(const ParamDef& param,
-                           const QJsonValue& current_value,
+    static QWidget* create(const ParamDef& param, const QJsonValue& current_value,
                            std::function<void(const QString& key, QJsonValue value)> on_change,
                            QWidget* parent = nullptr);
 };

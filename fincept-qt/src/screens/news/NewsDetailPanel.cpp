@@ -331,8 +331,8 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     QString pstr = services::priority_string(article.priority);
     QString pcolor = services::priority_color(article.priority);
     priority_badge_->setText(pstr);
-    priority_badge_->setStyleSheet(QString("background: %1; color: %2; padding: 1px 6px;")
-                                       .arg(pcolor, ui::colors::TEXT_PRIMARY));
+    priority_badge_->setStyleSheet(
+        QString("background: %1; color: %2; padding: 1px 6px;").arg(pcolor, ui::colors::TEXT_PRIMARY));
 
     // Sentiment badge
     QString sstr = services::sentiment_string(article.sentiment);
@@ -353,10 +353,12 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
         QString flag_text = services::NewsService::source_flag_label(article.source_flag);
         QString flag_color = article.source_flag == services::SourceFlag::STATE_MEDIA ? "#f97316" : ui::colors::WARNING;
         source_label_->setText(article.source.toUpper() + "  [" + flag_text + "]");
-        source_label_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700; background: transparent;").arg(flag_color));
+        source_label_->setStyleSheet(
+            QString("color: %1; font-size: 12px; font-weight: 700; background: transparent;").arg(flag_color));
     } else {
         source_label_->setText(article.source.toUpper());
-        source_label_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: 700; background: transparent;").arg(ui::colors::CYAN));
+        source_label_->setStyleSheet(
+            QString("color: %1; font-size: 12px; font-weight: 700; background: transparent;").arg(ui::colors::CYAN));
     }
 
     // Threat classification in impact label
@@ -395,10 +397,9 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
     ai_summary_->setText(analysis.summary.isEmpty() ? "No AI summary available." : analysis.summary);
 
     double score = std::clamp(analysis.sentiment.score, -1.0, 1.0);
-    QString sent_color = score > 0.1 ? ui::colors::POSITIVE : (score < -0.1 ? ui::colors::NEGATIVE : ui::colors::WARNING);
-    ai_sentiment_->setText(QString("Sentiment: %1%2")
-                               .arg(score >= 0 ? "+" : "")
-                               .arg(score, 0, 'f', 2));
+    QString sent_color =
+        score > 0.1 ? ui::colors::POSITIVE : (score < -0.1 ? ui::colors::NEGATIVE : ui::colors::WARNING);
+    ai_sentiment_->setText(QString("Sentiment: %1%2").arg(score >= 0 ? "+" : "").arg(score, 0, 'f', 2));
     ai_sentiment_->setStyleSheet(QString("color: %1;").arg(sent_color));
 
     ai_urgency_->setText(QString("Urgency: %1").arg(analysis.market_impact.urgency));
@@ -480,9 +481,7 @@ void NewsDetailPanel::show_related(const QVector<services::NewsArticle>& related
         btn->setText(QString("%1 - %2").arg(article.source, article.headline.left(50)));
         btn->setToolTip(article.headline);
 
-        connect(btn, &QPushButton::clicked, this, [this, article]() {
-            emit related_article_clicked(article);
-        });
+        connect(btn, &QPushButton::clicked, this, [this, article]() { emit related_article_clicked(article); });
 
         related_layout_->addWidget(btn);
     }
@@ -525,7 +524,8 @@ void NewsDetailPanel::show_monitor_matches(const QVector<QPair<services::NewsMon
 void NewsDetailPanel::show_entities(const services::EntityResult& entities) {
     while (entities_detail_layout_->count() > 0) {
         auto* item = entities_detail_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
@@ -559,7 +559,8 @@ void NewsDetailPanel::show_entities(const services::EntityResult& entities) {
 void NewsDetailPanel::show_infrastructure(const QVector<services::InfrastructureItem>& items) {
     while (infra_layout_->count() > 0) {
         auto* item = infra_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
@@ -570,13 +571,12 @@ void NewsDetailPanel::show_infrastructure(const QVector<services::Infrastructure
     infra_section_->show();
 
     for (const auto& inf : items) {
-        QString type_icon = inf.type == "airport" ? "AIR"
-                            : (inf.type == "military" ? "MIL"
-                               : (inf.type == "power_plant" ? "PWR" : "PRT"));
-        auto* lbl = new QLabel(QString("[%1] %2 — %3 km")
-                                   .arg(type_icon, inf.name.left(20))
-                                   .arg(inf.distance_km, 0, 'f', 1),
-                               infra_section_);
+        QString type_icon = inf.type == "airport"
+                                ? "AIR"
+                                : (inf.type == "military" ? "MIL" : (inf.type == "power_plant" ? "PWR" : "PRT"));
+        auto* lbl =
+            new QLabel(QString("[%1] %2 — %3 km").arg(type_icon, inf.name.left(20)).arg(inf.distance_km, 0, 'f', 1),
+                       infra_section_);
         lbl->setObjectName("newsDetailKeyPoint");
         infra_layout_->addWidget(lbl);
     }

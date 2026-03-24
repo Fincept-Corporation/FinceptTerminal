@@ -6,7 +6,9 @@ namespace fincept::ui {
 
 static bool s_rtl = false;
 
-bool is_rtl() { return s_rtl; }
+bool is_rtl() {
+    return s_rtl;
+}
 
 void set_rtl(bool rtl) {
     s_rtl = rtl;

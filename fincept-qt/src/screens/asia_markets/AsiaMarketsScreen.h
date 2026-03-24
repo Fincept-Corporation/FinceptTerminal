@@ -19,7 +19,7 @@ struct StockCategory {
     QString id;
     QString name;
     QString script;
-    QString color;   // hex color for the tab
+    QString color; // hex color for the tab
     int endpoint_count;
 };
 

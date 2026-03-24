@@ -7,17 +7,14 @@
 
 namespace fincept::workflow {
 
-ExecutionResultsPanel::ExecutionResultsPanel(QWidget* parent)
-    : QWidget(parent)
-{
+ExecutionResultsPanel::ExecutionResultsPanel(QWidget* parent) : QWidget(parent) {
     setFixedHeight(180);
     setObjectName("executionResultsPanel");
     build_ui();
     hide(); // hidden by default, shown during execution
 }
 
-void ExecutionResultsPanel::build_ui()
-{
+void ExecutionResultsPanel::build_ui() {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
@@ -36,16 +33,14 @@ void ExecutionResultsPanel::build_ui()
     hl->setContentsMargins(10, 0, 10, 0);
 
     auto* title = new QLabel("EXECUTION RESULTS");
-    title->setStyleSheet(
-        "color: #d97706; font-family: Consolas; font-size: 11px;"
-        "font-weight: bold; letter-spacing: 0.5px;");
+    title->setStyleSheet("color: #d97706; font-family: Consolas; font-size: 11px;"
+                         "font-weight: bold; letter-spacing: 0.5px;");
     hl->addWidget(title);
 
     hl->addStretch();
 
     status_label_ = new QLabel("IDLE");
-    status_label_->setStyleSheet(
-        "color: #525252; font-family: Consolas; font-size: 10px; font-weight: bold;");
+    status_label_->setStyleSheet("color: #525252; font-family: Consolas; font-size: 10px; font-weight: bold;");
     hl->addWidget(status_label_);
 
     root->addWidget(header);
@@ -54,11 +49,10 @@ void ExecutionResultsPanel::build_ui()
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet(
-        "QScrollArea { background: #141414; border: none; }"
-        "QScrollBar:vertical { background: #141414; width: 6px; }"
-        "QScrollBar::handle:vertical { background: #4a4a4a; min-height: 20px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+    scroll->setStyleSheet("QScrollArea { background: #141414; border: none; }"
+                          "QScrollBar:vertical { background: #141414; width: 6px; }"
+                          "QScrollBar::handle:vertical { background: #4a4a4a; min-height: 20px; }"
+                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
 
     results_container_ = new QWidget;
     results_layout_ = new QVBoxLayout(results_container_);
@@ -70,30 +64,26 @@ void ExecutionResultsPanel::build_ui()
     root->addWidget(scroll, 1);
 }
 
-void ExecutionResultsPanel::clear()
-{
+void ExecutionResultsPanel::clear() {
     while (results_layout_->count() > 1) {
         auto* item = results_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
     status_label_->setText("IDLE");
-    status_label_->setStyleSheet(
-        "color: #525252; font-family: Consolas; font-size: 10px; font-weight: bold;");
+    status_label_->setStyleSheet("color: #525252; font-family: Consolas; font-size: 10px; font-weight: bold;");
 }
 
-void ExecutionResultsPanel::set_started(const QString& workflow_id)
-{
+void ExecutionResultsPanel::set_started(const QString& workflow_id) {
     clear();
     show();
     Q_UNUSED(workflow_id);
     status_label_->setText("RUNNING...");
-    status_label_->setStyleSheet(
-        "color: #d97706; font-family: Consolas; font-size: 10px; font-weight: bold;");
+    status_label_->setStyleSheet("color: #d97706; font-family: Consolas; font-size: 10px; font-weight: bold;");
 }
 
-void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result)
-{
+void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result) {
     auto* row = new QWidget;
     row->setFixedHeight(22);
     auto* rl = new QHBoxLayout(row);
@@ -105,22 +95,19 @@ void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result)
     auto* dot = new QLabel(result.success ? "OK" : "ERR");
     dot->setFixedWidth(28);
     dot->setAlignment(Qt::AlignCenter);
-    dot->setStyleSheet(
-        QString("color: %1; font-family: Consolas; font-size: 9px; font-weight: bold;").arg(dot_color));
+    dot->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 9px; font-weight: bold;").arg(dot_color));
     rl->addWidget(dot);
 
     // Node ID (truncated)
     auto* id_label = new QLabel(result.node_id.left(12));
     id_label->setFixedWidth(90);
-    id_label->setStyleSheet(
-        "color: #808080; font-family: Consolas; font-size: 10px;");
+    id_label->setStyleSheet("color: #808080; font-family: Consolas; font-size: 10px;");
     rl->addWidget(id_label);
 
     // Duration
     auto* dur = new QLabel(QString("%1ms").arg(result.duration_ms));
     dur->setFixedWidth(50);
-    dur->setStyleSheet(
-        "color: #525252; font-family: Consolas; font-size: 10px;");
+    dur->setStyleSheet("color: #525252; font-family: Consolas; font-size: 10px;");
     rl->addWidget(dur);
 
     // Output preview or error
@@ -136,8 +123,7 @@ void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result)
     }
     auto* output_label = new QLabel(preview);
     output_label->setStyleSheet(
-        QString("color: %1; font-family: Consolas; font-size: 10px;")
-            .arg(result.success ? "#e5e5e5" : "#dc2626"));
+        QString("color: %1; font-family: Consolas; font-size: 10px;").arg(result.success ? "#e5e5e5" : "#dc2626"));
     output_label->setTextInteractionFlags(Qt::TextSelectableByMouse);
     rl->addWidget(output_label, 1);
 
@@ -145,16 +131,13 @@ void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result)
     results_layout_->insertWidget(pos, row);
 }
 
-void ExecutionResultsPanel::set_finished(const WorkflowExecutionResult& result)
-{
+void ExecutionResultsPanel::set_finished(const WorkflowExecutionResult& result) {
     if (result.success) {
         status_label_->setText(QString("COMPLETED  %1ms").arg(result.total_duration_ms));
-        status_label_->setStyleSheet(
-            "color: #16a34a; font-family: Consolas; font-size: 10px; font-weight: bold;");
+        status_label_->setStyleSheet("color: #16a34a; font-family: Consolas; font-size: 10px; font-weight: bold;");
     } else {
         status_label_->setText(QString("FAILED  %1").arg(result.error));
-        status_label_->setStyleSheet(
-            "color: #dc2626; font-family: Consolas; font-size: 10px; font-weight: bold;");
+        status_label_->setStyleSheet("color: #dc2626; font-family: Consolas; font-size: 10px; font-weight: bold;");
     }
 }
 

@@ -1,8 +1,9 @@
 #include "services/workflow/WorkflowExecutor.h"
-#include "services/workflow/NodeRegistry.h"
-#include "services/workflow/ExecutionHooks.h"
-#include "services/workflow/AuditLogger.h"
+
 #include "core/logging/Logger.h"
+#include "services/workflow/AuditLogger.h"
+#include "services/workflow/ExecutionHooks.h"
+#include "services/workflow/NodeRegistry.h"
 
 #include <QDateTime>
 #include <QElapsedTimer>
@@ -11,13 +12,9 @@
 
 namespace fincept::workflow {
 
-WorkflowExecutor::WorkflowExecutor(QObject* parent)
-    : QObject(parent)
-{
-}
+WorkflowExecutor::WorkflowExecutor(QObject* parent) : QObject(parent) {}
 
-void WorkflowExecutor::execute(const WorkflowDef& workflow)
-{
+void WorkflowExecutor::execute(const WorkflowDef& workflow) {
     if (running_) {
         LOG_WARN("Executor", "Execution already in progress");
         return;
@@ -63,17 +60,15 @@ void WorkflowExecutor::execute(const WorkflowDef& workflow)
     start_time_ms_ = QDateTime::currentMSecsSinceEpoch();
     ExecutionHooks::instance().emit_workflow_start(workflow_.id);
     AuditLogger::instance().log(AuditAction::WorkflowStarted, workflow_.id, {}, {},
-        QString("Started: %1 (%2 nodes)").arg(workflow_.name).arg(execution_order_.size()));
+                                QString("Started: %1 (%2 nodes)").arg(workflow_.name).arg(execution_order_.size()));
     emit execution_started(workflow_.id);
 
-    LOG_INFO("Executor", QString("Starting execution: %1 (%2 nodes)")
-             .arg(workflow_.name).arg(execution_order_.size()));
+    LOG_INFO("Executor", QString("Starting execution: %1 (%2 nodes)").arg(workflow_.name).arg(execution_order_.size()));
 
     execute_next();
 }
 
-void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& start_node_id)
-{
+void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& start_node_id) {
     if (running_) {
         LOG_WARN("Executor", "Execution already in progress");
         return;
@@ -139,22 +134,20 @@ void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& 
     ExecutionHooks::instance().emit_workflow_start(workflow_.id);
     emit execution_started(workflow_.id);
 
-    LOG_INFO("Executor", QString("Partial execution from %1: %2 nodes")
-             .arg(start_node_id).arg(execution_order_.size()));
+    LOG_INFO("Executor",
+             QString("Partial execution from %1: %2 nodes").arg(start_node_id).arg(execution_order_.size()));
 
     execute_next();
 }
 
-void WorkflowExecutor::stop()
-{
+void WorkflowExecutor::stop() {
     stop_requested_ = true;
     LOG_INFO("Executor", "Stop requested");
 }
 
 // ── Graph construction ─────────────────────────────────────────────────
 
-void WorkflowExecutor::build_graph()
-{
+void WorkflowExecutor::build_graph() {
     adjacency_.clear();
     reverse_adj_.clear();
 
@@ -172,8 +165,7 @@ void WorkflowExecutor::build_graph()
 
 // ── Cycle detection (DFS with coloring) ────────────────────────────────
 
-bool WorkflowExecutor::has_cycle() const
-{
+bool WorkflowExecutor::has_cycle() const {
     enum Color { White, Gray, Black };
     QMap<QString, Color> color;
     for (auto it = adjacency_.constBegin(); it != adjacency_.constEnd(); ++it)
@@ -182,8 +174,10 @@ bool WorkflowExecutor::has_cycle() const
     std::function<bool(const QString&)> dfs = [&](const QString& u) -> bool {
         color[u] = Gray;
         for (const auto& v : adjacency_.value(u)) {
-            if (color.value(v) == Gray) return true;   // back edge = cycle
-            if (color.value(v) == White && dfs(v)) return true;
+            if (color.value(v) == Gray)
+                return true; // back edge = cycle
+            if (color.value(v) == White && dfs(v))
+                return true;
         }
         color[u] = Black;
         return false;
@@ -198,8 +192,7 @@ bool WorkflowExecutor::has_cycle() const
 
 // ── Topological sort (Kahn's algorithm) ────────────────────────────────
 
-QVector<QString> WorkflowExecutor::topological_sort() const
-{
+QVector<QString> WorkflowExecutor::topological_sort() const {
     QMap<QString, int> in_degree;
     for (auto it = adjacency_.constBegin(); it != adjacency_.constEnd(); ++it)
         in_degree[it.key()] = 0;
@@ -239,22 +232,21 @@ QVector<QString> WorkflowExecutor::topological_sort() const
 
 // ── Execution loop ─────────────────────────────────────────────────────
 
-void WorkflowExecutor::execute_next()
-{
+void WorkflowExecutor::execute_next() {
     if (stop_requested_ || current_index_ >= execution_order_.size()) {
         // Execution complete
         running_ = false;
 
         WorkflowExecutionResult wr;
         wr.workflow_id = workflow_.id;
-        wr.total_duration_ms = static_cast<int>(
-            QDateTime::currentMSecsSinceEpoch() - start_time_ms_);
+        wr.total_duration_ms = static_cast<int>(QDateTime::currentMSecsSinceEpoch() - start_time_ms_);
 
         // Check if any node failed
         wr.success = true;
         for (auto it = results_.constBegin(); it != results_.constEnd(); ++it) {
             wr.node_results.append(it.value());
-            if (!it->success) wr.success = false;
+            if (!it->success)
+                wr.success = false;
         }
 
         if (stop_requested_) {
@@ -262,14 +254,12 @@ void WorkflowExecutor::execute_next()
             wr.error = "Execution stopped by user";
         }
 
-        LOG_INFO("Executor", QString("Execution %1 in %2ms")
-                 .arg(wr.success ? "completed" : "failed")
-                 .arg(wr.total_duration_ms));
+        LOG_INFO("Executor",
+                 QString("Execution %1 in %2ms").arg(wr.success ? "completed" : "failed").arg(wr.total_duration_ms));
 
         ExecutionHooks::instance().emit_workflow_end(workflow_.id, wr.success, wr.total_duration_ms);
         AuditLogger::instance().log(
-            wr.success ? AuditAction::WorkflowCompleted : AuditAction::WorkflowFailed,
-            workflow_.id, {}, {},
+            wr.success ? AuditAction::WorkflowCompleted : AuditAction::WorkflowFailed, workflow_.id, {}, {},
             QString("%1 in %2ms").arg(wr.success ? "Completed" : "Failed").arg(wr.total_duration_ms));
 
         emit execution_finished(wr);
@@ -311,25 +301,27 @@ void WorkflowExecutor::execute_next()
     // Execute asynchronously with QPointer guard (P8)
     QPointer<WorkflowExecutor> self = this;
     type_def->execute(nd.parameters, inputs,
-        [self, node_id, node_start](bool success, QJsonValue output, QString error) {
-            if (!self) return;
-            QMetaObject::invokeMethod(self, [self, node_id, success, output, error, node_start]() {
-                if (!self) return;
-                NodeExecutionResult nr;
-                nr.node_id = node_id;
-                nr.success = success;
-                nr.output = output;
-                nr.error = error;
-                nr.duration_ms = static_cast<int>(
-                    QDateTime::currentMSecsSinceEpoch() - node_start);
-                self->on_node_done(node_id, success, output, error);
-            }, Qt::QueuedConnection);
-        });
+                      [self, node_id, node_start](bool success, QJsonValue output, QString error) {
+                          if (!self)
+                              return;
+                          QMetaObject::invokeMethod(
+                              self,
+                              [self, node_id, success, output, error, node_start]() {
+                                  if (!self)
+                                      return;
+                                  NodeExecutionResult nr;
+                                  nr.node_id = node_id;
+                                  nr.success = success;
+                                  nr.output = output;
+                                  nr.error = error;
+                                  nr.duration_ms = static_cast<int>(QDateTime::currentMSecsSinceEpoch() - node_start);
+                                  self->on_node_done(node_id, success, output, error);
+                              },
+                              Qt::QueuedConnection);
+                      });
 }
 
-void WorkflowExecutor::on_node_done(const QString& node_id, bool success,
-                                     QJsonValue output, QString error)
-{
+void WorkflowExecutor::on_node_done(const QString& node_id, bool success, QJsonValue output, QString error) {
     NodeExecutionResult nr;
     nr.node_id = node_id;
     nr.success = success;
@@ -364,8 +356,7 @@ void WorkflowExecutor::on_node_done(const QString& node_id, bool success,
     execute_next();
 }
 
-QVector<QJsonValue> WorkflowExecutor::collect_inputs(const QString& node_id) const
-{
+QVector<QJsonValue> WorkflowExecutor::collect_inputs(const QString& node_id) const {
     QVector<QJsonValue> inputs;
     for (const auto& upstream_id : reverse_adj_.value(node_id)) {
         auto it = results_.constFind(upstream_id);

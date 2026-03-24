@@ -40,8 +40,7 @@ class ConfirmationService : public QObject {
     static ConfirmationService& instance();
 
     /// Request user confirmation. Calls callback with (approved, notes).
-    void request(const ConfirmationRequest& req,
-                 std::function<void(bool approved, const QString& notes)> callback);
+    void request(const ConfirmationRequest& req, std::function<void(bool approved, const QString& notes)> callback);
 
     /// Whether paper trading auto-approve is enabled.
     bool auto_approve_paper() const { return auto_approve_paper_; }

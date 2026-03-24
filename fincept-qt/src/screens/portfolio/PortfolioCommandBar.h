@@ -50,23 +50,23 @@ class PortfolioCommandBar : public QWidget {
     void update_selector_label();
 
     // Portfolio selector
-    QPushButton* selector_btn_   = nullptr;
-    QWidget*     dropdown_       = nullptr;
-    QLineEdit*   search_edit_    = nullptr;
+    QPushButton* selector_btn_ = nullptr;
+    QWidget* dropdown_ = nullptr;
+    QLineEdit* search_edit_ = nullptr;
     QListWidget* portfolio_list_ = nullptr;
 
     // Stats in the bar
-    QLabel* nav_label_     = nullptr;
-    QLabel* pnl_label_     = nullptr;
-    QLabel* day_label_     = nullptr;
-    QLabel* pos_label_     = nullptr;
+    QLabel* nav_label_ = nullptr;
+    QLabel* pnl_label_ = nullptr;
+    QLabel* day_label_ = nullptr;
+    QLabel* pos_label_ = nullptr;
 
     // Action buttons
-    QPushButton* buy_btn_     = nullptr;
-    QPushButton* sell_btn_    = nullptr;
+    QPushButton* buy_btn_ = nullptr;
+    QPushButton* sell_btn_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
-    QComboBox*   interval_cb_ = nullptr;
-    QPushButton* ffn_btn_     = nullptr;
+    QComboBox* interval_cb_ = nullptr;
+    QPushButton* ffn_btn_ = nullptr;
 
     // Detail view buttons
     QVector<QPushButton*> detail_btns_;
@@ -74,7 +74,7 @@ class PortfolioCommandBar : public QWidget {
     // Containers for show/hide
     QWidget* actions_container_ = nullptr; // BUY/SELL/REFRESH/interval/exports/FFN
     QWidget* details_container_ = nullptr; // 9 detail view buttons + AI/AGENT
-    QWidget* stats_container_   = nullptr; // inline NAV/PNL/DAY/POS
+    QWidget* stats_container_ = nullptr;   // inline NAV/PNL/DAY/POS
 
     // State
     QVector<portfolio::Portfolio> portfolios_;

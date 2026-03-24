@@ -11,8 +11,8 @@
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QProcess>
 #include <QPointer>
+#include <QProcess>
 
 namespace fincept::services {
 
@@ -114,8 +114,7 @@ void AgentService::run_python_light(const QString& action, const QJsonObject& pa
 
 // ── Python stdin runner (for large payloads) ─────────────────────────────────
 
-void AgentService::run_python_stdin(const QString& action, const QJsonObject& params,
-                                    const QJsonObject& config,
+void AgentService::run_python_stdin(const QString& action, const QJsonObject& params, const QJsonObject& config,
                                     std::function<void(bool, QJsonObject)> on_result) {
     auto& py = python::PythonRunner::instance();
     if (!py.is_available()) {
@@ -155,12 +154,11 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
 
                 QJsonDocument doc = QJsonDocument::fromJson(json_str.toUtf8());
                 if (exit_code != 0 || doc.isNull()) {
-                    LOG_ERROR("AgentService",
-                              QString("%1 failed (exit=%2, %3ms): %4")
-                                  .arg(action)
-                                  .arg(exit_code)
-                                  .arg(elapsed)
-                                  .arg(stderr_str.left(200)));
+                    LOG_ERROR("AgentService", QString("%1 failed (exit=%2, %3ms): %4")
+                                                  .arg(action)
+                                                  .arg(exit_code)
+                                                  .arg(elapsed)
+                                                  .arg(stderr_str.left(200)));
                     QString err = stderr_str.isEmpty() ? "Agent execution failed" : stderr_str.left(500);
                     on_result(false, QJsonObject{{"error", err}});
                     return;
@@ -283,7 +281,8 @@ void AgentService::discover_agents() {
             self->agents_cache_.fetched_at = QDateTime::currentMSecsSinceEpoch();
         }
 
-        LOG_INFO("AgentService", QString("Discovered %1 agents in %2 categories").arg(agents.size()).arg(categories.size()));
+        LOG_INFO("AgentService",
+                 QString("Discovered %1 agents in %2 categories").arg(agents.size()).arg(categories.size()));
         emit self->agents_discovered(agents, categories);
     });
 }
@@ -366,7 +365,7 @@ void AgentService::run_team(const QString& query, const QJsonObject& team_config
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
-                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
+                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
@@ -388,7 +387,7 @@ void AgentService::run_workflow(const QString& workflow_type, const QJsonObject&
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
-                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
+                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
@@ -626,8 +625,7 @@ void AgentService::set_active_config(const QString& id) {
 
 // ── Structured output ────────────────────────────────────────────────────────
 
-void AgentService::run_agent_structured(const QString& query, const QJsonObject& config,
-                                        const QString& output_model) {
+void AgentService::run_agent_structured(const QString& query, const QJsonObject& config, const QString& output_model) {
     LOG_INFO("AgentService", QString("Running structured agent (%1): %2").arg(output_model, query.left(60)));
     QJsonObject params;
     params["query"] = query;
@@ -635,12 +633,13 @@ void AgentService::run_agent_structured(const QString& query, const QJsonObject&
 
     QPointer<AgentService> self = this;
     run_python_stdin("run_structured", params, config, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         AgentExecutionResult r;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
-                     : QJsonDocument(result).toJson(QJsonDocument::Indented);
+                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
@@ -652,16 +651,18 @@ void AgentService::execute_routed_query(const QString& query, const QString& ses
     LOG_INFO("AgentService", QString("Execute routed query: %1").arg(query.left(60)));
     QJsonObject params;
     params["query"] = query;
-    if (!session_id.isEmpty()) params["session_id"] = session_id;
+    if (!session_id.isEmpty())
+        params["session_id"] = session_id;
 
     QPointer<AgentService> self = this;
     run_python_stdin("execute_query", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         AgentExecutionResult r;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
-                     : QJsonDocument(result).toJson(QJsonDocument::Indented);
+                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
@@ -677,7 +678,8 @@ void AgentService::execute_multi_query(const QString& query, bool aggregate) {
 
     QPointer<AgentService> self = this;
     run_python_stdin("execute_multi_query", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         if (ok)
             emit self->multi_query_result(result);
         else
@@ -694,12 +696,13 @@ void AgentService::run_stock_analysis(const QString& symbol, const QJsonObject& 
 
     QPointer<AgentService> self = this;
     run_python_stdin("stock_analysis", params, config, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         AgentExecutionResult r;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
-                     : QJsonDocument(result).toJson(QJsonDocument::Indented);
+                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
@@ -708,16 +711,18 @@ void AgentService::run_stock_analysis(const QString& symbol, const QJsonObject& 
 void AgentService::run_portfolio_rebalancing(const QJsonObject& portfolio_data) {
     LOG_INFO("AgentService", "Portfolio rebalancing");
     QJsonObject params;
-    if (!portfolio_data.isEmpty()) params["portfolio_data"] = portfolio_data;
+    if (!portfolio_data.isEmpty())
+        params["portfolio_data"] = portfolio_data;
 
     QPointer<AgentService> self = this;
     run_python_stdin("portfolio_rebal", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         AgentExecutionResult r;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
-                     : QJsonDocument(result).toJson(QJsonDocument::Indented);
+                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
@@ -726,16 +731,18 @@ void AgentService::run_portfolio_rebalancing(const QJsonObject& portfolio_data) 
 void AgentService::run_risk_assessment(const QJsonObject& portfolio_data) {
     LOG_INFO("AgentService", "Risk assessment");
     QJsonObject params;
-    if (!portfolio_data.isEmpty()) params["portfolio_data"] = portfolio_data;
+    if (!portfolio_data.isEmpty())
+        params["portfolio_data"] = portfolio_data;
 
     QPointer<AgentService> self = this;
     run_python_stdin("risk_assessment", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         AgentExecutionResult r;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
-                     : QJsonDocument(result).toJson(QJsonDocument::Indented);
+                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
@@ -745,16 +752,18 @@ void AgentService::run_portfolio_analysis(const QString& analysis_type, const QJ
     LOG_INFO("AgentService", QString("Portfolio analysis: %1").arg(analysis_type));
     QJsonObject params;
     params["analysis_type"] = analysis_type;
-    if (!portfolio_summary.isEmpty()) params["portfolio_summary"] = portfolio_summary;
+    if (!portfolio_summary.isEmpty())
+        params["portfolio_summary"] = portfolio_summary;
 
     QPointer<AgentService> self = this;
     run_python_stdin("run", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         AgentExecutionResult r;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
-                     : QJsonDocument(result).toJson(QJsonDocument::Indented);
+                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
@@ -769,8 +778,12 @@ void AgentService::create_stock_analysis_plan(const QString& symbol) {
 
     QPointer<AgentService> self = this;
     run_python_stdin("create_stock_plan", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
-        if (!ok) { emit self->error_occurred("create_stock_plan", result["error"].toString()); return; }
+        if (!self)
+            return;
+        if (!ok) {
+            emit self->error_occurred("create_stock_plan", result["error"].toString());
+            return;
+        }
         ExecutionPlan plan;
         plan.id = result["id"].toString();
         plan.name = result["name"].toString();
@@ -793,12 +806,17 @@ void AgentService::create_stock_analysis_plan(const QString& symbol) {
 void AgentService::create_portfolio_plan(const QJsonObject& goals) {
     LOG_INFO("AgentService", "Portfolio plan");
     QJsonObject params;
-    if (!goals.isEmpty()) params["goals"] = goals;
+    if (!goals.isEmpty())
+        params["goals"] = goals;
 
     QPointer<AgentService> self = this;
     run_python_stdin("create_portfolio_plan", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
-        if (!ok) { emit self->error_occurred("create_portfolio_plan", result["error"].toString()); return; }
+        if (!self)
+            return;
+        if (!ok) {
+            emit self->error_occurred("create_portfolio_plan", result["error"].toString());
+            return;
+        }
         ExecutionPlan plan;
         plan.id = result["id"].toString();
         plan.name = result["name"].toString();
@@ -820,16 +838,17 @@ void AgentService::create_portfolio_plan(const QJsonObject& goals) {
 
 // ── Memory & Knowledge ───────────────────────────────────────────────────────
 
-void AgentService::store_memory(const QString& content, const QString& memory_type,
-                                const QJsonObject& metadata) {
+void AgentService::store_memory(const QString& content, const QString& memory_type, const QJsonObject& metadata) {
     QJsonObject params;
     params["content"] = content;
     params["memory_type"] = memory_type;
-    if (!metadata.isEmpty()) params["metadata"] = metadata;
+    if (!metadata.isEmpty())
+        params["metadata"] = metadata;
 
     QPointer<AgentService> self = this;
     run_python_stdin("store_memory", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         emit self->memory_stored(ok, ok ? "Memory stored" : result["error"].toString());
     });
 }
@@ -837,12 +856,14 @@ void AgentService::store_memory(const QString& content, const QString& memory_ty
 void AgentService::recall_memories(const QString& query, const QString& memory_type, int limit) {
     QJsonObject params;
     params["query"] = query;
-    if (!memory_type.isEmpty()) params["memory_type"] = memory_type;
+    if (!memory_type.isEmpty())
+        params["memory_type"] = memory_type;
     params["limit"] = limit;
 
     QPointer<AgentService> self = this;
     run_python_stdin("recall_memories", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         if (ok)
             emit self->memories_recalled(result["memories"].toArray());
         else
@@ -857,7 +878,8 @@ void AgentService::search_knowledge(const QString& query, int limit) {
 
     QPointer<AgentService> self = this;
     run_python_stdin("search_knowledge", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         if (ok)
             emit self->knowledge_results(result["results"].toArray());
         else
@@ -865,16 +887,18 @@ void AgentService::search_knowledge(const QString& query, int limit) {
     });
 }
 
-void AgentService::save_memory_repo(const QString& content, const QString& agent_id,
-                                    const QJsonObject& options) {
+void AgentService::save_memory_repo(const QString& content, const QString& agent_id, const QJsonObject& options) {
     QJsonObject params;
     params["content"] = content;
-    if (!agent_id.isEmpty()) params["agent_id"] = agent_id;
-    if (!options.isEmpty()) params["options"] = options;
+    if (!agent_id.isEmpty())
+        params["agent_id"] = agent_id;
+    if (!options.isEmpty())
+        params["options"] = options;
 
     QPointer<AgentService> self = this;
     run_python_stdin("save_memory", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         emit self->memory_stored(ok, ok ? "Memory saved to repository" : result["error"].toString());
     });
 }
@@ -882,12 +906,14 @@ void AgentService::save_memory_repo(const QString& content, const QString& agent
 void AgentService::search_memories_repo(const QString& query, const QString& agent_id, int limit) {
     QJsonObject params;
     params["query"] = query;
-    if (!agent_id.isEmpty()) params["agent_id"] = agent_id;
+    if (!agent_id.isEmpty())
+        params["agent_id"] = agent_id;
     params["limit"] = limit;
 
     QPointer<AgentService> self = this;
     run_python_stdin("search_memories", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         if (ok)
             emit self->memories_recalled(result["memories"].toArray());
         else
@@ -901,7 +927,8 @@ void AgentService::save_session(const QJsonObject& session_data) {
     QJsonObject params = session_data;
     QPointer<AgentService> self = this;
     run_python_stdin("save_session", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         emit self->session_saved(ok && result["success"].toBool(ok));
     });
 }
@@ -912,7 +939,8 @@ void AgentService::get_session(const QString& session_id) {
 
     QPointer<AgentService> self = this;
     run_python_stdin("get_session", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         if (ok)
             emit self->session_loaded(result);
         else
@@ -928,15 +956,16 @@ void AgentService::add_session_message(const QString& session_id, const QString&
 
     QPointer<AgentService> self = this;
     run_python_stdin("add_message", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         emit self->session_saved(ok && result["success"].toBool(ok));
     });
 }
 
 // ── Paper trading ────────────────────────────────────────────────────────────
 
-void AgentService::paper_execute_trade(const QString& portfolio_id, const QString& symbol,
-                                       const QString& action, double quantity, double price) {
+void AgentService::paper_execute_trade(const QString& portfolio_id, const QString& symbol, const QString& action,
+                                       double quantity, double price) {
     LOG_INFO("AgentService", QString("Paper trade: %1 %2 %3").arg(action, symbol).arg(quantity));
     QJsonObject params;
     params["portfolio_id"] = portfolio_id;
@@ -947,7 +976,8 @@ void AgentService::paper_execute_trade(const QString& portfolio_id, const QStrin
 
     QPointer<AgentService> self = this;
     run_python_stdin("paper_execute_trade", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         if (ok)
             emit self->trade_executed(result);
         else
@@ -961,7 +991,8 @@ void AgentService::paper_get_portfolio(const QString& portfolio_id) {
 
     QPointer<AgentService> self = this;
     run_python_stdin("paper_get_portfolio", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         if (ok)
             emit self->trade_executed(result);
         else
@@ -975,7 +1006,8 @@ void AgentService::paper_get_positions(const QString& portfolio_id) {
 
     QPointer<AgentService> self = this;
     run_python_stdin("paper_get_positions", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         if (ok)
             emit self->trade_executed(result);
         else
@@ -988,19 +1020,24 @@ void AgentService::paper_get_positions(const QString& portfolio_id) {
 void AgentService::save_trade_decision(const QJsonObject& decision) {
     QPointer<AgentService> self = this;
     run_python_stdin("save_trade_decision", decision, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
-        if (!ok) emit self->error_occurred("save_trade_decision", result["error"].toString());
+        if (!self)
+            return;
+        if (!ok)
+            emit self->error_occurred("save_trade_decision", result["error"].toString());
     });
 }
 
 void AgentService::get_trade_decisions(const QString& competition_id, const QString& model_name) {
     QJsonObject params;
-    if (!competition_id.isEmpty()) params["competition_id"] = competition_id;
-    if (!model_name.isEmpty()) params["model_name"] = model_name;
+    if (!competition_id.isEmpty())
+        params["competition_id"] = competition_id;
+    if (!model_name.isEmpty())
+        params["model_name"] = model_name;
 
     QPointer<AgentService> self = this;
     run_python_stdin("get_decisions", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self) return;
+        if (!self)
+            return;
         if (ok)
             emit self->trade_decisions_loaded(result["decisions"].toArray());
         else
@@ -1017,8 +1054,10 @@ QString AgentService::make_cache_key(const QString& action, const QJsonObject& p
 bool AgentService::get_cached_response(const QString& key, QJsonObject& out) const {
     QMutexLocker lock(&cache_mutex_);
     auto it = response_cache_.find(key);
-    if (it == response_cache_.end()) return false;
-    if (!is_cache_fresh(it->fetched_at, kResponseCacheTtlMs)) return false;
+    if (it == response_cache_.end())
+        return false;
+    if (!is_cache_fresh(it->fetched_at, kResponseCacheTtlMs))
+        return false;
     out = it->data;
     return true;
 }
@@ -1035,7 +1074,8 @@ void AgentService::set_cached_response(const QString& key, const QJsonObject& da
                 oldest_key = it.key();
             }
         }
-        if (!oldest_key.isEmpty()) response_cache_.remove(oldest_key);
+        if (!oldest_key.isEmpty())
+            response_cache_.remove(oldest_key);
     }
     response_cache_[key] = {data, QDateTime::currentMSecsSinceEpoch()};
 }

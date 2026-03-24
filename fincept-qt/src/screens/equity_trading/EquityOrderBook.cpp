@@ -52,8 +52,7 @@ EquityOrderBook::EquityOrderBook(QWidget* parent) : QWidget(parent) {
     connect(repaint_timer_, &QTimer::timeout, this, [this]() { update(); });
 }
 
-void EquityOrderBook::set_data(const QVector<QPair<double, double>>& bids,
-                               const QVector<QPair<double, double>>& asks,
+void EquityOrderBook::set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
                                double spread, double spread_pct) {
     QMutexLocker lock(&mutex_);
     bids_ = bids.mid(0, MAX_LEVELS);
@@ -62,9 +61,7 @@ void EquityOrderBook::set_data(const QVector<QPair<double, double>>& bids,
     spread_pct_ = spread_pct;
     cache_dirty_ = true;
 
-    spread_label_->setText(QString("Spread: %1 (%2%)")
-                               .arg(spread, 0, 'f', 2)
-                               .arg(spread_pct, 0, 'f', 3));
+    spread_label_->setText(QString("Spread: %1 (%2%)").arg(spread, 0, 'f', 2).arg(spread_pct, 0, 'f', 3));
 
     if (!repaint_timer_->isActive())
         repaint_timer_->start();
@@ -79,7 +76,8 @@ void EquityOrderBook::mousePressEvent(QMouseEvent* event) {
     // Determine which price level was clicked
     QMutexLocker lock(&mutex_);
     const int canvas_y = event->pos().y() - HEADER_H;
-    if (canvas_y < 0) return;
+    if (canvas_y < 0)
+        return;
 
     const int half = (canvas_->height()) / 2;
     if (canvas_y < half) {
@@ -106,7 +104,8 @@ void EquityOrderBook::rebuild_cache() {
     QMutexLocker lock(&mutex_);
     const int w = width();
     const int h = height() - HEADER_H - SPREAD_H;
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0)
+        return;
 
     cache_ = QPixmap(w, h);
     cache_.fill(BG_SURFACE);
@@ -121,14 +120,17 @@ void EquityOrderBook::rebuild_cache() {
 
     // Find max quantity for bar scaling
     double max_qty = 1.0;
-    for (const auto& [price, qty] : bids_) max_qty = std::max(max_qty, qty);
-    for (const auto& [price, qty] : asks_) max_qty = std::max(max_qty, qty);
+    for (const auto& [price, qty] : bids_)
+        max_qty = std::max(max_qty, qty);
+    for (const auto& [price, qty] : asks_)
+        max_qty = std::max(max_qty, qty);
 
     // Draw asks (top half, bottom-up so best ask is near spread)
     for (int i = 0; i < asks_.size() && i < MAX_LEVELS; ++i) {
         const auto& [price, qty] = asks_[i];
         const int y = half - (i + 1) * ROW_H;
-        if (y < 0) break;
+        if (y < 0)
+            break;
 
         // Depth bar
         const double ratio = qty / max_qty;
@@ -136,29 +138,26 @@ void EquityOrderBook::rebuild_cache() {
         p.fillRect(w - bar_w, y, bar_w, ROW_H, QColor(220, 38, 38, 25));
 
         p.setPen(COLOR_SELL);
-        p.drawText(col_price, y, w / 2 - 8, ROW_H, Qt::AlignLeft | Qt::AlignVCenter,
-                   QString::number(price, 'f', 2));
+        p.drawText(col_price, y, w / 2 - 8, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, QString::number(price, 'f', 2));
         p.setPen(TEXT_SECONDARY);
-        p.drawText(col_qty, y, w / 4 - 4, ROW_H, Qt::AlignRight | Qt::AlignVCenter,
-                   QString::number(qty, 'f', 0));
+        p.drawText(col_qty, y, w / 4 - 4, ROW_H, Qt::AlignRight | Qt::AlignVCenter, QString::number(qty, 'f', 0));
     }
 
     // Draw bids (bottom half, top-down so best bid is near spread)
     for (int i = 0; i < bids_.size() && i < MAX_LEVELS; ++i) {
         const auto& [price, qty] = bids_[i];
         const int y = half + i * ROW_H;
-        if (y + ROW_H > h) break;
+        if (y + ROW_H > h)
+            break;
 
         const double ratio = qty / max_qty;
         const int bar_w = static_cast<int>(w * ratio * 0.4);
         p.fillRect(w - bar_w, y, bar_w, ROW_H, QColor(22, 163, 74, 25));
 
         p.setPen(COLOR_BUY);
-        p.drawText(col_price, y, w / 2 - 8, ROW_H, Qt::AlignLeft | Qt::AlignVCenter,
-                   QString::number(price, 'f', 2));
+        p.drawText(col_price, y, w / 2 - 8, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, QString::number(price, 'f', 2));
         p.setPen(TEXT_SECONDARY);
-        p.drawText(col_qty, y, w / 4 - 4, ROW_H, Qt::AlignRight | Qt::AlignVCenter,
-                   QString::number(qty, 'f', 0));
+        p.drawText(col_qty, y, w / 4 - 4, ROW_H, Qt::AlignRight | Qt::AlignVCenter, QString::number(qty, 'f', 0));
     }
 
     // Center line

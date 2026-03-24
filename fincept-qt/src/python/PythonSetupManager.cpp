@@ -116,19 +116,17 @@ SetupStatus PythonSetupManager::check_status() const {
     // If it exists, trust that setup completed. Still do lightweight file-exists
     // checks to catch a partially-deleted installation.
     bool sentinel_exists = QFileInfo::exists(sentinel_path_for(install_dir()));
-    status.uv_installed  = QFileInfo::exists(uv_path());
+    status.uv_installed = QFileInfo::exists(uv_path());
     status.venv_numpy1_ready = QFileInfo::exists(python_path("venv-numpy1"));
     status.venv_numpy2_ready = QFileInfo::exists(python_path("venv-numpy2"));
 
-    if (sentinel_exists && status.uv_installed
-        && status.venv_numpy1_ready && status.venv_numpy2_ready) {
+    if (sentinel_exists && status.uv_installed && status.venv_numpy1_ready && status.venv_numpy2_ready) {
         // Everything looks intact — skip spawning any Python processes.
         status.python_installed = true;
         status.needs_setup = false;
         status.needs_package_sync = check_requirements_changed();
         LOG_INFO("PythonSetup",
-                 QString("Fast-path OK (sentinel present). needs_sync=%1")
-                     .arg(status.needs_package_sync));
+                 QString("Fast-path OK (sentinel present). needs_sync=%1").arg(status.needs_package_sync));
         return status;
     }
 
@@ -149,26 +147,25 @@ SetupStatus PythonSetupManager::check_status() const {
             proc.start(py, {"--version"});
             if (proc.waitForFinished(5000) && proc.exitCode() == 0) {
                 status.python_installed = true;
-                status.python_version =
-                    QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+                status.python_version = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
             }
         }
     }
 
     // Check venvs — verify python runs AND key packages are importable
-    auto check_venv = [this](const QString& name,
-                              const QStringList& marker_packages) -> bool {
+    auto check_venv = [this](const QString& name, const QStringList& marker_packages) -> bool {
         QString vpy = python_path(name);
-        if (!QFileInfo::exists(vpy)) return false;
+        if (!QFileInfo::exists(vpy))
+            return false;
 
         QProcess ver_proc;
 #ifdef _WIN32
-        ver_proc.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-            cpa->flags |= 0x08000000;
-        });
+        ver_proc.setCreateProcessArgumentsModifier(
+            [](QProcess::CreateProcessArguments* cpa) { cpa->flags |= 0x08000000; });
 #endif
         ver_proc.start(vpy, {"--version"});
-        if (!ver_proc.waitForFinished(5000) || ver_proc.exitCode() != 0) return false;
+        if (!ver_proc.waitForFinished(5000) || ver_proc.exitCode() != 0)
+            return false;
 
         QStringList imports;
         for (const auto& pkg : marker_packages)
@@ -177,39 +174,35 @@ SetupStatus PythonSetupManager::check_status() const {
 
         QProcess pkg_proc;
 #ifdef _WIN32
-        pkg_proc.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-            cpa->flags |= 0x08000000;
-        });
+        pkg_proc.setCreateProcessArgumentsModifier(
+            [](QProcess::CreateProcessArguments* cpa) { cpa->flags |= 0x08000000; });
 #endif
         pkg_proc.start(vpy, {"-c", check_code});
         if (!pkg_proc.waitForFinished(15000) || pkg_proc.exitCode() != 0) {
             QString err = QString::fromUtf8(pkg_proc.readAllStandardError());
-            LOG_WARN("PythonSetup",
-                     QString("Venv %1 missing packages: %2").arg(name, err.left(200)));
+            LOG_WARN("PythonSetup", QString("Venv %1 missing packages: %2").arg(name, err.left(200)));
             return false;
         }
         return QString::fromUtf8(pkg_proc.readAllStandardOutput()).trimmed().contains("OK");
     };
 
-    status.venv_numpy1_ready =
-        check_venv("venv-numpy1", {"numpy", "pandas", "vectorbt"});
-    status.venv_numpy2_ready =
-        check_venv("venv-numpy2", {"numpy", "pandas", "requests", "sklearn"});
+    status.venv_numpy1_ready = check_venv("venv-numpy1", {"numpy", "pandas", "vectorbt"});
+    status.venv_numpy2_ready = check_venv("venv-numpy2", {"numpy", "pandas", "requests", "sklearn"});
 
-    status.needs_setup = !status.uv_installed
-                         || !status.python_installed
-                         || !status.venv_numpy1_ready
-                         || !status.venv_numpy2_ready;
+    status.needs_setup =
+        !status.uv_installed || !status.python_installed || !status.venv_numpy1_ready || !status.venv_numpy2_ready;
 
     if (!status.needs_setup) {
         status.needs_package_sync = check_requirements_changed();
     }
 
-    LOG_INFO("PythonSetup",
-             QString("Full check: uv=%1 py=%2 venv1=%3 venv2=%4 needs_setup=%5 needs_sync=%6")
-                 .arg(status.uv_installed).arg(status.python_installed)
-                 .arg(status.venv_numpy1_ready).arg(status.venv_numpy2_ready)
-                 .arg(status.needs_setup).arg(status.needs_package_sync));
+    LOG_INFO("PythonSetup", QString("Full check: uv=%1 py=%2 venv1=%3 venv2=%4 needs_setup=%5 needs_sync=%6")
+                                .arg(status.uv_installed)
+                                .arg(status.python_installed)
+                                .arg(status.venv_numpy1_ready)
+                                .arg(status.venv_numpy2_ready)
+                                .arg(status.needs_setup)
+                                .arg(status.needs_package_sync));
     return status;
 }
 
@@ -221,12 +214,17 @@ void PythonSetupManager::run_setup() {
     QPointer<PythonSetupManager> self = this;
 
     QtConcurrent::run([self]() {
-        if (!self) return;
+        if (!self)
+            return;
 
         auto fail = [&](const QString& msg) {
-            QMetaObject::invokeMethod(self, [self, msg]() {
-                if (self) emit self->setup_complete(false, msg);
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                self,
+                [self, msg]() {
+                    if (self)
+                        emit self->setup_complete(false, msg);
+                },
+                Qt::QueuedConnection);
         };
 
         auto status = self->check_status();
@@ -269,18 +267,16 @@ void PythonSetupManager::run_setup() {
 
             QFuture<void> f1, f2;
             if (need_venv1) {
-                f1 = QtConcurrent::run([self, &v1_ok]() {
-                    v1_ok = self && self->create_venv("venv-numpy1");
-                });
+                f1 = QtConcurrent::run([self, &v1_ok]() { v1_ok = self && self->create_venv("venv-numpy1"); });
             }
             if (need_venv2) {
-                f2 = QtConcurrent::run([self, &v2_ok]() {
-                    v2_ok = self && self->create_venv("venv-numpy2");
-                });
+                f2 = QtConcurrent::run([self, &v2_ok]() { v2_ok = self && self->create_venv("venv-numpy2"); });
             }
 
-            if (need_venv1) f1.waitForFinished();
-            if (need_venv2) f2.waitForFinished();
+            if (need_venv1)
+                f1.waitForFinished();
+            if (need_venv2)
+                f2.waitForFinished();
 
             if (!v1_ok || !v2_ok) {
                 self->emit_progress("venv", 0, "Failed to create virtual environments", true);
@@ -300,14 +296,12 @@ void PythonSetupManager::run_setup() {
         std::atomic<bool> p2_ok{!need_pkg2};
 
         if (need_pkg1) {
-            self->emit_progress("packages-numpy1", 0,
-                                "Installing NumPy 1.x packages...");
+            self->emit_progress("packages-numpy1", 0, "Installing NumPy 1.x packages...");
         } else {
             self->emit_progress("packages-numpy1", 100, "NumPy 1.x packages ready");
         }
         if (need_pkg2) {
-            self->emit_progress("packages-numpy2", 0,
-                                "Installing NumPy 2.x packages...");
+            self->emit_progress("packages-numpy2", 0, "Installing NumPy 2.x packages...");
         } else {
             self->emit_progress("packages-numpy2", 100, "NumPy 2.x packages ready");
         }
@@ -319,8 +313,7 @@ void PythonSetupManager::run_setup() {
                 p1_ok = self && self->install_packages("venv-numpy1", "requirements-numpy1.txt");
                 if (self) {
                     self->emit_progress("packages-numpy1", p1_ok ? 100 : 0,
-                                        p1_ok ? "NumPy 1.x packages installed"
-                                              : "NumPy 1.x package install failed",
+                                        p1_ok ? "NumPy 1.x packages installed" : "NumPy 1.x package install failed",
                                         !p1_ok);
                 }
             });
@@ -330,15 +323,16 @@ void PythonSetupManager::run_setup() {
                 p2_ok = self && self->install_packages("venv-numpy2", "requirements-numpy2.txt");
                 if (self) {
                     self->emit_progress("packages-numpy2", p2_ok ? 100 : 0,
-                                        p2_ok ? "NumPy 2.x packages installed"
-                                              : "NumPy 2.x package install failed",
+                                        p2_ok ? "NumPy 2.x packages installed" : "NumPy 2.x package install failed",
                                         !p2_ok);
                 }
             });
         }
 
-        if (need_pkg1) pf1.waitForFinished();
-        if (need_pkg2) pf2.waitForFinished();
+        if (need_pkg1)
+            pf1.waitForFinished();
+        if (need_pkg2)
+            pf2.waitForFinished();
 
         if (!p1_ok || !p2_ok) {
             fail("Package installation failed");
@@ -348,8 +342,10 @@ void PythonSetupManager::run_setup() {
         // ── Save requirements hashes so we can detect changes on next app update ──
         QString h1 = self->compute_requirements_hash("requirements-numpy1.txt");
         QString h2 = self->compute_requirements_hash("requirements-numpy2.txt");
-        if (!h1.isEmpty()) self->save_hash("venv-numpy1", h1);
-        if (!h2.isEmpty()) self->save_hash("venv-numpy2", h2);
+        if (!h1.isEmpty())
+            self->save_hash("venv-numpy1", h1);
+        if (!h2.isEmpty())
+            self->save_hash("venv-numpy2", h2);
 
         // ── Write sentinel so future launches skip the slow import checks ────
         {
@@ -361,9 +357,13 @@ void PythonSetupManager::run_setup() {
 
         // ── Done ────────────────────────────────────────────────────────────
         self->emit_progress("complete", 100, "Setup complete! All environments ready.");
-        QMetaObject::invokeMethod(self, [self]() {
-            if (self) emit self->setup_complete(true, {});
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self]() {
+                if (self)
+                    emit self->setup_complete(true, {});
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -387,15 +387,12 @@ bool PythonSetupManager::download_uv() {
     ext = "tar.gz";
 #else
     QString arch = QSysInfo::currentCpuArchitecture();
-    target = (arch == "aarch64" || arch == "arm64")
-                 ? "aarch64-unknown-linux-musl"
-                 : "x86_64-unknown-linux-musl";
+    target = (arch == "aarch64" || arch == "arm64") ? "aarch64-unknown-linux-musl" : "x86_64-unknown-linux-musl";
     ext = "tar.gz";
 #endif
 
     QString archive_name = QString("uv-%1.%2").arg(target, ext);
-    QString url = QString("https://github.com/astral-sh/uv/releases/download/%1/%2")
-                      .arg(kUvVersion, archive_name);
+    QString url = QString("https://github.com/astral-sh/uv/releases/download/%1/%2").arg(kUvVersion, archive_name);
     QString archive_path = dir + "/" + archive_name;
 
     LOG_INFO("PythonSetup", "Downloading UV from: " + url);
@@ -411,11 +408,9 @@ bool PythonSetupManager::download_uv() {
 
     // Extract
 #ifdef _WIN32
-    if (!run_command("powershell", {
-            "-NoProfile", "-Command",
-            QString("Expand-Archive -Path '%1' -DestinationPath '%2' -Force")
-                .arg(archive_path, dir)
-        })) {
+    if (!run_command("powershell",
+                     {"-NoProfile", "-Command",
+                      QString("Expand-Archive -Path '%1' -DestinationPath '%2' -Force").arg(archive_path, dir)})) {
         LOG_ERROR("PythonSetup", "Failed to extract UV");
         return false;
     }
@@ -510,16 +505,14 @@ bool PythonSetupManager::create_venv(const QString& venv_name) {
 // Step 4: Install packages (can run in parallel, UV handles internal parallelism)
 // ─────────────────────────────────────────────────────────────────────────────
 
-bool PythonSetupManager::install_packages(const QString& venv_name,
-                                            const QString& requirements_file) {
+bool PythonSetupManager::install_packages(const QString& venv_name, const QString& requirements_file) {
     QString req_path = find_requirements_file(requirements_file);
     if (req_path.isEmpty()) {
         LOG_ERROR("PythonSetup", "Requirements file not found: " + requirements_file);
         return false;
     }
 
-    LOG_INFO("PythonSetup", QString("Installing packages into %1 from %2")
-                                .arg(venv_name, req_path));
+    LOG_INFO("PythonSetup", QString("Installing packages into %1 from %2").arg(venv_name, req_path));
 
     QString venv_python = python_path(venv_name);
 
@@ -529,9 +522,7 @@ bool PythonSetupManager::install_packages(const QString& venv_name,
         "PEEWEE_NO_C_EXTENSION=1",
     };
 
-    return run_command(uv_path(),
-                       {"pip", "install", "--python", venv_python, "-r", req_path},
-                       env);
+    return run_command(uv_path(), {"pip", "install", "--python", venv_python, "-r", req_path}, env);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -552,12 +543,15 @@ QString PythonSetupManager::find_requirements_file(const QString& filename) cons
     QDir dir(exe_dir);
     while (dir.cdUp()) {
         QString c = dir.filePath("resources/" + filename);
-        if (QFileInfo::exists(c)) return QDir::cleanPath(c);
-        if (dir.isRoot()) break;
+        if (QFileInfo::exists(c))
+            return QDir::cleanPath(c);
+        if (dir.isRoot())
+            break;
     }
 
     for (const auto& c : candidates) {
-        if (QFileInfo::exists(c)) return QDir::cleanPath(c);
+        if (QFileInfo::exists(c))
+            return QDir::cleanPath(c);
     }
 
     return {};
@@ -568,7 +562,7 @@ QString PythonSetupManager::find_requirements_file(const QString& filename) cons
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool PythonSetupManager::run_command(const QString& program, const QStringList& args,
-                                       const QStringList& env_vars) const {
+                                     const QStringList& env_vars) const {
     QProcess proc;
 
     if (!env_vars.isEmpty()) {
@@ -599,11 +593,10 @@ bool PythonSetupManager::run_command(const QString& program, const QStringList& 
 
     if (proc.exitCode() != 0) {
         QString stderr_out = QString::fromUtf8(proc.readAllStandardError());
-        LOG_ERROR("PythonSetup",
-                  QString("Command failed (exit %1): %2\nStderr: %3")
-                      .arg(proc.exitCode())
-                      .arg(program)
-                      .arg(stderr_out.left(500)));
+        LOG_ERROR("PythonSetup", QString("Command failed (exit %1): %2\nStderr: %3")
+                                     .arg(proc.exitCode())
+                                     .arg(program)
+                                     .arg(stderr_out.left(500)));
         return false;
     }
 
@@ -617,15 +610,12 @@ bool PythonSetupManager::run_command(const QString& program, const QStringList& 
 QString PythonSetupManager::download_file(const QString& url, const QString& dest_path) const {
 #ifdef _WIN32
     QProcess proc;
-    proc.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= 0x08000000;
-    });
-    proc.start("powershell", {
-        "-NoProfile", "-Command",
-        QString("[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; "
-                "Invoke-WebRequest -Uri '%1' -OutFile '%2' -UseBasicParsing")
-            .arg(url, dest_path)
-    });
+    proc.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) { cpa->flags |= 0x08000000; });
+    proc.start("powershell",
+               {"-NoProfile", "-Command",
+                QString("[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; "
+                        "Invoke-WebRequest -Uri '%1' -OutFile '%2' -UseBasicParsing")
+                    .arg(url, dest_path)});
     if (!proc.waitForFinished(15 * 60 * 1000)) {
         proc.kill();
         return "Download timed out";
@@ -659,10 +649,12 @@ QString PythonSetupManager::download_file(const QString& url, const QString& des
 
 QString PythonSetupManager::compute_requirements_hash(const QString& filename) const {
     QString path = find_requirements_file(filename);
-    if (path.isEmpty()) return {};
+    if (path.isEmpty())
+        return {};
 
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) return {};
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
 
     QByteArray content = file.readAll();
     return QString(QCryptographicHash::hash(content, QCryptographicHash::Sha256).toHex());
@@ -671,7 +663,8 @@ QString PythonSetupManager::compute_requirements_hash(const QString& filename) c
 QString PythonSetupManager::load_stored_hash(const QString& venv_name) const {
     QString hash_file = install_dir() + "/" + venv_name + "/.requirements_hash";
     QFile file(hash_file);
-    if (!file.open(QIODevice::ReadOnly)) return {};
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
     return QString::fromUtf8(file.readAll()).trimmed();
 }
 
@@ -688,7 +681,8 @@ bool PythonSetupManager::check_requirements_changed() const {
     QString hash1 = compute_requirements_hash("requirements-numpy1.txt");
     QString hash2 = compute_requirements_hash("requirements-numpy2.txt");
 
-    if (hash1.isEmpty() || hash2.isEmpty()) return false; // can't compute, skip
+    if (hash1.isEmpty() || hash2.isEmpty())
+        return false; // can't compute, skip
 
     QString stored1 = load_stored_hash("venv-numpy1");
     QString stored2 = load_stored_hash("venv-numpy2");
@@ -704,13 +698,10 @@ bool PythonSetupManager::check_requirements_changed() const {
 // Emit progress (thread-safe)
 // ─────────────────────────────────────────────────────────────────────────────
 
-void PythonSetupManager::emit_progress(const QString& step, int pct,
-                                         const QString& msg, bool err) {
+void PythonSetupManager::emit_progress(const QString& step, int pct, const QString& msg, bool err) {
     SetupProgress p{step, pct, msg, err};
     LOG_INFO("PythonSetup", QString("[%1 %2%] %3").arg(step).arg(pct).arg(msg));
-    QMetaObject::invokeMethod(this, [this, p]() {
-        emit progress_changed(p);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, [this, p]() { emit progress_changed(p); }, Qt::QueuedConnection);
 }
 
 } // namespace fincept::python

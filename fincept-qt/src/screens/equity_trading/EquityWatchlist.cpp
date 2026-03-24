@@ -1,5 +1,6 @@
 // EquityWatchlist.cpp — compact watchlist with live quote updates
 #include "screens/equity_trading/EquityWatchlist.h"
+
 #include "screens/equity_trading/EquityTypes.h"
 
 #include <QHBoxLayout>
@@ -94,7 +95,8 @@ void EquityWatchlist::update_quotes(const QVector<trading::BrokerQuote>& quotes)
     // Update visible rows without full rebuild
     for (int row = 0; row < table_->rowCount(); ++row) {
         auto* sym_item = table_->item(row, 0);
-        if (!sym_item) continue;
+        if (!sym_item)
+            continue;
         const QString sym = sym_item->data(Qt::UserRole).toString();
         for (const auto& e : entries_) {
             if (e.symbol == sym && e.has_data) {
@@ -103,9 +105,7 @@ void EquityWatchlist::update_quotes(const QVector<trading::BrokerQuote>& quotes)
                 if (ltp_item)
                     ltp_item->setText(QString::number(e.ltp, 'f', 2));
                 if (chg_item) {
-                    chg_item->setText(QString("%1%2%")
-                                         .arg(e.change_pct >= 0 ? "+" : "")
-                                         .arg(e.change_pct, 0, 'f', 2));
+                    chg_item->setText(QString("%1%2%").arg(e.change_pct >= 0 ? "+" : "").arg(e.change_pct, 0, 'f', 2));
                     chg_item->setForeground(e.change_pct >= 0 ? COLOR_BUY : COLOR_SELL);
                 }
                 break;
@@ -118,7 +118,8 @@ void EquityWatchlist::set_active_symbol(const QString& symbol) {
     active_symbol_ = symbol;
     for (int row = 0; row < table_->rowCount(); ++row) {
         auto* item = table_->item(row, 0);
-        if (!item) continue;
+        if (!item)
+            continue;
         const bool active = item->data(Qt::UserRole).toString() == symbol;
         for (int col = 0; col < 3; ++col) {
             auto* cell = table_->item(row, col);
@@ -144,9 +145,9 @@ void EquityWatchlist::on_filter_changed(const QString& text) {
     const QString filter = text.trimmed().toUpper();
     for (int row = 0; row < table_->rowCount(); ++row) {
         auto* item = table_->item(row, 0);
-        if (!item) continue;
-        const bool match = filter.isEmpty() ||
-                           item->data(Qt::UserRole).toString().contains(filter);
+        if (!item)
+            continue;
+        const bool match = filter.isEmpty() || item->data(Qt::UserRole).toString().contains(filter);
         table_->setRowHidden(row, !match);
     }
 }

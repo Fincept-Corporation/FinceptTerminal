@@ -15,9 +15,8 @@ class CryptoDepthChart : public QWidget {
   public:
     explicit CryptoDepthChart(QWidget* parent = nullptr);
 
-    void set_data(const QVector<QPair<double, double>>& bids,
-                  const QVector<QPair<double, double>>& asks,
-                  double spread, double spread_pct);
+    void set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks, double spread,
+                  double spread_pct);
 
   protected:
     void paintEvent(QPaintEvent* event) override;

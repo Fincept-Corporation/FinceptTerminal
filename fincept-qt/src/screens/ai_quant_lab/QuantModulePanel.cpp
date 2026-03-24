@@ -1,8 +1,8 @@
 // src/screens/ai_quant_lab/QuantModulePanel.cpp
 #include "screens/ai_quant_lab/QuantModulePanel.h"
-#include "services/ai_quant_lab/AIQuantLabService.h"
 
 #include "core/logging/Logger.h"
+#include "services/ai_quant_lab/AIQuantLabService.h"
 #include "ui/theme/Theme.h"
 
 #include <QGridLayout>
@@ -22,34 +22,36 @@ using namespace fincept::services::quant;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-QDoubleSpinBox* QuantModulePanel::make_double_spin(double min, double max, double val,
-                                                    int decimals, const QString& suffix,
-                                                    QWidget* parent) {
+QDoubleSpinBox* QuantModulePanel::make_double_spin(double min, double max, double val, int decimals,
+                                                   const QString& suffix, QWidget* parent) {
     auto* spin = new QDoubleSpinBox(parent);
     spin->setRange(min, max);
     spin->setValue(val);
     spin->setDecimals(decimals);
-    if (!suffix.isEmpty()) spin->setSuffix(suffix);
-    spin->setStyleSheet(QString(
-        "QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-        "QDoubleSpinBox:focus { border-color:%6; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name()));
+    if (!suffix.isEmpty())
+        spin->setSuffix(suffix);
+    spin->setStyleSheet(QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
+                                "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
+                                "QDoubleSpinBox:focus { border-color:%6; }")
+                            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                            .arg(ui::fonts::DATA_FAMILY)
+                            .arg(ui::fonts::SMALL)
+                            .arg(module_.color.name()));
     return spin;
 }
 
 QPushButton* QuantModulePanel::make_run_button(const QString& text, QWidget* parent) {
     auto* btn = new QPushButton(text, parent);
     btn->setCursor(Qt::PointingHandCursor);
-    btn->setStyleSheet(QString(
-        "QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
-        "font-weight:700; border:none; padding:8px 20px; border-radius:2px;"
-        "letter-spacing:1px; }"
-        "QPushButton:hover { background:%5; }")
-        .arg(module_.color.name()).arg(ui::colors::BG_BASE)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.lighter(120).name()));
+    btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
+                               "font-weight:700; border:none; padding:8px 20px; border-radius:2px;"
+                               "letter-spacing:1px; }"
+                               "QPushButton:hover { background:%5; }")
+                           .arg(module_.color.name())
+                           .arg(ui::colors::BG_BASE)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL)
+                           .arg(module_.color.lighter(120).name()));
     return btn;
 }
 
@@ -61,7 +63,9 @@ QWidget* QuantModulePanel::build_input_row(const QString& label, QWidget* input,
     auto* lbl = new QLabel(label, row);
     lbl->setFixedWidth(160);
     lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                           .arg(ui::colors::TEXT_SECONDARY)
+                           .arg(ui::fonts::SMALL)
+                           .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(lbl);
     hl->addWidget(input, 1);
     return row;
@@ -69,8 +73,7 @@ QWidget* QuantModulePanel::build_input_row(const QString& label, QWidget* input,
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
-QuantModulePanel::QuantModulePanel(const QuantModule& mod, QWidget* parent)
-    : QWidget(parent), module_(mod) {
+QuantModulePanel::QuantModulePanel(const QuantModule& mod, QWidget* parent) : QWidget(parent), module_(mod) {
     build_ui();
     connect_service();
 }
@@ -89,26 +92,29 @@ void QuantModulePanel::build_ui() {
     // Module header
     auto* header = new QWidget(this);
     header->setFixedHeight(36);
-    header->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
-        .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+    header->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(16, 0, 16, 0);
     auto* title = new QLabel(module_.label.toUpper(), header);
     title->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-        "letter-spacing:1px;").arg(module_.color.name()).arg(ui::fonts::TINY).arg(ui::fonts::DATA_FAMILY));
+                                 "letter-spacing:1px;")
+                             .arg(module_.color.name())
+                             .arg(ui::fonts::TINY)
+                             .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(title);
     auto* div = new QWidget(header);
     div->setFixedSize(1, 14);
     div->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
     hhl->addWidget(div);
     auto* cat = new QLabel(module_.category, header);
-    cat->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+    cat->setStyleSheet(
+        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(cat);
     hhl->addStretch();
     status_label_ = new QLabel(header);
-    status_label_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+    status_label_->setStyleSheet(
+        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(status_label_);
     root->addWidget(header);
 
@@ -118,12 +124,18 @@ void QuantModulePanel::build_ui() {
     scroll->setStyleSheet("QScrollArea { border:none; background:transparent; }");
 
     QWidget* content = nullptr;
-    if (module_.id == "gs_quant")          content = build_gs_quant_panel();
-    else if (module_.id == "cfa_quant")    content = build_cfa_quant_panel();
-    else if (module_.id == "backtesting")  content = build_backtesting_panel();
-    else if (module_.id == "rl_trading")   content = build_rl_trading_panel();
-    else if (module_.id == "advanced_models") content = build_advanced_models_panel();
-    else                                   content = build_generic_panel();
+    if (module_.id == "gs_quant")
+        content = build_gs_quant_panel();
+    else if (module_.id == "cfa_quant")
+        content = build_cfa_quant_panel();
+    else if (module_.id == "backtesting")
+        content = build_backtesting_panel();
+    else if (module_.id == "rl_trading")
+        content = build_rl_trading_panel();
+    else if (module_.id == "advanced_models")
+        content = build_advanced_models_panel();
+    else
+        content = build_generic_panel();
 
     scroll->setWidget(content);
     root->addWidget(scroll, 1);
@@ -140,22 +152,24 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     vl->setSpacing(12);
 
     auto* tabs = new QTabWidget(w);
-    tabs->setStyleSheet(QString(
-        "QTabWidget::pane { border:1px solid %1; background:%2; }"
-        "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
-        "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
-        "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
-        "border-bottom:2px solid %7; }")
-        .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
-        .arg(ui::colors::TEXT_SECONDARY).arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-        .arg(module_.color.name()));
+    tabs->setStyleSheet(QString("QTabWidget::pane { border:1px solid %1; background:%2; }"
+                                "QTabBar::tab { background:%3; color:%4; padding:6px 12px;"
+                                "font-family:%5; font-size:%6px; border:1px solid %1; border-bottom:none; }"
+                                "QTabBar::tab:selected { background:%2; color:%7; font-weight:700;"
+                                "border-bottom:2px solid %7; }")
+                            .arg(ui::colors::BORDER_DIM, ui::colors::BG_SURFACE, ui::colors::BG_RAISED)
+                            .arg(ui::colors::TEXT_SECONDARY)
+                            .arg(ui::fonts::DATA_FAMILY)
+                            .arg(ui::fonts::SMALL)
+                            .arg(module_.color.name()));
 
-    auto input_style = QString(
-        "QLineEdit { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
-        "QLineEdit:focus { border-color:%6; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL).arg(module_.color.name());
+    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
+                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }"
+                               "QLineEdit:focus { border-color:%6; }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL)
+                           .arg(module_.color.name());
 
     // ── Risk Metrics ──
     auto* risk = new QWidget;
@@ -231,11 +245,11 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     gvl->addWidget(build_input_row("Volatility", g_vol, greeks));
     auto* g_type = new QComboBox(greeks);
     g_type->addItems({"call", "put"});
-    g_type->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    g_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                  "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                              .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                              .arg(ui::fonts::DATA_FAMILY)
+                              .arg(ui::fonts::SMALL));
     combo_inputs_["gs_option_type"] = g_type;
     gvl->addWidget(build_input_row("Option Type", g_type, greeks));
     auto* greeks_run = make_run_button("CALCULATE GREEKS", greeks);
@@ -297,8 +311,8 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     double_inputs_["gs_stress_position"] = st_pos;
     svl->addWidget(build_input_row("Position Value ($)", st_pos, stress));
     auto* st_hint = new QLabel("Tests 9 historical crisis scenarios: 2008, COVID-19, etc.", stress);
-    st_hint->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+    st_hint->setStyleSheet(
+        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
     svl->addWidget(st_hint);
     auto* stress_run = make_run_button("RUN STRESS TEST", stress);
     connect(stress_run, &QPushButton::clicked, this, [this]() {
@@ -333,11 +347,11 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     auto* bt_lookback = new QSpinBox(bt);
     bt_lookback->setRange(5, 252);
     bt_lookback->setValue(20);
-    bt_lookback->setStyleSheet(QString(
-        "QSpinBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    bt_lookback->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
+                                       "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                   .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                   .arg(ui::fonts::DATA_FAMILY)
+                                   .arg(ui::fonts::SMALL));
     int_inputs_["gs_bt_lookback"] = bt_lookback;
     bvl->addWidget(build_input_row("Lookback Period", bt_lookback, bt));
     auto* bt_run = make_run_button("RUN BACKTEST", bt);
@@ -396,16 +410,18 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString(
-        "QLineEdit { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
+    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
+                               "font-family:%4; font-size:%5px; padding:4px 6px; border-radius:2px; }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL);
 
     // Data input
     auto* data_lbl = new QLabel("DATA INPUT", w);
     data_lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
-        "letter-spacing:1px;").arg(module_.color.name()).arg(ui::fonts::DATA_FAMILY));
+                                    "letter-spacing:1px;")
+                                .arg(module_.color.name())
+                                .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(data_lbl);
 
     auto* symbol = new QLineEdit(w);
@@ -416,15 +432,13 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
 
     // Analysis type selector
     auto* analysis_type = new QComboBox(w);
-    analysis_type->addItems({
-        "trend_analysis", "stationarity_test", "arima_model", "forecasting",
-        "supervised_learning", "unsupervised_learning", "resampling_methods", "validate_data"
-    });
-    analysis_type->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    analysis_type->addItems({"trend_analysis", "stationarity_test", "arima_model", "forecasting", "supervised_learning",
+                             "unsupervised_learning", "resampling_methods", "validate_data"});
+    analysis_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                         "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                     .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                     .arg(ui::fonts::DATA_FAMILY)
+                                     .arg(ui::fonts::SMALL));
     combo_inputs_["cfa_analysis"] = analysis_type;
     vl->addWidget(build_input_row("Analysis Type", analysis_type, w));
 
@@ -458,19 +472,19 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     vl->setContentsMargins(16, 16, 16, 16);
     vl->setSpacing(12);
 
-    auto input_style = QString(
-        "QLineEdit { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
+    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
+                               "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL);
 
     auto* strat = new QComboBox(w);
     strat->addItems({"topk_dropout", "weight_based", "enhanced_indexing"});
-    strat->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    strat->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                 "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                             .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                             .arg(ui::fonts::DATA_FAMILY)
+                             .arg(ui::fonts::SMALL));
     combo_inputs_["bt_strategy"] = strat;
     vl->addWidget(build_input_row("Strategy", strat, w));
 
@@ -499,11 +513,11 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     auto* topk = new QSpinBox(w);
     topk->setRange(1, 100);
     topk->setValue(10);
-    topk->setStyleSheet(QString(
-        "QSpinBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    topk->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
+                                "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                            .arg(ui::fonts::DATA_FAMILY)
+                            .arg(ui::fonts::SMALL));
     int_inputs_["bt_topk"] = topk;
     vl->addWidget(build_input_row("Top K Positions", topk, w));
 
@@ -556,19 +570,19 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
 
     auto* algo = new QComboBox(w);
     algo->addItems({"PPO", "DQN", "A2C", "SAC", "TD3"});
-    algo->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    algo->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                            .arg(ui::fonts::DATA_FAMILY)
+                            .arg(ui::fonts::SMALL));
     combo_inputs_["rl_algo"] = algo;
     vl->addWidget(build_input_row("RL Algorithm", algo, w));
 
-    auto input_style = QString(
-        "QLineEdit { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL);
+    auto input_style = QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
+                               "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL);
 
     auto* ticker = new QLineEdit(w);
     ticker->setPlaceholderText("AAPL");
@@ -579,11 +593,11 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
     auto* episodes = new QSpinBox(w);
     episodes->setRange(10, 10000);
     episodes->setValue(100);
-    episodes->setStyleSheet(QString(
-        "QSpinBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    episodes->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
+                                    "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                .arg(ui::fonts::DATA_FAMILY)
+                                .arg(ui::fonts::SMALL));
     int_inputs_["rl_episodes"] = episodes;
     vl->addWidget(build_input_row("Training Episodes", episodes, w));
 
@@ -629,24 +643,24 @@ QWidget* QuantModulePanel::build_advanced_models_panel() {
     vl->setSpacing(12);
 
     auto* model_type = new QComboBox(w);
-    model_type->addItems({"LSTM", "GRU", "Transformer", "Localformer", "HIST",
-                           "GAT", "LightGBM", "XGBoost", "CatBoost"});
-    model_type->setStyleSheet(QString(
-        "QComboBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    model_type->addItems(
+        {"LSTM", "GRU", "Transformer", "Localformer", "HIST", "GAT", "LightGBM", "XGBoost", "CatBoost"});
+    model_type->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                      "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                                  .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                  .arg(ui::fonts::DATA_FAMILY)
+                                  .arg(ui::fonts::SMALL));
     combo_inputs_["adv_model"] = model_type;
     vl->addWidget(build_input_row("Model Type", model_type, w));
 
     auto* hidden = new QSpinBox(w);
     hidden->setRange(16, 1024);
     hidden->setValue(64);
-    hidden->setStyleSheet(QString(
-        "QSpinBox { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:4px 6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    hidden->setStyleSheet(QString("QSpinBox { background:%1; color:%2; border:1px solid %3;"
+                                  "font-family:%4; font-size:%5px; padding:4px 6px; }")
+                              .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                              .arg(ui::fonts::DATA_FAMILY)
+                              .arg(ui::fonts::SMALL));
     int_inputs_["adv_hidden"] = hidden;
     vl->addWidget(build_input_row("Hidden Size", hidden, w));
 
@@ -706,24 +720,28 @@ QWidget* QuantModulePanel::build_generic_panel() {
     auto* desc = new QLabel(module_.description, w);
     desc->setWordWrap(true);
     desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; line-height:1.5;")
-        .arg(ui::colors::TEXT_PRIMARY).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+                            .arg(ui::colors::TEXT_PRIMARY)
+                            .arg(ui::fonts::SMALL)
+                            .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(desc);
 
     auto* script_lbl = new QLabel(QString("Python script: %1").arg(module_.script), w);
     script_lbl->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;"
-        "padding:6px; background:%3; border:1px solid %4; border-radius:2px;")
-        .arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_DIM));
+                                      "padding:6px; background:%3; border:1px solid %4; border-radius:2px;")
+                                  .arg(ui::colors::TEXT_TERTIARY)
+                                  .arg(ui::fonts::DATA_FAMILY)
+                                  .arg(ui::colors::BG_RAISED)
+                                  .arg(ui::colors::BORDER_DIM));
     vl->addWidget(script_lbl);
 
     // Command input
     auto* cmd = new QLineEdit(w);
     cmd->setPlaceholderText("Command (e.g. analyze, train, list_models)");
-    cmd->setStyleSheet(QString(
-        "QLineEdit { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:6px 8px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    cmd->setStyleSheet(QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
+                               "font-family:%4; font-size:%5px; padding:6px 8px; }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL));
     text_inputs_["gen_command"] = cmd;
     vl->addWidget(build_input_row("Command", cmd, w));
 
@@ -731,23 +749,25 @@ QWidget* QuantModulePanel::build_generic_panel() {
     auto* params_edit = new QTextEdit(w);
     params_edit->setPlaceholderText("JSON parameters (optional)\ne.g. {\"ticker\":\"AAPL\"}");
     params_edit->setMaximumHeight(100);
-    params_edit->setStyleSheet(QString(
-        "QTextEdit { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:6px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    params_edit->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
+                                       "font-family:%4; font-size:%5px; padding:6px; }")
+                                   .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED)
+                                   .arg(ui::fonts::DATA_FAMILY)
+                                   .arg(ui::fonts::SMALL));
     vl->addWidget(params_edit);
 
     auto* run = make_run_button("EXECUTE", w);
     connect(run, &QPushButton::clicked, this, [this, params_edit]() {
         status_label_->setText("Running...");
         auto cmd_text = text_inputs_["gen_command"]->text().trimmed();
-        if (cmd_text.isEmpty()) cmd_text = "analyze";
+        if (cmd_text.isEmpty())
+            cmd_text = "analyze";
         auto json_text = params_edit->toPlainText().trimmed();
         QJsonObject params;
         if (!json_text.isEmpty()) {
             auto doc = QJsonDocument::fromJson(json_text.toUtf8());
-            if (!doc.isNull()) params = doc.object();
+            if (!doc.isNull())
+                params = doc.object();
         }
         AIQuantLabService::instance().run_module(module_.id, cmd_text, params);
     });
@@ -768,10 +788,12 @@ QWidget* QuantModulePanel::build_generic_panel() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 void QuantModulePanel::clear_results() {
-    if (!results_layout_) return;
+    if (!results_layout_)
+        return;
     while (results_layout_->count() > 0) {
         auto* item = results_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 }
@@ -780,11 +802,12 @@ void QuantModulePanel::display_error(const QString& msg) {
     clear_results();
     auto* err = new QLabel(msg);
     err->setWordWrap(true);
-    err->setStyleSheet(QString(
-        "color:%1; font-size:%2px; font-family:%3; padding:12px;"
-        "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3);"
-        "border-radius:2px;")
-        .arg(ui::colors::NEGATIVE).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
+    err->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:12px;"
+                               "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3);"
+                               "border-radius:2px;")
+                           .arg(ui::colors::NEGATIVE)
+                           .arg(ui::fonts::SMALL)
+                           .arg(ui::fonts::DATA_FAMILY));
     results_layout_->addWidget(err);
     status_label_->setText("Error");
 }
@@ -792,14 +815,18 @@ void QuantModulePanel::display_error(const QString& msg) {
 static QString format_val(const QJsonValue& val) {
     if (val.isDouble()) {
         double v = val.toDouble();
-        if (std::abs(v) >= 1e9) return QString("$%1B").arg(v / 1e9, 0, 'f', 1);
-        if (std::abs(v) >= 1e6) return QString("$%1M").arg(v / 1e6, 0, 'f', 1);
+        if (std::abs(v) >= 1e9)
+            return QString("$%1B").arg(v / 1e9, 0, 'f', 1);
+        if (std::abs(v) >= 1e6)
+            return QString("$%1M").arg(v / 1e6, 0, 'f', 1);
         if (std::abs(v) < 1.0 && std::abs(v) > 0.0001)
             return QString("%1%").arg(v * 100, 0, 'f', 2);
         return QString::number(v, 'f', 4);
     }
-    if (val.isBool()) return val.toBool() ? "YES" : "NO";
-    if (val.isString()) return val.toString();
+    if (val.isBool())
+        return val.toBool() ? "YES" : "NO";
+    if (val.isString())
+        return val.toString();
     return QString::fromUtf8("\u2014");
 }
 
@@ -807,9 +834,9 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
     clear_results();
 
     auto* header = new QLabel("RESULTS");
-    header->setStyleSheet(QString(
-        "color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
-        .arg(module_.color.name()).arg(ui::fonts::DATA_FAMILY));
+    header->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
+                              .arg(module_.color.name())
+                              .arg(ui::fonts::DATA_FAMILY));
     results_layout_->addWidget(header);
 
     // Key-value table for scalar fields
@@ -826,20 +853,22 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
         table->horizontalHeader()->setStretchLastSection(true);
         table->verticalHeader()->setVisible(false);
         table->setMaximumHeight(qMin(keys.size() * 30 + 30, 400));
-        table->setStyleSheet(QString(
-            "QTableWidget { background:%1; color:%2; gridline-color:%3;"
-            "font-family:%4; font-size:%5px; border:1px solid %3; }"
-            "QTableWidget::item { padding:4px 8px; }"
-            "QHeaderView::section { background:%6; color:%7; font-weight:700;"
-            "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-            "QTableWidget::item:alternate { background:%8; }")
-            .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-            .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL)
-            .arg(ui::colors::BG_RAISED).arg(ui::colors::TEXT_SECONDARY)
-            .arg(ui::colors::ROW_ALT));
+        table->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                                     "font-family:%4; font-size:%5px; border:1px solid %3; }"
+                                     "QTableWidget::item { padding:4px 8px; }"
+                                     "QHeaderView::section { background:%6; color:%7; font-weight:700;"
+                                     "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
+                                     "QTableWidget::item:alternate { background:%8; }")
+                                 .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                                 .arg(ui::fonts::DATA_FAMILY)
+                                 .arg(ui::fonts::SMALL)
+                                 .arg(ui::colors::BG_RAISED)
+                                 .arg(ui::colors::TEXT_SECONDARY)
+                                 .arg(ui::colors::ROW_ALT));
 
         for (int r = 0; r < keys.size(); ++r) {
-            auto label = keys[r]; label.replace('_', ' ');
+            auto label = keys[r];
+            label.replace('_', ' ');
             table->setItem(r, 0, new QTableWidgetItem(label.toUpper()));
             auto* vi = new QTableWidgetItem(format_val(data[keys[r]]));
             vi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -854,11 +883,11 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
     raw->setReadOnly(true);
     raw->setMaximumHeight(200);
     raw->setPlainText(QJsonDocument(data).toJson(QJsonDocument::Indented));
-    raw->setStyleSheet(QString(
-        "QTextEdit { background:%1; color:%2; border:1px solid %3;"
-        "font-family:%4; font-size:%5px; padding:8px; }")
-        .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
-        .arg(ui::fonts::DATA_FAMILY).arg(ui::fonts::SMALL));
+    raw->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
+                               "font-family:%4; font-size:%5px; padding:8px; }")
+                           .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM)
+                           .arg(ui::fonts::DATA_FAMILY)
+                           .arg(ui::fonts::SMALL));
     results_layout_->addWidget(raw);
 
     status_label_->setText("Done");
@@ -866,8 +895,7 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
 
 // ── Signal handlers ──────────────────────────────────────────────────────────
 
-void QuantModulePanel::on_result(const QString& module_id, const QString& command,
-                                  const QJsonObject& data) {
+void QuantModulePanel::on_result(const QString& module_id, const QString& command, const QJsonObject& data) {
     if (module_id == module_.id)
         display_result(data);
 }

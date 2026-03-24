@@ -44,7 +44,8 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
         tf_buttons_[i]->setObjectName("cryptoTfBtn");
         tf_buttons_[i]->setFixedHeight(22);
         tf_buttons_[i]->setCursor(Qt::PointingHandCursor);
-        if (i == active_tf_) tf_buttons_[i]->setProperty("active", true);
+        if (i == active_tf_)
+            tf_buttons_[i]->setProperty("active", true);
         connect(tf_buttons_[i], &QPushButton::clicked, this, [this, i]() { set_active_tf(i); });
         h_layout->addWidget(tf_buttons_[i]);
     }
@@ -61,11 +62,11 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
 
     series_ = new QCandlestickSeries;
     // Vibrant candle colors
-    series_->setIncreasingColor(QColor("#22c55e"));   // bright green
-    series_->setDecreasingColor(QColor("#ef4444"));   // bright red
+    series_->setIncreasingColor(QColor("#22c55e")); // bright green
+    series_->setDecreasingColor(QColor("#ef4444")); // bright red
     series_->setBodyWidth(0.75);
-    series_->setPen(QPen(Qt::NoPen));                 // no outline on body
-    series_->setCapsVisible(false);                    // clean look
+    series_->setPen(QPen(Qt::NoPen)); // no outline on body
+    series_->setCapsVisible(false);   // clean look
     chart_->addSeries(series_);
 
     time_axis_ = new QDateTimeAxis;
@@ -142,7 +143,8 @@ void CryptoChart::append_candle(const trading::Candle& candle) {
     }
 
     const auto& visible_sets = series_->sets();
-    if (visible_sets.isEmpty()) return;
+    if (visible_sets.isEmpty())
+        return;
 
     double min_price = 1e18, max_price = 0;
     qint64 min_time = INT64_MAX, max_time = 0;
@@ -150,8 +152,10 @@ void CryptoChart::append_candle(const trading::Candle& candle) {
         min_price = std::min(min_price, s->low());
         max_price = std::max(max_price, s->high());
         const qint64 ts = static_cast<qint64>(s->timestamp());
-        if (ts < min_time) min_time = ts;
-        if (ts > max_time) max_time = ts;
+        if (ts < min_time)
+            min_time = ts;
+        if (ts > max_time)
+            max_time = ts;
     }
     update_axes(min_price, max_price, min_time, max_time);
 }
@@ -162,7 +166,8 @@ void CryptoChart::clear() {
 }
 
 void CryptoChart::update_axes(double min_price, double max_price, qint64 min_time, qint64 max_time) {
-    if (min_price >= max_price) return; // invalid range
+    if (min_price >= max_price)
+        return; // invalid range
 
     const double padding = (max_price - min_price) * 0.05;
     const double p_min = min_price - padding;
@@ -174,8 +179,7 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
         last_max_price_ = p_max;
     }
     if (min_time != last_min_time_ || max_time != last_max_time_) {
-        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time),
-                             QDateTime::fromMSecsSinceEpoch(max_time));
+        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time), QDateTime::fromMSecsSinceEpoch(max_time));
         last_min_time_ = min_time;
         last_max_time_ = max_time;
     }
@@ -184,9 +188,10 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
 void CryptoChart::rebuild_chart() {
     series_->clear();
     last_min_price_ = last_max_price_ = -1;
-    last_min_time_  = last_max_time_  = -1;
+    last_min_time_ = last_max_time_ = -1;
 
-    if (candles_.isEmpty()) return;
+    if (candles_.isEmpty())
+        return;
 
     const int start = std::max(0, static_cast<int>(candles_.size()) - MAX_VISIBLE);
     double min_price = 1e18, max_price = 0;
@@ -197,8 +202,10 @@ void CryptoChart::rebuild_chart() {
         series_->append(new QCandlestickSet(c.open, c.high, c.low, c.close, c.timestamp));
         min_price = std::min(min_price, c.low);
         max_price = std::max(max_price, c.high);
-        if (c.timestamp < min_time) min_time = c.timestamp;
-        if (c.timestamp > max_time) max_time = c.timestamp;
+        if (c.timestamp < min_time)
+            min_time = c.timestamp;
+        if (c.timestamp > max_time)
+            max_time = c.timestamp;
     }
 
     update_axes(min_price, max_price, min_time, max_time);

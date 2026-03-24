@@ -1,14 +1,14 @@
 // McpServersSection.cpp — MCP external server management panel (Qt port)
 
 #include "screens/settings/McpServersSection.h"
+
+#include "core/logging/Logger.h"
 #include "mcp/McpManager.h"
 #include "mcp/McpService.h"
 #include "storage/repositories/McpServerRepository.h"
-#include "core/logging/Logger.h"
 
 #include <QCheckBox>
 #include <QDialog>
-#include <QtConcurrent/QtConcurrent>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QFrame>
@@ -23,12 +23,13 @@
 #include <QScrollArea>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
 
 namespace fincept::screens {
 
-using mcp::McpService;
 using mcp::McpManager;
 using mcp::McpServerConfig;
+using mcp::McpService;
 using mcp::ServerStatus;
 
 static constexpr const char* TAG = "McpServersSection";
@@ -84,14 +85,14 @@ void McpServersSection::build_ui() {
         auto* btn = new QPushButton(text);
         btn->setCheckable(true);
         btn->setFixedHeight(28);
-        btn->setStyleSheet(
-            "QPushButton{background:transparent;color:#888;border:none;"
-            "border-bottom:2px solid transparent;font-size:12px;padding:0 12px;}"
-            "QPushButton:checked{color:#ff6600;border-bottom:2px solid #ff6600;}"
-            "QPushButton:hover:!checked{color:#ccc;}");
+        btn->setStyleSheet("QPushButton{background:transparent;color:#888;border:none;"
+                           "border-bottom:2px solid transparent;font-size:12px;padding:0 12px;}"
+                           "QPushButton:checked{color:#ff6600;border-bottom:2px solid #ff6600;}"
+                           "QPushButton:hover:!checked{color:#ccc;}");
         connect(btn, &QPushButton::clicked, this, [this, idx]() { on_tab_changed(idx); });
         tbbl->addWidget(btn);
-        if (idx == 0) btn->setChecked(true);
+        if (idx == 0)
+            btn->setChecked(true);
         return btn;
     };
     make_tab("Installed Servers", 0);
@@ -134,31 +135,27 @@ QWidget* McpServersSection::build_servers_tab() {
     lvl->addWidget(list_lbl);
 
     server_list_ = new QListWidget;
-    server_list_->setStyleSheet(
-        "QListWidget{background:transparent;border:none;color:#ccc;font-size:12px;}"
-        "QListWidget::item{padding:10px 8px;border-radius:3px;border-bottom:1px solid #111;}"
-        "QListWidget::item:selected{background:#1a1a1a;color:#ff6600;}"
-        "QListWidget::item:hover{background:#111;}");
-    connect(server_list_, &QListWidget::currentRowChanged,
-            this, &McpServersSection::on_server_selected);
+    server_list_->setStyleSheet("QListWidget{background:transparent;border:none;color:#ccc;font-size:12px;}"
+                                "QListWidget::item{padding:10px 8px;border-radius:3px;border-bottom:1px solid #111;}"
+                                "QListWidget::item:selected{background:#1a1a1a;color:#ff6600;}"
+                                "QListWidget::item:hover{background:#111;}");
+    connect(server_list_, &QListWidget::currentRowChanged, this, &McpServersSection::on_server_selected);
     lvl->addWidget(server_list_, 1);
 
     // Action buttons
     auto* btns = new QHBoxLayout;
     add_btn_ = new QPushButton("+ Add");
-    add_btn_->setStyleSheet(
-        "QPushButton{background:#1a1a1a;color:#ff6600;border:1px solid #ff6600;"
-        "border-radius:3px;padding:5px 10px;font-size:11px;font-weight:600;}"
-        "QPushButton:hover{background:#2a1a0a;}");
+    add_btn_->setStyleSheet("QPushButton{background:#1a1a1a;color:#ff6600;border:1px solid #ff6600;"
+                            "border-radius:3px;padding:5px 10px;font-size:11px;font-weight:600;}"
+                            "QPushButton:hover{background:#2a1a0a;}");
     connect(add_btn_, &QPushButton::clicked, this, &McpServersSection::on_add_server);
 
     remove_btn_ = new QPushButton("Remove");
     remove_btn_->setEnabled(false);
-    remove_btn_->setStyleSheet(
-        "QPushButton{background:#1a0a0a;color:#cc3300;border:1px solid #330000;"
-        "border-radius:3px;padding:5px 10px;font-size:11px;}"
-        "QPushButton:hover{background:#2a1010;}"
-        "QPushButton:disabled{color:#333;border-color:#222;}");
+    remove_btn_->setStyleSheet("QPushButton{background:#1a0a0a;color:#cc3300;border:1px solid #330000;"
+                               "border-radius:3px;padding:5px 10px;font-size:11px;}"
+                               "QPushButton:hover{background:#2a1010;}"
+                               "QPushButton:disabled{color:#333;border-color:#222;}");
     connect(remove_btn_, &QPushButton::clicked, this, &McpServersSection::on_remove_server);
 
     btns->addWidget(add_btn_);
@@ -192,21 +189,19 @@ QWidget* McpServersSection::build_servers_tab() {
     start_btn_ = new QPushButton("▶  Start");
     start_btn_->setEnabled(false);
     start_btn_->setFixedHeight(32);
-    start_btn_->setStyleSheet(
-        "QPushButton{background:#0a2a0a;color:#44cc44;border:1px solid #226622;"
-        "border-radius:4px;font-size:12px;font-weight:600;padding:0 16px;}"
-        "QPushButton:hover{background:#0f3a0f;}"
-        "QPushButton:disabled{color:#333;border-color:#222;background:#0a0a0a;}");
+    start_btn_->setStyleSheet("QPushButton{background:#0a2a0a;color:#44cc44;border:1px solid #226622;"
+                              "border-radius:4px;font-size:12px;font-weight:600;padding:0 16px;}"
+                              "QPushButton:hover{background:#0f3a0f;}"
+                              "QPushButton:disabled{color:#333;border-color:#222;background:#0a0a0a;}");
     connect(start_btn_, &QPushButton::clicked, this, &McpServersSection::on_start_server);
 
     stop_btn_ = new QPushButton("■  Stop");
     stop_btn_->setEnabled(false);
     stop_btn_->setFixedHeight(32);
-    stop_btn_->setStyleSheet(
-        "QPushButton{background:#2a0a0a;color:#cc4444;border:1px solid #662222;"
-        "border-radius:4px;font-size:12px;font-weight:600;padding:0 16px;}"
-        "QPushButton:hover{background:#3a0f0f;}"
-        "QPushButton:disabled{color:#333;border-color:#222;background:#0a0a0a;}");
+    stop_btn_->setStyleSheet("QPushButton{background:#2a0a0a;color:#cc4444;border:1px solid #662222;"
+                             "border-radius:4px;font-size:12px;font-weight:600;padding:0 16px;}"
+                             "QPushButton:hover{background:#3a0f0f;}"
+                             "QPushButton:disabled{color:#333;border-color:#222;background:#0a0a0a;}");
     connect(stop_btn_, &QPushButton::clicked, this, &McpServersSection::on_stop_server);
 
     server_btns->addWidget(start_btn_);
@@ -237,8 +232,8 @@ QWidget* McpServersSection::build_tools_tab() {
     vl->setContentsMargins(16, 12, 16, 12);
     vl->setSpacing(8);
 
-    auto* info = new QLabel(
-        "All registered MCP tools — both internal (built-in) and external (from connected servers).");
+    auto* info =
+        new QLabel("All registered MCP tools — both internal (built-in) and external (from connected servers).");
     info->setStyleSheet("color:#888;font-size:11px;");
     info->setWordWrap(true);
     vl->addWidget(info);
@@ -254,14 +249,13 @@ QWidget* McpServersSection::build_tools_tab() {
     tools_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     tools_table_->setAlternatingRowColors(true);
     tools_table_->verticalHeader()->hide();
-    tools_table_->setStyleSheet(
-        "QTableWidget{background:#0a0a0a;color:#ccc;border:1px solid #1e1e1e;"
-        "gridline-color:#111;font-size:12px;}"
-        "QTableWidget::item{padding:6px;}"
-        "QTableWidget::item:selected{background:#1a1a1a;color:#ff6600;}"
-        "QHeaderView::section{background:#0d0d0d;color:#888;border:none;"
-        "border-bottom:1px solid #1e1e1e;padding:6px;font-size:11px;font-weight:600;}"
-        "QTableWidget{alternate-background-color:#080808;}");
+    tools_table_->setStyleSheet("QTableWidget{background:#0a0a0a;color:#ccc;border:1px solid #1e1e1e;"
+                                "gridline-color:#111;font-size:12px;}"
+                                "QTableWidget::item{padding:6px;}"
+                                "QTableWidget::item:selected{background:#1a1a1a;color:#ff6600;}"
+                                "QHeaderView::section{background:#0d0d0d;color:#888;border:none;"
+                                "border-bottom:1px solid #1e1e1e;padding:6px;font-size:11px;font-weight:600;}"
+                                "QTableWidget{alternate-background-color:#080808;}");
     vl->addWidget(tools_table_, 1);
 
     return page;
@@ -302,17 +296,17 @@ void McpServersSection::on_add_server() {
         return l;
     };
 
-    auto* name_edit    = fe("e.g. My Database Server");
-    auto* cmd_edit     = fe("e.g. npx, uvx, python");
-    auto* args_edit    = fe("e.g. -y @modelcontextprotocol/server-postgres");
-    auto* env_edit     = fe("KEY=VALUE KEY2=VALUE2 (space-separated)");
-    auto* cat_edit     = fe("e.g. data, tools, analytics");
+    auto* name_edit = fe("e.g. My Database Server");
+    auto* cmd_edit = fe("e.g. npx, uvx, python");
+    auto* args_edit = fe("e.g. -y @modelcontextprotocol/server-postgres");
+    auto* env_edit = fe("KEY=VALUE KEY2=VALUE2 (space-separated)");
+    auto* cat_edit = fe("e.g. data, tools, analytics");
 
-    form->addRow(fl("Name"),        name_edit);
-    form->addRow(fl("Command"),     cmd_edit);
-    form->addRow(fl("Arguments"),   args_edit);
+    form->addRow(fl("Name"), name_edit);
+    form->addRow(fl("Command"), cmd_edit);
+    form->addRow(fl("Arguments"), args_edit);
     form->addRow(fl("Environment"), env_edit);
-    form->addRow(fl("Category"),    cat_edit);
+    form->addRow(fl("Category"), cat_edit);
 
     vl->addLayout(form);
 
@@ -328,12 +322,11 @@ void McpServersSection::on_add_server() {
     vl->addLayout(auto_start_row);
 
     auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    btns->setStyleSheet(
-        "QPushButton{background:#1a1a1a;color:#e0e0e0;border:1px solid #333;"
-        "border-radius:3px;padding:6px 16px;font-size:12px;}"
-        "QPushButton:hover{background:#222;}"
-        "QPushButton[text='OK']{background:#ff6600;color:#000;border:none;}"
-        "QPushButton[text='OK']:hover{background:#ff8800;}");
+    btns->setStyleSheet("QPushButton{background:#1a1a1a;color:#e0e0e0;border:1px solid #333;"
+                        "border-radius:3px;padding:6px 16px;font-size:12px;}"
+                        "QPushButton:hover{background:#222;}"
+                        "QPushButton[text='OK']{background:#ff6600;color:#000;border:none;}"
+                        "QPushButton[text='OK']:hover{background:#ff8800;}");
     connect(btns, &QDialogButtonBox::accepted, dlg, &QDialog::accept);
     connect(btns, &QDialogButtonBox::rejected, dlg, &QDialog::reject);
     vl->addWidget(btns);
@@ -344,7 +337,7 @@ void McpServersSection::on_add_server() {
     }
 
     QString name = name_edit->text().trimmed();
-    QString cmd  = cmd_edit->text().trimmed();
+    QString cmd = cmd_edit->text().trimmed();
     if (name.isEmpty() || cmd.isEmpty()) {
         show_status("Name and Command are required", true);
         dlg->deleteLater();
@@ -352,12 +345,12 @@ void McpServersSection::on_add_server() {
     }
 
     McpServerConfig cfg;
-    cfg.name       = name;
-    cfg.command    = cmd;
-    cfg.args       = args_edit->text().trimmed().split(' ', Qt::SkipEmptyParts);
-    cfg.category   = cat_edit->text().trimmed();
+    cfg.name = name;
+    cfg.command = cmd;
+    cfg.args = args_edit->text().trimmed().split(' ', Qt::SkipEmptyParts);
+    cfg.category = cat_edit->text().trimmed();
     cfg.auto_start = as_cb->isChecked();
-    cfg.enabled    = true;
+    cfg.enabled = true;
 
     // Parse env pairs
     for (const auto& pair : env_edit->text().trimmed().split(' ', Qt::SkipEmptyParts)) {
@@ -389,9 +382,12 @@ void McpServersSection::load_servers() {
     auto servers = McpManager::instance().get_servers();
     for (const auto& cfg : servers) {
         QString status_icon;
-        if (cfg.status == ServerStatus::Running)       status_icon = "● ";
-        else if (cfg.status == ServerStatus::Error)    status_icon = "✕ ";
-        else                                           status_icon = "○ ";
+        if (cfg.status == ServerStatus::Running)
+            status_icon = "● ";
+        else if (cfg.status == ServerStatus::Error)
+            status_icon = "✕ ";
+        else
+            status_icon = "○ ";
 
         auto* item = new QListWidgetItem(status_icon + cfg.name);
         item->setData(Qt::UserRole, cfg.id);
@@ -425,10 +421,10 @@ void McpServersSection::load_tools() {
 
     int row = 0;
     for (const auto& t : tools) {
-        auto* name_item   = new QTableWidgetItem(t.name);
+        auto* name_item = new QTableWidgetItem(t.name);
         auto* server_item = new QTableWidgetItem(t.server_name);
-        auto* cat_item    = new QTableWidgetItem(t.is_internal ? "internal" : "external");
-        auto* desc_item   = new QTableWidgetItem(t.description);
+        auto* cat_item = new QTableWidgetItem(t.is_internal ? "internal" : "external");
+        auto* desc_item = new QTableWidgetItem(t.description);
 
         if (t.is_internal) {
             server_item->setForeground(QColor("#ff6600"));
@@ -449,23 +445,24 @@ void McpServersSection::load_tools() {
 void McpServersSection::refresh_server_detail(const QString& server_id) {
     auto servers = McpManager::instance().get_servers();
     for (const auto& cfg : servers) {
-        if (cfg.id != server_id) continue;
+        if (cfg.id != server_id)
+            continue;
 
         QString status_str;
-        if (cfg.status == ServerStatus::Running) status_str = "Running";
-        else if (cfg.status == ServerStatus::Error) status_str = "Error";
-        else status_str = "Stopped";
+        if (cfg.status == ServerStatus::Running)
+            status_str = "Running";
+        else if (cfg.status == ServerStatus::Error)
+            status_str = "Error";
+        else
+            status_str = "Stopped";
 
-        detail_lbl_->setText(
-            QString("<b style='color:#e0e0e0'>%1</b><br>"
-                    "<span style='color:#888;font-size:11px;'>Status: %2</span><br>"
-                    "<span style='color:#666;font-size:11px;'>Command: %3 %4</span><br>"
-                    "<span style='color:#666;font-size:11px;'>Category: %5</span><br>"
-                    "<span style='color:#666;font-size:11px;'>Auto-start: %6</span>")
-            .arg(cfg.name, status_str,
-                 cfg.command, cfg.args.join(' '),
-                 cfg.category.isEmpty() ? "-" : cfg.category,
-                 cfg.auto_start ? "Yes" : "No"));
+        detail_lbl_->setText(QString("<b style='color:#e0e0e0'>%1</b><br>"
+                                     "<span style='color:#888;font-size:11px;'>Status: %2</span><br>"
+                                     "<span style='color:#666;font-size:11px;'>Command: %3 %4</span><br>"
+                                     "<span style='color:#666;font-size:11px;'>Category: %5</span><br>"
+                                     "<span style='color:#666;font-size:11px;'>Auto-start: %6</span>")
+                                 .arg(cfg.name, status_str, cfg.command, cfg.args.join(' '),
+                                      cfg.category.isEmpty() ? "-" : cfg.category, cfg.auto_start ? "Yes" : "No"));
 
         bool running = (cfg.status == ServerStatus::Running);
         start_btn_->setEnabled(!running);
@@ -492,12 +489,13 @@ void McpServersSection::on_server_selected(int row) {
 }
 
 void McpServersSection::on_remove_server() {
-    if (selected_server_id_.isEmpty()) return;
+    if (selected_server_id_.isEmpty())
+        return;
 
-    auto reply = QMessageBox::question(this, "Remove Server",
-        "Remove this MCP server configuration?",
-        QMessageBox::Yes | QMessageBox::No);
-    if (reply != QMessageBox::Yes) return;
+    auto reply = QMessageBox::question(this, "Remove Server", "Remove this MCP server configuration?",
+                                       QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes)
+        return;
 
     McpManager::instance().remove_server(selected_server_id_);
     selected_server_id_.clear();
@@ -505,7 +503,8 @@ void McpServersSection::on_remove_server() {
 }
 
 void McpServersSection::on_start_server() {
-    if (selected_server_id_.isEmpty()) return;
+    if (selected_server_id_.isEmpty())
+        return;
     show_status("Starting server...", false);
     start_btn_->setEnabled(false);
 
@@ -513,19 +512,24 @@ void McpServersSection::on_start_server() {
     QString id = selected_server_id_;
     QtConcurrent::run([self, id]() {
         auto r = McpManager::instance().start_server(id);
-        QMetaObject::invokeMethod(qApp, [self, r, id]() {
-            if (!self) return;
-            if (r.is_err())
-                self->show_status("Start failed: " + QString::fromStdString(r.error()), true);
-            else
-                self->show_status("Server started", false);
-            self->load_servers();
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, r, id]() {
+                if (!self)
+                    return;
+                if (r.is_err())
+                    self->show_status("Start failed: " + QString::fromStdString(r.error()), true);
+                else
+                    self->show_status("Server started", false);
+                self->load_servers();
+            },
+            Qt::QueuedConnection);
     });
 }
 
 void McpServersSection::on_stop_server() {
-    if (selected_server_id_.isEmpty()) return;
+    if (selected_server_id_.isEmpty())
+        return;
     McpManager::instance().stop_server(selected_server_id_);
     show_status("Server stopped", false);
     load_servers();
@@ -544,16 +548,15 @@ void McpServersSection::on_tab_changed(int idx) {
         if (btn->isCheckable()) {
             btn->setChecked(checked_count == idx);
             ++checked_count;
-            if (checked_count > 1) break;
+            if (checked_count > 1)
+                break;
         }
     }
 }
 
 void McpServersSection::show_status(const QString& msg, bool error) {
     status_lbl_->setText(msg);
-    status_lbl_->setStyleSheet(error
-        ? "color:#ff4444;font-size:11px;"
-        : "color:#44cc44;font-size:11px;");
+    status_lbl_->setStyleSheet(error ? "color:#ff4444;font-size:11px;" : "color:#44cc44;font-size:11px;");
     status_lbl_->show();
     QTimer::singleShot(4000, status_lbl_, &QLabel::hide);
 }
