@@ -75,6 +75,7 @@ jobs:
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
+          sudo add-apt-repository universe -y
           sudo apt-get update -qq
           sudo apt-get install -y \
             cmake ninja-build g++ \
@@ -121,8 +122,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             ${{ matrix.cmake_extra }}
 
-      - name: Configure CMake (Windows x64 / macOS)
-        if: runner.os != 'Linux' && matrix.arch != 'arm64'
+      - name: Configure CMake (Windows x64 / macOS x64 / macOS arm64)
+        if: (runner.os == 'Windows' && matrix.arch == 'x64') || runner.os == 'macOS'
         shell: bash
         working-directory: fincept-qt
         run: |
@@ -136,7 +137,8 @@ jobs:
         shell: bash
         working-directory: fincept-qt
         run: |
-          HOST_QT="${{ runner.temp }}/qt-host/${{ env.QT_VERSION }}/msvc2022_64"
+          # jurplel/install-qt-action with dir set installs into <dir>/Qt/<version>/<arch>
+          HOST_QT="${{ runner.temp }}/qt-host/Qt/${{ env.QT_VERSION }}/msvc2022_64"
           cmake -B build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \

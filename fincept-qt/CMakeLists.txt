@@ -668,16 +668,6 @@ set_source_files_properties(
     src/screens/notes/NotesScreen.cpp
     src/screens/payment/PaymentProcessingScreen.cpp
     src/screens/payment/PaymentSuccessScreen.cpp
-    src/screens/polymarket/PolymarketActivityFeed.cpp
-    src/screens/polymarket/PolymarketBrowsePanel.cpp
-    src/screens/polymarket/PolymarketCommandBar.cpp
-    src/screens/polymarket/PolymarketDetailPanel.cpp
-    src/screens/polymarket/PolymarketLeaderboard.cpp
-    src/screens/polymarket/PolymarketMarketCard.cpp
-    src/screens/polymarket/PolymarketOrderBook.cpp
-    src/screens/polymarket/PolymarketPriceChart.cpp
-    src/screens/polymarket/PolymarketScreen.cpp
-    src/screens/polymarket/PolymarketStatusBar.cpp
     src/screens/portfolio/PortfolioAgentPanel.cpp
     src/screens/portfolio/PortfolioAiPanel.cpp
     src/screens/portfolio/PortfolioBlotter.cpp
