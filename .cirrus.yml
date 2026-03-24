@@ -1,0 +1,53 @@
+## Cirrus CI — macOS Apple Silicon build
+## Complements GitHub Actions (Linux + Windows).
+## Free for public repos: ~3,300 macOS CPU-minutes/month.
+
+build_task:
+  name: macOS arm64 (Apple Silicon)
+  timeout_in: 60m
+
+  macos_instance:
+    image: ghcr.io/cirruslabs/macos-runner:sonoma
+
+  env:
+    HOMEBREW_NO_AUTO_UPDATE: "1"
+    HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+    BUILD_TYPE: Release
+
+  # Cache Homebrew packages — refreshes monthly
+  brew_cache:
+    folder: "$HOME/Library/Caches/Homebrew"
+    fingerprint_script: echo "brew-qt6-cmake-ninja-$(date +%Y-%m)"
+    populate_script:
+      - brew install qt cmake ninja ccache python@3.12
+
+  # Cache ccache build artifacts between runs
+  ccache_cache:
+    folder: "$HOME/.ccache"
+    fingerprint_script: git log --oneline -10
+
+  configure_script:
+    - export QT_PREFIX="$(brew --prefix qt)"
+    - echo "Qt prefix:$QT_PREFIX"
+    - cmake -B fincept-qt/build
+        -S fincept-qt
+        -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+        -DCMAKE_PREFIX_PATH="$QT_PREFIX"
+        -DCMAKE_OSX_ARCHITECTURES=arm64
+        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        -GNinja
+
+  build_script:
+    - cmake --build fincept-qt/build --config $BUILD_TYPE --parallel $(sysctl -n hw.logicalcpu)
+
+  verify_script:
+    - |
+      EXE="fincept-qt/build/FinceptTerminal"
+      if [ ! -f "$EXE" ]; then
+        echo "ERROR: binary not found at $EXE"
+        exit 1
+      fi
+      echo "Binary: $(du -sh $EXE | cut -f1)"
+      file "$EXE"
+      lipo -info "$EXE"
