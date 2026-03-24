@@ -290,9 +290,9 @@ std::vector<ToolDef> get_trading_tools() {
                 auto stats = trading::pt_get_stats(id);
                 return ToolResult::ok_data(QJsonObject{{"total_pnl", stats.total_pnl},
                                                        {"win_rate", stats.win_rate},
-                                                       {"total_trades", stats.total_trades},
-                                                       {"winning_trades", stats.winning_trades},
-                                                       {"losing_trades", stats.losing_trades},
+                                                       {"total_trades", static_cast<qint64>(stats.total_trades)},
+                                                       {"winning_trades", static_cast<qint64>(stats.winning_trades)},
+                                                       {"losing_trades", static_cast<qint64>(stats.losing_trades)},
                                                        {"largest_win", stats.largest_win},
                                                        {"largest_loss", stats.largest_loss}});
             } catch (const std::exception& e) {

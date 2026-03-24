@@ -127,8 +127,8 @@ void EquityChart::rebuild_chart() {
         series_->append(set);
         min_p = std::min(min_p, c.low);
         max_p = std::max(max_p, c.high);
-        min_t = std::min(min_t, c.timestamp * 1000);
-        max_t = std::max(max_t, c.timestamp * 1000);
+        min_t = std::min(min_t, static_cast<qint64>(c.timestamp) * 1000);
+        max_t = std::max(max_t, static_cast<qint64>(c.timestamp) * 1000);
     }
 
     if (min_p < max_p)

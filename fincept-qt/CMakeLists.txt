@@ -51,6 +51,21 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(QXlsx)
 
+# QXlsx uses implicit const char* -> QString conversions which are banned by Qt6's
+# strict cast macros. Undefine them for this third-party target only (GCC/Clang: -U,
+# MSVC: /U). These macros are set by Qt6's cmake config, not by us globally.
+if(MSVC)
+    target_compile_options(QXlsx PRIVATE
+        /UQT_NO_CAST_FROM_ASCII /UQT_NO_CAST_FROM_BYTEARRAY
+        /UQT_NO_CAST_TO_ASCII   /UQT_NO_URL_CAST_FROM_STRING
+    )
+else()
+    target_compile_options(QXlsx PRIVATE
+        -UQT_NO_CAST_FROM_ASCII -UQT_NO_CAST_FROM_BYTEARRAY
+        -UQT_NO_CAST_TO_ASCII   -UQT_NO_URL_CAST_FROM_STRING
+    )
+endif()
+
 # ── QGeoView (interactive map widget with OSM tiles) ─────────────────────────
 FetchContent_Declare(
     QGeoView
@@ -739,6 +754,17 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v006_portfolio_multi.cpp
     src/storage/sqlite/migrations/v007_news_baselines.cpp
     src/storage/sqlite/migrations/v008_workflows.cpp
+    # Polymarket screen files — each defines static fmt_* helpers in same namespace
+    src/screens/polymarket/PolymarketScreen.cpp
+    src/screens/polymarket/PolymarketCommandBar.cpp
+    src/screens/polymarket/PolymarketMarketCard.cpp
+    src/screens/polymarket/PolymarketBrowsePanel.cpp
+    src/screens/polymarket/PolymarketDetailPanel.cpp
+    src/screens/polymarket/PolymarketOrderBook.cpp
+    src/screens/polymarket/PolymarketPriceChart.cpp
+    src/screens/polymarket/PolymarketLeaderboard.cpp
+    src/screens/polymarket/PolymarketActivityFeed.cpp
+    src/screens/polymarket/PolymarketStatusBar.cpp
     # Trading broker files — each defines static now_ts() in same namespace
     src/trading/brokers/IndianBrokers.cpp
     src/trading/brokers/GlobalBrokers.cpp

@@ -79,15 +79,16 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y \
             cmake ninja-build g++ \
-            qt6-base-dev qt6-charts-dev qt6-tools-dev qt6-tools-dev-tools \
-            libqt6sql6-dev libqt6websockets6-dev \
+            qt6-base-dev qt6-base-private-dev \
+            qt6-tools-dev qt6-tools-dev-tools \
+            libqt6charts6-dev libqt6websockets6-dev \
             qt6-multimedia-dev libqt6multimediawidgets6 \
-            libqt6svg6-dev \
-            libqt6printsupport6-dev \
+            libqt6svg6-dev libqt6concurrent6 \
             libgl1-mesa-dev libglu1-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
-            libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 \
+            libxcb-xinerama0 libxcb-xkb1 \
             pkg-config zip
 
       # ---- Qt6 target (Windows/macOS) ----
