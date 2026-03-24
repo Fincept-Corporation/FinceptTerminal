@@ -3,8 +3,9 @@
 #include <QSettings>
 
 #ifdef Q_OS_WIN
-#    include <wincred.h>
 #    include <windows.h>
+#    include <wincrypt.h>  // required before wincred.h for NTSTATUS and crypto types
+#    include <wincred.h>
 #    pragma comment(lib, "Advapi32.lib")
 #endif
 
