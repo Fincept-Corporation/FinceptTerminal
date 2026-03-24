@@ -38,7 +38,10 @@ int main(int argc, char* argv[]) {
     // Initialize config
     auto& config = fincept::AppConfig::instance();
     fincept::HttpClient::instance().set_base_url(config.api_base_url());
-    fincept::HttpClient::instance().set_auth_header("fk_user_vU20qwUxKtPmg0fWpriNBhcAnBVGgOtJxsKiiwfD9Qo");
+    const QString saved_token = config.auth_token();
+    if (!saved_token.isEmpty()) {
+        fincept::HttpClient::instance().set_auth_header(saved_token);
+    }
 
     // Register migrations explicitly (avoids MSVC /OPT:REF stripping static-init TUs)
     fincept::register_migration_v001();

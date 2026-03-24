@@ -850,7 +850,12 @@ endif()
 
 # ── Windows: deploy Qt DLLs ──────────────────────────────────────────────────
 if(WIN32)
-    find_program(WINDEPLOYQT_EXE windeployqt HINTS "C:/Qt/6.8.3/msvc2022_64/bin")
+    find_program(WINDEPLOYQT_EXE windeployqt
+        HINTS
+            "$ENV{QT_ROOT_DIR}/bin"
+            "C:/Qt/6.8.3/msvc2022_64/bin"
+            "C:/Qt/6.8.2/msvc2022_64/bin"
+    )
     if(WINDEPLOYQT_EXE)
         # Only deploy Qt DLLs when explicitly requested via -DDEPLOY_QT=ON
         # Avoids 10-30s overhead on every incremental build

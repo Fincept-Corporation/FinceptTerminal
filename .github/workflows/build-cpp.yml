@@ -174,17 +174,24 @@ jobs:
         run: |
           mkdir -p dist
           cp build/Release/${{ matrix.exe }} dist/
-          # windeployqt bundles Qt DLLs and dependencies
-          "${QT_ROOT_DIR}/bin/windeployqt.exe" \
-            --release \
-            --no-translations \
-            --no-system-d3d-compiler \
-            --no-opengl-sw \
-            dist/${{ matrix.exe }} || \
-          "${QT_ROOT_DIR}/../msvc2022_64/bin/windeployqt.exe" \
-            --release \
-            --no-translations \
-            dist/${{ matrix.exe }} || true
+          # windeployqt is always an x64 host tool — find it in the x64 Qt bin dir.
+          # For x64 builds QT_ROOT_DIR points to msvc2022_64, so bin/windeployqt.exe works.
+          # For ARM64 cross-compiled builds QT_ROOT_DIR points to msvc2022_arm64_cross_compiled;
+          # windeployqt.exe lives one level up in msvc2022_64/bin instead.
+          WDQT="${QT_ROOT_DIR}/bin/windeployqt.exe"
+          if [ ! -f "$WDQT" ]; then
+            WDQT="${QT_ROOT_DIR}/../msvc2022_64/bin/windeployqt.exe"
+          fi
+          if [ -f "$WDQT" ]; then
+            "$WDQT" \
+              --release \
+              --no-translations \
+              --no-system-d3d-compiler \
+              --no-opengl-sw \
+              dist/${{ matrix.exe }}
+          else
+            echo "::warning::windeployqt not found — Qt DLLs not bundled"
+          fi
           cp -r resources dist/resources 2>/dev/null || true
           cp -r scripts dist/scripts 2>/dev/null || true
 
@@ -194,14 +201,31 @@ jobs:
         working-directory: fincept-qt
         run: |
           mkdir -p dist
-          # Wrap in .app bundle if not already
+          MACDEPLOYQT="${QT_ROOT_DIR}/bin/macdeployqt"
           APP="build/${{ matrix.exe }}.app"
           if [ -d "$APP" ]; then
-            macdeployqt "$APP" -dmg 2>/dev/null || true
+            # .app bundle — run macdeployqt to embed Qt frameworks
+            "$MACDEPLOYQT" "$APP" 2>/dev/null || true
             cp -r "$APP" dist/
           else
-            cp "build/${{ matrix.exe }}" dist/
-            chmod +x "dist/${{ matrix.exe }}"
+            # Plain binary — create a minimal .app bundle manually then deploy
+            BUNDLE="dist/${{ matrix.exe }}.app"
+            mkdir -p "$BUNDLE/Contents/MacOS"
+            cp "build/${{ matrix.exe }}" "$BUNDLE/Contents/MacOS/${{ matrix.exe }}"
+            chmod +x "$BUNDLE/Contents/MacOS/${{ matrix.exe }}"
+            cat > "$BUNDLE/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>FinceptTerminal</string>
+            <key>CFBundleIdentifier</key><string>in.fincept.terminal</string>
+            <key>CFBundleName</key><string>FinceptTerminal</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>4.0.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+            "$MACDEPLOYQT" "$BUNDLE" 2>/dev/null || true
           fi
           cp -r resources dist/resources 2>/dev/null || true
           cp -r scripts dist/scripts 2>/dev/null || true
