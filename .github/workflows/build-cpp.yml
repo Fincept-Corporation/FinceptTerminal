@@ -71,6 +71,14 @@ jobs:
         with:
           submodules: recursive
 
+      # ---- ccache (macOS / Linux) ----
+      - name: Set up ccache
+        if: runner.os != 'Windows'
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ env.QT_VERSION }}
+          max-size: 500M
+
       # ---- System dependencies (Linux) ----
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
@@ -100,6 +108,7 @@ jobs:
           arch: ${{ matrix.qt_arch }}
           modules: ${{ env.QT_MODULES }}
           cache: true
+          cache-key-prefix: qt-${{ matrix.platform }}-${{ matrix.arch }}
 
       # ---- Qt6 x64 host tools for Windows ARM64 cross-compilation ----
       # moc/uic/rcc must run on the host (x64), not the target (arm64)
@@ -121,6 +130,8 @@ jobs:
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ matrix.cmake_extra }}
 
       - name: Configure CMake (Windows x64 / macOS x64 / macOS arm64)
@@ -131,6 +142,7 @@ jobs:
           cmake -B build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            ${{ runner.os == 'macOS' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }} \
             ${{ matrix.cmake_extra }}
 
       - name: Configure CMake (Windows ARM64)
@@ -150,7 +162,7 @@ jobs:
       - name: Build
         shell: bash
         working-directory: fincept-qt
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 3)
 
       # ---- Verify binary ----
       - name: Verify build output
@@ -201,6 +213,8 @@ jobs:
       # ---- Package: macOS (macdeployqt) ----
       # Note: upload-artifact strips execute bits (zip limitation).
       # We tar the dist/ contents so permissions are preserved on download.
+      # macdeployqt (copies ~300MB of Qt frameworks) only runs on tag builds;
+      # push/workflow_dispatch builds skip it to save ~3-5 minutes per job.
       - name: Package (macOS)
         if: runner.os == 'macOS'
         working-directory: fincept-qt
@@ -208,12 +222,15 @@ jobs:
           mkdir -p dist
           MACDEPLOYQT="${QT_ROOT_DIR}/bin/macdeployqt"
           APP="build/${{ matrix.exe }}.app"
+          IS_TAG="${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}"
           if [ -d "$APP" ]; then
-            # .app bundle — run macdeployqt to embed Qt frameworks
-            "$MACDEPLOYQT" "$APP" 2>/dev/null || true
+            # .app bundle exists — run macdeployqt only on tag builds
+            if [ "$IS_TAG" = "true" ]; then
+              "$MACDEPLOYQT" "$APP" 2>/dev/null || true
+            fi
             cp -r "$APP" dist/
           else
-            # Plain binary — create a minimal .app bundle manually then deploy
+            # Plain binary — create a minimal .app bundle manually
             BUNDLE="dist/${{ matrix.exe }}.app"
             mkdir -p "$BUNDLE/Contents/MacOS"
             cp "build/${{ matrix.exe }}" "$BUNDLE/Contents/MacOS/${{ matrix.exe }}"
@@ -230,7 +247,9 @@ jobs:
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
           PLIST
-            "$MACDEPLOYQT" "$BUNDLE" 2>/dev/null || true
+            if [ "$IS_TAG" = "true" ]; then
+              "$MACDEPLOYQT" "$BUNDLE" 2>/dev/null || true
+            fi
           fi
           cp -r resources dist/resources 2>/dev/null || true
           cp -r scripts dist/scripts 2>/dev/null || true
