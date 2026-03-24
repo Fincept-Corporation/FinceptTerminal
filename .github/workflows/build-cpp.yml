@@ -8,7 +8,8 @@ on:
 
 env:
   BUILD_TYPE: Release
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  QT_VERSION: "6.8.3"
+  QT_MODULES: "qtcharts qtwebsockets qtsql qtmultimedia"
 
 jobs:
   build:
@@ -23,7 +24,6 @@ jobs:
             artifact: FinceptTerminal-Windows-x64
             exe: FinceptTerminal.exe
             qt_arch: win64_msvc2022_64
-            qt_version: "6.8.3"
             cmake_extra: ""
 
           # ---- Windows ARM64 ----
@@ -33,7 +33,6 @@ jobs:
             artifact: FinceptTerminal-Windows-arm64
             exe: FinceptTerminal.exe
             qt_arch: win64_msvc2022_arm64
-            qt_version: "6.8.3"
             cmake_extra: "-A ARM64"
 
           # ---- Linux x64 ----
@@ -43,7 +42,6 @@ jobs:
             artifact: FinceptTerminal-Linux-x64
             exe: FinceptTerminal
             qt_arch: ""
-            qt_version: ""
             cmake_extra: ""
 
           # ---- macOS ARM64 (Apple Silicon) ----
@@ -53,17 +51,15 @@ jobs:
             artifact: FinceptTerminal-macOS-arm64
             exe: FinceptTerminal
             qt_arch: clang_64
-            qt_version: "6.8.3"
             cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=arm64"
 
           # ---- macOS x64 (Intel) ----
-          - os: macos-15-intel
+          - os: macos-13
             arch: x64
             platform: macOS
             artifact: FinceptTerminal-macOS-x64
             exe: FinceptTerminal
             qt_arch: clang_64
-            qt_version: "6.8.3"
             cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
 
     runs-on: ${{ matrix.os }}
@@ -75,48 +71,77 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Environment info
-        shell: bash
-        run: |
-          echo "OS: ${{ matrix.os }}"
-          echo "Platform: ${{ matrix.platform }}"
-          echo "Arch: ${{ matrix.arch }}"
-          cmake --version || echo "CMake not found"
-
       # ---- System dependencies (Linux) ----
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
+          sudo apt-get update -qq
           sudo apt-get install -y \
-            cmake g++ python3 python3-pip \
-            qt6-base-dev qt6-charts-dev qt6-tools-dev \
-            libqt6sql6-sqlite libqt6websockets6-dev \
+            cmake ninja-build g++ \
+            qt6-base-dev qt6-charts-dev qt6-tools-dev qt6-tools-dev-tools \
+            libqt6sql6 libqt6websockets6-dev \
+            qt6-multimedia-dev libqt6multimediawidgets6 \
+            libqt6svg6-dev libqt6concurrent6-dev \
+            libqt6printsupport6-dev \
             libgl1-mesa-dev libglu1-mesa-dev \
-            pkg-config
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 \
+            pkg-config zip
 
-      # ---- Qt6 (Windows + macOS) ----
-      - name: Install Qt6 (Windows/macOS)
+      # ---- Qt6 target (Windows/macOS) ----
+      - name: Install Qt6
         if: runner.os != 'Linux'
         uses: jurplel/install-qt-action@v4
         with:
-          version: ${{ matrix.qt_version }}
+          version: ${{ env.QT_VERSION }}
           arch: ${{ matrix.qt_arch }}
-          modules: "qtcharts qtwebsockets qtsql"
+          modules: ${{ env.QT_MODULES }}
           cache: true
 
-      # ---- Configure ----
-      - name: Configure CMake
+      # ---- Qt6 x64 host tools for Windows ARM64 cross-compilation ----
+      # moc/uic/rcc must run on the host (x64), not the target (arm64)
+      - name: Install Qt6 host tools (Windows ARM64 only)
+        if: runner.os == 'Windows' && matrix.arch == 'arm64'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          set-env: false
+          dir: ${{ runner.temp }}/qt-host
+
+      # ---- Configure CMake ----
+      - name: Configure CMake (Linux)
+        if: runner.os == 'Linux'
+        working-directory: fincept-qt
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            ${{ matrix.cmake_extra }}
+
+      - name: Configure CMake (Windows x64 / macOS)
+        if: runner.os != 'Linux' && matrix.arch != 'arm64'
         shell: bash
         working-directory: fincept-qt
         run: |
-          CMAKE_ARGS="-B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} ${{ matrix.cmake_extra }}"
-          echo "Running: cmake $CMAKE_ARGS"
-          cmake $CMAKE_ARGS
-          if [ ! -f build/CMakeCache.txt ]; then
-            echo "::error::CMake configure failed"
-            exit 1
-          fi
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            ${{ matrix.cmake_extra }}
+
+      - name: Configure CMake (Windows ARM64)
+        if: runner.os == 'Windows' && matrix.arch == 'arm64'
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          HOST_QT="${{ runner.temp }}/qt-host/${{ env.QT_VERSION }}/msvc2022_64"
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DQT_HOST_PATH="${HOST_QT}" \
+            ${{ matrix.cmake_extra }}
 
       # ---- Build ----
       - name: Build
@@ -124,7 +149,7 @@ jobs:
         working-directory: fincept-qt
         run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
 
-      # ---- Verify ----
+      # ---- Verify binary ----
       - name: Verify build output
         shell: bash
         working-directory: fincept-qt
@@ -141,21 +166,49 @@ jobs:
           echo "Binary verified: $BINARY"
           ls -lh "$BINARY"
 
-      # ---- Collect artifacts (Windows) ----
-      - name: Collect artifacts (Windows)
+      # ---- Package: Windows (windeployqt) ----
+      - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: bash
         working-directory: fincept-qt
         run: |
           mkdir -p dist
-          cp -r build/Release/. dist/
+          cp build/Release/${{ matrix.exe }} dist/
+          # windeployqt bundles Qt DLLs and dependencies
+          "${QT_ROOT_DIR}/bin/windeployqt.exe" \
+            --release \
+            --no-translations \
+            --no-system-d3d-compiler \
+            --no-opengl-sw \
+            dist/${{ matrix.exe }} || \
+          "${QT_ROOT_DIR}/../msvc2022_64/bin/windeployqt.exe" \
+            --release \
+            --no-translations \
+            dist/${{ matrix.exe }} || true
           cp -r resources dist/resources 2>/dev/null || true
           cp -r scripts dist/scripts 2>/dev/null || true
 
-      # ---- Collect artifacts (Linux/macOS) ----
-      - name: Collect artifacts (Linux/macOS)
-        if: runner.os != 'Windows'
-        shell: bash
+      # ---- Package: macOS (macdeployqt) ----
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        working-directory: fincept-qt
+        run: |
+          mkdir -p dist
+          # Wrap in .app bundle if not already
+          APP="build/${{ matrix.exe }}.app"
+          if [ -d "$APP" ]; then
+            macdeployqt "$APP" -dmg 2>/dev/null || true
+            cp -r "$APP" dist/
+          else
+            cp "build/${{ matrix.exe }}" dist/
+            chmod +x "dist/${{ matrix.exe }}"
+          fi
+          cp -r resources dist/resources 2>/dev/null || true
+          cp -r scripts dist/scripts 2>/dev/null || true
+
+      # ---- Package: Linux ----
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
         working-directory: fincept-qt
         run: |
           mkdir -p dist
@@ -176,7 +229,7 @@ jobs:
     needs: build
     runs-on: macos-14
     name: macOS Universal
-    if: "!cancelled() && needs.build.result == 'success'"
+    if: "!cancelled() && needs.build.result != 'failure'"
 
     steps:
       - name: Download macOS arm64
@@ -194,7 +247,8 @@ jobs:
       - name: Create Universal Binary
         run: |
           mkdir -p dist
-          lipo -create arm64/FinceptTerminal x64/FinceptTerminal -output dist/FinceptTerminal
+          lipo -create arm64/FinceptTerminal x64/FinceptTerminal \
+            -output dist/FinceptTerminal
           chmod +x dist/FinceptTerminal
           cp -r arm64/resources dist/resources 2>/dev/null || true
           cp -r arm64/scripts dist/scripts 2>/dev/null || true
@@ -212,11 +266,15 @@ jobs:
   release:
     needs: [build, macos-universal]
     runs-on: ubuntu-latest
-    if: "!cancelled() && needs.build.result == 'success'"
+    name: Create Release
+    if: "!cancelled() && needs.build.result != 'failure' && startsWith(github.ref, 'refs/tags/')"
     permissions:
       contents: write
 
     steps:
+      - name: Install zip
+        run: sudo apt-get install -y zip
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -236,6 +294,7 @@ jobs:
             fi
             cd ..
           done
+          ls -lh ../
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -244,21 +303,21 @@ jobs:
           name: Fincept Terminal ${{ github.ref_name }}
           make_latest: true
           body: |
-            Fincept Terminal ${{ github.ref_name }}
+            ## Fincept Terminal ${{ github.ref_name }}
 
-            ## Downloads
+            ### Downloads
 
-            ### Windows
-            - `FinceptTerminal-Windows-x64.zip` - Windows x86_64
-            - `FinceptTerminal-Windows-arm64.zip` - Windows ARM64
+            **Windows**
+            - `FinceptTerminal-Windows-x64.zip` — Windows x64 (MSVC)
+            - `FinceptTerminal-Windows-arm64.zip` — Windows ARM64
 
-            ### Linux
-            - `FinceptTerminal-Linux-x64.tar.gz` - Linux x86_64
+            **Linux**
+            - `FinceptTerminal-Linux-x64.tar.gz` — Linux x64
 
-            ### macOS
-            - `FinceptTerminal-macOS-arm64.tar.gz` - macOS Apple Silicon (M1/M2/M3/M4)
-            - `FinceptTerminal-macOS-x64.tar.gz` - macOS Intel
-            - `FinceptTerminal-macOS-universal.tar.gz` - macOS Universal
+            **macOS**
+            - `FinceptTerminal-macOS-universal.tar.gz` — macOS Universal (ARM64 + Intel)
+            - `FinceptTerminal-macOS-arm64.tar.gz` — macOS Apple Silicon
+            - `FinceptTerminal-macOS-x64.tar.gz` — macOS Intel
           files: |
             FinceptTerminal-Windows-x64.zip
             FinceptTerminal-Windows-arm64.zip
