@@ -32,6 +32,9 @@ class AsiaMarketsScreen : public QWidget {
   public:
     explicit AsiaMarketsScreen(QWidget* parent = nullptr);
 
+  protected:
+    void showEvent(QShowEvent* e) override;
+
   private slots:
     void on_category_changed(int index);
     void on_region_changed(int index);
@@ -42,6 +45,7 @@ class AsiaMarketsScreen : public QWidget {
 
   private:
     void setup_ui();
+    bool first_show_ = true;
     QWidget* create_header();
     QWidget* create_category_bar();
     QWidget* create_left_panel();
@@ -93,6 +97,7 @@ class AsiaMarketsScreen : public QWidget {
 
     bool is_table_view_ = true;
     bool loading_ = false;
+    QJsonArray last_data_;
 };
 
 } // namespace fincept::screens

@@ -10,6 +10,7 @@
 #include <QJsonDocument>
 #include <QPointer>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QSplitter>
 #include <QVBoxLayout>
 
@@ -142,6 +143,16 @@ AsiaMarketsScreen::AsiaMarketsScreen(QWidget* parent) : QWidget(parent) {
     LOG_INFO("AsiaMarkets", "Screen constructed");
 }
 
+// ── Show event — auto-load first category on first visit ────────────────────
+
+void AsiaMarketsScreen::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    if (first_show_) {
+        first_show_ = false;
+        on_category_changed(0);
+    }
+}
+
 // ── UI Setup ────────────────────────────────────────────────────────────────
 
 void AsiaMarketsScreen::setup_ui() {
@@ -256,8 +267,9 @@ QWidget* AsiaMarketsScreen::create_left_panel() {
     srl->setSpacing(6);
     auto* sym_label = new QLabel("SYMBOL");
     sym_label->setObjectName("asiaParamLabel");
-    symbol_input_ = new QLineEdit("000001");
+    symbol_input_ = new QLineEdit;
     symbol_input_->setObjectName("asiaSymbolInput");
+    symbol_input_->setPlaceholderText("e.g. 000001");
     symbol_input_->setMaxLength(20);
     srl->addWidget(sym_label);
     srl->addWidget(symbol_input_, 1);
@@ -462,6 +474,9 @@ void AsiaMarketsScreen::on_view_toggle() {
     is_table_view_ = !is_table_view_;
     view_stack_->setCurrentIndex(is_table_view_ ? 0 : 1);
     view_toggle_btn_->setText(is_table_view_ ? "JSON" : "TABLE");
+    // Populate JSON view lazily on first switch
+    if (!is_table_view_ && json_view_->toPlainText().isEmpty() && !last_data_.isEmpty())
+        display_json(last_data_);
 }
 
 // ── Data loading ────────────────────────────────────────────────────────────
@@ -553,6 +568,25 @@ void AsiaMarketsScreen::populate_endpoint_list(const QJsonObject& result) {
     endpoint_count_label_->setText(QString::number(all_endpoints.size()) + " endpoints");
     data_status_->setText("Select an endpoint");
     LOG_INFO("AsiaMarkets", "Loaded " + QString::number(all_endpoints.size()) + " endpoints");
+
+    // Auto-select: prefer a _sina endpoint (reliable), fallback to first real endpoint
+    QListWidgetItem* first_real = nullptr;
+    QListWidgetItem* first_sina = nullptr;
+    for (int i = 0; i < endpoint_list_->count(); ++i) {
+        auto* item = endpoint_list_->item(i);
+        QString ep = item->data(Qt::UserRole).toString();
+        if (ep.isEmpty()) continue;
+        if (!first_real) first_real = item;
+        if (!first_sina && ep.contains("sina", Qt::CaseInsensitive)) {
+            first_sina = item;
+            break;
+        }
+    }
+    QListWidgetItem* to_select = first_sina ? first_sina : first_real;
+    if (to_select) {
+        endpoint_list_->setCurrentItem(to_select);
+        on_endpoint_clicked(to_select);
+    }
 }
 
 void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList& extra_args) {
@@ -623,8 +657,11 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
         self->record_count_->show();
         self->data_status_->setText(endpoint);
 
+        self->last_data_ = data_array;
+        self->json_view_->clear();
         self->display_table(data_array);
-        self->display_json(data_array);
+        if (!self->is_table_view_)
+            self->display_json(data_array);
 
         LOG_INFO("AsiaMarkets", endpoint + ": " + QString::number(count) + " records");
     });
@@ -633,11 +670,6 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
 // ── Display ─────────────────────────────────────────────────────────────────
 
 void AsiaMarketsScreen::display_table(const QJsonArray& data) {
-    data_table_->setSortingEnabled(false);
-    data_table_->clear();
-    data_table_->setRowCount(0);
-    data_table_->setColumnCount(0);
-
     if (data.isEmpty()) {
         data_status_->setText("No data returned");
         return;
@@ -646,23 +678,33 @@ void AsiaMarketsScreen::display_table(const QJsonArray& data) {
     // Columns from first row
     QStringList columns;
     auto first = data[0].toObject();
-    for (auto it = first.begin(); it != first.end(); ++it) {
+    for (auto it = first.begin(); it != first.end(); ++it)
         columns << it.key();
-    }
 
+    int max_rows = qMin(data.size(), 2000);
+
+    // Block all signals + updates during population
+    data_table_->setSortingEnabled(false);
+    data_table_->setUpdatesEnabled(false);
+    data_table_->clearContents();
+    data_table_->setRowCount(max_rows);
     data_table_->setColumnCount(columns.size());
     data_table_->setHorizontalHeaderLabels(columns);
 
-    int max_rows = qMin(data.size(), 5000);
-    data_table_->setRowCount(max_rows);
+    // Pre-build color lookup to avoid repeated QColor construction
+    const QColor col_pos(colors::CYAN);
+    const QColor col_neg(colors::NEGATIVE);
 
     for (int row = 0; row < max_rows; ++row) {
         auto obj = data[row].toObject();
         for (int col = 0; col < columns.size(); ++col) {
             auto val = obj.value(columns[col]);
             QString text;
+            bool is_neg = false;
             if (val.isDouble()) {
-                text = QString::number(val.toDouble(), 'g', 10);
+                double v = val.toDouble();
+                text = QString::number(v, 'g', 8);
+                is_neg = v < 0;
             } else if (val.isNull()) {
                 text = "--";
             } else {
@@ -671,24 +713,20 @@ void AsiaMarketsScreen::display_table(const QJsonArray& data) {
 
             auto* item = new QTableWidgetItem(text);
             item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-
-            if (val.isDouble()) {
-                double v = val.toDouble();
-                item->setForeground(QColor(v < 0 ? colors::NEGATIVE : colors::CYAN));
-            }
-
+            if (val.isDouble())
+                item->setForeground(is_neg ? col_neg : col_pos);
             data_table_->setItem(row, col, item);
         }
     }
 
-    if (columns.size() <= 20) {
-        data_table_->resizeColumnsToContents();
-    }
+    // Fixed column width — much faster than resizeColumnsToContents
+    data_table_->horizontalHeader()->setDefaultSectionSize(110);
+    data_table_->verticalHeader()->setDefaultSectionSize(22);
+    data_table_->setUpdatesEnabled(true);
     data_table_->setSortingEnabled(true);
 
-    if (data.size() > max_rows) {
+    if (data.size() > max_rows)
         data_status_->setText(QString("Showing %1 of %2").arg(max_rows).arg(data.size()));
-    }
 }
 
 void AsiaMarketsScreen::display_json(const QJsonArray& data) {

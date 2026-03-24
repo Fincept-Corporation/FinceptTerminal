@@ -199,6 +199,8 @@ jobs:
           cp -r scripts dist/scripts 2>/dev/null || true
 
       # ---- Package: macOS (macdeployqt) ----
+      # Note: upload-artifact strips execute bits (zip limitation).
+      # We tar the dist/ contents so permissions are preserved on download.
       - name: Package (macOS)
         if: runner.os == 'macOS'
         working-directory: fincept-qt
@@ -232,6 +234,8 @@ jobs:
           fi
           cp -r resources dist/resources 2>/dev/null || true
           cp -r scripts dist/scripts 2>/dev/null || true
+          # Tar to preserve execute permissions (upload-artifact uses zip which strips them)
+          tar -czf dist.tar.gz -C dist .
 
       # ---- Package: Linux ----
       - name: Package (Linux)
@@ -248,7 +252,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: fincept-qt/dist/
+          # macOS: upload the tar to preserve execute permissions; others upload dist/ directly
+          path: ${{ runner.os == 'macOS' && 'fincept-qt/dist.tar.gz' || 'fincept-qt/dist/' }}
           retention-days: 30
 
   # ---- macOS Universal Binary ----
@@ -256,37 +261,75 @@ jobs:
     needs: build
     runs-on: macos-15
     name: macOS Universal
-    if: "!cancelled() && needs.build.result != 'failure'"
+    # Only run if ALL build matrix jobs succeeded (not just "didn't fail")
+    if: "!cancelled() && needs.build.result == 'success'"
 
     steps:
       - name: Download macOS arm64
         uses: actions/download-artifact@v4
         with:
           name: FinceptTerminal-macOS-arm64
-          path: arm64
+          path: arm64-dl
 
       - name: Download macOS x64
         uses: actions/download-artifact@v4
         with:
           name: FinceptTerminal-macOS-x64
-          path: x64
+          path: x64-dl
+
+      - name: Extract macOS artifacts
+        run: |
+          # Artifacts were uploaded as dist.tar.gz to preserve execute permissions
+          mkdir -p arm64 x64
+          tar -xzf arm64-dl/dist.tar.gz -C arm64
+          tar -xzf x64-dl/dist.tar.gz  -C x64
 
       - name: Create Universal Binary
         run: |
+          # Locate the binary — may be inside a .app bundle or at the top level
+          find_bin() {
+            local base="$1"
+            if [ -f "$base/FinceptTerminal" ]; then
+              echo "$base/FinceptTerminal"
+            elif [ -f "$base/FinceptTerminal.app/Contents/MacOS/FinceptTerminal" ]; then
+              echo "$base/FinceptTerminal.app/Contents/MacOS/FinceptTerminal"
+            else
+              echo "::error::Cannot find FinceptTerminal binary under $base" >&2
+              find "$base" -type f | head -20 >&2
+              exit 1
+            fi
+          }
+          ARM64_BIN=$(find_bin arm64)
+          X64_BIN=$(find_bin x64)
+          echo "arm64 binary: $ARM64_BIN"
+          echo "x64   binary: $X64_BIN"
+
+          # Verify the two binaries are actually different architectures before lipo
+          ARM64_ARCH=$(lipo -archs "$ARM64_BIN")
+          X64_ARCH=$(lipo -archs "$X64_BIN")
+          echo "arm64 artifact arch: $ARM64_ARCH"
+          echo "x64   artifact arch: $X64_ARCH"
+          if [ "$ARM64_ARCH" = "$X64_ARCH" ]; then
+            echo "::error::Both binaries report the same architecture ($ARM64_ARCH) — cannot create universal binary" >&2
+            exit 1
+          fi
+
           mkdir -p dist
-          lipo -create arm64/FinceptTerminal x64/FinceptTerminal \
-            -output dist/FinceptTerminal
+          lipo -create "$ARM64_BIN" "$X64_BIN" -output dist/FinceptTerminal
           chmod +x dist/FinceptTerminal
           cp -r arm64/resources dist/resources 2>/dev/null || true
           cp -r arm64/scripts dist/scripts 2>/dev/null || true
           file dist/FinceptTerminal
+          lipo -info dist/FinceptTerminal
           ls -lh dist/FinceptTerminal
+          # Tar to preserve execute permissions
+          tar -czf dist.tar.gz -C dist .
 
       - name: Upload Universal artifact
         uses: actions/upload-artifact@v4
         with:
           name: FinceptTerminal-macOS-universal
-          path: dist/
+          path: dist.tar.gz
           retention-days: 30
 
   # ---- Release ----
@@ -294,7 +337,7 @@ jobs:
     needs: [build, macos-universal]
     runs-on: ubuntu-latest
     name: Create Release
-    if: "!cancelled() && needs.build.result != 'failure' && startsWith(github.ref, 'refs/tags/')"
+    if: "!cancelled() && needs.build.result == 'success' && needs.macos-universal.result == 'success' && startsWith(github.ref, 'refs/tags/')"
     permissions:
       contents: write
 
@@ -313,13 +356,23 @@ jobs:
           cd artifacts
           for dir in */; do
             name="${dir%/}"
-            cd "$name"
             if [[ "$name" == *"Windows"* ]]; then
+              # Windows artifacts are plain directories
+              cd "$name"
               zip -r "../../${name}.zip" .
+              cd ..
+            elif [[ "$name" == *"macOS"* ]]; then
+              # macOS artifacts are already a dist.tar.gz (execute permissions preserved)
+              # Re-package as a named tarball for the release
+              mkdir -p "/tmp/${name}"
+              tar -xzf "${name}/dist.tar.gz" -C "/tmp/${name}"
+              tar -czf "../${name}.tar.gz" -C "/tmp/${name}" .
             else
+              # Linux: plain directory
+              cd "$name"
               tar -czf "../../${name}.tar.gz" .
+              cd ..
             fi
-            cd ..
           done
           ls -lh ../
 
