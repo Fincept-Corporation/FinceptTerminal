@@ -2,9 +2,14 @@
 #include "screens/portfolio/PortfolioBlotter.h"
 
 #include "screens/portfolio/PortfolioSparkline.h"
+#include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
 
 #include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMetaObject>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -35,17 +40,12 @@ void PortfolioBlotter::build_ui() {
     table_->verticalHeader()->setVisible(false);
     table_->setFocusPolicy(Qt::NoFocus);
 
-    // Column widths
+    // Column widths — stretch all columns evenly, no last-section special treatment
     auto* hdr = table_->horizontalHeader();
-    hdr->setMinimumSectionSize(50);
-    hdr->setSectionResizeMode(QHeaderView::Interactive);
-    hdr->setStretchLastSection(true);
+    hdr->setMinimumSectionSize(40);
+    hdr->setStretchLastSection(false);
     hdr->setSortIndicatorShown(false);
-
-    // Default widths
-    int col_widths[] = {72, 55, 68, 72, 80, 80, 78, 60, 58, 68, 52};
-    for (int i = 0; i < kColumns.size() && i < 11; ++i)
-        table_->setColumnWidth(i, col_widths[i]);
+    hdr->setSectionResizeMode(QHeaderView::Stretch);
 
     table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none;"
                                   "  font-size:11px; font-family:%3; gridline-color:transparent; }"
@@ -69,6 +69,46 @@ void PortfolioBlotter::build_ui() {
 void PortfolioBlotter::set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings) {
     holdings_ = holdings;
     populate_table();
+    fetch_sparklines(); // async — repaints sparkline cells when data arrives
+}
+
+void PortfolioBlotter::fetch_sparklines() {
+    if (holdings_.isEmpty())
+        return;
+
+    QStringList symbols;
+    for (const auto& h : holdings_)
+        symbols.append(h.symbol);
+
+    QPointer<PortfolioBlotter> self = this;
+    services::MarketDataService::instance().fetch_sparklines(
+        symbols,
+        [self](bool ok, QHash<QString, QVector<double>> data) {
+            if (!self || !ok || data.isEmpty())
+                return;
+            QMetaObject::invokeMethod(self, [self, data]() {
+                if (!self)
+                    return;
+                self->sparkline_cache_ = data;
+                // Repaint only the TREND column cells without full table rebuild
+                for (int r = 0; r < self->table_->rowCount(); ++r) {
+                    auto* item = self->table_->item(r, 0);
+                    if (!item)
+                        continue;
+                    QString sym = item->text();
+                    if (!self->sparkline_cache_.contains(sym))
+                        continue;
+                    auto* w = qobject_cast<PortfolioSparkline*>(self->table_->cellWidget(r, 9));
+                    if (!w)
+                        continue;
+                    const auto& prices = self->sparkline_cache_[sym];
+                    w->set_data(prices);
+                    // Colour based on first vs last price
+                    bool up = prices.size() >= 2 ? prices.last() >= prices.first() : true;
+                    w->set_color(QColor(up ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+                }
+            }, Qt::QueuedConnection);
+        });
 }
 
 void PortfolioBlotter::set_selected_symbol(const QString& symbol) {
@@ -227,15 +267,20 @@ void PortfolioBlotter::populate_table() {
         set_cell(8, QString("%1%2%").arg(h.day_change_percent >= 0 ? "+" : "").arg(format_value(h.day_change_percent)),
                  chg_color);
 
-        // TREND (sparkline widget)
-        auto* sparkline = new PortfolioSparkline(65, 20);
-        // Use current price as single point — real historical data comes later
-        QVector<double> trend_data;
-        double base = h.current_price - h.day_change;
-        for (int i = 0; i < 10; ++i)
-            trend_data.append(base + (h.day_change * i / 9.0));
-        sparkline->set_data(trend_data);
-        sparkline->set_color(QColor(h.day_change_percent >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+        // TREND — use real 5d/1h prices from cache if available, else placeholder
+        auto* sparkline = new PortfolioSparkline(0, 0);
+        sparkline->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        if (sparkline_cache_.contains(h.symbol)) {
+            const auto& prices = sparkline_cache_[h.symbol];
+            sparkline->set_data(prices);
+            bool up = prices.size() >= 2 ? prices.last() >= prices.first() : h.day_change >= 0;
+            sparkline->set_color(QColor(up ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+        } else {
+            // Placeholder: flat line at current price until real data arrives
+            QVector<double> flat(8, h.current_price);
+            sparkline->set_data(flat);
+            sparkline->set_color(QColor(ui::colors::TEXT_TERTIARY));
+        }
         table_->setCellWidget(r, 9, sparkline);
 
         // WT%

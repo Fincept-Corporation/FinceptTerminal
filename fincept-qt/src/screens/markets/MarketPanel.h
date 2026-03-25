@@ -18,6 +18,9 @@ class MarketPanel : public QWidget {
     void set_symbols(const QStringList& symbols);
     void refresh();
 
+  signals:
+    void refresh_finished();
+
   private:
     void populate(const QVector<services::QuoteData>& quotes);
     void show_skeleton();
@@ -32,6 +35,7 @@ class MarketPanel : public QWidget {
     QTableWidget* table_ = nullptr;
     QTimer* skeleton_timer_ = nullptr;
     int skeleton_offset_ = 0; // shimmer position 0..100
+    bool has_loaded_data_ = false;
 };
 
 } // namespace fincept::screens

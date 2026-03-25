@@ -8,6 +8,7 @@
 
 #include <QJsonDocument>
 #include <QThread>
+#include <QTimer>
 
 namespace fincept::mcp {
 
@@ -26,20 +27,43 @@ void McpService::initialize() {
     // Load external server configs from DB (fast, synchronous)
     McpManager::instance().initialize();
 
-    // Start external servers + health check in a background thread so the
-    // UI thread is never blocked (each server start involves spawning a process
-    // and running an IPC handshake).
-    QThread* t = QThread::create([]() {
-        McpManager::instance().start_auto_servers();
-        McpManager::instance().start_health_check();
-        LOG_INFO("McpService", "External MCP servers started in background");
+    // Invalidate tool cache whenever external servers change (start/stop/add/remove)
+    QObject::connect(&McpManager::instance(), &McpManager::servers_changed, [this]() {
+        QMutexLocker lock(&mutex_);
+        cache_time_ = QDateTime(); // force refresh on next get_all_tools()
+        LOG_INFO(TAG, "Tool cache invalidated — external servers changed");
     });
-    t->setObjectName("mcp-init");
-    t->start();
-    // Thread cleans itself up when finished
-    QObject::connect(t, &QThread::finished, t, &QObject::deleteLater);
 
-    LOG_INFO(TAG, QString("McpService initialized — %1 internal tools").arg(McpProvider::instance().tool_count()));
+    // Auto-start enabled servers in a background thread so the UI never
+    // freezes. Only servers with both enabled AND auto_start flags are
+    // started at launch. Users can manually enable others from the MCP tab.
+    const auto servers = McpManager::instance().get_servers();
+    QStringList to_start;
+    for (const auto& srv : servers) {
+        if (srv.enabled && srv.auto_start)
+            to_start.append(srv.id);
+    }
+
+    if (!to_start.isEmpty()) {
+        QThread* t = QThread::create([to_start]() {
+            for (const auto& id : to_start) {
+                LOG_INFO("McpService", "Auto-starting MCP server: " + id);
+                auto r = McpManager::instance().start_server(id);
+                if (r.is_err())
+                    LOG_WARN("McpService", "Auto-start failed for " + id + ": " + QString::fromStdString(r.error()));
+            }
+            LOG_INFO("McpService", "All external MCP servers started");
+        });
+        t->setObjectName("mcp-autostart");
+        t->start();
+        QObject::connect(t, &QThread::finished, t, &QObject::deleteLater);
+    }
+
+    McpManager::instance().start_health_check();
+
+    LOG_INFO(TAG, QString("McpService initialized — %1 internal tools, %2 external servers queued")
+                      .arg(McpProvider::instance().tool_count())
+                      .arg(to_start.size()));
 }
 
 void McpService::shutdown() {
@@ -83,6 +107,7 @@ QJsonArray McpService::format_tools_for_openai() {
         result.append(entry);
     }
 
+    LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM").arg(result.size()));
     return result;
 }
 
@@ -225,7 +250,7 @@ void McpService::refresh_cache() {
     cache_time_ = QDateTime::currentDateTime();
     cached_generation_ = McpProvider::instance().generation();
 
-    LOG_DEBUG(TAG, QString("Refreshed tool cache: %1 total (%2 internal, %3 external)")
+    LOG_INFO(TAG, QString("Refreshed tool cache: %1 total (%2 internal, %3 external)")
                        .arg(cached_tools_.size())
                        .arg(internal.size())
                        .arg(external.size()));

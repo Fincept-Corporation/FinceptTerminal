@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QResizeEvent>
 
 namespace fincept::ui {
 
@@ -39,9 +40,18 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     menu_bar_->addMenu(build_help_menu());
     hl->addWidget(menu_bar_);
 
+    // Command bar — shrinks gracefully, min 120 max 260
+    command_bar_ = new CommandBar(this);
+    command_bar_->setMinimumWidth(120);
+    command_bar_->setMaximumWidth(260);
+    command_bar_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    connect(command_bar_, &CommandBar::navigate_to, this, &ToolBar::navigate_to);
+    hl->addWidget(command_bar_);
+
     auto sep = [&]() {
         auto* s = new QLabel("|");
-        s->setStyleSheet("color:#1a1a1a;font-size:13px;background:transparent;padding:0 6px;");
+        s->setStyleSheet("color:#333333;font-size:13px;background:transparent;padding:0 4px;");
+        s->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         hl->addWidget(s);
     };
 
@@ -52,31 +62,43 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
                              .arg(sz)
                              .arg(b ? "font-weight:700;" : "")
                              .arg(MF));
+        l->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         return l;
     };
 
     sep();
-    hl->addWidget(mk("FINCEPT", "#d97706", 14, true));
-    hl->addWidget(mk(" TERMINAL", "#404040", 12));
+    hl->addWidget(mk("FINCEPT ", "#d97706", 14, true));
+    hl->addWidget(mk("TERMINAL", "#e5e5e5", 14, true));
+    // subtitle — hidden below ~900px effective width via stretch absorbing
+    subtitle_label_ = mk("  |  PROFESSIONAL RESEARCH DESK", "#666666", 11);
+    subtitle_label_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    hl->addWidget(subtitle_label_);
     hl->addWidget(mk("  ", "#000"));
     hl->addWidget(mk("\xe2\x97\x8f", "#16a34a", 9));
     hl->addWidget(mk(" LIVE", "#16a34a", 11, true));
 
-    hl->addStretch();
-    clock_label_ = mk("", "#404040", 12);
+    hl->addStretch(1);
+
+    clock_label_ = mk("", "#ffffff", 12);
+    clock_label_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    clock_label_->setMinimumWidth(160);
     hl->addWidget(clock_label_);
-    hl->addStretch();
+
+    hl->addStretch(1);
 
     user_label_ = mk("---", "#d97706", 12);
+    user_label_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     hl->addWidget(user_label_);
     sep();
     credits_label_ = mk("---", "#16a34a", 12);
+    credits_label_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     hl->addWidget(credits_label_);
     sep();
     plan_btn_ = new QPushButton("---");
     plan_btn_->setCursor(Qt::PointingHandCursor);
     plan_btn_->setToolTip("View Plans & Pricing");
-    plan_btn_->setStyleSheet("QPushButton{color:#525252;font-size:12px;background:transparent;border:none;"
+    plan_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    plan_btn_->setStyleSheet("QPushButton{color:#ffffff;font-size:12px;background:transparent;border:none;"
                              "font-family:'Consolas',monospace;padding:0 2px;}"
                              "QPushButton:hover{color:#d97706;}");
     connect(plan_btn_, &QPushButton::clicked, this, &ToolBar::plan_clicked);
@@ -86,6 +108,7 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     auto* logout_btn = new QPushButton("LOGOUT");
     logout_btn->setFixedHeight(20);
     logout_btn->setCursor(Qt::PointingHandCursor);
+    logout_btn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     logout_btn->setStyleSheet("QPushButton{background:transparent;color:#dc2626;border:1px solid #7f1d1d;"
                               "padding:0 8px;font-size:11px;font-weight:700;font-family:'Consolas',monospace;}"
                               "QPushButton:hover{background:#dc2626;color:#e5e5e5;border-color:#dc2626;}");
@@ -103,8 +126,16 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     refresh_user_display();
 }
 
+void ToolBar::resizeEvent(QResizeEvent* e) {
+    QWidget::resizeEvent(e);
+    // Hide subtitle below 900px to prevent collisions
+    if (subtitle_label_)
+        subtitle_label_->setVisible(e->size().width() >= 900);
+}
+
 void ToolBar::update_clock() {
-    clock_label_->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd  HH:mm:ss"));
+    auto dt = QDateTime::currentDateTime();
+    clock_label_->setText(dt.toString("dd MMM yyyy").toUpper() + "  " + dt.toString("HH:mm:ss"));
 }
 
 void ToolBar::refresh_user_display() {

@@ -9,6 +9,7 @@
 #include "screens/equity_trading/EquityOrderEntry.h"
 #include "screens/equity_trading/EquityTickerBar.h"
 #include "screens/equity_trading/EquityWatchlist.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
@@ -16,8 +17,11 @@
 #include "ui/theme/StyleSheets.h"
 
 #include <QCompleter>
+#include <QDate>
 #include <QDateTime>
 #include <QHBoxLayout>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMutexLocker>
 #include <QPointer>
 #include <QSplitter>
@@ -61,6 +65,8 @@ void EquityTradingScreen::showEvent(QShowEvent* event) {
         watchlist_timer_->start();
     if (clock_timer_)
         clock_timer_->start();
+    if (market_clock_timer_)
+        market_clock_timer_->start();
     LOG_INFO(TAG, "Screen visible — timers started");
 }
 
@@ -74,6 +80,8 @@ void EquityTradingScreen::hideEvent(QHideEvent* event) {
         watchlist_timer_->stop();
     if (clock_timer_)
         clock_timer_->stop();
+    if (market_clock_timer_)
+        market_clock_timer_->stop();
     LOG_INFO(TAG, "Screen hidden — timers stopped");
 }
 
@@ -153,8 +161,14 @@ void EquityTradingScreen::setup_ui() {
     clock_label_->setObjectName("eqClock");
     cmd_layout->addWidget(clock_label_);
 
+    // Connection status indicator
+    conn_label_ = new QLabel("○ NOT CONNECTED");
+    conn_label_->setObjectName("eqConnLabel");
+    conn_label_->setStyleSheet("color: #525252; font-size: 10px; font-weight: 700;");
+    cmd_layout->addWidget(conn_label_);
+
     // API button
-    api_btn_ = new QPushButton("API");
+    api_btn_ = new QPushButton("API KEYS");
     api_btn_->setObjectName("eqApiBtn");
     api_btn_->setFixedHeight(22);
     api_btn_->setCursor(Qt::PointingHandCursor);
@@ -228,6 +242,8 @@ void EquityTradingScreen::setup_ui() {
     connect(order_entry_, &EquityOrderEntry::order_submitted, this, &EquityTradingScreen::on_order_submitted);
     connect(orderbook_, &EquityOrderBook::price_clicked, this, &EquityTradingScreen::on_ob_price_clicked);
     connect(bottom_panel_, &EquityBottomPanel::cancel_order_requested, this, &EquityTradingScreen::on_cancel_order);
+    connect(bottom_panel_, &EquityBottomPanel::modify_order_requested,
+            this, &EquityTradingScreen::async_modify_order);
     connect(chart_, &EquityChart::timeframe_changed, this,
             [this](const QString& tf) { async_fetch_candles(selected_symbol_, tf); });
 }
@@ -253,10 +269,54 @@ void EquityTradingScreen::setup_timers() {
     connect(clock_timer_, &QTimer::timeout, this, &EquityTradingScreen::update_clock);
     clock_timer_->setInterval(CLOCK_UPDATE_MS);
 
+    // Market clock — poll every 60s (is_open changes only at open/close boundary)
+    market_clock_timer_ = new QTimer(this);
+    connect(market_clock_timer_, &QTimer::timeout, this, &EquityTradingScreen::async_fetch_clock);
+    market_clock_timer_->setInterval(60000);
+
     // Deferred init — don't block constructor (P1)
     QTimer::singleShot(100, this, [this]() {
+        // Restore last selected broker
+        auto saved_broker = SettingsRepository::instance().get("equity.broker", broker_id_);
+        if (saved_broker.is_ok() && !saved_broker.value().isEmpty()
+            && BrokerRegistry::instance().get(saved_broker.value())) {
+            on_broker_changed(saved_broker.value());
+        }
         init_broker();
         load_portfolio();
+
+        // Check if credentials already saved — show connected status and load data
+        auto* broker = BrokerRegistry::instance().get(broker_id_);
+        if (broker) {
+            auto creds = broker->load_credentials(); // finds best available env
+            if (!creds.api_key.isEmpty()) {
+                const QString acct = creds.user_id.isEmpty() ? broker_id_.toUpper() : creds.user_id;
+                // additional_data may be JSON — extract env or skip display
+                QString env_str;
+                if (!creds.additional_data.isEmpty()) {
+                    auto _doc = QJsonDocument::fromJson(creds.additional_data.toUtf8());
+                    if (_doc.isObject()) {
+                        QString cc = _doc.object().value("client_code").toString();
+                        if (!cc.isEmpty() && cc != acct) env_str = QString(" [%1]").arg(cc);
+                    } else {
+                        env_str = QString(" [%1]").arg(creds.additional_data.toUpper());
+                    }
+                }
+                const QString env  = env_str;
+                conn_label_->setText(QString("● %1%2").arg(acct, env));
+                conn_label_->setStyleSheet("color: #16a34a; font-size: 10px; font-weight: 700;");
+                async_fetch_positions();
+                async_fetch_holdings();
+                async_fetch_orders();
+                async_fetch_funds();
+                async_fetch_calendar();
+                async_fetch_clock();
+                async_fetch_time_sales();
+                async_fetch_auctions();
+                async_fetch_condition_codes();
+            }
+        }
+
         refresh_quote();
         async_fetch_watchlist_quotes();
         async_fetch_candles(selected_symbol_, chart_->current_timeframe());
@@ -284,7 +344,10 @@ void EquityTradingScreen::load_portfolio() {
         portfolio_ = *existing;
         portfolio_id_ = portfolio_.id;
     } else {
-        portfolio_ = pt_create_portfolio("Equity Paper", DEFAULT_PAPER_BALANCE, "INR", 1.0, "cross", 0.001, broker_id_);
+        auto* b_profile = BrokerRegistry::instance().get(broker_id_);
+        const double paper_bal = b_profile ? b_profile->profile().default_paper_balance : DEFAULT_PAPER_BALANCE;
+        const QString paper_cur = b_profile ? b_profile->profile().currency : "INR";
+        portfolio_ = pt_create_portfolio("Equity Paper", paper_bal, paper_cur, 1.0, "cross", 0.001, broker_id_);
         portfolio_id_ = portfolio_.id;
     }
 
@@ -335,10 +398,16 @@ void EquityTradingScreen::async_fetch_quote() {
             return;
         }
         auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty()) {
+            self->quote_fetching_ = false;
+            return;
+        }
         auto result = broker->get_quotes(creds, {self->selected_symbol_});
         self->quote_fetching_ = false;
-        if (!result.success || !result.data || result.data->isEmpty())
+        if (!result.success || !result.data || result.data->isEmpty()) {
+            LOG_WARN(TAG, QString("get_quotes failed: %1").arg(result.error));
             return;
+        }
         const auto quote = result.data->first();
         QMetaObject::invokeMethod(
             self,
@@ -380,10 +449,32 @@ void EquityTradingScreen::async_fetch_candles(const QString& symbol, const QStri
             return;
         }
         auto creds = broker->load_credentials();
-        auto result = broker->get_history(creds, symbol, timeframe, "", "");
-        self->candles_fetching_ = false;
-        if (!result.success || !result.data)
+        if (creds.api_key.isEmpty()) {
+            self->candles_fetching_ = false;
             return;
+        }
+        // Build date range — AngelOne rejects empty dates
+        // For intraday go back 5 days to cover weekends/holidays
+        const QString to_dt = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm");
+        QString from_dt;
+        if (timeframe == "1d" || timeframe == "D" || timeframe == "1w" || timeframe == "W")
+            from_dt = QDate::currentDate().addYears(-2).toString("yyyy-MM-dd") + " 00:00";
+        else if (timeframe == "1h" || timeframe == "60")
+            from_dt = QDate::currentDate().addDays(-30).toString("yyyy-MM-dd") + " 00:00";
+        else if (timeframe == "30m")
+            from_dt = QDate::currentDate().addDays(-10).toString("yyyy-MM-dd") + " 00:00";
+        else if (timeframe == "15m")
+            from_dt = QDate::currentDate().addDays(-7).toString("yyyy-MM-dd") + " 00:00";
+        else if (timeframe == "5m")
+            from_dt = QDate::currentDate().addDays(-5).toString("yyyy-MM-dd") + " 00:00";
+        else  // 1m — last 5 days covers weekends
+            from_dt = QDate::currentDate().addDays(-5).toString("yyyy-MM-dd") + " 00:00";
+        auto result = broker->get_history(creds, symbol, timeframe, from_dt, to_dt);
+        self->candles_fetching_ = false;
+        if (!result.success || !result.data) {
+            LOG_WARN(TAG, QString("get_history failed: %1").arg(result.error));
+            return;
+        }
         QMetaObject::invokeMethod(
             self,
             [self, data = *result.data]() {
@@ -526,6 +617,165 @@ void EquityTradingScreen::async_fetch_watchlist_quotes() {
     });
 }
 
+void EquityTradingScreen::async_fetch_orderbook() {
+    if (current_price_ <= 0)
+        return;
+    QPointer<EquityTradingScreen> self = this;
+    QtConcurrent::run([self]() {
+        if (!self) return;
+        auto* broker = BrokerRegistry::instance().get(self->broker_id_);
+        if (!broker) return;
+        auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty()) return;
+
+        // Fetch recent quote ticks — reconstruct L2 by aggregating bid/ask sizes per price level
+        // Use today's quotes limited to 1000 ticks which gives real depth
+        const QString today = QDate::currentDate().toString("yyyy-MM-dd");
+        auto result = broker->get_historical_quotes_single(creds, self->selected_symbol_,
+                                                           today + "T00:00:00Z", "", 1000);
+
+        // Fall back to snapshot best bid/ask if quotes unavailable (pre-market, free tier limits)
+        if (!result.success || !result.data || result.data->isEmpty()) {
+            auto snap = broker->get_quotes(creds, {self->selected_symbol_});
+            if (!snap.success || !snap.data || snap.data->isEmpty()) return;
+            const auto& q = snap.data->first();
+            // Use LTP as fallback if bid/ask not available (some brokers omit depth in basic mode)
+            const double bid = q.bid > 0 ? q.bid : (q.ltp > 0 ? q.ltp * 0.9995 : 0);
+            const double ask = q.ask > 0 ? q.ask : (q.ltp > 0 ? q.ltp * 1.0005 : 0);
+            if (bid <= 0 || ask <= 0) return;
+            const double bid_sz = q.bid_size > 0 ? q.bid_size : 100.0;
+            const double ask_sz = q.ask_size > 0 ? q.ask_size : 100.0;
+            QVector<QPair<double, double>> bids{{bid, bid_sz}}, asks_{{ask, ask_sz}};
+            const double spread = ask - bid;
+            const double spread_pct = bid > 0 ? (spread / bid) * 100.0 : 0.0;
+            QMetaObject::invokeMethod(self, [self, bids, asks_, spread, spread_pct]() {
+                if (!self) return;
+                self->orderbook_->set_data(bids, asks_, spread, spread_pct);
+            }, Qt::QueuedConnection);
+            return;
+        }
+
+        // Aggregate: accumulate size at each price level
+        QMap<double, double> bid_map, ask_map;
+        for (const auto& q : *result.data) {
+            if (q.bid > 0) bid_map[q.bid] += q.bid_size > 0 ? q.bid_size : 1.0;
+            if (q.ask > 0) ask_map[q.ask] += q.ask_size > 0 ? q.ask_size : 1.0;
+        }
+
+        // Sort: bids descending (best first), asks ascending (best first)
+        QVector<QPair<double, double>> bids, asks_v;
+        auto bid_keys = bid_map.keys();
+        std::sort(bid_keys.begin(), bid_keys.end(), std::greater<double>());
+        for (const double p : bid_keys.mid(0, 10))
+            bids.append({p, bid_map[p]});
+
+        auto ask_keys = ask_map.keys();
+        std::sort(ask_keys.begin(), ask_keys.end());
+        for (const double p : ask_keys.mid(0, 10))
+            asks_v.append({p, ask_map[p]});
+
+        if (bids.isEmpty() || asks_v.isEmpty()) return;
+
+        const double best_bid = bids.first().first;
+        const double best_ask = asks_v.first().first;
+        const double spread     = best_ask - best_bid;
+        const double spread_pct = best_bid > 0 ? (spread / best_bid) * 100.0 : 0.0;
+
+        QMetaObject::invokeMethod(self, [self, bids, asks_v, spread, spread_pct]() {
+            if (!self) return;
+            self->orderbook_->set_data(bids, asks_v, spread, spread_pct);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void EquityTradingScreen::async_fetch_time_sales() {
+    if (time_sales_fetching_.exchange(true)) return;
+    QPointer<EquityTradingScreen> self = this;
+    QtConcurrent::run([self]() {
+        if (!self) { self->time_sales_fetching_ = false; return; }
+        auto* broker = BrokerRegistry::instance().get(self->broker_id_);
+        if (!broker) { self->time_sales_fetching_ = false; return; }
+        auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty()) { self->time_sales_fetching_ = false; return; }
+
+        // Fetch today's trades — limit 500 for initial load
+        const QString today = QDate::currentDate().toString("yyyy-MM-dd");
+        auto result = broker->get_historical_trades_single(creds, self->selected_symbol_,
+                                                           today + "T00:00:00Z", "", 500);
+        self->time_sales_fetching_ = false;
+        if (!result.success || !result.data) return;
+
+        auto trades = *result.data;
+        QMetaObject::invokeMethod(self, [self, trades]() {
+            if (!self) return;
+            self->bottom_panel_->set_time_sales(trades);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void EquityTradingScreen::async_fetch_latest_trade() {
+    QPointer<EquityTradingScreen> self = this;
+    QtConcurrent::run([self]() {
+        if (!self) return;
+        auto* broker = BrokerRegistry::instance().get(self->broker_id_);
+        if (!broker) return;
+        auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty()) return;
+
+        auto result = broker->get_latest_trade(creds, self->selected_symbol_);
+        if (!result.success || !result.data) return;
+
+        auto trade = *result.data;
+        QMetaObject::invokeMethod(self, [self, trade]() {
+            if (!self) return;
+            self->bottom_panel_->prepend_trade(trade);
+        }, Qt::QueuedConnection);
+    });
+}
+
+// Fetch the market calendar for the next 30 days (and past 5 for context)
+void EquityTradingScreen::async_fetch_calendar() {
+    QPointer<EquityTradingScreen> self = this;
+    QtConcurrent::run([self]() {
+        if (!self) return;
+        auto* broker = BrokerRegistry::instance().get(self->broker_id_);
+        if (!broker) return;
+        auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty()) return;
+
+        const QString start = QDate::currentDate().addDays(-5).toString("yyyy-MM-dd");
+        const QString end   = QDate::currentDate().addDays(30).toString("yyyy-MM-dd");
+        auto result = broker->get_calendar(creds, start, end);
+        if (!result.success || !result.data) return;
+
+        auto days = *result.data;
+        QMetaObject::invokeMethod(self, [self, days]() {
+            if (!self) return;
+            self->bottom_panel_->set_calendar(days);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void EquityTradingScreen::async_fetch_clock() {
+    QPointer<EquityTradingScreen> self = this;
+    QtConcurrent::run([self]() {
+        if (!self) return;
+        auto* broker = BrokerRegistry::instance().get(self->broker_id_);
+        if (!broker) return;
+        auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty()) return;
+
+        auto result = broker->get_clock(creds);
+        if (!result.success || !result.data) return;
+
+        auto clock = *result.data;
+        QMetaObject::invokeMethod(self, [self, clock]() {
+            if (!self) return;
+            self->bottom_panel_->set_clock(clock);
+        }, Qt::QueuedConnection);
+    });
+}
+
 // ============================================================================
 // Slot Handlers
 // ============================================================================
@@ -533,25 +783,47 @@ void EquityTradingScreen::async_fetch_watchlist_quotes() {
 void EquityTradingScreen::on_broker_changed(const QString& broker) {
     broker_id_ = broker;
     broker_btn_->setText(broker.toUpper());
+    SettingsRepository::instance().set("equity.broker", broker, "equity_trading");
+
+    // Reset connection status, then check if credentials already saved
+    conn_label_->setText("○ NOT CONNECTED");
+    conn_label_->setStyleSheet("color: #525252; font-size: 10px; font-weight: 700;");
 
     // Update default watchlist based on broker region
     auto* b = BrokerRegistry::instance().get(broker);
     if (b) {
-        auto bid = b->id();
-        // Indian brokers
-        if (bid == BrokerId::Fyers || bid == BrokerId::Zerodha || bid == BrokerId::Upstox || bid == BrokerId::Dhan ||
-            bid == BrokerId::Kotak || bid == BrokerId::Groww || bid == BrokerId::AliceBlue ||
-            bid == BrokerId::AngelOne || bid == BrokerId::FivePaisa || bid == BrokerId::IIFL ||
-            bid == BrokerId::Motilal || bid == BrokerId::Shoonya) {
-            watchlist_symbols_ = DEFAULT_WATCHLIST;
-            selected_exchange_ = "NSE";
-            if (selected_symbol_ == "AAPL" || selected_symbol_ == "MSFT")
-                selected_symbol_ = "RELIANCE";
+        const auto prof = b->profile();
+
+        // Update watchlist and selected symbol/exchange from profile
+        watchlist_symbols_ = QStringList(prof.default_watchlist.begin(), prof.default_watchlist.end());
+        selected_symbol_   = prof.default_symbol;
+        selected_exchange_ = prof.default_exchange;
+
+        // Configure order entry for this broker's product types / exchanges
+        order_entry_->configure_for_broker(prof);
+
+        // For brokers with native paper trading, always use Live mode
+        // (their paper server handles simulation); for others, stay in Paper mode
+        if (prof.has_native_paper) {
+            trading_mode_ = TradingMode::Live;
+            mode_btn_->setChecked(true);
+            mode_btn_->setText("LIVE");
+            mode_btn_->setProperty("mode", "live");
+            mode_btn_->style()->unpolish(mode_btn_);
+            mode_btn_->style()->polish(mode_btn_);
+            order_entry_->set_mode(false);
+            bottom_panel_->set_mode(false);
+            UnifiedTrading::instance().switch_mode("live");
         } else {
-            watchlist_symbols_ = US_WATCHLIST;
-            selected_exchange_ = "NASDAQ";
-            if (selected_symbol_ == "RELIANCE" || selected_symbol_ == "HDFCBANK")
-                selected_symbol_ = "AAPL";
+            trading_mode_ = TradingMode::Paper;
+            mode_btn_->setChecked(false);
+            mode_btn_->setText("PAPER");
+            mode_btn_->setProperty("mode", "paper");
+            mode_btn_->style()->unpolish(mode_btn_);
+            mode_btn_->style()->polish(mode_btn_);
+            order_entry_->set_mode(true);
+            bottom_panel_->set_mode(true);
+            UnifiedTrading::instance().switch_mode("paper");
         }
     }
 
@@ -559,6 +831,7 @@ void EquityTradingScreen::on_broker_changed(const QString& broker) {
     symbol_input_->setText(selected_symbol_);
     watchlist_->set_symbols(watchlist_symbols_);
     ticker_bar_->set_symbol(selected_symbol_);
+    ticker_bar_->set_currency(currency_symbol(exchange_currency(selected_exchange_)));
     order_entry_->set_symbol(selected_symbol_);
     order_entry_->set_exchange(selected_exchange_);
 
@@ -566,6 +839,35 @@ void EquityTradingScreen::on_broker_changed(const QString& broker) {
     load_portfolio();
     async_fetch_candles(selected_symbol_, chart_->current_timeframe());
     async_fetch_watchlist_quotes();
+
+    // Check if credentials already saved for this broker
+    if (b) {
+        auto creds = b->load_credentials();
+        if (!creds.api_key.isEmpty()) {
+            const QString acct = creds.user_id.isEmpty() ? broker_id_.toUpper() : creds.user_id;
+            QString env_str;
+            if (!creds.additional_data.isEmpty()) {
+                auto _doc = QJsonDocument::fromJson(creds.additional_data.toUtf8());
+                if (_doc.isObject()) {
+                    QString cc = _doc.object().value("client_code").toString();
+                    if (!cc.isEmpty()) env_str = QString(" [%1]").arg(cc);
+                } else {
+                    env_str = QString(" [%1]").arg(creds.additional_data.toUpper());
+                }
+            }
+            conn_label_->setText(QString("● %1%2").arg(acct, env_str));
+            conn_label_->setStyleSheet("color: #16a34a; font-size: 10px; font-weight: 700;");
+            async_fetch_positions();
+            async_fetch_holdings();
+            async_fetch_orders();
+            async_fetch_funds();
+            async_fetch_calendar();
+            async_fetch_clock();
+            async_fetch_time_sales();
+            async_fetch_auctions();
+            async_fetch_condition_codes();
+        }
+    }
 }
 
 void EquityTradingScreen::on_symbol_selected(const QString& symbol) {
@@ -582,6 +884,10 @@ void EquityTradingScreen::switch_symbol(const QString& symbol) {
     watchlist_->set_active_symbol(symbol);
     refresh_quote();
     async_fetch_candles(selected_symbol_, chart_->current_timeframe());
+    if (trading_mode_ == TradingMode::Live) {
+        async_fetch_time_sales();
+        async_fetch_auctions();
+    }
 }
 
 void EquityTradingScreen::on_mode_toggled() {
@@ -602,52 +908,87 @@ void EquityTradingScreen::on_mode_toggled() {
         async_fetch_holdings();
         async_fetch_orders();
         async_fetch_funds();
+        async_fetch_calendar();
+        async_fetch_clock();
+        async_fetch_time_sales();
+        async_fetch_auctions();
+        async_fetch_condition_codes();
     } else {
         refresh_portfolio();
     }
 }
 
 void EquityTradingScreen::on_api_clicked() {
-    auto* dlg = new EquityCredentials(broker_id_, this);
+    auto* broker_for_dlg = BrokerRegistry::instance().get(broker_id_);
+    auto prof = broker_for_dlg ? broker_for_dlg->profile() : trading::BrokerProfile{};
+    auto* dlg = new EquityCredentials(broker_id_, prof, this);
+
+    QPointer<EquityCredentials> dlg_ptr = dlg;
+    QPointer<EquityTradingScreen> self = this;
+
     connect(dlg, &EquityCredentials::credentials_saved, this,
-            [this](const QString& bid, const QString& key, const QString& secret, const QString& auth) {
-                // P1: exchange_token() does HTTP — must not block UI thread
-                QPointer<EquityTradingScreen> self = this;
-                QtConcurrent::run([self, bid, key, secret, auth]() {
-                    if (!self)
-                        return;
+            [self, dlg_ptr](const QString& bid, const QString& key, const QString& secret, const QString& auth) {
+                if (!self) return;
+                self->conn_label_->setText("◌ CONNECTING...");
+                self->conn_label_->setStyleSheet("color: #ca8a04; font-size: 10px; font-weight: 700;");
+                self->api_btn_->setEnabled(false);
+
+                QtConcurrent::run([self, dlg_ptr, bid, key, secret, auth]() {
+                    if (!self) return;
                     auto* broker = BrokerRegistry::instance().get(bid);
-                    if (!broker)
-                        return;
+                    if (!broker) return;
 
                     auto token_result = broker->exchange_token(key, secret, auth);
-                    QMetaObject::invokeMethod(
-                        self,
-                        [self, bid, key, secret, token_result]() {
-                            if (!self)
-                                return;
-                            if (token_result.success) {
-                                auto* broker = BrokerRegistry::instance().get(bid);
-                                if (!broker)
-                                    return;
-                                BrokerCredentials creds;
-                                creds.broker_id = bid;
-                                creds.api_key = key;
-                                creds.api_secret = secret;
-                                creds.access_token = token_result.access_token;
-                                creds.user_id = token_result.user_id;
-                                broker->save_credentials(creds);
-                                LOG_INFO(TAG, QString("Connected to %1").arg(bid));
-                                // Refresh data after successful auth
-                                self->refresh_quote();
-                                self->async_fetch_watchlist_quotes();
-                            } else {
-                                LOG_ERROR(TAG, QString("Auth failed for %1: %2").arg(bid, token_result.error));
-                            }
-                        },
-                        Qt::QueuedConnection);
+                    QMetaObject::invokeMethod(self, [self, dlg_ptr, bid, key, secret, token_result, auth]() {
+                        if (!self) return;
+                        self->api_btn_->setEnabled(true);
+
+                        if (token_result.success) {
+                            auto* broker = BrokerRegistry::instance().get(bid);
+                            if (!broker) return;
+
+                            // Save credentials — env is in token_result.additional_data (auto-detected)
+                            BrokerCredentials creds;
+                            creds.broker_id       = bid;
+                            creds.api_key         = key;
+                            creds.api_secret      = secret;
+                            creds.access_token    = token_result.access_token;
+                            creds.user_id         = token_result.user_id;
+                            creds.additional_data = token_result.additional_data;
+                            broker->save_credentials(creds);
+                            LOG_INFO(TAG, QString("Connected to %1 env=%2 user=%3")
+                                             .arg(bid, token_result.additional_data, token_result.user_id));
+
+                            const QString acct = token_result.user_id.isEmpty()
+                                                     ? bid.toUpper() : token_result.user_id;
+                            self->conn_label_->setText(QString("● %1").arg(acct));
+                            self->conn_label_->setStyleSheet(
+                                "color: #16a34a; font-size: 10px; font-weight: 700;");
+
+                            // Update dialog status — stays open so user can add other env
+                            if (dlg_ptr)
+                                dlg_ptr->mark_connected(token_result.additional_data, acct);
+
+                            // Full data refresh
+                            self->refresh_quote();
+                            self->async_fetch_watchlist_quotes();
+                            self->async_fetch_candles(self->selected_symbol_,
+                                                      self->chart_->current_timeframe());
+                            self->async_fetch_positions();
+                            self->async_fetch_holdings();
+                            self->async_fetch_orders();
+                            self->async_fetch_funds();
+                        } else {
+                            LOG_ERROR(TAG, QString("Auth failed %1: %2").arg(bid, token_result.error));
+                            self->conn_label_->setText(QString("✕ %1").arg(token_result.error));
+                            self->conn_label_->setStyleSheet(
+                                "color: #dc2626; font-size: 10px; font-weight: 700;");
+                            if (dlg_ptr) dlg_ptr->mark_error(token_result.error);
+                        }
+                    }, Qt::QueuedConnection);
                 });
             });
+
     dlg->exec();
     dlg->deleteLater();
 }
@@ -669,11 +1010,16 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
             double fill_price = current_price_ > 0 ? current_price_ : (order.price > 0 ? order.price : 0.0);
             if (fill_price <= 0) {
                 LOG_WARN(TAG, "No price available for paper market order — skipping fill");
+                order_entry_->show_order_status("No price available for fill", false);
                 return;
             }
             pt_fill_order(pt_order.id, fill_price);
+            order_entry_->show_order_status(
+                QString("Paper order filled: %1 @ %2").arg(order.symbol).arg(fill_price, 0, 'f', 2), true);
         } else {
             OrderMatcher::instance().add_order(pt_order);
+            order_entry_->show_order_status(
+                QString("Paper order queued: %1").arg(order.symbol), true);
         }
         refresh_portfolio();
     } else {
@@ -691,11 +1037,14 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
                         return;
                     if (result.success) {
                         LOG_INFO(TAG, QString("Order placed: %1").arg(result.order_id));
+                        self->order_entry_->show_order_status(
+                            QString("Order placed: %1").arg(result.order_id), true);
                         self->async_fetch_orders();
                         self->async_fetch_positions();
                         self->async_fetch_funds();
                     } else {
                         LOG_ERROR(TAG, QString("Order failed: %1").arg(result.message));
+                        self->order_entry_->show_order_status(result.message, false);
                     }
                 },
                 Qt::QueuedConnection);
@@ -738,6 +1087,9 @@ void EquityTradingScreen::refresh_quote() {
     if (!initialized_)
         return;
     async_fetch_quote();
+    async_fetch_orderbook();
+    if (trading_mode_ == TradingMode::Live)
+        async_fetch_latest_trade();
 }
 
 void EquityTradingScreen::refresh_portfolio() {
@@ -779,6 +1131,79 @@ void EquityTradingScreen::refresh_watchlist() {
 
 void EquityTradingScreen::refresh_candles() {
     async_fetch_candles(selected_symbol_, chart_->current_timeframe());
+}
+
+void EquityTradingScreen::async_fetch_auctions() {
+    QPointer<EquityTradingScreen> self = this;
+    QtConcurrent::run([self]() {
+        if (!self) return;
+        auto* broker = BrokerRegistry::instance().get(self->broker_id_);
+        if (!broker) return;
+        auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty()) return;
+
+        const QString start = QDate::currentDate().addDays(-30).toString("yyyy-MM-dd");
+        const QString end   = QDate::currentDate().toString("yyyy-MM-dd");
+        auto result = broker->get_historical_auctions_single(creds, self->selected_symbol_, start, end);
+        if (!result.success || !result.data) return;
+
+        auto auctions = *result.data;
+        QMetaObject::invokeMethod(self, [self, auctions]() {
+            if (!self) return;
+            self->bottom_panel_->set_auctions(auctions);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void EquityTradingScreen::async_fetch_condition_codes() {
+    QPointer<EquityTradingScreen> self = this;
+    QtConcurrent::run([self]() {
+        if (!self) return;
+        auto* broker = BrokerRegistry::instance().get(self->broker_id_);
+        if (!broker) return;
+        auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty()) return;
+
+        // Fetch trade condition codes for tape C (most common)
+        auto result = broker->get_condition_codes(creds, "trades", "C");
+        if (!result.success || !result.data) return;
+
+        QMap<QString, QString> codes;
+        for (const auto& e : *result.data)
+            codes[e.code] = e.description;
+
+        QMetaObject::invokeMethod(self, [self, codes]() {
+            if (!self) return;
+            self->bottom_panel_->set_condition_codes(codes);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void EquityTradingScreen::async_modify_order(const QString& order_id, double qty, double price) {
+    QPointer<EquityTradingScreen> self = this;
+    QtConcurrent::run([self, order_id, qty, price]() {
+        if (!self) return;
+        auto* broker = BrokerRegistry::instance().get(self->broker_id_);
+        if (!broker) return;
+        auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty()) return;
+
+        QJsonObject mods;
+        if (qty > 0)   mods["qty"]         = QString::number(qty, 'f', 0);
+        if (price > 0) mods["limit_price"] = QString::number(price, 'f', 2);
+
+        auto result = broker->modify_order(creds, order_id, mods);
+        QMetaObject::invokeMethod(self, [self, result]() {
+            if (!self) return;
+            if (result.success) {
+                self->order_entry_->show_order_status("Order modified", true);
+                self->async_fetch_orders();
+            } else {
+                self->order_entry_->show_order_status(
+                    result.error.isEmpty() ? "Modify failed" : result.error, false);
+            }
+        }, Qt::QueuedConnection);
+    });
 }
 
 } // namespace fincept::screens

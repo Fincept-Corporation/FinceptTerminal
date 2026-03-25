@@ -158,6 +158,7 @@ set(PYTHON_SOURCES
 set(AI_CHAT_SOURCES
     src/ai_chat/LlmService.cpp
     src/ai_chat/AiChatScreen.cpp
+    src/ai_chat/AiChatBubble.cpp
 )
 
 # MCP — Model Context Protocol system
@@ -171,13 +172,21 @@ set(MCP_SOURCES
 
     # Tool modules
     src/mcp/tools/NavigationTools.cpp
-    src/mcp/tools/MarketDataTools.cpp
-    src/mcp/tools/SettingsTools.cpp
+    src/mcp/tools/MarketsTools.cpp
+    src/mcp/tools/WatchlistTools.cpp
+    src/mcp/tools/NewsTools.cpp
+    src/mcp/tools/NotesTools.cpp
+    src/mcp/tools/AiChatTools.cpp
     src/mcp/tools/PortfolioTools.cpp
-    src/mcp/tools/TradingTools.cpp
-    src/mcp/tools/PortfolioToolsExt.cpp
+    src/mcp/tools/CryptoTradingTools.cpp
+    src/mcp/tools/PaperTradingTools.cpp
+    src/mcp/tools/MAAnalyticsTools.cpp
+    src/mcp/tools/AltInvestmentsTools.cpp
+    src/mcp/tools/DataSourcesTools.cpp
+    src/mcp/tools/ForumTools.cpp
+    src/mcp/tools/ProfileTools.cpp
+    src/mcp/tools/SettingsTools.cpp
     src/mcp/tools/PythonTools.cpp
-    src/mcp/tools/ExchangeTools.cpp
     src/mcp/tools/SystemTools.cpp
 )
 
@@ -189,6 +198,7 @@ set(TRADING_SOURCES
     src/trading/UnifiedTrading.cpp
     src/trading/ExchangeService.cpp
     src/trading/brokers/BrokerHttp.cpp
+    src/trading/brokers/AngelOneBroker.cpp
     src/trading/brokers/FyersBroker.cpp
     src/trading/brokers/IndianBrokers.cpp
     src/trading/brokers/GlobalBrokers.cpp
@@ -260,6 +270,7 @@ set(UI_SOURCES
     src/ui/navigation/FKeyBar.cpp
     src/ui/navigation/StatusBar.cpp
     src/ui/navigation/ToolBar.cpp
+    src/ui/navigation/CommandBar.cpp
 )
 
 # Screens
@@ -775,13 +786,21 @@ set_source_files_properties(
     src/mcp/McpManager.cpp
     src/mcp/McpInit.cpp
     src/mcp/tools/NavigationTools.cpp
-    src/mcp/tools/MarketDataTools.cpp
-    src/mcp/tools/SettingsTools.cpp
+    src/mcp/tools/MarketsTools.cpp
+    src/mcp/tools/WatchlistTools.cpp
+    src/mcp/tools/NewsTools.cpp
+    src/mcp/tools/NotesTools.cpp
+    src/mcp/tools/AiChatTools.cpp
     src/mcp/tools/PortfolioTools.cpp
-    src/mcp/tools/TradingTools.cpp
-    src/mcp/tools/PortfolioToolsExt.cpp
+    src/mcp/tools/CryptoTradingTools.cpp
+    src/mcp/tools/PaperTradingTools.cpp
+    src/mcp/tools/MAAnalyticsTools.cpp
+    src/mcp/tools/AltInvestmentsTools.cpp
+    src/mcp/tools/DataSourcesTools.cpp
+    src/mcp/tools/ForumTools.cpp
+    src/mcp/tools/ProfileTools.cpp
+    src/mcp/tools/SettingsTools.cpp
     src/mcp/tools/PythonTools.cpp
-    src/mcp/tools/ExchangeTools.cpp
     src/mcp/tools/SystemTools.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
@@ -800,6 +819,7 @@ add_executable(FinceptTerminal WIN32
     ${UI_SOURCES}
     ${SCREEN_SOURCES}
     ${APP_SOURCES}
+    resources/app.rc
 )
 
 target_include_directories(FinceptTerminal PRIVATE src)

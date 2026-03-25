@@ -602,11 +602,8 @@ const portfolio::HoldingWithQuote* PortfolioScreen::find_holding(const QString& 
 void PortfolioScreen::load_demo_portfolio() {
     auto& svc = services::PortfolioService::instance();
 
-    // Create the demo portfolio
-    svc.create_portfolio("Demo Portfolio", "Fincept User", "USD", "Sample portfolio for demonstration");
-
-    // We'll add assets once the portfolio is created (via the portfolio_created signal).
-    // Disconnect any previous one-shot, connect a one-shot to add demo holdings.
+    // Connect BEFORE create_portfolio() — create_portfolio() emits portfolio_created
+    // synchronously, so the lambda must be connected first or it will never fire.
     QMetaObject::Connection* conn = new QMetaObject::Connection;
     *conn = connect(&svc, &services::PortfolioService::portfolio_created, this, [this, conn](portfolio::Portfolio p) {
         disconnect(*conn);
@@ -630,9 +627,19 @@ void PortfolioScreen::load_demo_portfolio() {
             svc.add_asset(p.id, h.symbol, h.qty, h.price);
         }
 
-        // Select it
+        // portfolios_ may not yet contain the new portfolio since load_portfolios()
+        // is async. Add it directly so on_portfolio_selected() can find it.
+        bool already_present = std::any_of(portfolios_.begin(), portfolios_.end(),
+                                           [&p](const portfolio::Portfolio& x) { return x.id == p.id; });
+        if (!already_present) {
+            portfolios_.append(p);
+        }
+
         on_portfolio_selected(p.id);
     });
+
+    // Create the demo portfolio (emits portfolio_created synchronously)
+    svc.create_portfolio("Demo Portfolio", "Fincept User", "USD", "Sample portfolio for demonstration");
 }
 
 } // namespace fincept::screens

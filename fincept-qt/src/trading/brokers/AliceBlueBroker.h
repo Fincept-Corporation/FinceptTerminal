@@ -9,6 +9,27 @@ class AliceBlueBroker : public IBroker {
     const char* name() const override { return "AliceBlue"; }
     const char* base_url() const override { return "https://ant.aliceblueonline.com/rest/AliceBlueAPIService/api"; }
 
+    BrokerProfile profile() const override {
+        return BrokerProfile{
+            .id = "aliceblue", .display_name = "AliceBlue", .region = "IN", .currency = "INR",
+            .credential_fields = {
+                {CredentialField::ApiKey,    "USER ID",    "Enter User ID...",    false},
+                {CredentialField::ApiSecret, "API SECRET", "Enter API Secret...", true},
+            },
+            .exchanges = {"NSE","BSE","NFO","MCX","NCDEX"},
+            .product_types = {
+                {"Intraday (MIS)", ProductType::Intraday},
+                {"Delivery (CNC)",ProductType::Delivery},
+                {"Margin (NRML)", ProductType::Margin},
+            },
+            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
+            .has_native_paper=false, .default_paper_balance=1000000.0,
+            .default_watchlist={"HDFCBANK","ICICIBANK","SBIN","TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE","HINDUNILVR","ITC"},
+            .default_symbol="RELIANCE", .default_exchange="NSE",
+            .brokerage_info="\u20B915/order flat",
+        };
+    }
+
     TokenExchangeResponse exchange_token(const QString& api_key, const QString& api_secret,
                                          const QString& auth_code) override;
     OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) override;

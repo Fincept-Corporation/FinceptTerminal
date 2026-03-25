@@ -45,6 +45,7 @@ class SettingsScreen : public QWidget {
     QComboBox* app_font_family_ = nullptr;
     QComboBox* app_theme_ = nullptr;
     QComboBox* app_density_ = nullptr;
+    QCheckBox* chat_bubble_toggle_ = nullptr;
 
     // ── Notifications state ───────────────────────────────────────────────────
     QCheckBox* notif_email_ = nullptr;

@@ -104,12 +104,14 @@ struct ToolDef {
 // Server Status — for external MCP server management
 // ============================================================================
 
-enum class ServerStatus { Stopped, Running, Error };
+enum class ServerStatus { Stopped, Starting, Running, Error };
 
 inline const char* server_status_str(ServerStatus s) {
     switch (s) {
         case ServerStatus::Stopped:
             return "stopped";
+        case ServerStatus::Starting:
+            return "starting";
         case ServerStatus::Running:
             return "running";
         case ServerStatus::Error:

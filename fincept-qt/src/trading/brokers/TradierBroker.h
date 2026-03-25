@@ -9,6 +9,26 @@ class TradierBroker : public IBroker {
     const char* name() const override { return "Tradier"; }
     const char* base_url() const override { return "https://api.tradier.com/v1"; }
 
+    BrokerProfile profile() const override {
+        return BrokerProfile{
+            .id = "tradier", .display_name = "Tradier", .region = "US", .currency = "USD",
+            .credential_fields = {
+                {CredentialField::ApiKey,      "ACCESS TOKEN","Enter Access Token...",false},
+                {CredentialField::Environment, "ENVIRONMENT", "",                     false},
+            },
+            .exchanges = {"NYSE","NASDAQ","AMEX"},
+            .product_types = {
+                {"Day Order", ProductType::Intraday},
+                {"GTC Order", ProductType::Delivery},
+            },
+            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
+            .has_native_paper=true, .default_paper_balance=100000.0,
+            .default_watchlist={"AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","JPM","V","JNJ"},
+            .default_symbol="AAPL", .default_exchange="NASDAQ",
+            .brokerage_info="$0 commission (US equities)",
+        };
+    }
+
     TokenExchangeResponse exchange_token(const QString& api_key, const QString& api_secret,
                                          const QString& auth_code) override;
     OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) override;

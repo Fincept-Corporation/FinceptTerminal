@@ -1,14 +1,22 @@
 // src/screens/portfolio/PortfolioFFNView.cpp
 #include "screens/portfolio/PortfolioFFNView.h"
 
+#include "core/logging/Logger.h"
+#include "python/PythonRunner.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QVBoxLayout>
 
 #include <algorithm>
 #include <cmath>
+
+using fincept::python::PythonResult;
+using fincept::python::PythonRunner;
 
 namespace fincept::screens {
 
@@ -50,7 +58,24 @@ void PortfolioFFNView::build_ui() {
     title->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER));
     h_layout->addWidget(title);
+
     h_layout->addStretch();
+
+    status_label_ = new QLabel;
+    status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    h_layout->addWidget(status_label_);
+
+    run_btn_ = new QPushButton("RUN FFN ANALYSIS");
+    run_btn_->setFixedHeight(24);
+    run_btn_->setCursor(Qt::PointingHandCursor);
+    run_btn_->setStyleSheet(QString("QPushButton { background:%1; color:#000; border:none;"
+                                    "  padding:0 12px; font-size:9px; font-weight:700; letter-spacing:0.5px; }"
+                                    "QPushButton:hover { background:%2; }"
+                                    "QPushButton:disabled { background:%3; color:%4; }")
+                                .arg(ui::colors::POSITIVE, "#22c55e", ui::colors::BG_SURFACE,
+                                     ui::colors::TEXT_TERTIARY));
+    connect(run_btn_, &QPushButton::clicked, this, &PortfolioFFNView::run_ffn);
+    h_layout->addWidget(run_btn_);
 
     layout->addWidget(header);
 
@@ -145,91 +170,157 @@ void PortfolioFFNView::set_data(const portfolio::PortfolioSummary& summary, cons
 }
 
 void PortfolioFFNView::update_overview() {
-    struct Metric {
-        const char* name;
-        double portfolio_val;
-        double benchmark_val;
-    };
+    // Aggregate FFN data across all symbols (weighted by portfolio weight)
+    // Fall back to live summary data if FFN hasn't been run yet
+    bool has_ffn = !ffn_data_.isEmpty();
 
-    double pnl_pct = summary_.total_unrealized_pnl_percent;
-    double vol = 0;
-    int vol_n = 0;
-    for (const auto& h : summary_.holdings) {
-        if (std::abs(h.day_change_percent) > 0.001) {
-            vol += std::abs(h.day_change_percent);
-            ++vol_n;
+    double total_ann_ret = 0, total_ann_vol = 0, total_sharpe = 0, total_max_dd = 0;
+    double total_best_day = 0, total_worst_day = 0;
+    int pos_days = 0, neg_days = 0;
+    int sym_count = 0;
+    QString best_sym, worst_sym;
+    double best_ret = -1e9, worst_ret = 1e9;
+
+    if (has_ffn) {
+        for (const auto& h : summary_.holdings) {
+            if (!ffn_data_.contains(h.symbol))
+                continue;
+            auto s = ffn_data_[h.symbol].toObject();
+            double w = h.weight / 100.0;
+            total_ann_ret  += s["annualized_return"].toDouble()     * w;
+            total_ann_vol  += s["annualized_volatility"].toDouble() * w;
+            total_sharpe   += s["sharpe_ratio"].toDouble()          * w;
+            total_max_dd   += s["max_drawdown"].toDouble()          * w;
+            total_best_day  = std::max(total_best_day, s["best_day"].toDouble());
+            total_worst_day = std::min(total_worst_day, s["worst_day"].toDouble());
+            pos_days       += s["positive_days"].toInt();
+            neg_days       += s["negative_days"].toInt();
+            double sym_ret  = s["total_return"].toDouble();
+            if (sym_ret > best_ret)  { best_ret  = sym_ret; best_sym  = h.symbol; }
+            if (sym_ret < worst_ret) { worst_ret = sym_ret; worst_sym = h.symbol; }
+            ++sym_count;
         }
     }
-    double daily_vol = vol_n > 0 ? vol / vol_n : 0;
-    double ann_vol = daily_vol * std::sqrt(252.0);
-    double sharpe = ann_vol > 0.01 ? (pnl_pct - 4.0) / ann_vol : 0;
 
-    QVector<Metric> metrics = {
-        {"Total Return", pnl_pct, 10.5},
-        {"Annualized Volatility", ann_vol, 15.2},
-        {"Sharpe Ratio", sharpe, 0.82},
-        {"Max Drawdown", pnl_pct < 0 ? std::abs(pnl_pct) : 0, 20.5},
-        {"Win Rate", summary_.gainers > 0 ? summary_.gainers * 100.0 / summary_.total_positions : 0, 55.0},
-        {"Best Holding", 0, 0},
-        {"Worst Holding", 0, 0},
-        {"Positions", static_cast<double>(summary_.total_positions), 500},
-        {"Total Value", summary_.total_market_value, 0},
-        {"Cost Basis", summary_.total_cost_basis, 0},
+    double pnl_pct = summary_.total_unrealized_pnl_percent;
+    double win_rate = summary_.total_positions > 0
+                          ? summary_.gainers * 100.0 / summary_.total_positions : 0;
+
+    struct Row { QString name; QString value; QString benchmark; const char* color; };
+    QVector<Row> rows;
+
+    auto pct_str = [](double v, int dp = 2) {
+        return QString("%1%2%").arg(v >= 0 ? "+" : "").arg(QString::number(v * 100.0, 'f', dp));
     };
+    auto fmt = [](double v, int dp = 2) { return QString::number(v, 'f', dp); };
 
-    // Find best/worst
-    if (!summary_.holdings.isEmpty()) {
-        auto best =
-            std::max_element(summary_.holdings.begin(), summary_.holdings.end(), [](const auto& a, const auto& b) {
-                return a.unrealized_pnl_percent < b.unrealized_pnl_percent;
-            });
-        auto worst =
-            std::min_element(summary_.holdings.begin(), summary_.holdings.end(), [](const auto& a, const auto& b) {
-                return a.unrealized_pnl_percent < b.unrealized_pnl_percent;
-            });
-        metrics[5].portfolio_val = best->unrealized_pnl_percent;
-        metrics[6].portfolio_val = worst->unrealized_pnl_percent;
+    if (has_ffn) {
+        rows = {
+            {"Annualized Return",     pct_str(total_ann_ret),      "+10.50%", total_ann_ret  >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
+            {"Annualized Volatility", pct_str(total_ann_vol),      "15.20%",  ui::colors::CYAN},
+            {"Sharpe Ratio",          fmt(total_sharpe),           "0.82",    total_sharpe   >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
+            {"Max Drawdown",          pct_str(total_max_dd),       "-20.50%", ui::colors::NEGATIVE},
+            {"Best Day (any)",        pct_str(total_best_day),     "--",      ui::colors::POSITIVE},
+            {"Worst Day (any)",       pct_str(total_worst_day),    "--",      ui::colors::NEGATIVE},
+            {"Positive Days",         QString::number(pos_days),   "--",      ui::colors::POSITIVE},
+            {"Negative Days",         QString::number(neg_days),   "--",      ui::colors::NEGATIVE},
+            {"Best Holding",          best_sym.isEmpty()  ? "--" : best_sym  + " (" + pct_str(best_ret)  + ")", "--", ui::colors::POSITIVE},
+            {"Worst Holding",         worst_sym.isEmpty() ? "--" : worst_sym + " (" + pct_str(worst_ret) + ")", "--", ui::colors::NEGATIVE},
+            {"Total Return (cost)",   pct_str(pnl_pct / 100.0),   "--",      pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
+            {"Win Rate",              fmt(win_rate) + "%",         "55.00%",  ui::colors::CYAN},
+            {"Positions",             QString::number(summary_.total_positions), "--", ui::colors::CYAN},
+            {"Total Value",           currency_ + " " + fmt(summary_.total_market_value), "--", ui::colors::WARNING},
+            {"Cost Basis",            currency_ + " " + fmt(summary_.total_cost_basis),   "--", ui::colors::TEXT_SECONDARY},
+        };
+    } else {
+        // Pre-run placeholder — show live data and prompt to run
+        double vol = 0; int vn = 0;
+        for (const auto& h : summary_.holdings)
+            if (std::abs(h.day_change_percent) > 0.001) { vol += std::abs(h.day_change_percent); ++vn; }
+        double daily_vol = vn > 0 ? vol / vn : 0;
+        double ann_vol   = daily_vol * std::sqrt(252.0);
+        double sharpe    = ann_vol > 0.01 ? (pnl_pct - 4.0) / ann_vol : 0;
+
+        rows = {
+            {"Total Return (unrealized)", pct_str(pnl_pct / 100.0), "+10.50%", pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
+            {"Annualized Volatility (est.)", pct_str(ann_vol / 100.0), "15.20%", ui::colors::CYAN},
+            {"Sharpe Ratio (est.)",          fmt(sharpe),              "0.82",   sharpe >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
+            {"Win Rate",                     fmt(win_rate) + "%",      "55.00%", ui::colors::CYAN},
+            {"Positions",                    QString::number(summary_.total_positions), "--", ui::colors::CYAN},
+            {"Total Value",                  currency_ + " " + fmt(summary_.total_market_value), "--", ui::colors::WARNING},
+            {"Cost Basis",                   currency_ + " " + fmt(summary_.total_cost_basis),   "--", ui::colors::TEXT_SECONDARY},
+            {"FFN Deep Metrics",             "Click RUN FFN ANALYSIS for full stats", "--", ui::colors::AMBER},
+        };
     }
 
-    overview_table_->setRowCount(metrics.size());
-    for (int r = 0; r < metrics.size(); ++r) {
-        const auto& m = metrics[r];
+    overview_table_->setRowCount(rows.size());
+    for (int r = 0; r < rows.size(); ++r) {
+        const auto& row = rows[r];
         overview_table_->setRowHeight(r, 28);
 
-        auto set = [&](int col, const QString& text, const char* color = nullptr) {
+        auto set = [&](int col, const QString& text, const char* color) {
             auto* item = new QTableWidgetItem(text);
-            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
-            if (color)
-                item->setForeground(QColor(color));
+            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter)
+                                            : (Qt::AlignRight | Qt::AlignVCenter));
+            item->setForeground(QColor(color));
             overview_table_->setItem(r, col, item);
         };
 
-        set(0, m.name, ui::colors::TEXT_PRIMARY);
-
-        // Format based on metric type
-        bool is_pct = (r <= 4 || r == 5 || r == 6);
-        bool is_currency = (r == 8 || r == 9);
-        const char* val_color =
-            is_pct ? (m.portfolio_val >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE) : ui::colors::CYAN;
-
-        if (is_currency)
-            set(1, QString("%1 %2").arg(currency_, QString::number(m.portfolio_val, 'f', 2)), ui::colors::WARNING);
-        else if (is_pct)
-            set(1, QString("%1%2%").arg(m.portfolio_val >= 0 ? "+" : "").arg(QString::number(m.portfolio_val, 'f', 2)),
-                val_color);
-        else
-            set(1, QString::number(m.portfolio_val, 'f', 0), ui::colors::CYAN);
-
-        // Benchmark
-        if (m.benchmark_val != 0) {
-            if (is_pct)
-                set(2, QString("%1%").arg(QString::number(m.benchmark_val, 'f', 2)), ui::colors::TEXT_TERTIARY);
-            else
-                set(2, QString::number(m.benchmark_val, 'f', 0), ui::colors::TEXT_TERTIARY);
-        } else {
-            set(2, "--", ui::colors::TEXT_TERTIARY);
-        }
+        set(0, row.name,      ui::colors::TEXT_SECONDARY);
+        set(1, row.value,     row.color);
+        set(2, row.benchmark, ui::colors::TEXT_TERTIARY);
     }
+}
+
+void PortfolioFFNView::run_ffn() {
+    if (summary_.holdings.isEmpty())
+        return;
+
+    run_btn_->setEnabled(false);
+    status_label_->setText("Running FFN analysis...");
+    status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::AMBER));
+
+    QStringList symbols;
+    for (const auto& h : summary_.holdings)
+        symbols.append(h.symbol);
+
+    QJsonObject args;
+    args["symbols"] = QJsonArray::fromStringList(symbols);
+    QString args_str = QJsonDocument(args).toJson(QJsonDocument::Compact);
+
+    QPointer<PortfolioFFNView> self = this;
+    PythonRunner::instance().run("ffn_analysis", {args_str}, [self](PythonResult result) {
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(self, [self, result]() {
+            if (!self)
+                return;
+            self->run_btn_->setEnabled(true);
+
+            if (!result.success || result.output.trimmed().isEmpty()) {
+                self->status_label_->setText("FFN failed — check Python/yfinance");
+                self->status_label_->setStyleSheet(
+                    QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+                LOG_ERROR("FFNView", "FFN script failed: " + result.error.left(300));
+                return;
+            }
+
+            auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
+            if (!doc.isObject()) {
+                self->status_label_->setText("FFN returned invalid JSON");
+                self->status_label_->setStyleSheet(
+                    QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE));
+                return;
+            }
+
+            self->ffn_data_ = doc.object();
+            self->status_label_->setText(
+                QString("FFN complete — %1 symbols").arg(self->ffn_data_.keys().size()));
+            self->status_label_->setStyleSheet(
+                QString("color:%1; font-size:9px;").arg(ui::colors::POSITIVE));
+            self->update_overview();
+        }, Qt::QueuedConnection);
+    });
 }
 
 } // namespace fincept::screens

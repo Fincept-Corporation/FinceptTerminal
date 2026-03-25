@@ -407,6 +407,21 @@ QWidget* SettingsScreen::build_appearance() {
     app_density_->setStyleSheet(COMBO_SS);
     vl->addWidget(make_row("Content Density", app_density_, "Controls padding and spacing throughout the UI."));
 
+    vl->addSpacing(8);
+    vl->addWidget(make_sep());
+    vl->addSpacing(8);
+
+    auto* t3 = new QLabel("INTERFACE");
+    t3->setStyleSheet(SUB_TITLE);
+    vl->addWidget(t3);
+    vl->addSpacing(4);
+
+    chat_bubble_toggle_ = new QCheckBox("Show AI Chat Bubble");
+    chat_bubble_toggle_->setChecked(true);
+    chat_bubble_toggle_->setStyleSheet(CHECK_SS);
+    vl->addWidget(make_row("AI Chat Bubble", chat_bubble_toggle_,
+                            "Floating chat assistant in the bottom-right corner."));
+
     vl->addSpacing(16);
 
     // Apply button
@@ -419,6 +434,8 @@ QWidget* SettingsScreen::build_appearance() {
         repo.set("appearance.font_family", app_font_family_->currentText(), "appearance");
         repo.set("appearance.theme", app_theme_->currentText(), "appearance");
         repo.set("appearance.density", app_density_->currentText(), "appearance");
+        repo.set("appearance.show_chat_bubble",
+                 chat_bubble_toggle_->isChecked() ? "true" : "false", "appearance");
         LOG_INFO("Settings", "Appearance saved");
     });
     vl->addWidget(apply_btn);
@@ -443,6 +460,12 @@ void SettingsScreen::load_appearance() {
     load_combo(app_font_family_, "appearance.font_family", "Consolas");
     load_combo(app_theme_, "appearance.theme", "Bloomberg Dark");
     load_combo(app_density_, "appearance.density", "Default");
+
+    if (chat_bubble_toggle_) {
+        auto r = repo.get("appearance.show_chat_bubble");
+        bool show = !r.is_ok() || r.value() != "false";
+        chat_bubble_toggle_->setChecked(show);
+    }
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────

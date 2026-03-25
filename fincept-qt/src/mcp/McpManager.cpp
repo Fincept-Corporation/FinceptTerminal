@@ -61,6 +61,7 @@ void McpManager::initialize() {
     }
 
     LOG_INFO(TAG, QString("Loaded %1 MCP server configs").arg(configs_.size()));
+    emit servers_changed();
 }
 
 std::vector<McpServerConfig> McpManager::get_servers() const {
@@ -93,11 +94,14 @@ Result<void> McpManager::save_server(const McpServerConfig& config) {
     if (r.is_err())
         return r;
 
-    QMutexLocker lock(&mutex_);
-    McpServerConfig cfg = config;
-    cfg.id = srv.id;
-    configs_.insert(cfg.id, cfg);
+    {
+        QMutexLocker lock(&mutex_);
+        McpServerConfig cfg = config;
+        cfg.id = srv.id;
+        configs_.insert(cfg.id, cfg);
+    }
 
+    emit servers_changed();
     return Result<void>::ok();
 }
 
@@ -108,9 +112,13 @@ Result<void> McpManager::remove_server(const QString& id) {
     if (r.is_err())
         return r;
 
-    QMutexLocker lock(&mutex_);
-    configs_.remove(id);
-    tool_cache_.remove(id);
+    {
+        QMutexLocker lock(&mutex_);
+        configs_.remove(id);
+        tool_cache_.remove(id);
+    }
+
+    emit servers_changed();
     return Result<void>::ok();
 }
 
@@ -119,41 +127,57 @@ Result<void> McpManager::remove_server(const QString& id) {
 // ============================================================================
 
 Result<void> McpManager::start_server(const QString& id) {
-    QMutexLocker lock(&mutex_);
+    McpServerConfig cfg;
+    {
+        QMutexLocker lock(&mutex_);
+        if (!configs_.contains(id))
+            return Result<void>::err("Unknown server: " + id.toStdString());
+        // Already running — nothing to do
+        if (clients_.contains(id) && clients_[id]->is_running())
+            return Result<void>::ok();
+        // Guard against concurrent start attempts (auto-start thread + user click).
+        // If status is Starting, another caller is already starting this server.
+        if (configs_[id].status == ServerStatus::Starting)
+            return Result<void>::ok();
+        configs_[id].status = ServerStatus::Starting;
+        cfg = configs_[id];
+    }
+    // mutex released — slow operations below don't block other threads
 
-    if (!configs_.contains(id))
-        return Result<void>::err("Unknown server: " + id.toStdString());
-
-    if (clients_.contains(id) && clients_[id]->is_running())
-        return Result<void>::ok(); // already running
-
-    const auto& cfg = configs_[id];
     auto client = std::make_shared<McpClient>(cfg);
 
     auto start_result = client->start();
     if (start_result.is_err()) {
+        QMutexLocker lock(&mutex_);
+        if (configs_.contains(id))
+            configs_[id].status = ServerStatus::Error;
         McpServerRepository::instance().set_status(id, "error");
+        emit servers_changed();
         return start_result;
     }
 
-    // Handshake
     auto init_result = client->initialize();
     if (init_result.is_err()) {
         client->stop();
+        QMutexLocker lock(&mutex_);
+        if (configs_.contains(id))
+            configs_[id].status = ServerStatus::Error;
         McpServerRepository::instance().set_status(id, "error");
+        emit servers_changed();
         return Result<void>::err("Handshake failed for " + cfg.name.toStdString() + ": " + init_result.error());
     }
 
-    McpServerRepository::instance().set_status(id, "running");
-    configs_[id].status = ServerStatus::Running;
-
-    // Discover tools (outside lock is fine since we own the client)
-    auto* raw = client.get();
-    clients_.insert(id, std::move(client));
-    lock.unlock();
+    // Re-acquire mutex only to update state
+    {
+        QMutexLocker lock(&mutex_);
+        McpServerRepository::instance().set_status(id, "running");
+        configs_[id].status = ServerStatus::Running;
+        clients_.insert(id, std::move(client));
+    }
 
     refresh_tools_for(id);
 
+    emit servers_changed();
     LOG_INFO(TAG, "MCP server started: " + cfg.name);
     return Result<void>::ok();
 }
@@ -172,6 +196,9 @@ Result<void> McpManager::stop_server(const QString& id) {
         configs_[id].status = ServerStatus::Stopped;
 
     McpServerRepository::instance().set_status(id, "stopped");
+    lock.unlock();
+
+    emit servers_changed();
     LOG_INFO(TAG, "MCP server stopped: " + id);
     return Result<void>::ok();
 }
@@ -287,6 +314,14 @@ McpClient* McpManager::get_client(const QString& id) const {
     if (it == clients_.end())
         return nullptr;
     return it->get();
+}
+
+QStringList McpManager::get_logs(const QString& id) const {
+    QMutexLocker lock(&mutex_);
+    auto it = clients_.find(id);
+    if (it == clients_.end())
+        return {};
+    return it->get()->get_logs();
 }
 
 void McpManager::refresh_tools_for(const QString& id) {

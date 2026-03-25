@@ -15,6 +15,7 @@
 #include <QStringList>
 
 #include <functional>
+#include <optional>
 #include <vector>
 
 namespace fincept::ai_chat {
@@ -120,6 +121,13 @@ class LlmService : public QObject {
 
     // Tool-call follow-up loop (OpenAI-compatible)
     LlmResponse do_tool_loop(QJsonArray loop_messages, const QString& url, const QMap<QString, QString>& headers);
+
+    // Detect and execute tool calls embedded as text/XML in the response content.
+    // Returns std::nullopt if no text-based tool calls were found.
+    std::optional<LlmResponse> try_extract_and_execute_text_tool_calls(const QString& content,
+                                                                       const QString& user_message,
+                                                                       const QString& url,
+                                                                       const QMap<QString, QString>& headers);
 
     // Models-list helpers
     static QString get_models_url(const QString& provider, const QString& api_key, const QString& base_url);

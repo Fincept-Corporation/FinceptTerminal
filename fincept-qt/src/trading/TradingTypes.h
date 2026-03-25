@@ -112,6 +112,7 @@ struct ApiResponse {
 struct TokenExchangeResponse {
     bool success = false;
     QString access_token;
+    QString refresh_token;
     QString user_id;
     QString additional_data;
     QString error;
@@ -194,6 +195,7 @@ struct BrokerPosition {
     double avg_price = 0;
     double ltp = 0;
     double pnl = 0;
+    double pnl_pct = 0;
     double day_pnl = 0;
     QString side;
 };
@@ -239,6 +241,8 @@ struct BrokerQuote {
     double change_pct = 0;
     double bid = 0;
     double ask = 0;
+    double bid_size = 0;
+    double ask_size = 0;
     int64_t timestamp = 0;
 };
 
@@ -257,6 +261,55 @@ struct BrokerFunds {
     double total_balance = 0;
     double collateral = 0;
     QJsonObject raw_data;
+};
+
+struct MarketCalendarDay {
+    QString date;          // "YYYY-MM-DD"
+    QString open;          // "09:30"
+    QString close;         // "16:00"
+    QString session_open;  // pre-market open if present
+    QString session_close; // after-hours close if present
+};
+
+struct MarketClock {
+    QString timestamp;     // ISO8601 current time
+    bool    is_open = false;
+    QString next_open;     // ISO8601
+    QString next_close;    // ISO8601
+};
+
+// Individual trade print (time & sales)
+struct BrokerTrade {
+    QString symbol;
+    double  price    = 0;
+    double  size     = 0;
+    QString exchange;
+    QString timestamp;     // ISO8601
+    QStringList conditions;
+    QString tape;          // "A"/"B"/"C"
+};
+
+// Auction print (opening/closing)
+struct BrokerAuction {
+    QString symbol;
+    QString date;          // "YYYY-MM-DD"
+    // Each auction entry (can be multiple per day: opening + closing)
+    struct Entry {
+        QString timestamp;
+        QString auction_type;   // "O" (opening) or "C" (closing)
+        double  price      = 0;
+        double  size       = 0;
+        QString exchange;
+        QStringList conditions;
+    };
+    QVector<Entry> entries;
+};
+
+// Exchange/condition metadata
+struct BrokerMetaEntry {
+    QString code;
+    QString description;
+    QString exchange;      // for condition codes: which tape/exchange it applies to
 };
 
 enum class BrokerId {

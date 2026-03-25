@@ -1,9 +1,12 @@
 #include "app/MainWindow.h"
 
+#include "ai_chat/AiChatBubble.h"
 #include "ai_chat/AiChatScreen.h"
 #include "auth/AuthManager.h"
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "screens/ComingSoonScreen.h"
 #include "screens/about/AboutScreen.h"
 #include "screens/agent_config/AgentConfigScreen.h"
@@ -81,6 +84,7 @@ namespace fincept {
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("Fincept Terminal");
+    setWindowIcon(QIcon("C:/windowsdisk/finceptTerminal/fincept_icon.ico"));
     setMinimumSize(1280, 720);
 
     QScreen* screen = QApplication::primaryScreen();
@@ -129,12 +133,42 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     router_ = new ScreenRouter(app_stack_, this);
     setup_app_screens();
 
+    // AI Chat Bubble — floats over app_stack_ content area
+    chat_bubble_ = new AiChatBubble(app_stack_);
+    {
+        auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
+        bool show = !r.is_ok() || r.value() != "false";
+        chat_bubble_->setVisible(show);
+        if (show) chat_bubble_->raise();
+    }
+
     // Tab bar ↔ router
     connect(tab_bar, &ui::TabBar::tab_changed, router_, &ScreenRouter::navigate);
     connect(router_, &ScreenRouter::screen_changed, tab_bar, &ui::TabBar::set_active);
 
+    // Re-raise bubble on every screen switch; respect show_chat_bubble setting
+    connect(router_, &ScreenRouter::screen_changed, this, [this](const QString&) {
+        if (!chat_bubble_) return;
+        auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
+        bool show = !r.is_ok() || r.value() != "false";
+        chat_bubble_->setVisible(show);
+        if (show) {
+            chat_bubble_->reposition();
+            chat_bubble_->raise();
+        }
+    });
+
     // Toolbar Navigate menu → router
     connect(toolbar, &ui::ToolBar::navigate_to, router_, &ScreenRouter::navigate);
+
+    // MCP navigation tool → router (published from any thread, must invoke on UI thread)
+    EventBus::instance().subscribe("nav.switch_screen", [this](const QVariantMap& data) {
+        QString screen_id = data["screen_id"].toString();
+        if (!screen_id.isEmpty())
+            QMetaObject::invokeMethod(router_, [this, screen_id]() {
+                router_->navigate(screen_id);
+            }, Qt::QueuedConnection);
+    });
 
     // ── Keyboard shortcuts ────────────────────────────────────────────────────
     auto* sc_fullscreen = new QShortcut(QKeySequence(Qt::Key_F11), this);
@@ -432,6 +466,12 @@ void MainWindow::restore_session() {}
 void MainWindow::closeEvent(QCloseEvent* event) {
     SessionManager::instance().save_geometry(saveGeometry(), saveState());
     event->accept();
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event) {
+    QMainWindow::resizeEvent(event);
+    if (chat_bubble_)
+        chat_bubble_->reposition();
 }
 
 } // namespace fincept

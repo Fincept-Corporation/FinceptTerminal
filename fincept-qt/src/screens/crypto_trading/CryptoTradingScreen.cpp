@@ -285,7 +285,11 @@ void CryptoTradingScreen::setup_timers() {
     connect(ws_flush_timer_, &QTimer::timeout, this, &CryptoTradingScreen::flush_ws_updates);
     ws_flush_timer_->setInterval(100); // 10fps
 
-    QTimer::singleShot(100, this, [this]() {
+    // Defer to next event loop tick (0ms) — just enough to let the widget be shown
+    // before we start spinning up processes. Daemon is already pre-warming in the
+    // background via ExchangeService constructor so it should be ready by the time
+    // the user actually clicks this tab.
+    QTimer::singleShot(0, this, [this]() {
         init_exchange();
         load_portfolio();
         refresh_ticker();

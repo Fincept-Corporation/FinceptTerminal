@@ -3,8 +3,12 @@
 #include "mcp/McpClient.h"
 
 #include "core/logging/Logger.h"
+#include "python/PythonSetupManager.h"
 
+#include <QElapsedTimer>
+#include <QFileInfo>
 #include <QJsonDocument>
+#include <QMetaObject>
 #include <QProcessEnvironment>
 
 namespace fincept::mcp {
@@ -25,7 +29,13 @@ Result<void> McpClient::start() {
     if (running_)
         return Result<void>::ok();
 
-    process_ = new QProcess(this);
+    // Create a dedicated worker thread with its own event loop so that
+    // QProcess signals are delivered there. This means start_server() can be
+    // called from ANY thread without freezing the UI.
+    worker_thread_ = new QThread;
+    worker_thread_->setObjectName("mcp-" + config_.id);
+
+    process_ = new QProcess;  // no parent — we'll move it to worker thread
 
     // Merge environment
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
@@ -33,20 +43,62 @@ Result<void> McpClient::start() {
         env.insert(it.key(), it.value());
     process_->setProcessEnvironment(env);
 
-    // Wire signals — must be done before start() so we don't miss output
-    connect(process_, &QProcess::readyReadStandardOutput, this, &McpClient::on_ready_read);
-    connect(process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, &McpClient::on_finished);
+    // Wire signals — they'll fire on worker_thread_ once process_ is moved
+    connect(process_, &QProcess::readyReadStandardOutput, this, &McpClient::on_ready_read, Qt::DirectConnection);
+    connect(process_, &QProcess::readyReadStandardError, this, [this]() {
+        while (process_ && process_->canReadLine()) {
+            const QString line = QString::fromUtf8(process_->readLine()).trimmed();
+            if (!line.isEmpty())
+                append_log("[stderr] " + line);
+        }
+    }, Qt::DirectConnection);
+    connect(process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &McpClient::on_finished, Qt::DirectConnection);
 
-    process_->start(config_.command, config_.args);
-    if (!process_->waitForStarted(10000)) {
-        LOG_ERROR(TAG, "Failed to start MCP server: " + config_.name);
-        process_->deleteLater();
+    // Route uvx through the app's bundled uv
+    QString command = config_.command;
+    QStringList args = config_.args;
+    if (command == "uvx") {
+        const QString uv = python::PythonSetupManager::instance().uv_path();
+        if (QFileInfo::exists(uv)) {
+            command = uv;
+            args.prepend("run");
+            args.prepend("tool");  // becomes: uv tool run <package> <args>
+            LOG_INFO(TAG, "Routing uvx through bundled uv: " + uv);
+        }
+    }
+
+#ifdef _WIN32
+    process_->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
+        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
+    });
+#endif
+
+    // Move QProcess to worker thread and start it there
+    process_->moveToThread(worker_thread_);
+    worker_thread_->start();
+
+    // Use invokeMethod to call start() on the worker thread (where QProcess now lives)
+    bool started_ok = false;
+    QMetaObject::invokeMethod(process_, [this, command, args, &started_ok]() {
+        process_->start(command, args);
+        started_ok = process_->waitForStarted(60000); // 60s for first-time uv downloads
+    }, Qt::BlockingQueuedConnection);
+
+    if (!started_ok) {
+        const QString err = process_->errorString();
+        LOG_ERROR(TAG, "Failed to start MCP server: " + config_.name + " — " + err);
+        worker_thread_->quit();
+        worker_thread_->wait(3000);
+        delete process_;
         process_ = nullptr;
-        return Result<void>::err("Failed to start process: " + config_.name.toStdString());
+        delete worker_thread_;
+        worker_thread_ = nullptr;
+        return Result<void>::err("Failed to start: " + config_.name.toStdString() + " — " + err.toStdString());
     }
 
     running_ = true;
-    LOG_INFO(TAG, "Started MCP server: " + config_.name);
+    LOG_INFO(TAG, "Started MCP server process: " + config_.name);
     return Result<void>::ok();
 }
 
@@ -66,11 +118,21 @@ void McpClient::stop() {
     }
 
     if (process_) {
-        process_->terminate();
-        if (!process_->waitForFinished(3000))
-            process_->kill();
-        process_->deleteLater();
+        // Terminate on the worker thread where QProcess lives
+        QMetaObject::invokeMethod(process_, [this]() {
+            process_->terminate();
+            if (!process_->waitForFinished(3000))
+                process_->kill();
+        }, Qt::BlockingQueuedConnection);
+        delete process_;
         process_ = nullptr;
+    }
+
+    if (worker_thread_) {
+        worker_thread_->quit();
+        worker_thread_->wait(3000);
+        delete worker_thread_;
+        worker_thread_ = nullptr;
     }
 
     LOG_INFO(TAG, "Stopped MCP server: " + config_.name);
@@ -128,7 +190,10 @@ Result<QJsonObject> McpClient::call_tool(const QString& name, const QJsonObject&
     QJsonObject params;
     params["name"] = name;
     params["arguments"] = args;
-    return send_request("tools/call", params, 30000);
+    // 120s timeout for tool execution — external tools like database queries
+    // (Postgres, MySQL, etc.) can take significantly longer than 30s,
+    // especially for schema introspection or large result sets.
+    return send_request("tools/call", params, 120000);
 }
 
 Result<void> McpClient::ping() {
@@ -163,23 +228,39 @@ Result<QJsonObject> McpClient::send_request(const QString& method, const QJsonOb
     if (!params.isEmpty())
         req["params"] = params;
 
-    QByteArray line = QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n";
-    process_->write(line);
+    LOG_INFO(TAG, "RPC → " + method + " (id=" + QString::number(id) + ")");
 
-    // Wait for response
+    QByteArray line = QJsonDocument(req).toJson(QJsonDocument::Compact) + "\n";
+
+    // Write to process on its worker thread
+    QMetaObject::invokeMethod(process_, [this, line]() {
+        process_->write(line);
+    }, Qt::QueuedConnection);
+
+    // Wait for response via QWaitCondition. QProcess lives on its own
+    // worker thread with an event loop, so readyRead signals fire there
+    // and handle_line() wakes us up via rpc_cond_.
+    QElapsedTimer timer;
+    timer.start();
+
     {
         QMutexLocker lock(&rpc_mutex_);
         if (!pending.completed) {
             rpc_cond_.wait(&rpc_mutex_, static_cast<unsigned long>(timeout_ms));
         }
-        pending_.remove(id);
-
-        if (!pending.error.isEmpty())
-            return Result<QJsonObject>::err(pending.error.toStdString());
-        if (!pending.completed)
-            return Result<QJsonObject>::err("Timeout waiting for: " + method.toStdString());
     }
 
+    {
+        QMutexLocker lock(&rpc_mutex_);
+        pending_.remove(id);
+    }
+
+    if (!pending.error.isEmpty())
+        return Result<QJsonObject>::err(pending.error.toStdString());
+    if (!pending.completed)
+        return Result<QJsonObject>::err("Timeout waiting for: " + method.toStdString());
+
+    LOG_INFO(TAG, "RPC ← " + method + " OK (" + QString::number(timer.elapsed()) + "ms)");
     return Result<QJsonObject>::ok(pending.response);
 }
 
@@ -216,8 +297,21 @@ void McpClient::handle_line(const QByteArray& line) {
 void McpClient::on_ready_read() {
     while (process_ && process_->canReadLine()) {
         QByteArray line = process_->readLine();
+        append_log("[stdout] " + QString::fromUtf8(line).trimmed());
         handle_line(line);
     }
+}
+
+QStringList McpClient::get_logs() const {
+    QMutexLocker lock(&log_mutex_);
+    return log_lines_;
+}
+
+void McpClient::append_log(const QString& line) {
+    QMutexLocker lock(&log_mutex_);
+    log_lines_.append(line);
+    if (log_lines_.size() > MAX_LOG_LINES)
+        log_lines_.removeFirst();
 }
 
 void McpClient::on_finished(int exit_code, QProcess::ExitStatus) {

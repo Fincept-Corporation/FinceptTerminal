@@ -57,7 +57,7 @@ static QVector<ConnectorConfig> relational_configs() {
          "S",
          "#003B57",
          "Lightweight embedded SQL database",
-         true,
+         false,  // file-based: no network endpoint to test
          false,
          {{"filepath", "Database File Path", FieldType::Text, "/path/to/database.db", true, "", {}},
           {"readonly", "Read Only", FieldType::Checkbox, "", false, "false", {}}}},

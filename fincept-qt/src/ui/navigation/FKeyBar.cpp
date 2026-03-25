@@ -71,10 +71,10 @@ void TabBar::update_styles() {
         btn->setStyleSheet(active ? "QPushButton{background:#b45309;color:#e5e5e5;border:1px solid #4d3300;"
                                     "padding:0 12px;font-size:13px;font-weight:600;letter-spacing:1px;"
                                     "font-family:'Consolas',monospace;}"
-                                  : "QPushButton{background:transparent;color:#525252;border:none;"
+                                  : "QPushButton{background:transparent;color:#ffffff;border:none;"
                                     "padding:0 12px;font-size:13px;letter-spacing:0.5px;"
                                     "font-family:'Consolas',monospace;}"
-                                    "QPushButton:hover{color:#808080;background:#111111;}");
+                                    "QPushButton:hover{color:#d97706;background:#111111;}");
     }
 }
 

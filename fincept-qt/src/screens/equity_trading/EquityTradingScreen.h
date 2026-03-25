@@ -67,6 +67,14 @@ class EquityTradingScreen : public QWidget {
     void async_fetch_orders();
     void async_fetch_funds();
     void async_fetch_watchlist_quotes();
+    void async_fetch_orderbook();
+    void async_fetch_calendar();
+    void async_fetch_clock();
+    void async_fetch_time_sales();   // historical trades for current symbol
+    void async_fetch_latest_trade(); // single latest trade — appended to T&S on each poll
+    void async_fetch_auctions();
+    void async_fetch_condition_codes();
+    void async_modify_order(const QString& order_id, double qty, double price);
 
     // ── Command bar widgets ──
     QPushButton* broker_btn_ = nullptr;
@@ -76,6 +84,7 @@ class EquityTradingScreen : public QWidget {
     QPushButton* api_btn_ = nullptr;
     QLabel* exchange_label_ = nullptr;
     QLabel* clock_label_ = nullptr;
+    QLabel* conn_label_ = nullptr; // connection status indicator
 
     // ── Sub-widgets ──
     equity::EquityTickerBar* ticker_bar_ = nullptr;
@@ -90,6 +99,7 @@ class EquityTradingScreen : public QWidget {
     QTimer* portfolio_timer_ = nullptr;
     QTimer* watchlist_timer_ = nullptr;
     QTimer* clock_timer_ = nullptr;
+    QTimer* market_clock_timer_ = nullptr;
 
     // ── State ──
     QString broker_id_ = "fyers";
@@ -106,6 +116,7 @@ class EquityTradingScreen : public QWidget {
     std::atomic<bool> quote_fetching_{false};
     std::atomic<bool> candles_fetching_{false};
     std::atomic<bool> portfolio_fetching_{false};
+    std::atomic<bool> time_sales_fetching_{false};
 
     QStringList watchlist_symbols_;
     double current_price_ = 0.0; // last known LTP for selected symbol

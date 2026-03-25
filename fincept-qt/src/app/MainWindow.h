@@ -1,5 +1,6 @@
 #pragma once
 #include "app/ScreenRouter.h"
+#include "ai_chat/AiChatBubble.h"
 
 #include <QMainWindow>
 #include <QShortcut>
@@ -14,6 +15,7 @@ class MainWindow : public QMainWindow {
 
   protected:
     void closeEvent(QCloseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
   private:
     QStackedWidget* stack_ = nullptr;
@@ -28,6 +30,7 @@ class MainWindow : public QMainWindow {
     bool always_on_top_ = false;
     QWidget* tab_bar_widget_ = nullptr; // kept to hide/show in focus mode
     QWidget* status_bar_widget_ = nullptr;
+    AiChatBubble* chat_bubble_ = nullptr;
 
     void setup_auth_screens();
     void setup_app_screens();

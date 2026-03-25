@@ -25,7 +25,7 @@ NavigationBar::NavigationBar(QWidget* parent) : QWidget(parent) {
     };
 
     hl->addWidget(mk("FINCEPT", "#d97706", 16, true));
-    hl->addWidget(mk("TERMINAL", "#525252", 14));
+    hl->addWidget(mk("TERMINAL", "#ffffff", 14));
     hl->addWidget(mk("   ", "#000"));
     hl->addWidget(mk("\xe2\x97\x8f", "#16a34a", 10));
     hl->addWidget(mk(" LIVE", "#16a34a", 13, true));
@@ -39,7 +39,7 @@ NavigationBar::NavigationBar(QWidget* parent) : QWidget(parent) {
     credits_label_ = mk("---", "#16a34a", 13);
     hl->addWidget(credits_label_);
     hl->addWidget(mk("  |  ", "#1a1a1a", 13));
-    plan_label_ = mk("---", "#525252", 13);
+    plan_label_ = mk("---", "#ffffff", 13);
     hl->addWidget(plan_label_);
     hl->addWidget(mk("  |  ", "#1a1a1a", 13));
 

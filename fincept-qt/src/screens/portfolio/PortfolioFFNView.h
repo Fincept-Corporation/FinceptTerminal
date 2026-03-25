@@ -3,7 +3,9 @@
 #include "screens/portfolio/PortfolioTypes.h"
 
 #include <QChartView>
+#include <QJsonObject>
 #include <QLabel>
+#include <QPointer>
 #include <QPushButton>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -26,6 +28,7 @@ class PortfolioFFNView : public QWidget {
   private:
     void build_ui();
     void update_overview();
+    void run_ffn();
 
     QTabWidget* tabs_ = nullptr;
 
@@ -41,11 +44,14 @@ class PortfolioFFNView : public QWidget {
     QWidget* drawdowns_panel_ = nullptr;
     QWidget* rolling_panel_ = nullptr;
 
-    // Back button
+    // Header widgets
     QPushButton* back_btn_ = nullptr;
+    QPushButton* run_btn_  = nullptr;
+    QLabel*      status_label_ = nullptr;
 
     portfolio::PortfolioSummary summary_;
     QString currency_;
+    QJsonObject ffn_data_;
 };
 
 } // namespace fincept::screens

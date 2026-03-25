@@ -1,20 +1,43 @@
 #pragma once
-// Equity Chart — Candlestick chart with timeframe toggle buttons
+// Equity Chart — Custom-painted candlestick chart with timeframe toggle buttons
+// Uses QPainter directly — no QCandlestickSeries (which has QDateTimeAxis gaps).
 
 #include "trading/TradingTypes.h"
 
+#include <QLabel>
 #include <QPushButton>
 #include <QVector>
 #include <QWidget>
 
-class QChartView;
-class QChart;
-class QCandlestickSeries;
-class QDateTimeAxis;
-class QValueAxis;
-
 namespace fincept::screens::equity {
 
+// ── Canvas: draws candles via QPainter ───────────────────────────────────────
+class CandleCanvas : public QWidget {
+    Q_OBJECT
+  public:
+    explicit CandleCanvas(QWidget* parent = nullptr);
+
+    void set_candles(const QVector<trading::BrokerCandle>& candles);
+    void clear();
+
+  protected:
+    void paintEvent(QPaintEvent*) override;
+    void resizeEvent(QResizeEvent*) override;
+
+  private:
+    void rebuild_cache();
+
+    QVector<trading::BrokerCandle> candles_;
+    QPixmap cache_;
+    bool    dirty_ = true;
+
+    static constexpr int MAX_VISIBLE = 120;
+    static constexpr int PRICE_AXIS_W = 70;  // pixels reserved for price labels on right
+    static constexpr int TIME_AXIS_H  = 20;  // pixels reserved for time labels at bottom
+    static constexpr int LABEL_STEP   = 20;  // draw a time label every N candles
+};
+
+// ── EquityChart: header + canvas ─────────────────────────────────────────────
 class EquityChart : public QWidget {
     Q_OBJECT
   public:
@@ -29,27 +52,13 @@ class EquityChart : public QWidget {
     void timeframe_changed(const QString& tf);
 
   private:
-    void rebuild_chart();
-    void update_axes(double min_price, double max_price, qint64 min_time, qint64 max_time);
     void set_active_tf(int idx);
 
-    QChartView* chart_view_ = nullptr;
-    QChart* chart_ = nullptr;
-    QCandlestickSeries* series_ = nullptr;
-    QDateTimeAxis* time_axis_ = nullptr;
-    QValueAxis* price_axis_ = nullptr;
+    CandleCanvas* canvas_      = nullptr;
+    QPushButton*  tf_buttons_[6] = {};
+    int           active_tf_   = 2; // default "15m"
 
-    QPushButton* tf_buttons_[6] = {};
-    int active_tf_ = 1; // default "5m"
     static constexpr const char* TF_LABELS[] = {"1m", "5m", "15m", "1h", "1d", "1w"};
-
-    QVector<trading::BrokerCandle> candles_;
-    static constexpr int MAX_VISIBLE = 120;
-
-    double last_min_price_ = -1;
-    double last_max_price_ = -1;
-    qint64 last_min_time_ = -1;
-    qint64 last_max_time_ = -1;
 };
 
 } // namespace fincept::screens::equity

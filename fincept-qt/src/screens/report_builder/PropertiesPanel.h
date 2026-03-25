@@ -23,10 +23,10 @@ class PropertiesPanel : public QWidget {
     void delete_requested(int index);
 
   private:
-    QStackedWidget* stack_ = nullptr;
-    QWidget* empty_widget_ = nullptr;
-    QWidget* editor_widget_ = nullptr;
-    int current_index_ = -1;
+    QStackedWidget* stack_         = nullptr;
+    QWidget*        empty_widget_  = nullptr;
+    QWidget*        editor_widget_ = nullptr;
+    int             current_index_ = -1;
 
     void build_empty_page();
     void build_editor_page();

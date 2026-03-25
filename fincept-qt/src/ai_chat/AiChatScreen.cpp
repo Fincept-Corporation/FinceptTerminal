@@ -1,4 +1,4 @@
-// AiChatScreen.cpp — Fincept AI Terminal chat, Obsidian design system
+// AiChatScreen.cpp — Fincept AI Chat, Obsidian design system
 
 #include "ai_chat/AiChatScreen.h"
 
@@ -6,366 +6,455 @@
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
 #include "storage/repositories/ChatRepository.h"
+#include "ui/theme/Theme.h"
 
 #include <QApplication>
 #include <QDateTime>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMenu>
 #include <QPointer>
+#include <QRandomGenerator>
+#include <QResizeEvent>
 #include <QScrollBar>
 #include <QShowEvent>
 #include <QSizePolicy>
 #include <QTimer>
+#include <QToolButton>
 #include <QtConcurrent/QtConcurrent>
 
 namespace fincept::screens {
 
 static constexpr const char* TAG = "AiChatScreen";
 
-// ── Obsidian palette ─────────────────────────────────────────────────────────
-namespace obs {
-constexpr const char* BG_BASE = "#080808";
-constexpr const char* BG_SURFACE = "#0a0a0a";
-constexpr const char* BG_RAISED = "#111111";
-constexpr const char* BG_HOVER = "#161616";
-constexpr const char* BORDER_DIM = "#1a1a1a";
-constexpr const char* BORDER_MED = "#222222";
-constexpr const char* BORDER_BRT = "#333333";
-constexpr const char* TEXT_PRI = "#e5e5e5";
-constexpr const char* TEXT_SEC = "#808080";
-constexpr const char* TEXT_TER = "#525252";
-constexpr const char* TEXT_DIM = "#404040";
-constexpr const char* AMBER = "#d97706";
-constexpr const char* AMBER_DIM = "#78350f";
-constexpr const char* POSITIVE = "#16a34a";
-constexpr const char* NEGATIVE = "#dc2626";
-constexpr const char* CYAN = "#0891b2";
-constexpr const char* INFO = "#2563eb";
-constexpr const char* ROW_ALT = "#0c0c0c";
-} // namespace obs
+namespace fnt = fincept::ui::fonts;
+namespace col = fincept::ui::colors;
 
-static const QString MF = "font-family:'Consolas','Courier New',monospace;";
+// ── Style helpers ─────────────────────────────────────────────────────────────
 
-// ── Shared styles ────────────────────────────────────────────────────────────
-
-static QFrame* sep() {
-    auto* s = new QFrame;
-    s->setFixedHeight(1);
-    s->setStyleSheet(QString("background:%1;border:none;").arg(obs::BORDER_DIM));
-    return s;
+static QString bubble_style(const QString& role) {
+    if (role == "user")
+        return "background:rgba(120,53,15,0.45);border:1px solid rgba(217,119,6,0.28);"
+               "border-radius:6px;padding:10px 14px;";
+    if (role == "system")
+        return "background:rgba(50,12,12,0.85);border:1px solid rgba(220,38,38,0.22);"
+               "border-radius:6px;padding:10px 14px;";
+    return QString("background:%1;border:1px solid %2;border-radius:6px;padding:10px 14px;")
+        .arg(col::BG_RAISED, col::BORDER_MED);
 }
 
-// ============================================================================
-// Construction
-// ============================================================================
+static QString body_color(const QString& role) {
+    if (role == "user")   return "#fff7ed";
+    if (role == "system") return "#fee2e2";
+    return col::TEXT_PRIMARY;
+}
+
+static QString generate_session_title() {
+    static const QStringList prefixes = {"Amber","Apex","Atlas","Echo","Flux","Nova","Slate","Vector"};
+    static const QStringList nouns    = {"Brief","Drift","Focus","Ledger","Macro","Pulse","Signal","Tape"};
+    const int pi = QRandomGenerator::global()->bounded(prefixes.size());
+    const int ni = QRandomGenerator::global()->bounded(nouns.size());
+    const QString sfx = QString::number(QRandomGenerator::global()->bounded(0x10000), 16)
+                            .rightJustified(4,'0').toUpper();
+    return QString("%1 %2 %3").arg(prefixes[pi], nouns[ni], sfx);
+}
+
+static QString display_session_title(const ChatSession& s) {
+    if (!s.title.trimmed().isEmpty() && s.title.trimmed().toLower() != "chat")
+        return s.title;
+    return QString("Session %1").arg(s.id.left(4).toUpper());
+}
+
+static QString display_session_meta(const ChatSession& s) {
+    QDateTime dt = QDateTime::fromString(s.updated_at, Qt::ISODate);
+    if (!dt.isValid())
+        dt = QDateTime::fromString(s.updated_at, "yyyy-MM-dd HH:mm:ss");
+    const QString stamp = dt.isValid() ? dt.toString("MMM d · hh:mm") : "";
+    return s.message_count > 0
+        ? QString("%1 msg%2%3").arg(s.message_count)
+              .arg(stamp.isEmpty() ? "" : "  ·  ")
+              .arg(stamp)
+        : stamp;
+}
+
+// ── Constructor ───────────────────────────────────────────────────────────────
 
 AiChatScreen::AiChatScreen(QWidget* parent) : QWidget(parent) {
+    typing_timer_ = new QTimer(this);
+    typing_timer_->setInterval(400);
+    connect(typing_timer_, &QTimer::timeout, this, &AiChatScreen::on_typing_indicator_tick);
+
     build_ui();
     load_sessions();
 }
 
 void AiChatScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::finished_streaming, this,
-            &AiChatScreen::on_streaming_done, Qt::UniqueConnection);
-    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed, this,
-            &AiChatScreen::on_provider_changed, Qt::UniqueConnection);
+    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::finished_streaming,
+            this, &AiChatScreen::on_streaming_done, Qt::UniqueConnection);
+    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed,
+            this, &AiChatScreen::on_provider_changed, Qt::UniqueConnection);
     update_stats();
-    if (clock_timer_)
-        clock_timer_->start(1000);
 }
 
 void AiChatScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
-    if (clock_timer_)
-        clock_timer_->stop();
 }
 
-// ============================================================================
-// Build UI
-// ============================================================================
+void AiChatScreen::resizeEvent(QResizeEvent* e) {
+    QWidget::resizeEvent(e);
+}
+
+// ── Build UI ──────────────────────────────────────────────────────────────────
 
 void AiChatScreen::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(obs::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(col::BG_BASE));
     auto* root = new QHBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
+    root->setContentsMargins(0,0,0,0);
     root->setSpacing(0);
-
     build_sidebar();
     build_chat_area();
-
     root->addWidget(sidebar_);
     root->addWidget(chat_widget_, 1);
 }
 
-// ── Left sidebar ─────────────────────────────────────────────────────────────
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 
 void AiChatScreen::build_sidebar() {
     sidebar_ = new QWidget;
-    sidebar_->setFixedWidth(260);
-    sidebar_->setStyleSheet(QString("background:%1;border-right:1px solid %2;").arg(obs::BG_SURFACE, obs::BORDER_DIM));
+    sidebar_->setFixedWidth(280);
+    sidebar_->setStyleSheet(
+        QString("background:#050505;border-right:1px solid %1;").arg(col::BORDER_DIM));
 
     auto* vl = new QVBoxLayout(sidebar_);
-    vl->setContentsMargins(0, 0, 0, 0);
+    vl->setContentsMargins(0,0,0,0);
     vl->setSpacing(0);
 
     // ── Header ───────────────────────────────────────────────────────────
     auto* hdr = new QWidget;
-    hdr->setFixedHeight(34);
-    hdr->setStyleSheet(QString("background:%1;").arg(obs::BG_RAISED));
+    hdr->setFixedHeight(60);
+    hdr->setStyleSheet(
+        QString("background:#020202;border-bottom:1px solid %1;").arg(col::BORDER_DIM));
     auto* hhl = new QHBoxLayout(hdr);
-    hhl->setContentsMargins(12, 0, 12, 0);
+    hhl->setContentsMargins(14, 0, 10, 0);
+    hhl->setSpacing(6);
 
-    auto* title = new QLabel("CONVERSATIONS");
+    auto* icon = new QLabel("⬡");
+    icon->setStyleSheet(QString("color:%1;font-size:18px;").arg(col::AMBER));
+    hhl->addWidget(icon);
+
+    auto* title = new QLabel("Fincept AI");
     title->setStyleSheet(
-        QString("color:%1;font-size:12px;font-weight:700;letter-spacing:0.5px;%2").arg(obs::AMBER, MF));
-    hhl->addWidget(title);
-    hhl->addStretch();
+        QString("color:%1;font-size:%2px;font-weight:700;").arg(col::TEXT_PRIMARY).arg(fnt::BODY));
+    hhl->addWidget(title, 1);
 
-    session_count_lbl_ = new QLabel("0");
-    session_count_lbl_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;%2").arg(obs::TEXT_SEC, MF));
-    hhl->addWidget(session_count_lbl_);
+    new_btn_ = new QPushButton("＋");
+    new_btn_->setFixedSize(32, 32);
+    new_btn_->setCursor(Qt::PointingHandCursor);
+    new_btn_->setToolTip("New Chat  (Ctrl+N)");
+    new_btn_->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                "border-radius:4px;font-size:16px;font-weight:400;}"
+                "QPushButton:hover{background:%2;color:%3;}"
+                "QPushButton:disabled{color:%4;border-color:%5;}")
+            .arg(col::AMBER, col::AMBER_DIM, col::BG_BASE, col::TEXT_DIM, col::BORDER_DIM));
+    connect(new_btn_, &QPushButton::clicked, this, &AiChatScreen::on_new_session);
+    hhl->addWidget(new_btn_);
     vl->addWidget(hdr);
 
-    // ── New session button ───────────────────────────────────────────────
-    auto* new_bar = new QWidget;
-    new_bar->setStyleSheet(QString("background:%1;").arg(obs::BG_SURFACE));
-    auto* nbl = new QHBoxLayout(new_bar);
-    nbl->setContentsMargins(10, 8, 10, 8);
-
-    new_btn_ = new QPushButton("+ NEW CONVERSATION");
-    new_btn_->setFixedHeight(28);
-    new_btn_->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;"
-                                    "font-size:12px;font-weight:700;%3}"
-                                    "QPushButton:hover{background:%1;color:%4;}")
-                                .arg(obs::AMBER, obs::AMBER_DIM, MF, obs::BG_BASE));
-    connect(new_btn_, &QPushButton::clicked, this, &AiChatScreen::on_new_session);
-    nbl->addWidget(new_btn_);
-    vl->addWidget(new_bar);
-
     // ── Search ───────────────────────────────────────────────────────────
-    auto* search_bar = new QWidget;
-    search_bar->setStyleSheet(QString("background:%1;").arg(obs::BG_SURFACE));
-    auto* shl = new QHBoxLayout(search_bar);
-    shl->setContentsMargins(10, 0, 10, 8);
+    auto* search_wrap = new QWidget;
+    search_wrap->setStyleSheet("background:#030303;");
+    auto* swl = new QHBoxLayout(search_wrap);
+    swl->setContentsMargins(10, 8, 10, 8);
 
     search_edit_ = new QLineEdit;
-    search_edit_->setPlaceholderText("Search conversations...");
-    search_edit_->setFixedHeight(26);
+    search_edit_->setPlaceholderText("Search sessions...");
+    search_edit_->setFixedHeight(30);
     search_edit_->setStyleSheet(
         QString("QLineEdit{background:%1;color:%2;border:1px solid %3;"
-                "padding:3px 8px;font-size:12px;%4}"
-                "QLineEdit:focus{border-color:%5;}"
-                "QLineEdit::placeholder{color:%6;}")
-            .arg(obs::BG_BASE, obs::TEXT_PRI, obs::BORDER_DIM, MF, obs::BORDER_BRT, obs::TEXT_DIM));
+                "border-radius:4px;padding:2px 10px;font-size:%4px;}"
+                "QLineEdit:focus{border-color:%5;}")
+            .arg(col::BG_BASE, col::TEXT_PRIMARY, col::BORDER_MED)
+            .arg(fnt::SMALL).arg(col::AMBER));
     connect(search_edit_, &QLineEdit::textChanged, this, &AiChatScreen::on_search_changed);
-    shl->addWidget(search_edit_);
-    vl->addWidget(search_bar);
+    swl->addWidget(search_edit_);
+    vl->addWidget(search_wrap);
 
     // ── Session list ─────────────────────────────────────────────────────
     session_list_ = new QListWidget;
+    session_list_->setWordWrap(false);
+    session_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     session_list_->setStyleSheet(
-        QString("QListWidget{background:transparent;border:none;color:%1;font-size:13px;%2}"
-                "QListWidget::item{padding:10px 12px;border-left:2px solid transparent;}"
-                "QListWidget::item:selected{background:rgba(217,119,6,0.06);border-left:2px solid %3;color:%4;}"
-                "QListWidget::item:hover{background:%5;}")
-            .arg(obs::TEXT_SEC, MF, obs::AMBER, obs::TEXT_PRI, obs::BG_HOVER));
-    connect(session_list_, &QListWidget::currentRowChanged, this, &AiChatScreen::on_session_selected);
+        QString("QListWidget{background:#030303;border:none;outline:none;}"
+                "QListWidget::item{padding:10px 14px;border-bottom:1px solid %1;"
+                "color:%2;font-size:%3px;}"
+                "QListWidget::item:selected{background:rgba(217,119,6,0.10);"
+                "border-left:3px solid %4;color:%5;}"
+                "QListWidget::item:hover:!selected{background:rgba(255,255,255,0.03);}"
+                "QScrollBar:vertical{background:transparent;width:4px;}"
+                "QScrollBar::handle:vertical{background:%6;border-radius:2px;}"
+                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+            .arg(col::BORDER_DIM, col::TEXT_SECONDARY).arg(fnt::SMALL)
+            .arg(col::AMBER, col::TEXT_PRIMARY, col::BORDER_MED));
+    connect(session_list_, &QListWidget::currentRowChanged,
+            this, &AiChatScreen::on_session_selected);
     vl->addWidget(session_list_, 1);
 
-    // ── Delete ───────────────────────────────────────────────────────────
-    auto* del_bar = new QWidget;
-    del_bar->setStyleSheet(QString("background:%1;").arg(obs::BG_SURFACE));
-    auto* dbl = new QHBoxLayout(del_bar);
-    dbl->setContentsMargins(10, 4, 10, 4);
+    // ── Session actions ──────────────────────────────────────────────────
+    auto* actions = new QWidget;
+    actions->setFixedHeight(42);
+    actions->setStyleSheet(
+        QString("background:#020202;border-top:1px solid %1;").arg(col::BORDER_DIM));
+    auto* al = new QHBoxLayout(actions);
+    al->setContentsMargins(10, 0, 10, 0);
+    al->setSpacing(6);
 
-    delete_btn_ = new QPushButton("DELETE");
+    rename_btn_ = new QPushButton("Rename");
+    rename_btn_->setEnabled(false);
+    rename_btn_->setFixedHeight(26);
+    rename_btn_->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                "border-radius:3px;font-size:%3px;padding:0 8px;}"
+                "QPushButton:hover:enabled{background:%2;color:%4;}"
+                "QPushButton:disabled{color:%5;border-color:%6;}")
+            .arg(col::TEXT_SECONDARY, col::BORDER_MED).arg(fnt::SMALL)
+            .arg(col::BG_BASE, col::TEXT_DIM, col::BORDER_DIM));
+    connect(rename_btn_, &QPushButton::clicked, this, &AiChatScreen::on_rename_session);
+    al->addWidget(rename_btn_);
+
+    al->addStretch();
+
+    delete_btn_ = new QPushButton("Delete");
     delete_btn_->setEnabled(false);
-    delete_btn_->setFixedHeight(24);
-    delete_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                       "font-size:11px;font-weight:700;%3}"
-                                       "QPushButton:hover{background:rgba(220,38,38,0.1);border-color:%1;}"
-                                       "QPushButton:disabled{color:%4;border-color:%5;}")
-                                   .arg(obs::NEGATIVE, obs::BORDER_DIM, MF, obs::TEXT_DIM, obs::BORDER_DIM));
+    delete_btn_->setFixedHeight(26);
+    delete_btn_->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:1px solid rgba(220,38,38,0.28);"
+                "border-radius:3px;font-size:%2px;padding:0 8px;}"
+                "QPushButton:hover:enabled{background:%1;color:%3;border-color:%1;}"
+                "QPushButton:disabled{color:%4;border-color:%5;}")
+            .arg(col::NEGATIVE).arg(fnt::SMALL)
+            .arg(col::BG_BASE, col::TEXT_DIM, col::BORDER_DIM));
     connect(delete_btn_, &QPushButton::clicked, this, &AiChatScreen::on_delete_session);
-    dbl->addWidget(delete_btn_);
-    vl->addWidget(del_bar);
+    al->addWidget(delete_btn_);
+    vl->addWidget(actions);
 
-    // ── Stats footer ─────────────────────────────────────────────────────
-    auto* stats = new QWidget;
-    stats->setStyleSheet(QString("background:%1;border-top:1px solid %2;").arg(obs::BG_RAISED, obs::BORDER_DIM));
-    auto* svl = new QVBoxLayout(stats);
-    svl->setContentsMargins(12, 8, 12, 8);
-    svl->setSpacing(4);
+    // ── Provider/Model footer ────────────────────────────────────────────
+    auto* footer = new QWidget;
+    footer->setFixedHeight(50);
+    footer->setStyleSheet(
+        QString("background:#020202;border-top:1px solid %1;").arg(col::BORDER_DIM));
+    auto* fl = new QVBoxLayout(footer);
+    fl->setContentsMargins(14, 7, 14, 7);
+    fl->setSpacing(2);
 
-    // Provider info
-    provider_lbl_ = new QLabel("NO PROVIDER");
+    provider_lbl_ = new QLabel("No provider");
     provider_lbl_->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;%2").arg(obs::AMBER, MF));
-    svl->addWidget(provider_lbl_);
+        QString("color:%1;font-size:%2px;font-weight:600;")
+            .arg(col::AMBER).arg(fnt::SMALL));
+    provider_lbl_->setToolTip("Active LLM Provider");
 
-    svl->addWidget(sep());
+    model_lbl_ = new QLabel("No model");
+    model_lbl_->setStyleSheet(
+        QString("color:%1;font-size:%2px;").arg(col::TEXT_SECONDARY).arg(fnt::TINY));
+    model_lbl_->setToolTip("Active Model — change in Settings > LLM Configuration");
 
-    auto make_stat = [&](const QString& label) -> QLabel* {
-        auto* row = new QWidget;
-        row->setStyleSheet("background:transparent;");
-        auto* rl = new QHBoxLayout(row);
-        rl->setContentsMargins(0, 0, 0, 0);
-        auto* l = new QLabel(label);
-        l->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;%2").arg(obs::TEXT_SEC, MF));
-        rl->addWidget(l);
-        auto* v = new QLabel("0");
-        v->setAlignment(Qt::AlignRight);
-        v->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;%2").arg(obs::CYAN, MF));
-        rl->addWidget(v);
-        svl->addWidget(row);
-        return v;
-    };
-    stats_msgs_lbl_ = make_stat("MESSAGES");
-    stats_tokens_lbl_ = make_stat("TOKENS");
-    vl->addWidget(stats);
+    fl->addWidget(provider_lbl_);
+    fl->addWidget(model_lbl_);
+    vl->addWidget(footer);
 }
 
-// ── Chat area ────────────────────────────────────────────────────────────────
+// ── Chat area ─────────────────────────────────────────────────────────────────
 
 void AiChatScreen::build_chat_area() {
     chat_widget_ = new QWidget;
-    chat_widget_->setStyleSheet(QString("background:%1;").arg(obs::BG_BASE));
+    chat_widget_->setStyleSheet(QString("background:%1;").arg(col::BG_BASE));
     auto* vl = new QVBoxLayout(chat_widget_);
-    vl->setContentsMargins(0, 0, 0, 0);
+    vl->setContentsMargins(0,0,0,0);
     vl->setSpacing(0);
 
     vl->addWidget(build_header_bar());
 
-    // Messages scroll area
     scroll_area_ = new QScrollArea;
     scroll_area_->setWidgetResizable(true);
     scroll_area_->setFrameShape(QFrame::NoFrame);
-    scroll_area_->setStyleSheet(QString("QScrollArea{background:%1;border:none;}"
-                                        "QScrollBar:vertical{background:transparent;width:6px;}"
-                                        "QScrollBar::handle:vertical{background:%2;}"
-                                        "QScrollBar::handle:vertical:hover{background:%3;}"
-                                        "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-                                    .arg(obs::BG_BASE, obs::BORDER_MED, obs::BORDER_BRT));
+    scroll_area_->setStyleSheet(
+        QString("QScrollArea{background:%1;border:none;}"
+                "QScrollBar:vertical{background:transparent;width:5px;margin:2px;}"
+                "QScrollBar::handle:vertical{background:%2;border-radius:2px;min-height:30px;}"
+                "QScrollBar::handle:vertical:hover{background:%3;}"
+                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+            .arg(col::BG_BASE, col::BORDER_MED, col::BORDER_BRIGHT));
 
     messages_container_ = new QWidget;
-    messages_container_->setStyleSheet(QString("background:%1;").arg(obs::BG_BASE));
+    messages_container_->setStyleSheet(QString("background:%1;").arg(col::BG_BASE));
     messages_layout_ = new QVBoxLayout(messages_container_);
-    messages_layout_->setContentsMargins(20, 16, 20, 16);
-    messages_layout_->setSpacing(0);
+    messages_layout_->setContentsMargins(32, 24, 32, 16);
+    messages_layout_->setSpacing(18);
     messages_layout_->addStretch();
     scroll_area_->setWidget(messages_container_);
     vl->addWidget(scroll_area_, 1);
 
-    welcome_panel_ = build_welcome();
-    vl->addWidget(welcome_panel_);
+    // Typing indicator sits above input, inside chat area
+    vl->addWidget(build_typing_indicator());
     vl->addWidget(build_input_area());
 }
 
 QWidget* AiChatScreen::build_header_bar() {
     auto* bar = new QWidget;
-    bar->setFixedHeight(34);
-    bar->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(obs::BG_RAISED, obs::BORDER_DIM));
+    bar->setFixedHeight(52);
+    bar->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;")
+            .arg(col::BG_RAISED, col::BORDER_DIM));
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(16, 0, 16, 0);
+    hl->setContentsMargins(20, 0, 16, 0);
     hl->setSpacing(10);
 
-    auto* title = new QLabel("AI CHAT");
-    title->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:1px;%2").arg(obs::AMBER, MF));
-    hl->addWidget(title);
+    // Status dot
+    hdr_status_dot_ = new QLabel;
+    hdr_status_dot_->setFixedSize(8, 8);
+    hdr_status_dot_->setStyleSheet(
+        QString("background:%1;border-radius:4px;").arg(col::POSITIVE));
+    hl->addWidget(hdr_status_dot_);
 
-    auto* div1 = new QLabel("|");
-    div1->setStyleSheet(QString("color:%1;font-size:13px;%2").arg(obs::BORDER_BRT, MF));
-    hl->addWidget(div1);
-
-    hdr_status_lbl_ = new QLabel("READY");
-    hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;%2").arg(obs::POSITIVE, MF));
-    hl->addWidget(hdr_status_lbl_);
+    // Session name
+    hdr_session_lbl_ = new QLabel("New Conversation");
+    hdr_session_lbl_->setStyleSheet(
+        QString("color:%1;font-size:%2px;font-weight:600;")
+            .arg(col::TEXT_PRIMARY).arg(fnt::BODY));
+    hl->addWidget(hdr_session_lbl_);
 
     hl->addStretch();
 
-    hdr_session_lbl_ = new QLabel("");
-    hdr_session_lbl_->setStyleSheet(QString("color:%1;font-size:12px;%2").arg(obs::TEXT_DIM, MF));
-    hl->addWidget(hdr_session_lbl_);
+    // Token count
+    hdr_tokens_lbl_ = new QLabel;
+    hdr_tokens_lbl_->setStyleSheet(
+        QString("color:%1;font-size:%2px;").arg(col::TEXT_DIM).arg(fnt::TINY));
+    hl->addWidget(hdr_tokens_lbl_);
 
-    auto* div2 = new QLabel("|");
-    div2->setStyleSheet(QString("color:%1;font-size:13px;%2").arg(obs::BORDER_BRT, MF));
-    hl->addWidget(div2);
+    // Divider
+    auto* div = new QFrame;
+    div->setFrameShape(QFrame::VLine);
+    div->setFixedWidth(1);
+    div->setStyleSheet(QString("background:%1;").arg(col::BORDER_DIM));
+    hl->addWidget(div);
 
-    hdr_clock_lbl_ = new QLabel("00:00:00");
-    hdr_clock_lbl_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;%2").arg(obs::TEXT_SEC, MF));
-    hl->addWidget(hdr_clock_lbl_);
+    // Active model pill
+    hdr_model_lbl_ = new QLabel("No model");
+    hdr_model_lbl_->setStyleSheet(
+        QString("color:%1;font-size:%2px;background:%3;border:1px solid %4;"
+                "border-radius:3px;padding:2px 8px;")
+            .arg(col::TEXT_SECONDARY).arg(fnt::TINY)
+            .arg(col::BG_BASE, col::BORDER_MED));
+    hdr_model_lbl_->setToolTip("Active model — change in Settings > LLM Configuration");
+    hl->addWidget(hdr_model_lbl_);
 
-    clock_timer_ = new QTimer(this);
-    connect(clock_timer_, &QTimer::timeout, this, &AiChatScreen::on_clock_tick);
+    // Status text
+    hdr_status_lbl_ = new QLabel("Ready");
+    hdr_status_lbl_->setFixedWidth(64);
+    hdr_status_lbl_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    hdr_status_lbl_->setStyleSheet(
+        QString("color:%1;font-size:%2px;font-weight:600;")
+            .arg(col::POSITIVE).arg(fnt::SMALL));
+    hl->addWidget(hdr_status_lbl_);
+
     return bar;
 }
 
-// ── Welcome / suggestions panel ──────────────────────────────────────────────
+// ── Typing indicator ──────────────────────────────────────────────────────────
+
+QWidget* AiChatScreen::build_typing_indicator() {
+    typing_indicator_ = new QWidget;
+    typing_indicator_->setFixedHeight(28);
+    typing_indicator_->setStyleSheet("background:transparent;");
+    auto* hl = new QHBoxLayout(typing_indicator_);
+    hl->setContentsMargins(36, 0, 0, 0);
+
+    typing_dots_lbl_ = new QLabel("AI is thinking");
+    typing_dots_lbl_->setStyleSheet(
+        QString("color:%1;font-size:%2px;font-style:italic;")
+            .arg(col::TEXT_DIM).arg(fnt::SMALL));
+    hl->addWidget(typing_dots_lbl_);
+    hl->addStretch();
+
+    typing_indicator_->hide();
+    return typing_indicator_;
+}
+
+// ── Welcome panel ─────────────────────────────────────────────────────────────
 
 QWidget* AiChatScreen::build_welcome() {
     auto* panel = new QWidget;
-    panel->setStyleSheet(QString("background:%1;border-top:1px solid %2;").arg(obs::BG_SURFACE, obs::BORDER_DIM));
+    panel->setStyleSheet(QString("background:%1;").arg(col::BG_BASE));
     auto* vl = new QVBoxLayout(panel);
-    vl->setContentsMargins(20, 16, 20, 16);
-    vl->setSpacing(12);
+    vl->setContentsMargins(48, 36, 48, 28);
+    vl->setSpacing(20);
 
-    // Welcome header
-    auto* welcome_title = new QLabel("FINCEPT AI ASSISTANT");
-    welcome_title->setAlignment(Qt::AlignCenter);
-    welcome_title->setStyleSheet(
-        QString("color:%1;font-size:16px;font-weight:700;letter-spacing:1px;%2").arg(obs::AMBER, MF));
-    vl->addWidget(welcome_title);
+    auto* heading = new QLabel("How can I help you?");
+    heading->setAlignment(Qt::AlignCenter);
+    heading->setStyleSheet(
+        QString("color:%1;font-size:%2px;font-weight:700;")
+            .arg(col::TEXT_PRIMARY).arg(fnt::TITLE));
+    vl->addWidget(heading);
 
-    auto* welcome_sub = new QLabel("Ask about markets, analyze portfolios, run analytics, or explore financial data");
-    welcome_sub->setAlignment(Qt::AlignCenter);
-    welcome_sub->setWordWrap(true);
-    welcome_sub->setStyleSheet(QString("color:%1;font-size:13px;%2").arg(obs::TEXT_SEC, MF));
-    vl->addWidget(welcome_sub);
+    auto* sub = new QLabel(
+        "Ask about markets, portfolios, macro data, or any financial topic.\n"
+        "Conversations are saved automatically.");
+    sub->setAlignment(Qt::AlignCenter);
+    sub->setWordWrap(true);
+    sub->setStyleSheet(
+        QString("color:%1;font-size:%2px;").arg(col::TEXT_SECONDARY).arg(fnt::SMALL));
+    vl->addWidget(sub);
 
-    vl->addSpacing(4);
-
-    // Suggestion grid — 2 rows x 3 cols
     auto* grid = new QGridLayout;
-    grid->setSpacing(8);
+    grid->setHorizontalSpacing(10);
+    grid->setVerticalSpacing(10);
 
-    struct Sug {
-        const char* cat;
-        const char* text;
-    };
+    struct Sug { const char* cat; const char* cat_color; const char* text; };
     const Sug suggestions[] = {
-        {"MARKETS", "Show me today's top market movers"},  {"NEWS", "Summarize the latest financial news"},
-        {"PORTFOLIO", "Analyze my portfolio performance"}, {"ANALYTICS", "Calculate valuation for AAPL"},
-        {"ECONOMICS", "Current GDP and inflation data"},   {"RESEARCH", "Tech sector market trends"},
+        {"Markets",   col::CYAN,     "Show me today's top market movers"},
+        {"News",      col::AMBER,    "Summarize the latest financial news"},
+        {"Portfolio", col::POSITIVE, "Analyze my portfolio performance"},
+        {"Analytics", col::AMBER,    "Calculate valuation for AAPL"},
+        {"Economics", col::CYAN,     "Current GDP and inflation data"},
+        {"Research",  col::POSITIVE, "Tech sector market trends"},
     };
 
     for (int i = 0; i < 6; ++i) {
         auto* btn = new QPushButton;
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(QString("QPushButton{background:%1;border:1px solid %2;padding:12px;text-align:left;%3}"
-                                   "QPushButton:hover{background:%4;border-color:%5;}")
-                               .arg(obs::BG_RAISED, obs::BORDER_DIM, MF, obs::BG_HOVER, obs::AMBER_DIM));
+        btn->setStyleSheet(
+            QString("QPushButton{background:%1;border:1px solid %2;border-radius:6px;"
+                    "padding:12px 14px;text-align:left;}"
+                    "QPushButton:hover{background:%3;border-color:%4;}")
+                .arg(col::BG_RAISED, col::BORDER_DIM, col::BG_HOVER, col::BORDER_BRIGHT));
 
         auto* bl = new QVBoxLayout(btn);
-        bl->setContentsMargins(0, 0, 0, 0);
+        bl->setContentsMargins(0,0,0,0);
         bl->setSpacing(4);
 
         auto* cat = new QLabel(suggestions[i].cat);
         cat->setStyleSheet(
-            QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;%2").arg(obs::AMBER, MF));
+            QString("color:%1;font-size:%2px;font-weight:700;background:transparent;")
+                .arg(suggestions[i].cat_color).arg(fnt::TINY));
         cat->setAttribute(Qt::WA_TransparentForMouseEvents);
         bl->addWidget(cat);
 
         auto* desc = new QLabel(suggestions[i].text);
-        desc->setStyleSheet(QString("color:%1;font-size:12px;%2").arg(obs::TEXT_PRI, MF));
+        desc->setStyleSheet(
+            QString("color:%1;font-size:%2px;background:transparent;")
+                .arg(col::TEXT_PRIMARY).arg(fnt::SMALL));
         desc->setWordWrap(true);
         desc->setAttribute(Qt::WA_TransparentForMouseEvents);
         bl->addWidget(desc);
 
-        QString prompt = suggestions[i].text;
+        const QString prompt = suggestions[i].text;
         connect(btn, &QPushButton::clicked, this, [this, prompt]() {
             input_box_->setPlainText(prompt);
             on_send();
@@ -373,90 +462,60 @@ QWidget* AiChatScreen::build_welcome() {
         grid->addWidget(btn, i / 3, i % 3);
     }
     vl->addLayout(grid);
-
-    // Hint
-    auto* hint =
-        new QLabel("Or type your own question below. The AI can access market data, run Python analytics, and more.");
-    hint->setAlignment(Qt::AlignCenter);
-    hint->setWordWrap(true);
-    hint->setStyleSheet(QString("color:%1;font-size:11px;%2").arg(obs::TEXT_DIM, MF));
-    vl->addWidget(hint);
-
     return panel;
 }
 
-// ── Input area ───────────────────────────────────────────────────────────────
+// ── Input area ────────────────────────────────────────────────────────────────
 
 QWidget* AiChatScreen::build_input_area() {
     auto* bar = new QWidget;
-    bar->setStyleSheet(QString("background:%1;border-top:1px solid %2;").arg(obs::BG_RAISED, obs::BORDER_DIM));
-    auto* vl = new QVBoxLayout(bar);
-    vl->setContentsMargins(16, 10, 16, 10);
-    vl->setSpacing(6);
-
-    // Input container
-    auto* input_row = new QWidget;
-    input_row->setStyleSheet(QString("background:%1;border:1px solid %2;").arg(obs::BG_BASE, obs::BORDER_DIM));
-    auto* irl = new QHBoxLayout(input_row);
-    irl->setContentsMargins(10, 8, 10, 8);
-    irl->setSpacing(10);
-
-    auto* prompt_sym = new QLabel(">");
-    prompt_sym->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;%2").arg(obs::AMBER, MF));
-    prompt_sym->setFixedWidth(14);
-    irl->addWidget(prompt_sym, 0, Qt::AlignTop);
+    bar->setStyleSheet(
+        QString("background:%1;border-top:1px solid %2;")
+            .arg(col::BG_RAISED, col::BORDER_DIM));
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(16, 12, 16, 12);
+    hl->setSpacing(10);
 
     input_box_ = new QPlainTextEdit;
-    input_box_->setPlaceholderText("Ask anything about markets, data, or analytics...");
-    input_box_->setFixedHeight(24);
-    input_box_->setStyleSheet(QString("QPlainTextEdit{background:transparent;color:%1;border:none;font-size:14px;%2}"
-                                      "QPlainTextEdit[readOnly=\"true\"]{color:%3;}")
-                                  .arg(obs::TEXT_PRI, MF, obs::TEXT_DIM));
+    input_box_->setPlaceholderText("Message Fincept AI...");
+    input_box_->setFixedHeight(44);
     input_box_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    input_box_->setStyleSheet(
+        QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;"
+                "border-radius:6px;padding:8px 14px;font-size:%4px;}"
+                "QPlainTextEdit:focus{border-color:%5;}")
+            .arg(col::BG_BASE, col::TEXT_PRIMARY, col::BORDER_MED)
+            .arg(fnt::BODY).arg(col::AMBER));
     input_box_->installEventFilter(this);
     connect(input_box_, &QPlainTextEdit::textChanged, this, [this]() {
-        int lines = input_box_->document()->blockCount();
-        input_box_->setFixedHeight(qMin(qMax(lines, 1), 5) * 22 + 4);
+        const int lines = input_box_->document()->blockCount();
+        input_box_->setFixedHeight(qMin(qMax(lines, 1), 6) * 24 + 20);
     });
-    irl->addWidget(input_box_, 1);
+    hl->addWidget(input_box_, 1);
 
-    send_btn_ = new QPushButton("SEND");
-    send_btn_->setFixedSize(70, 30);
+    send_btn_ = new QPushButton("Send");
+    send_btn_->setFixedSize(76, 44);
     send_btn_->setCursor(Qt::PointingHandCursor);
     send_btn_->setStyleSheet(
-        QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;"
-                "font-size:12px;font-weight:700;letter-spacing:0.5px;%3}"
-                "QPushButton:hover{background:%1;color:%4;}"
-                "QPushButton:disabled{background:%5;color:%6;border-color:%7;}")
-            .arg(obs::AMBER, obs::AMBER_DIM, MF, obs::BG_BASE, obs::BG_RAISED, obs::TEXT_DIM, obs::BORDER_DIM));
+        QString("QPushButton{background:%1;color:%2;border:none;border-radius:6px;"
+                "font-size:%3px;font-weight:700;}"
+                "QPushButton:hover:enabled{background:%4;}"
+                "QPushButton:disabled{background:%5;color:%6;}")
+            .arg(col::AMBER, col::BG_BASE).arg(fnt::SMALL)
+            .arg(col::ORANGE, col::BG_RAISED, col::TEXT_DIM));
     connect(send_btn_, &QPushButton::clicked, this, &AiChatScreen::on_send);
-    irl->addWidget(send_btn_, 0, Qt::AlignBottom);
-    vl->addWidget(input_row);
+    hl->addWidget(send_btn_);
 
-    // Help text
-    auto* help = new QHBoxLayout;
-    help->setContentsMargins(0, 0, 0, 0);
-    auto* lh = new QLabel("ENTER to send  |  SHIFT+ENTER new line  |  CTRL+N new chat");
-    lh->setStyleSheet(QString("color:%1;font-size:11px;%2").arg(obs::TEXT_DIM, MF));
-    help->addWidget(lh);
-    help->addStretch();
-    auto* rh = new QLabel("FINCEPT AI");
-    rh->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;%2").arg(obs::TEXT_DIM, MF));
-    help->addWidget(rh);
-    vl->addLayout(help);
     return bar;
 }
 
-// ============================================================================
-// Events
-// ============================================================================
+// ── Events ────────────────────────────────────────────────────────────────────
 
 bool AiChatScreen::eventFilter(QObject* obj, QEvent* event) {
     if (obj == input_box_ && event->type() == QEvent::KeyPress) {
         auto* ke = static_cast<QKeyEvent*>(event);
         if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) {
-            if (ke->modifiers() & Qt::ShiftModifier)
-                return false;
+            if (ke->modifiers() & Qt::ShiftModifier) return false;
             ke->accept();
             on_send();
             return true;
@@ -469,38 +528,55 @@ bool AiChatScreen::eventFilter(QObject* obj, QEvent* event) {
     return QWidget::eventFilter(obj, event);
 }
 
-void AiChatScreen::on_clock_tick() {
-    hdr_clock_lbl_->setText(QDateTime::currentDateTime().toString("HH:mm:ss"));
-}
-
 void AiChatScreen::on_search_changed(const QString& text) {
-    QString filter = text.trimmed().toLower();
+    const QString filter = text.trimmed().toLower();
     for (int i = 0; i < session_list_->count(); ++i) {
         auto* item = session_list_->item(i);
         item->setHidden(!filter.isEmpty() && !item->text().toLower().contains(filter));
     }
 }
 
-// ============================================================================
-// Session management
-// ============================================================================
+// ── Typing indicator slot ─────────────────────────────────────────────────────
+
+void AiChatScreen::on_typing_indicator_tick() {
+    static const QStringList states = {
+        "AI is thinking", "AI is thinking·", "AI is thinking··", "AI is thinking···"
+    };
+    typing_step_ = (typing_step_ + 1) % states.size();
+    typing_dots_lbl_->setText(states[typing_step_]);
+}
+
+void AiChatScreen::show_typing(bool show) {
+    if (show) {
+        typing_step_ = 0;
+        typing_dots_lbl_->setText("AI is thinking");
+        typing_indicator_->show();
+        typing_timer_->start();
+    } else {
+        typing_timer_->stop();
+        typing_indicator_->hide();
+    }
+}
+
+// ── Session management ────────────────────────────────────────────────────────
 
 void AiChatScreen::load_sessions() {
     session_list_->blockSignals(true);
     session_list_->clear();
     auto result = ChatRepository::instance().list_sessions();
-    if (result.is_err()) {
-        session_list_->blockSignals(false);
-        return;
-    }
-    for (const auto& s : result.value()) {
-        QString label = s.title.isEmpty() ? "Chat " + s.id.left(8) : s.title;
-        auto* item = new QListWidgetItem(label);
-        item->setData(Qt::UserRole, s.id);
-        session_list_->addItem(item);
+    if (result.is_ok()) {
+        for (const auto& s : result.value()) {
+            const QString meta  = display_session_meta(s);
+            const QString title = display_session_title(s);
+            const QString label = title + (meta.isEmpty() ? "" : "\n" + meta);
+            auto* item = new QListWidgetItem(label);
+            item->setData(Qt::UserRole, s.id);
+            item->setToolTip(title + (meta.isEmpty() ? "" : "\n" + meta));
+            item->setSizeHint(QSize(0, 52));
+            session_list_->addItem(item);
+        }
     }
     session_list_->blockSignals(false);
-    session_count_lbl_->setText(QString::number(session_list_->count()));
 
     if (!active_session_id_.isEmpty()) {
         for (int i = 0; i < session_list_->count(); ++i) {
@@ -517,131 +593,161 @@ void AiChatScreen::load_sessions() {
 }
 
 void AiChatScreen::create_new_session() {
-    auto result = ChatRepository::instance().create_session("Chat", ai_chat::LlmService::instance().active_provider(),
-                                                            ai_chat::LlmService::instance().active_model());
-    if (result.is_err())
-        return;
-    active_session_id_ = result.value().id;
+    if (streaming_) return;
+    const QString title = generate_session_title();
+    auto result = ChatRepository::instance().create_session(
+        title,
+        ai_chat::LlmService::instance().active_provider(),
+        ai_chat::LlmService::instance().active_model());
+    if (result.is_err()) return;
+    active_session_id_    = result.value().id;
+    active_session_title_ = result.value().title;
     history_.clear();
-    total_tokens_ = 0;
+    total_tokens_   = 0;
     total_messages_ = 0;
+    clear_messages();
     load_sessions();
+    hdr_session_lbl_->setText(active_session_title_);
+    delete_btn_->setEnabled(true);
+    rename_btn_->setEnabled(true);
+    update_stats();
     show_welcome(true);
 }
 
 void AiChatScreen::load_messages(const QString& session_id) {
-    while (messages_layout_->count() > 1) {
-        QLayoutItem* item = messages_layout_->takeAt(1);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    clear_messages();
     history_.clear();
     auto result = ChatRepository::instance().get_messages(session_id);
-    if (result.is_err())
-        return;
+    if (result.is_err()) return;
     const auto& msgs = result.value();
     total_messages_ = static_cast<int>(msgs.size());
+    total_tokens_   = 0;
     for (const auto& msg : msgs) {
         add_message_bubble(msg.role, msg.content, msg.timestamp);
         if (msg.role != "system")
             history_.push_back({msg.role, msg.content});
+        total_tokens_ += msg.tokens_used;
     }
     show_welcome(msgs.empty());
     scroll_to_bottom();
     update_stats();
 }
 
-// ============================================================================
-// Slots
-// ============================================================================
+// ── Slots ─────────────────────────────────────────────────────────────────────
 
-void AiChatScreen::on_new_session() {
-    create_new_session();
-}
+void AiChatScreen::on_new_session() { create_new_session(); }
 
 void AiChatScreen::on_session_selected(int row) {
-    if (row < 0 || row >= session_list_->count())
-        return;
-    QString id = session_list_->item(row)->data(Qt::UserRole).toString();
-    if (id == active_session_id_)
-        return;
-    active_session_id_ = id;
+    if (streaming_ || row < 0 || row >= session_list_->count()) return;
+    auto* item = session_list_->item(row);
+    active_session_id_    = item->data(Qt::UserRole).toString();
+    active_session_title_ = item->text().split('\n').first();
     delete_btn_->setEnabled(true);
-    hdr_session_lbl_->setText(id.left(8));
-    load_messages(id);
+    rename_btn_->setEnabled(true);
+    hdr_session_lbl_->setText(active_session_title_);
+    load_messages(active_session_id_);
+}
+
+void AiChatScreen::on_rename_session() {
+    if (active_session_id_.isEmpty()) return;
+    bool ok = false;
+    const QString name = QInputDialog::getText(
+        this, "Rename Session", "Session name:",
+        QLineEdit::Normal, active_session_title_, &ok);
+    if (!ok || name.trimmed().isEmpty()) return;
+    ChatRepository::instance().update_session_title(active_session_id_, name.trimmed());
+    active_session_title_ = name.trimmed();
+    hdr_session_lbl_->setText(active_session_title_);
+    load_sessions();
 }
 
 void AiChatScreen::on_delete_session() {
-    if (active_session_id_.isEmpty())
-        return;
+    if (streaming_ || active_session_id_.isEmpty()) return;
     ChatRepository::instance().delete_session(active_session_id_);
     active_session_id_.clear();
+    active_session_title_.clear();
     history_.clear();
+    clear_messages();
+    delete_btn_->setEnabled(false);
+    rename_btn_->setEnabled(false);
     load_sessions();
 }
 
 void AiChatScreen::on_send() {
-    if (streaming_)
-        return;
-    QString text = input_box_->toPlainText().trimmed();
-    if (text.isEmpty())
-        return;
-    if (active_session_id_.isEmpty())
-        create_new_session();
+    if (streaming_) return;
+    const QString text = input_box_->toPlainText().trimmed();
+    if (text.isEmpty()) return;
+    if (active_session_id_.isEmpty()) create_new_session();
     if (!ai_chat::LlmService::instance().is_configured()) {
         add_message_bubble("system",
-                           "No LLM provider configured. Go to Settings > LLM Configuration to set up a provider.");
+            "No LLM provider configured. Go to Settings > LLM Configuration to set up a provider.");
         return;
     }
     input_box_->clear();
-    input_box_->setFixedHeight(24);
+    input_box_->setFixedHeight(44);
     set_input_enabled(false);
     streaming_ = true;
     show_welcome(false);
     add_message_bubble("user", text);
     total_messages_++;
     ChatRepository::instance().add_message(active_session_id_, "user", text,
-                                           ai_chat::LlmService::instance().active_provider(),
-                                           ai_chat::LlmService::instance().active_model());
+        ai_chat::LlmService::instance().active_provider(),
+        ai_chat::LlmService::instance().active_model());
     history_.push_back({"user", text});
-    streaming_bubble_ = add_streaming_bubble();
+
+    // Show typing indicator while waiting for first chunk
+    show_typing(true);
     scroll_to_bottom();
 
     std::vector<ai_chat::ConversationMessage> hist_copy = history_;
-    QString provider = ai_chat::LlmService::instance().active_provider();
+    const QString provider = ai_chat::LlmService::instance().active_provider();
     if (ai_chat::provider_supports_streaming(provider)) {
+        bool first_chunk = true;
         QPointer<AiChatScreen> self = this;
-        ai_chat::LlmService::instance().chat_streaming(text, hist_copy, [self](const QString& chunk, bool done) {
-            QMetaObject::invokeMethod(
-                qApp,
-                [self, chunk, done]() {
-                    if (self)
-                        self->on_stream_chunk(chunk, done);
-                },
-                Qt::QueuedConnection);
-        });
+        ai_chat::LlmService::instance().chat_streaming(text, hist_copy,
+            [self, first_chunk](const QString& chunk, bool done) mutable {
+                QMetaObject::invokeMethod(qApp, [self, chunk, done, first_chunk]() mutable {
+                    if (!self) return;
+                    // On first chunk: hide typing indicator, show streaming bubble
+                    if (first_chunk && !chunk.isEmpty()) {
+                        first_chunk = false;
+                        self->show_typing(false);
+                        self->streaming_bubble_ = self->add_streaming_bubble();
+                        self->scroll_to_bottom();
+                    }
+                    self->on_stream_chunk(chunk, done);
+                }, Qt::QueuedConnection);
+            });
     } else {
         QPointer<AiChatScreen> self = this;
         QtConcurrent::run([self, text, hist_copy]() {
             auto resp = ai_chat::LlmService::instance().chat(text, hist_copy);
-            QMetaObject::invokeMethod(
-                qApp,
-                [self, resp]() {
-                    if (self)
-                        self->on_streaming_done(resp);
-                },
-                Qt::QueuedConnection);
+            QMetaObject::invokeMethod(qApp, [self, resp]() {
+                if (self) self->on_streaming_done(resp);
+            }, Qt::QueuedConnection);
         });
     }
 }
 
 void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
-    if (!streaming_bubble_)
+    if (!streaming_bubble_) return;
+
+    // Tool-call clear sentinel: reset bubble content (removes partial XML)
+    if (chunk.startsWith("\x01__TOOL_CALL_CLEAR__")) {
+        streaming_bubble_->clear();
+        streaming_bubble_->setPlainText("Calling tool...");
+        scroll_to_bottom();
         return;
+    }
+
     if (!chunk.isEmpty()) {
-        streaming_bubble_->moveCursor(QTextCursor::End);
-        streaming_bubble_->insertPlainText(chunk);
+        // If bubble shows the "Calling tool..." placeholder, replace it
+        if (streaming_bubble_->toPlainText() == "Calling tool...") {
+            streaming_bubble_->setPlainText(chunk);
+        } else {
+            streaming_bubble_->moveCursor(QTextCursor::End);
+            streaming_bubble_->insertPlainText(chunk);
+        }
         scroll_to_bottom();
     }
     Q_UNUSED(done)
@@ -649,18 +755,23 @@ void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
 
 void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     streaming_ = false;
+    show_typing(false);
+
+    // If non-streaming path: create bubble now with full content
+    if (!streaming_bubble_ && response.success && !response.content.isEmpty()) {
+        streaming_bubble_ = add_streaming_bubble();
+    }
+
     set_input_enabled(true);
+
     if (!response.success) {
-        if (streaming_bubble_) {
+        if (streaming_bubble_)
             streaming_bubble_->setPlainText("Error: " + response.error);
-            streaming_bubble_->setStyleSheet(
-                QString("QTextEdit{background:transparent;color:%1;border:none;font-size:13px;%2}")
-                    .arg(obs::NEGATIVE, MF));
-        }
         streaming_bubble_ = nullptr;
         return;
     }
-    QString content = response.content;
+
+    const QString content = response.content;
     if (streaming_bubble_) {
         if (!content.isEmpty() && streaming_bubble_->toPlainText().isEmpty())
             streaming_bubble_->setPlainText(content);
@@ -673,210 +784,233 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
         total_tokens_ += response.total_tokens;
         update_stats();
         ChatRepository::instance().add_message(active_session_id_, "assistant", content,
-                                               ai_chat::LlmService::instance().active_provider(),
-                                               ai_chat::LlmService::instance().active_model(), response.total_tokens);
+            ai_chat::LlmService::instance().active_provider(),
+            ai_chat::LlmService::instance().active_model(),
+            response.total_tokens);
     }
     scroll_to_bottom();
     input_box_->setFocus();
 }
 
-void AiChatScreen::on_provider_changed() {
-    update_stats();
-}
+void AiChatScreen::on_provider_changed() { update_stats(); }
 
-// ============================================================================
-// Message bubbles — Obsidian design
-// ============================================================================
+// ── Message bubbles ───────────────────────────────────────────────────────────
 
-void AiChatScreen::add_message_bubble(const QString& role, const QString& content, const QString& timestamp) {
-    bool is_user = (role == "user");
-    bool is_system = (role == "system");
+void AiChatScreen::add_message_bubble(const QString& role, const QString& content,
+                                      const QString& timestamp) {
+    const bool is_user   = (role == "user");
+    const bool is_system = (role == "system");
 
-    QString ts = timestamp.isEmpty() ? QDateTime::currentDateTime().toString("HH:mm:ss")
-                                     : QDateTime::fromString(timestamp, Qt::ISODate).toString("HH:mm:ss");
+    const QString ts = [&]() -> QString {
+        QDateTime dt = QDateTime::fromString(timestamp, Qt::ISODate);
+        if (!dt.isValid()) dt = QDateTime::fromString(timestamp, "yyyy-MM-dd HH:mm:ss");
+        if (!dt.isValid() && !timestamp.isEmpty()) return timestamp;
+        return (dt.isValid() ? dt : QDateTime::currentDateTime()).toString("HH:mm");
+    }();
 
-    // Outer alignment wrapper
-    auto* align = new QWidget;
-    align->setStyleSheet("background:transparent;");
-    auto* al = new QHBoxLayout(align);
-    al->setContentsMargins(0, 0, 0, 0);
+    auto* row = new QWidget;
+    row->setStyleSheet("background:transparent;");
+    auto* rl = new QHBoxLayout(row);
+    rl->setContentsMargins(0,0,0,0);
+    rl->setSpacing(0);
 
-    if (is_user)
-        al->addStretch();
+    if (is_user) rl->addStretch();
 
-    // Bubble container
-    auto* bubble = new QWidget;
-    bubble->setMaximumWidth(680);
-    bubble->setMinimumWidth(120);
+    auto* col_widget = new QWidget;
+    col_widget->setStyleSheet("background:transparent;");
+    col_widget->setMaximumWidth(is_user ? 560 : 680);
+    auto* cvl = new QVBoxLayout(col_widget);
+    cvl->setContentsMargins(0,0,0,0);
+    cvl->setSpacing(4);
 
-    if (is_system) {
-        bubble->setStyleSheet(QString("background:rgba(220,38,38,0.05);border:1px solid %1;").arg(obs::BORDER_DIM));
-    } else if (is_user) {
-        bubble->setStyleSheet(QString("background:%1;border:1px solid %2;").arg(obs::BG_SURFACE, obs::BORDER_DIM));
-    } else {
-        bubble->setStyleSheet(QString("background:%1;border-left:2px solid %2;border-top:1px solid %3;"
-                                      "border-right:1px solid %3;border-bottom:1px solid %3;")
-                                  .arg(obs::BG_SURFACE, obs::AMBER, obs::BORDER_DIM));
-    }
+    // Role label
+    auto* role_lbl = new QLabel(is_user ? "You" : (is_system ? "System" : "AI"));
+    role_lbl->setAlignment(is_user ? Qt::AlignRight : Qt::AlignLeft);
+    role_lbl->setStyleSheet(
+        QString("color:%1;font-size:%2px;font-weight:600;background:transparent;")
+            .arg(is_user ? col::AMBER : (is_system ? col::NEGATIVE : col::CYAN))
+            .arg(fnt::TINY));
+    cvl->addWidget(role_lbl);
 
+    // Bubble
+    auto* bubble = new QFrame;
+    bubble->setStyleSheet(bubble_style(role));
     auto* bvl = new QVBoxLayout(bubble);
-    bvl->setContentsMargins(12, 8, 12, 8);
-    bvl->setSpacing(6);
+    bvl->setContentsMargins(0,0,0,0);
 
-    // Header row: role + timestamp
-    auto* hdr = new QWidget;
-    hdr->setStyleSheet("background:transparent;");
-    auto* hhl = new QHBoxLayout(hdr);
-    hhl->setContentsMargins(0, 0, 0, 0);
-    hhl->setSpacing(8);
-
-    if (is_system) {
-        auto* nm = new QLabel("SYSTEM");
-        nm->setStyleSheet(
-            QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;%2").arg(obs::NEGATIVE, MF));
-        hhl->addWidget(nm);
-    } else if (is_user) {
-        auto* nm = new QLabel("YOU");
-        nm->setStyleSheet(
-            QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;%2").arg(obs::TEXT_SEC, MF));
-        hhl->addWidget(nm);
-    } else {
-        auto* nm = new QLabel("FINCEPT AI");
-        nm->setStyleSheet(
-            QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;%2").arg(obs::AMBER, MF));
-        hhl->addWidget(nm);
-    }
-
-    hhl->addStretch();
-
-    auto* tl = new QLabel(ts);
-    tl->setStyleSheet(QString("color:%1;font-size:11px;%2").arg(obs::TEXT_DIM, MF));
-    hhl->addWidget(tl);
-    bvl->addWidget(hdr);
-
-    // Body — use QLabel for correct auto-sizing with word wrap
     auto* body = new QLabel(content);
     body->setWordWrap(true);
-    body->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    body->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;%2").arg(obs::TEXT_PRI, MF));
+    body->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
+    body->setTextFormat(Qt::MarkdownText);
+    body->setOpenExternalLinks(false);
+    body->setStyleSheet(
+        QString("color:%1;font-size:%2px;background:transparent;")
+            .arg(body_color(role)).arg(fnt::BODY));
     bvl->addWidget(body);
+    cvl->addWidget(bubble);
 
-    al->addWidget(bubble);
-    if (!is_user)
-        al->addStretch();
-    messages_layout_->addWidget(align);
+    // Timestamp
+    auto* time_lbl = new QLabel(ts);
+    time_lbl->setAlignment(is_user ? Qt::AlignRight : Qt::AlignLeft);
+    time_lbl->setStyleSheet(
+        QString("color:%1;font-size:%2px;background:transparent;")
+            .arg(col::TEXT_DIM).arg(fnt::TINY));
+    cvl->addWidget(time_lbl);
 
-    // Spacer
-    auto* spacer = new QWidget;
-    spacer->setFixedHeight(8);
-    spacer->setStyleSheet("background:transparent;");
-    messages_layout_->addWidget(spacer);
+    rl->addWidget(col_widget);
+    if (!is_user) rl->addStretch();
+
+    messages_layout_->insertWidget(messages_layout_->count() - 1, row);
 }
 
 QTextEdit* AiChatScreen::add_streaming_bubble() {
-    auto* align = new QWidget;
-    align->setStyleSheet("background:transparent;");
-    auto* al = new QHBoxLayout(align);
-    al->setContentsMargins(0, 0, 0, 0);
+    auto* row = new QWidget;
+    row->setStyleSheet("background:transparent;");
+    auto* rl = new QHBoxLayout(row);
+    rl->setContentsMargins(0,0,0,0);
 
-    auto* bubble = new QWidget;
-    bubble->setMaximumWidth(680);
-    bubble->setMinimumWidth(120);
-    bubble->setStyleSheet(QString("background:%1;border-left:2px solid %2;border-top:1px solid %3;"
-                                  "border-right:1px solid %3;border-bottom:1px solid %3;")
-                              .arg(obs::BG_SURFACE, obs::AMBER, obs::BORDER_DIM));
+    auto* col_widget = new QWidget;
+    col_widget->setStyleSheet("background:transparent;");
+    col_widget->setMaximumWidth(680);
+    auto* cvl = new QVBoxLayout(col_widget);
+    cvl->setContentsMargins(0,0,0,0);
+    cvl->setSpacing(4);
 
+    auto* role_lbl = new QLabel("AI");
+    role_lbl->setAlignment(Qt::AlignLeft);
+    role_lbl->setStyleSheet(
+        QString("color:%1;font-size:%2px;font-weight:600;background:transparent;")
+            .arg(col::CYAN).arg(fnt::TINY));
+    cvl->addWidget(role_lbl);
+
+    auto* bubble = new QFrame;
+    bubble->setStyleSheet(bubble_style("assistant"));
     auto* bvl = new QVBoxLayout(bubble);
-    bvl->setContentsMargins(12, 8, 12, 8);
-    bvl->setSpacing(6);
+    bvl->setContentsMargins(0,0,0,0);
 
-    // Header
-    auto* hdr = new QWidget;
-    hdr->setStyleSheet("background:transparent;");
-    auto* hhl = new QHBoxLayout(hdr);
-    hhl->setContentsMargins(0, 0, 0, 0);
-    hhl->setSpacing(8);
-
-    auto* nm = new QLabel("FINCEPT AI");
-    nm->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;%2").arg(obs::AMBER, MF));
-    hhl->addWidget(nm);
-    hhl->addStretch();
-
-    auto* st = new QLabel("THINKING...");
-    st->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;%2").arg(obs::TEXT_DIM, MF));
-    hhl->addWidget(st);
-    bvl->addWidget(hdr);
-
-    // Body — streaming, needs QTextEdit for incremental appends
     auto* body = new QTextEdit;
     body->setReadOnly(false);
     body->setFrameShape(QFrame::NoFrame);
-    body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::MinimumExpanding);
+    body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     body->document()->setDocumentMargin(0);
-    body->setMinimumHeight(24);
-    body->setStyleSheet(
-        QString("QTextEdit{background:transparent;color:%1;border:none;font-size:13px;%2}").arg(obs::TEXT_PRI, MF));
+    body->setMinimumHeight(28);
+    body->setFixedHeight(28);
+    body->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     body->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    connect(body->document(), &QTextDocument::contentsChanged, body, [body]() {
-        int h = static_cast<int>(body->document()->size().height()) + 10;
-        body->setMinimumHeight(qMax(h, 24));
-        body->setMaximumHeight(qMax(h, 24));
+    body->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+    body->setStyleSheet(
+        QString("QTextEdit{background:transparent;color:%1;border:none;font-size:%2px;}")
+            .arg(col::TEXT_PRIMARY).arg(fnt::BODY));
+    // Grow height to fit content as chunks stream in
+    connect(body->document(), &QTextDocument::contentsChanged, body, [body, bubble, row]() {
+        body->document()->setTextWidth(body->viewport()->width() > 0
+                                       ? body->viewport()->width()
+                                       : 640);
+        const int doc_h = static_cast<int>(body->document()->size().height());
+        const int new_h = qMax(doc_h + 4, 28);
+        body->setFixedHeight(new_h);
+        bubble->adjustSize();
+        row->adjustSize();
     });
     bvl->addWidget(body);
+    cvl->addWidget(bubble);
+    rl->addWidget(col_widget);
+    rl->addStretch();
 
-    al->addWidget(bubble);
-    al->addStretch();
-    messages_layout_->addWidget(align);
+    messages_layout_->insertWidget(messages_layout_->count() - 1, row);
     return body;
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+void AiChatScreen::clear_messages() {
+    streaming_bubble_.clear();
+    while (messages_layout_->count() > 1) {
+        QLayoutItem* item = messages_layout_->takeAt(0);
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
+    }
+}
 
 void AiChatScreen::scroll_to_bottom() {
     QTimer::singleShot(50, this, [this]() {
         if (scroll_area_ && scroll_area_->verticalScrollBar())
-            scroll_area_->verticalScrollBar()->setValue(scroll_area_->verticalScrollBar()->maximum());
+            scroll_area_->verticalScrollBar()->setValue(
+                scroll_area_->verticalScrollBar()->maximum());
     });
 }
 
 void AiChatScreen::set_input_enabled(bool enabled) {
     input_box_->setEnabled(enabled);
     send_btn_->setEnabled(enabled);
-    send_btn_->setText(enabled ? "SEND" : "...");
-    hdr_status_lbl_->setText(enabled ? "READY" : "PROCESSING");
+    new_btn_->setEnabled(enabled);
+    search_edit_->setEnabled(enabled);
+    session_list_->setEnabled(enabled);
+    delete_btn_->setEnabled(enabled && !active_session_id_.isEmpty());
+    rename_btn_->setEnabled(enabled && !active_session_id_.isEmpty());
+    send_btn_->setText(enabled ? "Send" : "···");
+
+    // Status dot + label
+    const QString status_color = enabled ? col::POSITIVE : col::AMBER;
+    hdr_status_dot_->setStyleSheet(
+        QString("background:%1;border-radius:4px;").arg(status_color));
+    hdr_status_lbl_->setText(enabled ? "Ready" : "Streaming");
     hdr_status_lbl_->setStyleSheet(
-        QString("color:%1;font-size:12px;font-weight:700;%2").arg(enabled ? obs::POSITIVE : obs::TEXT_DIM, MF));
+        QString("color:%1;font-size:%2px;font-weight:600;")
+            .arg(status_color).arg(fnt::SMALL));
 }
 
 void AiChatScreen::update_stats() {
-    stats_msgs_lbl_->setText(QString::number(total_messages_));
-    stats_tokens_lbl_->setText(QString::number(total_tokens_));
-    if (!active_session_id_.isEmpty())
+    // Header session name
+    if (!active_session_title_.isEmpty())
+        hdr_session_lbl_->setText(active_session_title_);
+    else if (!active_session_id_.isEmpty())
         hdr_session_lbl_->setText(active_session_id_.left(8));
+    else
+        hdr_session_lbl_->setText("New Conversation");
 
-    // Update provider label
+    // Token count in header
+    if (total_tokens_ > 0) {
+        hdr_tokens_lbl_->setText(
+            total_tokens_ < 1000
+                ? QString("%1 tokens").arg(total_tokens_)
+                : QString("%1k tokens").arg(total_tokens_ / 1000.0, 0, 'f', 1));
+    } else {
+        hdr_tokens_lbl_->clear();
+    }
+
     auto& llm = ai_chat::LlmService::instance();
     if (llm.is_configured()) {
-        QString prov = llm.active_provider().toUpper();
-        QString model = llm.active_model();
-        if (model.length() > 20)
-            model = model.left(18) + "..";
-        provider_lbl_->setText(prov + " | " + model);
+        const QString prov  = llm.active_provider().toUpper();
+        QString model       = llm.active_model();
+        if (model.length() > 24) model = model.left(22) + "..";
+
+        // Sidebar footer
+        provider_lbl_->setText(prov);
         provider_lbl_->setStyleSheet(
-            QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;%2").arg(obs::AMBER, MF));
+            QString("color:%1;font-size:%2px;font-weight:600;").arg(col::AMBER).arg(fnt::SMALL));
+        model_lbl_->setText(model);
+        model_lbl_->setToolTip(llm.active_model());
+        model_lbl_->setStyleSheet(
+            QString("color:%1;font-size:%2px;").arg(col::TEXT_SECONDARY).arg(fnt::TINY));
+
+        // Header model pill
+        hdr_model_lbl_->setText(model);
+        hdr_model_lbl_->setToolTip("Provider: " + prov + "\nModel: " + llm.active_model()
+                                   + "\n\nChange in Settings > LLM Configuration");
     } else {
-        provider_lbl_->setText("NO PROVIDER CONFIGURED");
+        provider_lbl_->setText("No provider");
         provider_lbl_->setStyleSheet(
-            QString("color:%1;font-size:11px;font-weight:700;letter-spacing:0.5px;%2").arg(obs::NEGATIVE, MF));
+            QString("color:%1;font-size:%2px;font-weight:600;").arg(col::NEGATIVE).arg(fnt::SMALL));
+        model_lbl_->setText("Configure in Settings");
+        model_lbl_->setStyleSheet(
+            QString("color:%1;font-size:%2px;").arg(col::TEXT_DIM).arg(fnt::TINY));
+        hdr_model_lbl_->setText("No model");
     }
 }
 
 void AiChatScreen::show_welcome(bool show) {
-    if (welcome_panel_)
-        welcome_panel_->setVisible(show);
+    if (welcome_panel_) welcome_panel_->setVisible(show);
 }
 
 } // namespace fincept::screens

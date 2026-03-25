@@ -2,6 +2,8 @@
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
 
+#include <QHash>
+#include <QPointer>
 #include <QTableWidget>
 #include <QWidget>
 
@@ -31,11 +33,16 @@ class PortfolioBlotter : public QWidget {
 
     QTableWidget* table_ = nullptr;
 
+    void fetch_sparklines();
+
     QVector<portfolio::HoldingWithQuote> holdings_;
     QVector<portfolio::HoldingWithQuote> sorted_;
     QString selected_symbol_;
     portfolio::SortColumn sort_col_ = portfolio::SortColumn::Weight;
     portfolio::SortDirection sort_dir_ = portfolio::SortDirection::Desc;
+
+    // Real sparkline data keyed by symbol — populated async via fetch_sparklines()
+    QHash<QString, QVector<double>> sparkline_cache_;
 };
 
 } // namespace fincept::screens

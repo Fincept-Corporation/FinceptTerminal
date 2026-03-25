@@ -1,10 +1,11 @@
-// EquityOrderEntry.cpp — BUY/SELL form with equity-specific product types
+// EquityOrderEntry.cpp — BUY/SELL form configurable per broker profile
 #include "screens/equity_trading/EquityOrderEntry.h"
 
 #include "screens/equity_trading/EquityTypes.h"
 
 #include <QHBoxLayout>
 #include <QStyle>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -101,6 +102,12 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     exchange_combo_->addItems({"NSE", "BSE", "NYSE", "NASDAQ"});
     exchange_combo_->setFixedHeight(26);
     form->addWidget(exchange_combo_);
+
+    // Brokerage info
+    brokerage_label_ = new QLabel("");
+    brokerage_label_->setObjectName("eqOeBrokerage");
+    brokerage_label_->setStyleSheet("color: #525252; font-size: 10px;");
+    form->addWidget(brokerage_label_);
 
     form->addSpacing(2);
 
@@ -214,6 +221,46 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     layout->addWidget(content, 1);
 }
 
+void EquityOrderEntry::configure_for_broker(const trading::BrokerProfile& profile) {
+    // Cache product types for order construction
+    product_types_ = profile.product_types;
+    current_currency_ = profile.currency;
+
+    // Rebuild product combo
+    product_combo_->clear();
+    for (const auto& pt : profile.product_types)
+        product_combo_->addItem(pt.label);
+
+    // Rebuild exchange combo
+    exchange_combo_->clear();
+    for (const auto& ex : profile.exchanges)
+        exchange_combo_->addItem(ex);
+
+    // Set default exchange
+    if (!profile.default_exchange.isEmpty()) {
+        int idx = exchange_combo_->findText(profile.default_exchange);
+        if (idx >= 0)
+            exchange_combo_->setCurrentIndex(idx);
+        current_exchange_ = profile.default_exchange;
+    }
+
+    // Update brokerage label
+    brokerage_label_->setText(profile.brokerage_info.isEmpty()
+                                  ? ""
+                                  : QString("Fee: %1").arg(profile.brokerage_info));
+
+    // Reset form state
+    qty_edit_->clear();
+    price_edit_->clear();
+    stop_price_edit_->clear();
+    if (sl_edit_) sl_edit_->clear();
+    if (tp_edit_) tp_edit_->clear();
+    status_label_->clear();
+    current_price_ = 0;
+    balance_ = 0;
+    update_cost_preview();
+}
+
 void EquityOrderEntry::set_buy_side(bool is_buy) {
     is_buy_side_ = is_buy;
     buy_tab_->setProperty("active", is_buy);
@@ -245,14 +292,14 @@ void EquityOrderEntry::set_order_type(int idx) {
 void EquityOrderEntry::set_balance(double balance) {
     balance_ = balance;
     balance_label_->setText(
-        QString("%1%2").arg(currency_symbol(exchange_currency(current_exchange_))).arg(balance, 0, 'f', 2));
+        QString("%1%2").arg(currency_symbol(current_currency_)).arg(balance, 0, 'f', 2));
     update_cost_preview();
 }
 
 void EquityOrderEntry::set_current_price(double price) {
     current_price_ = price;
     market_price_label_->setText(
-        QString("MKT: %1%2").arg(currency_symbol(exchange_currency(current_exchange_))).arg(price, 0, 'f', 2));
+        QString("MKT: %1%2").arg(currency_symbol(current_currency_)).arg(price, 0, 'f', 2));
     update_cost_preview();
 }
 
@@ -269,7 +316,6 @@ void EquityOrderEntry::set_symbol(const QString& symbol) {
 
 void EquityOrderEntry::set_exchange(const QString& exchange) {
     current_exchange_ = exchange;
-    // Select matching exchange in combo
     for (int i = 0; i < exchange_combo_->count(); ++i) {
         if (exchange_combo_->itemText(i) == exchange) {
             exchange_combo_->setCurrentIndex(i);
@@ -287,25 +333,34 @@ void EquityOrderEntry::on_submit() {
     }
 
     trading::UnifiedOrder order;
-    order.symbol = current_symbol_;
+    order.symbol   = current_symbol_;
     order.exchange = exchange_combo_->currentText();
-    order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
+    order.side     = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
 
-    static const trading::OrderType type_map[] = {trading::OrderType::Market, trading::OrderType::Limit,
-                                                  trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
-    order.order_type = type_map[active_type_];
-    order.quantity = qty;
-    order.price = price_edit_->text().toDouble();
-    order.stop_price = stop_price_edit_->text().toDouble();
-    order.stop_loss = sl_edit_->text().toDouble();
-    order.take_profit = tp_edit_->text().toDouble();
+    static const trading::OrderType type_map[] = {
+        trading::OrderType::Market, trading::OrderType::Limit,
+        trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
+    order.order_type  = type_map[active_type_];
+    order.quantity    = qty;
+    order.price       = price_edit_->text().toDouble();
+    order.stop_price  = stop_price_edit_->text().toDouble();
+    order.stop_loss   = sl_edit_ ? sl_edit_->text().toDouble() : 0.0;
+    order.take_profit = tp_edit_ ? tp_edit_->text().toDouble() : 0.0;
 
-    // Product type from combo
-    static const trading::ProductType prod_map[] = {trading::ProductType::Intraday, trading::ProductType::Delivery,
-                                                    trading::ProductType::Margin};
-    order.product_type = prod_map[product_combo_->currentIndex()];
+    // Product type from profile-driven combo
+    const int prod_idx = product_combo_->currentIndex();
+    if (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
+        order.product_type = product_types_[prod_idx].value;
+    else
+        order.product_type = trading::ProductType::Intraday;
 
     emit order_submitted(order);
+}
+
+void EquityOrderEntry::show_order_status(const QString& msg, bool success) {
+    status_label_->setText(msg);
+    status_label_->setStyleSheet(success ? "color: #16a34a;" : "color: #dc2626;");
+    QTimer::singleShot(5000, status_label_, [this]() { status_label_->clear(); });
 }
 
 void EquityOrderEntry::update_cost_preview() {
@@ -316,7 +371,7 @@ void EquityOrderEntry::update_cost_preview() {
         if (limit_p > 0)
             price = limit_p;
     }
-    const QString sym = currency_symbol(exchange_currency(current_exchange_));
+    const QString sym = currency_symbol(current_currency_);
     if (qty > 0 && price > 0)
         cost_label_->setText(QString("Est: %1%2").arg(sym).arg(qty * price, 0, 'f', 2));
     else

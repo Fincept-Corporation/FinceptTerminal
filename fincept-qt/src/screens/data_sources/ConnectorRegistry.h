@@ -23,6 +23,9 @@ class ConnectorRegistry {
         configs_.append(std::move(cfg));
     }
 
+    // Safe to call without lock after startup: all add() calls happen during
+    // static initialisation (before QApplication::exec()), so configs_ is
+    // effectively read-only by the time any screen accesses it.
     const QVector<ConnectorConfig>& all() const { return configs_; }
 
     const ConnectorConfig* get(const QString& id) const {

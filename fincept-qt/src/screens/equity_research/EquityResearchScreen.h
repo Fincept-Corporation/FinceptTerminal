@@ -4,8 +4,6 @@
 
 #include <QHideEvent>
 #include <QLabel>
-#include <QLineEdit>
-#include <QListWidget>
 #include <QShowEvent>
 #include <QTabWidget>
 #include <QTimer>
@@ -31,23 +29,19 @@ class EquityResearchScreen : public QWidget {
     void hideEvent(QHideEvent* event) override;
 
   private slots:
-    void on_search_text_changed(const QString& text);
-    void on_search_committed();
-    void on_search_results_loaded(QVector<services::equity::SearchResult> results);
     void on_quote_loaded(services::equity::QuoteData quote);
+    void on_info_loaded(services::equity::StockInfo info);
     void on_tab_changed(int index);
 
   private:
     void build_ui();
-    QWidget* build_search_bar();
+    QWidget* build_title_bar();
     QWidget* build_quote_bar();
     void update_quote_bar(const services::equity::QuoteData& q);
     void load_symbol(const QString& symbol);
 
-    // Search widgets
-    QWidget* search_container_ = nullptr;
-    QLineEdit* search_edit_ = nullptr;
-    QListWidget* suggest_list_ = nullptr;
+    // Title bar
+    QLabel* symbol_label_ = nullptr;
 
     // Quote bar
     QLabel* sym_label_ = nullptr;
@@ -70,8 +64,7 @@ class EquityResearchScreen : public QWidget {
 
     QTimer* refresh_timer_ = nullptr;
     QString current_symbol_;
-
-    QVector<services::equity::SearchResult> last_search_results_;
+    QString current_currency_;
 };
 
 } // namespace fincept::screens

@@ -311,6 +311,47 @@ def get_batch_quotes(symbols):
                 results.append(quote)
         return results
 
+def get_batch_sparklines(symbols, period="5d", interval="1h"):
+    """Fetch close price series for multiple symbols — used for blotter sparklines.
+    Returns: {"AAPL": [170.1, 171.3, ...], "MSFT": [...], ...}
+    """
+    try:
+        import io, contextlib
+        _buf = io.StringIO()
+        with contextlib.redirect_stdout(_buf):
+            data = yf.download(symbols, period=period, interval=interval,
+                               group_by='ticker', progress=False, threads=True, auto_adjust=True)
+
+        if data is None or data.empty:
+            return {"error": "No data"}
+
+        result = {}
+        for symbol in symbols:
+            try:
+                if not isinstance(data.columns, pd.MultiIndex):
+                    hist = data
+                else:
+                    level0 = data.columns.get_level_values(0).unique().tolist()
+                    level1 = data.columns.get_level_values(1).unique().tolist()
+                    if symbol in level0:
+                        hist = data[symbol]
+                    elif symbol in level1:
+                        hist = data.xs(symbol, axis=1, level=1)
+                    else:
+                        continue
+
+                closes = hist['Close'].dropna()
+                if closes.empty:
+                    continue
+                result[symbol] = [round(float(v), 4) for v in closes.tolist()]
+            except Exception:
+                continue
+
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def get_company_profile(symbol):
     """Get company profile data formatted for peer comparison"""
     try:
@@ -693,6 +734,13 @@ def main(args=None):
             period = args[2] if len(args) > 2 else '6mo'
             interval = args[3] if len(args) > 3 else '1d'
             result = get_historical_period(symbol, period, interval)
+
+    elif command == "batch_sparklines":
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py batch_sparklines <sym1> <sym2> ..."}
+        else:
+            symbols = args[1:]
+            result = get_batch_sparklines(symbols)
 
     elif command == "resolve_symbol":
         if len(args) < 2:

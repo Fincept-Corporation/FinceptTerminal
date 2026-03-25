@@ -26,11 +26,23 @@ Result<DataSource> DataSourceRepository::get(const QString& id) {
 
 Result<void> DataSourceRepository::save(const DataSource& ds) {
     return exec_write(
-        "INSERT OR REPLACE INTO data_sources "
-        "(id, alias, display_name, description, type, provider, category, config, enabled, tags, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+        "INSERT INTO data_sources "
+        "(id, alias, display_name, description, type, provider, category, config, enabled, tags, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+        "COALESCE((SELECT created_at FROM data_sources WHERE id = ?), datetime('now')), datetime('now')) "
+        "ON CONFLICT(id) DO UPDATE SET "
+        "alias = excluded.alias, "
+        "display_name = excluded.display_name, "
+        "description = excluded.description, "
+        "type = excluded.type, "
+        "provider = excluded.provider, "
+        "category = excluded.category, "
+        "config = excluded.config, "
+        "enabled = excluded.enabled, "
+        "tags = excluded.tags, "
+        "updated_at = datetime('now')",
         {ds.id, ds.alias, ds.display_name, ds.description, ds.type, ds.provider, ds.category, ds.config,
-         ds.enabled ? 1 : 0, ds.tags});
+         ds.enabled ? 1 : 0, ds.tags, ds.id});
 }
 
 Result<void> DataSourceRepository::remove(const QString& id) {

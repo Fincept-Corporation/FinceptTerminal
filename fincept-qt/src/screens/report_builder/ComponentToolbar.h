@@ -24,13 +24,19 @@ class ComponentToolbar : public QWidget {
     void duplicate(int index);
     void delete_item(int index);
     void font_changed(const QString& family, int size, bool bold, bool italic);
+    void new_report_requested();
+    void open_report_requested();
+    void recent_reports_requested();
+    void templates_requested();
+    void theme_requested();
+    void metadata_requested();
 
   private:
-    QListWidget* structure_list_ = nullptr;
-    QFontComboBox* font_combo_ = nullptr;
-    QSpinBox* font_size_ = nullptr;
-    QPushButton* bold_btn_ = nullptr;
-    QPushButton* italic_btn_ = nullptr;
+    QListWidget*   structure_list_ = nullptr;
+    QFontComboBox* font_combo_     = nullptr;
+    QSpinBox*      font_size_      = nullptr;
+    QPushButton*   bold_btn_       = nullptr;
+    QPushButton*   italic_btn_     = nullptr;
 
     void add_type_button(QVBoxLayout* layout, const QString& label, const QString& type);
 };

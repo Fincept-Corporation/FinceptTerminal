@@ -9,6 +9,28 @@ class SaxoBankBroker : public IBroker {
     const char* name() const override { return "SaxoBank"; }
     const char* base_url() const override { return "https://gateway.saxobank.com/openapi"; }
 
+    BrokerProfile profile() const override {
+        return BrokerProfile{
+            .id = "saxobank", .display_name = "Saxo Bank", .region = "EU", .currency = "EUR",
+            .credential_fields = {
+                {CredentialField::ApiKey,    "APP KEY",    "Enter App Key...",    false},
+                {CredentialField::ApiSecret, "APP SECRET", "Enter App Secret...", true},
+                {CredentialField::AuthCode,  "AUTH CODE",  "Paste OAuth code...", false},
+            },
+            .exchanges = {"NYSE","NASDAQ","LSE","XETRA","EURONEXT"},
+            .product_types = {
+                {"Day Order",  ProductType::Intraday},
+                {"GTC Order",  ProductType::Delivery},
+                {"Margin",     ProductType::Margin},
+            },
+            .supports_intraday=true, .supports_bracket_order=false, .supports_cover_order=false,
+            .has_native_paper=true, .default_paper_balance=50000.0,
+            .default_watchlist={"AAPL","MSFT","GOOGL","AMZN","NVDA","VOD.L","ADS.XETRA","ASML.EURONEXT","SIE.XETRA","AIR.EURONEXT"},
+            .default_symbol="AAPL", .default_exchange="NYSE",
+            .brokerage_info="0.05% (min \u20AC3)",
+        };
+    }
+
     TokenExchangeResponse exchange_token(const QString& api_key, const QString& api_secret,
                                          const QString& auth_code) override;
     OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) override;

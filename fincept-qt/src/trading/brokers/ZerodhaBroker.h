@@ -10,6 +10,38 @@ class ZerodhaBroker : public IBroker {
     const char* base_url() const override { return "https://api.kite.trade"; }
     const char* ws_adapter_name() const override { return "zerodha"; }
 
+    BrokerProfile profile() const override {
+        return BrokerProfile{
+            .id = "zerodha",
+            .display_name = "Zerodha",
+            .region = "IN",
+            .currency = "INR",
+            .credential_fields = {
+                {CredentialField::ApiKey,    "API KEY",      "Enter API Key...",       false},
+                {CredentialField::ApiSecret, "API SECRET",   "Enter API Secret...",    true},
+                {CredentialField::AuthCode,  "REQUEST TOKEN","Paste request_token...", false},
+            },
+            .exchanges = {"NSE", "BSE", "NFO", "CDS"},
+            .product_types = {
+                {"Intraday (MIS)",  ProductType::Intraday},
+                {"Delivery (CNC)", ProductType::Delivery},
+                {"Margin (NRML)",  ProductType::Margin},
+                {"Cover Order",    ProductType::CoverOrder},
+                {"Bracket Order",  ProductType::BracketOrder},
+            },
+            .supports_intraday = true,
+            .supports_bracket_order = true,
+            .supports_cover_order = true,
+            .has_native_paper = false,
+            .default_paper_balance = 1000000.0,
+            .default_watchlist = {"HDFCBANK","ICICIBANK","SBIN","KOTAKBANK","AXISBANK",
+                                  "TCS","INFY","RELIANCE","TATAMOTORS","BAJFINANCE"},
+            .default_symbol = "RELIANCE",
+            .default_exchange = "NSE",
+            .brokerage_info = "\u20B920/order or 0.03% intraday, 0% delivery",
+        };
+    }
+
     TokenExchangeResponse exchange_token(const QString& api_key, const QString& api_secret,
                                          const QString& auth_code) override;
     OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) override;

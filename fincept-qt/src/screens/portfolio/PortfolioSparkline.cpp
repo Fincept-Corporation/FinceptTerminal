@@ -8,7 +8,8 @@
 namespace fincept::screens {
 
 PortfolioSparkline::PortfolioSparkline(int w, int h, QWidget* parent) : QWidget(parent) {
-    setFixedSize(w, h);
+    if (w > 0 && h > 0)
+        setFixedSize(w, h);
     setAttribute(Qt::WA_OpaquePaintEvent);
 }
 
@@ -38,7 +39,7 @@ void PortfolioSparkline::resizeEvent(QResizeEvent* event) {
 
 void PortfolioSparkline::rebuild_pixmap() {
     cached_ = QPixmap(size());
-    cached_.fill(Qt::transparent);
+    cached_.fill(QColor("#0d0d0d")); // match BG_BASE
 
     if (data_.size() < 2) {
         dirty_ = false;

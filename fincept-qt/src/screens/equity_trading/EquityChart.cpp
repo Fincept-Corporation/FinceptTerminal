@@ -1,22 +1,189 @@
-// EquityChart.cpp — Candlestick chart with timeframe buttons
+// EquityChart.cpp — Custom-painted candlestick chart
+// QPainter-based: no QCandlestickSeries, no QDateTimeAxis gaps.
 #include "screens/equity_trading/EquityChart.h"
-
 #include "screens/equity_trading/EquityTypes.h"
 
-#include <QCandlestickSeries>
-#include <QCandlestickSet>
-#include <QChart>
-#include <QChartView>
-#include <QDateTimeAxis>
 #include <QHBoxLayout>
+#include <QPainter>
+#include <QPainterPath>
 #include <QStyle>
 #include <QVBoxLayout>
-#include <QValueAxis>
 
 #include <algorithm>
 #include <cmath>
 
 namespace fincept::screens::equity {
+
+// ── CandleCanvas ─────────────────────────────────────────────────────────────
+
+CandleCanvas::CandleCanvas(QWidget* parent) : QWidget(parent) {
+    setObjectName("eqCandleCanvas");
+    setMinimumHeight(120);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+}
+
+void CandleCanvas::set_candles(const QVector<trading::BrokerCandle>& candles) {
+    candles_ = candles;
+    dirty_   = true;
+    update();
+}
+
+void CandleCanvas::clear() {
+    candles_.clear();
+    dirty_ = true;
+    update();
+}
+
+void CandleCanvas::resizeEvent(QResizeEvent* e) {
+    QWidget::resizeEvent(e);
+    dirty_ = true;
+}
+
+void CandleCanvas::paintEvent(QPaintEvent*) {
+    if (dirty_) {
+        rebuild_cache();
+        dirty_ = false;
+    }
+    QPainter p(this);
+    p.drawPixmap(0, 0, cache_);
+}
+
+void CandleCanvas::rebuild_cache() {
+    const int W = width();
+    const int H = height();
+    if (W <= 0 || H <= 0) return;
+
+    cache_ = QPixmap(W, H);
+    cache_.fill(BG_SURFACE);
+
+    QPainter p(&cache_);
+    p.setRenderHint(QPainter::Antialiasing, false);
+
+    // ── Subset ───────────────────────────────────────────────────────────────
+    const int total = candles_.size();
+    if (total == 0) {
+        // Empty state
+        p.setPen(TEXT_TERTIARY);
+        p.setFont(QFont("monospace", 10));
+        p.drawText(cache_.rect(), Qt::AlignCenter, "No data");
+        return;
+    }
+
+    const int start = qMax(0, total - MAX_VISIBLE);
+    const int count = total - start;
+
+    // ── Price range ──────────────────────────────────────────────────────────
+    double lo = 1e18, hi = 0.0;
+    for (int i = start; i < total; ++i) {
+        lo = std::min(lo, candles_[i].low);
+        hi = std::max(hi, candles_[i].high);
+    }
+    if (lo >= hi) return;
+
+    const double margin = (hi - lo) * 0.05;
+    lo -= margin;
+    hi += margin;
+
+    // ── Layout ───────────────────────────────────────────────────────────────
+    const int plot_w = W - PRICE_AXIS_W;
+    const int plot_h = H - TIME_AXIS_H;
+    if (plot_w <= 0 || plot_h <= 0) return;
+
+    // Lambda: price → y pixel
+    auto py = [&](double price) -> int {
+        return static_cast<int>(plot_h - (price - lo) / (hi - lo) * plot_h);
+    };
+
+    // ── Grid lines ───────────────────────────────────────────────────────────
+    p.setPen(QPen(BORDER_DIM, 1));
+    for (int g = 1; g < 5; ++g) {
+        int gy = plot_h * g / 5;
+        p.drawLine(0, gy, plot_w, gy);
+    }
+
+    // ── Candle geometry ──────────────────────────────────────────────────────
+    const double slot_w = static_cast<double>(plot_w) / count;
+    const int    body_w = qMax(1, static_cast<int>(slot_w * 0.6));
+    const int    half   = body_w / 2;
+
+    for (int i = 0; i < count; ++i) {
+        const auto& c   = candles_[start + i];
+        const int   cx  = static_cast<int>((i + 0.5) * slot_w); // centre x
+        const bool  bull = c.close >= c.open;
+
+        const QColor col = bull ? COLOR_BUY : COLOR_SELL;
+
+        const int open_y  = py(c.open);
+        const int close_y = py(c.close);
+        const int high_y  = py(c.high);
+        const int low_y   = py(c.low);
+
+        const int body_top = std::min(open_y, close_y);
+        const int body_bot = std::max(open_y, close_y);
+        const int body_h   = qMax(1, body_bot - body_top);
+
+        // Wick
+        p.setPen(QPen(col, 1));
+        p.drawLine(cx, high_y, cx, low_y);
+
+        // Body
+        p.fillRect(cx - half, body_top, body_w, body_h, col);
+    }
+
+    // ── Price axis (right) ────────────────────────────────────────────────────
+    p.setPen(BORDER_MED);
+    p.drawLine(plot_w, 0, plot_w, plot_h);
+
+    p.setPen(TEXT_SECONDARY);
+    QFont lbl_font("monospace", 8);
+    p.setFont(lbl_font);
+    QFontMetrics fm(lbl_font);
+
+    for (int g = 0; g <= 5; ++g) {
+        double price = lo + (hi - lo) * g / 5.0;
+        int    gy    = py(price);
+        QString txt  = QString::number(price, 'f', 2);
+        p.drawText(plot_w + 4, gy + fm.ascent() / 2, txt);
+    }
+
+    // ── Time axis (bottom) ────────────────────────────────────────────────────
+    p.setPen(BORDER_MED);
+    p.drawLine(0, plot_h, plot_w, plot_h);
+
+    p.setPen(TEXT_SECONDARY);
+    for (int i = 0; i < count; i += LABEL_STEP) {
+        const auto& c  = candles_[start + i];
+        QDateTime   dt = QDateTime::fromMSecsSinceEpoch(c.timestamp);
+        // Show date if daily/weekly, time otherwise
+        QString label;
+        if (slot_w * LABEL_STEP > 60) {
+            // enough space — pick format based on timeframe span
+            qint64 span_ms = candles_.last().timestamp - candles_.first().timestamp;
+            label = span_ms > 7LL * 24 * 3600 * 1000
+                        ? dt.toString("dd MMM")
+                        : dt.toString("HH:mm");
+        } else {
+            label = dt.toString("HH:mm");
+        }
+        int lx = static_cast<int>((i + 0.5) * slot_w);
+        int tw = fm.horizontalAdvance(label);
+        p.drawText(lx - tw / 2, plot_h + TIME_AXIS_H - 3, label);
+    }
+    // Always draw the last label
+    {
+        const auto& c  = candles_.last();
+        QDateTime   dt = QDateTime::fromMSecsSinceEpoch(c.timestamp);
+        qint64 span_ms = candles_.last().timestamp - candles_.first().timestamp;
+        QString label = span_ms > 7LL * 24 * 3600 * 1000
+                            ? dt.toString("dd MMM")
+                            : dt.toString("HH:mm");
+        int lx = static_cast<int>((count - 0.5) * slot_w);
+        int tw = fm.horizontalAdvance(label);
+        p.drawText(lx - tw / 2, plot_h + TIME_AXIS_H - 3, label);
+    }
+}
+
+// ── EquityChart ───────────────────────────────────────────────────────────────
 
 EquityChart::EquityChart(QWidget* parent) : QWidget(parent) {
     setObjectName("eqChart");
@@ -50,47 +217,16 @@ EquityChart::EquityChart(QWidget* parent) : QWidget(parent) {
     }
     layout->addWidget(header);
 
-    // Chart
-    chart_ = new QChart;
-    chart_->setBackgroundBrush(BG_SURFACE);
-    chart_->legend()->hide();
-    chart_->setMargins(QMargins(0, 0, 0, 0));
-
-    series_ = new QCandlestickSeries;
-    series_->setIncreasingColor(COLOR_BUY);
-    series_->setDecreasingColor(COLOR_SELL);
-    series_->setBodyWidth(0.7);
-    series_->setPen(Qt::NoPen);
-    chart_->addSeries(series_);
-
-    time_axis_ = new QDateTimeAxis;
-    time_axis_->setFormat("HH:mm");
-    time_axis_->setLabelsColor(TEXT_SECONDARY);
-    time_axis_->setGridLineColor(BORDER_DIM);
-    chart_->addAxis(time_axis_, Qt::AlignBottom);
-    series_->attachAxis(time_axis_);
-
-    price_axis_ = new QValueAxis;
-    price_axis_->setLabelsColor(TEXT_SECONDARY);
-    price_axis_->setGridLineColor(BORDER_DIM);
-    price_axis_->setLabelFormat("%.2f");
-    chart_->addAxis(price_axis_, Qt::AlignRight);
-    series_->attachAxis(price_axis_);
-
-    chart_view_ = new QChartView(chart_);
-    chart_view_->setRenderHint(QPainter::Antialiasing, false);
-    chart_view_->setObjectName("eqChartView");
-    layout->addWidget(chart_view_, 1);
+    canvas_ = new CandleCanvas(this);
+    layout->addWidget(canvas_, 1);
 }
 
 void EquityChart::set_candles(const QVector<trading::BrokerCandle>& candles) {
-    candles_ = candles;
-    rebuild_chart();
+    canvas_->set_candles(candles);
 }
 
 void EquityChart::clear() {
-    candles_.clear();
-    series_->clear();
+    canvas_->clear();
 }
 
 QString EquityChart::current_timeframe() const {
@@ -98,8 +234,7 @@ QString EquityChart::current_timeframe() const {
 }
 
 void EquityChart::set_active_tf(int idx) {
-    if (idx == active_tf_)
-        return;
+    if (idx == active_tf_) return;
     for (int i = 0; i < 6; ++i) {
         tf_buttons_[i]->setProperty("active", i == idx);
         tf_buttons_[i]->style()->unpolish(tf_buttons_[i]);
@@ -107,47 +242,6 @@ void EquityChart::set_active_tf(int idx) {
     }
     active_tf_ = idx;
     emit timeframe_changed(TF_LABELS[idx]);
-}
-
-void EquityChart::rebuild_chart() {
-    series_->clear();
-    last_min_price_ = last_max_price_ = -1;
-    last_min_time_ = last_max_time_ = -1;
-
-    if (candles_.isEmpty())
-        return;
-
-    const int start = qMax(0, static_cast<int>(candles_.size()) - MAX_VISIBLE);
-    double min_p = 1e18, max_p = 0;
-    qint64 min_t = INT64_MAX, max_t = 0;
-
-    for (int i = start; i < candles_.size(); ++i) {
-        const auto& c = candles_[i];
-        auto* set = new QCandlestickSet(c.open, c.high, c.low, c.close, c.timestamp * 1000);
-        series_->append(set);
-        min_p = std::min(min_p, c.low);
-        max_p = std::max(max_p, c.high);
-        min_t = std::min(min_t, static_cast<qint64>(c.timestamp) * 1000);
-        max_t = std::max(max_t, static_cast<qint64>(c.timestamp) * 1000);
-    }
-
-    if (min_p < max_p)
-        update_axes(min_p, max_p, min_t, max_t);
-}
-
-void EquityChart::update_axes(double min_price, double max_price, qint64 min_time, qint64 max_time) {
-    if (min_price == last_min_price_ && max_price == last_max_price_ && min_time == last_min_time_ &&
-        max_time == last_max_time_)
-        return;
-
-    const double margin = (max_price - min_price) * 0.05;
-    price_axis_->setRange(min_price - margin, max_price + margin);
-    time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time), QDateTime::fromMSecsSinceEpoch(max_time));
-
-    last_min_price_ = min_price;
-    last_max_price_ = max_price;
-    last_min_time_ = min_time;
-    last_max_time_ = max_time;
 }
 
 } // namespace fincept::screens::equity

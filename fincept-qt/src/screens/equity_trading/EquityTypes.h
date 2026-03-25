@@ -18,9 +18,9 @@ enum class TradingMode { Paper, Live };
 // ── Default Watchlist (NIFTY 50 subset) ────────────────────────────────────
 
 inline const QStringList DEFAULT_WATCHLIST = {
-    "HDFCBANK", "ICICIBANK", "SBIN",     "KOTAKBANK",  "AXISBANK",   "TCS",        "INFY",
-    "WIPRO",    "HCLTECH",   "RELIANCE", "TATAMOTORS", "MARUTI",     "BAJFINANCE", "HINDUNILVR",
-    "ITC",      "SUNPHARMA", "DRREDDY",  "LT",         "BHARTIARTL", "TITAN",
+    "HDFCBANK", "ICICIBANK", "SBIN",    "KOTAKBANK", "AXISBANK",  "TCS",       "INFY",
+    "WIPRO",    "HCLTECH",  "RELIANCE","TATASTEEL",  "MARUTI",    "BAJFINANCE","HINDUNILVR",
+    "ITC",      "SUNPHARMA","DRREDDY", "LT",         "BHARTIARTL","TITAN",
 };
 
 inline const QStringList US_WATCHLIST = {
@@ -65,10 +65,12 @@ inline const QColor ROW_ALT = QColor("#0c0c0c");
 inline QString exchange_currency(const QString& exchange) {
     if (exchange == "NSE" || exchange == "BSE" || exchange == "NFO" || exchange == "MCX" || exchange == "CDS")
         return "INR";
-    if (exchange == "NYSE" || exchange == "NASDAQ" || exchange == "AMEX")
+    if (exchange == "NYSE" || exchange == "NASDAQ" || exchange == "AMEX" || exchange == "CBOE")
         return "USD";
     if (exchange == "LSE")
         return "GBP";
+    if (exchange == "XETRA" || exchange == "EURONEXT")
+        return "EUR";
     return "USD";
 }
 

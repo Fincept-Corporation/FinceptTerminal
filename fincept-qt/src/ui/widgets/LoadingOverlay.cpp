@@ -1,48 +1,25 @@
 // src/ui/widgets/LoadingOverlay.cpp
 #include "ui/widgets/LoadingOverlay.h"
 
-#include "ui/theme/Theme.h"
-
 #include <QPainter>
-#include <QResizeEvent>
-#include <QVBoxLayout>
+#include <QPainterPath>
+
+#include <cmath>
 
 namespace fincept::ui {
-
-static const char* SPIN_FRAMES[] = {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"};
-static constexpr int SPIN_FRAME_COUNT = 10;
 
 LoadingOverlay::LoadingOverlay(QWidget* parent) : QWidget(parent) {
     setAttribute(Qt::WA_TransparentForMouseEvents, false);
     setAttribute(Qt::WA_NoSystemBackground);
     hide();
 
-    auto* vl = new QVBoxLayout(this);
-    vl->setAlignment(Qt::AlignCenter);
-    vl->setSpacing(14);
-
-    spinner_label_ = new QLabel(SPIN_FRAMES[0]);
-    spinner_label_->setAlignment(Qt::AlignCenter);
-    spinner_label_->setStyleSheet(
-        QString("color:%1; font-size:32px; background:transparent; border:0;").arg(ui::colors::AMBER));
-
-    message_label_ = new QLabel("LOADING…");
-    message_label_->setAlignment(Qt::AlignCenter);
-    message_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:2px; "
-                                          "background:transparent; border:0;")
-                                      .arg(ui::colors::AMBER));
-
-    vl->addWidget(spinner_label_);
-    vl->addWidget(message_label_);
-
-    spin_timer_ = new QTimer(this);
-    spin_timer_->setInterval(80);
-    connect(spin_timer_, &QTimer::timeout, this, [this]() {
-        spin_idx_ = (spin_idx_ + 1) % SPIN_FRAME_COUNT;
-        spinner_label_->setText(SPIN_FRAMES[spin_idx_]);
+    anim_timer_ = new QTimer(this);
+    anim_timer_->setInterval(ANIM_INTERVAL_MS);
+    connect(anim_timer_, &QTimer::timeout, this, [this]() {
+        tick_++;
+        update();
     });
 
-    // Fill parent immediately
     if (parent) {
         setGeometry(parent->rect());
         raise();
@@ -50,29 +27,68 @@ LoadingOverlay::LoadingOverlay(QWidget* parent) : QWidget(parent) {
 }
 
 void LoadingOverlay::show_loading(const QString& message) {
-    message_label_->setText(message);
+    message_ = message;
     if (parentWidget())
         setGeometry(parentWidget()->rect());
     raise();
     show();
-    spin_idx_ = 0;
-    spin_timer_->start();
+    tick_ = 0;
+    anim_timer_->start();
 }
 
 void LoadingOverlay::hide_loading() {
-    spin_timer_->stop();
+    anim_timer_->stop();
     hide();
-}
-
-void LoadingOverlay::resizeEvent(QResizeEvent* e) {
-    QWidget::resizeEvent(e);
 }
 
 void LoadingOverlay::paintEvent(QPaintEvent*) {
     QPainter p(this);
-    // Dark semi-transparent background
-    QColor bg(15, 17, 21, 210); // ~#0f1115 at 82% opacity
-    p.fillRect(rect(), bg);
+    p.setRenderHint(QPainter::Antialiasing, false);
+
+    // Dark overlay
+    p.fillRect(rect(), QColor(8, 8, 8, 220));
+
+    const int cx = width() / 2;
+    const int cy = height() / 2;
+
+    // ── Pulsing bars (Bloomberg-style) ───────────────────────────────────────
+    const int bar_w = 4;
+    const int bar_gap = 6;
+    const int max_bar_h = 28;
+    const int min_bar_h = 8;
+    const int total_w = BAR_COUNT * bar_w + (BAR_COUNT - 1) * bar_gap;
+    const int start_x = cx - total_w / 2;
+    const int base_y = cy + 4;
+
+    for (int i = 0; i < BAR_COUNT; ++i) {
+        // Phase offset per bar creates a wave
+        double phase = (tick_ * 0.3) - i * 0.7;
+        double t = (std::sin(phase) + 1.0) / 2.0; // 0..1
+        int bar_h = min_bar_h + static_cast<int>(t * (max_bar_h - min_bar_h));
+
+        // Color: amber at peak, dim at trough
+        int r = 217, g = 119, b = 6;    // #d97706
+        int alpha = 100 + static_cast<int>(t * 155); // 100..255
+        QColor col(r, g, b, alpha);
+
+        int bx = start_x + i * (bar_w + bar_gap);
+        int by = base_y - bar_h;
+        p.fillRect(bx, by, bar_w, bar_h, col);
+    }
+
+    // ── Message text ─────────────────────────────────────────────────────────
+    if (!message_.isEmpty()) {
+        p.setPen(QColor(217, 119, 6, 200)); // amber
+        p.setFont(QFont("Consolas", 10, QFont::Bold));
+        QRect text_rect(0, base_y + 14, width(), 24);
+        p.drawText(text_rect, Qt::AlignHCenter | Qt::AlignTop, message_);
+    }
+
+    // ── Subtle border box around the animation area ──────────────────────────
+    p.setPen(QPen(QColor(217, 119, 6, 40), 1));
+    int box_w = total_w + 40;
+    int box_h = max_bar_h + 60;
+    p.drawRect(cx - box_w / 2, cy - max_bar_h - 10, box_w, box_h);
 }
 
 } // namespace fincept::ui

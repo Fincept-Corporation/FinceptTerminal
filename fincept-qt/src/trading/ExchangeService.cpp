@@ -42,7 +42,14 @@ ExchangeService& ExchangeService::instance() {
 ExchangeService::ExchangeService() {
     feed_timer_ = new QTimer(this);
     connect(feed_timer_, &QTimer::timeout, this, &ExchangeService::poll_prices);
-    // Daemon starts lazily on first daemon_call() — avoids startup race with PythonRunner
+
+    // Pre-warm daemon in background so it's ready by the time the user opens Crypto Trading.
+    // QTimer::singleShot(0) defers until after QApplication::exec() is running so PythonRunner
+    // is fully initialised before we spawn the daemon process.
+    QTimer::singleShot(0, this, [this]() {
+        if (!is_daemon_running())
+            start_daemon();
+    });
 }
 
 ExchangeService::~ExchangeService() {

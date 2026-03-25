@@ -5,6 +5,7 @@
 #include "core/logging/Logger.h"
 
 #include <QEventLoop>
+#include <QMutexLocker>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -56,6 +57,7 @@ BrokerHttpResponse BrokerHttp::post_form(const QString& url, const QMap<QString,
 
 BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url, const QByteArray& body,
                                        const QString& content_type, const QMap<QString, QString>& headers) {
+    QMutexLocker locker(&mutex_);
     QNetworkAccessManager nam;
     QUrl req_url(url);
     QNetworkRequest req(req_url);

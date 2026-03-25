@@ -48,8 +48,15 @@ class McpManager : public QObject {
     std::vector<ExternalTool> get_all_external_tools();
     Result<QJsonObject> call_external_tool(const QString& server_id, const QString& tool_name, const QJsonObject& args);
 
+    /// Returns captured log lines for a running server (empty if not running).
+    QStringList get_logs(const QString& id) const;
+
     McpManager(const McpManager&) = delete;
     McpManager& operator=(const McpManager&) = delete;
+
+  signals:
+    /// Emitted whenever server list or status changes (save/remove/start/stop).
+    void servers_changed();
 
   private:
     McpManager();

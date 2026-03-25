@@ -11,11 +11,11 @@
 #include <QMutex>
 #include <QProcess>
 #include <QString>
+#include <QStringList>
+#include <QThread>
 #include <QWaitCondition>
 
 #include <atomic>
-#include <functional>
-#include <memory>
 
 namespace fincept::mcp {
 
@@ -53,6 +53,9 @@ class McpClient : public QObject {
 
     const McpServerConfig& config() const { return config_; }
 
+    /// Returns captured stdout/stderr lines (last 500 lines).
+    QStringList get_logs() const;
+
   private:
     struct PendingRequest {
         QJsonObject response;
@@ -61,6 +64,7 @@ class McpClient : public QObject {
     };
 
     McpServerConfig config_;
+    QThread* worker_thread_ = nullptr;
     QProcess* process_ = nullptr;
     std::atomic<bool> running_{false};
 
@@ -72,6 +76,11 @@ class McpClient : public QObject {
 
     Result<QJsonObject> send_request(const QString& method, const QJsonObject& params, int timeout_ms = 30000);
     void handle_line(const QByteArray& line);
+    void append_log(const QString& line);
+
+    static constexpr int MAX_LOG_LINES = 500;
+    mutable QMutex log_mutex_;
+    QStringList log_lines_;
 
   private slots:
     void on_ready_read();

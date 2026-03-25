@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
+#include <QMutex>
 #include <QString>
 
 namespace fincept::trading {
@@ -45,6 +46,7 @@ class BrokerHttp {
     BrokerHttpResponse execute(const QString& method, const QString& url, const QByteArray& body,
                                const QString& content_type, const QMap<QString, QString>& headers);
     int timeout_ms_ = 15000;
+    QMutex mutex_; // guards concurrent calls from QtConcurrent worker threads
 };
 
 } // namespace fincept::trading

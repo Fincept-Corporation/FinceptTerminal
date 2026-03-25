@@ -24,27 +24,26 @@ class EquityTechnicalsTab : public QWidget {
     void populate(const services::equity::TechnicalsData& data);
     void clear_sections();
 
-    // Signal helper for threshold-based logic matching reference
-    static QString compute_signal(const services::equity::TechIndicator& ti);
-    static QString signal_label(services::equity::TechSignal s);
-    static QString signal_color(services::equity::TechSignal s);
-    static QString signal_bg(services::equity::TechSignal s);
+    static QString signal_text(services::equity::TechSignal s);
+    static const char* signal_color(services::equity::TechSignal s);
+    static QString interpretation(const QString& col_key, double value);
 
     QString current_symbol_;
 
-    // TECHNICAL RATING panel
-    QLabel* rating_label_ = nullptr;    // "STRONG BUY" etc
-    QProgressBar* gauge_bar_ = nullptr; // sell|neutral|buy gauge
+    // Rating panel
+    QLabel* rating_label_ = nullptr;
+    QProgressBar* gauge_bar_ = nullptr;
+    QLabel* strong_buy_count_ = nullptr;
     QLabel* buy_count_ = nullptr;
     QLabel* neutral_count_ = nullptr;
     QLabel* sell_count_ = nullptr;
+    QLabel* strong_sell_count_ = nullptr;
     QLabel* total_label_ = nullptr;
 
-    // KEY INDICATORS panel — 8 fixed mini cards
-    // Stored as pairs (name_lbl, value_lbl, signal_lbl) — built dynamically
-    QWidget* key_grid_ = nullptr;
+    // Key indicators container
+    QWidget* key_container_ = nullptr;
 
-    // Scrollable section container
+    // Category sections container
     QWidget* sections_container_ = nullptr;
 
     ui::LoadingOverlay* loading_overlay_ = nullptr;

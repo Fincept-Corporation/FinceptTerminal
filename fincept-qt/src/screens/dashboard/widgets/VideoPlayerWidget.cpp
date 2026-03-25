@@ -21,18 +21,18 @@ struct PresetChannel {
 };
 
 static const PresetChannel kPresets[] = {
-    {"Bloomberg TV", "https://www.youtube.com/watch?v=dp8PhLsUcFE", "Global business & markets", "#9D4EDD"},
-    {"CNBC Live", "https://www.youtube.com/watch?v=9ApRjK3RVSY", "US market coverage", "#2563eb"},
-    {"Reuters TV", "https://www.youtube.com/watch?v=vAvNMaWlkrc", "World news & finance", "#d97706"},
-    {"Yahoo Finance", "https://www.youtube.com/watch?v=WUm7b7GiTFM", "Market analysis", "#16a34a"},
-    {"Fox Business", "https://www.youtube.com/watch?v=6IlWB5R_Oso", "Business & economy", "#dc2626"},
-    {"NDTV Profit", "https://www.youtube.com/watch?v=QFIn0MQDXuA", "India business & markets", "#0891b2"},
+    {"Bloomberg TV",     "https://www.youtube.com/watch?v=iEpJwprxDdk", "Global business & markets", "#9D4EDD"},
+    {"CNBC Live",        "https://www.youtube.com/watch?v=rGgBsS3cm7E", "US market coverage",        "#2563eb"},
+    {"Yahoo Finance",    "https://www.youtube.com/@YahooFinance/live",   "Market analysis",           "#16a34a"},
+    {"NDTV Profit",      "https://www.youtube.com/watch?v=kf8tVmwfUHI", "India business & markets",  "#0891b2"},
+    {"Al Jazeera",       "https://www.youtube.com/watch?v=gCNeDWCI0vo", "World news & finance",      "#d97706"},
 };
 
 static constexpr int kPresetCount = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
 
 static bool is_youtube_url(const QString& url) {
-    return url.contains("youtube.com/watch") || url.contains("youtu.be/") || url.contains("youtube.com/live");
+    return url.contains("youtube.com/watch") || url.contains("youtu.be/")
+        || url.contains("youtube.com/live")  || url.contains("youtube.com/@");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
