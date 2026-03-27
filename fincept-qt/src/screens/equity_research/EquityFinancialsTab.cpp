@@ -2,6 +2,7 @@
 #include "screens/equity_research/EquityFinancialsTab.h"
 
 #include "services/equity/EquityResearchService.h"
+#include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
 #include <QBarCategoryAxis>
@@ -14,8 +15,14 @@
 #include <QHeaderView>
 #include <QJsonObject>
 #include <QLineSeries>
+#include <QDateTime>
+#include <QFile>
+#include <QFileInfo>
+#include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QSizePolicy>
+#include <QTextStream>
 #include <QVBoxLayout>
 #include <QValueAxis>
 
@@ -203,6 +210,69 @@ void EquityFinancialsTab::build_ui() {
     make_btn("Cash Flow", btn_cashflow_);
     btn_income_->setChecked(true);
     btn_hl->addStretch();
+
+    auto* export_btn = new QPushButton("EXPORT CSV");
+    export_btn->setStyleSheet(QString(R"(
+        QPushButton {
+            background:transparent; color:%1; border:1px solid %1;
+            border-radius:3px; padding:4px 14px; font-size:11px; font-weight:700;
+        }
+        QPushButton:hover { background:%1; color:#000; }
+    )").arg(kAmber));
+    btn_hl->addWidget(export_btn);
+
+    connect(export_btn, &QPushButton::clicked, this, [this]() {
+        int idx = stack_ ? stack_->currentIndex() : 0;
+        QTableWidget* tbl = nullptr;
+        QString label;
+        if (idx == 0) { tbl = inc_table_;  label = "income"; }
+        else if (idx == 1) { tbl = bal_table_;  label = "balance"; }
+        else                { tbl = cf_table_;   label = "cashflow"; }
+        if (!tbl) return;
+
+        // Build sanitised ticker prefix from object name or use generic
+        QString ticker = objectName().isEmpty() ? "equity" : objectName();
+        ticker.remove(QRegularExpression(R"([^A-Za-z0-9_\-])"));
+
+        QString filename = QString("%1_%2_%3.csv")
+            .arg(ticker, label, QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
+        QString dest = services::FileManagerService::instance().storage_dir() + "/" + filename;
+
+        QFile f(dest);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+        QTextStream out(&f);
+
+        // Header row
+        QStringList headers;
+        for (int c = 0; c < tbl->columnCount(); ++c) {
+            auto* item = tbl->horizontalHeaderItem(c);
+            headers << (item ? item->text() : QString("Col%1").arg(c));
+        }
+        out << headers.join(",") << "\n";
+
+        // Data rows
+        for (int r = 0; r < tbl->rowCount(); ++r) {
+            QStringList row;
+            for (int c = 0; c < tbl->columnCount(); ++c) {
+                auto* item = tbl->item(r, c);
+                QString cell = item ? item->text() : "";
+                if (cell.contains(',') || cell.contains('"') || cell.contains('\n'))
+                    cell = "\"" + cell.replace("\"", "\"\"") + "\"";
+                row << cell;
+            }
+            out << row.join(",") << "\n";
+        }
+        f.close();
+
+        services::FileManagerService::instance().register_file(
+            dest,
+            QFileInfo(dest).fileName(),
+            QFileInfo(dest).size(),
+            "text/csv",
+            "equity_research"
+        );
+    });
+
     vl->addWidget(btn_bar);
 
     auto switch_to = [this](int idx) {

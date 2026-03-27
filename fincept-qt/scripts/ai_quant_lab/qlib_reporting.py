@@ -508,6 +508,8 @@ def main():
     service = ReportingService()
 
     try:
+        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+
         if command == "check_status":
             result = {
                 "success": True,
@@ -515,10 +517,52 @@ def main():
                 "plotly_available": PLOTLY_AVAILABLE,
                 "matplotlib_available": MATPLOTLIB_AVAILABLE
             }
-            print(json.dumps(result))
+
+        elif command == "position_analysis":
+            result = service.generate_position_analysis_report(
+                positions=params.get("positions", {}),
+                returns=params.get("returns", []),
+                benchmark_returns=params.get("benchmark_returns")
+            )
+
+        elif command == "ic_analysis":
+            result = service.generate_ic_analysis_report(
+                predictions=params.get("predictions", []),
+                returns=params.get("returns", []),
+                method=params.get("method", "both")
+            )
+
+        elif command == "cumulative_return_graph":
+            result = service.generate_cumulative_return_graph(
+                returns=params.get("returns", []),
+                benchmark_returns=params.get("benchmark_returns"),
+                title=params.get("title", "Cumulative Returns")
+            )
+
+        elif command == "risk_analysis_graph":
+            result = service.generate_risk_analysis_graph(
+                returns=params.get("returns", []),
+                title=params.get("title", "Risk Analysis")
+            )
+
+        elif command == "model_performance":
+            result = service.generate_model_performance_report(
+                predictions=params.get("predictions", []),
+                returns=params.get("returns", []),
+                model_name=params.get("model_name", "Model")
+            )
+
+        elif command == "export_report":
+            result = service.export_report(
+                report_data=params.get("report_data", {}),
+                format=params.get("format", "json"),
+                filepath=params.get("filepath")
+            )
+
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
-            print(json.dumps(result))
+
+        print(json.dumps(result))
 
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))

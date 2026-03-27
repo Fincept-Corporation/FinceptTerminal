@@ -565,16 +565,59 @@ def main():
     service = EvaluationService()
 
     try:
+        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+
         if command == "check_status":
             result = {
                 "success": True,
                 "pandas_available": PANDAS_AVAILABLE,
                 "qlib_available": QLIB_AVAILABLE
             }
-            print(json.dumps(result))
+
+        elif command == "calculate_ic":
+            predictions = pd.Series(params.get("predictions", []))
+            returns = pd.Series(params.get("returns", []))
+            method = params.get("method", "pearson")
+            result = service.calculate_ic_metrics(predictions, returns, method)
+
+        elif command == "calculate_rank_ic":
+            predictions = pd.Series(params.get("predictions", []))
+            returns = pd.Series(params.get("returns", []))
+            result = service.calculate_rank_ic(predictions, returns)
+
+        elif command == "analyze_factor_returns":
+            factor_values = pd.Series(params.get("factor_values", []))
+            returns = pd.Series(params.get("returns", []))
+            quantiles = params.get("quantiles", 5)
+            result = service.analyze_factor_returns(factor_values, returns, quantiles)
+
+        elif command == "calculate_factor_turnover":
+            factor_values = pd.Series(params.get("factor_values", []))
+            top_n = params.get("top_n", 50)
+            result = service.calculate_factor_turnover(factor_values, top_n)
+
+        elif command == "calculate_risk_metrics":
+            returns = pd.Series(params.get("returns", []))
+            benchmark_returns = pd.Series(params.get("benchmark_returns")) if params.get("benchmark_returns") else None
+            confidence_level = params.get("confidence_level", 0.95)
+            result = service.calculate_risk_metrics(returns, benchmark_returns, confidence_level)
+
+        elif command == "combine_factors":
+            factors = {k: pd.Series(v) for k, v in params.get("factors", {}).items()}
+            weights = params.get("weights")
+            method = params.get("method", "equal_weight")
+            result = service.combine_factors(factors, weights, method)
+
+        elif command == "generate_evaluation_report":
+            factor_name = params.get("factor_name", "factor")
+            predictions = pd.Series(params.get("predictions", []))
+            returns = pd.Series(params.get("returns", []))
+            result = service.generate_evaluation_report(factor_name, predictions, returns)
+
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
-            print(json.dumps(result))
+
+        print(json.dumps(result))
 
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))

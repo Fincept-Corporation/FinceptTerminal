@@ -29,7 +29,6 @@ class StrategyBuilderPanel : public QWidget {
     void build_ui();
     void connect_service();
     QWidget* build_condition_row(QWidget* parent);
-    QJsonArray gather_conditions();
 
     QLineEdit* name_edit_ = nullptr;
     QLineEdit* desc_edit_ = nullptr;
@@ -48,6 +47,8 @@ class StrategyBuilderPanel : public QWidget {
     // Backtest inputs
     QLineEdit* bt_symbol_ = nullptr;
     QDoubleSpinBox* bt_capital_ = nullptr;
+    QLineEdit* bt_start_date_ = nullptr;
+    QLineEdit* bt_end_date_ = nullptr;
 };
 
 } // namespace fincept::screens

@@ -394,19 +394,100 @@ def main():
     engineer = FeatureEngineer()
 
     try:
+        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+        data = params.get("data", [])
+
         if command == "check_status":
             result = {
                 "success": True,
                 "pandas_available": PANDAS_AVAILABLE,
                 "indicators_available": [
                     "moving_average", "rsi", "macd", "bollinger_bands",
-                    "atr", "stochastic_oscillator", "obv", "vwap"
+                    "atr", "stochastic_oscillator", "returns", "log_returns",
+                    "momentum", "volatility", "obv", "vwap", "volume_ratio",
+                    "rolling_correlation", "rolling_beta", "drawdown", "select_features_by_ic"
                 ]
             }
-            print(json.dumps(result))
+
+        elif command == "moving_average":
+            s = pd.Series(data)
+            result_series = engineer.moving_average(s, params.get("window", 20), params.get("method", "sma"))
+            result = {"success": True, "data": result_series.dropna().tolist()}
+
+        elif command == "rsi":
+            s = pd.Series(data)
+            result_series = engineer.rsi(s, params.get("window", 14))
+            result = {"success": True, "data": result_series.dropna().tolist()}
+
+        elif command == "macd":
+            s = pd.Series(data)
+            r = engineer.macd(s, params.get("fast", 12), params.get("slow", 26), params.get("signal", 9))
+            result = {"success": True, "macd": r["macd"].dropna().tolist(),
+                      "signal": r["signal"].dropna().tolist(), "histogram": r["histogram"].dropna().tolist()}
+
+        elif command == "bollinger_bands":
+            s = pd.Series(data)
+            r = engineer.bollinger_bands(s, params.get("window", 20), params.get("num_std", 2.0))
+            result = {"success": True, "upper": r["upper"].dropna().tolist(),
+                      "middle": r["middle"].dropna().tolist(), "lower": r["lower"].dropna().tolist()}
+
+        elif command == "atr":
+            r = engineer.atr(pd.Series(params.get("high", [])), pd.Series(params.get("low", [])),
+                             pd.Series(data), params.get("window", 14))
+            result = {"success": True, "data": r.dropna().tolist()}
+
+        elif command == "stochastic_oscillator":
+            r = engineer.stochastic_oscillator(pd.Series(params.get("high", [])),
+                                               pd.Series(params.get("low", [])), pd.Series(data),
+                                               params.get("k_window", 14), params.get("d_window", 3))
+            result = {"success": True, "k": r["k"].dropna().tolist(), "d": r["d"].dropna().tolist()}
+
+        elif command == "returns":
+            r = engineer.returns(pd.Series(data), params.get("periods", 1))
+            result = {"success": True, "data": r.dropna().tolist()}
+
+        elif command == "log_returns":
+            r = engineer.log_returns(pd.Series(data), params.get("periods", 1))
+            result = {"success": True, "data": r.dropna().tolist()}
+
+        elif command == "momentum":
+            r = engineer.momentum(pd.Series(data), params.get("window", 20))
+            result = {"success": True, "data": r.dropna().tolist()}
+
+        elif command == "volatility":
+            r = engineer.volatility(pd.Series(data), params.get("window", 20), params.get("annualize", False))
+            result = {"success": True, "data": r.dropna().tolist()}
+
+        elif command == "obv":
+            r = engineer.obv(pd.Series(data), pd.Series(params.get("volume", [])))
+            result = {"success": True, "data": r.tolist()}
+
+        elif command == "vwap":
+            r = engineer.vwap(pd.Series(params.get("high", [])), pd.Series(params.get("low", [])),
+                              pd.Series(data), pd.Series(params.get("volume", [])))
+            result = {"success": True, "data": r.tolist()}
+
+        elif command == "drawdown":
+            r = engineer.drawdown(pd.Series(data))
+            result = {"success": True, "data": r.tolist()}
+
+        elif command == "select_features_by_ic":
+            features = {k: pd.Series(v) for k, v in params.get("features", {}).items()}
+            returns_s = pd.Series(params.get("returns", []))
+            r = engineer.select_features_by_ic(features, returns_s, params.get("top_k", 10),
+                                               params.get("method", "pearson"))
+            result = {"success": True, "selected_features": r}
+
+        elif command == "evaluate_expression":
+            df = pd.DataFrame(params.get("data", {}))
+            engine = FeatureExpressionEngine(df)
+            expr_result = engine.evaluate(params.get("expression", ""))
+            result = {"success": True, "data": expr_result.dropna().tolist() if hasattr(expr_result, 'tolist') else expr_result}
+
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
-            print(json.dumps(result))
+
+        print(json.dumps(result))
 
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))

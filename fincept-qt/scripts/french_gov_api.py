@@ -1037,6 +1037,24 @@ def main():
 
     command = sys.argv[1]
 
+    # Aliases used by the C++ GovDataProviderPanel
+    _fr_search_query = None
+    _fr_dataset_id = None
+    if command == "publishers":
+        # List data services as "publishers"
+        command = "data-services"
+    elif command == "datasets":
+        # datasets <org_id> <limit> -> datasets with org filter
+        _fr_search_query = sys.argv[2] if len(sys.argv) > 2 else None
+        command = "datasets"
+    elif command == "resources":
+        # resources <dataset_id> -> profile
+        _fr_dataset_id = sys.argv[2] if len(sys.argv) > 2 else None
+        command = "profile"
+    elif command == "search":
+        _fr_search_query = sys.argv[2] if len(sys.argv) > 2 else None
+        command = "datasets"
+
     try:
         # API Géo Commands
         if command == "municipalities":
@@ -1082,17 +1100,17 @@ def main():
             result = search_data_services(query=query, page=page, page_size=page_size)
 
         elif command == "datasets":
-            query = sys.argv[2] if len(sys.argv) > 2 else None
+            query = _fr_search_query if _fr_search_query is not None else (sys.argv[2] if len(sys.argv) > 2 else None)
             page = int(sys.argv[3]) if len(sys.argv) > 3 else 1
             page_size = int(sys.argv[4]) if len(sys.argv) > 4 else 20
             result = search_datasets(query=query, page=page, page_size=page_size)
 
         # API Tabulaire Commands
         elif command == "profile":
-            if len(sys.argv) < 3:
+            resource_id = _fr_dataset_id or (sys.argv[2] if len(sys.argv) > 2 else None)
+            if not resource_id:
                 print(json.dumps({"error": "Usage: profile <resource_id>"}))
                 sys.exit(1)
-            resource_id = sys.argv[2]
             result = get_resource_profile(resource_id)
 
         elif command == "lines":
@@ -1137,6 +1155,43 @@ def main():
                 ]
             }
 
+        # Normalize data-services output so C++ populate_orgs gets expected fields
+        if command == "data-services" and isinstance(result, dict):
+            for item in result.get("data", []):
+                if isinstance(item, dict):
+                    if "name" not in item:
+                        item["name"] = item.get("id", "")
+                    if "display_name" not in item:
+                        item["display_name"] = item.get("title", item.get("original_title", item.get("name", "")))
+                    if "dataset_count" not in item:
+                        item["dataset_count"] = item.get("metrics", {}).get("datasets", -1) if isinstance(item.get("metrics"), dict) else -1
+
+        # Normalize datasets output so C++ populate_datasets gets expected fields
+        if command == "datasets" and isinstance(result, dict):
+            for item in result.get("data", []):
+                if isinstance(item, dict):
+                    if "num_resources" not in item:
+                        item["num_resources"] = item.get("resources_count", len(item.get("resources", [])))
+                    if "metadata_modified" not in item:
+                        item["metadata_modified"] = item.get("last_modified", item.get("updated_at", ""))
+
+        # Normalize profile output: C++ populate_resources expects data as array of resource objects
+        if command == "profile" and isinstance(result, dict):
+            profile = result.get("data", {})
+            if isinstance(profile, dict) and profile:
+                columns = profile.get("columns", [])
+                if columns:
+                    # Represent each column as a "resource" row for display
+                    rows = [{"name": c.get("name", ""), "format": c.get("python_type", c.get("type", "")),
+                             "size": 0, "last_modified": "", "url": ""}
+                            for c in columns if isinstance(c, dict)]
+                    result["data"] = rows
+                else:
+                    result["data"] = [profile]
+            elif not isinstance(profile, list):
+                result["data"] = []
+
+        sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', errors='replace', closefd=False)
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
     except ValueError as e:

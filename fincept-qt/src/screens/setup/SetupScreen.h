@@ -31,9 +31,13 @@ class SetupScreen : public QWidget {
   private:
     void build_ui();
     QWidget* build_step_row(const QString& label, const QString& object_name);
+    void prefill_completed_steps();
+    void mark_step_done(const QString& key);
 
-    QPushButton* begin_btn_ = nullptr;
-    QLabel* status_label_ = nullptr;
+    QPushButton* begin_btn_   = nullptr;
+    QLabel*      status_label_ = nullptr;
+    QLabel*      subtitle_lbl_ = nullptr;
+    QLabel*      summary_lbl_  = nullptr;
 
     // Step progress bars (keyed by step name)
     struct StepUI {

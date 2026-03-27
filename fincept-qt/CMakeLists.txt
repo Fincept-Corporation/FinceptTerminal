@@ -14,7 +14,22 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Unity build for infrastructure layers (safe — no local symbol conflicts)
 # Screens are excluded below via SKIP_UNITY_BUILD_INCLUSION (too many local statics/functions)
 set(CMAKE_UNITY_BUILD ON)
-set(CMAKE_UNITY_BUILD_BATCH_SIZE 8)
+set(CMAKE_UNITY_BUILD_BATCH_SIZE 24)
+
+# MSVC: /MP = multi-processor compilation (uses all cores within one project)
+# /Z7 = embed debug info in .obj files instead of shared PDB → eliminates PDB
+#        write contention that serialises /MP builds (major speedup)
+# /Oi = enable intrinsics (faster codegen, no extra passes)
+if(MSVC)
+    add_compile_options(/MP /Z7 /Oi /bigobj)
+    # Replace /Zi (shared PDB) with /Z7 in all configs to avoid race conditions
+    foreach(flag_var
+            CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELWITHDEBINFO
+            CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_MINSIZEREL)
+        string(REPLACE "/Zi" "/Z7" ${flag_var} "${${flag_var}}")
+        string(REPLACE "/ZI" "/Z7" ${flag_var} "${${flag_var}}")
+    endforeach()
+endif()
 
 # Suppress Windows min/max macros that break std::min/std::max in unity batches
 add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
@@ -65,6 +80,17 @@ else()
         -UQT_NO_CAST_TO_ASCII   -UQT_NO_URL_CAST_FROM_STRING
     )
 endif()
+
+# ── QSimpleUpdater (cross-platform auto-update) ──────────────────────────────
+set(QSIMPLE_UPDATER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    QSimpleUpdater
+    GIT_REPOSITORY https://github.com/alex-spataru/QSimpleUpdater.git
+    GIT_TAG        master
+)
+FetchContent_MakeAvailable(QSimpleUpdater)
+# QSimpleUpdater's CMakeLists builds a proper STATIC library target with
+# AUTOMOC — we just link against it and add its include dir.
 
 # ── QGeoView (interactive map widget with OSM tiles) ─────────────────────────
 FetchContent_Declare(
@@ -137,6 +163,7 @@ set(STORAGE_SOURCES
     src/storage/repositories/PortfolioHoldingsRepository.cpp
     src/storage/repositories/ChatRepository.cpp
     src/storage/repositories/LlmConfigRepository.cpp
+    src/storage/repositories/LlmProfileRepository.cpp
     src/storage/repositories/DataSourceRepository.cpp
     src/storage/repositories/McpServerRepository.cpp
     src/storage/repositories/AgentConfigRepository.cpp
@@ -146,6 +173,12 @@ set(STORAGE_SOURCES
 
     # Workflow migration
     src/storage/sqlite/migrations/v008_workflows.cpp
+
+    # Instrument master contract (Phase 1)
+    src/storage/sqlite/migrations/v009_instruments.cpp
+
+    # LLM Profiles — multi-provider support
+    src/storage/sqlite/migrations/v010_llm_profiles.cpp
 )
 
 # Python runner
@@ -176,6 +209,7 @@ set(MCP_SOURCES
     src/mcp/tools/WatchlistTools.cpp
     src/mcp/tools/NewsTools.cpp
     src/mcp/tools/NotesTools.cpp
+    src/mcp/tools/FileManagerTools.cpp
     src/mcp/tools/AiChatTools.cpp
     src/mcp/tools/PortfolioTools.cpp
     src/mcp/tools/CryptoTradingTools.cpp
@@ -198,10 +232,32 @@ set(TRADING_SOURCES
     src/trading/UnifiedTrading.cpp
     src/trading/ExchangeService.cpp
     src/trading/brokers/BrokerHttp.cpp
-    src/trading/brokers/AngelOneBroker.cpp
-    src/trading/brokers/FyersBroker.cpp
-    src/trading/brokers/IndianBrokers.cpp
-    src/trading/brokers/GlobalBrokers.cpp
+    # Trading WebSocket
+    src/trading/websocket/ZerodhaWebSocket.cpp
+    src/trading/websocket/AngelOneWebSocket.cpp
+    # Indian brokers
+    src/trading/brokers/zerodha/ZerodhaBroker.cpp
+    src/trading/brokers/angelone/AngelOneBroker.cpp
+    src/trading/brokers/fyers/FyersBroker.cpp
+    src/trading/brokers/upstox/UpstoxBroker.cpp
+    src/trading/brokers/dhan/DhanBroker.cpp
+    src/trading/brokers/kotak/KotakBroker.cpp
+    src/trading/brokers/groww/GrowwBroker.cpp
+    src/trading/brokers/aliceblue/AliceBlueBroker.cpp
+    src/trading/brokers/fivepaisa/FivePaisaBroker.cpp
+    src/trading/brokers/iifl/IIFLBroker.cpp
+    src/trading/brokers/motilal/MotilalBroker.cpp
+    src/trading/brokers/shoonya/ShoonyaBroker.cpp
+    # Global brokers
+    src/trading/brokers/alpaca/AlpacaBroker.cpp
+    src/trading/brokers/ibkr/IBKRBroker.cpp
+    src/trading/brokers/tradier/TradierBroker.cpp
+    src/trading/brokers/saxo/SaxoBankBroker.cpp
+
+    # Instrument system (Phase 1)
+    src/trading/instruments/InstrumentRepository.cpp
+    src/trading/instruments/ZerodhaInstrumentParser.cpp
+    src/trading/instruments/InstrumentService.cpp
 )
 
 # Services
@@ -224,6 +280,7 @@ set(SERVICE_SOURCES
     src/services/algo_trading/AlgoTradingService.cpp
     src/services/portfolio/PortfolioService.cpp
     src/services/agents/AgentService.cpp
+    src/services/file_manager/FileManagerService.cpp
     src/services/workflow/NodeRegistry.cpp
     src/services/workflow/WorkflowService.cpp
     src/services/workflow/WorkflowExecutor.cpp
@@ -264,6 +321,7 @@ set(UI_SOURCES
     src/ui/widgets/GeometricBackground.cpp
     src/ui/widgets/WorldMapWidget.cpp
     src/ui/widgets/LoadingOverlay.cpp
+    src/ui/widgets/ConfettiOverlay.cpp
     src/ui/tables/DataTable.cpp
     src/ui/charts/ChartFactory.cpp
     src/ui/navigation/NavigationBar.cpp
@@ -294,8 +352,6 @@ set(SCREEN_SOURCES
     src/screens/info/PrivacyScreen.cpp
     src/screens/info/TrademarksScreen.cpp
     src/screens/info/HelpScreen.cpp
-    src/screens/payment/PaymentProcessingScreen.cpp
-    src/screens/payment/PaymentSuccessScreen.cpp
     src/screens/file_manager/FileManagerScreen.cpp
     src/screens/relationship_map/RelationshipMapScreen.cpp
     src/screens/relationship_map/RelationshipGraphScene.cpp
@@ -328,6 +384,7 @@ set(SCREEN_SOURCES
     src/screens/dashboard/widgets/RiskMetricsWidget.cpp
     src/screens/dashboard/widgets/PortfolioSummaryWidget.cpp
     src/screens/dashboard/widgets/QuickTradeWidget.cpp
+    src/screens/dashboard/widgets/RecentFilesWidget.cpp
     src/screens/dashboard/widgets/VideoPlayerWidget.cpp
     src/screens/report_builder/ReportBuilderScreen.cpp
     src/screens/report_builder/ComponentToolbar.cpp
@@ -622,6 +679,7 @@ set_source_files_properties(
     src/screens/dashboard/widgets/SectorHeatmapWidget.cpp
     src/screens/dashboard/widgets/StockQuoteWidget.cpp
     src/screens/dashboard/widgets/TopMoversWidget.cpp
+    src/screens/dashboard/widgets/RecentFilesWidget.cpp
     src/screens/dashboard/widgets/VideoPlayerWidget.cpp
     src/screens/dashboard/widgets/WatchlistWidget.cpp
     src/screens/data_mapping/DataMappingScreen.cpp
@@ -692,8 +750,6 @@ set_source_files_properties(
     src/screens/node_editor/toolbar/DeployDialog.cpp
     src/screens/node_editor/toolbar/NodeEditorToolbar.cpp
     src/screens/notes/NotesScreen.cpp
-    src/screens/payment/PaymentProcessingScreen.cpp
-    src/screens/payment/PaymentSuccessScreen.cpp
     src/screens/portfolio/PortfolioAgentPanel.cpp
     src/screens/portfolio/PortfolioAiPanel.cpp
     src/screens/portfolio/PortfolioBlotter.cpp
@@ -776,9 +832,25 @@ set_source_files_properties(
     src/screens/polymarket/PolymarketLeaderboard.cpp
     src/screens/polymarket/PolymarketActivityFeed.cpp
     src/screens/polymarket/PolymarketStatusBar.cpp
+    src/trading/websocket/ZerodhaWebSocket.cpp
+    src/trading/websocket/AngelOneWebSocket.cpp
     # Trading broker files — each defines static now_ts() in same namespace
-    src/trading/brokers/IndianBrokers.cpp
-    src/trading/brokers/GlobalBrokers.cpp
+    src/trading/brokers/zerodha/ZerodhaBroker.cpp
+    src/trading/brokers/angelone/AngelOneBroker.cpp
+    src/trading/brokers/fyers/FyersBroker.cpp
+    src/trading/brokers/upstox/UpstoxBroker.cpp
+    src/trading/brokers/dhan/DhanBroker.cpp
+    src/trading/brokers/kotak/KotakBroker.cpp
+    src/trading/brokers/groww/GrowwBroker.cpp
+    src/trading/brokers/aliceblue/AliceBlueBroker.cpp
+    src/trading/brokers/fivepaisa/FivePaisaBroker.cpp
+    src/trading/brokers/iifl/IIFLBroker.cpp
+    src/trading/brokers/motilal/MotilalBroker.cpp
+    src/trading/brokers/shoonya/ShoonyaBroker.cpp
+    src/trading/brokers/alpaca/AlpacaBroker.cpp
+    src/trading/brokers/ibkr/IBKRBroker.cpp
+    src/trading/brokers/tradier/TradierBroker.cpp
+    src/trading/brokers/saxo/SaxoBankBroker.cpp
     # MCP core + tool files — each defines static constexpr TAG in same namespace
     src/mcp/McpProvider.cpp
     src/mcp/McpService.cpp
@@ -790,6 +862,7 @@ set_source_files_properties(
     src/mcp/tools/WatchlistTools.cpp
     src/mcp/tools/NewsTools.cpp
     src/mcp/tools/NotesTools.cpp
+    src/mcp/tools/FileManagerTools.cpp
     src/mcp/tools/AiChatTools.cpp
     src/mcp/tools/PortfolioTools.cpp
     src/mcp/tools/CryptoTradingTools.cpp
@@ -819,38 +892,78 @@ add_executable(FinceptTerminal WIN32
     ${UI_SOURCES}
     ${SCREEN_SOURCES}
     ${APP_SOURCES}
+    src/services/updater/UpdateService.cpp
     resources/app.rc
 )
 
 target_include_directories(FinceptTerminal PRIVATE src)
 
-# Precompiled header — Qt headers parsed once, reused across all TUs
+# Precompiled header — Qt + std headers parsed once, reused across all TUs
+# QDebug excluded — it adds overhead in Release and is only needed for debugging
 target_precompile_headers(FinceptTerminal PRIVATE
-    <QWidget>
+    # Core Qt
     <QObject>
+    <QWidget>
     <QString>
     <QStringList>
+    <QByteArray>
     <QList>
+    <QVector>
     <QMap>
     <QHash>
-    <QVector>
+    <QSet>
     <QVariant>
+    <QPointer>
+    # JSON
     <QJsonObject>
     <QJsonArray>
     <QJsonDocument>
-    <QLabel>
-    <QPushButton>
+    <QJsonValue>
+    # Layouts & common widgets
     <QVBoxLayout>
     <QHBoxLayout>
     <QGridLayout>
+    <QLabel>
+    <QPushButton>
+    <QLineEdit>
+    <QComboBox>
     <QScrollArea>
     <QFrame>
+    <QSplitter>
+    <QTabWidget>
+    <QStackedWidget>
+    <QTableWidget>
+    <QTreeWidget>
+    <QGroupBox>
+    <QCheckBox>
+    <QSpinBox>
+    <QTextEdit>
+    <QMessageBox>
+    <QDialog>
+    # Timers & dates
     <QTimer>
     <QDateTime>
-    <QDebug>
-    <QtConcurrent/QtConcurrent>
+    # Network
+    <QNetworkAccessManager>
+    <QNetworkRequest>
     <QNetworkReply>
-    <QPointer>
+    # Process & concurrency
+    <QProcess>
+    <QtConcurrent/QtConcurrent>
+    <QThread>
+    <QMutex>
+    # Storage & settings
+    <QSettings>
+    <QStandardPaths>
+    <QDir>
+    <QFile>
+    # std
+    <functional>
+    <memory>
+    <vector>
+    <string>
+    <optional>
+    <variant>
 )
 
 target_link_libraries(FinceptTerminal PRIVATE
@@ -862,6 +975,7 @@ target_link_libraries(FinceptTerminal PRIVATE
     Qt6::Concurrent
     QXlsx::QXlsx
     qgeoview
+    QSimpleUpdater
 )
 
 if(HAS_WEBSOCKETS)
@@ -902,5 +1016,26 @@ if(WIN32)
                 COMMENT "Running windeployqt..."
             )
         endif()
+    endif()
+
+    # ── Fix: Qt Maintenance Tool partial-update leaves plugins mismatched ──────
+    # The local Qt 6.8.3 install has Qt6Core/Qt6Sql updated (March 2026) but
+    # sqldrivers/qsqlite.dll still at the original March 2025 build, causing a
+    # crash on startup (0xc0000005 in qsqlite.dll).
+    # Qt_temp contains a clean, fully-consistent Qt 6.8.3 install from aqtinstall.
+    # Always overwrite the sql plugins with the consistent set after every build.
+    set(QT_CONSISTENT_PLUGINS "C:/Qt_temp/6.8.3/msvc2022_64/plugins")
+    if(EXISTS "${QT_CONSISTENT_PLUGINS}/sqldrivers/qsqlite.dll")
+        add_custom_command(TARGET FinceptTerminal POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:FinceptTerminal>/sqldrivers"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${QT_CONSISTENT_PLUGINS}/sqldrivers/qsqlite.dll"
+                "$<TARGET_FILE_DIR:FinceptTerminal>/sqldrivers/qsqlite.dll"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${QT_CONSISTENT_PLUGINS}/sqldrivers/qsqlmimer.dll"
+                "$<TARGET_FILE_DIR:FinceptTerminal>/sqldrivers/qsqlmimer.dll"
+            COMMENT "Overwriting sqldrivers with consistent Qt_temp plugins..."
+        )
     endif()
 endif()

@@ -159,6 +159,38 @@ def main(args=None):
         api_keys = payload.get("api_keys", {})
         params = payload.get("params", {})
         config = payload.get("config", {})
+        active_llm = payload.get("active_llm", {})
+
+        # Inject active_llm into config["model"] so every code path picks it up.
+        # This carries the full resolved config (provider, model_id, api_key,
+        # base_url) from LlmService — handles custom endpoints like
+        # minimax-over-anthropic-compatible URLs correctly.
+        if active_llm:
+            config.setdefault("model", {})
+
+            # Normalise base_url: strip provider-specific path suffixes that are
+            # not part of the API root. E.g. "https://api.minimax.io/anthropic"
+            # should be "https://api.minimax.io/v1" for OpenAI-compat endpoints.
+            raw_base_url = active_llm.get("base_url", "")
+            if raw_base_url:
+                # Strip trailing /anthropic, /openai etc. — these are SDK routing
+                # prefixes, not valid REST base paths for OpenAI-compatible APIs.
+                import re as _re
+                raw_base_url = _re.sub(r'/(anthropic|openai|google|gemini|mistral|cohere)/?$', '', raw_base_url)
+                # Ensure /v1 suffix for known hosts that require it
+                _V1_HOSTS = ["api.minimax.io", "api.deepseek.com", "api.groq.com",
+                             "api.together.xyz", "api.fireworks.ai", "api.openrouter.ai"]
+                from urllib.parse import urlparse as _up
+                _host = _up(raw_base_url).netloc
+                if any(_host == h for h in _V1_HOSTS) and not raw_base_url.rstrip("/").endswith("/v1"):
+                    raw_base_url = raw_base_url.rstrip("/") + "/v1"
+
+            config["model"]["provider"]    = active_llm.get("provider",    config["model"].get("provider", "openai"))
+            config["model"]["model_id"]    = active_llm.get("model_id",    config["model"].get("model_id", ""))
+            config["model"]["api_key"]     = active_llm.get("api_key",     "")
+            config["model"]["base_url"]    = raw_base_url
+            config["model"]["temperature"] = active_llm.get("temperature", config["model"].get("temperature", 0.7))
+            config["model"]["max_tokens"]  = active_llm.get("max_tokens",  config["model"].get("max_tokens", 4096))
 
         # Enable streaming in params if flag is set
         if streaming:

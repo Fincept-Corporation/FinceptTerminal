@@ -484,9 +484,11 @@ class CoreAgent:
         return ModelsRegistry.create_model(
             provider=provider,
             model_id=model_config.get("model_id"),
+            api_key=model_config.get("api_key") or None,
             api_keys=self.api_keys,
             temperature=model_config.get("temperature"),
             max_tokens=model_config.get("max_tokens"),
+            base_url=model_config.get("base_url") or None,
         )
 
     def _create_agent(self, config: Dict[str, Any]) -> Any:
@@ -509,21 +511,37 @@ class CoreAgent:
         # 1. Create Model
         # =================================================================
         model_config = config.get("model", {})
-        provider = model_config.get("provider") or self._resolve_model_config()["provider"]
+        provider = model_config.get("provider", "")
+        if not provider:
+            fallback = self._resolve_model_config()
+            provider = fallback.get("provider", "")
+        if not provider:
+            raise ValueError(
+                "No LLM provider resolved from config or api_keys. "
+                "Configure an LLM provider in Settings > LLM Config."
+            )
 
-        # Pass any extra model-level kwargs (e.g. max_tool_rounds for FinceptChat)
+        # Pass any extra model-level kwargs (e.g. max_tool_rounds for FinceptChat).
+        # Explicitly exclude all known non-constructor fields so metadata never
+        # leaks into provider constructors as unexpected kwargs.
+        _MODEL_RESERVED_KEYS = {
+            "provider", "model_id", "temperature", "max_tokens",
+            "api_key", "base_url", "system_prompt",
+            "profile_id", "profile_name",  # internal metadata from C++ LlmService
+        }
         extra_model_kwargs = {
             k: v for k, v in model_config.items()
-            if k not in {"provider", "model_id", "temperature", "max_tokens"}
-            and v is not None
+            if k not in _MODEL_RESERVED_KEYS and v is not None
         }
 
         model = ModelsRegistry.create_model(
             provider=provider,
             model_id=model_config.get("model_id"),
+            api_key=model_config.get("api_key") or None,   # direct key from LlmService takes priority
             api_keys=self.api_keys,
             temperature=model_config.get("temperature"),
             max_tokens=model_config.get("max_tokens"),
+            base_url=model_config.get("base_url") or None,
             **extra_model_kwargs,
         )
 

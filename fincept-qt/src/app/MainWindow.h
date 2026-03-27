@@ -5,6 +5,7 @@
 #include <QMainWindow>
 #include <QShortcut>
 #include <QStackedWidget>
+#include <QTimer>
 
 namespace fincept {
 
@@ -31,6 +32,7 @@ class MainWindow : public QMainWindow {
     QWidget* tab_bar_widget_ = nullptr; // kept to hide/show in focus mode
     QWidget* status_bar_widget_ = nullptr;
     AiChatBubble* chat_bubble_ = nullptr;
+    QTimer* user_refresh_timer_ = nullptr;
 
     void setup_auth_screens();
     void setup_app_screens();
@@ -46,7 +48,6 @@ class MainWindow : public QMainWindow {
     void show_register();
     void show_forgot_password();
     void show_pricing();
-    void show_payment_processing();
     void show_info_contact();
     void show_info_terms();
     void show_info_privacy();

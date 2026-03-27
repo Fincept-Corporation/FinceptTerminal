@@ -308,17 +308,23 @@ void PythonRunner::start_next() {
 // ── Extract JSON ─────────────────────────────────────────────────────────────
 
 QString extract_json(const QString& output) {
-    // Find the last line that starts with '{' or '['
-    // This matches the Rust python_runner's extract_json logic
-    QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+    // Find the first '{' or '[' and return everything from that point.
+    // Scripts print multi-line indented JSON, so we cannot take a single line.
+    int brace   = output.indexOf('{');
+    int bracket = output.indexOf('[');
 
-    for (int i = lines.size() - 1; i >= 0; --i) {
-        QString trimmed = lines[i].trimmed();
-        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-            return trimmed;
-        }
-    }
-    return {};
+    int start = -1;
+    if (brace >= 0 && bracket >= 0)
+        start = qMin(brace, bracket);
+    else if (brace >= 0)
+        start = brace;
+    else if (bracket >= 0)
+        start = bracket;
+
+    if (start < 0)
+        return {};
+
+    return output.mid(start).trimmed();
 }
 
 } // namespace fincept::python

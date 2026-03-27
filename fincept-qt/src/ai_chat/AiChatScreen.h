@@ -31,6 +31,7 @@ class AiChatScreen : public QWidget {
 
   private slots:
     void on_send();
+    void on_attach_file();
     void on_new_session();
     void on_session_selected(int row);
     void on_delete_session();
@@ -67,6 +68,9 @@ class AiChatScreen : public QWidget {
     QWidget*      welcome_panel_      = nullptr;
     QPlainTextEdit* input_box_        = nullptr;
     QPushButton*  send_btn_           = nullptr;
+    QPushButton*  attach_btn_         = nullptr;
+    QLabel*       attach_badge_       = nullptr;   // shows attached file name
+    QString       attached_file_path_;
 
     // ── Typing indicator ─────────────────────────────────────────────────
     QWidget*      typing_indicator_   = nullptr;

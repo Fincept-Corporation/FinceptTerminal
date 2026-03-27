@@ -188,7 +188,27 @@ void RegisterScreen::build_form_page() {
     vl->addWidget(name_row);
 
     add_field(email_, "EMAIL", "user@domain.com", vl);
-    add_field(phone_, "PHONE (WITH COUNTRY CODE)", "+1 234 567 8900", vl);
+
+    // Phone + country code side by side
+    auto* ph_row = new QWidget;
+    ph_row->setStyleSheet("background: transparent;");
+    auto* phl = new QHBoxLayout(ph_row);
+    phl->setContentsMargins(0, 0, 0, 0);
+    phl->setSpacing(8);
+
+    auto* cc_col = new QVBoxLayout;
+    cc_col->setSpacing(2);
+    add_field(country_code_, "CODE", "+1", cc_col);
+    country_code_->setFixedWidth(72);
+    phl->addLayout(cc_col);
+
+    auto* ph_col = new QVBoxLayout;
+    ph_col->setSpacing(2);
+    add_field(phone_, "PHONE", "234 567 8900", ph_col);
+    phl->addLayout(ph_col);
+
+    vl->addWidget(ph_row);
+
     add_field(password_, "PASSWORD", "min 8 characters", vl);
     password_->setEchoMode(QLineEdit::Password);
 
@@ -355,17 +375,28 @@ void RegisterScreen::update_password_strength() {
 void RegisterScreen::on_register() {
     error_label_->hide();
 
-    QString fn = first_name_->text().trimmed();
-    QString ln = last_name_->text().trimmed();
-    QString em = email_->text().trimmed();
-    QString ph = phone_->text().trimmed();
-    QString pw = password_->text();
+    QString fn  = first_name_->text().trimmed();
+    QString ln  = last_name_->text().trimmed();
+    QString em  = email_->text().trimmed();
+    QString ph  = phone_->text().trimmed();
+    QString cc  = country_code_->text().trimmed();
+    QString pw  = password_->text();
     QString cpw = confirm_pw_->text();
 
-    if (fn.isEmpty() || ln.isEmpty() || em.isEmpty() || pw.isEmpty() || cpw.isEmpty()) {
+    if (fn.isEmpty() || ln.isEmpty() || em.isEmpty() || ph.isEmpty() || pw.isEmpty() || cpw.isEmpty()) {
         error_label_->setText("All fields are required");
         error_label_->show();
         return;
+    }
+    if (cc.isEmpty()) {
+        error_label_->setText("Country code is required (e.g. +1, +91)");
+        error_label_->show();
+        return;
+    }
+    // Ensure country code starts with +
+    if (!cc.startsWith('+')) {
+        cc = '+' + cc;
+        country_code_->setText(cc);
     }
     auto ev = auth::validate_email(em);
     if (!ev.valid) {
@@ -393,7 +424,7 @@ void RegisterScreen::on_register() {
 
     register_btn_->setEnabled(false);
     register_btn_->setText("  CREATING...  ");
-    auth::AuthManager::instance().signup(username, em, pw, ph, {}, {});
+    auth::AuthManager::instance().signup(username, em, pw, ph, {}, cc);
 }
 
 void RegisterScreen::on_verify_otp() {
@@ -413,8 +444,11 @@ void RegisterScreen::on_resend_otp() {
     QString fn = first_name_->text().trimmed();
     QString ln = last_name_->text().trimmed();
     QString username = auth::sanitize_input(fn + ln).toLower();
+    QString cc = country_code_->text().trimmed();
+    if (!cc.isEmpty() && !cc.startsWith('+'))
+        cc = '+' + cc;
     auth::AuthManager::instance().signup(username, email_->text().trimmed(), password_->text(),
-                                         phone_->text().trimmed(), {}, {});
+                                         phone_->text().trimmed(), {}, cc);
 }
 
 } // namespace fincept::screens

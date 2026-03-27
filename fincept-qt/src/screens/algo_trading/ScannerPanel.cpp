@@ -312,12 +312,12 @@ void ScannerPanel::build_ui() {
     logic_lbl->setStyleSheet(kLabelStyle());
     logic_row->addWidget(logic_lbl);
 
-    auto* logic_combo = new QComboBox(left_col);
-    logic_combo->addItems({"AND", "OR"});
-    logic_combo->setStyleSheet(kComboStyle());
-    logic_combo->setFixedHeight(26);
-    logic_combo->setFixedWidth(80);
-    logic_row->addWidget(logic_combo);
+    logic_combo_ = new QComboBox(left_col);
+    logic_combo_->addItems({"AND", "OR"});
+    logic_combo_->setStyleSheet(kComboStyle());
+    logic_combo_->setFixedHeight(26);
+    logic_combo_->setFixedWidth(80);
+    logic_row->addWidget(logic_combo_);
     logic_row->addStretch();
     left_vl->addLayout(logic_row);
 
@@ -505,7 +505,7 @@ void ScannerPanel::on_scan() {
                                      .arg(kMonoFont()));
 
     AlgoTradingService::instance().run_scan(conditions, symbols, timeframe_combo_->currentText(),
-                                            lookback_spin_->value());
+                                            lookback_spin_->value(), logic_combo_->currentText());
 
     LOG_INFO("AlgoTrading",
              QString("Scan started: %1 conditions, %2 symbols").arg(conditions.size()).arg(symbols.size()));

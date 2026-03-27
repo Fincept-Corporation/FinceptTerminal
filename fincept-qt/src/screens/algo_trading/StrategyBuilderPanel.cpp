@@ -3,9 +3,16 @@
 
 #include "core/logging/Logger.h"
 #include "services/algo_trading/AlgoTradingService.h"
+#include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
+#include <QFile>
+#include <QFileInfo>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QUuid>
 
@@ -210,10 +217,6 @@ static QJsonArray gather_from_layout(QVBoxLayout* layout) {
         arr.append(cond);
     }
     return arr;
-}
-
-QJsonArray StrategyBuilderPanel::gather_conditions() {
-    return gather_from_layout(entry_conditions_layout_);
 }
 
 // ── Build UI ────────────────────────────────────────────────────────────────
@@ -441,6 +444,38 @@ void StrategyBuilderPanel::build_ui() {
     bt_cap_vl->addWidget(bt_capital_);
     bt_hl->addWidget(bt_cap_col);
 
+    // Start date
+    auto* bt_start_col = new QWidget(bt_row);
+    auto* bt_start_vl = new QVBoxLayout(bt_start_col);
+    bt_start_vl->setContentsMargins(0, 0, 0, 0);
+    bt_start_vl->setSpacing(2);
+    auto* bt_start_lbl = new QLabel("START DATE", bt_start_col);
+    bt_start_lbl->setStyleSheet(kLabelStyle());
+    bt_start_vl->addWidget(bt_start_lbl);
+    bt_start_date_ = new QLineEdit(bt_start_col);
+    bt_start_date_->setPlaceholderText("YYYY-MM-DD");
+    bt_start_date_->setText("2024-01-01");
+    bt_start_date_->setStyleSheet(kInputStyle());
+    bt_start_date_->setFixedHeight(30);
+    bt_start_vl->addWidget(bt_start_date_);
+    bt_hl->addWidget(bt_start_col);
+
+    // End date
+    auto* bt_end_col = new QWidget(bt_row);
+    auto* bt_end_vl = new QVBoxLayout(bt_end_col);
+    bt_end_vl->setContentsMargins(0, 0, 0, 0);
+    bt_end_vl->setSpacing(2);
+    auto* bt_end_lbl = new QLabel("END DATE", bt_end_col);
+    bt_end_lbl->setStyleSheet(kLabelStyle());
+    bt_end_vl->addWidget(bt_end_lbl);
+    bt_end_date_ = new QLineEdit(bt_end_col);
+    bt_end_date_->setPlaceholderText("YYYY-MM-DD");
+    bt_end_date_->setText("2025-01-01");
+    bt_end_date_->setStyleSheet(kInputStyle());
+    bt_end_date_->setFixedHeight(30);
+    bt_end_vl->addWidget(bt_end_date_);
+    bt_hl->addWidget(bt_end_col);
+
     // Backtest button
     auto* bt_btn = new QPushButton("BACKTEST", bt_row);
     bt_btn->setCursor(Qt::PointingHandCursor);
@@ -531,6 +566,45 @@ void StrategyBuilderPanel::on_save() {
 
     AlgoTradingService::instance().save_strategy(strategy);
     LOG_INFO("AlgoTrading", QString("Saving strategy: %1").arg(strategy.name));
+
+    // Serialize strategy to JSON and register with File Manager
+    {
+        QJsonObject json;
+        json["id"]               = strategy.id;
+        json["name"]             = strategy.name;
+        json["description"]      = strategy.description;
+        json["timeframe"]        = strategy.timeframe;
+        json["entry_logic"]      = strategy.entry_logic;
+        json["exit_logic"]       = strategy.exit_logic;
+        json["stop_loss"]        = strategy.stop_loss;
+        json["take_profit"]      = strategy.take_profit;
+        json["trailing_stop"]    = strategy.trailing_stop;
+
+        QJsonArray entry_arr;
+        for (const auto& c : strategy.entry_conditions) entry_arr.append(c);
+        json["entry_conditions"] = entry_arr;
+
+        QJsonArray exit_arr;
+        for (const auto& c : strategy.exit_conditions) exit_arr.append(c);
+        json["exit_conditions"]  = exit_arr;
+
+        QString safe_name = strategy.name;
+        safe_name.replace(QRegularExpression("[^a-zA-Z0-9_\\-]"), "_");
+        QString dest = services::FileManagerService::instance().storage_dir()
+                       + "/" + safe_name + "_" + strategy.id.left(8) + ".json";
+
+        QFile f(dest);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            f.write(QJsonDocument(json).toJson(QJsonDocument::Indented));
+            f.close();
+            services::FileManagerService::instance().register_file(
+                safe_name + "_" + strategy.id.left(8) + ".json",
+                strategy.name + ".json",
+                QFileInfo(dest).size(),
+                "application/json",
+                "algo_trading");
+        }
+    }
 }
 
 void StrategyBuilderPanel::on_backtest() {
@@ -550,11 +624,18 @@ void StrategyBuilderPanel::on_backtest() {
                                      .arg(fincept::ui::fonts::SMALL)
                                      .arg(kMonoFont()));
 
-    // Use strategy id if saved, otherwise use name as identifier
+    QString start_date = bt_start_date_->text().trimmed();
+    QString end_date = bt_end_date_->text().trimmed();
+    if (start_date.isEmpty())
+        start_date = "2024-01-01";
+    if (end_date.isEmpty())
+        end_date = "2025-01-01";
+
+    // Use strategy name as identifier (strategy must be saved first for full backtest)
     QString strat_id = name_edit_->text().trimmed();
     double capital = bt_capital_->value();
 
-    AlgoTradingService::instance().run_backtest(strat_id, symbol, "2024-01-01", "2025-01-01", capital);
+    AlgoTradingService::instance().run_backtest(strat_id, symbol, start_date, end_date, capital);
     LOG_INFO("AlgoTrading", QString("Backtest requested: %1 on %2").arg(strat_id, symbol));
 }
 

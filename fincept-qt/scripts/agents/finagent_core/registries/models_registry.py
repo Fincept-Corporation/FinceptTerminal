@@ -36,7 +36,7 @@ class ModelsRegistry:
         # Anthropic
         "anthropic": {
             "class": "agno.models.anthropic.Claude",
-            "models": ["claude-sonnet-4-5-20250514", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
+            "models": ["claude-sonnet-4-5-20250514", "claude-opus-4-5", "claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
             "api_key_env": "ANTHROPIC_API_KEY",
             "default_model": "claude-sonnet-4-5-20250514",
         },
@@ -44,9 +44,9 @@ class ModelsRegistry:
         # Google
         "google": {
             "class": "agno.models.google.Gemini",
-            "models": ["gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"],
+            "models": ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-pro", "gemini-1.5-flash"],
             "api_key_env": "GOOGLE_API_KEY",
-            "default_model": "gemini-2.0-flash-exp",
+            "default_model": "gemini-2.0-flash",
         },
         "vertexai": {
             "class": "agno.models.vertexai.VertexAI",
@@ -206,9 +206,9 @@ class ModelsRegistry:
         # OpenRouter (Multi-provider)
         "openrouter": {
             "class": "agno.models.openrouter.OpenRouter",
-            "models": ["anthropic/claude-3.5-sonnet", "openai/gpt-4o", "google/gemini-pro"],
+            "models": ["anthropic/claude-sonnet-4-5", "openai/gpt-4o", "google/gemini-2.0-flash"],
             "api_key_env": "OPENROUTER_API_KEY",
-            "default_model": "anthropic/claude-3.5-sonnet",
+            "default_model": "anthropic/claude-sonnet-4-5",
         },
 
         # Portkey (Multi-provider)
@@ -372,16 +372,47 @@ class ModelsRegistry:
             # Always pop base_url from kwargs so it never leaks via catch-all
             kwarg_base_url = kwargs.pop("base_url", None)
 
+            # Resolve the effective base_url (kwarg takes priority over api_keys dict)
+            base_url_key = f"{provider.upper()}_BASE_URL"
+            effective_base_url = (
+                kwarg_base_url
+                or (api_keys or {}).get(base_url_key)
+                or config.get("base_url")
+            )
+
+            # If a custom base_url is set for a provider that normally doesn't
+            # accept one (e.g. anthropic with a MiniMax/OpenRouter-compatible
+            # endpoint), redirect to OpenAIChat — the custom endpoint speaks
+            # the OpenAI-compatible protocol, not the native SDK protocol.
+            if effective_base_url and provider_lower in NO_BASE_URL_PROVIDERS:
+                from agno.models.openai import OpenAIChat as _OAI
+                # Use standard role map — Agno's default maps "system"→"developer"
+                # which is only valid for OpenAI o1/o3. Custom endpoints (MiniMax,
+                # OpenRouter, etc.) expect the standard "system" role.
+                _STANDARD_ROLE_MAP = {
+                    "system": "system",
+                    "user": "user",
+                    "assistant": "assistant",
+                    "tool": "tool",
+                    "model": "assistant",
+                }
+                oai_kwargs = {"id": final_model_id, "base_url": effective_base_url,
+                              "role_map": _STANDARD_ROLE_MAP}
+                if final_api_key:
+                    oai_kwargs["api_key"] = final_api_key
+                if "temperature" in kwargs:
+                    oai_kwargs["temperature"] = kwargs.pop("temperature")
+                if "max_tokens" in kwargs:
+                    oai_kwargs["max_tokens"] = kwargs.pop("max_tokens")
+                logger.info(
+                    f"Provider '{provider}' has custom base_url → redirecting to "
+                    f"OpenAIChat(base_url={effective_base_url}, id={final_model_id})"
+                )
+                return _OAI(**{k: v for k, v in oai_kwargs.items() if v is not None})
+
             if provider_lower not in NO_BASE_URL_PROVIDERS:
-                # Add base_url - check api_keys for custom endpoint, then config default
-                base_url_key = f"{provider.upper()}_BASE_URL"
-                custom_base_url = (api_keys or {}).get(base_url_key)
-                if custom_base_url:
-                    model_kwargs["base_url"] = custom_base_url
-                elif kwarg_base_url:
-                    model_kwargs["base_url"] = kwarg_base_url
-                elif config.get("base_url"):
-                    model_kwargs["base_url"] = config["base_url"]
+                if effective_base_url:
+                    model_kwargs["base_url"] = effective_base_url
 
             # Add optional parameters with provider-specific name mapping
             # Google Gemini uses max_output_tokens instead of max_tokens
@@ -403,11 +434,6 @@ class ModelsRegistry:
             for k, v in kwargs.items():
                 if v is not None:
                     model_kwargs[k] = v
-
-            # DEBUG: log exactly what we're passing to the constructor
-            import sys
-            print(f"[DEBUG models_registry] provider={provider_lower}, class={class_name}, model_kwargs keys={list(model_kwargs.keys())}", file=sys.stderr, flush=True)
-            print(f"[DEBUG models_registry] model_kwargs={model_kwargs}", file=sys.stderr, flush=True)
 
             model_instance = model_class(**model_kwargs)
             logger.debug(f"Created model: {provider}/{final_model_id}")

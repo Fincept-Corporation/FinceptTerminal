@@ -15,6 +15,7 @@
 #include "screens/dashboard/widgets/SectorHeatmapWidget.h"
 #include "screens/dashboard/widgets/StockQuoteWidget.h"
 #include "screens/dashboard/widgets/TopMoversWidget.h"
+#include "screens/dashboard/widgets/RecentFilesWidget.h"
 #include "screens/dashboard/widgets/VideoPlayerWidget.h"
 #include "screens/dashboard/widgets/WatchlistWidget.h"
 
@@ -85,6 +86,10 @@ WidgetRegistry::WidgetRegistry() {
     register_widget({"video_player", "Live TV / Streams", "Tools",
                      "Financial TV — Bloomberg, CNBC, Reuters and custom streams", 4, 5, 3, 4,
                      []() { return widgets::create_video_player_widget(); }});
+
+    register_widget({"recent_files", "Recent Files", "Tools",
+                     "Recently saved files — exports, reports, notebooks and more", 4, 4, 2, 3,
+                     []() { return new widgets::RecentFilesWidget; }});
 }
 
 void WidgetRegistry::register_widget(WidgetMeta meta) {

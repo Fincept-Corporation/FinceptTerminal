@@ -23,7 +23,6 @@ class AlgoTradingService : public QObject {
     void stop_deployment(const QString& deployment_id);
     void stop_all_deployments();
     void list_deployments();
-    void get_trades(const QString& deployment_id);
 
     // ── Backtesting ─────────────────────────────────────────────────────────
     void run_backtest(const QString& strategy_id, const QString& symbol, const QString& start_date,
@@ -31,10 +30,7 @@ class AlgoTradingService : public QObject {
 
     // ── Scanner ─────────────────────────────────────────────────────────────
     void run_scan(const QJsonArray& conditions, const QStringList& symbols, const QString& timeframe,
-                  int lookback_days);
-
-    // ── Condition evaluation ────────────────────────────────────────────────
-    void evaluate_conditions(const QJsonArray& conditions, const QString& symbol, const QString& timeframe);
+                  int lookback_days, const QString& logic = "AND");
 
   signals:
     void strategy_saved(QString id);
@@ -43,10 +39,8 @@ class AlgoTradingService : public QObject {
     void deployment_started(QString deployment_id);
     void deployments_loaded(QVector<fincept::services::algo::AlgoDeployment> deployments);
     void deployment_stopped(QString deployment_id);
-    void trades_loaded(QString deployment_id, QVector<fincept::services::algo::AlgoTrade> trades);
     void backtest_result(QJsonObject data);
     void scan_result(QJsonObject data);
-    void condition_result(QJsonObject data);
     void error_occurred(QString context, QString message);
 
   private:

@@ -459,7 +459,27 @@ def main():
 
     elif command == 'train':
         params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-        result = agent.train_agent(**params)
+        # Normalize param names from C++ UI
+        if 'ticker' in params:
+            params['tickers'] = params.pop('ticker')
+        if 'initial_capital' in params:
+            params['initial_cash'] = params.pop('initial_capital')
+        # episodes → total_timesteps (episodes * ~365 steps per episode)
+        if 'episodes' in params:
+            episodes = params.pop('episodes')
+            params.setdefault('total_timesteps', episodes * 365)
+        # Auto-create env from same params before training
+        env_params = {k: params.pop(k) for k in ['tickers', 'initial_cash', 'start_date', 'end_date']
+                      if k in params}
+        env_params.setdefault('tickers', 'AAPL')
+        env_params.setdefault('initial_cash', 100000)
+        env_params.setdefault('start_date', '2022-01-01')
+        env_params.setdefault('end_date', '2024-01-01')
+        env_result = agent.create_trading_env(**env_params)
+        if not env_result.get('success'):
+            result = env_result
+        else:
+            result = agent.train_agent(**params)
 
     elif command == 'evaluate':
         n_episodes = int(sys.argv[2]) if len(sys.argv) > 2 else 10

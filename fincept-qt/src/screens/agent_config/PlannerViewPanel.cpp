@@ -503,4 +503,12 @@ void PlannerViewPanel::copy_result() {
     }
 }
 
+void PlannerViewPanel::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (!data_loaded_) {
+        data_loaded_ = true;
+        services::AgentService::instance().discover_agents();
+    }
+}
+
 } // namespace fincept::screens

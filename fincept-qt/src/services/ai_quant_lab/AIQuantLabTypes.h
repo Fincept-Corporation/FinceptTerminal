@@ -33,7 +33,7 @@ inline QVector<QuantModule> all_quant_modules() {
 
         // AI/ML
         {"deep_agent", "Deep Agent", "DAGENT", "AI_ML", QColor("#9D4EDD"),
-         "ai_quant_lab/rdagent/core/rd_agent_service.py", "Autonomous AI research agent (RD-Agent)"},
+         "agents/rdagents/cli.py", "Autonomous AI research agent (RD-Agent)"},
         {"rl_trading", "RL Trading", "RL", "AI_ML", QColor("#FF3B8E"), "ai_quant_lab/qlib_rl.py",
          "Reinforcement learning: PPO, DQN, A2C, SAC, TD3"},
         {"online_learning", "Online Learning", "ONLINE", "AI_ML", QColor("#00BCD4"),
@@ -50,6 +50,20 @@ inline QVector<QuantModule> all_quant_modules() {
          "ai_quant_lab/qlib_rolling_retraining.py", "Automated model retraining with rolling windows"},
         {"advanced_models", "Advanced Models", "ADV", "ADVANCED", QColor("#03A9F4"),
          "ai_quant_lab/qlib_advanced_models.py", "LSTM, GRU, Transformer, Localformer, HIST, GAT"},
+
+        // QLIB SUITE
+        {"feature_engineering", "Feature Engineering", "FEAT", "ADVANCED", QColor("#26C6DA"),
+         "ai_quant_lab/qlib_feature_engineering.py", "Technical indicators, factor selection, expression engine"},
+        {"portfolio_opt", "Portfolio Optimization", "PORTOPT", "ADVANCED", QColor("#66BB6A"),
+         "ai_quant_lab/qlib_portfolio_opt.py", "Black-Litterman, HRP, Min-Variance, Max-Sharpe, EF"},
+        {"factor_evaluation", "Factor Evaluation", "EVAL", "ADVANCED", QColor("#FFA726"),
+         "ai_quant_lab/qlib_evaluation.py", "IC metrics, factor returns, risk metrics, factor scoring"},
+        {"strategy_builder", "Strategy Builder", "STRAT", "ADVANCED", QColor("#AB47BC"),
+         "ai_quant_lab/qlib_strategy.py", "TopK-Dropout, Enhanced Indexing, Risk Parity, Mean-Variance"},
+        {"data_processors", "Data Processors", "PROC", "ADVANCED", QColor("#EF5350"),
+         "ai_quant_lab/qlib_data_processors.py", "10 normalizers: zscore, winsorize, cs_rank, tanh, fillna"},
+        {"quant_reporting", "Quant Reporting", "REPORT", "ANALYTICS", QColor("#78909C"),
+         "ai_quant_lab/qlib_reporting.py", "IC reports, cumulative returns, risk analysis, model performance"},
 
         // ANALYTICS
         {"cfa_quant", "CFA Quant", "CFA", "ANALYTICS", QColor("#FF6B35"), "Analytics/quant_analytics_cli.py",

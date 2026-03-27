@@ -1,10 +1,16 @@
 #include "screens/notes/NotesScreen.h"
 
 #include "core/logging/Logger.h"
+#include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
+#include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
+#include <QRegularExpression>
+#include <QTextStream>
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QScrollArea>
@@ -323,6 +329,13 @@ QWidget* NotesScreen::build_editor_panel() {
         }
     });
     edit_toolbar->addWidget(cancel_btn);
+
+    auto* export_btn = new QPushButton("EXPORT");
+    export_btn->setStyleSheet(kSecondaryBtn);
+    export_btn->setToolTip("Export this note as a Markdown file to the File Manager");
+    connect(export_btn, &QPushButton::clicked, this, &NotesScreen::on_export_note);
+    edit_toolbar->addWidget(export_btn);
+
     edit_toolbar->addStretch();
     edl->addLayout(edit_toolbar);
 
@@ -576,6 +589,45 @@ void NotesScreen::on_toggle_archive() {
 
 void NotesScreen::on_search_changed(const QString& /*text*/) {
     update_notes_list();
+}
+
+void NotesScreen::on_export_note() {
+    QString title   = edit_title_->text().trimmed();
+    QString content = edit_content_->toPlainText();
+    if (title.isEmpty()) {
+        edit_title_->setFocus();
+        return;
+    }
+
+    // Write to a temp .md file inside storage dir, then import via FileManagerService
+    auto& svc = services::FileManagerService::instance();
+    QString safe_title = title;
+    safe_title.replace(QRegularExpression("[^a-zA-Z0-9_\\-]"), "_");
+    QString stored_name = safe_title + ".md";
+    QString dest = svc.storage_dir() + "/" + stored_name;
+
+    // If file exists, make it unique
+    if (QFile::exists(dest)) {
+        QString ts = QString::number(QDateTime::currentMSecsSinceEpoch());
+        stored_name = safe_title + "_" + ts + ".md";
+        dest = svc.storage_dir() + "/" + stored_name;
+    }
+
+    QFile f(dest);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        LOG_ERROR("Notes", "Failed to export note: " + dest);
+        return;
+    }
+
+    QTextStream out(&f);
+    out << "# " << title << "\n\n" << content << "\n";
+    f.close();
+
+    QFileInfo info(dest);
+    svc.register_file(stored_name, title + ".md", info.size(),
+                      "text/markdown", "notes");
+
+    LOG_INFO("Notes", "Exported note to File Manager: " + stored_name);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

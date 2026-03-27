@@ -2,17 +2,16 @@
 #pragma once
 #include "services/agents/AgentTypes.h"
 #include "storage/repositories/AgentConfigRepository.h"
+#include "storage/repositories/LlmProfileRepository.h"
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QSpinBox>
 #include <QTextEdit>
 #include <QWidget>
 
@@ -28,6 +27,9 @@ class CreateAgentPanel : public QWidget {
   protected:
     void showEvent(QShowEvent* event) override;
 
+  public slots:
+    void apply_tools_selection(const QStringList& tools);
+
   private:
     void build_ui();
     QWidget* build_saved_list_panel();
@@ -42,6 +44,8 @@ class CreateAgentPanel : public QWidget {
     void test_agent();
     void export_json();
     void import_json();
+    void load_profile_combo();
+    void refresh_llm_pill();
     QJsonObject build_config_json() const;
 
     // Left panel
@@ -53,11 +57,9 @@ class CreateAgentPanel : public QWidget {
     QPlainTextEdit* desc_edit_ = nullptr;
     QComboBox* category_combo_ = nullptr;
 
-    // ── Model fields ─────────────────────────────────────────────────────────
-    QComboBox* provider_combo_ = nullptr;
-    QLineEdit* model_id_edit_ = nullptr;
-    QDoubleSpinBox* temperature_spin_ = nullptr;
-    QSpinBox* max_tokens_spin_ = nullptr;
+    // ── LLM profile picker ───────────────────────────────────────────────────
+    QComboBox* llm_profile_combo_ = nullptr;
+    QLabel*    llm_resolved_lbl_  = nullptr;
 
     // ── Instructions ─────────────────────────────────────────────────────────
     QPlainTextEdit* instructions_edit_ = nullptr;

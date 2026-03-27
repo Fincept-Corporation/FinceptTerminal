@@ -10,6 +10,7 @@
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -24,6 +25,7 @@ static const QString kAccent = "#d97706"; // Amber
 
 SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
+    prefill_completed_steps();
 
     connect(&python::PythonSetupManager::instance(), &python::PythonSetupManager::progress_changed, this,
             &SetupScreen::on_progress);
@@ -58,22 +60,12 @@ void SetupScreen::build_ui() {
         QString("color:%1; font-family:%2; font-size:24px; font-weight:700;").arg(kAccent, fonts::DATA_FAMILY));
     cl->addWidget(title);
 
-    auto* subtitle = new QLabel("First-Time Environment Setup", center);
-    subtitle->setAlignment(Qt::AlignCenter);
-    subtitle->setStyleSheet(
+    subtitle_lbl_ = new QLabel("First-Time Environment Setup", center);
+    subtitle_lbl_->setAlignment(Qt::AlignCenter);
+    subtitle_lbl_->setStyleSheet(
         QString("color:%1; font-family:%2; font-size:13px;").arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
-    cl->addWidget(subtitle);
+    cl->addWidget(subtitle_lbl_);
 
-    auto* desc = new QLabel("Fincept Terminal requires Python and several analytics libraries.\n"
-                            "This one-time setup uses UV (ultra-fast package manager) to download\n"
-                            "and configure everything automatically. Internet connection required.\n"
-                            "Estimated time: 3-5 minutes.",
-                            center);
-    desc->setAlignment(Qt::AlignCenter);
-    desc->setWordWrap(true);
-    desc->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; margin:10px 0;")
-                            .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
-    cl->addWidget(desc);
 
     cl->addSpacing(10);
 
@@ -99,12 +91,19 @@ void SetupScreen::build_ui() {
     connect(begin_btn_, &QPushButton::clicked, this, &SetupScreen::on_begin_setup);
     cl->addWidget(begin_btn_);
 
-    // Status label
-    status_label_ = new QLabel("Click BEGIN SETUP to start", center);
+    // Status label — text set by prefill_completed_steps()
+    status_label_ = new QLabel({}, center);
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:8px;")
                                      .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
     cl->addWidget(status_label_);
+
+    summary_lbl_ = new QLabel({}, center);
+    summary_lbl_->setAlignment(Qt::AlignCenter);
+    summary_lbl_->setWordWrap(true);
+    summary_lbl_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px;")
+                                    .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+    cl->addWidget(summary_lbl_);
 
     // Install dir info
     auto* dir_label = new QLabel("Install directory: " + python::PythonSetupManager::instance().install_dir(), center);
@@ -227,6 +226,48 @@ void SetupScreen::on_setup_done(bool success, const QString& error) {
             QString("color:%1; font-family:%2; font-size:10px; margin-top:8px;").arg(colors::RED, fonts::DATA_FAMILY));
 
         LOG_ERROR("SetupScreen", "Setup failed: " + error);
+    }
+}
+
+void SetupScreen::mark_step_done(const QString& key) {
+    if (!steps_.contains(key)) return;
+    auto& ui = steps_[key];
+    ui.bar->setValue(100);
+    ui.status->setText("DONE");
+    ui.status->setStyleSheet(
+        QString("color:%1; font-family:%2; font-size:9px;").arg(colors::GREEN, fonts::DATA_FAMILY));
+}
+
+void SetupScreen::prefill_completed_steps() {
+    const auto status = python::PythonSetupManager::instance().check_status();
+
+    // Pre-fill completed steps as green DONE
+    if (status.uv_installed)        mark_step_done("uv");
+    if (status.python_installed)    mark_step_done("python");
+    if (status.venv_numpy1_ready && status.venv_numpy2_ready) mark_step_done("venv");
+    if (status.venv_numpy1_ready)   mark_step_done("packages-numpy1");
+    if (status.venv_numpy2_ready)   mark_step_done("packages-numpy2");
+
+    const bool any_done = status.uv_installed || status.python_installed
+                          || status.venv_numpy1_ready || status.venv_numpy2_ready;
+    const bool all_done = status.uv_installed && status.python_installed
+                          && status.venv_numpy1_ready && status.venv_numpy2_ready;
+
+    summary_lbl_->setText({});
+
+    if (all_done) {
+        subtitle_lbl_->setText("Environment Ready");
+        begin_btn_->setEnabled(false);
+        begin_btn_->setText("ALREADY COMPLETE");
+        status_label_->setText("All components are installed.");
+    } else if (any_done) {
+        subtitle_lbl_->setText("Completing Environment Setup");
+        begin_btn_->setText("COMPLETE SETUP");
+        status_label_->setText("Only missing components will be downloaded. Internet connection required.");
+    } else {
+        subtitle_lbl_->setText("First-Time Environment Setup");
+        begin_btn_->setText("BEGIN SETUP");
+        status_label_->setText("Estimated time: 3–5 minutes. Internet connection required.");
     }
 }
 

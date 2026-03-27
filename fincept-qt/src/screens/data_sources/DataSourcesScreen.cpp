@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "screens/data_sources/ConnectorRegistry.h"
+#include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
 #include <QCheckBox>
@@ -2491,7 +2492,10 @@ void DataSourcesScreen::on_export_connections() {
         return;
     }
     file.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
+    file.close();
     LOG_INFO(TAG, QString("Exported %1 connections to %2").arg(arr.size()).arg(path));
+
+    services::FileManagerService::instance().import_file(path, "data_sources");
 }
 
 // ── on_import_connections ─────────────────────────────────────────────────────
@@ -2543,6 +2547,9 @@ void DataSourcesScreen::on_import_connections() {
 
     refresh_connections();
     LOG_INFO(TAG, QString("Import complete: %1 imported, %2 skipped").arg(imported).arg(skipped));
+
+    // Register the imported file so it appears in the File Manager
+    services::FileManagerService::instance().import_file(path, "data_sources");
 }
 
 // ── on_poll_timer — background status poll for enabled connections ─────────────

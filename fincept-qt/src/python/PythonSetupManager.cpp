@@ -39,8 +39,16 @@ PythonSetupManager::PythonSetupManager(QObject* parent) : QObject(parent) {}
 
 QString PythonSetupManager::install_dir() const {
 #ifdef _WIN32
-    QString base = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-    return base + "/com.fincept.terminal";
+    // AppLocalDataLocation = %LOCALAPPDATA% — matches Tauri's com.fincept.terminal path.
+    // GenericDataLocation can return either Local or Roaming depending on Qt version/build,
+    // so pin to AppLocalDataLocation for consistency across all Windows builds.
+    QString base = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    // AppLocalDataLocation = .../Local/Fincept/FinceptTerminal — strip to .../Local/
+    // by going up two levels, then append the app-specific folder name.
+    QDir d(base);
+    d.cdUp(); // .../Local/Fincept
+    d.cdUp(); // .../Local
+    return d.absolutePath() + "/com.fincept.terminal";
 #elif defined(__APPLE__)
     return QDir::homePath() + "/Library/Application Support/com.fincept.terminal";
 #else
@@ -487,6 +495,14 @@ bool PythonSetupManager::install_python_via_uv() {
 
 bool PythonSetupManager::create_venv(const QString& venv_name) {
     QString venv_path = install_dir() + "/" + venv_name;
+
+    // If the directory exists but is not a valid venv (no pyvenv.cfg), remove it.
+    // This happens when a previous setup run created the dir but failed before
+    // UV could populate it — UV refuses to overwrite a non-venv directory.
+    if (QFileInfo::exists(venv_path) && !QFileInfo::exists(venv_path + "/pyvenv.cfg")) {
+        LOG_WARN("PythonSetup", QString("Removing stale non-venv dir: %1").arg(venv_path));
+        QDir(venv_path).removeRecursively();
+    }
 
     QStringList env = {
         "UV_PYTHON_INSTALL_DIR=" + install_dir() + "/python",

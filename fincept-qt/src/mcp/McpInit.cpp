@@ -6,6 +6,7 @@
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
 #include "mcp/tools/AiChatTools.h"
+#include "mcp/tools/FileManagerTools.h"
 #include "mcp/tools/CryptoTradingTools.h"
 #include "mcp/tools/AltInvestmentsTools.h"
 #include "mcp/tools/DataSourcesTools.h"
@@ -71,6 +72,9 @@ void initialize_all_tools() {
 
     // profile tab
     provider.register_tools(tools::get_profile_tools());
+
+    // file manager tab
+    provider.register_tools(tools::get_file_manager_tools());
 
     // settings, python, system
     provider.register_tools(tools::get_settings_tools());

@@ -1,11 +1,11 @@
 // Global Brokers — Alpaca (US), IBKR (US), Tradier (US), SaxoBank (EU)
 
 #include "core/logging/Logger.h"
-#include "trading/brokers/AlpacaBroker.h"
 #include "trading/brokers/BrokerHttp.h"
-#include "trading/brokers/IBKRBroker.h"
-#include "trading/brokers/SaxoBankBroker.h"
-#include "trading/brokers/TradierBroker.h"
+#include "trading/brokers/alpaca/AlpacaBroker.h"
+#include "trading/brokers/ibkr/IBKRBroker.h"
+#include "trading/brokers/saxo/SaxoBankBroker.h"
+#include "trading/brokers/tradier/TradierBroker.h"
 
 #include <QDateTime>
 #include <QJsonArray>

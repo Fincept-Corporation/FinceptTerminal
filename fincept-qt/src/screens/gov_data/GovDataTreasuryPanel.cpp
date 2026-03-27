@@ -19,22 +19,73 @@ namespace fincept::screens {
 
 using namespace fincept::ui;
 
-static const QString kColor = "#3B82F6";
+static const QString kColor  = "#3B82F6";
 static const QString kScript = "government_us_data.py";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Constructor
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Stylesheet ───────────────────────────────────────────────────────────────
+
+static const char* kStyle =
+    "#govTreasuryToolbar { background:#111111; border-bottom:1px solid #1a1a1a; }"
+
+    "#govTreasTab { background:transparent; color:#808080; border:1px solid #1a1a1a;"
+    "  font-size:10px; font-weight:700; padding:4px 12px; letter-spacing:0.5px; }"
+    "#govTreasTab:hover { color:#e5e5e5; background:#161616; }"
+    "#govTreasTab:checked { background:rgba(59,130,246,0.12); color:#3B82F6;"
+    "  border:1px solid #3B82F6; }"
+
+    "#govFetchBtn { background:#3B82F6; color:#080808; border:none;"
+    "  font-size:10px; font-weight:700; padding:4px 14px; }"
+    "#govFetchBtn:hover { background:#60a5fa; }"
+    "#govFetchBtn:disabled { background:#1a1a1a; color:#404040; }"
+    "#govCsvBtn { background:transparent; color:#808080; border:1px solid #1a1a1a;"
+    "  font-size:10px; font-weight:700; padding:4px 10px; }"
+    "#govCsvBtn:hover { color:#e5e5e5; background:#161616; }"
+
+    "QDateEdit { background:#080808; color:#e5e5e5; border:1px solid #1a1a1a;"
+    "  font-size:11px; padding:2px 6px; }"
+    "QDateEdit::drop-down { border:none; }"
+    "QComboBox { background:#080808; color:#e5e5e5; border:1px solid #1a1a1a;"
+    "  font-size:11px; padding:2px 6px; }"
+    "QComboBox::drop-down { border:none; }"
+    "QComboBox QAbstractItemView { background:#111111; color:#e5e5e5;"
+    "  border:1px solid #1a1a1a; }"
+
+    "QTableWidget { background:#080808; color:#e5e5e5; border:none;"
+    "  gridline-color:#1a1a1a; font-size:11px; alternate-background-color:#0a0a0a; }"
+    "QTableWidget::item { padding:5px 8px; border-bottom:1px solid #1a1a1a; }"
+    "QTableWidget::item:selected { background:rgba(59,130,246,0.1); color:#3B82F6; }"
+    "QHeaderView::section { background:#111111; color:#808080; border:none;"
+    "  border-bottom:2px solid #1a1a1a; border-right:1px solid #1a1a1a;"
+    "  padding:5px 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+
+    // Summary cards
+    "#govSummaryPage { background:#080808; }"
+    "#govSumCard { background:#0a0a0a; border:1px solid #1a1a1a; }"
+    "#govSumCard:hover { border-color:#333333; }"
+    "#govSumLabel { color:#808080; font-size:8px; font-weight:700;"
+    "  letter-spacing:1px; background:transparent; }"
+    "#govSumValue { color:#3B82F6; font-size:16px; font-weight:700; background:transparent; }"
+    "#govSumSub   { color:#808080; font-size:9px; background:transparent; }"
+
+    // Status page
+    "#govStatusPage { background:#080808; }"
+    "#govStatusMsg { color:#808080; font-size:13px; background:transparent; }"
+    "#govStatusErr { color:#dc2626; font-size:12px; background:transparent; }"
+
+    "QScrollBar:vertical { background:#080808; width:5px; }"
+    "QScrollBar::handle:vertical { background:#1a1a1a; min-height:20px; }"
+    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }";
+
+// ── Constructor ──────────────────────────────────────────────────────────────
 
 GovDataTreasuryPanel::GovDataTreasuryPanel(QWidget* parent) : QWidget(parent) {
+    setStyleSheet(kStyle);
     build_ui();
-    connect(&services::GovDataService::instance(), &services::GovDataService::result_ready, this,
-            &GovDataTreasuryPanel::on_result);
+    connect(&services::GovDataService::instance(), &services::GovDataService::result_ready,
+            this, &GovDataTreasuryPanel::on_result);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Build UI
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Build UI ─────────────────────────────────────────────────────────────────
 
 void GovDataTreasuryPanel::build_ui() {
     auto* root = new QVBoxLayout(this);
@@ -43,34 +94,23 @@ void GovDataTreasuryPanel::build_ui() {
 
     root->addWidget(build_toolbar());
 
-    content_stack_ = new QStackedWidget(this);
+    content_stack_ = new QStackedWidget;
 
-    // Table style shared
-    const QString table_style =
-        QString("QTableWidget { background:%1; color:%2; border:none; gridline-color:%3;"
-                "  font-family:%4; font-size:12px; }"
-                "QTableWidget::item { padding:6px 8px; border-bottom:1px solid %3; }"
-                "QTableWidget::item:selected { background:%5; }"
-                "QTableWidget::item:alternate { background:%6; }"
-                "QHeaderView::section { background:%7; color:%8; border:none; border-bottom:1px solid %3;"
-                "  font-family:%4; font-size:10px; font-weight:700; padding:6px 8px; }")
-            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM, fonts::DATA_FAMILY, colors::BG_HOVER,
-                 colors::ROW_ALT, colors::BG_RAISED, kColor);
-
-    // Page 0: Prices table
-    prices_table_ = new QTableWidget(this);
+    // ── Page 0: Prices table ──
+    prices_table_ = new QTableWidget;
     prices_table_->setColumnCount(7);
-    prices_table_->setHorizontalHeaderLabels({"CUSIP", "TYPE", "RATE", "MATURITY", "BID", "OFFER", "EOD PRICE"});
+    prices_table_->setHorizontalHeaderLabels(
+        {"CUSIP", "TYPE", "RATE %", "MATURITY", "BID", "OFFER", "EOD PRICE"});
     prices_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     prices_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     prices_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     prices_table_->verticalHeader()->setVisible(false);
     prices_table_->setAlternatingRowColors(true);
-    prices_table_->setStyleSheet(table_style);
+    prices_table_->setShowGrid(true);
     content_stack_->addWidget(prices_table_);
 
-    // Page 1: Auctions table
-    auctions_table_ = new QTableWidget(this);
+    // ── Page 1: Auctions table ──
+    auctions_table_ = new QTableWidget;
     auctions_table_->setColumnCount(8);
     auctions_table_->setHorizontalHeaderLabels(
         {"CUSIP", "TYPE", "TERM", "AUCTION DATE", "HIGH RATE", "HIGH PRICE", "BID/COVER", "OFFERING"});
@@ -79,196 +119,184 @@ void GovDataTreasuryPanel::build_ui() {
     auctions_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     auctions_table_->verticalHeader()->setVisible(false);
     auctions_table_->setAlternatingRowColors(true);
-    auctions_table_->setStyleSheet(table_style);
+    auctions_table_->setShowGrid(true);
     content_stack_->addWidget(auctions_table_);
 
-    // Page 2: Summary
-    summary_widget_ = new QWidget(this);
-    auto* sum_layout = new QVBoxLayout(summary_widget_);
-    sum_layout->setContentsMargins(16, 16, 16, 16);
-    sum_layout->setSpacing(12);
+    // ── Page 2: Summary ──
+    auto* summary_page = new QWidget;
+    summary_page->setObjectName("govSummaryPage");
+    auto* svl = new QVBoxLayout(summary_page);
+    svl->setContentsMargins(16, 16, 16, 16);
+    svl->setSpacing(12);
 
-    const QString card_style =
-        QString("QLabel { color:%1; font-family:%2; font-size:12px; }").arg(colors::TEXT_PRIMARY, fonts::DATA_FAMILY);
+    // Stat cards row
+    auto* cards_row = new QWidget;
+    auto* crhl = new QHBoxLayout(cards_row);
+    crhl->setContentsMargins(0, 0, 0, 0);
+    crhl->setSpacing(8);
 
-    const QString header_style = QString("QLabel { color:%1; font-family:%2; font-size:10px; font-weight:700; }")
-                                     .arg(kColor, fonts::DATA_FAMILY);
-
-    const QString value_style = QString("QLabel { color:%1; font-family:%2; font-size:16px; font-weight:700; }")
-                                    .arg(colors::TEXT_PRIMARY, fonts::DATA_FAMILY);
-
-    // Stats grid
-    auto* stats_grid = new QGridLayout();
-    stats_grid->setSpacing(16);
-
-    auto add_stat = [&](int row, int col, const QString& label, QLabel*& value_lbl) {
-        auto* lbl = new QLabel(label, summary_widget_);
-        lbl->setStyleSheet(header_style);
-        value_lbl = new QLabel("-", summary_widget_);
-        value_lbl->setStyleSheet(value_style);
-        stats_grid->addWidget(lbl, row * 2, col);
-        stats_grid->addWidget(value_lbl, row * 2 + 1, col);
+    auto make_card = [&](const QString& label, QLabel*& val_out, const QString& sub = "") {
+        auto* card = new QWidget;
+        card->setObjectName("govSumCard");
+        card->setMinimumWidth(110);
+        auto* cvl = new QVBoxLayout(card);
+        cvl->setContentsMargins(12, 8, 12, 8);
+        cvl->setSpacing(2);
+        auto* lbl = new QLabel(label);
+        lbl->setObjectName("govSumLabel");
+        val_out = new QLabel("—");
+        val_out->setObjectName("govSumValue");
+        cvl->addWidget(lbl);
+        cvl->addWidget(val_out);
+        if (!sub.isEmpty()) {
+            auto* sl = new QLabel(sub);
+            sl->setObjectName("govSumSub");
+            cvl->addWidget(sl);
+        }
+        crhl->addWidget(card);
     };
 
-    add_stat(0, 0, "TOTAL SECURITIES", total_securities_label_);
-    add_stat(0, 1, "MIN RATE", min_rate_label_);
-    add_stat(0, 2, "MAX RATE", max_rate_label_);
-    add_stat(0, 3, "AVG RATE", avg_rate_label_);
-    add_stat(1, 0, "MIN PRICE", min_price_label_);
-    add_stat(1, 1, "MAX PRICE", max_price_label_);
-    add_stat(1, 2, "AVG PRICE", avg_price_label_);
+    make_card("TOTAL SECURITIES",  total_securities_label_);
+    make_card("MIN RATE",          min_rate_label_,   "yield %");
+    make_card("MAX RATE",          max_rate_label_,   "yield %");
+    make_card("AVG RATE",          avg_rate_label_,   "yield %");
+    make_card("MIN PRICE",         min_price_label_,  "per $100");
+    make_card("MAX PRICE",         max_price_label_,  "per $100");
+    make_card("AVG PRICE",         avg_price_label_,  "per $100");
+    crhl->addStretch(1);
+    svl->addWidget(cards_row);
 
-    sum_layout->addLayout(stats_grid);
+    // Breakdown table
+    auto* breakdown_hdr = new QLabel("SECURITY TYPE BREAKDOWN");
+    breakdown_hdr->setStyleSheet(
+        "color:#3B82F6; font-size:9px; font-weight:700; letter-spacing:1px;"
+        " background:transparent; margin-top:8px;");
+    svl->addWidget(breakdown_hdr);
 
-    // Type breakdown table
-    auto* type_label = new QLabel("SECURITY TYPE BREAKDOWN", summary_widget_);
-    type_label->setStyleSheet(header_style);
-    sum_layout->addWidget(type_label);
-
-    type_breakdown_table_ = new QTableWidget(summary_widget_);
+    type_breakdown_table_ = new QTableWidget;
     type_breakdown_table_->setColumnCount(2);
     type_breakdown_table_->setHorizontalHeaderLabels({"TYPE", "COUNT"});
     type_breakdown_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     type_breakdown_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     type_breakdown_table_->verticalHeader()->setVisible(false);
-    type_breakdown_table_->setStyleSheet(table_style);
-    sum_layout->addWidget(type_breakdown_table_);
+    type_breakdown_table_->setAlternatingRowColors(true);
+    type_breakdown_table_->setMaximumHeight(200);
+    svl->addWidget(type_breakdown_table_);
+    svl->addStretch(1);
+    content_stack_->addWidget(summary_page);
 
-    summary_widget_->setStyleSheet(QString("QWidget { background:%1; }").arg(colors::BG_BASE));
-    content_stack_->addWidget(summary_widget_);
-
-    // Page 3: Status label
-    status_label_ = new QLabel(this);
+    // ── Page 3: Status ──
+    auto* status_page = new QWidget;
+    status_page->setObjectName("govStatusPage");
+    auto* spvl = new QVBoxLayout(status_page);
+    spvl->setAlignment(Qt::AlignCenter);
+    status_label_ = new QLabel;
+    status_label_->setObjectName("govStatusMsg");
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setWordWrap(true);
-    status_label_->setStyleSheet(QString("QLabel { color:%1; font-family:%2; font-size:12px; }")
-                                     .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY));
-    content_stack_->addWidget(status_label_);
+    spvl->addWidget(status_label_);
+    content_stack_->addWidget(status_page);
 
     root->addWidget(content_stack_, 1);
 }
 
 QWidget* GovDataTreasuryPanel::build_toolbar() {
-    auto* bar = new QWidget(this);
-    bar->setFixedHeight(38);
-    bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BG_RAISED, colors::BORDER_MED));
+    auto* bar = new QWidget;
+    bar->setObjectName("govTreasuryToolbar");
+    bar->setFixedHeight(40);
 
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(8, 0, 8, 0);
-    hl->setSpacing(4);
+    hl->setContentsMargins(10, 0, 10, 0);
+    hl->setSpacing(5);
 
-    const QString btn_style = QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                                      " font-family:%3; font-size:10px; font-weight:700; padding:4px 10px; }"
-                                      "QPushButton:hover { background:%4; }"
-                                      "QPushButton:checked { background:%5; color:%6; border-color:%5; }")
-                                  .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM, fonts::DATA_FAMILY, colors::BG_HOVER,
-                                       kColor, colors::TEXT_PRIMARY);
-
-    prices_btn_ = new QPushButton("PRICES", bar);
+    // Endpoint tabs
+    prices_btn_ = new QPushButton("PRICES");
+    prices_btn_->setObjectName("govTreasTab");
     prices_btn_->setCheckable(true);
     prices_btn_->setChecked(true);
-    prices_btn_->setStyleSheet(btn_style);
+    prices_btn_->setCursor(Qt::PointingHandCursor);
     connect(prices_btn_, &QPushButton::clicked, this, [this]() { on_endpoint_changed(Prices); });
 
-    auctions_btn_ = new QPushButton("AUCTIONS", bar);
+    auctions_btn_ = new QPushButton("AUCTIONS");
+    auctions_btn_->setObjectName("govTreasTab");
     auctions_btn_->setCheckable(true);
-    auctions_btn_->setStyleSheet(btn_style);
+    auctions_btn_->setCursor(Qt::PointingHandCursor);
     connect(auctions_btn_, &QPushButton::clicked, this, [this]() { on_endpoint_changed(Auctions); });
 
-    summary_btn_ = new QPushButton("SUMMARY", bar);
+    summary_btn_ = new QPushButton("SUMMARY");
+    summary_btn_->setObjectName("govTreasTab");
     summary_btn_->setCheckable(true);
-    summary_btn_->setStyleSheet(btn_style);
+    summary_btn_->setCursor(Qt::PointingHandCursor);
     connect(summary_btn_, &QPushButton::clicked, this, [this]() { on_endpoint_changed(Summary); });
 
     hl->addWidget(prices_btn_);
     hl->addWidget(auctions_btn_);
     hl->addWidget(summary_btn_);
-    hl->addSpacing(12);
+    hl->addSpacing(14);
 
-    // Date range
-    const QString date_style = QString("QDateEdit { background:%1; color:%2; border:1px solid %3;"
-                                       " font-family:%4; font-size:11px; padding:2px 6px; }"
-                                       "QDateEdit::drop-down { border:none; }")
-                                   .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM, fonts::DATA_FAMILY);
+    // Date labels
+    auto lbl_style = "color:#525252; font-size:9px; font-weight:700; background:transparent;";
+    auto* from_lbl = new QLabel("FROM");
+    from_lbl->setStyleSheet(lbl_style);
+    hl->addWidget(from_lbl);
 
-    auto* from_label = new QLabel("FROM:", bar);
-    from_label->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px; font-weight:700;")
-                                  .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
-
-    start_date_ = new QDateEdit(QDate::currentDate().addMonths(-1), bar);
+    start_date_ = new QDateEdit(QDate::currentDate().addMonths(-1));
     start_date_->setCalendarPopup(true);
     start_date_->setDisplayFormat("yyyy-MM-dd");
-    start_date_->setStyleSheet(date_style);
+    start_date_->setFixedHeight(26);
+    hl->addWidget(start_date_);
 
-    auto* to_label = new QLabel("TO:", bar);
-    to_label->setStyleSheet(from_label->styleSheet());
+    auto* to_lbl = new QLabel("TO");
+    to_lbl->setStyleSheet(lbl_style);
+    hl->addWidget(to_lbl);
 
-    // Default to previous business day
     QDate end = QDate::currentDate().addDays(-1);
-    if (end.dayOfWeek() == 6)
-        end = end.addDays(-1);
-    if (end.dayOfWeek() == 7)
-        end = end.addDays(-2);
-    end_date_ = new QDateEdit(end, bar);
+    if (end.dayOfWeek() == 6) end = end.addDays(-1);
+    if (end.dayOfWeek() == 7) end = end.addDays(-2);
+    end_date_ = new QDateEdit(end);
     end_date_->setCalendarPopup(true);
     end_date_->setDisplayFormat("yyyy-MM-dd");
-    end_date_->setStyleSheet(date_style);
-
-    hl->addWidget(from_label);
-    hl->addWidget(start_date_);
-    hl->addWidget(to_label);
+    end_date_->setFixedHeight(26);
     hl->addWidget(end_date_);
-    hl->addSpacing(8);
 
-    // Security type filter
-    auto* type_label = new QLabel("TYPE:", bar);
-    type_label->setStyleSheet(from_label->styleSheet());
+    hl->addSpacing(10);
 
-    security_type_ = new QComboBox(bar);
-    security_type_->addItem("All", "all");
+    // Security type
+    auto* type_lbl = new QLabel("TYPE");
+    type_lbl->setStyleSheet(lbl_style);
+    hl->addWidget(type_lbl);
+
+    security_type_ = new QComboBox;
+    security_type_->addItem("All",   "all");
     security_type_->addItem("Bills", "bill");
     security_type_->addItem("Notes", "note");
     security_type_->addItem("Bonds", "bond");
-    security_type_->addItem("TIPS", "tips");
-    security_type_->addItem("FRN", "frn");
-    security_type_->setStyleSheet(
-        QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                " font-family:%4; font-size:11px; padding:2px 6px; }"
-                "QComboBox::drop-down { border:none; }"
-                "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3; }")
-            .arg(colors::BG_BASE, colors::TEXT_PRIMARY, colors::BORDER_DIM, fonts::DATA_FAMILY));
-
-    hl->addWidget(type_label);
+    security_type_->addItem("TIPS",  "tips");
+    security_type_->addItem("FRN",   "frn");
+    security_type_->setFixedHeight(26);
     hl->addWidget(security_type_);
 
-    hl->addStretch();
+    hl->addStretch(1);
 
-    // Fetch
-    fetch_btn_ = new QPushButton("FETCH", bar);
-    fetch_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
-                                      " font-family:%3; font-size:10px; font-weight:700; padding:4px 12px; }"
-                                      "QPushButton:hover { opacity:0.8; }")
-                                  .arg(kColor, colors::TEXT_PRIMARY, fonts::DATA_FAMILY));
+    fetch_btn_ = new QPushButton("FETCH");
+    fetch_btn_->setObjectName("govFetchBtn");
+    fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, &GovDataTreasuryPanel::on_fetch);
     hl->addWidget(fetch_btn_);
 
-    // Export
-    export_btn_ = new QPushButton("CSV", bar);
-    export_btn_->setStyleSheet(btn_style);
+    export_btn_ = new QPushButton("CSV");
+    export_btn_->setObjectName("govCsvBtn");
+    export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataTreasuryPanel::on_export_csv);
     hl->addWidget(export_btn_);
 
     return bar;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Actions
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Actions ──────────────────────────────────────────────────────────────────
 
 void GovDataTreasuryPanel::load_initial_data() {
-    // Show empty state, user clicks FETCH
-    show_loading("Select an endpoint and click FETCH to load US Treasury data");
+    show_loading("Select PRICES, AUCTIONS or SUMMARY then click FETCH");
 }
 
 void GovDataTreasuryPanel::on_endpoint_changed(int index) {
@@ -279,27 +307,24 @@ void GovDataTreasuryPanel::on_endpoint_changed(int index) {
 }
 
 void GovDataTreasuryPanel::on_fetch() {
-    QString date_str = end_date_->date().toString("yyyy-MM-dd");
+    QString date_str  = end_date_->date().toString("yyyy-MM-dd");
     QString start_str = start_date_->date().toString("yyyy-MM-dd");
-    QString sec_type = security_type_->currentData().toString();
+    QString sec_type  = security_type_->currentData().toString();
 
     QStringList args;
-    QString command;
+    QString     command;
 
     switch (active_endpoint_) {
         case Prices:
             command = "treasury_prices";
             args << date_str;
-            if (sec_type != "all") {
-                args << ""; // cusip placeholder
-                args << sec_type;
-            }
+            if (sec_type != "all") { args << ""; args << sec_type; }
             break;
         case Auctions:
             command = "treasury_auctions";
-            args << start_str << date_str;
-            args << (sec_type != "all" ? sec_type : "");
-            args << "50" << "1"; // page_size, page_num
+            args << start_str << date_str
+                 << (sec_type != "all" ? sec_type : "")
+                 << "50" << "1";
             break;
         case Summary:
             command = "summary";
@@ -307,18 +332,15 @@ void GovDataTreasuryPanel::on_fetch() {
             break;
     }
 
-    show_loading("Loading US Treasury data...");
-    services::GovDataService::instance().execute(kScript, command, args, "gov_treasury_" + command);
+    show_loading("Loading US Treasury data…");
+    services::GovDataService::instance().execute(
+        kScript, command, args, "gov_treasury_" + command);
 }
 
-void GovDataTreasuryPanel::on_result(const QString& request_id, const services::GovDataResult& result) {
-    if (!request_id.startsWith("gov_treasury_"))
-        return;
-
-    if (!result.success) {
-        show_error(result.error);
-        return;
-    }
+void GovDataTreasuryPanel::on_result(const QString& request_id,
+                                     const services::GovDataResult& result) {
+    if (!request_id.startsWith("gov_treasury_")) return;
+    if (!result.success) { show_error(result.error); return; }
 
     if (request_id.contains("treasury_prices")) {
         populate_prices(result.data);
@@ -332,14 +354,17 @@ void GovDataTreasuryPanel::on_result(const QString& request_id, const services::
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Populate
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Populate ─────────────────────────────────────────────────────────────────
 
 void GovDataTreasuryPanel::populate_prices(const QJsonObject& data) {
     const QJsonArray records = data["data"].toArray();
     prices_table_->setRowCount(0);
     prices_table_->setRowCount(records.size());
+
+    auto fmt = [](const QJsonValue& v) -> QString {
+        if (v.isNull() || v.isUndefined()) return "—";
+        return QString::number(v.toDouble(), 'f', 3);
+    };
 
     for (int i = 0; i < records.size(); ++i) {
         const auto r = records[i].toObject();
@@ -349,19 +374,15 @@ void GovDataTreasuryPanel::populate_prices(const QJsonObject& data) {
         type_item->setForeground(QColor(kColor));
         prices_table_->setItem(i, 1, type_item);
 
-        auto fmt_num = [](const QJsonValue& v) -> QString {
-            if (v.isNull() || v.isUndefined())
-                return "-";
-            return QString::number(v.toDouble(), 'f', 3);
-        };
+        prices_table_->setItem(i, 2, new QTableWidgetItem(fmt(r["rate"])));
+        prices_table_->setItem(i, 3, new QTableWidgetItem(r["maturity_date"].toString("—")));
 
-        prices_table_->setItem(i, 2, new QTableWidgetItem(fmt_num(r["rate"])));
-        prices_table_->setItem(i, 3, new QTableWidgetItem(r["maturity_date"].toString("-")));
-        prices_table_->setItem(i, 4, new QTableWidgetItem(fmt_num(r["bid"])));
-        prices_table_->setItem(i, 5, new QTableWidgetItem(fmt_num(r["offer"])));
-        prices_table_->setItem(i, 6, new QTableWidgetItem(fmt_num(r["eod_price"])));
+        for (int c : {4, 5, 6}) {
+            auto* it = new QTableWidgetItem(fmt(r[c == 4 ? "bid" : c == 5 ? "offer" : "eod_price"]));
+            it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            prices_table_->setItem(i, c, it);
+        }
     }
-
     LOG_INFO("GovTreasury", QString("Loaded %1 price records").arg(records.size()));
 }
 
@@ -369,6 +390,11 @@ void GovDataTreasuryPanel::populate_auctions(const QJsonObject& data) {
     const QJsonArray records = data["data"].toArray();
     auctions_table_->setRowCount(0);
     auctions_table_->setRowCount(records.size());
+
+    auto fmt = [](const QJsonValue& v) -> QString {
+        if (v.isNull() || v.isUndefined()) return "—";
+        return QString::number(v.toDouble(), 'f', 3);
+    };
 
     for (int i = 0; i < records.size(); ++i) {
         const auto r = records[i].toObject();
@@ -379,24 +405,21 @@ void GovDataTreasuryPanel::populate_auctions(const QJsonObject& data) {
         auctions_table_->setItem(i, 1, type_item);
 
         auctions_table_->setItem(i, 2, new QTableWidgetItem(r["securityTerm"].toString()));
-        auctions_table_->setItem(i, 3, new QTableWidgetItem(r["auctionDate"].toString("-")));
+        auctions_table_->setItem(i, 3, new QTableWidgetItem(r["auctionDate"].toString("—")));
 
-        auto fmt_num = [](const QJsonValue& v) -> QString {
-            if (v.isNull() || v.isUndefined())
-                return "-";
-            return QString::number(v.toDouble(), 'f', 3);
-        };
+        for (int c : {4, 5, 6}) {
+            auto key = c == 4 ? "highDiscountRate" : c == 5 ? "highPrice" : "bidToCoverRatio";
+            auto* it = new QTableWidgetItem(fmt(r[key]));
+            it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            auctions_table_->setItem(i, c, it);
+        }
 
-        auctions_table_->setItem(i, 4, new QTableWidgetItem(fmt_num(r["highDiscountRate"])));
-        auctions_table_->setItem(i, 5, new QTableWidgetItem(fmt_num(r["highPrice"])));
-        auctions_table_->setItem(i, 6, new QTableWidgetItem(fmt_num(r["bidToCoverRatio"])));
-
-        // Format offering amount
         double offering = r["offeringAmount"].toDouble(0);
-        QString offering_str = offering > 0 ? QString("$%L1").arg(static_cast<qlonglong>(offering)) : "-";
-        auctions_table_->setItem(i, 7, new QTableWidgetItem(offering_str));
+        QString os = offering > 0
+            ? "$" + QString::number(static_cast<qlonglong>(offering / 1e9), 'f', 1) + "B"
+            : "—";
+        auctions_table_->setItem(i, 7, new QTableWidgetItem(os));
     }
-
     LOG_INFO("GovTreasury", QString("Loaded %1 auction records").arg(records.size()));
 }
 
@@ -413,7 +436,6 @@ void GovDataTreasuryPanel::populate_summary(const QJsonObject& data) {
     max_price_label_->setText(QString::number(price["max_price"].toDouble(), 'f', 2));
     avg_price_label_->setText(QString::number(price["avg_price"].toDouble(), 'f', 2));
 
-    // Type breakdown
     auto types = data["security_types"].toObject();
     type_breakdown_table_->setRowCount(0);
     type_breakdown_table_->setRowCount(types.size());
@@ -422,27 +444,24 @@ void GovDataTreasuryPanel::populate_summary(const QJsonObject& data) {
         auto* name_item = new QTableWidgetItem(it.key());
         name_item->setForeground(QColor(kColor));
         type_breakdown_table_->setItem(row, 0, name_item);
-        type_breakdown_table_->setItem(row, 1, new QTableWidgetItem(QString::number(it.value().toInt())));
+        type_breakdown_table_->setItem(row, 1, new QTableWidgetItem(
+            QString::number(it.value().toInt())));
     }
-
     LOG_INFO("GovTreasury", "Summary loaded");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 void GovDataTreasuryPanel::show_loading(const QString& message) {
-    status_label_->setText(message);
     status_label_->setStyleSheet(
-        QString("QLabel { color:%1; font-family:%2; font-size:13px; }").arg(kColor, fonts::DATA_FAMILY));
+        QString("color:%1; font-size:13px; background:transparent;").arg(kColor));
+    status_label_->setText(message);
     content_stack_->setCurrentIndex(3);
 }
 
 void GovDataTreasuryPanel::show_error(const QString& message) {
+    status_label_->setStyleSheet("color:#dc2626; font-size:12px; background:transparent;");
     status_label_->setText("Error: " + message);
-    status_label_->setStyleSheet(
-        QString("QLabel { color:%1; font-family:%2; font-size:12px; }").arg(colors::RED, fonts::DATA_FAMILY));
     content_stack_->setCurrentIndex(3);
 }
 
@@ -452,20 +471,18 @@ void GovDataTreasuryPanel::on_export_csv() {
         table = prices_table_;
     else if (active_endpoint_ == Auctions)
         table = auctions_table_;
-    else if (active_endpoint_ == Summary)
+    else
         table = type_breakdown_table_;
-    if (!table || table->rowCount() == 0)
-        return;
+    if (!table || table->rowCount() == 0) return;
 
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", "treasury_data.csv", "CSV Files (*.csv)");
-    if (path.isEmpty())
-        return;
+    QString path = QFileDialog::getSaveFileName(
+        this, "Export CSV", "treasury_data.csv", "CSV Files (*.csv)");
+    if (path.isEmpty()) return;
 
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-        return;
-
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return;
     QTextStream out(&file);
+
     QStringList headers;
     for (int c = 0; c < table->columnCount(); ++c) {
         auto* h = table->horizontalHeaderItem(c);

@@ -1,5 +1,6 @@
 #include "screens/report_builder/ReportBuilderScreen.h"
 
+#include "services/file_manager/FileManagerService.h"
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
 
@@ -1683,6 +1684,9 @@ void ReportBuilderScreen::on_save() {
     f.write(serialize_to_json().toUtf8());
     f.close();
     update_recent(path);
+
+    // Register with File Manager so it appears in the Files tab
+    services::FileManagerService::instance().import_file(path, "report_builder");
 }
 
 void ReportBuilderScreen::on_auto_save() {
@@ -1801,6 +1805,9 @@ void ReportBuilderScreen::on_export_pdf() {
 
     QMessageBox::information(this, "Export PDF",
                              "Report exported successfully to:\n" + path);
+
+    // Register exported PDF with File Manager
+    services::FileManagerService::instance().import_file(path, "report_builder");
 }
 
 void ReportBuilderScreen::on_preview() {

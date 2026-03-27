@@ -14,6 +14,7 @@
 #include "screens/portfolio/PortfolioSectorPanel.h"
 #include "screens/portfolio/PortfolioStatsRibbon.h"
 #include "screens/portfolio/PortfolioStatusBar.h"
+#include "services/file_manager/FileManagerService.h"
 #include "services/portfolio/PortfolioService.h"
 #include "ui/theme/Theme.h"
 
@@ -131,15 +132,19 @@ void PortfolioScreen::build_ui() {
         if (selected_id_.isEmpty())
             return;
         QString path = QFileDialog::getSaveFileName(this, "Export CSV", "portfolio.csv", "CSV Files (*.csv)");
-        if (!path.isEmpty())
+        if (!path.isEmpty()) {
             services::PortfolioService::instance().export_csv(selected_id_, path);
+            services::FileManagerService::instance().import_file(path, "portfolio");
+        }
     });
     connect(command_bar_, &PortfolioCommandBar::export_json_requested, this, [this]() {
         if (selected_id_.isEmpty())
             return;
         QString path = QFileDialog::getSaveFileName(this, "Export JSON", "portfolio.json", "JSON Files (*.json)");
-        if (!path.isEmpty())
+        if (!path.isEmpty()) {
             services::PortfolioService::instance().export_json(selected_id_, path);
+            services::FileManagerService::instance().import_file(path, "portfolio");
+        }
     });
     connect(command_bar_, &PortfolioCommandBar::import_requested, this, [this]() {
         ImportPortfolioDialog dlg(portfolios_, this);

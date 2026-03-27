@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
 #include <QFileDialog>
@@ -691,8 +692,12 @@ void CodeEditorScreen::on_save_notebook() {
     QFile file(path);
     if (file.open(QIODevice::WriteOnly)) {
         file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+        file.close();
         notebook_path_ = path;
         LOG_INFO("CodeEditor", "Saved notebook: " + path);
+
+        // Register with File Manager so it appears in the Files tab
+        services::FileManagerService::instance().import_file(path, "code_editor");
     }
 
     update_status();

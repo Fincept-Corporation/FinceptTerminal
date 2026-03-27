@@ -152,7 +152,7 @@ void ToolBar::refresh_user_display() {
                                       .arg(s.user_info.credit_balance > 0 ? "#16a34a" : "#dc2626")
                                       .arg(MF));
 
-    QString plan_text = s.user_info.account_type.toUpper();
+    QString plan_text = s.account_type().toUpper();
     if (!plan_text.isEmpty())
         plan_text += " Plan";
     plan_btn_->setText(plan_text.isEmpty() ? "FREE" : plan_text);
@@ -167,6 +167,8 @@ QMenu* ToolBar::build_file_menu() {
     m->addSeparator();
     m->addAction("Import Data", this, [this]() { emit action_triggered("import_data"); });
     m->addAction("Export Data", this, [this]() { emit action_triggered("export_data"); });
+    m->addSeparator();
+    m->addAction("File Manager", this, [this]() { emit navigate_to("file_manager"); });
     m->addSeparator();
     m->addAction("Refresh All", this, [this]() { emit action_triggered("refresh"); });
     return m;

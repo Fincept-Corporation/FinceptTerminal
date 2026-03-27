@@ -484,11 +484,11 @@ void ProfileScreen::refresh_all() {
         return;
     username_header_->setText(s.user_info.username.isEmpty() ? s.user_info.email : s.user_info.username);
     credits_badge_->setText(QString("CR %1").arg(s.user_info.credit_balance, 0, 'f', 2));
-    plan_badge_->setText(s.user_info.account_type.toUpper());
+    plan_badge_->setText(s.account_type().toUpper());
     ov_username_->setText(s.user_info.username.isEmpty() ? "N/A" : s.user_info.username);
     ov_email_->setText(s.user_info.email.isEmpty() ? "N/A" : s.user_info.email);
     ov_user_type_->setText("REGISTERED");
-    ov_account_type_->setText(s.user_info.account_type.toUpper());
+    ov_account_type_->setText(s.account_type().toUpper());
     ov_account_type_->setStyleSheet(
         QString("color:#d97706;font-size:13px;font-weight:700;background:transparent;%1").arg(MF));
     ov_phone_->setText(s.user_info.phone.isEmpty() ? "\xe2\x80\x94" : s.user_info.phone);
@@ -502,7 +502,7 @@ void ProfileScreen::refresh_all() {
                                .arg(s.user_info.mfa_enabled ? "#16a34a" : "#dc2626")
                                .arg(MF));
     ov_credits_big_->setText(QString::number(static_cast<int>(s.user_info.credit_balance)));
-    ov_plan_->setText(s.user_info.account_type.toUpper());
+    ov_plan_->setText(s.account_type().toUpper());
     ov_plan_->setStyleSheet(QString("color:#d97706;font-size:13px;font-weight:700;background:transparent;%1").arg(MF));
     sec_verified_->setText(s.user_info.is_verified ? "YES" : "NO");
     sec_verified_->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;background:transparent;%2")
@@ -512,7 +512,7 @@ void ProfileScreen::refresh_all() {
     sec_mfa_->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;background:transparent;%2")
                                 .arg(s.user_info.mfa_enabled ? "#16a34a" : "#808080")
                                 .arg(MF));
-    bill_plan_->setText(s.user_info.account_type.toUpper());
+    bill_plan_->setText(s.account_type().toUpper());
     bill_credits_->setText(QString::number(s.user_info.credit_balance, 'f', 2));
     bill_support_->setText("COMMUNITY");
 }
@@ -521,7 +521,7 @@ void ProfileScreen::fetch_usage_data() {
     // Populate stat boxes with session data as fallback
     const auto& s = auth::AuthManager::instance().session();
     usg_credits_->setText(QString::number(s.user_info.credit_balance, 'f', 0));
-    usg_plan_->setText(s.user_info.account_type.toUpper());
+    usg_plan_->setText(s.account_type().toUpper());
     usg_rate_->setText("—");
 
     auth::UserApi::instance().get_user_usage(30, [this](auth::ApiResponse r) {

@@ -741,6 +741,11 @@ def main():
         sys.exit(1)
 
     command = sys.argv[1]
+
+    # Aliases used by the C++ GovDataCongressPanel
+    if command == "bills":
+        command = "congress_bills"
+
     wrapper = CongressGovWrapper()
 
     try:
@@ -768,10 +773,19 @@ def main():
 
         elif command == "bill_info":
             if len(sys.argv) < 3:
-                print(json.dumps({"success": False, "error": "Usage: python congress_gov_data.py bill_info <bill_url>"}))
+                print(json.dumps({"success": False, "error": "Usage: python congress_gov_data.py bill_info <bill_url_or_congress> [type] [number]"}))
                 sys.exit(1)
 
-            bill_url = sys.argv[2]
+            # C++ sends: bill_info <congress> <bill_type> <bill_number>
+            # Script expects: bill_info <bill_url>
+            # Build the API URL from the 3-arg form if the first arg is a number
+            if sys.argv[2].isdigit() and len(sys.argv) >= 5:
+                congress_num = sys.argv[2]
+                bill_type = sys.argv[3].lower()
+                bill_number = sys.argv[4]
+                bill_url = f"https://api.congress.gov/v3/bill/{congress_num}/{bill_type}/{bill_number}"
+            else:
+                bill_url = sys.argv[2]
             result = wrapper.get_bill_info(bill_url)
             print(json.dumps(result, indent=2))
 

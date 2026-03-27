@@ -17,8 +17,8 @@ class StrategyListPanel;
 class ScannerPanel;
 class DeploymentDashboard;
 
-/// Algo Trading screen — 5-tab trading system builder.
-/// Tabs: Builder, My Strategies, Library, Scanner, Dashboard
+/// Algo Trading screen — 4-tab trading system builder.
+/// Tabs: Builder, My Strategies, Scanner, Dashboard
 class AlgoTradingScreen : public QWidget {
     Q_OBJECT
   public:

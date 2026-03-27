@@ -21,6 +21,9 @@ class AgentChatPanel : public QWidget {
   public:
     explicit AgentChatPanel(QWidget* parent = nullptr);
 
+  protected:
+    void showEvent(QShowEvent* event) override;
+
   private:
     void build_ui();
     void setup_connections();
@@ -52,7 +55,8 @@ class AgentChatPanel : public QWidget {
 
     // State
     bool auto_routing_ = false;
-    bool executing_ = false;
+    bool executing_    = false;
+    bool data_loaded_  = false;
     QString last_query_; // saved for routed execution
 };
 

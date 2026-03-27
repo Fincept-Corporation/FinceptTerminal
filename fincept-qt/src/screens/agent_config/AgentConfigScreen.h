@@ -1,5 +1,9 @@
 // src/screens/agent_config/AgentConfigScreen.h
 #pragma once
+#include "screens/agent_config/AgentsViewPanel.h"
+#include "screens/agent_config/CreateAgentPanel.h"
+#include "screens/agent_config/TeamsViewPanel.h"
+#include "screens/agent_config/ToolsViewPanel.h"
 #include "services/agents/AgentTypes.h"
 
 #include <QLabel>
@@ -33,6 +37,10 @@ class AgentConfigScreen : public QWidget {
     QVector<QPushButton*> nav_buttons_;
     QLabel* status_label_ = nullptr;
     QLabel* agent_count_label_ = nullptr;
+    AgentsViewPanel*  agents_panel_ = nullptr;
+    TeamsViewPanel*   teams_panel_  = nullptr;
+    CreateAgentPanel* create_panel_ = nullptr;
+    ToolsViewPanel*   tools_panel_  = nullptr;
 
     services::AgentViewMode current_view_ = services::AgentViewMode::Agents;
     bool first_show_ = true;

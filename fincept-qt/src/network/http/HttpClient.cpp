@@ -43,7 +43,16 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback) {
         if (reply->error() != QNetworkReply::NoError) {
             LOG_WARN("HTTP",
                      QString("HTTP %1: %2 — %3").arg(status).arg(reply->url().toString()).arg(reply->errorString()));
-            // Return error so callers can distinguish HTTP failures from success
+
+            // For any HTTP error that has a parseable JSON body, pass it through
+            // so callers (AuthApi) can extract server-side error messages
+            // (e.g. "Incorrect password. 2 attempts remaining.", "Account locked.", etc.)
+            if (!data.isEmpty() && parse_err.error == QJsonParseError::NoError && doc.isObject()) {
+                cb(Result<QJsonDocument>::ok(doc));
+                return;
+            }
+
+            // No parseable body — return sentinel so callers map status to fallback message
             cb(Result<QJsonDocument>::err(QString("HTTP_%1").arg(status).toStdString()));
             return;
         }

@@ -1,6 +1,7 @@
 // src/screens/agent_config/TeamsViewPanel.h
 #pragma once
 #include "services/agents/AgentTypes.h"
+#include "storage/repositories/LlmProfileRepository.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -24,6 +25,9 @@ class TeamsViewPanel : public QWidget {
   protected:
     void showEvent(QShowEvent* event) override;
 
+  public slots:
+    void add_agent_from_panel(const services::AgentInfo& agent);
+
   private:
     void build_ui();
     QWidget* build_team_panel();
@@ -36,6 +40,8 @@ class TeamsViewPanel : public QWidget {
     void remove_from_team(int row);
     void run_team();
     void update_leader_combo();
+    void load_team_profile_combo();
+    void refresh_team_llm_label();
 
     // Left: team
     QListWidget* team_list_ = nullptr;
@@ -49,10 +55,10 @@ class TeamsViewPanel : public QWidget {
     QListWidget* available_list_ = nullptr;
     QLabel* available_count_ = nullptr;
 
-    // Right: execution + LLM override
-    QComboBox* team_provider_combo_ = nullptr;
-    QLineEdit* team_model_edit_ = nullptr;
-    QPlainTextEdit* query_input_ = nullptr;
+    // Right: execution + LLM profile
+    QComboBox* team_profile_combo_  = nullptr;  // coordinator profile picker
+    QLabel*    team_resolved_lbl_   = nullptr;  // shows resolved provider/model
+    QPlainTextEdit* query_input_    = nullptr;
     QPushButton* run_btn_ = nullptr;
     QTextEdit* result_display_ = nullptr;
     QTextEdit* log_display_ = nullptr;

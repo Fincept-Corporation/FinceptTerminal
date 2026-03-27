@@ -295,7 +295,35 @@ void AgentChatPanel::setup_connections() {
         }
     });
 
+    connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& status) {
+        if (!executing_) return;
+        status_label_->setText(status);
+    });
+    connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& token) {
+        if (!executing_) return;
+        // Append tokens to the last assistant bubble's label if present,
+        // otherwise fall back to a new bubble finalised on stream_done.
+        status_label_->setText("Streaming...");
+        // Accumulate in last_query_ temporarily — reset on send_message already saved it
+        // We use a dedicated streaming_buffer_ approach: just update status here,
+        // full response rendered on agent_stream_done below.
+        Q_UNUSED(token)
+    });
+    connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
+        if (!executing_) return;
+        executing_ = false;
+        send_btn_->setEnabled(true);
+        send_btn_->setText("SEND");
+        if (r.success) {
+            add_assistant_bubble(r.response);
+            status_label_->setText(QString("Response received (%1ms)").arg(r.execution_time_ms));
+        } else {
+            add_system_bubble("Error: " + r.error);
+            status_label_->setText("Agent execution failed");
+        }
+    });
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
+        if (!executing_) return;
         executing_ = false;
         send_btn_->setEnabled(true);
         send_btn_->setText("SEND");
@@ -362,6 +390,14 @@ void AgentChatPanel::clear_chat() {
     }
     status_label_->clear();
     add_system_bubble("Chat cleared. Start a new conversation.");
+}
+
+void AgentChatPanel::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (!data_loaded_) {
+        data_loaded_ = true;
+        add_system_bubble("Agent Chat ready. Type a message or use the quick actions below.");
+    }
 }
 
 } // namespace fincept::screens

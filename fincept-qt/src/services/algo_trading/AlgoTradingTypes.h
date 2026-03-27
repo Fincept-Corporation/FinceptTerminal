@@ -66,20 +66,6 @@ inline QColor deployment_status_color(const QString& status) {
     return QColor("#787878"); // pending
 }
 
-// ── Trade ───────────────────────────────────────────────────────────────────
-
-struct AlgoTrade {
-    QString id;
-    QString deployment_id;
-    QString symbol;
-    QString side; // BUY, SELL
-    double quantity = 0;
-    double price = 0;
-    double pnl = 0;
-    QString signal_reason;
-    QString timestamp;
-};
-
 // ── Condition ───────────────────────────────────────────────────────────────
 
 struct ConditionDef {

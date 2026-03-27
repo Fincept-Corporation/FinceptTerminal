@@ -26,6 +26,17 @@ AlgoTradingScreen::AlgoTradingScreen(QWidget* parent) : QWidget(parent) {
             AlgoTradingService::instance().list_deployments();
     });
 
+    // Keep deploy count badge in sync whenever deployments are loaded
+    connect(&AlgoTradingService::instance(), &AlgoTradingService::deployments_loaded, this,
+            [this](const QVector<AlgoDeployment>& deps) {
+                int active = 0;
+                for (const auto& d : deps) {
+                    if (d.status == "running" || d.status == "starting")
+                        ++active;
+                }
+                deploy_count_label_->setText(QString("%1 LIVE").arg(active));
+            });
+
     LOG_INFO("AlgoTrading", "Screen constructed");
 }
 

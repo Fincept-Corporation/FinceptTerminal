@@ -259,4 +259,12 @@ void WorkflowsViewPanel::run_workflow(const QString& type, const QJsonObject& pa
     services::AgentService::instance().run_workflow(type, params);
 }
 
+void WorkflowsViewPanel::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (!data_loaded_) {
+        data_loaded_ = true;
+        services::AgentService::instance().discover_agents();
+    }
+}
+
 } // namespace fincept::screens

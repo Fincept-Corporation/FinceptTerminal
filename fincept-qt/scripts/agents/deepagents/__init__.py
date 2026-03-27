@@ -1,32 +1,27 @@
 """
-Fincept Terminal - DeepAgents Integration
-Complete wrapper for hierarchical agentic automation with LangGraph
+Fincept Terminal — Deep Agents Integration
+Built on deepagents 0.4.12 (LangGraph-based hierarchical multi-agent framework)
+
+Entry point: cli.py
 """
 
-import sys
-import os
-
-# Add current directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from deep_agent_wrapper import DeepAgentWrapper
-from fincept_llm_adapter import FinceptLLMAdapter
-from agent_factory import create_fincept_deep_agent
-from subagent_templates import (
-    create_research_subagent,
-    create_data_analyst_subagent,
-    create_trading_subagent,
-    create_risk_analyzer_subagent,
-    create_reporter_subagent
-)
+from models import create_model, extract_text, supports_tool_calling, TOOL_CALLING_PROVIDERS
+from backends import get_backend
+from subagents import get_subagents_for_type, list_agent_types, list_subagent_names
+from agent import create_agent, build_fincept_context, FinceptContext
+from orchestrator import FinceptOrchestrator
 
 __all__ = [
-    'DeepAgentWrapper',
-    'FinceptLLMAdapter',
-    'create_fincept_deep_agent',
-    'create_research_subagent',
-    'create_data_analyst_subagent',
-    'create_trading_subagent',
-    'create_risk_analyzer_subagent',
-    'create_reporter_subagent'
+    "create_model",
+    "extract_text",
+    "supports_tool_calling",
+    "TOOL_CALLING_PROVIDERS",
+    "get_backend",
+    "get_subagents_for_type",
+    "list_agent_types",
+    "list_subagent_names",
+    "create_agent",
+    "build_fincept_context",
+    "FinceptContext",
+    "FinceptOrchestrator",
 ]

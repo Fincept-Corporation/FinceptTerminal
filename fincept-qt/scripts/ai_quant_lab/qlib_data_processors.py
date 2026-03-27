@@ -558,6 +558,18 @@ def main():
                 params.get("processors", [])
             )
 
+        elif command == "process_data":
+            params = json.loads(sys.argv[2])
+            import pandas as _pd
+            df = _pd.DataFrame(params.get("data", {}))
+            result = service.process_data(
+                pipeline_id=params.get("pipeline_id"),
+                data=df,
+                fit=params.get("fit", True)
+            )
+            if result.get("success") and "data" in result:
+                result["data"] = result["data"].to_dict() if hasattr(result["data"], "to_dict") else result["data"]
+
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 

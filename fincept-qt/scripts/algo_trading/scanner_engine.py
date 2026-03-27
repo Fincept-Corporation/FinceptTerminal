@@ -4,8 +4,17 @@ Scanner Engine
 One-shot scanner: evaluates conditions across multiple symbols.
 Returns list of symbols that match the given conditions.
 
-Usage:
-    python scanner_engine.py --conditions <json> --symbols <json_array> --timeframe <tf> --db <path>
+Usage (called by C++ AlgoTradingService):
+    python scanner_engine.py scan <json_params> --db <path>
+
+JSON params:
+    {
+        "conditions": [...],
+        "symbols": [...],
+        "timeframe": "1d",
+        "lookback_days": 365,
+        "logic": "AND"
+    }
 """
 
 import json
@@ -18,20 +27,40 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from condition_evaluator import load_candles_from_db, evaluate_condition_group
 
 
+def get_db_path(arg_db: str) -> str:
+    if arg_db and os.path.exists(arg_db):
+        return arg_db
+    appdata = os.environ.get('APPDATA', '')
+    if appdata:
+        candidate = os.path.join(appdata, 'Fincept', 'FinceptTerminal', 'fincept.db')
+        if os.path.exists(candidate):
+            return candidate
+    return arg_db or ''
+
+
 def main():
     parser = argparse.ArgumentParser(description='Algo Scanner Engine')
-    parser.add_argument('--conditions', required=True, help='JSON conditions array')
-    parser.add_argument('--symbols', required=True, help='JSON array of symbols')
-    parser.add_argument('--timeframe', default='5m')
-    parser.add_argument('--db', required=True, help='SQLite database path')
-    parser.add_argument('--limit', type=int, default=200)
+    parser.add_argument('command', choices=['scan'], help='Subcommand')
+    parser.add_argument('payload', help='JSON params: conditions, symbols, timeframe, lookback_days, logic')
+    parser.add_argument('--db', default=None, help='SQLite database path')
     args = parser.parse_args()
 
+    db_path = get_db_path(args.db)
+
     try:
-        conditions = json.loads(args.conditions)
-        symbols = json.loads(args.symbols)
+        params = json.loads(args.payload)
     except json.JSONDecodeError as e:
         print(json.dumps({'success': False, 'error': f'Invalid JSON: {e}'}))
+        sys.exit(1)
+
+    conditions = params.get('conditions', [])
+    symbols = params.get('symbols', [])
+    timeframe = params.get('timeframe', '1d')
+    limit = int(params.get('lookback_days', 365))
+    logic = params.get('logic', 'AND')
+
+    if not conditions:
+        print(json.dumps({'success': False, 'error': 'No conditions provided'}))
         sys.exit(1)
 
     if not isinstance(symbols, list) or not symbols:
@@ -43,29 +72,24 @@ def main():
     scanned = 0
     debug_log = []
 
-    debug_log.append(f'[scanner.py] db={args.db}')
-    debug_log.append(f'[scanner.py] timeframe={args.timeframe}, symbols={len(symbols)}, conditions={len(conditions)}')
+    debug_log.append(f'[scanner] db={db_path}')
+    debug_log.append(f'[scanner] timeframe={timeframe}, symbols={len(symbols)}, conditions={len(conditions)}, logic={logic}')
 
-    # Check DB connectivity and candle_cache state
+    # Log candle_cache state for diagnostics
     try:
-        conn_check = sqlite3.connect(args.db)
+        conn_check = sqlite3.connect(db_path)
         cur = conn_check.cursor()
-        cur.execute('SELECT COUNT(*) FROM candle_cache WHERE timeframe = ?', (args.timeframe,))
+        cur.execute('SELECT COUNT(*) FROM candle_cache WHERE timeframe = ?', (timeframe,))
         total_rows = cur.fetchone()[0]
-        debug_log.append(f'[scanner.py] candle_cache total rows for tf={args.timeframe}: {total_rows}')
-
-        for sym in symbols:
-            cur.execute('SELECT COUNT(*) FROM candle_cache WHERE symbol = ? AND timeframe = ?', (sym, args.timeframe))
-            sym_count = cur.fetchone()[0]
-            debug_log.append(f'[scanner.py] {sym}: {sym_count} candles in cache')
+        debug_log.append(f'[scanner] candle_cache rows for tf={timeframe}: {total_rows}')
         conn_check.close()
     except Exception as e:
-        debug_log.append(f'[scanner.py] DB check error: {e}')
+        debug_log.append(f'[scanner] DB check skipped: {e}')
 
     for symbol in symbols:
         scanned += 1
         try:
-            df = load_candles_from_db(args.db, symbol, args.timeframe, args.limit)
+            df = load_candles_from_db(db_path, symbol, timeframe, limit)
             if df.empty or len(df) < 10:
                 errors.append({'symbol': symbol, 'error': f'Insufficient data ({len(df)} candles)'})
                 continue
@@ -73,27 +97,27 @@ def main():
             result = evaluate_condition_group(conditions, df)
 
             if result['result']:
-                # Get current price from last candle
                 current_price = float(df['close'].iloc[-1])
                 matches.append({
                     'symbol': symbol,
                     'price': current_price,
-                    'details': result['details'],
+                    'conditions': result.get('details', []),
                 })
 
         except Exception as e:
             errors.append({'symbol': symbol, 'error': str(e)})
-            debug_log.append(f'[scanner.py] {symbol} exception: {e}')
+            debug_log.append(f'[scanner] {symbol} exception: {e}')
 
-    debug_log.append(f'[scanner.py] summary: scanned={scanned}, matches={len(matches)}, errors={len(errors)}')
+    debug_log.append(f'[scanner] done: scanned={scanned}, matches={len(matches)}, errors={len(errors)}')
 
     print(json.dumps({
         'success': True,
         'matches': matches,
         'match_count': len(matches),
-        'scanned': scanned,
+        'total_scanned': scanned,
+        'condition_count': len(conditions),
         'errors': errors,
-        'timeframe': args.timeframe,
+        'timeframe': timeframe,
         'scanner_debug': debug_log,
     }))
 

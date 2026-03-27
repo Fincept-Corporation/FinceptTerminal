@@ -27,9 +27,10 @@ class AgentService : public QObject {
 
     // ── Core agent execution ─────────────────────────────────────────────────
     void run_agent(const QString& query, const QJsonObject& config);
+    void run_agent_streaming(const QString& query, const QJsonObject& config);
     void run_agent_structured(const QString& query, const QJsonObject& config, const QString& output_model);
     void route_query(const QString& query);
-    void execute_routed_query(const QString& query, const QString& session_id = {});
+    void execute_routed_query(const QString& query, const QJsonObject& config = {}, const QString& session_id = {});
 
     // ── Multi-query & parallel ───────────────────────────────────────────────
     void execute_multi_query(const QString& query, bool aggregate = true);
@@ -89,6 +90,9 @@ class AgentService : public QObject {
   signals:
     void agents_discovered(QVector<AgentInfo> agents, QVector<AgentCategory> categories);
     void agent_result(AgentExecutionResult result);
+    void agent_stream_token(const QString& token);    // emitted per TOKEN chunk
+    void agent_stream_thinking(const QString& status); // emitted per THINKING chunk
+    void agent_stream_done(AgentExecutionResult result); // emitted when stream ends
     void routing_result(RoutingResult result);
     void tools_loaded(AgentToolsInfo info);
     void models_loaded(AgentModelsInfo info);

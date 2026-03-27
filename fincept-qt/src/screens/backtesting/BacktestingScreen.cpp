@@ -3,8 +3,11 @@
 
 #include "core/logging/Logger.h"
 #include "services/backtesting/BacktestingService.h"
+#include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
+#include <QFile>
+#include <QFileDialog>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -308,6 +311,36 @@ QWidget* BacktestingScreen::build_center_panel() {
                              .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(title);
     hhl->addStretch();
+
+    auto* export_btn = new QPushButton("EXPORT JSON", header);
+    export_btn->setCursor(Qt::PointingHandCursor);
+    export_btn->setFixedHeight(24);
+    export_btn->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
+                "padding:0 10px; font-size:%3px; font-family:%4; }"
+                "QPushButton:hover { color:#FF6B35; border-color:#FF6B35; }")
+            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM)
+            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::DATA_FAMILY));
+    connect(export_btn, &QPushButton::clicked, this, [this]() {
+        QString text = raw_json_edit_ ? raw_json_edit_->toPlainText() : QString();
+        if (text.trimmed().isEmpty()) return;
+
+        QString path = QFileDialog::getSaveFileName(
+            this, "Export Backtest Results", "backtest_results.json",
+            "JSON Files (*.json);;All Files (*)");
+        if (path.isEmpty()) return;
+
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            f.write(text.toUtf8());
+            f.close();
+            services::FileManagerService::instance().import_file(path, "backtesting");
+            LOG_INFO("Backtesting", "Exported results to: " + path);
+        }
+    });
+    hhl->addWidget(export_btn);
+
     vl->addWidget(header);
 
     // Tab widget for results

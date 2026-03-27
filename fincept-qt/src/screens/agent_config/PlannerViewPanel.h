@@ -21,6 +21,9 @@ class PlannerViewPanel : public QWidget {
   public:
     explicit PlannerViewPanel(QWidget* parent = nullptr);
 
+  protected:
+    void showEvent(QShowEvent* event) override;
+
   private:
     void build_ui();
     QWidget* build_templates_panel();
@@ -66,8 +69,9 @@ class PlannerViewPanel : public QWidget {
     // State
     services::ExecutionPlan current_plan_;
     QVector<services::ExecutionPlan> plan_history_;
-    bool generating_ = false;
-    bool executing_ = false;
+    bool generating_  = false;
+    bool executing_   = false;
+    bool data_loaded_ = false;
 };
 
 } // namespace fincept::screens

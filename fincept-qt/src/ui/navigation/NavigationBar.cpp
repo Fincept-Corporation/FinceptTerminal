@@ -80,7 +80,7 @@ void NavigationBar::refresh_user_display() {
     credits_label_->setStyleSheet(
         QString("color:%1;font-size:13px;background:transparent;font-family:'Consolas',monospace;")
             .arg(s.user_info.credit_balance > 0 ? "#16a34a" : "#dc2626"));
-    plan_label_->setText(s.user_info.account_type.toUpper());
+    plan_label_->setText(s.account_type().toUpper());
 }
 
 } // namespace fincept::ui

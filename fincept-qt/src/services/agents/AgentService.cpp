@@ -1,6 +1,7 @@
 // src/services/agents/AgentService.cpp
 #include "services/agents/AgentService.h"
 
+#include "ai_chat/LlmService.h"
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
@@ -48,13 +49,33 @@ int AgentService::cached_agent_count() const {
 // ── API key builder ──────────────────────────────────────────────────────────
 
 QJsonObject AgentService::build_api_keys() const {
+    // Python's _get_api_key() looks up keys by env-var name (e.g. "ANTHROPIC_API_KEY"),
+    // not by lowercase provider name. Send both forms so the lookup always succeeds.
+    static const QMap<QString, QString> kEnvVarNames = {
+        {"anthropic",         "ANTHROPIC_API_KEY"},
+        {"openai",            "OPENAI_API_KEY"},
+        {"google",            "GOOGLE_API_KEY"},
+        {"gemini",            "GOOGLE_API_KEY"},
+        {"groq",              "GROQ_API_KEY"},
+        {"deepseek",          "DEEPSEEK_API_KEY"},
+        {"financial_datasets","FINANCIAL_DATASETS_API_KEY"},
+        {"tavily",            "TAVILY_API_KEY"},
+        {"mistral",           "MISTRAL_API_KEY"},
+        {"cohere",            "COHERE_API_KEY"},
+        {"xai",               "XAI_API_KEY"},
+    };
+
     QJsonObject keys;
     auto providers = LlmConfigRepository::instance().list_providers();
     if (providers.is_ok()) {
         for (const auto& p : providers.value()) {
-            if (!p.api_key.isEmpty()) {
-                keys[p.provider.toLower()] = p.api_key;
-            }
+            if (p.api_key.isEmpty())
+                continue;
+            const QString lower = p.provider.toLower();
+            keys[lower] = p.api_key;                          // lowercase form
+            const QString env_name = kEnvVarNames.value(lower);
+            if (!env_name.isEmpty())
+                keys[env_name] = p.api_key;                   // env-var form Python expects
         }
     }
 
@@ -63,8 +84,8 @@ QJsonObject AgentService::build_api_keys() const {
     if (!keys.contains("fincept")) {
         const auto& session = auth::AuthManager::instance().session();
         if (!session.api_key.isEmpty()) {
-            keys["fincept"] = session.api_key;
-            keys["FINCEPT_API_KEY"] = session.api_key;
+            keys["fincept"]          = session.api_key;
+            keys["FINCEPT_API_KEY"]  = session.api_key;
         }
     }
 
@@ -78,6 +99,31 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
     QJsonObject payload;
     payload["action"] = action;
     payload["api_keys"] = build_api_keys();
+
+    // Inject the resolved LLM config as active_llm so Python can build the exact
+    // model instance without re-resolving credentials.
+    // Priority: config["model"] (per-agent resolved profile) > global active LLM.
+    // This means: if the caller already embedded a resolved profile in config["model"]
+    // (as build_config_from_editor() now does), Python gets the right per-agent creds.
+    {
+        if (config.contains("model") && !config["model"].toObject()["provider"].toString().isEmpty()) {
+            // Use the per-agent resolved profile already embedded in the config
+            payload["active_llm"] = config["model"].toObject();
+        } else {
+            auto& llm = ai_chat::LlmService::instance();
+            if (llm.is_configured()) {
+                QJsonObject active_llm;
+                active_llm["provider"]    = llm.active_provider();
+                active_llm["model_id"]    = llm.active_model();
+                active_llm["api_key"]     = llm.active_api_key();
+                active_llm["base_url"]    = llm.active_base_url();
+                active_llm["temperature"] = llm.active_temperature();
+                active_llm["max_tokens"]  = llm.active_max_tokens();
+                payload["active_llm"] = active_llm;
+            }
+        }
+    }
+
     if (!params.isEmpty())
         payload["params"] = params;
     if (!config.isEmpty())
@@ -321,6 +367,122 @@ void AgentService::run_agent(const QString& query, const QJsonObject& config) {
     });
 }
 
+// ── Streaming agent execution ─────────────────────────────────────────────────
+
+void AgentService::run_agent_streaming(const QString& query, const QJsonObject& config) {
+    LOG_INFO("AgentService", QString("Streaming agent query: %1").arg(query.left(80)));
+
+    auto& py = python::PythonRunner::instance();
+    if (!py.is_available()) {
+        AgentExecutionResult r;
+        r.success = false;
+        r.error = "Python not available";
+        emit agent_stream_done(r);
+        return;
+    }
+
+    QJsonObject params;
+    params["query"] = query;
+
+    QJsonObject payload = build_payload("run", params, config);
+    QByteArray payload_bytes = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+
+    QString python_path = py.python_path();
+    QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
+
+    auto* proc = new QProcess(this);
+    QPointer<AgentService> self = this;
+    QElapsedTimer* timer = new QElapsedTimer;
+    timer->start();
+
+    // Accumulate full response from TOKEN chunks
+    QString* accumulated = new QString;
+
+    // Read stdout line by line as process writes
+    connect(proc, &QProcess::readyReadStandardOutput, this, [self, proc, accumulated]() {
+        if (!self) return;
+        while (proc->canReadLine()) {
+            QString line = QString::fromUtf8(proc->readLine()).trimmed();
+            if (line.isEmpty()) continue;
+
+            if (line.startsWith("TOKEN: ")) {
+                QString token = line.mid(7);
+                *accumulated += token + " ";
+                emit self->agent_stream_token(token);
+            } else if (line.startsWith("THINKING: ")) {
+                emit self->agent_stream_thinking(line.mid(10));
+            } else if (line.startsWith("TOOL: ")) {
+                emit self->agent_stream_thinking("Tool: " + line.mid(6));
+            } else if (line.startsWith("ERROR: ")) {
+                AgentExecutionResult r;
+                r.success = false;
+                r.error = line.mid(7);
+                emit self->agent_stream_done(r);
+            }
+            // DONE line and final JSON are handled in finished signal
+        }
+    });
+
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+            [self, proc, accumulated, timer](int exit_code, QProcess::ExitStatus) {
+                int elapsed = timer->elapsed();
+                delete timer;
+
+                // Drain any remaining stdout (final JSON result line)
+                QString remaining = QString::fromUtf8(proc->readAllStandardOutput());
+                QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
+                proc->deleteLater();
+
+                if (!self) { delete accumulated; return; }
+
+                // Find the final JSON line (last non-empty line)
+                QString final_json;
+                for (const QString& line : remaining.split('\n')) {
+                    QString t = line.trimmed();
+                    if (t.startsWith('{')) final_json = t;
+                }
+
+                AgentExecutionResult r;
+                r.execution_time_ms = elapsed;
+
+                QJsonDocument doc = QJsonDocument::fromJson(final_json.toUtf8());
+                if (!doc.isNull() && doc.object()["success"].toBool()) {
+                    // Prefer full response from JSON if available, else use accumulated tokens
+                    QString json_response = doc.object()["response"].toString();
+                    r.success = true;
+                    r.response = json_response.isEmpty() ? accumulated->trimmed() : json_response;
+                } else if (!accumulated->trimmed().isEmpty()) {
+                    // Tokens arrived but no final JSON — use accumulated
+                    r.success = true;
+                    r.response = accumulated->trimmed();
+                } else {
+                    r.success = false;
+                    r.error = exit_code != 0 ? stderr_str.left(500) : "No response received";
+                }
+
+                delete accumulated;
+                LOG_INFO("AgentService", QString("Streaming completed in %1ms").arg(elapsed));
+                emit self->agent_stream_done(r);
+            });
+
+    connect(proc, &QProcess::errorOccurred, this, [self, proc, accumulated, timer](QProcess::ProcessError) {
+        delete timer;
+        QString err = proc->errorString();
+        proc->deleteLater();
+        delete accumulated;
+        if (!self) return;
+        AgentExecutionResult r;
+        r.success = false;
+        r.error = "Process error: " + err;
+        emit self->agent_stream_done(r);
+    });
+
+    LOG_INFO("AgentService", QString("Starting streaming agent (%1 bytes payload)").arg(payload_bytes.size()));
+    proc->start(python_path, {script_path, "--stdin", "--stream"});
+    proc->write(payload_bytes);
+    proc->closeWriteChannel();
+}
+
 // ── Query routing ────────────────────────────────────────────────────────────
 
 void AgentService::route_query(const QString& query) {
@@ -357,8 +519,14 @@ void AgentService::run_team(const QString& query, const QJsonObject& team_config
     params["query"] = query;
     params["team_config"] = team_config;
 
+    // Pass coordinator model as config so build_payload promotes it to active_llm.
+    // This ensures Python receives the resolved coordinator profile credentials.
+    QJsonObject coord_as_config;
+    if (team_config.contains("model"))
+        coord_as_config["model"] = team_config["model"];
+
     QPointer<AgentService> self = this;
-    run_python_stdin("run_team", params, {}, [self](bool ok, QJsonObject result) {
+    run_python_stdin("run_team", params, coord_as_config, [self](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;
@@ -647,7 +815,7 @@ void AgentService::run_agent_structured(const QString& query, const QJsonObject&
 
 // ── Routed query execution ───────────────────────────────────────────────────
 
-void AgentService::execute_routed_query(const QString& query, const QString& session_id) {
+void AgentService::execute_routed_query(const QString& query, const QJsonObject& config, const QString& session_id) {
     LOG_INFO("AgentService", QString("Execute routed query: %1").arg(query.left(60)));
     QJsonObject params;
     params["query"] = query;
@@ -655,7 +823,7 @@ void AgentService::execute_routed_query(const QString& query, const QString& ses
         params["session_id"] = session_id;
 
     QPointer<AgentService> self = this;
-    run_python_stdin("execute_query", params, {}, [self](bool ok, QJsonObject result) {
+    run_python_stdin("execute_query", params, config, [self](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;

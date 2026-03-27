@@ -1,0 +1,19 @@
+{
+  "updates": {
+    "windows": {
+      "latest-version": "4.0.0",
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/FinceptTerminal-Windows-x64.zip",
+      "changelog": "See https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest for full changelog."
+    },
+    "osx": {
+      "latest-version": "4.0.0",
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/FinceptTerminal-macOS-universal.tar.gz",
+      "changelog": "See https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest for full changelog."
+    },
+    "linux": {
+      "latest-version": "4.0.0",
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/FinceptTerminal-Linux-x86_64.AppImage",
+      "changelog": "See https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest for full changelog."
+    }
+  }
+}

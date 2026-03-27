@@ -1,6 +1,7 @@
 // src/screens/portfolio/PortfolioDialogs.cpp
 #include "screens/portfolio/PortfolioDialogs.h"
 
+#include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
 #include <QFile>
@@ -425,6 +426,7 @@ ImportPortfolioDialog::ImportPortfolioDialog(const QVector<portfolio::Portfolio>
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
             f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
             f.close();
+            services::FileManagerService::instance().import_file(path, "portfolio");
             QMessageBox::information(this, "Demo JSON Saved",
                                      "Demo portfolio JSON saved.\nYou can now import it using the BROWSE button.");
         } else {

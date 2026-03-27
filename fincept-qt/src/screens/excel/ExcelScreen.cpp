@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "screens/excel/SpreadsheetWidget.h"
+#include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
 #include <QFileDialog>
@@ -227,6 +228,9 @@ void ExcelScreen::on_import() {
     sheet_counter_ = sheet_names.size() + 1;
     update_status();
     LOG_INFO("ExcelScreen", QString("Imported %1 sheets from %2").arg(sheet_names.size()).arg(file_name_));
+
+    // Register with File Manager so it appears in the Files tab
+    services::FileManagerService::instance().import_file(path, "excel");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -281,6 +285,9 @@ void ExcelScreen::on_export() {
         if (fname)
             fname->setText(file_name_);
         LOG_INFO("ExcelScreen", QString("Exported to %1").arg(path));
+
+        // Register with File Manager so it appears in the Files tab
+        services::FileManagerService::instance().import_file(path, "excel");
     } else {
         LOG_ERROR("ExcelScreen", "Failed to save XLSX file");
     }
@@ -330,6 +337,9 @@ void ExcelScreen::on_export_csv() {
     }
 
     LOG_INFO("ExcelScreen", QString("Exported CSV to %1").arg(path));
+
+    // Register with File Manager so it appears in the Files tab
+    services::FileManagerService::instance().import_file(path, "excel");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

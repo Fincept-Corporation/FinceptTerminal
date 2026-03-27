@@ -663,6 +663,22 @@ class QlibService:
             if fields is None:
                 fields = ["$open", "$high", "$low", "$close", "$volume", "$vwap", "$factor"]
 
+            # Normalize instruments to lowercase (qlib US data uses lowercase dirs)
+            instruments = [i.lower() if isinstance(i, str) else i for i in instruments]
+
+            # Clamp dates to available calendar range
+            cal = D.calendar(freq=freq)
+            cal_warning = None
+            if len(cal) > 0:
+                cal_start = str(cal[0].date())
+                cal_end   = str(cal[-1].date())
+                if start_date < cal_start:
+                    cal_warning = f"start_date clamped from {start_date} to {cal_start}"
+                    start_date = cal_start
+                if end_date > cal_end:
+                    cal_warning = (cal_warning or "") + f" end_date clamped from {end_date} to {cal_end}"
+                    end_date = cal_end
+
             # Fetch data using Qlib's data API
             data = D.features(instruments, fields, start_date, end_date, freq=freq)
 
@@ -683,7 +699,7 @@ class QlibService:
                 except Exception as e:
                     data_dict[instrument] = {"error": str(e)}
 
-            return {
+            result = {
                 "success": True,
                 "data": data_dict,
                 "instruments": instruments,
@@ -692,6 +708,9 @@ class QlibService:
                 "freq": freq,
                 "total_records": total_records
             }
+            if cal_warning:
+                result["warning"] = cal_warning
+            return result
         except Exception as e:
             return {
                 "success": False,

@@ -10,6 +10,7 @@ WebSocketClient::WebSocketClient(QObject* parent) : QObject(parent) {
     connect(&socket_, &QWebSocket::connected, this, &WebSocketClient::on_connected);
     connect(&socket_, &QWebSocket::disconnected, this, &WebSocketClient::on_disconnected);
     connect(&socket_, &QWebSocket::textMessageReceived, this, &WebSocketClient::on_text_received);
+    connect(&socket_, &QWebSocket::binaryMessageReceived, this, &WebSocketClient::on_binary_received);
     connect(&socket_, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error), this,
             &WebSocketClient::on_error);
     connect(&reconnect_timer_, &QTimer::timeout, this, &WebSocketClient::attempt_reconnect);
@@ -30,6 +31,10 @@ void WebSocketClient::disconnect() {
 
 void WebSocketClient::send(const QString& message) {
     socket_.sendTextMessage(message);
+}
+
+void WebSocketClient::send_binary(const QByteArray& data) {
+    socket_.sendBinaryMessage(data);
 }
 
 bool WebSocketClient::is_connected() const {
@@ -55,6 +60,10 @@ void WebSocketClient::on_text_received(const QString& msg) {
     emit message_received(msg);
 }
 
+void WebSocketClient::on_binary_received(const QByteArray& data) {
+    emit binary_message_received(data);
+}
+
 void WebSocketClient::on_error(QAbstractSocket::SocketError err) {
     Q_UNUSED(err);
     LOG_ERROR("WS", "Error: " + socket_.errorString());
@@ -75,6 +84,7 @@ void WebSocketClient::connect_to(const QString& /*url*/) {
 }
 void WebSocketClient::disconnect() {}
 void WebSocketClient::send(const QString& /*message*/) {}
+void WebSocketClient::send_binary(const QByteArray& /*data*/) {}
 bool WebSocketClient::is_connected() const {
     return false;
 }

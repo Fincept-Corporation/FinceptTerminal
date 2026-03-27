@@ -1,5 +1,6 @@
 #include "app/MainWindow.h"
 
+#include "services/updater/UpdateService.h"
 #include "ai_chat/AiChatBubble.h"
 #include "ai_chat/AiChatScreen.h"
 #include "auth/AuthManager.h"
@@ -49,8 +50,6 @@
 #include "screens/news/NewsScreen.h"
 #include "screens/node_editor/NodeEditorScreen.h"
 #include "screens/notes/NotesScreen.h"
-#include "screens/payment/PaymentProcessingScreen.h"
-#include "screens/payment/PaymentSuccessScreen.h"
 #include "screens/polymarket/PolymarketScreen.h"
 #include "screens/portfolio/PortfolioScreen.h"
 #include "screens/profile/ProfileScreen.h"
@@ -267,7 +266,35 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             &MainWindow::on_auth_state_changed);
     connect(&auth::AuthManager::instance(), &auth::AuthManager::logged_out, this, &MainWindow::on_auth_state_changed);
 
-    on_auth_state_changed();
+    // If a saved session exists, optimistically show the dashboard to avoid
+    // flashing the login screen while session validation is in progress.
+    auto& auth_mgr = auth::AuthManager::instance();
+    if (auth_mgr.is_authenticated() || auth_mgr.is_loading()) {
+        stack_->setCurrentIndex(1);
+        router_->navigate("dashboard");
+    } else {
+        on_auth_state_changed();
+    }
+
+    // Periodic refresh of user credits/plan (every 3 minutes)
+    user_refresh_timer_ = new QTimer(this);
+    user_refresh_timer_->setInterval(3 * 60 * 1000);
+    connect(user_refresh_timer_, &QTimer::timeout, this, []() {
+        auto& auth = auth::AuthManager::instance();
+        if (auth.is_authenticated())
+            auth.refresh_user_data();
+    });
+    user_refresh_timer_->start();
+
+    // Confetti overlay (parented to central widget so it covers the whole app)
+    // Refresh user data when app regains focus (updates toolbar credits/plan)
+    connect(qApp, &QApplication::applicationStateChanged, this, [](Qt::ApplicationState state) {
+        if (state == Qt::ApplicationActive) {
+            auto& auth = auth::AuthManager::instance();
+            if (auth.is_authenticated())
+                auth.refresh_user_data();
+        }
+    });
 }
 
 void MainWindow::setup_auth_screens() {
@@ -275,8 +302,6 @@ void MainWindow::setup_auth_screens() {
     auto* reg = new screens::RegisterScreen;
     auto* forgot = new screens::ForgotPasswordScreen;
     auto* pricing = new screens::PricingScreen;
-    auto* pay_processing = new screens::PaymentProcessingScreen;
-    auto* pay_success = new screens::PaymentSuccessScreen;
 
     // Info screens stack (shared between auth and app via master stack index 2)
     info_stack_ = new QStackedWidget;
@@ -292,13 +317,11 @@ void MainWindow::setup_auth_screens() {
     info_stack_->addWidget(trademarks); // index 3
     info_stack_->addWidget(help);       // index 4
 
-    auth_stack_->addWidget(login);          // index 0
-    auth_stack_->addWidget(reg);            // index 1
-    auth_stack_->addWidget(forgot);         // index 2
-    auth_stack_->addWidget(pricing);        // index 3
-    auth_stack_->addWidget(pay_processing); // index 4
-    auth_stack_->addWidget(pay_success);    // index 5
-    auth_stack_->addWidget(info_stack_);    // index 6
+    auth_stack_->addWidget(login);       // index 0
+    auth_stack_->addWidget(reg);         // index 1
+    auth_stack_->addWidget(forgot);      // index 2
+    auth_stack_->addWidget(pricing);     // index 3
+    auth_stack_->addWidget(info_stack_); // index 4
 
     // ── Auth navigation ──────────────────────────────────────────────────────
     connect(login, &screens::LoginScreen::navigate_register, this, &MainWindow::show_register);
@@ -306,25 +329,6 @@ void MainWindow::setup_auth_screens() {
     connect(reg, &screens::RegisterScreen::navigate_login, this, &MainWindow::show_login);
     connect(forgot, &screens::ForgotPasswordScreen::navigate_login, this, &MainWindow::show_login);
     connect(pricing, &screens::PricingScreen::navigate_dashboard, this, [this]() {
-        stack_->setCurrentIndex(1);
-        router_->navigate("dashboard");
-    });
-
-    // Pricing → payment processing: when user initiates payment, navigate to polling screen
-    connect(pricing, &screens::PricingScreen::payment_initiated, this,
-            [this, pay_processing](const QString& order_id, const QString& plan_name) {
-                auth_stack_->setCurrentIndex(4); // show processing screen
-                pay_processing->start_polling(order_id, plan_name);
-            });
-
-    // ── Payment navigation ───────────────────────────────────────────────────
-    connect(pay_processing, &screens::PaymentProcessingScreen::payment_completed, this, [this, pay_success]() {
-        auth_stack_->setCurrentIndex(5);     // show success
-        pay_success->show_success("", 0, 0); // details come from refreshed session
-    });
-    connect(pay_processing, &screens::PaymentProcessingScreen::navigate_back, this, &MainWindow::show_pricing);
-
-    connect(pay_success, &screens::PaymentSuccessScreen::navigate_dashboard, this, [this]() {
         stack_->setCurrentIndex(1);
         router_->navigate("dashboard");
     });
@@ -391,7 +395,18 @@ void MainWindow::setup_app_screens() {
     router_->register_factory("mcp_servers", []() { return new screens::McpServersScreen; });
     router_->register_factory("data_mapping", []() { return new screens::DataMappingScreen; });
     router_->register_factory("data_sources", []() { return new screens::DataSourcesScreen; });
-    router_->register_factory("file_manager", []() { return new screens::FileManagerScreen; });
+    router_->register_factory("file_manager", [this]() {
+        auto* fm = new screens::FileManagerScreen;
+        // "Open With" buttons emit this — navigate to the target screen.
+        // The file path is intentionally not forwarded here because each screen
+        // manages its own open dialog; the navigation itself is sufficient to
+        // bring the user to the right place.
+        connect(fm, &screens::FileManagerScreen::open_file_in_screen,
+                this, [this](const QString& route_id, const QString& /*file_path*/) {
+                    router_->navigate(route_id);
+                });
+        return fm;
+    });
     router_->register_factory("excel", []() { return new screens::ExcelScreen; });
     router_->register_factory("trade_viz", []() { return new screens::TradeVizScreen; });
 
@@ -409,11 +424,28 @@ void MainWindow::setup_navigation() {}
 
 void MainWindow::on_auth_state_changed() {
     auto& auth = auth::AuthManager::instance();
+
+    // Still validating saved session — don't flash the login screen.
+    // Stay on whatever is currently shown until validation completes.
+    if (auth.is_loading())
+        return;
+
     if (auth.is_authenticated()) {
+        // Don't redirect if user is already on the app stack (dashboard, etc.)
+        // or is intentionally viewing the pricing screen from the toolbar.
+        if (stack_->currentIndex() == 1)
+            return;
+        if (stack_->currentIndex() == 0 && auth_stack_->currentIndex() == 3)
+            return;  // user is on pricing screen — let PricingScreen handle it
+
         if (auth.session().has_paid_plan()) {
             // Paid user → straight to dashboard
             stack_->setCurrentIndex(1);
             router_->navigate("dashboard");
+            // Trigger silent update check after login (delayed so UI settles first)
+            QTimer::singleShot(3000, this, []() {
+                services::UpdateService::instance().check_for_updates(true);
+            });
         } else {
             // Free/no plan → show pricing gate
             stack_->setCurrentIndex(0);
@@ -437,28 +469,25 @@ void MainWindow::show_forgot_password() {
 void MainWindow::show_pricing() {
     auth_stack_->setCurrentIndex(3);
 }
-void MainWindow::show_payment_processing() {
-    auth_stack_->setCurrentIndex(4);
-}
 void MainWindow::show_info_contact() {
     info_stack_->setCurrentIndex(0);
-    auth_stack_->setCurrentIndex(6);
+    auth_stack_->setCurrentIndex(4);
 }
 void MainWindow::show_info_terms() {
     info_stack_->setCurrentIndex(1);
-    auth_stack_->setCurrentIndex(6);
+    auth_stack_->setCurrentIndex(4);
 }
 void MainWindow::show_info_privacy() {
     info_stack_->setCurrentIndex(2);
-    auth_stack_->setCurrentIndex(6);
+    auth_stack_->setCurrentIndex(4);
 }
 void MainWindow::show_info_trademarks() {
     info_stack_->setCurrentIndex(3);
-    auth_stack_->setCurrentIndex(6);
+    auth_stack_->setCurrentIndex(4);
 }
 void MainWindow::show_info_help() {
     info_stack_->setCurrentIndex(4);
-    auth_stack_->setCurrentIndex(6);
+    auth_stack_->setCurrentIndex(4);
 }
 
 void MainWindow::restore_session() {}

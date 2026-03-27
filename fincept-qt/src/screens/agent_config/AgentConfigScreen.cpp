@@ -56,13 +56,17 @@ void AgentConfigScreen::build_ui() {
     root->addWidget(view_stack_, 1);
 
     // Index 0: AGENTS view
-    view_stack_->addWidget(new AgentsViewPanel);
+    agents_panel_ = new AgentsViewPanel;
+    view_stack_->addWidget(agents_panel_);
 
-    view_stack_->addWidget(new CreateAgentPanel);   // 1
-    view_stack_->addWidget(new TeamsViewPanel);     // 2
+    create_panel_ = new CreateAgentPanel;
+    view_stack_->addWidget(create_panel_);          // 1
+    teams_panel_ = new TeamsViewPanel;
+    view_stack_->addWidget(teams_panel_);           // 2
     view_stack_->addWidget(new WorkflowsViewPanel); // 3
     view_stack_->addWidget(new PlannerViewPanel);   // 4
-    view_stack_->addWidget(new ToolsViewPanel);     // 5
+    tools_panel_ = new ToolsViewPanel;
+    view_stack_->addWidget(tools_panel_);           // 5
     view_stack_->addWidget(new AgentChatPanel);     // 6
 
     // Index 7: SYSTEM view
@@ -184,6 +188,16 @@ void AgentConfigScreen::setup_connections() {
         status_label_->setText(QString("ERROR [%1]: %2").arg(ctx, msg.left(60)));
         status_label_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::NEGATIVE));
     });
+
+    // Wire "Add to Team" button in Agents tab → TeamsViewPanel
+    connect(agents_panel_, &AgentsViewPanel::add_agent_to_team,
+            teams_panel_,  &TeamsViewPanel::add_agent_from_panel);
+
+    // Wire Tools tab selection → Agents + Create panels
+    connect(tools_panel_, &ToolsViewPanel::tools_selection_changed,
+            agents_panel_, &AgentsViewPanel::apply_tools_selection);
+    connect(tools_panel_, &ToolsViewPanel::tools_selection_changed,
+            create_panel_, &CreateAgentPanel::apply_tools_selection);
 
     // Reset status on successful operations
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {

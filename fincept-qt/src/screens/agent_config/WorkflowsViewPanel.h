@@ -16,6 +16,9 @@ class WorkflowsViewPanel : public QWidget {
   public:
     explicit WorkflowsViewPanel(QWidget* parent = nullptr);
 
+  protected:
+    void showEvent(QShowEvent* event) override;
+
   private:
     void build_ui();
     QWidget* build_workflow_cards();
@@ -34,7 +37,8 @@ class WorkflowsViewPanel : public QWidget {
     QLabel* result_status_ = nullptr;
     QLabel* workflow_title_ = nullptr;
 
-    bool executing_ = false;
+    bool executing_   = false;
+    bool data_loaded_ = false;
 };
 
 } // namespace fincept::screens

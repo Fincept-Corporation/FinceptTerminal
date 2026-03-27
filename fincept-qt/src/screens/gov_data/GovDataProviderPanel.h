@@ -1,20 +1,16 @@
 // src/screens/gov_data/GovDataProviderPanel.h
-//
 // Reusable panel for CKAN-style government data portals.
-// Supports hierarchical browsing: Publishers/Orgs → Datasets → Resources
-// Plus search and recent views.
-// Used by: Canada, Switzerland, Hong Kong, openAFRICA, Universal CKAN, Australia, etc.
+// Supports hierarchical browsing: Publishers/Orgs → Datasets → Resources + Search
 #pragma once
 
 #include "services/gov_data/GovDataService.h"
 
+#include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
-#include <QListWidget>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTableWidget>
-#include <QVBoxLayout>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -22,11 +18,10 @@ namespace fincept::screens {
 class GovDataProviderPanel : public QWidget {
     Q_OBJECT
   public:
-    /// @param script       Python script filename
-    /// @param provider_color  Accent color hex string
-    /// @param org_label    Label for top-level entities ("Publishers", "Organizations", "Categories")
-    explicit GovDataProviderPanel(const QString& script, const QString& provider_color,
-                                  const QString& org_label = "Publishers", QWidget* parent = nullptr);
+    explicit GovDataProviderPanel(const QString& script,
+                                  const QString& provider_color,
+                                  const QString& org_label  = "Publishers",
+                                  QWidget*       parent     = nullptr);
 
   public slots:
     void load_initial_data();
@@ -41,44 +36,48 @@ class GovDataProviderPanel : public QWidget {
     void on_export_csv();
 
   private:
-    void build_ui();
+    void     build_ui();
     QWidget* build_toolbar();
-    void show_loading(const QString& message);
-    void show_error(const QString& message);
-    void show_empty(const QString& message);
-    void populate_orgs(const QJsonArray& data);
-    void populate_datasets(const QJsonArray& data, int total_count);
-    void populate_resources(const QJsonArray& data);
+    void     show_loading(const QString& message);
+    void     show_error(const QString& message);
+    void     show_empty(const QString& message);
+    void     populate_orgs(const QJsonArray& data);
+    void     populate_datasets(const QJsonArray& data, int total_count);
+    void     populate_resources(const QJsonArray& data);
+    void     update_toolbar_state();
+    void     update_breadcrumb();
 
     QString script_;
     QString color_;
     QString org_label_;
 
-    // View state
     enum View { Orgs = 0, Datasets, Resources, Search };
     View current_view_ = Orgs;
 
     // Toolbar
-    QPushButton* back_btn_ = nullptr;
-    QPushButton* orgs_btn_ = nullptr;
+    QPushButton* back_btn_     = nullptr;
+    QPushButton* orgs_btn_     = nullptr;
     QPushButton* datasets_btn_ = nullptr;
-    QPushButton* search_btn_ = nullptr;
-    QLineEdit* search_input_ = nullptr;
-    QPushButton* fetch_btn_ = nullptr;
-    QPushButton* export_btn_ = nullptr;
+    QPushButton* search_btn_   = nullptr;
+    QLineEdit*   search_input_ = nullptr;
+    QPushButton* fetch_btn_    = nullptr;
+    QPushButton* export_btn_   = nullptr;
+
+    // Breadcrumb
+    QWidget* breadcrumb_       = nullptr;
+    QLabel*  breadcrumb_label_ = nullptr;
+    QLabel*  row_count_label_  = nullptr;
 
     // Content
-    QStackedWidget* content_stack_ = nullptr;
-    QTableWidget* orgs_table_ = nullptr;
-    QTableWidget* datasets_table_ = nullptr;
-    QTableWidget* resources_table_ = nullptr;
-    QLabel* status_label_ = nullptr;
-
-    void update_toolbar_state();
+    QStackedWidget* content_stack_    = nullptr;
+    QTableWidget*   orgs_table_       = nullptr;
+    QTableWidget*   datasets_table_   = nullptr;
+    QTableWidget*   resources_table_  = nullptr;
+    QLabel*         status_label_     = nullptr;
 
     // Navigation state
-    QString selected_org_;
-    QString selected_dataset_;
+    QString    selected_org_;
+    QString    selected_dataset_;
     QJsonArray current_orgs_;
     QJsonArray current_datasets_;
     QJsonArray current_resources_;

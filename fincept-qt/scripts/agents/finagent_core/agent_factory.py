@@ -86,85 +86,84 @@ class AgentFactory:
 
     def _create_model(self, model_config: Dict[str, Any]):
         """
-        Create Agno model from config
+        Create Agno model from config.
 
-        Args:
-            model_config: {provider, model_id, temperature, max_tokens}
-
-        Returns:
-            Agno model instance
+        model_config fields:
+          provider    — e.g. "openai", "anthropic", "gemini", "groq", "deepseek", "ollama"
+          model_id    — e.g. "gpt-4o", "claude-3-5-sonnet-20241022"
+          api_key     — resolved key passed directly from LlmService (takes priority)
+          base_url    — custom endpoint; if set, forces OpenAI-compatible path for any provider
+          temperature — float
+          max_tokens  — int
         """
-        provider = model_config["provider"].lower()
-        model_id = model_config["model_id"]
+        provider    = model_config.get("provider", "openai").lower()
+        model_id    = model_config.get("model_id", "")
         temperature = model_config.get("temperature", 0.7)
-        max_tokens = model_config.get("max_tokens", 4096)
+        max_tokens  = model_config.get("max_tokens", 4096)
+        base_url    = model_config.get("base_url", "") or ""
+        # api_key passed directly takes priority; fall back to env-var lookup
+        api_key     = model_config.get("api_key") or self._get_api_key(provider) or ""
 
-        # Get API key
-        api_key = self._get_api_key(provider)
+        # ── Custom base_url → OpenAI-compatible endpoint ──────────────────────
+        # Any provider configured with a custom base_url (e.g. minimax served
+        # on an Anthropic-compatible endpoint, OpenRouter, LM Studio, etc.)
+        # is routed through OpenAIChat with that base_url.
+        if base_url:
+            from agno.models.openai import OpenAIChat
+            # Override Agno's default role_map which maps "system"→"developer".
+            # Custom endpoints (MiniMax, OpenRouter, etc.) expect standard roles.
+            _STANDARD_ROLE_MAP = {
+                "system": "system",
+                "user": "user",
+                "assistant": "assistant",
+                "tool": "tool",
+                "model": "assistant",
+            }
+            kwargs = dict(id=model_id, api_key=api_key,
+                          temperature=temperature, max_tokens=max_tokens,
+                          base_url=base_url, role_map=_STANDARD_ROLE_MAP)
+            return OpenAIChat(**{k: v for k, v in kwargs.items() if v})
 
-        # Import and create model
+        # ── Native provider instances ─────────────────────────────────────────
         if provider == "openai":
             from agno.models.openai import OpenAIChat
-            return OpenAIChat(
-                id=model_id,
-                api_key=api_key,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
+            return OpenAIChat(id=model_id, api_key=api_key,
+                              temperature=temperature, max_tokens=max_tokens)
 
-        elif provider == "anthropic":
+        if provider == "anthropic":
             from agno.models.anthropic import Claude
-            return Claude(
-                id=model_id,
-                api_key=api_key,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
+            return Claude(id=model_id, api_key=api_key,
+                          temperature=temperature, max_tokens=max_tokens)
 
-        elif provider in ["google", "gemini"]:
+        if provider in ("google", "gemini"):
             from agno.models.google import Gemini
-            return Gemini(
-                id=model_id,
-                api_key=api_key,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
+            return Gemini(id=model_id, api_key=api_key,
+                          temperature=temperature, max_tokens=max_tokens)
 
-        elif provider == "ollama":
-            from agno.models.ollama import Ollama
-            return Ollama(
-                id=model_id,
-                temperature=temperature,
-                num_predict=max_tokens
-            )
-
-        elif provider == "groq":
+        if provider == "groq":
             from agno.models.groq import Groq
-            return Groq(
-                id=model_id,
-                api_key=api_key,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
+            return Groq(id=model_id, api_key=api_key,
+                        temperature=temperature, max_tokens=max_tokens)
 
-        elif provider == "deepseek":
+        if provider == "deepseek":
             from agno.models.deepseek import DeepSeek
-            return DeepSeek(
-                id=model_id,
-                api_key=api_key,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
+            return DeepSeek(id=model_id, api_key=api_key,
+                            temperature=temperature, max_tokens=max_tokens)
 
-        else:
-            # Default to OpenAI
+        if provider == "ollama":
+            from agno.models.ollama import Ollama
+            return Ollama(id=model_id, temperature=temperature, num_predict=max_tokens)
+
+        if provider in ("openrouter",):
             from agno.models.openai import OpenAIChat
-            return OpenAIChat(
-                id=model_id,
-                api_key=api_key,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
+            return OpenAIChat(id=model_id, api_key=api_key,
+                              base_url="https://openrouter.ai/api/v1",
+                              temperature=temperature, max_tokens=max_tokens)
+
+        # Fallback: OpenAI-compatible
+        from agno.models.openai import OpenAIChat
+        return OpenAIChat(id=model_id, api_key=api_key,
+                          temperature=temperature, max_tokens=max_tokens)
 
     def _get_tools(self, tool_names: List[str]) -> List:
         """

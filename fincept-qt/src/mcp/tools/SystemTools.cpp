@@ -28,7 +28,7 @@ std::vector<ToolDef> get_system_tools() {
             return ToolResult::ok_data(QJsonObject{{"authenticated", true},
                                                    {"username", s.user_info.username},
                                                    {"email", s.user_info.email},
-                                                   {"account_type", s.user_info.account_type},
+                                                   {"account_type", s.account_type()},
                                                    {"is_verified", s.user_info.is_verified},
                                                    {"credit_balance", s.user_info.credit_balance},
                                                    {"has_subscription", s.has_subscription}});

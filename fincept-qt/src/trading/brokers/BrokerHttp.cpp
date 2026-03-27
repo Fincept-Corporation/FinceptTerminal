@@ -30,10 +30,22 @@ BrokerHttpResponse BrokerHttp::post_json(const QString& url, const QJsonObject& 
     return execute("POST", url, body, "application/json", headers);
 }
 
+BrokerHttpResponse BrokerHttp::post_json_array(const QString& url, const QJsonArray& payload,
+                                               const QMap<QString, QString>& headers) {
+    QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    return execute("POST", url, body, "application/json", headers);
+}
+
 BrokerHttpResponse BrokerHttp::put_json(const QString& url, const QJsonObject& payload,
                                         const QMap<QString, QString>& headers) {
     QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     return execute("PUT", url, body, "application/json", headers);
+}
+
+BrokerHttpResponse BrokerHttp::patch_json(const QString& url, const QJsonObject& payload,
+                                          const QMap<QString, QString>& headers) {
+    QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    return execute("PATCH", url, body, "application/json", headers);
 }
 
 BrokerHttpResponse BrokerHttp::del(const QString& url, const QMap<QString, QString>& headers,
@@ -48,11 +60,41 @@ BrokerHttpResponse BrokerHttp::del(const QString& url, const QMap<QString, QStri
 BrokerHttpResponse BrokerHttp::post_form(const QString& url, const QMap<QString, QString>& params,
                                          const QMap<QString, QString>& headers) {
     QUrlQuery query;
-    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it)
         query.addQueryItem(it.key(), it.value());
-    }
     QByteArray body = query.toString(QUrl::FullyEncoded).toUtf8();
     return execute("POST", url, body, "application/x-www-form-urlencoded", headers);
+}
+
+BrokerHttpResponse BrokerHttp::put_form(const QString& url, const QMap<QString, QString>& params,
+                                        const QMap<QString, QString>& headers) {
+    QUrlQuery query;
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it)
+        query.addQueryItem(it.key(), it.value());
+    QByteArray body = query.toString(QUrl::FullyEncoded).toUtf8();
+    return execute("PUT", url, body, "application/x-www-form-urlencoded", headers);
+}
+
+BrokerHttpResponse BrokerHttp::post_raw(const QString& url, const QByteArray& body,
+                                        const QMap<QString, QString>& headers) {
+    QString ct = "application/x-www-form-urlencoded";
+    auto it = headers.find("Content-Type");
+    if (it != headers.end())
+        ct = it.value();
+    QMap<QString, QString> h = headers;
+    h.remove("Content-Type");
+    return execute("POST", url, body, ct, h);
+}
+
+BrokerHttpResponse BrokerHttp::put_raw(const QString& url, const QByteArray& body,
+                                       const QMap<QString, QString>& headers) {
+    QString ct = "application/x-www-form-urlencoded";
+    auto it = headers.find("Content-Type");
+    if (it != headers.end())
+        ct = it.value();
+    QMap<QString, QString> h = headers;
+    h.remove("Content-Type");
+    return execute("PUT", url, body, ct, h);
 }
 
 BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url, const QByteArray& body,
@@ -79,6 +121,8 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
         reply = nam.post(req, body);
     } else if (method == "PUT") {
         reply = nam.put(req, body);
+    } else if (method == "PATCH") {
+        reply = nam.sendCustomRequest(req, "PATCH", body);
     } else if (method == "DELETE") {
         if (body.isEmpty()) {
             reply = nam.deleteResource(req);

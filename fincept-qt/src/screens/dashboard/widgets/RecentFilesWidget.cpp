@@ -1,0 +1,123 @@
+// src/screens/dashboard/widgets/RecentFilesWidget.cpp
+#include "screens/dashboard/widgets/RecentFilesWidget.h"
+
+#include "services/file_manager/FileManagerService.h"
+#include "ui/theme/Theme.h"
+
+#include <QDateTime>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QScrollArea>
+#include <QShowEvent>
+
+namespace fincept::screens::widgets {
+
+using namespace fincept::ui;
+using fincept::services::FileManagerService;
+
+static const char* MF = "font-family:'Consolas','Courier New',monospace;";
+
+RecentFilesWidget::RecentFilesWidget(QWidget* parent)
+    : BaseWidget("Recent Files", parent, "#d97706") {
+
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setStyleSheet("QScrollArea{border:none;background:transparent;}"
+                          "QScrollBar:vertical{background:transparent;width:4px;}"
+                          "QScrollBar::handle:vertical{background:#222;}");
+
+    auto* container = new QWidget;
+    container->setStyleSheet("background:transparent;");
+    list_layout_ = new QVBoxLayout(container);
+    list_layout_->setContentsMargins(4, 4, 4, 4);
+    list_layout_->setSpacing(3);
+    list_layout_->addStretch();
+    scroll->setWidget(container);
+
+    content_layout()->addWidget(scroll);
+
+    // Refresh when service changes
+    connect(&FileManagerService::instance(), &FileManagerService::files_changed,
+            this, &RecentFilesWidget::refresh_data);
+}
+
+void RecentFilesWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+    if (!loaded_) { loaded_ = true; refresh_data(); }
+}
+
+void RecentFilesWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+}
+
+void RecentFilesWidget::refresh_data() {
+    while (QLayoutItem* item = list_layout_->takeAt(0)) {
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
+    }
+
+    QJsonArray all = FileManagerService::instance().all_files();
+
+    // Sort by uploadedAt descending, take top 8
+    QVector<QJsonObject> files;
+    for (const auto& v : all)
+        if (v.isObject()) files.append(v.toObject());
+
+    std::sort(files.begin(), files.end(), [](const QJsonObject& a, const QJsonObject& b) {
+        return a["uploadedAt"].toString() > b["uploadedAt"].toString();
+    });
+    if (files.size() > 8) files.resize(8);
+
+    if (files.isEmpty()) {
+        auto* empty = new QLabel("No files yet");
+        empty->setAlignment(Qt::AlignCenter);
+        empty->setStyleSheet(
+            QString("color:%1;font-size:11px;background:transparent;padding:16px;%2")
+                .arg(colors::TEXT_DIM, MF));
+        list_layout_->addWidget(empty);
+        list_layout_->addStretch();
+        return;
+    }
+
+    for (const QJsonObject& f : files) {
+        auto* row = new QWidget;
+        row->setStyleSheet(
+            "background:#0d0d0d;border:1px solid #1a1a1a;border-radius:2px;");
+        auto* rl = new QHBoxLayout(row);
+        rl->setContentsMargins(8, 5, 8, 5);
+        rl->setSpacing(6);
+
+        // MIME badge
+        QString mime = f["type"].toString();
+        QString badge_text = mime.section('/', 1, 1).left(3).toUpper();
+        auto* badge = new QLabel(badge_text);
+        badge->setFixedWidth(28);
+        badge->setAlignment(Qt::AlignCenter);
+        badge->setStyleSheet(
+            QString("color:%1;font-size:9px;font-weight:700;background:transparent;%2")
+                .arg("#d97706", MF));
+        rl->addWidget(badge);
+
+        // Name
+        auto* name_lbl = new QLabel(f["originalName"].toString());
+        name_lbl->setStyleSheet(
+            QString("color:#e5e5e5;font-size:11px;background:transparent;%1").arg(MF));
+        name_lbl->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        rl->addWidget(name_lbl, 1);
+
+        // Date
+        QString date_str = QDateTime::fromString(f["uploadedAt"].toString(), Qt::ISODate)
+                               .toLocalTime().toString("MM/dd HH:mm");
+        auto* date_lbl = new QLabel(date_str);
+        date_lbl->setStyleSheet(
+            QString("color:%1;font-size:10px;background:transparent;%2")
+                .arg(colors::TEXT_DIM, MF));
+        rl->addWidget(date_lbl);
+
+        list_layout_->addWidget(row);
+    }
+
+    list_layout_->addStretch();
+}
+
+} // namespace fincept::screens::widgets

@@ -6,6 +6,7 @@
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "trading/BrokerRegistry.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
 
@@ -23,6 +24,27 @@ QString resolve_script_path(const QString& relative) {
     if (dir.isEmpty())
         return {};
     return dir + "/" + relative;
+}
+
+bool is_broker_stream(const QString& id) {
+    return fincept::trading::BrokerRegistry::instance().has(id);
+}
+
+QStringList to_broker_symbol_args(const QStringList& symbols) {
+    QStringList out;
+    out.reserve(symbols.size());
+    for (const auto& s : symbols) {
+        QString sym = s.trimmed();
+        if (sym.isEmpty())
+            continue;
+        QString exchange = "NSE";
+        if (sym.contains(':')) {
+            exchange = sym.section(':', 0, 0).trimmed().toUpper();
+            sym = sym.section(':', 1).trimmed();
+        }
+        out << (sym + ":" + exchange + ":0");
+    }
+    return out;
 }
 } // anonymous namespace
 
@@ -497,17 +519,64 @@ void ExchangeService::start_ws_stream(const QString& primary_symbol, const QStri
 
     // Find Python and script paths via PythonRunner
     QString python_path = python::PythonRunner::instance().python_path();
-    QString script_path = resolve_script_path("exchange/ws_stream.py");
-
-    if (python_path.isEmpty() || script_path.isEmpty()) {
-        LOG_ERROR(TAG, "Python or ws_stream.py not found");
-        return;
-    }
-
+    QString script_path;
     QStringList args;
-    args << "-u" << "-B" << script_path << exchange_id_;
-    for (const auto& sym : all_symbols)
-        args << sym;
+
+    if (is_broker_stream(exchange_id_)) {
+        script_path = resolve_script_path("exchange/broker_ws_bridge.py");
+        if (python_path.isEmpty() || script_path.isEmpty()) {
+            LOG_ERROR(TAG, "Python or broker_ws_bridge.py not found");
+            return;
+        }
+
+        auto* broker = BrokerRegistry::instance().get(exchange_id_);
+        if (!broker) {
+            LOG_ERROR(TAG, "Broker stream requested but broker is not registered: " + exchange_id_);
+            return;
+        }
+
+        auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty() || creds.access_token.isEmpty()) {
+            LOG_ERROR(TAG, "Broker stream credentials missing for " + exchange_id_);
+            return;
+        }
+
+        QString feed_token;
+        QString user_id = creds.user_id;
+        if (!creds.additional_data.isEmpty()) {
+            auto ad = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
+            if (user_id.isEmpty())
+                user_id = ad.value("client_code").toString();
+            feed_token = ad.value("feed_token").toString();
+        }
+        if (user_id.isEmpty())
+            user_id = creds.api_key;
+
+        QStringList broker_symbols = to_broker_symbol_args(all_symbols);
+        if (broker_symbols.isEmpty())
+            broker_symbols = to_broker_symbol_args({primary_symbol});
+        if (broker_symbols.isEmpty()) {
+            LOG_ERROR(TAG, "No symbols provided for broker websocket stream");
+            return;
+        }
+
+        args << "-u" << "-B" << script_path
+             << exchange_id_ << creds.api_key << creds.access_token << user_id;
+        if (!feed_token.isEmpty())
+            args << "--feed-token" << feed_token;
+        args << "--symbols";
+        args.append(broker_symbols);
+    } else {
+        script_path = resolve_script_path("exchange/ws_stream.py");
+        if (python_path.isEmpty() || script_path.isEmpty()) {
+            LOG_ERROR(TAG, "Python or ws_stream.py not found");
+            return;
+        }
+
+        args << "-u" << "-B" << script_path << exchange_id_;
+        for (const auto& sym : all_symbols)
+            args << sym;
+    }
 
     ws_process_ = new QProcess(this);
     // Throttle: process max 8 lines per event loop cycle via drain_ws_buffer()
@@ -576,15 +645,30 @@ void ExchangeService::handle_ws_line(const QString& line) {
         return;
     }
 
-    if (type == "ticker") {
-        // ws_stream.py emits snake_case fields; REST parse_ticker uses camelCase
-        QJsonObject normalised = msg;
-        if (!msg.contains("baseVolume") && msg.contains("base_volume"))
-            normalised["baseVolume"] = msg.value("base_volume");
-        if (!msg.contains("quoteVolume") && msg.contains("quote_volume"))
-            normalised["quoteVolume"] = msg.value("quote_volume");
+    if (type == "ticker" || type == "tick") {
+        TickerData ticker;
+        if (type == "tick") {
+            // broker_ws_bridge.py emits "tick" with equity field names.
+            ticker.symbol = msg.value("symbol").toString();
+            ticker.last = msg.value("ltp").toDouble();
+            ticker.bid = msg.value("bid").toDouble();
+            ticker.ask = msg.value("ask").toDouble();
+            ticker.high = msg.value("high").toDouble();
+            ticker.low = msg.value("low").toDouble();
+            ticker.open = msg.value("open").toDouble();
+            ticker.close = msg.value("close").toDouble();
+            ticker.base_volume = msg.value("volume").toDouble();
+            ticker.timestamp = msg.value("timestamp").toVariant().toLongLong();
+        } else {
+            // ws_stream.py emits snake_case fields; REST parse_ticker uses camelCase
+            QJsonObject normalised = msg;
+            if (!msg.contains("baseVolume") && msg.contains("base_volume"))
+                normalised["baseVolume"] = msg.value("base_volume");
+            if (!msg.contains("quoteVolume") && msg.contains("quote_volume"))
+                normalised["quoteVolume"] = msg.value("quote_volume");
+            ticker = parse_ticker(normalised);
+        }
 
-        TickerData ticker = parse_ticker(normalised);
         if (ticker.symbol.isEmpty() || ticker.last <= 0.0)
             return;
 

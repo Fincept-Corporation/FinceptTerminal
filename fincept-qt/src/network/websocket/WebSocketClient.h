@@ -19,12 +19,14 @@ class WebSocketClient : public QObject {
     void connect_to(const QString& url);
     void disconnect();
     void send(const QString& message);
+    void send_binary(const QByteArray& data);
     bool is_connected() const;
 
   signals:
     void connected();
     void disconnected();
     void message_received(const QString& message);
+    void binary_message_received(const QByteArray& data);
     void error_occurred(const QString& error);
 
   private slots:
@@ -32,6 +34,7 @@ class WebSocketClient : public QObject {
     void on_connected();
     void on_disconnected();
     void on_text_received(const QString& msg);
+    void on_binary_received(const QByteArray& data);
     void on_error(QAbstractSocket::SocketError err);
     void attempt_reconnect();
 #endif

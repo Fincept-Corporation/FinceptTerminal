@@ -80,8 +80,9 @@ class NewsDetailPanel : public QWidget {
     QVBoxLayout* infra_layout_ = nullptr;
 
     // Action buttons
-    QPushButton* open_btn_ = nullptr;
-    QPushButton* copy_btn_ = nullptr;
+    QPushButton* open_btn_  = nullptr;
+    QPushButton* copy_btn_  = nullptr;
+    QPushButton* save_btn_  = nullptr;
 
     QStackedWidget* stack_ = nullptr;
     services::NewsArticle current_article_;

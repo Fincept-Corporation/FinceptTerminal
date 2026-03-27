@@ -5,6 +5,7 @@
 // Streaming via QNetworkReply::readyRead + SSE parsing.
 
 #include "core/result/Result.h"
+#include "storage/repositories/LlmProfileRepository.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -69,9 +70,26 @@ class LlmService : public QObject {
     // Reload config from DB (call after user changes LLM settings)
     void reload_config();
 
+    // ── Active config accessors (AI Chat context) ─────────────────────────────
     QString active_provider() const;
     QString active_model() const;
-    bool is_configured() const;
+    QString active_api_key() const;
+    QString active_base_url() const;
+    double  active_temperature() const;
+    int     active_max_tokens() const;
+    bool    is_configured() const;
+
+    // ── Profile-aware resolution ──────────────────────────────────────────────
+    // Returns the resolved LLM profile for a given context.
+    // context_type: "ai_chat" | "agent" | "agent_default" |
+    //               "team" | "team_default" | "team_coordinator"
+    // context_id:   agent/team id, or empty for type-level queries.
+    ResolvedLlmProfile resolve_profile(const QString& context_type,
+                                       const QString& context_id = {}) const;
+
+    // Convenience: build a QJsonObject suitable for embedding in AgentService
+    // payloads (provider, model_id, api_key, base_url, temperature, max_tokens).
+    static QJsonObject profile_to_json(const ResolvedLlmProfile& p);
 
     // Fetch available models for a provider (async — emits models_fetched)
     void fetch_models(const QString& provider, const QString& api_key, const QString& base_url = {});

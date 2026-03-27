@@ -167,24 +167,258 @@ void AIQuantLabService::train_advanced_model(const QJsonObject& params) {
     run_module("advanced_models", "train_model", params);
 }
 
+// ── Factor Discovery ─────────────────────────────────────────────────────────
+void AIQuantLabService::factor_get_library() {
+    run_python("ai_quant_lab/qlib_service.py", {"get_factor_library"}, "factor_discovery", "get_factor_library");
+}
+void AIQuantLabService::factor_get_data(const QJsonObject& params) {
+    run_module("factor_discovery", "get_data", params);
+}
+void AIQuantLabService::factor_get_calendar(const QJsonObject& params) {
+    run_module("factor_discovery", "get_calendar", params);
+}
+void AIQuantLabService::factor_get_instruments() {
+    run_python("ai_quant_lab/qlib_service.py", {"get_instruments"}, "factor_discovery", "get_instruments");
+}
+
+// ── Model Library ─────────────────────────────────────────────────────────────
+void AIQuantLabService::model_list() {
+    run_python("ai_quant_lab/qlib_service.py", {"list_models"}, "model_library", "list_models");
+}
+void AIQuantLabService::model_train(const QJsonObject& params) {
+    run_module("model_library", "train_model", params);
+}
+void AIQuantLabService::model_backtest(const QJsonObject& params) {
+    run_module("model_library", "run_backtest", params);
+}
+void AIQuantLabService::model_check_status() {
+    run_python("ai_quant_lab/qlib_service.py", {"check_status"}, "model_library", "check_status");
+}
+
+// ── Live Signals ──────────────────────────────────────────────────────────────
+void AIQuantLabService::signals_get_data(const QJsonObject& params) {
+    run_module("live_signals", "get_data", params);
+}
+void AIQuantLabService::signals_get_factor_analysis(const QJsonObject& params) {
+    run_module("live_signals", "get_factor_analysis", params);
+}
+void AIQuantLabService::signals_get_feature_importance(const QJsonObject& params) {
+    run_module("live_signals", "get_feature_importance", params);
+}
+
 // ── HFT ──────────────────────────────────────────────────────────────────────
-void AIQuantLabService::hft_analyze(const QJsonObject& params) {
-    run_module("hft", "analyze", params);
+void AIQuantLabService::hft_create_orderbook(const QJsonObject& params) {
+    run_module("hft", "create_orderbook", params);
+}
+void AIQuantLabService::hft_snapshot(const QJsonObject& params) {
+    run_module("hft", "snapshot", params);
+}
+void AIQuantLabService::hft_market_making_quotes(const QJsonObject& params) {
+    run_module("hft", "market_making_quotes", params);
+}
+void AIQuantLabService::hft_detect_toxic(const QJsonObject& params) {
+    run_module("hft", "detect_toxic", params);
+}
+void AIQuantLabService::hft_execute_order(const QJsonObject& params) {
+    run_module("hft", "execute_order", params);
 }
 
 // ── Meta Learning ────────────────────────────────────────────────────────────
-void AIQuantLabService::meta_learn(const QJsonObject& params) {
-    run_module("meta_learning", "learn", params);
+void AIQuantLabService::meta_list_models() {
+    run_python("ai_quant_lab/qlib_meta_learning.py", {"list_models"}, "meta_learning", "list_models");
+}
+void AIQuantLabService::meta_run_selection(const QJsonObject& params) {
+    run_module("meta_learning", "run_selection", params);
+}
+void AIQuantLabService::meta_create_ensemble(const QJsonObject& params) {
+    run_module("meta_learning", "create_ensemble", params);
+}
+void AIQuantLabService::meta_tune_hyperparameters(const QJsonObject& params) {
+    run_module("meta_learning", "tune_hyperparameters", params);
+}
+void AIQuantLabService::meta_get_results() {
+    run_python("ai_quant_lab/qlib_meta_learning.py", {"get_results"}, "meta_learning", "get_results");
 }
 
 // ── Online Learning ──────────────────────────────────────────────────────────
-void AIQuantLabService::online_learn(const QJsonObject& params) {
-    run_module("online_learning", "learn", params);
+void AIQuantLabService::online_list_models() {
+    run_python("ai_quant_lab/qlib_online_learning.py", {"list_models"}, "online_learning", "list_models");
+}
+void AIQuantLabService::online_create_model(const QJsonObject& params) {
+    run_module("online_learning", "create_model", params);
+}
+void AIQuantLabService::online_train(const QJsonObject& params) {
+    run_module("online_learning", "train", params);
+}
+void AIQuantLabService::online_predict(const QJsonObject& params) {
+    run_module("online_learning", "predict", params);
+}
+void AIQuantLabService::online_performance(const QJsonObject& params) {
+    run_module("online_learning", "performance", params);
 }
 
 // ── Rolling Retraining ───────────────────────────────────────────────────────
-void AIQuantLabService::rolling_retrain(const QJsonObject& params) {
+void AIQuantLabService::rolling_create_schedule(const QJsonObject& params) {
+    run_module("rolling_retraining", "create", params);
+}
+void AIQuantLabService::rolling_execute_retrain(const QJsonObject& params) {
     run_module("rolling_retraining", "retrain", params);
+}
+void AIQuantLabService::rolling_list_schedules() {
+    run_python("ai_quant_lab/qlib_rolling_retraining.py", {"list"}, "rolling_retraining", "list");
+}
+
+// ── Deep Agent (LangGraph multi-agent) ───────────────────────────────────────
+void AIQuantLabService::run_deep_agent(const QJsonObject& params) {
+    // Build the CLI payload: execute_task with task, agent_type, thread_id
+    QJsonObject payload;
+    payload["task"]       = params["task"];
+    payload["agent_type"] = params.contains("agent_type") ? params["agent_type"] : QJsonValue("general");
+    if (params.contains("thread_id"))
+        payload["thread_id"] = params["thread_id"];
+
+    auto json = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    run_python("agents/deepagents/cli.py", {"execute_task", json}, "deep_agent", "execute_task");
+}
+
+// ── RD-Agent (autonomous factor/model research) ──────────────────────────────
+void AIQuantLabService::rd_agent_check_status() {
+    run_python("agents/rdagents/cli.py", {"check_status"}, "deep_agent", "check_status");
+}
+
+void AIQuantLabService::rd_agent_start_factor_mining(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python("agents/rdagents/cli.py", {"start_factor_mining", json}, "deep_agent", "start_factor_mining");
+}
+
+void AIQuantLabService::rd_agent_start_model_optimization(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python("agents/rdagents/cli.py", {"start_model_optimization", json}, "deep_agent", "start_model_optimization");
+}
+
+void AIQuantLabService::rd_agent_start_quant_research(const QJsonObject& params) {
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python("agents/rdagents/cli.py", {"start_quant_research", json}, "deep_agent", "start_quant_research");
+}
+
+void AIQuantLabService::rd_agent_get_task_status(const QString& task_id) {
+    auto json = QString("{\"task_id\":\"%1\"}").arg(task_id);
+    run_python("agents/rdagents/cli.py", {"get_task_status", json}, "deep_agent", "get_task_status");
+}
+
+void AIQuantLabService::rd_agent_get_discovered_factors(const QString& task_id) {
+    auto json = QString("{\"task_id\":\"%1\"}").arg(task_id);
+    run_python("agents/rdagents/cli.py", {"get_discovered_factors", json}, "deep_agent", "get_discovered_factors");
+}
+
+void AIQuantLabService::rd_agent_get_optimized_model(const QString& task_id) {
+    auto json = QString("{\"task_id\":\"%1\"}").arg(task_id);
+    run_python("agents/rdagents/cli.py", {"get_optimized_model", json}, "deep_agent", "get_optimized_model");
+}
+
+void AIQuantLabService::rd_agent_list_tasks(const QString& status_filter) {
+    QString json = status_filter.isEmpty()
+        ? QStringLiteral("{}")
+        : QString("{\"status\":\"%1\"}").arg(status_filter);
+    run_python("agents/rdagents/cli.py", {"list_tasks", json}, "deep_agent", "list_tasks");
+}
+
+void AIQuantLabService::rd_agent_stop_task(const QString& task_id) {
+    auto json = QString("{\"task_id\":\"%1\"}").arg(task_id);
+    run_python("agents/rdagents/cli.py", {"stop_task", json}, "deep_agent", "stop_task");
+}
+
+void AIQuantLabService::rd_agent_resume_task(const QString& task_id, const QJsonObject& config) {
+    QJsonObject params;
+    params["task_id"] = task_id;
+    if (!config.isEmpty())
+        params["config"] = config;
+    auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    run_python("agents/rdagents/cli.py", {"resume_task", json}, "deep_agent", "resume_task");
+}
+
+void AIQuantLabService::rd_agent_start_ui() {
+    run_python("agents/rdagents/cli.py", {"start_ui"}, "deep_agent", "start_ui");
+}
+
+void AIQuantLabService::rd_agent_start_mcp_server(int port) {
+    auto json = QString("{\"port\":%1}").arg(port);
+    run_python("agents/rdagents/cli.py", {"start_mcp_server", json}, "deep_agent", "start_mcp_server");
+}
+
+void AIQuantLabService::rd_agent_mcp_status() {
+    run_python("agents/rdagents/cli.py", {"mcp_status"}, "deep_agent", "mcp_status");
+}
+
+// ── Feature Engineering ──────────────────────────────────────────────────────
+void AIQuantLabService::feature_compute(const QJsonObject& params) {
+    auto cmd = params["indicator"].toString("moving_average");
+    run_module("feature_engineering", cmd, params);
+}
+
+void AIQuantLabService::feature_select_by_ic(const QJsonObject& params) {
+    run_module("feature_engineering", "select_features_by_ic", params);
+}
+
+void AIQuantLabService::feature_evaluate_expression(const QJsonObject& params) {
+    run_module("feature_engineering", "evaluate_expression", params);
+}
+
+// ── Portfolio Optimization ────────────────────────────────────────────────────
+void AIQuantLabService::portopt_run(const QString& method, const QJsonObject& params) {
+    run_module("portfolio_opt", method, params);
+}
+
+// ── Factor Evaluation ─────────────────────────────────────────────────────────
+void AIQuantLabService::evaluation_ic(const QJsonObject& params) {
+    run_module("factor_evaluation", "calculate_ic", params);
+}
+
+void AIQuantLabService::evaluation_report(const QJsonObject& params) {
+    run_module("factor_evaluation", "generate_evaluation_report", params);
+}
+
+void AIQuantLabService::evaluation_risk_metrics(const QJsonObject& params) {
+    run_module("factor_evaluation", "calculate_risk_metrics", params);
+}
+
+// ── Strategy Builder ──────────────────────────────────────────────────────────
+void AIQuantLabService::strategy_create(const QString& type, const QJsonObject& params) {
+    run_module("strategy_builder", type, params);
+}
+
+void AIQuantLabService::strategy_portfolio_metrics(const QJsonObject& params) {
+    run_module("strategy_builder", "portfolio_metrics", params);
+}
+
+void AIQuantLabService::strategy_list() {
+    run_module("strategy_builder", "list_strategies", {});
+}
+
+// ── Data Processors ───────────────────────────────────────────────────────────
+void AIQuantLabService::dataproc_list_processors() {
+    run_module("data_processors", "list_processors", {});
+}
+
+void AIQuantLabService::dataproc_create_pipeline(const QJsonObject& params) {
+    run_module("data_processors", "create_pipeline", params);
+}
+
+void AIQuantLabService::dataproc_process_data(const QJsonObject& params) {
+    run_module("data_processors", "process_data", params);
+}
+
+// ── Quant Reporting ───────────────────────────────────────────────────────────
+void AIQuantLabService::reporting_ic_analysis(const QJsonObject& params) {
+    run_module("quant_reporting", "ic_analysis", params);
+}
+
+void AIQuantLabService::reporting_model_performance(const QJsonObject& params) {
+    run_module("quant_reporting", "model_performance", params);
+}
+
+void AIQuantLabService::reporting_cumulative_returns(const QJsonObject& params) {
+    run_module("quant_reporting", "cumulative_return_graph", params);
 }
 
 } // namespace fincept::services::quant

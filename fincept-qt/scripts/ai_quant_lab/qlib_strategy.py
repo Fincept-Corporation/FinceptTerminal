@@ -510,6 +510,8 @@ def main():
     service = StrategyService()
 
     try:
+        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+
         if command == "check_status":
             result = {
                 "success": True,
@@ -549,6 +551,34 @@ def main():
 
         elif command == "list_strategies":
             result = service.list_strategies()
+
+        elif command == "create_risk_parity":
+            result = service.create_risk_parity_strategy(
+                returns=pd.DataFrame(params.get("returns", [])),
+                target_risk=params.get("target_risk", 0.10),
+                rebalance_frequency=params.get("rebalance_frequency", "monthly")
+            )
+
+        elif command == "create_mean_variance":
+            cov_raw = params.get("cov_matrix", [])
+            assets = params.get("assets", [f"A{i}" for i in range(len(cov_raw))])
+            result = service.create_mean_variance_strategy(
+                expected_returns=pd.Series(params.get("expected_returns", []), index=assets),
+                cov_matrix=pd.DataFrame(cov_raw, index=assets, columns=assets),
+                target_return=params.get("target_return"),
+                risk_free_rate=params.get("risk_free_rate", 0.02),
+                constraints=params.get("constraints")
+            )
+
+        elif command == "portfolio_metrics":
+            result = service.calculate_portfolio_metrics(
+                returns=pd.Series(params.get("returns", [])),
+                benchmark_returns=pd.Series(params.get("benchmark_returns")) if params.get("benchmark_returns") else None,
+                risk_free_rate=params.get("risk_free_rate", 0.02)
+            )
+
+        elif command == "get_strategy":
+            result = service.get_strategy(params.get("strategy_id", ""))
 
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}

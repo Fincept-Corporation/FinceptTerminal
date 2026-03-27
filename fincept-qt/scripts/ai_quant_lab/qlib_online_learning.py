@@ -479,43 +479,48 @@ def main():
     command = sys.argv[1]
     manager = OnlineLearningManager()
 
-    if command == 'initialize':
-        provider_uri = sys.argv[2] if len(sys.argv) > 2 else "~/.qlib/qlib_data/cn_data"
-        region = sys.argv[3] if len(sys.argv) > 3 else "cn"
-        result = manager.initialize(provider_uri, region)
+    params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
 
-    elif command == 'create_model':
-        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-        result = manager.create_online_model(**params)
+    try:
+        if command == 'initialize':
+            result = manager.initialize(
+                params.get('provider_uri', "~/.qlib/qlib_data/cn_data"),
+                params.get('region', "cn")
+            )
 
-    elif command == 'train':
-        model_id = sys.argv[2]
-        features = json.loads(sys.argv[3])
-        target = float(sys.argv[4])
-        result = manager.incremental_train(model_id, features, target)
+        elif command == 'create_model':
+            result = manager.create_online_model(**params)
 
-    elif command == 'predict':
-        model_id = sys.argv[2]
-        features = json.loads(sys.argv[3])
-        result = manager.predict_online(model_id, features)
+        elif command == 'train':
+            result = manager.incremental_train(
+                model_id=params.get('model_id', ''),
+                features=params.get('features', {}),
+                target=float(params.get('target', 0.0))
+            )
 
-    elif command == 'performance':
-        model_id = sys.argv[2]
-        result = manager.get_model_performance(model_id)
+        elif command == 'predict':
+            result = manager.predict_online(
+                model_id=params.get('model_id', ''),
+                features=params.get('features', {})
+            )
 
-    elif command == 'setup_rolling':
-        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-        result = manager.setup_rolling_update(**params)
+        elif command == 'performance':
+            result = manager.get_model_performance(params.get('model_id', ''))
 
-    elif command == 'handle_drift':
-        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-        result = manager.handle_concept_drift(**params)
+        elif command == 'setup_rolling':
+            result = manager.setup_rolling_update(**params)
 
-    elif command == 'list_models':
-        result = manager.get_all_models()
+        elif command == 'handle_drift':
+            result = manager.handle_concept_drift(**params)
 
-    else:
-        result = {'success': False, 'error': f'Unknown command: {command}'}
+        elif command == 'list_models':
+            result = manager.get_all_models()
+
+        else:
+            result = {'success': False, 'error': f'Unknown command: {command}'}
+
+    except Exception as e:
+        result = {'success': False, 'error': str(e)}
 
     print(json.dumps(result, indent=2))
 

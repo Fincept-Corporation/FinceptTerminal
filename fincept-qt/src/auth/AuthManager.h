@@ -2,6 +2,7 @@
 #include "auth/AuthTypes.h"
 
 #include <QObject>
+#include <functional>
 
 namespace fincept::auth {
 
@@ -58,9 +59,10 @@ class AuthManager : public QObject {
     void save_session();
     void load_session();
     void clear_session();
-    void validate_saved_session(const SessionData& saved);
-    void fetch_user_profile(const QString& api_key);
-    void fetch_user_subscription();
+    void validate_saved_session();
+    void fetch_user_profile(std::function<void()> on_done = {});
+    void fetch_user_subscription(std::function<void()> on_done = {});
+    void complete_auth_flow(std::function<void()> on_done);
     void auto_configure_fincept_llm();
     QString generate_device_id() const;
     QJsonObject unwrap_data(const QJsonObject& raw) const;

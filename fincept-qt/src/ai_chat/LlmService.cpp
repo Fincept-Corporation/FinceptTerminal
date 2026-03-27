@@ -135,6 +135,30 @@ QString LlmService::active_model() const {
     return model_;
 }
 
+QString LlmService::active_api_key() const {
+    QMutexLocker lock(&mutex_);
+    const_cast<LlmService*>(this)->ensure_config();
+    return api_key_;
+}
+
+QString LlmService::active_base_url() const {
+    QMutexLocker lock(&mutex_);
+    const_cast<LlmService*>(this)->ensure_config();
+    return base_url_;
+}
+
+double LlmService::active_temperature() const {
+    QMutexLocker lock(&mutex_);
+    const_cast<LlmService*>(this)->ensure_config();
+    return temperature_;
+}
+
+int LlmService::active_max_tokens() const {
+    QMutexLocker lock(&mutex_);
+    const_cast<LlmService*>(this)->ensure_config();
+    return max_tokens_;
+}
+
 bool LlmService::is_configured() const {
     QMutexLocker lock(&mutex_);
     const_cast<LlmService*>(this)->ensure_config();
@@ -143,6 +167,28 @@ bool LlmService::is_configured() const {
     if (provider_requires_api_key(provider_))
         return !api_key_.isEmpty();
     return true;
+}
+
+ResolvedLlmProfile LlmService::resolve_profile(const QString& context_type,
+                                                const QString& context_id) const {
+    return LlmProfileRepository::instance().resolve_for_context(context_type, context_id);
+}
+
+// static
+QJsonObject LlmService::profile_to_json(const ResolvedLlmProfile& p) {
+    // Only include fields the Python model constructor accepts.
+    // profile_id / profile_name are internal metadata — never send them to Python
+    // or they land in extra_model_kwargs and fail as unexpected kwargs (e.g. Claude(profile_id=...)).
+    QJsonObject obj;
+    obj["provider"]    = p.provider;
+    obj["model_id"]    = p.model_id;
+    obj["api_key"]     = p.api_key;
+    obj["base_url"]    = p.base_url;
+    obj["temperature"] = p.temperature;
+    obj["max_tokens"]  = p.max_tokens;
+    if (!p.system_prompt.isEmpty())
+        obj["system_prompt"] = p.system_prompt;
+    return obj;
 }
 
 // ============================================================================

@@ -485,22 +485,69 @@ def main():
     service = PortfolioOptimizationService()
 
     try:
+        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+
         if command == "check_status":
             result = {
                 "success": True,
                 "scipy_available": SCIPY_AVAILABLE,
                 "methods_available": [
-                    "black_litterman",
-                    "hierarchical_risk_parity",
-                    "minimum_variance",
-                    "maximum_sharpe",
-                    "efficient_frontier"
+                    "black_litterman", "hierarchical_risk_parity",
+                    "minimum_variance", "maximum_sharpe", "efficient_frontier"
                 ]
             }
-            print(json.dumps(result))
+
+        elif command == "black_litterman":
+            cov_raw = params.get("cov_matrix", [])
+            assets = params.get("assets", [f"A{i}" for i in range(len(cov_raw))])
+            result = service.black_litterman(
+                market_caps=pd.Series(params.get("market_caps", []), index=assets),
+                cov_matrix=pd.DataFrame(cov_raw, index=assets, columns=assets),
+                views=np.array(params.get("views", [])),
+                view_confidences=np.array(params.get("view_confidences", [])),
+                risk_free_rate=params.get("risk_free_rate", 0.02),
+                tau=params.get("tau", 0.025),
+                risk_aversion=params.get("risk_aversion", 2.5)
+            )
+
+        elif command == "hierarchical_risk_parity":
+            cov_raw = params.get("cov_matrix", [])
+            assets = params.get("assets", [f"A{i}" for i in range(len(cov_raw))])
+            result = service.hierarchical_risk_parity(
+                cov_matrix=pd.DataFrame(cov_raw, index=assets, columns=assets)
+            )
+
+        elif command == "minimum_variance":
+            cov_raw = params.get("cov_matrix", [])
+            assets = params.get("assets", [f"A{i}" for i in range(len(cov_raw))])
+            result = service.minimum_variance_portfolio(
+                cov_matrix=pd.DataFrame(cov_raw, index=assets, columns=assets),
+                constraints=params.get("constraints")
+            )
+
+        elif command == "maximum_sharpe":
+            cov_raw = params.get("cov_matrix", [])
+            assets = params.get("assets", [f"A{i}" for i in range(len(cov_raw))])
+            result = service.maximum_sharpe_portfolio(
+                expected_returns=pd.Series(params.get("expected_returns", []), index=assets),
+                cov_matrix=pd.DataFrame(cov_raw, index=assets, columns=assets),
+                risk_free_rate=params.get("risk_free_rate", 0.02),
+                constraints=params.get("constraints")
+            )
+
+        elif command == "efficient_frontier":
+            cov_raw = params.get("cov_matrix", [])
+            assets = params.get("assets", [f"A{i}" for i in range(len(cov_raw))])
+            result = service.efficient_frontier(
+                expected_returns=pd.Series(params.get("expected_returns", []), index=assets),
+                cov_matrix=pd.DataFrame(cov_raw, index=assets, columns=assets),
+                num_portfolios=params.get("num_portfolios", 100)
+            )
+
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
-            print(json.dumps(result))
+
+        print(json.dumps(result))
 
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))

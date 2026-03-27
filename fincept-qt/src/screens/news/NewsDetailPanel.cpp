@@ -1,12 +1,18 @@
 #include "screens/news/NewsDetailPanel.h"
 
 #include "core/logging/Logger.h"
+#include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDateTime>
 #include <QDesktopServices>
+#include <QFile>
+#include <QFileInfo>
+#include <QRegularExpression>
 #include <QScrollArea>
+#include <QTextStream>
 #include <QTimer>
 #include <QUrl>
 
@@ -135,10 +141,15 @@ QWidget* NewsDetailPanel::build_content_view() {
     analyze_btn_ = new QPushButton("ANALYZE", content);
     analyze_btn_->setObjectName("newsDetailAnalyzeBtn");
     analyze_btn_->setFixedHeight(24);
+    save_btn_ = new QPushButton("SAVE", content);
+    save_btn_->setObjectName("newsDetailSaveBtn");
+    save_btn_->setFixedHeight(24);
+    save_btn_->setToolTip("Save article to File Manager");
 
     action_layout->addWidget(open_btn_);
     action_layout->addWidget(copy_btn_);
     action_layout->addWidget(analyze_btn_);
+    action_layout->addWidget(save_btn_);
     layout->addWidget(actions);
 
     connect(open_btn_, &QPushButton::clicked, this, [this]() {
@@ -156,6 +167,32 @@ QWidget* NewsDetailPanel::build_content_view() {
         analyze_btn_->setEnabled(false);
         analyze_timeout_->start();
         emit analyze_requested(current_article_.link);
+    });
+    connect(save_btn_, &QPushButton::clicked, this, [this]() {
+        if (!has_article_) return;
+
+        // Build a safe filename from headline
+        QString safe = current_article_.headline;
+        safe.replace(QRegularExpression("[^a-zA-Z0-9_\\- ]"), "").simplified();
+        safe.replace(' ', '_');
+        if (safe.length() > 60) safe = safe.left(60);
+        QString ts = QString::number(QDateTime::currentMSecsSinceEpoch());
+        QString stored_name = "news_" + safe + "_" + ts + ".txt";
+        QString dest = services::FileManagerService::instance().storage_dir() + "/" + stored_name;
+
+        QFile f(dest);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&f);
+            out << current_article_.headline << "\n";
+            out << current_article_.source << "  |  " << current_article_.time << "\n";
+            out << current_article_.link << "\n\n";
+            out << current_article_.summary << "\n";
+            f.close();
+            services::FileManagerService::instance().register_file(
+                stored_name, safe + ".txt",
+                QFileInfo(dest).size(), "text/plain", "news");
+            LOG_INFO("News", "Saved article: " + stored_name);
+        }
     });
 
     // Translate button

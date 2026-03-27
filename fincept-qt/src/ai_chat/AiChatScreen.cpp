@@ -11,6 +11,10 @@
 #include <QApplication>
 #include <QDateTime>
 #include <QDialog>
+#include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QTextStream>
 #include <QDialogButtonBox>
 #include <QFrame>
 #include <QGridLayout>
@@ -493,6 +497,31 @@ QWidget* AiChatScreen::build_input_area() {
     });
     hl->addWidget(input_box_, 1);
 
+    // Attach file button
+    attach_btn_ = new QPushButton("⊕");
+    attach_btn_->setFixedSize(44, 44);
+    attach_btn_->setCursor(Qt::PointingHandCursor);
+    attach_btn_->setToolTip("Attach a file to this message");
+    attach_btn_->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                "border-radius:6px;font-size:18px;font-weight:700;}"
+                "QPushButton:hover{background:rgba(217,119,6,0.15);border-color:%1;}"
+                "QPushButton[active=\"true\"]{background:rgba(217,119,6,0.2);"
+                "border-color:%1;color:%1;}")
+            .arg(col::AMBER, col::BORDER_MED));
+    connect(attach_btn_, &QPushButton::clicked, this, &AiChatScreen::on_attach_file);
+    hl->addWidget(attach_btn_);
+
+    // Badge showing attached file name (hidden by default)
+    attach_badge_ = new QLabel;
+    attach_badge_->setVisible(false);
+    attach_badge_->setMaximumWidth(160);
+    attach_badge_->setStyleSheet(
+        QString("color:%1;font-size:10px;background:rgba(217,119,6,0.12);"
+                "border:1px solid #78350f;border-radius:3px;padding:2px 6px;%2")
+            .arg(col::AMBER, "font-family:'Consolas',monospace;"));
+    hl->addWidget(attach_badge_);
+
     send_btn_ = new QPushButton("Send");
     send_btn_->setFixedSize(76, 44);
     send_btn_->setCursor(Qt::PointingHandCursor);
@@ -673,22 +702,61 @@ void AiChatScreen::on_delete_session() {
     load_sessions();
 }
 
+void AiChatScreen::on_attach_file() {
+    // Let user pick from File Manager index or browse disk
+    QStringList paths = QFileDialog::getOpenFileNames(
+        this, "Attach File to Message", QString(),
+        "All Files (*);;Text Files (*.txt *.md *.csv *.json);;Notebooks (*.ipynb);;PDF (*.pdf)");
+    if (paths.isEmpty()) return;
+
+    attached_file_path_ = paths.first(); // single attach for now
+    QFileInfo fi(attached_file_path_);
+    if (attach_badge_) {
+        attach_badge_->setText("⊕ " + fi.fileName());
+        attach_badge_->setVisible(true);
+    }
+    if (attach_btn_)
+        attach_btn_->setProperty("active", true);
+}
+
 void AiChatScreen::on_send() {
     if (streaming_) return;
-    const QString text = input_box_->toPlainText().trimmed();
-    if (text.isEmpty()) return;
+    const QString raw_text = input_box_->toPlainText().trimmed();
+    if (raw_text.isEmpty() && attached_file_path_.isEmpty()) return;
     if (active_session_id_.isEmpty()) create_new_session();
     if (!ai_chat::LlmService::instance().is_configured()) {
         add_message_bubble("system",
             "No LLM provider configured. Go to Settings > LLM Configuration to set up a provider.");
         return;
     }
+
+    // Build final text: prepend file contents if attached
+    QString text = raw_text;
+    if (!attached_file_path_.isEmpty()) {
+        QFile f(attached_file_path_);
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&f);
+            in.setEncoding(QStringConverter::Utf8);
+            QString file_content = in.read(32000); // cap at 32K chars
+            f.close();
+            QFileInfo fi(attached_file_path_);
+            text = QString("[Attached file: %1]\n\n%2\n\n---\n\n%3")
+                       .arg(fi.fileName(), file_content, raw_text);
+        }
+        // Reset attach state
+        attached_file_path_.clear();
+        if (attach_badge_) attach_badge_->setVisible(false);
+        if (attach_btn_)   attach_btn_->setProperty("active", false);
+    }
+
     input_box_->clear();
     input_box_->setFixedHeight(44);
     set_input_enabled(false);
     streaming_ = true;
     show_welcome(false);
-    add_message_bubble("user", text);
+    // Display only raw_text in bubble (not full file dump)
+    add_message_bubble("user", raw_text.isEmpty()
+        ? "[File attached — see context]" : raw_text);
     total_messages_++;
     ChatRepository::instance().add_message(active_session_id_, "user", text,
         ai_chat::LlmService::instance().active_provider(),

@@ -4,6 +4,7 @@
 #include "auth/AuthManager.h"
 #include "ui/theme/Theme.h"
 
+#include <QApplication>
 #include <QDesktopServices>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -35,6 +36,7 @@ static const char* CARD_ACTIVE = "QWidget#plan_card { background: #0a0a0a; borde
 
 PricingScreen::PricingScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
+    confetti_ = new ui::ConfettiOverlay(this);
 }
 
 void PricingScreen::build_ui() {
@@ -123,21 +125,42 @@ void PricingScreen::build_ui() {
 
 void PricingScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    update_footer();
 
     auto& auth = auth::AuthManager::instance();
     if (auth.is_authenticated()) {
-        auto& s = auth.session();
-        QString info = (s.user_info.email.isEmpty() ? s.user_info.username : s.user_info.email);
-        info += QString("  |  %1 CR").arg(s.user_info.credit_balance, 0, 'f', 0);
-        user_info_label_->setText(info);
-        user_info_label_->show();
+        // Show loading while we fetch fresh data
+        loading_label_->setText("Updating plan status...");
+        loading_label_->show();
+        user_info_label_->hide();
+
+        // Fetch fresh user data from API, then render once with accurate data
+        auth.refresh_user_data();
+        auto* conn = new QMetaObject::Connection;
+        *conn = connect(&auth, &auth::AuthManager::auth_state_changed, this, [this, conn]() {
+            disconnect(*conn);
+            delete conn;
+
+            loading_label_->hide();
+
+            auto& mgr = auth::AuthManager::instance();
+            if (mgr.is_authenticated()) {
+                auto& s = mgr.session();
+                QString info = (s.user_info.email.isEmpty() ? s.user_info.username : s.user_info.email);
+                info += QString("  |  %1 CR").arg(s.user_info.credit_balance, 0, 'f', 0);
+                user_info_label_->setText(info);
+                user_info_label_->show();
+            }
+
+            // Render cards once with fresh data
+            fetched_ = false;
+            fetch_plans();
+            update_footer();
+        });
     } else {
         user_info_label_->hide();
-    }
-
-    if (!fetched_) {
+        fetched_ = false;
         fetch_plans();
+        update_footer();
     }
 }
 
@@ -245,7 +268,8 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
     bool is_popular = (plan.name == "Standard" || plan.name == "Pro");
     bool is_current = false;
     if (auth_mgr.is_authenticated()) {
-        QString user_plan = auth_mgr.session().user_info.account_type.toLower();
+        const auto& s = auth_mgr.session();
+        QString user_plan = s.account_type().toLower();
         is_current = (user_plan == plan.plan_id.toLower());
     }
 
@@ -404,7 +428,7 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
     }
     error_label_->hide();
 
-    auth::AuthApi::instance().create_payment_order(plan_id, [this, plan_id](auth::ApiResponse r) {
+    auth::AuthApi::instance().generate_checkout_token(plan_id, [this, plan_id](auth::ApiResponse r) {
         for (auto* btn : cards_container_->findChildren<QPushButton*>()) {
             if (btn->text() == "PROCESSING...") {
                 btn->setEnabled(true);
@@ -413,7 +437,7 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
         }
 
         if (!r.success) {
-            error_label_->setText(r.error.isEmpty() ? "Failed to create payment session" : r.error);
+            error_label_->setText(r.error.isEmpty() ? "Failed to generate checkout token" : r.error);
             error_label_->show();
             return;
         }
@@ -422,28 +446,86 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
         if (data.contains("data") && data["data"].isObject())
             data = data["data"].toObject();
 
-        QString checkout_url;
-        if (data.contains("payment_session_id")) {
-            QString sid = data["payment_session_id"].toString();
-            checkout_url = "https://fincept.in/checkout.html?session=" + sid;
-        }
-        if (checkout_url.isEmpty() && data.contains("checkout_url"))
-            checkout_url = data["checkout_url"].toString();
-        if (checkout_url.isEmpty() && data.contains("url"))
-            checkout_url = data["url"].toString();
-
-        QString order_id = data["order_id"].toString();
-
-        if (!checkout_url.isEmpty()) {
-            QDesktopServices::openUrl(QUrl(checkout_url));
-            // Navigate to payment processing screen to poll for confirmation
-            if (!order_id.isEmpty())
-                emit payment_initiated(order_id, plan_id);
-        } else {
-            error_label_->setText("No checkout URL received from server");
+        QString token = data["token"].toString();
+        if (token.isEmpty()) {
+            error_label_->setText("No checkout token received from server");
             error_label_->show();
+            return;
+        }
+
+        QString url = QString("https://fincept.in/checkout?token=%1&plan=%2")
+                          .arg(QUrl::toPercentEncoding(token),
+                               QUrl::toPercentEncoding(plan_id));
+        QDesktopServices::openUrl(QUrl(url));
+
+        // Store plan before payment so we can detect changes
+        awaiting_payment_ = true;
+        awaiting_plan_id_ = plan_id;
+        pre_payment_plan_ = auth::AuthManager::instance().session().account_type().toLower();
+
+        // Start polling every 5 seconds to detect plan change
+        if (!payment_poll_timer_) {
+            payment_poll_timer_ = new QTimer(this);
+            payment_poll_timer_->setInterval(1000);
+            connect(payment_poll_timer_, &QTimer::timeout, this, &PricingScreen::poll_payment_status);
+        }
+        payment_poll_timer_->start();
+
+        // Also check on focus return for faster detection
+        if (focus_connection_)
+            disconnect(focus_connection_);
+        focus_connection_ = connect(qApp, &QApplication::applicationStateChanged,
+                                    this, [this](Qt::ApplicationState state) {
+                                        if (state == Qt::ApplicationActive && awaiting_payment_)
+                                            poll_payment_status();
+                                    });
+    });
+}
+
+void PricingScreen::poll_payment_status() {
+    if (!awaiting_payment_)
+        return;
+
+    auto& auth = auth::AuthManager::instance();
+    auth.refresh_user_data();
+
+    auto* conn = new QMetaObject::Connection;
+    *conn = connect(&auth, &auth::AuthManager::auth_state_changed, this, [this, conn]() {
+        disconnect(*conn);
+        delete conn;
+
+        auto& mgr = auth::AuthManager::instance();
+
+        // Update user info label
+        if (mgr.is_authenticated()) {
+            auto& s = mgr.session();
+            QString info = (s.user_info.email.isEmpty() ? s.user_info.username : s.user_info.email);
+            info += QString("  |  %1 CR").arg(s.user_info.credit_balance, 0, 'f', 0);
+            user_info_label_->setText(info);
+        }
+
+        QString new_plan = mgr.session().account_type().toLower();
+
+        if (new_plan != pre_payment_plan_) {
+            // Plan changed — stop polling, re-render, show confetti
+            awaiting_payment_ = false;
+            if (payment_poll_timer_)
+                payment_poll_timer_->stop();
+            if (focus_connection_)
+                disconnect(focus_connection_);
+
+            fetched_ = false;
+            fetch_plans();
+            update_footer();
+
+            confetti_->setGeometry(0, 0, width(), height());
+            confetti_->show_confetti();
         }
     });
+}
+
+void PricingScreen::on_app_focus_returned() {
+    poll_payment_status();
 }
 
 // ── Footer ───────────────────────────────────────────────────────────────────

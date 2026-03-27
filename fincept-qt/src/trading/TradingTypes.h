@@ -185,6 +185,7 @@ struct UnifiedOrder {
     double stop_loss = 0;
     double take_profit = 0;
     bool amo = false;
+    QString instrument_token; // broker-specific numeric token (e.g. Zerodha/AliceBlue/Dhan)
 };
 
 struct BrokerPosition {
@@ -214,6 +215,7 @@ struct BrokerHolding {
 
 struct BrokerOrderInfo {
     QString order_id;
+    QString exchange_order_id;
     QString symbol;
     QString exchange;
     QString side;
@@ -222,6 +224,7 @@ struct BrokerOrderInfo {
     double quantity = 0;
     double price = 0;
     double trigger_price = 0;
+    double stop_price = 0;
     double filled_qty = 0;
     double avg_price = 0;
     QString status;
@@ -310,6 +313,69 @@ struct BrokerMetaEntry {
     QString code;
     QString description;
     QString exchange;      // for condition codes: which tape/exchange it applies to
+};
+
+// ── Margin Calculator ─────────────────────────────────────────────────────────
+
+/// Per-order margin breakdown returned by the broker's pre-trade margin API.
+struct OrderMargin {
+    QString symbol;
+    QString exchange;
+    QString side;          // "BUY" / "SELL"
+    double  quantity       = 0.0;
+    double  price          = 0.0;
+
+    // Margin components (all in account currency)
+    double  total          = 0.0;  // total margin required
+    double  var_margin     = 0.0;  // VaR margin (equity)
+    double  elm            = 0.0;  // Extreme Loss Margin
+    double  additional     = 0.0;  // additional margin (futures/options)
+    double  bo_margin      = 0.0;  // bracket order margin
+    double  cash           = 0.0;  // cash component
+    double  pnl            = 0.0;  // unrealised P&L used as collateral
+    double  leverage       = 0.0;  // implied leverage ratio (total / (price * qty))
+    QString error;                 // per-order error if margin could not be calculated
+};
+
+/// Aggregate margin for a basket of orders (POST /margins/basket).
+struct BasketMargin {
+    double               initial_margin   = 0.0;  // total margin needed to open
+    double               final_margin     = 0.0;  // total margin needed after netting
+    QVector<OrderMargin> orders;                   // per-order breakdown
+};
+
+// ── GTT (Good Till Triggered) Orders — Zerodha-specific ──────────────────────
+
+enum class GttOrderType {
+    Single,  // fires when price hits one trigger
+    OCO,     // one-cancels-other: two triggers (e.g. stop-loss + target)
+};
+
+struct GttTrigger {
+    double trigger_price = 0.0;  // the price level that fires this leg
+    double limit_price   = 0.0;  // limit price for the resulting order (0 = market)
+    double quantity      = 0.0;
+    OrderSide side       = OrderSide::Buy;
+    OrderType order_type = OrderType::Limit;
+    ProductType product  = ProductType::Delivery;
+};
+
+struct GttOrder {
+    QString      gtt_id;         // broker-assigned GTT ID
+    QString      symbol;         // normalised symbol, e.g. "RELIANCE"
+    QString      exchange;       // "NSE" / "BSE"
+    GttOrderType type            = GttOrderType::Single;
+    double       last_price      = 0.0;  // LTP at the time of GTT creation
+    QString      status;         // "active" / "triggered" / "cancelled" / "expired"
+    QString      created_at;
+    QString      updated_at;
+    QVector<GttTrigger> triggers; // 1 for Single, 2 for OCO
+};
+
+struct GttPlaceResponse {
+    bool    success  = false;
+    QString gtt_id;
+    QString error;
 };
 
 enum class BrokerId {

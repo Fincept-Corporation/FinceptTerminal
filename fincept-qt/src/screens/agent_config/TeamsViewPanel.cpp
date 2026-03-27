@@ -1,8 +1,10 @@
 // src/screens/agent_config/TeamsViewPanel.cpp
 #include "screens/agent_config/TeamsViewPanel.h"
 
+#include "ai_chat/LlmService.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
+#include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -174,27 +176,24 @@ QWidget* TeamsViewPanel::build_execution_panel() {
     vl->setContentsMargins(12, 8, 12, 8);
     vl->setSpacing(6);
 
-    // LLM override section
-    auto* llm_hdr = new QLabel("TEAM LLM OVERRIDE");
+    // Coordinator LLM profile picker
+    auto* llm_hdr = new QLabel("COORDINATOR LLM PROFILE");
     llm_hdr->setStyleSheet(
         QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
     vl->addWidget(llm_hdr);
-    auto* lr = new QHBoxLayout;
-    auto* pl = new QLabel("Provider:");
-    pl->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_SECONDARY));
-    lr->addWidget(pl);
-    team_provider_combo_ = new QComboBox;
-    team_provider_combo_->addItems({"(default)", "openai", "anthropic", "google", "groq", "deepseek", "ollama"});
-    team_provider_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(kIn));
-    lr->addWidget(team_provider_combo_);
-    auto* mdl = new QLabel("Model:");
-    mdl->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_SECONDARY));
-    lr->addWidget(mdl);
-    team_model_edit_ = new QLineEdit;
-    team_model_edit_->setPlaceholderText("(use agent default)");
-    team_model_edit_->setStyleSheet(kIn);
-    lr->addWidget(team_model_edit_, 1);
-    vl->addLayout(lr);
+
+    team_profile_combo_ = new QComboBox;
+    team_profile_combo_->setToolTip("LLM profile for the team coordinator. Members use their own assigned profiles.");
+    team_profile_combo_->setStyleSheet(
+        QString("QComboBox{%1}QComboBox::drop-down{border:none;}"
+                "QComboBox QAbstractItemView{background:%2;color:%3;selection-background-color:%4;}")
+            .arg(kIn, ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::AMBER_DIM));
+    vl->addWidget(team_profile_combo_);
+
+    team_resolved_lbl_ = new QLabel;
+    team_resolved_lbl_->setStyleSheet(
+        QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+    vl->addWidget(team_resolved_lbl_);
 
     // Query
     auto* qh = new QLabel("TEAM QUERY");
@@ -245,6 +244,21 @@ QWidget* TeamsViewPanel::build_execution_panel() {
                 "QScrollBar:vertical{background:%1;width:6px;}"
                 "QScrollBar::handle:vertical{background:%4;min-height:20px;}")
             .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_DIM, ui::colors::BORDER_BRIGHT));
+    result_display_->document()->setDefaultStyleSheet(
+        QString("body { color: %1; background: %2; font-size: 12px; }"
+                "h1, h2, h3, h4 { color: %3; margin: 8px 0 4px 0; }"
+                "h1 { font-size: 16px; border-bottom: 1px solid %4; padding-bottom: 4px; }"
+                "h2 { font-size: 14px; }"
+                "h3 { font-size: 13px; color: %5; }"
+                "code { background: %6; color: %7; padding: 1px 4px; border-radius: 3px; font-family: monospace; }"
+                "pre  { background: %6; color: %7; padding: 8px; border-radius: 4px; font-family: monospace; }"
+                "blockquote { border-left: 3px solid %3; margin: 4px 0; padding-left: 10px; color: %8; }"
+                "a { color: %5; } ul, ol { margin: 4px 0; padding-left: 20px; }"
+                "li { margin: 2px 0; } strong { color: %1; }"
+                "hr { border: none; border-top: 1px solid %4; }")
+            .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_BASE, ui::colors::AMBER,
+                 ui::colors::BORDER_DIM,   ui::colors::CYAN,    ui::colors::BG_RAISED,
+                 ui::colors::TEXT_PRIMARY, ui::colors::TEXT_SECONDARY));
     vl->addWidget(result_display_, 1);
     return p;
 }
@@ -263,7 +277,7 @@ void TeamsViewPanel::setup_connections() {
         run_btn_->setEnabled(true);
         run_btn_->setText("RUN TEAM");
         if (r.success) {
-            result_display_->setPlainText(r.response);
+            result_display_->setMarkdown(r.response);
             exec_status_->setText(QString("Completed in %1ms").arg(r.execution_time_ms));
             exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE));
             log_display_->append(QString("[DONE] Team completed (%1ms)").arg(r.execution_time_ms));
@@ -274,6 +288,44 @@ void TeamsViewPanel::setup_connections() {
             log_display_->append("[ERROR] " + r.error);
         }
     });
+
+    connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& status) {
+        if (!executing_) return;
+        exec_status_->setText(status);
+    });
+
+    connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& token) {
+        if (!executing_) return;
+        QTextCursor cursor = result_display_->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        result_display_->setTextCursor(cursor);
+        result_display_->insertPlainText(token + " ");
+    });
+
+    connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
+        if (!executing_) return;
+        executing_ = false;
+        run_btn_->setEnabled(true);
+        run_btn_->setText("RUN TEAM");
+        if (r.success) {
+            result_display_->setMarkdown(r.response);
+            exec_status_->setText(QString("Completed in %1ms").arg(r.execution_time_ms));
+            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE));
+            log_display_->append(QString("[DONE] Team completed (%1ms)").arg(r.execution_time_ms));
+        } else {
+            result_display_->setPlainText("Error: " + r.error);
+            exec_status_->setText("FAILED");
+            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+            log_display_->append("[ERROR] " + r.error);
+        }
+    });
+    // Profile combo for coordinator
+    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed,
+            this, &TeamsViewPanel::load_team_profile_combo);
+    connect(team_profile_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &TeamsViewPanel::refresh_team_llm_label);
+    load_team_profile_combo();
+
     connect(run_btn_, &QPushButton::clicked, this, &TeamsViewPanel::run_team);
     connect(available_list_, &QListWidget::itemDoubleClicked, this, [this]() {
         int row = available_list_->currentRow();
@@ -292,6 +344,10 @@ void TeamsViewPanel::populate_available_agents(const QVector<services::AgentInfo
         available_list_->addItem(item);
     }
     available_count_->setText(QString::number(agents.size()));
+}
+
+void TeamsViewPanel::add_agent_from_panel(const services::AgentInfo& agent) {
+    add_to_team(agent);
 }
 
 void TeamsViewPanel::add_to_team(const services::AgentInfo& agent) {
@@ -322,6 +378,72 @@ void TeamsViewPanel::update_leader_combo() {
         leader_combo_->addItem(QString("%1. %2").arg(i + 1).arg(team_members_[i].name));
 }
 
+void TeamsViewPanel::load_team_profile_combo() {
+    const QString prev_id = team_profile_combo_->currentData().toString();
+    team_profile_combo_->blockSignals(true);
+    team_profile_combo_->clear();
+    team_profile_combo_->addItem("Default (Global)", QString{});
+
+    const auto pr = LlmProfileRepository::instance().list_profiles();
+    const auto profiles = pr.is_ok() ? pr.value() : QVector<LlmProfile>{};
+    for (const auto& p : profiles) {
+        QString label = p.name;
+        if (p.is_default) label += " [default]";
+        team_profile_combo_->addItem(label, p.id);
+    }
+
+    int restore = 0;
+    if (!prev_id.isEmpty()) {
+        for (int i = 1; i < team_profile_combo_->count(); ++i) {
+            if (team_profile_combo_->itemData(i).toString() == prev_id) {
+                restore = i;
+                break;
+            }
+        }
+    }
+    team_profile_combo_->blockSignals(false);
+    team_profile_combo_->setCurrentIndex(restore);
+    refresh_team_llm_label();
+}
+
+void TeamsViewPanel::refresh_team_llm_label() {
+    const QString profile_id = team_profile_combo_->currentData().toString();
+    ResolvedLlmProfile resolved;
+    if (!profile_id.isEmpty()) {
+        const auto pr2 = LlmProfileRepository::instance().list_profiles();
+        const auto profiles2 = pr2.is_ok() ? pr2.value() : QVector<LlmProfile>{};
+        for (const auto& p : profiles2) {
+            if (p.id == profile_id) {
+                resolved.profile_id    = p.id;
+                resolved.profile_name  = p.name;
+                resolved.provider      = p.provider;
+                resolved.model_id      = p.model_id;
+                resolved.api_key       = p.api_key;
+                resolved.base_url      = p.base_url;
+                resolved.temperature   = p.temperature;
+                resolved.max_tokens    = p.max_tokens;
+                resolved.system_prompt = p.system_prompt;
+                break;
+            }
+        }
+    }
+    if (resolved.provider.isEmpty())
+        resolved = ai_chat::LlmService::instance().resolve_profile("team_coordinator", {});
+
+    if (!resolved.provider.isEmpty()) {
+        QString text = resolved.provider.toUpper() + " / " + resolved.model_id;
+        if (text.length() > 60) text = text.left(58) + "..";
+        if (profile_id.isEmpty()) text += " (inherited)";
+        team_resolved_lbl_->setText(text);
+        team_resolved_lbl_->setStyleSheet(
+            QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+    } else {
+        team_resolved_lbl_->setText("No provider — go to Settings > LLM Config");
+        team_resolved_lbl_->setStyleSheet(
+            QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+    }
+}
+
 void TeamsViewPanel::run_team() {
     QString q = query_input_->toPlainText().trimmed();
     if (q.isEmpty() || team_members_.isEmpty() || executing_)
@@ -336,30 +458,52 @@ void TeamsViewPanel::run_team() {
                              .arg(team_members_.size())
                              .arg(mode_combo_->currentText()));
 
+    // Resolve coordinator profile
+    const QString coord_profile_id = team_profile_combo_->currentData().toString();
+    ResolvedLlmProfile coord;
+    if (!coord_profile_id.isEmpty()) {
+        const auto pr3 = LlmProfileRepository::instance().list_profiles();
+        const auto profiles3 = pr3.is_ok() ? pr3.value() : QVector<LlmProfile>{};
+        for (const auto& p : profiles3) {
+            if (p.id == coord_profile_id) {
+                coord.profile_id = p.id; coord.provider = p.provider;
+                coord.model_id = p.model_id; coord.api_key = p.api_key;
+                coord.base_url = p.base_url; coord.temperature = p.temperature;
+                coord.max_tokens = p.max_tokens;
+                break;
+            }
+        }
+    }
+    if (coord.provider.isEmpty())
+        coord = ai_chat::LlmService::instance().resolve_profile("team_coordinator", {});
+
     QJsonObject tc;
     tc["name"] = "Custom Team";
     tc["mode"] = mode_combo_->currentText();
     tc["show_members_responses"] = show_responses_check_->isChecked();
     tc["leader_index"] = leader_combo_->currentIndex();
-
-    // Team LLM override
-    QString tp = team_provider_combo_->currentText();
-    if (tp != "(default)" && !tp.isEmpty()) {
-        QJsonObject model;
-        model["provider"] = tp;
-        if (!team_model_edit_->text().trimmed().isEmpty())
-            model["model_id"] = team_model_edit_->text().trimmed();
-        tc["model"] = model;
-    }
+    tc["model"] = ai_chat::LlmService::profile_to_json(coord);
 
     QJsonArray members;
     for (const auto& m : team_members_) {
         QJsonObject member;
         member["name"] = m.name;
         member["role"] = m.description;
-        QJsonObject mc = m.config.contains("model") ? m.config["model"].toObject()
-                                                    : QJsonObject{{"provider", "openai"}, {"model_id", "gpt-4o"}};
+
+        // Resolve per-member profile via assignment chain
+        const ResolvedLlmProfile member_profile =
+            ai_chat::LlmService::instance().resolve_profile("agent", m.id);
+        QJsonObject mc = ai_chat::LlmService::profile_to_json(member_profile);
+
+        // If the member has a saved model config with api_key, honour it;
+        // otherwise the resolved profile above is authoritative.
+        if (m.config.contains("model")) {
+            QJsonObject saved = m.config["model"].toObject();
+            if (!saved["api_key"].toString().isEmpty())
+                mc = saved;
+        }
         member["model"] = mc;
+
         if (m.config.contains("tools"))
             member["tools"] = m.config["tools"];
         if (m.config.contains("instructions"))

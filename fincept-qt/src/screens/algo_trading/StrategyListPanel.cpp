@@ -5,9 +5,13 @@
 #include "services/algo_trading/AlgoTradingService.h"
 #include "ui/theme/Theme.h"
 
+#include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QHBoxLayout>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QVBoxLayout>
 
 // ── Shared style constants ──────────────────────────────────────────────────
 
@@ -135,7 +139,119 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
 
     vl->addLayout(metrics);
 
-    // Action buttons
+    // ── Deploy form (hidden until DEPLOY clicked) ────────────────────────────
+    auto* deploy_form = new QWidget(card);
+    deploy_form->setVisible(false);
+    deploy_form->setStyleSheet(QString("background: %1; border-top: 1px solid %2;")
+                                   .arg(fincept::ui::colors::BG_BASE, fincept::ui::colors::BORDER_DIM));
+    auto* form_hl = new QHBoxLayout(deploy_form);
+    form_hl->setContentsMargins(0, 6, 0, 0);
+    form_hl->setSpacing(8);
+
+    auto make_field = [&](const QString& label_text, QWidget* input_widget) {
+        auto* col = new QWidget(deploy_form);
+        auto* cvl = new QVBoxLayout(col);
+        cvl->setContentsMargins(0, 0, 0, 0);
+        cvl->setSpacing(2);
+        auto* lbl = new QLabel(label_text, col);
+        lbl->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
+                                   " background: transparent; border: none;")
+                               .arg(fincept::ui::colors::TEXT_TERTIARY)
+                               .arg(fincept::ui::fonts::TINY)
+                               .arg(kMonoFont()));
+        cvl->addWidget(lbl);
+        input_widget->setParent(col);
+        cvl->addWidget(input_widget);
+        form_hl->addWidget(col);
+    };
+
+    auto* sym_input = new QLineEdit(deploy_form);
+    sym_input->setPlaceholderText("RELIANCE");
+    sym_input->setText("RELIANCE");
+    sym_input->setFixedHeight(26);
+    sym_input->setStyleSheet(kInputStyle());
+    make_field("SYMBOL", sym_input);
+
+    auto* mode_combo = new QComboBox(deploy_form);
+    mode_combo->addItems({"paper", "live"});
+    mode_combo->setFixedHeight(26);
+    mode_combo->setStyleSheet(
+        QString("QComboBox { background: %1; color: %2; border: 1px solid %3; padding: 2px 6px;"
+                " font-size: %4px; %5 }"
+                "QComboBox::drop-down { border: none; }"
+                "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3;"
+                " selection-background-color: %6; %5 }")
+            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::TEXT_PRIMARY,
+                 fincept::ui::colors::BORDER_DIM)
+            .arg(fincept::ui::fonts::SMALL)
+            .arg(kMonoFont())
+            .arg(fincept::ui::colors::BG_HOVER));
+    make_field("MODE", mode_combo);
+
+    auto* tf_combo = new QComboBox(deploy_form);
+    tf_combo->addItems(algo_timeframes());
+    tf_combo->setCurrentIndex(algo_timeframes().indexOf("1d"));
+    tf_combo->setFixedHeight(26);
+    tf_combo->setStyleSheet(mode_combo->styleSheet());
+    make_field("TIMEFRAME", tf_combo);
+
+    auto* qty_spin = new QDoubleSpinBox(deploy_form);
+    qty_spin->setRange(0.01, 1e7);
+    qty_spin->setDecimals(2);
+    qty_spin->setValue(1.0);
+    qty_spin->setFixedHeight(26);
+    qty_spin->setStyleSheet(
+        QString("QDoubleSpinBox { background: %1; color: %2; border: 1px solid %3; padding: 2px 6px;"
+                " font-size: %4px; %5 }"
+                "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 14px; }")
+            .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::TEXT_PRIMARY,
+                 fincept::ui::colors::BORDER_DIM)
+            .arg(fincept::ui::fonts::SMALL)
+            .arg(kMonoFont()));
+    make_field("QTY", qty_spin);
+
+    auto* confirm_btn = new QPushButton("GO", deploy_form);
+    confirm_btn->setCursor(Qt::PointingHandCursor);
+    confirm_btn->setFixedSize(48, 26);
+    confirm_btn->setStyleSheet(
+        QString("QPushButton { background: rgba(22,163,74,0.1); color: %1; border: 1px solid %1;"
+                " font-size: %2px; font-weight: 700; %3 }"
+                "QPushButton:hover { background: %1; color: %4; }")
+            .arg(fincept::ui::colors::POSITIVE)
+            .arg(fincept::ui::fonts::TINY)
+            .arg(kMonoFont())
+            .arg(fincept::ui::colors::BG_BASE));
+    connect(confirm_btn, &QPushButton::clicked, card,
+            [id = s.id, sym_input, mode_combo, tf_combo, qty_spin, deploy_form]() {
+                QString symbol = sym_input->text().trimmed().toUpper();
+                if (symbol.isEmpty())
+                    symbol = "RELIANCE";
+                AlgoTradingService::instance().deploy_strategy(id, symbol, mode_combo->currentText(),
+                                                               tf_combo->currentText(), qty_spin->value());
+                deploy_form->setVisible(false);
+                LOG_INFO("AlgoTrading",
+                         QString("Deploy: strategy=%1 symbol=%2 mode=%3").arg(id, symbol, mode_combo->currentText()));
+            });
+    auto* cancel_btn = new QPushButton("✕", deploy_form);
+    cancel_btn->setCursor(Qt::PointingHandCursor);
+    cancel_btn->setFixedSize(26, 26);
+    cancel_btn->setStyleSheet(
+        QString("QPushButton { background: transparent; color: %1; border: 1px solid %2;"
+                " font-size: %3px; %4 }"
+                "QPushButton:hover { color: %5; border-color: %5; }")
+            .arg(fincept::ui::colors::TEXT_TERTIARY, fincept::ui::colors::BORDER_DIM)
+            .arg(fincept::ui::fonts::TINY)
+            .arg(kMonoFont())
+            .arg(fincept::ui::colors::NEGATIVE));
+    connect(cancel_btn, &QPushButton::clicked, deploy_form, [deploy_form]() { deploy_form->setVisible(false); });
+
+    form_hl->addWidget(confirm_btn, 0, Qt::AlignBottom);
+    form_hl->addWidget(cancel_btn, 0, Qt::AlignBottom);
+    form_hl->addStretch();
+
+    vl->addWidget(deploy_form);
+
+    // ── Action buttons ───────────────────────────────────────────────────────
     auto* actions = new QHBoxLayout;
     actions->setSpacing(8);
     actions->addStretch();
@@ -150,9 +266,8 @@ QWidget* StrategyListPanel::build_strategy_card(const AlgoStrategy& s, QWidget* 
                                   .arg(fincept::ui::fonts::TINY)
                                   .arg(kMonoFont())
                                   .arg(fincept::ui::colors::BG_BASE));
-    connect(deploy_btn, &QPushButton::clicked, card, [id = s.id]() {
-        AlgoTradingService::instance().deploy_strategy(id, "RELIANCE", "paper", "1d", 1.0);
-        LOG_INFO("AlgoTrading", QString("Deploy requested for strategy: %1").arg(id));
+    connect(deploy_btn, &QPushButton::clicked, card, [deploy_form]() {
+        deploy_form->setVisible(!deploy_form->isVisible());
     });
     actions->addWidget(deploy_btn);
 

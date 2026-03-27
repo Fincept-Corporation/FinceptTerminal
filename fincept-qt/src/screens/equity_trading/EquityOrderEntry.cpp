@@ -1,12 +1,17 @@
 // EquityOrderEntry.cpp — BUY/SELL form configurable per broker profile
 #include "screens/equity_trading/EquityOrderEntry.h"
 
+#include "core/logging/Logger.h"
 #include "screens/equity_trading/EquityTypes.h"
+#include "trading/BrokerRegistry.h"
 
 #include <QHBoxLayout>
+#include <QMetaObject>
+#include <QPointer>
 #include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
 
 #include <cmath>
 
@@ -203,6 +208,12 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     cost_label_->setObjectName("eqOeCost");
     form->addWidget(cost_label_);
 
+    // Required margin (live broker only)
+    margin_label_ = new QLabel("");
+    margin_label_->setObjectName("eqOeMargin");
+    margin_label_->hide();
+    form->addWidget(margin_label_);
+
     // Submit
     submit_btn_ = new QPushButton("BUY RELIANCE");
     submit_btn_->setObjectName("eqBuySubmit");
@@ -219,6 +230,14 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
 
     form->addStretch();
     layout->addWidget(content, 1);
+
+    // Debounce timer: fetch margin 600ms after last qty/price change (live broker only)
+    margin_timer_ = new QTimer(this);
+    margin_timer_->setSingleShot(true);
+    margin_timer_->setInterval(600);
+    connect(margin_timer_, &QTimer::timeout, this, &EquityOrderEntry::fetch_margin_async);
+    connect(qty_edit_,   &QLineEdit::textChanged, this, [this](){ margin_timer_->start(); });
+    connect(price_edit_, &QLineEdit::textChanged, this, [this](){ margin_timer_->start(); });
 }
 
 void EquityOrderEntry::configure_for_broker(const trading::BrokerProfile& profile) {
@@ -307,6 +326,7 @@ void EquityOrderEntry::set_mode(bool is_paper) {
     is_paper_ = is_paper;
     mode_label_->setText(is_paper ? "PAPER" : "LIVE");
     mode_label_->setStyleSheet(QString("color: %1;").arg(is_paper ? "#16a34a" : "#dc2626"));
+    if (is_paper) margin_label_->hide();
 }
 
 void EquityOrderEntry::set_symbol(const QString& symbol) {
@@ -376,6 +396,72 @@ void EquityOrderEntry::update_cost_preview() {
         cost_label_->setText(QString("Est: %1%2").arg(sym).arg(qty * price, 0, 'f', 2));
     else
         cost_label_->setText("Est: --");
+}
+
+void EquityOrderEntry::set_broker_id(const QString& broker_id) {
+    broker_id_ = broker_id;
+}
+
+void EquityOrderEntry::fetch_margin_async() {
+    // Only fetch for live mode with a real broker
+    if (is_paper_ || broker_id_.isEmpty())
+        return;
+
+    const double qty = qty_edit_->text().toDouble();
+    if (qty <= 0)
+        return;
+
+    // Guard against concurrent fetches
+    bool expected = false;
+    if (!margin_fetching_.compare_exchange_strong(expected, true))
+        return;
+
+    trading::UnifiedOrder order;
+    order.symbol   = current_symbol_;
+    order.exchange = exchange_combo_->currentText();
+    order.side     = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
+    order.quantity = qty;
+    order.price    = price_edit_->text().toDouble();
+    order.stop_price = stop_price_edit_->text().toDouble();
+    static const trading::OrderType type_map[] = {
+        trading::OrderType::Market, trading::OrderType::Limit,
+        trading::OrderType::StopLoss, trading::OrderType::StopLossLimit};
+    order.order_type = type_map[active_type_];
+    const int prod_idx = product_combo_->currentIndex();
+    order.product_type = (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
+                             ? product_types_[prod_idx].value
+                             : trading::ProductType::Intraday;
+
+    const QString bid = broker_id_;
+    QPointer<EquityOrderEntry> self = this;
+
+    QtConcurrent::run([self, bid, order]() {
+        auto* broker = trading::BrokerRegistry::instance().get(bid);
+        if (!broker) {
+            if (self) self->margin_fetching_ = false;
+            return;
+        }
+        auto creds = broker->load_credentials();
+        if (creds.api_key.isEmpty()) {
+            if (self) self->margin_fetching_ = false;
+            return;
+        }
+        auto result = broker->get_order_margins(creds, order);
+        QMetaObject::invokeMethod(self, [self, result]() {
+            if (!self) return;
+            self->margin_fetching_ = false;
+            if (result.success && result.data) {
+                const auto& m = *result.data;
+                const QString sym = currency_symbol(self->current_currency_);
+                self->margin_label_->setText(
+                    QString("Margin: %1%2").arg(sym).arg(m.total, 0, 'f', 2));
+                self->margin_label_->setStyleSheet("color: #f59e0b; font-size: 10px;");
+                self->margin_label_->show();
+            } else {
+                self->margin_label_->hide();
+            }
+        }, Qt::QueuedConnection);
+    });
 }
 
 } // namespace fincept::screens::equity

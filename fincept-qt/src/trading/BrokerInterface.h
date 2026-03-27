@@ -204,6 +204,44 @@ class IBroker {
         return {false, std::nullopt, "Not supported"};
     }
 
+    // --- Margin Calculator ---
+    /// Pre-trade margin check for a single order. Returns breakdown of margin required.
+    virtual ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds,
+                                                       const UnifiedOrder& order) {
+        Q_UNUSED(creds); Q_UNUSED(order);
+        return {false, std::nullopt, "Margin calculator not supported for this broker"};
+    }
+    /// Pre-trade margin check for a basket of orders (with netting across legs).
+    virtual ApiResponse<BasketMargin> get_basket_margins(const BrokerCredentials& creds,
+                                                         const QVector<UnifiedOrder>& orders) {
+        Q_UNUSED(creds); Q_UNUSED(orders);
+        return {false, std::nullopt, "Basket margin not supported for this broker"};
+    }
+
+    // --- GTT (Good Till Triggered) Orders ---
+    // Default implementations return "Not supported" — only override in brokers that have GTT.
+    virtual GttPlaceResponse gtt_place(const BrokerCredentials& creds, const GttOrder& order) {
+        Q_UNUSED(creds); Q_UNUSED(order);
+        return {false, "", "GTT not supported for this broker"};
+    }
+    virtual ApiResponse<GttOrder> gtt_get(const BrokerCredentials& creds, const QString& gtt_id) {
+        Q_UNUSED(creds); Q_UNUSED(gtt_id);
+        return {false, std::nullopt, "GTT not supported for this broker"};
+    }
+    virtual ApiResponse<QVector<GttOrder>> gtt_list(const BrokerCredentials& creds) {
+        Q_UNUSED(creds);
+        return {false, std::nullopt, "GTT not supported for this broker"};
+    }
+    virtual ApiResponse<GttOrder> gtt_modify(const BrokerCredentials& creds, const QString& gtt_id,
+                                              const GttOrder& updated) {
+        Q_UNUSED(creds); Q_UNUSED(gtt_id); Q_UNUSED(updated);
+        return {false, std::nullopt, "GTT not supported for this broker"};
+    }
+    virtual ApiResponse<QJsonObject> gtt_cancel(const BrokerCredentials& creds, const QString& gtt_id) {
+        Q_UNUSED(creds); Q_UNUSED(gtt_id);
+        return {false, std::nullopt, "GTT not supported for this broker"};
+    }
+
     // --- WebSocket streaming ---
     virtual const char* ws_adapter_name() const { return ""; }
 

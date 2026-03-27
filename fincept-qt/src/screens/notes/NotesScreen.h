@@ -28,6 +28,7 @@ class NotesScreen : public QWidget {
     void on_toggle_favorite();
     void on_toggle_archive();
     void on_search_changed(const QString& text);
+    void on_export_note();
 
   private:
     void build_ui();

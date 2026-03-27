@@ -8,7 +8,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QTimer>
 #include <QWidget>
+#include <atomic>
 
 namespace fincept::screens::equity {
 
@@ -25,6 +27,7 @@ class EquityOrderEntry : public QWidget {
     void set_mode(bool is_paper);
     void set_symbol(const QString& symbol);
     void set_exchange(const QString& exchange);
+    void set_broker_id(const QString& broker_id);
     void show_order_status(const QString& msg, bool success); // show result after order placed
 
   signals:
@@ -69,6 +72,7 @@ class EquityOrderEntry : public QWidget {
     QLabel* balance_label_      = nullptr;
     QLabel* market_price_label_ = nullptr;
     QLabel* cost_label_         = nullptr;
+    QLabel* margin_label_       = nullptr;  // required margin from broker API
     QLabel* status_label_       = nullptr;
     QLabel* mode_label_         = nullptr;
 
@@ -80,6 +84,13 @@ class EquityOrderEntry : public QWidget {
     QString current_symbol_   = "RELIANCE";
     QString current_exchange_ = "NSE";
     QString current_currency_ = "INR";
+    QString broker_id_;
+
+    // Margin fetch debounce timer — fires 500ms after last qty/price change
+    QTimer* margin_timer_ = nullptr;
+    std::atomic<bool> margin_fetching_{false};
+
+    void fetch_margin_async();
 
     // Cached product types from profile (for order construction)
     QVector<trading::ProductTypeDef> product_types_;

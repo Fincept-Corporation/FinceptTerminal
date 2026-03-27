@@ -480,36 +480,40 @@ def main():
     command = sys.argv[1]
     manager = MetaLearningManager()
 
-    if command == 'list_models':
-        result = manager.get_available_models()
+    try:
+        if command == 'list_models':
+            result = manager.get_available_models()
 
-    elif command == 'run_selection':
-        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-        model_ids = params.get('model_ids', [])
-        task_type = params.get('task_type', 'classification')
-        metric = params.get('metric', 'auto')
-        result = manager.run_model_selection(model_ids, task_type=task_type, metric=metric)
+        elif command == 'run_selection':
+            params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+            model_ids = params.get('model_ids', [])
+            task_type = params.get('task_type', 'classification')
+            metric = params.get('metric', 'auto')
+            result = manager.run_model_selection(model_ids, task_type=task_type, metric=metric)
 
-    elif command == 'create_ensemble':
-        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-        model_keys = params.get('model_keys', [])
-        ensemble_method = params.get('method', 'voting')
-        task_type = params.get('task_type', 'classification')
-        result = manager.create_ensemble(model_keys, ensemble_method, task_type)
+        elif command == 'create_ensemble':
+            params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+            model_keys = params.get('model_keys', [])
+            ensemble_method = params.get('method', 'voting')
+            task_type = params.get('task_type', 'classification')
+            result = manager.create_ensemble(model_keys, ensemble_method, task_type)
 
-    elif command == 'tune_hyperparameters':
-        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-        model_id = params.get('model_id', '')
-        param_grid = params.get('param_grid', {})
-        task_type = params.get('task_type', 'classification')
-        search_method = params.get('search_method', 'grid')
-        result = manager.hyperparameter_tuning(model_id, param_grid, task_type=task_type, search_method=search_method)
+        elif command == 'tune_hyperparameters':
+            params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+            model_id = params.get('model_id', '')
+            param_grid = params.get('param_grid', {})
+            task_type = params.get('task_type', 'classification')
+            search_method = params.get('search_method', 'grid')
+            result = manager.hyperparameter_tuning(model_id, param_grid, task_type=task_type, search_method=search_method)
 
-    elif command == 'get_results':
-        result = manager.get_all_results()
+        elif command == 'get_results':
+            result = manager.get_all_results()
 
-    else:
-        result = {'success': False, 'error': f'Unknown command: {command}'}
+        else:
+            result = {'success': False, 'error': f'Unknown command: {command}'}
+
+    except Exception as e:
+        result = {'success': False, 'error': str(e)}
 
     print(json.dumps(result, indent=2))
 

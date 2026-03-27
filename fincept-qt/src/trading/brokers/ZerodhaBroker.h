@@ -68,6 +68,7 @@ class ZerodhaBroker : public IBroker {
     static const char* zerodha_product(ProductType p);
     static const char* zerodha_side(OrderSide s);
     static const char* zerodha_variety(ProductType p);
+    static QString zerodha_interval(const QString& resolution);
 };
 
 } // namespace fincept::trading

@@ -587,6 +587,25 @@ def main():
 
     command = sys.argv[1]
 
+    # Aliases used by the C++ GovDataProviderPanel
+    _hk_alias_org_id = None
+    _hk_alias_dataset_id = None
+    if command == "publishers":
+        command = "categories_list"
+    elif command == "datasets":
+        # datasets <org_id> <limit> -> category_datasets <category_id>
+        command = "category_datasets"
+        if len(sys.argv) > 2:
+            _hk_alias_org_id = sys.argv[2]
+    elif command == "resources":
+        # resources <dataset_id> -> dataset_details <dataset_id>
+        command = "dataset_details"
+        if len(sys.argv) > 2:
+            _hk_alias_dataset_id = sys.argv[2]
+    elif command == "search":
+        # search <query> <limit> -> datasets_list (HK has no text search, use datasets_list)
+        command = "datasets_list"
+
     # Initialize wrapper with English language by default
     language = os.environ.get('DATA_GOV_HK_LANGUAGE', 'en')
     wrapper = DataGovHKWrapper(language=language)
@@ -608,10 +627,10 @@ def main():
             result = wrapper.get_datasets_list(limit=limit, offset=offset)
 
         elif command == "dataset_details":
-            if len(sys.argv) < 3:
+            dataset_id = _hk_alias_dataset_id or (sys.argv[2] if len(sys.argv) > 2 else None)
+            if not dataset_id:
                 print(json.dumps({"error": "Dataset ID is required"}))
                 sys.exit(1)
-            dataset_id = sys.argv[2]
             result = wrapper.get_dataset_details(dataset_id)
 
         elif command == "historical_files":
@@ -628,10 +647,10 @@ def main():
             result = wrapper.get_catalogue_overview()
 
         elif command == "category_datasets":
-            if len(sys.argv) < 3:
+            category_id = _hk_alias_org_id or (sys.argv[2] if len(sys.argv) > 2 else None)
+            if not category_id:
                 print(json.dumps({"error": "Category ID is required"}))
                 sys.exit(1)
-            category_id = sys.argv[2]
             result = wrapper.get_all_category_datasets(category_id)
 
         elif command == "test_all":
@@ -661,6 +680,40 @@ def main():
         else:
             result = {"error": f"Unknown command: {command}"}
 
+        # Normalize categories_list: convert plain string list to objects expected by C++ populate_orgs
+        if command == "categories_list" and isinstance(result, dict):
+            raw_data = result.get("data", [])
+            if raw_data and isinstance(raw_data[0], str):
+                result["data"] = [{"id": s, "name": s, "display_name": s.replace("-", " ").title(), "dataset_count": -1}
+                                  for s in raw_data]
+
+        # Normalize category_datasets: convert {datasets:{id:obj,...}} to {data:[...], metadata:{}}
+        if command == "category_datasets" and isinstance(result, dict) and "datasets" in result:
+            ds_map = result.get("datasets", {})
+            items = []
+            for ds_id, ds_obj in ds_map.items():
+                if isinstance(ds_obj, dict):
+                    ds_obj.setdefault("id", ds_id)
+                    ds_obj.setdefault("name", ds_id)
+                    ds_obj.setdefault("num_resources", len(ds_obj.get("resources", [])))
+                    ds_obj.setdefault("metadata_modified", ds_obj.get("last_modified", ""))
+                    items.append(ds_obj)
+            result = {"data": items, "metadata": {"total_count": len(items)}, "error": None}
+
+        # Normalize dataset_details: wrap resources list into {data:[...]}
+        if command == "dataset_details" and isinstance(result, dict):
+            resources = result.get("resources", [])
+            normalized = []
+            for r in resources:
+                if isinstance(r, dict):
+                    r.setdefault("name", r.get("id", ""))
+                    r.setdefault("format", r.get("format", ""))
+                    r.setdefault("url", r.get("url", ""))
+                    r.setdefault("last_modified", r.get("last_modified", ""))
+                    normalized.append(r)
+            result = {"data": normalized, "metadata": {"total_count": len(normalized)}, "error": None}
+
+        sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', errors='replace', closefd=False)
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
     except ValueError as e:

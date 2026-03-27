@@ -1,638 +1,519 @@
 """
-DeepAgents CLI - Command-line interface for Fincept DeepAgents
-Exposes DeepAgents functionality to C++ backend
+cli.py — C++ entry point for Fincept Deep Agents.
 
-Dual-path routing:
-  - Tool-calling LLMs (OpenAI, Anthropic, Google, Groq, etc.) -> deepagents library
-  - Fincept LLM / Ollama / unknown -> FinceptOrchestrator (prompt loop)
+Single responsibility:
+  - Receive a command + JSON params from C++ via argv
+  - Dispatch to agent.py (tool-calling LLMs) or orchestrator.py (fallback)
+  - Return newline-delimited JSON to stdout
+  - Send all logs to stderr
+
+Usage:
+  python cli.py <command> '<json_params>'
+
+Commands:
+  check_status      Check library availability and list capabilities
+  execute_task      Run a full agent task
+  stream_task       Run a task with streaming output (one JSON chunk per line)
+  create_plan       Planning pass only — returns todo list without executing
+  execute_step      Execute a single step (for incremental UI updates)
+  synthesize        Combine step results into a final report
+  list_capabilities List all agent types and subagents
+  resume_thread     Resume an agent from a saved checkpoint
+
+Output schema (all commands):
+  { "success": bool, "result": str, "todos": [...], "files": {...},
+    "thread_id": str, "error": str|null }
 """
 
+from __future__ import annotations
+
 import json
+import logging
 import sys
-import os
 import traceback
-from typing import Dict, Any, Optional, List
+from pathlib import Path
+from typing import Any
 
-# Add parent directory to path for imports when run as script
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from agent_factory import (
-    create_fincept_deep_agent,
-    create_agent_by_type,
-    AGENT_FACTORIES
+# Force all logging to stderr — stdout is reserved for JSON output to C++
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(levelname)-8s %(name)s: %(message)s",
+    stream=sys.stderr,
+    force=True,
 )
-from deep_agent_wrapper import check_availability, DeepAgentWrapper
-from subagent_templates import list_available_templates, get_subagent_template
-from fincept_orchestrator import FinceptOrchestrator
 
-# Providers that support tool calling (bind_tools / tool_calls in AIMessage)
-TOOL_CALLING_PROVIDERS = {
-    "openai", "anthropic", "google", "groq", "deepseek", "openrouter",
-    "azure", "mistral", "cohere", "fireworks", "together"
-}
+# Add parent dirs to path
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
 
-# Map agent types to their subagent names for the orchestrator
-AGENT_SUBAGENTS = {
-    "research": ["data_analyst", "reporter"],
-    "trading_strategy": ["data_analyst", "trading", "backtester", "risk_analyzer", "reporter"],
-    "portfolio_management": ["data_analyst", "portfolio_optimizer", "risk_analyzer", "reporter"],
-    "risk_assessment": ["data_analyst", "risk_analyzer", "reporter"],
-    "general": ["research", "data_analyst", "trading", "risk_analyzer", "portfolio_optimizer", "backtester", "reporter"]
-}
+logger = logging.getLogger(__name__)
+
+from models import create_model, extract_text, supports_tool_calling, TOOL_CALLING_PROVIDERS
+from subagents import get_subagents_for_type, list_agent_types, list_subagent_names, AGENT_SUBAGENTS
+
+# ---------------------------------------------------------------------------
+# Availability check (import deepagents lazily so CLI starts fast)
+# ---------------------------------------------------------------------------
+
+def _check_deepagents() -> dict[str, Any]:
+    try:
+        from deepagents import create_deep_agent  # noqa: F401
+        return {"available": True, "error": None}
+    except ImportError as exc:
+        return {"available": False, "error": str(exc)}
 
 
-def _parse_config(raw_config) -> dict:
-    """Parse config from various formats (dict, JSON string, None) to dict."""
-    if isinstance(raw_config, dict):
-        return raw_config
-    if isinstance(raw_config, str):
+# ---------------------------------------------------------------------------
+# Command handlers
+# ---------------------------------------------------------------------------
+
+def cmd_check_status(_params: dict[str, Any]) -> dict[str, Any]:
+    info = _check_deepagents()
+    return {
+        "success":          True,
+        "available":        info["available"],
+        "error":            info["error"],
+        "agent_types":      list_agent_types(),
+        "subagent_names":   list_subagent_names(),
+    }
+
+
+def cmd_list_capabilities(_params: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "success":     True,
+        "agent_types": {k: v for k, v in AGENT_SUBAGENTS.items()},
+        "subagents":   list_subagent_names(),
+        "features": [
+            "Hierarchical subagent spawning",
+            "Built-in todo management",
+            "Filesystem tools (ls/read/write/edit/glob/grep)",
+            "Shell execution via LocalShellBackend (opt-in)",
+            "Persistent memory via AGENTS.md",
+            "Skills via SKILL.md (add skills/ directory to enable)",
+            "Human-in-the-loop interrupt_on",
+            "AnthropicPromptCaching (auto)",
+            "Summarization middleware (auto)",
+            "Structured output via response_schema",
+            "Thread checkpointing via MemorySaver",
+            "Cross-session storage via StoreBackend",
+        ],
+    }
+
+
+def cmd_execute_task(params: dict[str, Any]) -> dict[str, Any]:
+    task       = params.get("task")
+    agent_type = params.get("agent_type", "general")
+    thread_id  = params.get("thread_id",  "default-thread")
+    config     = _parse_config(params.get("config", {}))
+
+    if not task:
+        return _error("task is required")
+
+    context_data = params.get("context", {})
+
+    if supports_tool_calling(config):
+        return _execute_with_deepagents(
+            task=task,
+            agent_type=agent_type,
+            config=config,
+            thread_id=thread_id,
+            context_data=context_data,
+        )
+
+    return _execute_with_orchestrator(
+        task=task,
+        agent_type=agent_type,
+        config=config,
+        thread_id=thread_id,
+    )
+
+
+def cmd_stream_task(params: dict[str, Any]) -> None:
+    """Stream task execution — yields one JSON object per line to stdout."""
+    task       = params.get("task")
+    agent_type = params.get("agent_type", "general")
+    thread_id  = params.get("thread_id",  "default-thread")
+    config     = _parse_config(params.get("config", {}))
+    context_data = params.get("context", {})
+
+    if not task:
+        _print_json(_error("task is required"))
+        return
+
+    if not supports_tool_calling(config):
+        # Orchestrator doesn't stream — run normally and emit one chunk
+        result = _execute_with_orchestrator(task, agent_type, config, thread_id)
+        _print_json(result)
+        return
+
+    try:
+        from agent import create_agent, build_fincept_context
+        from models import create_model
+
+        model    = create_model(config)
+        compiled = create_agent(model=model, config={**config, "agent_type": agent_type})
+        ctx      = build_fincept_context({**params, "agent_type": agent_type})
+
+        run_config = {"recursion_limit": 1000}
+        if thread_id:
+            run_config["configurable"] = {"thread_id": thread_id}
+
+        for chunk in compiled.stream(
+            {"messages": [("user", task)]},
+            config=run_config,
+            context=ctx,
+            stream_mode="updates",   # incremental diffs only, not full state each step
+            subgraphs=True,          # expose subagent execution as separate chunks
+        ):
+            _print_json({"success": True, "chunk": _serialise_chunk(chunk), "thread_id": thread_id})
+
+    except Exception as exc:
+        _print_json({"success": False, "error": str(exc), "thread_id": thread_id})
+
+
+def cmd_create_plan(params: dict[str, Any]) -> dict[str, Any]:
+    task       = params.get("task")
+    agent_type = params.get("agent_type", "general")
+    config     = _parse_config(params.get("config", {}))
+
+    if not task:
+        return _error("task is required")
+
+    # Use tool-calling LLM for richer plan generation if available
+    if supports_tool_calling(config):
         try:
-            return json.loads(raw_config)
+            from langchain_core.messages import HumanMessage
+            from subagents import AGENT_SUBAGENTS
+
+            model = create_model(config)
+            subagent_names = AGENT_SUBAGENTS.get(agent_type, list(AGENT_SUBAGENTS.keys()))
+            prompt = (
+                f"You are a planning agent for a financial analysis task.\n\n"
+                f"Task: {task}\n\n"
+                f"Available specialists: {', '.join(subagent_names)}\n\n"
+                f"Create a concise execution plan as a JSON array. Each item must have:\n"
+                f'  "step": short step title\n'
+                f'  "specialist": one of the available specialists\n'
+                f'  "prompt": specific instructions for that specialist\n\n'
+                f"Return ONLY the JSON array, no other text."
+            )
+            response = model.invoke([HumanMessage(content=prompt)])
+            raw = extract_text(response.content)
+
+            import json as _json
+            start = raw.find("[")
+            end   = raw.rfind("]") + 1
+            plan  = _json.loads(raw[start:end]) if start >= 0 and end > start else []
+
+            todos = [
+                {
+                    "id":         f"todo-{i+1}",
+                    "task":       step.get("step", f"Step {i+1}"),
+                    "status":     "pending",
+                    "specialist": step.get("specialist", "data-analyst"),
+                    "prompt":     step.get("prompt", task),
+                    "subtasks":   [],
+                }
+                for i, step in enumerate(plan)
+            ]
+            return {"success": True, "todos": todos, "plan": plan, "error": None}
+
+        except Exception as exc:
+            logger.warning("Tool-calling create_plan failed: %s", exc)
+
+    from orchestrator import FinceptOrchestrator
+    subagent_names = [s["name"] for s in get_subagents_for_type(agent_type)]
+    orch = FinceptOrchestrator(api_key=config.get("llm_api_key"))
+    return orch.create_plan(task, agent_type, subagent_names)
+
+
+def cmd_execute_step(params: dict[str, Any]) -> dict[str, Any]:
+    task             = params.get("task")
+    step_prompt      = params.get("step_prompt")
+    specialist       = params.get("specialist", "data-analyst")
+    config           = _parse_config(params.get("config", {}))
+    previous_results = _parse_list(params.get("previous_results", []))
+
+    if not task or not step_prompt:
+        return _error("task and step_prompt are required")
+
+    # Prefer tool-calling LLM for richer step output
+    if supports_tool_calling(config):
+        try:
+            from langchain_core.messages import SystemMessage, HumanMessage
+            from subagents import AGENT_SUBAGENTS
+            from orchestrator import SUBAGENT_PROMPTS
+
+            model = create_model(config)
+            system = SUBAGENT_PROMPTS.get(specialist, SUBAGENT_PROMPTS["data-analyst"])
+
+            prev = ""
+            if previous_results:
+                prev = "\n\nPrevious findings:\n" + "".join(
+                    f"--- {r.get('step','')} ---\n{r.get('result','')}\n\n"
+                    for r in previous_results
+                )
+
+            msgs = [
+                SystemMessage(content=system),
+                HumanMessage(content=(
+                    f"Overall task: {task}\n"
+                    f"Your assignment: {step_prompt}"
+                    f"{prev}\n\n"
+                    f"Provide thorough analysis with specific data points."
+                )),
+            ]
+            response = model.invoke(msgs)
+            return {"success": True, "result": extract_text(response.content), "error": None}
+
+        except Exception as exc:
+            logger.warning("Tool-calling step failed, falling back to orchestrator: %s", exc)
+
+    from orchestrator import FinceptOrchestrator
+    orch = FinceptOrchestrator(api_key=config.get("llm_api_key"))
+    return orch.execute_step(task, step_prompt, specialist, previous_results)
+
+
+def cmd_synthesize(params: dict[str, Any]) -> dict[str, Any]:
+    task         = params.get("task")
+    step_results = _parse_list(params.get("step_results", []))
+    config       = _parse_config(params.get("config", {}))
+
+    if not task or not step_results:
+        return _error("task and step_results are required")
+
+    if supports_tool_calling(config):
+        try:
+            from langchain_core.messages import HumanMessage
+
+            model = create_model(config)
+            findings = "".join(
+                f"--- {r.get('step','')} (by {r.get('specialist','')}) ---\n{r.get('result','')}\n\n"
+                for r in step_results
+            )
+            prompt = (
+                f"You are a senior financial analyst.\n\n"
+                f"Task: {task}\n\nSpecialist findings:\n{findings}\n"
+                f"Synthesize into a professional report with: "
+                f"Executive Summary, Analysis, Risks, Recommendations."
+            )
+            response = model.invoke([HumanMessage(content=prompt)])
+            return {"success": True, "result": extract_text(response.content), "error": None}
+
+        except Exception as exc:
+            logger.warning("Tool-calling synthesize failed, falling back to orchestrator: %s", exc)
+
+    from orchestrator import FinceptOrchestrator
+    orch = FinceptOrchestrator(api_key=config.get("llm_api_key"))
+    return orch.synthesize(task, step_results)
+
+
+def cmd_resume_thread(params: dict[str, Any]) -> dict[str, Any]:
+    thread_id = params.get("thread_id")
+    new_input = params.get("input")
+    config    = _parse_config(params.get("config", {}))
+
+    if not thread_id:
+        return _error("thread_id is required")
+
+    if not supports_tool_calling(config):
+        return _error("resume_thread requires a tool-calling LLM provider")
+
+    try:
+        from agent import create_agent, build_fincept_context
+
+        model    = create_model(config)
+        compiled = create_agent(model=model, config=config)
+        ctx      = build_fincept_context(params)
+
+        run_config = {
+            "recursion_limit": 1000,
+            "configurable":    {"thread_id": thread_id},
+        }
+
+        inp = {"messages": [("user", new_input)]} if new_input else None
+        result = compiled.invoke(inp, config=run_config, context=ctx)
+        return _format_result(result, thread_id)
+
+    except Exception as exc:
+        return _error(str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Internal execution helpers
+# ---------------------------------------------------------------------------
+
+def _execute_with_deepagents(
+    task: str,
+    agent_type: str,
+    config: dict[str, Any],
+    thread_id: str,
+    context_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Execute via deepagents library (tool-calling LLM path)."""
+    try:
+        from agent import create_agent, build_fincept_context
+
+        model    = create_model(config)
+        compiled = create_agent(
+            model=model,
+            config={**config, "agent_type": agent_type},
+        )
+        ctx = build_fincept_context({"agent_type": agent_type, "context": context_data})
+
+        run_config = {"recursion_limit": 1000}
+        if thread_id:
+            run_config["configurable"] = {"thread_id": thread_id}
+
+        result = compiled.invoke(
+            {"messages": [("user", task)]},
+            config=run_config,
+            context=ctx,
+        )
+        return _format_result(result, thread_id)
+
+    except Exception as exc:
+        # Never silently fall through — log and raise
+        logger.error("deepagents execution failed: %s\n%s", exc, traceback.format_exc())
+        return _error(str(exc))
+
+
+def _execute_with_orchestrator(
+    task: str,
+    agent_type: str,
+    config: dict[str, Any],
+    thread_id: str,
+) -> dict[str, Any]:
+    """Execute via FinceptOrchestrator (non-tool-calling LLM fallback)."""
+    from orchestrator import FinceptOrchestrator
+    subagent_names = [s["name"] for s in get_subagents_for_type(agent_type)]
+    orch = FinceptOrchestrator(api_key=config.get("llm_api_key"))
+    result = orch.execute(task, agent_type, subagent_names)
+    result["thread_id"] = thread_id
+    return result
+
+
+def _format_result(raw: dict[str, Any], thread_id: str) -> dict[str, Any]:
+    """Normalise a deepagents invoke() result to the standard output schema."""
+    messages = raw.get("messages", [])
+    result_text = ""
+    for msg in reversed(messages):
+        content = getattr(msg, "content", None)
+        if content:
+            result_text = extract_text(content)
+            break
+
+    todos = []
+    raw_todos = raw.get("todos", [])
+    if isinstance(raw_todos, list):
+        for i, t in enumerate(raw_todos):
+            if isinstance(t, dict):
+                todos.append(t)
+            elif isinstance(t, str):
+                todos.append({"id": f"todo-{i+1}", "task": t, "status": "completed", "subtasks": []})
+
+    return {
+        "success":   True,
+        "result":    result_text,
+        "todos":     todos,
+        "files":     raw.get("files", {}),
+        "thread_id": thread_id,
+        "error":     None,
+    }
+
+
+def _serialise_chunk(chunk: Any) -> Any:
+    """Make a streaming chunk JSON-serialisable."""
+    if isinstance(chunk, dict):
+        out = {}
+        for k, v in chunk.items():
+            if hasattr(v, "content"):
+                out[k] = {"content": extract_text(v.content), "type": type(v).__name__}
+            elif isinstance(v, (str, int, float, bool, list, dict, type(None))):
+                out[k] = v
+            else:
+                out[k] = str(v)
+        return out
+    return str(chunk)
+
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+
+def _parse_config(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
         except (json.JSONDecodeError, ValueError):
             return {}
     return {}
 
 
-def _supports_tool_calling(config: dict) -> bool:
-    """Check if the configured LLM provider supports tool calling."""
-    provider = config.get("llm_provider", "fincept").lower().strip()
-    return provider in TOOL_CALLING_PROVIDERS
-
-
-def _create_langchain_model(config: dict):
-    """
-    Create a LangChain chat model from the user's LLM config.
-    Returns None if creation fails (caller should fall back to orchestrator).
-    """
-    provider = config.get("llm_provider", "").lower().strip()
-    api_key = config.get("llm_api_key", "")
-    model_name = config.get("llm_model", "")
-    base_url = config.get("llm_base_url")
-
-    try:
-        if provider == "openai":
-            from langchain_openai import ChatOpenAI
-            kwargs = {"api_key": api_key, "model": model_name or "gpt-4o-mini"}
-            if base_url:
-                kwargs["base_url"] = base_url
-            return ChatOpenAI(**kwargs)
-
-        elif provider == "anthropic":
-            from langchain_anthropic import ChatAnthropic
-            return ChatAnthropic(
-                api_key=api_key,
-                model_name=model_name or "claude-sonnet-4-20250514"
-            )
-
-        elif provider == "google":
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            return ChatGoogleGenerativeAI(
-                google_api_key=api_key,
-                model=model_name or "gemini-2.0-flash"
-            )
-
-        elif provider == "groq":
-            from langchain_groq import ChatGroq
-            return ChatGroq(
-                api_key=api_key,
-                model_name=model_name or "llama-3.3-70b-versatile"
-            )
-
-        elif provider in ("deepseek", "openrouter", "azure", "fireworks", "together", "mistral"):
-            # These all support OpenAI-compatible API
-            from langchain_openai import ChatOpenAI
-            default_urls = {
-                "deepseek": "https://api.deepseek.com/v1",
-                "openrouter": "https://openrouter.ai/api/v1",
-                "fireworks": "https://api.fireworks.ai/inference/v1",
-                "together": "https://api.together.xyz/v1",
-                "mistral": "https://api.mistral.ai/v1",
-            }
-            url = base_url or default_urls.get(provider, base_url)
-            return ChatOpenAI(
-                api_key=api_key,
-                model=model_name or "default",
-                base_url=url
-            )
-
-        elif provider == "cohere":
-            from langchain_cohere import ChatCohere
-            return ChatCohere(
-                cohere_api_key=api_key,
-                model=model_name or "command-r-plus"
-            )
-
-    except ImportError as e:
-        # LangChain provider package not installed
-        return None
-    except Exception as e:
-        return None
-
-    return None
-
-
-def _execute_with_deepagents(task: str, agent_type: str, config: dict, thread_id: str = "default") -> Dict[str, Any]:
-    """
-    Execute task using the real deepagents library with a tool-calling LLM.
-    This enables proper sub-agent spawning, todo management, and file ops.
-    """
-    model = _create_langchain_model(config)
-    if model is None:
-        return {"success": False, "error": "Failed to create LangChain model for provider"}
-
-    subagent_names = AGENT_SUBAGENTS.get(agent_type, ["data_analyst", "reporter"])
-
-    wrapper = DeepAgentWrapper(
-        model=model,
-        system_prompt=None,  # use default
-        enable_checkpointing=True,
-        enable_summarization=True,
-        recursion_limit=100
-    )
-
-    # Add subagents from templates
-    for name in subagent_names:
+def _parse_list(raw: Any) -> list[Any]:
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
         try:
-            template = get_subagent_template(name)
-            if template:
-                wrapper.add_subagent(
-                    name=template["name"],
-                    description=template["description"],
-                    prompt=template["system_prompt"],
-                    model=model  # same model for subagents
-                )
-        except ValueError:
-            pass  # skip unknown template names
+            return json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return []
+    return []
 
-    wrapper.build()
-    result = wrapper.invoke(task=task, thread_id=thread_id)
 
-    # Extract text result from messages
-    if result.get("success") and result.get("messages"):
-        messages = result["messages"]
-        # Get the last AI message content
-        text_parts = []
-        for msg in reversed(messages):
-            if hasattr(msg, "content") and msg.content:
-                text_parts.insert(0, msg.content)
-                break
-        if text_parts:
-            result["result"] = "\n".join(text_parts)
+def _error(msg: str) -> dict[str, Any]:
+    return {"success": False, "result": "", "todos": [], "files": {}, "thread_id": "", "error": msg}
 
-    # Format todos from deepagents state
-    todos = result.get("todos", [])
-    formatted_todos = []
-    if isinstance(todos, list):
-        for i, t in enumerate(todos):
-            if isinstance(t, dict):
-                formatted_todos.append(t)
-            elif isinstance(t, str):
-                formatted_todos.append({
-                    "id": f"todo-{i+1}",
-                    "task": t,
-                    "status": "completed",
-                    "subtasks": []
-                })
 
-    return {
-        "success": result.get("success", False),
-        "result": result.get("result", ""),
-        "todos": formatted_todos,
-        "files": result.get("files", {}),
-        "thread_id": thread_id,
-        "error": result.get("error")
-    }
+def _print_json(obj: Any) -> None:
+    print(json.dumps(obj, default=str), flush=True)
 
 
-def check_status() -> Dict[str, Any]:
-    """Check if DeepAgents is available"""
-    availability = check_availability()
-    return {
-        "success": True,
-        "available": availability["available"],
-        "error": availability.get("error"),
-        "agent_types": list(AGENT_FACTORIES.keys()),
-        "subagent_templates": list_available_templates()
-    }
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
+_COMMANDS = {
+    "check_status":      cmd_check_status,
+    "list_capabilities": cmd_list_capabilities,
+    "execute_task":      cmd_execute_task,
+    "stream_task":       cmd_stream_task,
+    "create_plan":       cmd_create_plan,
+    "execute_step":      cmd_execute_step,
+    "synthesize":        cmd_synthesize,
+    "resume_thread":     cmd_resume_thread,
+}
 
-def create_agent(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Create a configured DeepAgent."""
-    try:
-        agent_type = config.get("agent_type", "general")
 
-        if agent_type and agent_type in AGENT_FACTORIES:
-            agent = create_agent_by_type(
-                agent_type=agent_type,
-                model=config.get("model"),
-                api_key=config.get("api_key")
-            )
-        else:
-            agent = create_fincept_deep_agent(
-                model=config.get("model"),
-                api_key=config.get("api_key"),
-                use_fincept_llm=config.get("use_fincept_llm", True),
-                system_prompt=config.get("system_prompt"),
-                enable_checkpointing=config.get("enable_checkpointing", True),
-                enable_longterm_memory=config.get("enable_longterm_memory", False),
-                enable_summarization=config.get("enable_summarization", True),
-                recursion_limit=config.get("recursion_limit", 100),
-                subagents=config.get("subagents")
-            )
-
-        agent.build()
-
-        return {
-            "success": True,
-            "message": f"Created {agent_type} agent",
-            "agent_id": id(agent),
-            "config": {
-                "agent_type": agent_type,
-                "subagents": len(agent.subagents),
-                "checkpointing": agent.enable_checkpointing,
-                "longterm_memory": agent.enable_longterm_memory
-            }
-        }
-
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def execute_task(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Execute a task. Routes to deepagents library or orchestrator based on LLM provider.
-    """
-    try:
-        if isinstance(params, str):
-            params = json.loads(params)
-
-        agent_type = params.get("agent_type", "general")
-        task = params.get("task")
-        thread_id = params.get("thread_id", "default-thread")
-        context = params.get("context")
-        config = _parse_config(params.get("config", {}))
-
-        if not task:
-            return {"success": False, "error": "No task provided"}
-
-        full_task = task
-        if context:
-            ctx = context if isinstance(context, str) else json.dumps(context)
-            full_task = f"{task}\n\nAdditional context: {ctx}"
-
-        # Route based on LLM provider
-        if _supports_tool_calling(config):
-            try:
-                return _execute_with_deepagents(full_task, agent_type, config, thread_id)
-            except Exception as e:
-                # Fall back to orchestrator on any deepagents failure
-                pass
-
-        # Fincept LLM / Ollama / fallback -> orchestrator
-        api_key = config.get("api_key")
-        orchestrator = FinceptOrchestrator(api_key=api_key)
-        subagent_names = AGENT_SUBAGENTS.get(agent_type, ["data_analyst", "reporter"])
-
-        result = orchestrator.execute(
-            task=full_task,
-            agent_type=agent_type,
-            subagent_names=subagent_names
-        )
-
-        return {
-            "success": result.get("success", False),
-            "result": result.get("result", ""),
-            "todos": result.get("todos", []),
-            "files": result.get("files", {}),
-            "thread_id": thread_id,
-            "error": result.get("error")
-        }
-
-    except Exception as e:
-        return {"success": False, "error": str(e), "details": traceback.format_exc()}
-
-
-def create_plan(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Create an execution plan (list of steps/todos) without executing them.
-    Uses orchestrator for planning (works with any LLM).
-    """
-    try:
-        if isinstance(params, str):
-            params = json.loads(params)
-
-        agent_type = params.get("agent_type", "general")
-        task = params.get("task")
-        config = _parse_config(params.get("config", {}))
-
-        if not task:
-            return {"success": False, "error": "No task provided"}
-
-        # If tool-calling LLM, use deepagents for the whole flow via execute_task
-        # But for incremental UI, we still create a plan via orchestrator
-        api_key = config.get("api_key")
-        orchestrator = FinceptOrchestrator(api_key=api_key)
-        subagent_names = AGENT_SUBAGENTS.get(agent_type, ["data_analyst", "reporter"])
-
-        plan = orchestrator._create_plan(task, agent_type, subagent_names)
-
-        todos = []
-        for i, step in enumerate(plan):
-            todos.append({
-                "id": f"todo-{i+1}",
-                "task": step.get("step", f"Step {i+1}"),
-                "status": "pending",
-                "specialist": step.get("specialist", "data_analyst"),
-                "prompt": step.get("prompt", step.get("step", task)),
-                "subtasks": []
-            })
-
-        return {
-            "success": True,
-            "todos": todos,
-            "plan": plan
-        }
-
-    except Exception as e:
-        return {"success": False, "error": str(e), "details": traceback.format_exc()}
-
-
-def execute_step(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Execute a single step from the plan.
-    Uses tool-calling LLM directly if available, otherwise Fincept orchestrator.
-    """
-    try:
-        if isinstance(params, str):
-            params = json.loads(params)
-
-        task = params.get("task")
-        step_prompt = params.get("step_prompt")
-        specialist = params.get("specialist", "data_analyst")
-        config = _parse_config(params.get("config", {}))
-
-        raw_prev = params.get("previous_results", [])
-        if isinstance(raw_prev, str):
-            try:
-                previous_results = json.loads(raw_prev)
-            except (json.JSONDecodeError, ValueError):
-                previous_results = []
-        elif isinstance(raw_prev, list):
-            previous_results = raw_prev
-        else:
-            previous_results = []
-
-        if not task or not step_prompt:
-            return {"success": False, "error": "task and step_prompt are required"}
-
-        # Try tool-calling LLM for direct inference (richer output)
-        if _supports_tool_calling(config):
-            model = _create_langchain_model(config)
-            if model:
-                try:
-                    from langchain_core.messages import SystemMessage, HumanMessage
-
-                    system_context = FinceptOrchestrator.SUBAGENT_PROMPTS.get(
-                        specialist, FinceptOrchestrator.SUBAGENT_PROMPTS["data_analyst"]
-                    )
-
-                    prev_context = ""
-                    if previous_results:
-                        prev_context = "\n\nPrevious findings from the team:\n"
-                        for pr in previous_results:
-                            prev_context += f"--- {pr.get('step', '')} ---\n{pr.get('result', '')}\n\n"
-
-                    messages = [
-                        SystemMessage(content=system_context),
-                        HumanMessage(content=f"""Context: You are working as part of a multi-agent team analyzing a financial task.
-Overall task: {task}
-Your specific assignment: {step_prompt}
-{prev_context}
-Provide a thorough, detailed analysis. Include specific data points, company names, numbers, and actionable insights where relevant. Be comprehensive.""")
-                    ]
-
-                    response = model.invoke(messages)
-                    return {"success": True, "result": response.content}
-                except Exception:
-                    pass  # Fall through to orchestrator
-
-        # Fincept LLM / fallback -> orchestrator
-        api_key = config.get("api_key")
-        orchestrator = FinceptOrchestrator(api_key=api_key)
-
-        system_context = orchestrator.SUBAGENT_PROMPTS.get(
-            specialist, orchestrator.SUBAGENT_PROMPTS["data_analyst"]
-        )
-
-        prev_context = ""
-        if previous_results:
-            prev_context = "\n\nPrevious findings from the team:\n"
-            for pr in previous_results:
-                prev_context += f"--- {pr.get('step', '')} ---\n{pr.get('result', '')}\n\n"
-
-        full_prompt = f"""{system_context}
-
-Context: You are working as part of a multi-agent team analyzing a financial task.
-Overall task: {task}
-Your specific assignment: {step_prompt}
-{prev_context}
-Provide a thorough, detailed analysis. Include specific data points, company names, numbers, and actionable insights where relevant. Be comprehensive."""
-
-        result = orchestrator._call_llm(full_prompt, max_tokens=1500)
-
-        return {"success": True, "result": result}
-
-    except Exception as e:
-        return {"success": False, "error": str(e), "details": traceback.format_exc()}
-
-
-def synthesize_results(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Synthesize all step results into a final report.
-    Uses tool-calling LLM if available, otherwise Fincept orchestrator.
-    """
-    try:
-        if isinstance(params, str):
-            params = json.loads(params)
-
-        task = params.get("task")
-        config = _parse_config(params.get("config", {}))
-
-        raw_steps = params.get("step_results", [])
-        if isinstance(raw_steps, str):
-            try:
-                step_results = json.loads(raw_steps)
-            except (json.JSONDecodeError, ValueError):
-                step_results = []
-        elif isinstance(raw_steps, list):
-            step_results = raw_steps
-        else:
-            step_results = []
-
-        if not task or not step_results:
-            return {"success": False, "error": "task and step_results are required"}
-
-        synthesis_prompt = f"""You are a senior financial analyst writing a comprehensive report.
-
-Original task: {task}
-
-Below are the results from your specialist team:
-
-"""
-        for sr in step_results:
-            synthesis_prompt += f"--- {sr.get('step', '')} (by {sr.get('specialist', '')}) ---\n{sr.get('result', '')}\n\n"
-
-        synthesis_prompt += """
-Now synthesize all the above into a single, cohesive, well-structured report.
-Use clear headings, bullet points, and organize the information logically.
-Include a brief executive summary at the top and key recommendations at the bottom.
-Be thorough and professional."""
-
-        # Try tool-calling LLM
-        if _supports_tool_calling(config):
-            model = _create_langchain_model(config)
-            if model:
-                try:
-                    from langchain_core.messages import HumanMessage
-                    response = model.invoke([HumanMessage(content=synthesis_prompt)])
-                    return {"success": True, "result": response.content}
-                except Exception:
-                    pass  # Fall through
-
-        # Fincept LLM / fallback
-        api_key = config.get("api_key")
-        orchestrator = FinceptOrchestrator(api_key=api_key)
-        final_report = orchestrator._call_llm(synthesis_prompt, max_tokens=3000)
-
-        return {"success": True, "result": final_report}
-
-    except Exception as e:
-        return {"success": False, "error": str(e), "details": traceback.format_exc()}
-
-
-def stream_task(params: Dict[str, Any]) -> None:
-    """Stream task execution (yields JSON chunks to stdout)."""
-    try:
-        if isinstance(params, str):
-            params = json.loads(params)
-
-        agent_type = params.get("agent_type", "general")
-        task = params.get("task")
-        thread_id = params.get("thread_id")
-        context = params.get("context")
-        config = _parse_config(params.get("config", {}))
-
-        if not task:
-            print(json.dumps({"success": False, "error": "No task provided"}))
-            return
-
-        agent = create_agent_by_type(
-            agent_type=agent_type,
-            model=config.get("model"),
-            api_key=config.get("api_key")
-        )
-        agent.build()
-
-        for chunk in agent.stream(task=task, thread_id=thread_id, context=context):
-            print(json.dumps(chunk))
-            sys.stdout.flush()
-
-    except Exception as e:
-        print(json.dumps({"success": False, "error": str(e)}))
-
-
-def get_agent_state(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Get agent state for a thread."""
-    try:
-        thread_id = params.get("thread_id")
-        if not thread_id:
-            return {"success": False, "error": "No thread_id provided"}
-        return {
-            "success": False,
-            "error": "State retrieval requires persistent agent instance"
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def list_capabilities() -> Dict[str, Any]:
-    """List all agent types and subagent templates"""
-    return {
-        "success": True,
-        "agent_types": {
-            name: "Pre-configured agent for specific use case"
-            for name in AGENT_FACTORIES.keys()
-        },
-        "subagent_templates": list_available_templates(),
-        "features": [
-            "Hierarchical task delegation",
-            "Built-in todo management",
-            "Mock file operations",
-            "State checkpointing",
-            "Long-term memory (optional)",
-            "Context summarization",
-            "Streaming execution",
-            "Dual-path: tool-calling LLMs use deepagents library, Fincept LLM uses orchestrator"
-        ]
-    }
-
-
-def main():
-    """CLI entry point"""
+def main() -> None:
     if len(sys.argv) < 2:
-        print(json.dumps({
-            "success": False,
-            "error": "No command specified. Available: check_status, create_agent, execute_task, stream_task, list_capabilities"
-        }))
+        _print_json(_error(
+            f"No command specified. Available: {', '.join(_COMMANDS)}"
+        ))
         sys.exit(1)
 
     command = sys.argv[1]
+    raw_params = sys.argv[2] if len(sys.argv) > 2 else "{}"
 
     try:
-        if command == "check_status":
-            result = check_status()
-
-        elif command == "create_agent":
-            config = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-            result = create_agent(config)
-
-        elif command == "execute_task":
-            params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-            result = execute_task(params)
-
-        elif command == "create_plan":
-            params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-            result = create_plan(params)
-
-        elif command == "execute_step":
-            params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-            result = execute_step(params)
-
-        elif command == "synthesize_results":
-            params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-            result = synthesize_results(params)
-
-        elif command == "stream_task":
-            params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-            stream_task(params)
-            return
-
-        elif command == "get_state":
-            params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-            result = get_agent_state(params)
-
-        elif command == "list_capabilities":
-            result = list_capabilities()
-
-        else:
-            result = {"success": False, "error": f"Unknown command: {command}"}
-
-        print(json.dumps(result))
-
-    except Exception as e:
-        print(json.dumps({"success": False, "error": str(e)}))
+        params = json.loads(raw_params)
+    except (json.JSONDecodeError, ValueError) as exc:
+        _print_json(_error(f"Invalid JSON params: {exc}"))
         sys.exit(1)
+
+    if command not in _COMMANDS:
+        _print_json(_error(f"Unknown command '{command}'. Available: {', '.join(_COMMANDS)}"))
+        sys.exit(1)
+
+    if command == "stream_task":
+        # stream_task prints its own output and returns None
+        _COMMANDS[command](params)
+    else:
+        result = _COMMANDS[command](params)
+        _print_json(result)
 
 
 if __name__ == "__main__":

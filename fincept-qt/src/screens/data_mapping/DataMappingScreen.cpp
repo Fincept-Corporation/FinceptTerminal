@@ -435,7 +435,10 @@ QWidget* DataMappingScreen::create_main_area() {
     cvl->setSpacing(0);
 
     view_stack_ = new QStackedWidget;
+    // Stack order must match header button order: MAPPINGS=0, TEMPLATES=1, CREATE=2
     view_stack_->addWidget(create_list_view());
+
+    view_stack_->addWidget(create_template_view());
 
     // Create view contains step stack
     auto* create_scroll = new QScrollArea;
@@ -455,8 +458,6 @@ QWidget* DataMappingScreen::create_main_area() {
     ccl->addStretch(1);
     create_scroll->setWidget(create_content);
     view_stack_->addWidget(create_scroll);
-
-    view_stack_->addWidget(create_template_view());
     cvl->addWidget(view_stack_, 1);
 
     // Right panel
@@ -497,7 +498,7 @@ QWidget* DataMappingScreen::create_left_panel() {
         btn->setStyleSheet("text-align: left; padding: 6px 10px; border: none; border-bottom: 1px solid " +
                            QString(colors::BORDER_DIM) + ";");
         connect(btn, &QPushButton::clicked, this, [this, i]() {
-            on_view_changed(1); // switch to create view
+            on_view_changed(2); // switch to create view
             on_step_changed(i);
         });
         vl->addWidget(btn);
@@ -1035,7 +1036,7 @@ QWidget* DataMappingScreen::create_template_view() {
             // Pre-populate create form from template
             api_name_->setText(g_templates[row].name);
             schema_select_->setCurrentText(g_templates[row].schema);
-            on_view_changed(1); // switch to create
+            on_view_changed(2); // switch to create
             on_step_changed(0);
             LOG_INFO("DataMapping", "Template applied: " + g_templates[row].name);
         }
@@ -1231,10 +1232,10 @@ void DataMappingScreen::on_view_changed(int view) {
     const QStringList names = {"MAPPINGS", "TEMPLATES", "CREATE"};
     status_view_->setText("VIEW: " + names[view]);
 
-    // Show/hide step bar and nav footer
-    nav_footer_->setVisible(view == 1); // only in create mode
+    // Show/hide step bar and nav footer — CREATE is index 2
+    nav_footer_->setVisible(view == 2); // only in create mode
 
-    if (view == 1) {
+    if (view == 2) {
         update_step_indicators();
     }
 
@@ -1445,7 +1446,7 @@ void DataMappingScreen::on_new_mapping() {
     save_btn_->setEnabled(false);
     right_test_info_->setText("Test: --");
 
-    on_view_changed(1); // create
+    on_view_changed(2); // create
     on_step_changed(0);
 }
 

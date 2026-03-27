@@ -32,7 +32,7 @@ void AuthManager::set_loading(bool v) {
 
 QJsonObject AuthManager::unwrap_data(const QJsonObject& raw) const {
     if (raw.contains("data") && raw["data"].isObject()) {
-        auto inner = raw["data"].toObject();
+        const auto inner = raw["data"].toObject();
         if (inner.contains("data") && inner["data"].isObject()) {
             return inner["data"].toObject();
         }
@@ -111,7 +111,7 @@ void AuthManager::initialize() {
     if (!session_.api_key.isEmpty()) {
         // Restore tokens on HttpClient so API calls work
         apply_tokens(session_.api_key, session_.session_token);
-        validate_saved_session(session_);
+        validate_saved_session();
         return;
     }
 
@@ -119,8 +119,7 @@ void AuthManager::initialize() {
     emit auth_state_changed();
 }
 
-void AuthManager::validate_saved_session(const SessionData& saved) {
-    Q_UNUSED(saved);
+void AuthManager::validate_saved_session() {
     AuthApi::instance().validate_session_server([this](ApiResponse r) {
         // 401/403 → session truly expired, must re-login
         if (!r.success && (r.status_code == 401 || r.status_code == 403)) {
@@ -142,7 +141,7 @@ void AuthManager::validate_saved_session(const SessionData& saved) {
         }
 
         // Success — check response body
-        auto data = unwrap_data(r.data);
+        const auto data = unwrap_data(r.data);
         LOG_DEBUG("Auth", "validate-session response: " +
                               QString::fromUtf8(QJsonDocument(r.data).toJson(QJsonDocument::Compact)));
 
@@ -157,44 +156,61 @@ void AuthManager::validate_saved_session(const SessionData& saved) {
         }
 
         // Session valid — refresh profile then proceed
-        fetch_user_profile(session_.api_key);
+        fetch_user_profile([this] { emit subscription_fetched(); });
     });
 }
 
-void AuthManager::fetch_user_profile(const QString& api_key) {
-    Q_UNUSED(api_key);
-    AuthApi::instance().get_user_profile([this](ApiResponse r) {
+void AuthManager::fetch_user_profile(std::function<void()> on_done) {
+    AuthApi::instance().get_user_profile([this, on_done = std::move(on_done)](ApiResponse r) mutable {
         if (r.success) {
-            auto data = unwrap_data(r.data);
+            const auto data = unwrap_data(r.data);
             session_.user_info = UserProfile::from_json(data);
         }
-        // Chain subscription fetch
-        fetch_user_subscription();
+        fetch_user_subscription(std::move(on_done));
     });
 }
 
-void AuthManager::fetch_user_subscription() {
-    UserApi::instance().get_user_subscription([this](ApiResponse r) {
+// ── Shared post-auth completion ───────────────────────────────────────────────
+// Fetches subscription, syncs state, saves session, emits success_signal.
+// Called at the tail of login / verify_otp / verify_mfa / session restore.
+
+// ── Shared post-auth completion ───────────────────────────────────────────────
+// Fetches subscription, syncs state, saves session, then calls on_done().
+// Used by login / verify_otp / verify_mfa / session restore to avoid
+// duplicating the same 8-line block in four places.
+
+void AuthManager::complete_auth_flow(std::function<void()> on_done) {
+    UserApi::instance().get_user_subscription([this, on_done = std::move(on_done)](ApiResponse r) {
         if (r.success) {
-            auto data = unwrap_data(r.data);
-            session_.subscription = UserSubscription::from_json(data);
+            const auto sub_data = unwrap_data(r.data);
+            session_.subscription = UserSubscription::from_json(sub_data);
             session_.has_subscription = !session_.subscription.account_type.isEmpty();
         }
-        // Fallback: use account_type from profile
+        // Fallback: promote profile account_type into subscription so account_type() is consistent
         if (session_.subscription.account_type.isEmpty() && !session_.user_info.account_type.isEmpty()) {
             session_.subscription.account_type = session_.user_info.account_type;
             session_.subscription.credit_balance = session_.user_info.credit_balance;
             session_.has_subscription = true;
         }
-        // Mark as authenticated — we have a valid api_key and server didn't reject
+        // Sync user_info from subscription so legacy readers stay consistent
+        if (!session_.subscription.account_type.isEmpty())
+            session_.user_info.account_type = session_.subscription.account_type;
+        if (session_.subscription.credit_balance > 0)
+            session_.user_info.credit_balance = session_.subscription.credit_balance;
+
         if (!session_.api_key.isEmpty())
             session_.authenticated = true;
         save_session();
         auto_configure_fincept_llm();
         set_loading(false);
-        emit subscription_fetched();
+        if (on_done)
+            on_done();
         emit auth_state_changed();
     });
+}
+
+void AuthManager::fetch_user_subscription(std::function<void()> on_done) {
+    complete_auth_flow(std::move(on_done));
 }
 
 // ── Login ────────────────────────────────────────────────────────────────────
@@ -207,14 +223,14 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
     req.password = password;
     req.force_login = force_login;
 
-    AuthApi::instance().login(req, [this, email](ApiResponse r) {
+    AuthApi::instance().login(req, [this](ApiResponse r) {
         if (!r.success) {
             set_loading(false);
             emit login_failed(r.error.isEmpty() ? "Login failed" : r.error);
             return;
         }
 
-        auto data = unwrap_data(r.data);
+        const auto data = unwrap_data(r.data);
 
         if (data["active_session"].toBool()) {
             set_loading(false);
@@ -228,14 +244,14 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
             return;
         }
 
-        QString api_key = data["api_key"].toString();
+        const QString api_key = data["api_key"].toString();
         if (api_key.isEmpty()) {
             set_loading(false);
             emit login_failed("No API key returned from server");
             return;
         }
 
-        QString session_token = data["session_token"].toString();
+        const QString session_token = data["session_token"].toString();
 
         // Set tokens on HttpClient — all subsequent API calls will use them
         apply_tokens(api_key, session_token);
@@ -244,32 +260,9 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
         session_.api_key = api_key;
         session_.session_token = session_token;
         session_.device_id = generate_device_id();
-        session_.user_info.email = email;
 
-        // Fetch profile, then subscription (HttpClient already has tokens set)
-        AuthApi::instance().get_user_profile([this](ApiResponse pr) {
-            if (pr.success) {
-                session_.user_info = UserProfile::from_json(unwrap_data(pr.data));
-            }
-            // Chain subscription fetch before emitting success
-            UserApi::instance().get_user_subscription([this](ApiResponse sr) {
-                if (sr.success) {
-                    auto sub_data = unwrap_data(sr.data);
-                    session_.subscription = UserSubscription::from_json(sub_data);
-                    session_.has_subscription = !session_.subscription.account_type.isEmpty();
-                }
-                if (session_.subscription.account_type.isEmpty() && !session_.user_info.account_type.isEmpty()) {
-                    session_.subscription.account_type = session_.user_info.account_type;
-                    session_.subscription.credit_balance = session_.user_info.credit_balance;
-                    session_.has_subscription = true;
-                }
-                save_session();
-                auto_configure_fincept_llm();
-                set_loading(false);
-                emit login_succeeded();
-                emit auth_state_changed();
-            });
-        });
+        // Fetch profile then subscription; on_done emits login_succeeded
+        fetch_user_profile([this] { emit login_succeeded(); });
     });
 }
 
@@ -305,52 +298,30 @@ void AuthManager::verify_otp(const QString& email, const QString& otp) {
     req.email = sanitize_input(email).toLower();
     req.otp = sanitize_input(otp);
 
-    AuthApi::instance().verify_otp(req, [this, email](ApiResponse r) {
+    AuthApi::instance().verify_otp(req, [this](ApiResponse r) {
         if (!r.success) {
             set_loading(false);
             emit otp_failed(r.error.isEmpty() ? "Verification failed" : r.error);
             return;
         }
 
-        auto data = unwrap_data(r.data);
-        QString api_key = data["api_key"].toString();
+        const auto data = unwrap_data(r.data);
+        const QString api_key = data["api_key"].toString();
         if (api_key.isEmpty()) {
             set_loading(false);
             emit otp_failed("No API key returned");
             return;
         }
 
-        QString session_token = data["session_token"].toString();
+        const QString session_token = data["session_token"].toString();
         apply_tokens(api_key, session_token);
 
         session_.authenticated = true;
         session_.api_key = api_key;
         session_.session_token = session_token;
         session_.device_id = generate_device_id();
-        session_.user_info.email = email;
 
-        AuthApi::instance().get_user_profile([this](ApiResponse pr) {
-            if (pr.success) {
-                session_.user_info = UserProfile::from_json(unwrap_data(pr.data));
-            }
-            UserApi::instance().get_user_subscription([this](ApiResponse sr) {
-                if (sr.success) {
-                    auto sub_data = unwrap_data(sr.data);
-                    session_.subscription = UserSubscription::from_json(sub_data);
-                    session_.has_subscription = !session_.subscription.account_type.isEmpty();
-                }
-                if (session_.subscription.account_type.isEmpty() && !session_.user_info.account_type.isEmpty()) {
-                    session_.subscription.account_type = session_.user_info.account_type;
-                    session_.subscription.credit_balance = session_.user_info.credit_balance;
-                    session_.has_subscription = true;
-                }
-                save_session();
-                auto_configure_fincept_llm();
-                set_loading(false);
-                emit otp_verified();
-                emit auth_state_changed();
-            });
-        });
+        fetch_user_profile([this] { emit otp_verified(); });
     });
 }
 
@@ -359,52 +330,30 @@ void AuthManager::verify_otp(const QString& email, const QString& otp) {
 void AuthManager::verify_mfa(const QString& email, const QString& otp) {
     set_loading(true);
 
-    AuthApi::instance().verify_mfa(sanitize_input(email).toLower(), sanitize_input(otp), [this, email](ApiResponse r) {
+    AuthApi::instance().verify_mfa(sanitize_input(email).toLower(), sanitize_input(otp), [this](ApiResponse r) {
         if (!r.success) {
             set_loading(false);
             emit mfa_failed(r.error.isEmpty() ? "MFA verification failed" : r.error);
             return;
         }
 
-        auto data = unwrap_data(r.data);
-        QString api_key = data["api_key"].toString();
+        const auto data = unwrap_data(r.data);
+        const QString api_key = data["api_key"].toString();
         if (api_key.isEmpty()) {
             set_loading(false);
             emit mfa_failed("No API key returned");
             return;
         }
 
-        QString session_token = data["session_token"].toString();
+        const QString session_token = data["session_token"].toString();
         apply_tokens(api_key, session_token);
 
         session_.authenticated = true;
         session_.api_key = api_key;
         session_.session_token = session_token;
         session_.device_id = generate_device_id();
-        session_.user_info.email = email;
 
-        AuthApi::instance().get_user_profile([this](ApiResponse pr) {
-            if (pr.success) {
-                session_.user_info = UserProfile::from_json(unwrap_data(pr.data));
-            }
-            UserApi::instance().get_user_subscription([this](ApiResponse sr) {
-                if (sr.success) {
-                    auto sub_data = unwrap_data(sr.data);
-                    session_.subscription = UserSubscription::from_json(sub_data);
-                    session_.has_subscription = !session_.subscription.account_type.isEmpty();
-                }
-                if (session_.subscription.account_type.isEmpty() && !session_.user_info.account_type.isEmpty()) {
-                    session_.subscription.account_type = session_.user_info.account_type;
-                    session_.subscription.credit_balance = session_.user_info.credit_balance;
-                    session_.has_subscription = true;
-                }
-                save_session();
-                auto_configure_fincept_llm();
-                set_loading(false);
-                emit mfa_verified();
-                emit auth_state_changed();
-            });
-        });
+        fetch_user_profile([this] { emit mfa_verified(); });
     });
 }
 
@@ -468,7 +417,7 @@ void AuthManager::refresh_user_data() {
     if (!session_.authenticated || session_.api_key.isEmpty())
         return;
     // fetch_user_profile chains into fetch_user_subscription automatically
-    fetch_user_profile(session_.api_key);
+    fetch_user_profile([this] { emit subscription_fetched(); });
 }
 
 // ── Auto-configure Fincept LLM provider ──────────────────────────────────────

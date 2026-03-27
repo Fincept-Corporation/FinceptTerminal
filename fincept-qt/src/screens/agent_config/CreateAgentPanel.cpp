@@ -1,9 +1,11 @@
 // src/screens/agent_config/CreateAgentPanel.cpp
 #include "screens/agent_config/CreateAgentPanel.h"
 
+#include "ai_chat/LlmService.h"
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
 #include "services/agents/AgentService.h"
+#include "storage/repositories/LlmProfileRepository.h"
 #include "storage/repositories/McpServerRepository.h"
 #include "ui/theme/Theme.h"
 
@@ -191,45 +193,24 @@ QWidget* CreateAgentPanel::build_form_panel() {
     bl->addWidget(desc_edit_);
     vl->addWidget(basic);
 
-    // ── MODEL ────────────────────────────────────────────────────────────────
+    // ── MODEL (read-only pill — configured in Settings > LLM Config) ─────────
     auto* model = make_section("MODEL", false);
     auto* ml = new QVBoxLayout(model);
     ml->setSpacing(6);
 
-    auto* r3 = new QHBoxLayout;
-    r3->addWidget(field_label("Provider:"));
-    provider_combo_ = new QComboBox;
-    for (const auto& p : {"openai", "anthropic", "google", "groq", "deepseek", "ollama", "openrouter", "fincept"})
-        provider_combo_->addItem(p);
-    provider_combo_->setStyleSheet(QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(kIn));
-    r3->addWidget(provider_combo_, 1);
-    ml->addLayout(r3);
+    llm_profile_combo_ = new QComboBox;
+    llm_profile_combo_->setToolTip("Select which LLM profile this agent uses. Create profiles in Settings > LLM Config > Profiles.");
+    llm_profile_combo_->setStyleSheet(
+        QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:5px 10px;font-size:12px;}"
+                "QComboBox::drop-down{border:none;}"
+                "QComboBox QAbstractItemView{background:%1;color:%2;selection-background-color:%4;}")
+            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED, ui::colors::AMBER_DIM));
+    ml->addWidget(llm_profile_combo_);
 
-    auto* r4 = new QHBoxLayout;
-    r4->addWidget(field_label("Model ID:"));
-    model_id_edit_ = new QLineEdit;
-    model_id_edit_->setPlaceholderText("e.g. gpt-4o");
-    model_id_edit_->setStyleSheet(kIn);
-    r4->addWidget(model_id_edit_, 1);
-    ml->addLayout(r4);
-
-    auto* r5 = new QHBoxLayout;
-    r5->addWidget(field_label("Temp:"));
-    temperature_spin_ = new QDoubleSpinBox;
-    temperature_spin_->setRange(0.0, 2.0);
-    temperature_spin_->setSingleStep(0.1);
-    temperature_spin_->setValue(0.7);
-    temperature_spin_->setStyleSheet(kIn);
-    r5->addWidget(temperature_spin_);
-    r5->addWidget(field_label("Max Tokens:"));
-    max_tokens_spin_ = new QSpinBox;
-    max_tokens_spin_->setRange(100, 128000);
-    max_tokens_spin_->setSingleStep(500);
-    max_tokens_spin_->setValue(4096);
-    max_tokens_spin_->setStyleSheet(kIn);
-    r5->addWidget(max_tokens_spin_);
-    r5->addStretch();
-    ml->addLayout(r5);
+    llm_resolved_lbl_ = new QLabel;
+    llm_resolved_lbl_->setStyleSheet(
+        QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+    ml->addWidget(llm_resolved_lbl_);
     vl->addWidget(model);
 
     // ── INSTRUCTIONS ─────────────────────────────────────────────────────────
@@ -467,9 +448,83 @@ QWidget* CreateAgentPanel::build_form_panel() {
 
 // ── Connections ──────────────────────────────────────────────────────────────
 
+void CreateAgentPanel::load_profile_combo() {
+    const QString prev_id = llm_profile_combo_->currentData().toString();
+    llm_profile_combo_->blockSignals(true);
+    llm_profile_combo_->clear();
+    llm_profile_combo_->addItem("Default (Global)", QString{});
+
+    const auto pr = LlmProfileRepository::instance().list_profiles();
+    const auto profiles = pr.is_ok() ? pr.value() : QVector<LlmProfile>{};
+    for (const auto& p : profiles) {
+        QString label = p.name;
+        if (p.is_default) label += " [default]";
+        llm_profile_combo_->addItem(label, p.id);
+    }
+
+    int restore = 0;
+    if (!prev_id.isEmpty()) {
+        for (int i = 1; i < llm_profile_combo_->count(); ++i) {
+            if (llm_profile_combo_->itemData(i).toString() == prev_id) {
+                restore = i;
+                break;
+            }
+        }
+    }
+    llm_profile_combo_->blockSignals(false);
+    llm_profile_combo_->setCurrentIndex(restore);
+    refresh_llm_pill();
+}
+
+void CreateAgentPanel::refresh_llm_pill() {
+    const QString profile_id = llm_profile_combo_->currentData().toString();
+    ResolvedLlmProfile resolved;
+    if (!profile_id.isEmpty()) {
+        const auto pr2 = LlmProfileRepository::instance().list_profiles();
+        const auto profiles2 = pr2.is_ok() ? pr2.value() : QVector<LlmProfile>{};
+        for (const auto& p : profiles2) {
+            if (p.id == profile_id) {
+                resolved.profile_id    = p.id;
+                resolved.profile_name  = p.name;
+                resolved.provider      = p.provider;
+                resolved.model_id      = p.model_id;
+                resolved.api_key       = p.api_key;
+                resolved.base_url      = p.base_url;
+                resolved.temperature   = p.temperature;
+                resolved.max_tokens    = p.max_tokens;
+                resolved.system_prompt = p.system_prompt;
+                break;
+            }
+        }
+    }
+    if (resolved.provider.isEmpty())
+        resolved = ai_chat::LlmService::instance().resolve_profile("agent", editing_id_);
+
+    if (!resolved.provider.isEmpty()) {
+        QString text = resolved.provider.toUpper() + " / " + resolved.model_id;
+        if (text.length() > 60) text = text.left(58) + "..";
+        if (profile_id.isEmpty()) text += " (inherited)";
+        llm_resolved_lbl_->setText(text);
+        llm_resolved_lbl_->setStyleSheet(
+            QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY));
+    } else {
+        llm_resolved_lbl_->setText("No provider configured — go to Settings > LLM Config");
+        llm_resolved_lbl_->setStyleSheet(
+            QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+    }
+}
+
 void CreateAgentPanel::setup_connections() {
     connect(save_btn_, &QPushButton::clicked, this, &CreateAgentPanel::save_agent);
     connect(test_btn_, &QPushButton::clicked, this, &CreateAgentPanel::test_agent);
+
+    // Reload profile combo when LLM config changes
+    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed,
+            this, &CreateAgentPanel::load_profile_combo);
+    // Update resolved label when user picks a different profile
+    connect(llm_profile_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &CreateAgentPanel::refresh_llm_pill);
+    load_profile_combo();
 
     auto& svc = services::AgentService::instance();
     connect(&svc, &services::AgentService::config_saved, this, [this]() {
@@ -482,6 +537,28 @@ void CreateAgentPanel::setup_connections() {
         status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:4px 0;").arg(ui::colors::WARNING));
         editing_id_.clear();
         load_saved_agents();
+    });
+    connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& status) {
+        status_label_->setText(status);
+    });
+    connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& token) {
+        QTextCursor cursor = test_result_->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        test_result_->setTextCursor(cursor);
+        test_result_->insertPlainText(token + " ");
+    });
+    connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
+        test_btn_->setEnabled(true);
+        test_btn_->setText("TEST");
+        if (r.success) {
+            test_result_->setPlainText(r.response);
+            status_label_->setText(QString("Test completed in %1ms").arg(r.execution_time_ms));
+            status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:4px 0;").arg(ui::colors::POSITIVE));
+        } else {
+            test_result_->setPlainText("Error: " + r.error);
+            status_label_->setText("Test failed");
+            status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:4px 0;").arg(ui::colors::NEGATIVE));
+        }
     });
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
         test_btn_->setEnabled(true);
@@ -537,20 +614,30 @@ void CreateAgentPanel::load_saved_agents() {
 
 void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
     editing_id_ = cfg.id;
+
+    // Restore the profile assignment for this agent
+    const QString assigned_id = LlmProfileRepository::instance().get_assignment("agent", cfg.id);
+    llm_profile_combo_->blockSignals(true);
+    int select_idx = 0;
+    if (!assigned_id.isEmpty()) {
+        for (int i = 1; i < llm_profile_combo_->count(); ++i) {
+            if (llm_profile_combo_->itemData(i).toString() == assigned_id) {
+                select_idx = i;
+                break;
+            }
+        }
+    }
+    llm_profile_combo_->blockSignals(false);
+    llm_profile_combo_->setCurrentIndex(select_idx);
+    refresh_llm_pill();
+
     name_edit_->setText(cfg.name);
     desc_edit_->setPlainText(cfg.description);
     int ci = category_combo_->findText(cfg.category);
     if (ci >= 0)
         category_combo_->setCurrentIndex(ci);
 
-    QJsonObject c = QJsonDocument::fromJson(cfg.config_json.toUtf8()).object();
-    QJsonObject m = c["model"].toObject();
-    int pi = provider_combo_->findText(m["provider"].toString());
-    if (pi >= 0)
-        provider_combo_->setCurrentIndex(pi);
-    model_id_edit_->setText(m["model_id"].toString());
-    temperature_spin_->setValue(m["temperature"].toDouble(0.7));
-    max_tokens_spin_->setValue(m["max_tokens"].toInt(4096));
+    const QJsonObject c = QJsonDocument::fromJson(cfg.config_json.toUtf8()).object();
     instructions_edit_->setPlainText(c["instructions"].toString());
 
     // Tools
@@ -622,10 +709,6 @@ void CreateAgentPanel::clear_form() {
     name_edit_->clear();
     desc_edit_->clear();
     category_combo_->setCurrentIndex(0);
-    provider_combo_->setCurrentIndex(0);
-    model_id_edit_->clear();
-    temperature_spin_->setValue(0.7);
-    max_tokens_spin_->setValue(4096);
     instructions_edit_->clear();
     for (int i = 0; i < tools_list_->count(); ++i)
         tools_list_->item(i)->setCheckState(Qt::Unchecked);
@@ -657,12 +740,32 @@ void CreateAgentPanel::clear_form() {
 
 QJsonObject CreateAgentPanel::build_config_json() const {
     QJsonObject config;
-    QJsonObject model;
-    model["provider"] = provider_combo_->currentText();
-    model["model_id"] = model_id_edit_->text();
-    model["temperature"] = temperature_spin_->value();
-    model["max_tokens"] = max_tokens_spin_->value();
-    config["model"] = model;
+
+    // Resolve the LLM profile — explicit selection or fallback via assignment chain.
+    const QString profile_id = llm_profile_combo_->currentData().toString();
+    ResolvedLlmProfile resolved;
+    if (!profile_id.isEmpty()) {
+        const auto pr3 = LlmProfileRepository::instance().list_profiles();
+        const auto profiles3 = pr3.is_ok() ? pr3.value() : QVector<LlmProfile>{};
+        for (const auto& p : profiles3) {
+            if (p.id == profile_id) {
+                resolved.profile_id    = p.id;
+                resolved.profile_name  = p.name;
+                resolved.provider      = p.provider;
+                resolved.model_id      = p.model_id;
+                resolved.api_key       = p.api_key;
+                resolved.base_url      = p.base_url;
+                resolved.temperature   = p.temperature;
+                resolved.max_tokens    = p.max_tokens;
+                resolved.system_prompt = p.system_prompt;
+                break;
+            }
+        }
+    }
+    if (resolved.provider.isEmpty())
+        resolved = ai_chat::LlmService::instance().resolve_profile("agent", editing_id_);
+    config["model"] = ai_chat::LlmService::profile_to_json(resolved);
+
     config["instructions"] = instructions_edit_->toPlainText();
 
     QJsonArray tools;
@@ -736,6 +839,14 @@ void CreateAgentPanel::save_agent() {
     db.config_json = QString::fromUtf8(QJsonDocument(build_config_json()).toJson(QJsonDocument::Compact));
     services::AgentService::instance().save_config(db);
     editing_id_ = db.id;
+
+    // Persist profile assignment
+    const QString profile_id = llm_profile_combo_->currentData().toString();
+    auto& repo = LlmProfileRepository::instance();
+    if (profile_id.isEmpty())
+        repo.remove_assignment("agent", editing_id_);
+    else
+        repo.assign_profile("agent", editing_id_, profile_id);
 }
 
 void CreateAgentPanel::delete_agent() {
@@ -805,6 +916,13 @@ void CreateAgentPanel::showEvent(QShowEvent* event) {
                 mcp_servers_list_->addItem(item);
             }
         }
+    }
+}
+
+void CreateAgentPanel::apply_tools_selection(const QStringList& tools) {
+    for (int i = 0; i < tools_list_->count(); ++i) {
+        auto* item = tools_list_->item(i);
+        item->setCheckState(tools.contains(item->text()) ? Qt::Checked : Qt::Unchecked);
     }
 }
 

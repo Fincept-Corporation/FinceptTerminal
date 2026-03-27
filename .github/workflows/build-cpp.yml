@@ -181,34 +181,220 @@ jobs:
           echo "Binary verified: $BINARY"
           ls -lh "$BINARY"
 
-      # ---- Package: Windows (windeployqt) ----
+      # ---- Package: Windows (windeployqt + manual DLL sweep) ----
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: bash
         working-directory: fincept-qt
         run: |
+          set -euo pipefail
           mkdir -p dist
+
+          # Copy main executable
           cp build/Release/${{ matrix.exe }} dist/
-          # windeployqt is always an x64 host tool — find it in the x64 Qt bin dir.
-          # For x64 builds QT_ROOT_DIR points to msvc2022_64, so bin/windeployqt.exe works.
-          # For ARM64 cross-compiled builds QT_ROOT_DIR points to msvc2022_arm64_cross_compiled;
-          # windeployqt.exe lives one level up in msvc2022_64/bin instead.
+
+          # Copy qgeoview.dll (built by FetchContent, placed next to exe by post-build command)
+          if [ -f "build/Release/qgeoview.dll" ]; then
+            cp build/Release/qgeoview.dll dist/
+            echo "Copied qgeoview.dll"
+          else
+            echo "::warning::qgeoview.dll not found in build/Release — map widget may fail"
+          fi
+
+          # ----------------------------------------------------------------
+          # windeployqt
+          # Always an x64 host tool. For ARM64 cross-compiled builds
+          # QT_ROOT_DIR points to the ARM64 kit; windeployqt lives in x64.
+          # ----------------------------------------------------------------
           WDQT="${QT_ROOT_DIR}/bin/windeployqt.exe"
           if [ ! -f "$WDQT" ]; then
             WDQT="${QT_ROOT_DIR}/../msvc2022_64/bin/windeployqt.exe"
           fi
+
           if [ -f "$WDQT" ]; then
+            echo "Running windeployqt: $WDQT"
             "$WDQT" \
               --release \
               --no-translations \
-              --no-system-d3d-compiler \
-              --no-opengl-sw \
+              --compiler-runtime \
+              --force \
               dist/${{ matrix.exe }}
           else
             echo "::warning::windeployqt not found — Qt DLLs not bundled"
           fi
+
+          QT_BIN="${QT_ROOT_DIR}/bin"
+          QT_PLUGINS="${QT_ROOT_DIR}/plugins"
+
+          # ----------------------------------------------------------------
+          # Qt Core DLLs (windeployqt should handle these, but belt+suspenders)
+          # ----------------------------------------------------------------
+          for qt_dll in \
+            Qt6Core.dll Qt6Gui.dll Qt6Widgets.dll \
+            Qt6Charts.dll Qt6PrintSupport.dll \
+            Qt6Network.dll Qt6Sql.dll Qt6Concurrent.dll \
+            Qt6WebSockets.dll \
+            Qt6Multimedia.dll Qt6MultimediaWidgets.dll \
+            Qt6OpenGL.dll Qt6OpenGLWidgets.dll \
+            Qt6Svg.dll Qt6Xml.dll; do
+            if [ -f "${QT_BIN}/${qt_dll}" ] && [ ! -f "dist/${qt_dll}" ]; then
+              cp "${QT_BIN}/${qt_dll}" dist/
+              echo "Copied ${qt_dll}"
+            fi
+          done
+
+          # ----------------------------------------------------------------
+          # OpenSSL DLLs — Qt6::Network requires these for HTTPS.
+          # Qt 6.x ships them in its own bin/ directory.
+          # ----------------------------------------------------------------
+          for ssl_dll in \
+            libssl-3-x64.dll libcrypto-3-x64.dll \
+            libssl-3.dll     libcrypto-3.dll \
+            libssl-1_1-x64.dll libcrypto-1_1-x64.dll; do
+            if [ -f "${QT_BIN}/${ssl_dll}" ] && [ ! -f "dist/${ssl_dll}" ]; then
+              cp "${QT_BIN}/${ssl_dll}" dist/
+              echo "Copied ${ssl_dll}"
+            fi
+          done
+
+          # ----------------------------------------------------------------
+          # MSVC Runtime DLLs — --compiler-runtime covers most, but copy
+          # from System32 as a fallback for anything missed.
+          # ----------------------------------------------------------------
+          for vcrt_dll in \
+            vcruntime140.dll vcruntime140_1.dll \
+            msvcp140.dll msvcp140_1.dll msvcp140_2.dll \
+            concrt140.dll vccorlib140.dll; do
+            SYS32="/c/Windows/System32/${vcrt_dll}"
+            if [ -f "$SYS32" ] && [ ! -f "dist/${vcrt_dll}" ]; then
+              cp "$SYS32" dist/
+              echo "Copied MSVC runtime ${vcrt_dll}"
+            fi
+          done
+
+          # ----------------------------------------------------------------
+          # Qt Platform Plugin — mandatory, app won't start without it
+          # ----------------------------------------------------------------
+          mkdir -p dist/platforms
+          for plat_dll in qwindows.dll qwindowsd.dll; do
+            if [ -f "${QT_PLUGINS}/platforms/${plat_dll}" ] && [ ! -f "dist/platforms/${plat_dll}" ]; then
+              cp "${QT_PLUGINS}/platforms/${plat_dll}" dist/platforms/
+              echo "Copied platforms/${plat_dll}"
+            fi
+          done
+
+          # ----------------------------------------------------------------
+          # Qt SQL Drivers — qsqlite required for SQLite database
+          # ----------------------------------------------------------------
+          mkdir -p dist/sqldrivers
+          for sql_dll in qsqlite.dll qsqlodbc.dll; do
+            if [ -f "${QT_PLUGINS}/sqldrivers/${sql_dll}" ] && [ ! -f "dist/sqldrivers/${sql_dll}" ]; then
+              cp "${QT_PLUGINS}/sqldrivers/${sql_dll}" dist/sqldrivers/
+              echo "Copied sqldrivers/${sql_dll}"
+            fi
+          done
+
+          # ----------------------------------------------------------------
+          # Qt Image Format Plugins — needed to render PNG/JPG/SVG/GIF/ICO
+          # in the UI (logos, icons, chart exports)
+          # ----------------------------------------------------------------
+          mkdir -p dist/imageformats
+          for img_dll in \
+            qbmp.dll qgif.dll qico.dll qjpeg.dll \
+            qpng.dll qsvg.dll qtga.dll qtiff.dll qwbmp.dll qwebp.dll; do
+            if [ -f "${QT_PLUGINS}/imageformats/${img_dll}" ] && [ ! -f "dist/imageformats/${img_dll}" ]; then
+              cp "${QT_PLUGINS}/imageformats/${img_dll}" dist/imageformats/
+              echo "Copied imageformats/${img_dll}"
+            fi
+          done
+
+          # ----------------------------------------------------------------
+          # Qt Icon Engine Plugin — renders .svg icons in toolbars/menus
+          # ----------------------------------------------------------------
+          mkdir -p dist/iconengines
+          if [ -f "${QT_PLUGINS}/iconengines/qsvgicon.dll" ] && [ ! -f "dist/iconengines/qsvgicon.dll" ]; then
+            cp "${QT_PLUGINS}/iconengines/qsvgicon.dll" dist/iconengines/
+            echo "Copied iconengines/qsvgicon.dll"
+          fi
+
+          # ----------------------------------------------------------------
+          # Qt Style Plugins — Fusion style (cross-platform look)
+          # ----------------------------------------------------------------
+          mkdir -p dist/styles
+          for style_dll in qwindowsvistastyle.dll; do
+            if [ -f "${QT_PLUGINS}/styles/${style_dll}" ] && [ ! -f "dist/styles/${style_dll}" ]; then
+              cp "${QT_PLUGINS}/styles/${style_dll}" dist/styles/
+              echo "Copied styles/${style_dll}"
+            fi
+          done
+
+          # ----------------------------------------------------------------
+          # Qt Network TLS Backend Plugin — required for HTTPS on Qt 6.2+
+          # (replaces old OpenSSL linkage model)
+          # ----------------------------------------------------------------
+          mkdir -p dist/tls
+          for tls_dll in qschannelbackend.dll qopensslbackend.dll qcertonlybackend.dll; do
+            if [ -f "${QT_PLUGINS}/tls/${tls_dll}" ] && [ ! -f "dist/tls/${tls_dll}" ]; then
+              cp "${QT_PLUGINS}/tls/${tls_dll}" dist/tls/
+              echo "Copied tls/${tls_dll}"
+            fi
+          done
+
+          # ----------------------------------------------------------------
+          # Qt Multimedia Plugins — audio/video backend (Windows MF + FFMPEG)
+          # ----------------------------------------------------------------
+          if [ -d "${QT_PLUGINS}/multimedia" ]; then
+            mkdir -p dist/multimedia
+            for media_dll in windowsmediafoundation.dll ffmpegmediaplugin.dll; do
+              if [ -f "${QT_PLUGINS}/multimedia/${media_dll}" ] && [ ! -f "dist/multimedia/${media_dll}" ]; then
+                cp "${QT_PLUGINS}/multimedia/${media_dll}" dist/multimedia/
+                echo "Copied multimedia/${media_dll}"
+              fi
+            done
+          fi
+
+          # ----------------------------------------------------------------
+          # Qt Generic Plugins (touch/tablet input)
+          # ----------------------------------------------------------------
+          if [ -d "${QT_PLUGINS}/generic" ]; then
+            mkdir -p dist/generic
+            cp -n "${QT_PLUGINS}/generic/"*.dll dist/generic/ 2>/dev/null || true
+          fi
+
+          # ----------------------------------------------------------------
+          # Direct3D compiler + OpenGL SW fallback
+          # Needed on machines without a proper GPU driver (VMs, headless CI)
+          # ----------------------------------------------------------------
+          for d3d_dll in d3dcompiler_47.dll opengl32sw.dll libEGL.dll libGLESv2.dll; do
+            if [ -f "${QT_BIN}/${d3d_dll}" ] && [ ! -f "dist/${d3d_dll}" ]; then
+              cp "${QT_BIN}/${d3d_dll}" dist/
+              echo "Copied ${d3d_dll}"
+            fi
+          done
+
+          # ----------------------------------------------------------------
+          # ICU DLLs — Qt 6 on Windows ships its own ICU for Unicode support
+          # ----------------------------------------------------------------
+          for icu_dll in "${QT_BIN}"/icu*.dll; do
+            base=$(basename "$icu_dll")
+            if [ -f "$icu_dll" ] && [ ! -f "dist/${base}" ]; then
+              cp "$icu_dll" dist/
+              echo "Copied ${base}"
+            fi
+          done
+
+          # ----------------------------------------------------------------
+          # Copy app resources and Python analytics scripts
+          # ----------------------------------------------------------------
           cp -r resources dist/resources 2>/dev/null || true
-          cp -r scripts dist/scripts 2>/dev/null || true
+          cp -r scripts   dist/scripts   2>/dev/null || true
+
+          # ----------------------------------------------------------------
+          # Final diagnostic — list everything that will be zipped
+          # ----------------------------------------------------------------
+          echo ""
+          echo "=== dist/ contents ($(find dist -type f | wc -l) files) ==="
+          find dist -type f | sort
 
       # ---- Package: macOS (macdeployqt) ----
       # Note: upload-artifact strips execute bits (zip limitation).
@@ -256,16 +442,97 @@ jobs:
           # Tar to preserve execute permissions (upload-artifact uses zip which strips them)
           tar -czf dist.tar.gz -C dist .
 
-      # ---- Package: Linux ----
+      # ---- Package: Linux (AppImage) ----
       - name: Package (Linux)
         if: runner.os == 'Linux'
         working-directory: fincept-qt
         run: |
+          set -euo pipefail
+
+          # ── Download linuxdeploy + Qt plugin ─────────────────────────────
+          wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          wget -q "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+
+          # ── Build AppDir structure ────────────────────────────────────────
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+          cp build/${{ matrix.exe }} AppDir/usr/bin/
+          chmod +x AppDir/usr/bin/${{ matrix.exe }}
+
+          # Copy resources and scripts inside AppDir
+          cp -r resources AppDir/usr/bin/resources 2>/dev/null || true
+          cp -r scripts   AppDir/usr/bin/scripts   2>/dev/null || true
+
+          # Desktop entry (required by linuxdeploy)
+          cat > AppDir/usr/share/applications/fincept-terminal.desktop <<'EOF'
+          [Desktop Entry]
+          Name=Fincept Terminal
+          Exec=FinceptTerminal
+          Icon=fincept-terminal
+          Type=Application
+          Categories=Finance;
+          EOF
+
+          # App icon (use existing .ico or create placeholder)
+          if [ -f "resources/icons/app_icon_256.png" ]; then
+            cp resources/icons/app_icon_256.png AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png
+          else
+            # Generate a minimal placeholder icon with ImageMagick
+            convert -size 256x256 xc:#1a1a2e -fill white \
+              -font DejaVu-Sans -pointsize 48 -gravity center \
+              -annotate 0 "FT" AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png 2>/dev/null || \
+            cp /usr/share/icons/hicolor/256x256/apps/firefox.png \
+               AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png 2>/dev/null || \
+            touch AppDir/usr/share/icons/hicolor/256x256/apps/fincept-terminal.png
+          fi
+
+          # ── Build AppImage ────────────────────────────────────────────────
+          # UPDATE_INFORMATION embeds zsync update URL so AppImageUpdate can
+          # fetch deltas automatically from the GitHub release.
+          export QMAKE=$(which qmake6 || which qmake)
+          export OUTPUT="FinceptTerminal-Linux-x86_64.AppImage"
+          export UPDATE_INFORMATION="gh-releases-zsync|Fincept-Corporation|FinceptTerminal|latest|FinceptTerminal-Linux-x86_64.AppImage.zsync"
+
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --plugin qt \
+            --output appimage \
+            2>&1 || true
+
+          # Verify AppImage was created
+          if [ ! -f "$OUTPUT" ]; then
+            # Fallback: find any AppImage produced
+            OUTPUT=$(find . -maxdepth 1 -name "*.AppImage" | head -1)
+          fi
+
+          if [ -z "$OUTPUT" ] || [ ! -f "$OUTPUT" ]; then
+            echo "::error::AppImage build failed — no .AppImage produced"
+            exit 1
+          fi
+
+          echo "AppImage produced: $OUTPUT ($(du -sh "$OUTPUT" | cut -f1))"
+
+          # Rename to canonical name and move to dist/
           mkdir -p dist
-          cp build/${{ matrix.exe }} dist/
-          chmod +x dist/${{ matrix.exe }}
-          cp -r resources dist/resources 2>/dev/null || true
-          cp -r scripts dist/scripts 2>/dev/null || true
+          mv "$OUTPUT" dist/FinceptTerminal-Linux-x86_64.AppImage
+          chmod +x dist/FinceptTerminal-Linux-x86_64.AppImage
+
+          # Generate zsync file for delta updates
+          if command -v zsyncmake &>/dev/null; then
+            zsyncmake dist/FinceptTerminal-Linux-x86_64.AppImage -o dist/FinceptTerminal-Linux-x86_64.AppImage.zsync
+            echo "zsync file generated"
+          else
+            sudo apt-get install -y zsync -qq 2>/dev/null || true
+            if command -v zsyncmake &>/dev/null; then
+              zsyncmake dist/FinceptTerminal-Linux-x86_64.AppImage -o dist/FinceptTerminal-Linux-x86_64.AppImage.zsync
+              echo "zsync file generated"
+            else
+              echo "::warning::zsyncmake not available — delta updates disabled"
+            fi
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -376,21 +643,19 @@ jobs:
           for dir in */; do
             name="${dir%/}"
             if [[ "$name" == *"Windows"* ]]; then
-              # Windows artifacts are plain directories
+              # Windows artifacts are plain directories → zip
               cd "$name"
               zip -r "../../${name}.zip" .
               cd ..
             elif [[ "$name" == *"macOS"* ]]; then
               # macOS artifacts are already a dist.tar.gz (execute permissions preserved)
-              # Re-package as a named tarball for the release
               mkdir -p "/tmp/${name}"
               tar -xzf "${name}/dist.tar.gz" -C "/tmp/${name}"
               tar -czf "../${name}.tar.gz" -C "/tmp/${name}" .
-            else
-              # Linux: plain directory
-              cd "$name"
-              tar -czf "../../${name}.tar.gz" .
-              cd ..
+            elif [[ "$name" == *"Linux"* ]]; then
+              # Linux: AppImage + optional zsync — copy directly, no re-archive
+              cp "${name}/FinceptTerminal-Linux-x86_64.AppImage" "../FinceptTerminal-Linux-x86_64.AppImage" 2>/dev/null || true
+              cp "${name}/FinceptTerminal-Linux-x86_64.AppImage.zsync" "../FinceptTerminal-Linux-x86_64.AppImage.zsync" 2>/dev/null || true
             fi
           done
           ls -lh ../
@@ -411,7 +676,8 @@ jobs:
             - `FinceptTerminal-Windows-arm64.zip` — Windows ARM64
 
             **Linux**
-            - `FinceptTerminal-Linux-x64.tar.gz` — Linux x64
+            - `FinceptTerminal-Linux-x86_64.AppImage` — Linux x86_64 (portable, runs on any distro)
+            - `FinceptTerminal-Linux-x86_64.AppImage.zsync` — Delta update file (used by auto-updater)
 
             **macOS**
             - `FinceptTerminal-macOS-universal.tar.gz` — macOS Universal (ARM64 + Intel)
@@ -420,7 +686,8 @@ jobs:
           files: |
             FinceptTerminal-Windows-x64.zip
             FinceptTerminal-Windows-arm64.zip
-            FinceptTerminal-Linux-x64.tar.gz
+            FinceptTerminal-Linux-x86_64.AppImage
+            FinceptTerminal-Linux-x86_64.AppImage.zsync
             FinceptTerminal-macOS-arm64.tar.gz
             FinceptTerminal-macOS-x64.tar.gz
             FinceptTerminal-macOS-universal.tar.gz

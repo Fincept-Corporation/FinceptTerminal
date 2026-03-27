@@ -41,8 +41,7 @@ class AuthApi : public QObject {
 
     // Subscription / payment
     void get_subscription_plans(Callback cb);
-    void create_payment_order(const QString& plan_id, Callback cb);
-    void get_transaction_status(const QString& order_id, Callback cb);
+    void generate_checkout_token(const QString& plan_id, Callback cb);
 
   private:
     AuthApi() = default;

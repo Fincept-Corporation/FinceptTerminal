@@ -444,42 +444,84 @@ def main():
     command = sys.argv[1]
     trader = HighFrequencyTrader()
 
-    if command == 'initialize':
-        provider_uri = sys.argv[2] if len(sys.argv) > 2 else "~/.qlib/qlib_data/cn_data"
-        region = sys.argv[3] if len(sys.argv) > 3 else "cn"
-        result = trader.initialize(provider_uri, region)
+    # Helper: parse second arg as JSON dict or return empty dict
+    def params_or_empty():
+        if len(sys.argv) > 2:
+            try:
+                return json.loads(sys.argv[2])
+            except (json.JSONDecodeError, ValueError):
+                return {}
+        return {}
 
-    elif command == 'create_orderbook':
-        symbol = sys.argv[2]
-        depth = int(sys.argv[3]) if len(sys.argv) > 3 else 10
-        result = trader.create_order_book(symbol, depth)
+    # Helper: get symbol from JSON params or positional arg
+    def get_symbol(default='AAPL'):
+        if len(sys.argv) > 2:
+            try:
+                p = json.loads(sys.argv[2])
+                return p.get('symbol', default)
+            except (json.JSONDecodeError, ValueError):
+                return sys.argv[2]
+        return default
 
-    elif command == 'update_orderbook':
-        params = json.loads(sys.argv[2])
-        result = trader.update_order_book(**params)
+    try:
+        if command == 'initialize':
+            p = params_or_empty()
+            provider_uri = p.get('provider_uri', "~/.qlib/qlib_data/cn_data")
+            region = p.get('region', "cn")
+            result = trader.initialize(provider_uri, region)
 
-    elif command == 'market_making_quotes':
-        params = json.loads(sys.argv[2])
-        result = trader.calculate_market_making_quotes(**params)
+        elif command == 'create_orderbook':
+            p = params_or_empty()
+            symbol = p.get('symbol', get_symbol())
+            depth = p.get('depth', int(sys.argv[3]) if len(sys.argv) > 3 else 10)
+            result = trader.create_order_book(symbol, depth)
 
-    elif command == 'detect_toxic':
-        symbol = sys.argv[2]
-        result = trader.detect_toxic_flow(symbol)
+        elif command == 'update_orderbook':
+            result = trader.update_order_book(**params_or_empty())
 
-    elif command == 'execute_order':
-        params = json.loads(sys.argv[2])
-        result = trader.execute_aggressive_order(**params)
+        elif command == 'market_making_quotes':
+            p = params_or_empty()
+            symbol = p.get('symbol', get_symbol())
+            # Auto-create orderbook if not present
+            if symbol not in trader.order_books:
+                trader.create_order_book(symbol, p.get('depth', 10))
+            result = trader.calculate_market_making_quotes(
+                symbol=symbol,
+                inventory=p.get('inventory', 0),
+                risk_aversion=p.get('risk_aversion', 0.01),
+                spread_multiplier=p.get('spread_multiplier', 1.5)
+            )
 
-    elif command == 'latency_stats':
-        result = trader.get_latency_stats()
+        elif command == 'detect_toxic':
+            p = params_or_empty()
+            symbol = p.get('symbol', get_symbol())
+            if symbol not in trader.order_books:
+                trader.create_order_book(symbol)
+            result = trader.detect_toxic_flow(symbol)
 
-    elif command == 'snapshot':
-        symbol = sys.argv[2]
-        n_levels = int(sys.argv[3]) if len(sys.argv) > 3 else 5
-        result = trader.get_order_book_snapshot(symbol, n_levels)
+        elif command == 'execute_order':
+            p = params_or_empty()
+            symbol = p.get('symbol', 'AAPL')
+            if symbol not in trader.order_books:
+                trader.create_order_book(symbol)
+            result = trader.execute_aggressive_order(**p)
 
-    else:
-        result = {'success': False, 'error': f'Unknown command: {command}'}
+        elif command == 'latency_stats':
+            result = trader.get_latency_stats()
+
+        elif command == 'snapshot':
+            p = params_or_empty()
+            symbol = p.get('symbol', get_symbol())
+            if symbol not in trader.order_books:
+                trader.create_order_book(symbol)
+            n_levels = p.get('n_levels', 5)
+            result = trader.get_order_book_snapshot(symbol, n_levels)
+
+        else:
+            result = {'success': False, 'error': f'Unknown command: {command}'}
+
+    except Exception as e:
+        result = {'success': False, 'error': str(e)}
 
     print(json.dumps(result, indent=2))
 

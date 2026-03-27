@@ -4,6 +4,7 @@
 
 #include "screens/equity_trading/EquityTypes.h"
 #include "trading/TradingTypes.h"
+#include "trading/websocket/AngelOneTickTypes.h"
 
 #include <QHideEvent>
 #include <QLabel>
@@ -16,6 +17,10 @@
 #include <QWidget>
 
 #include <atomic>
+
+namespace fincept::trading {
+class AngelOneWebSocket;
+} // namespace fincept::trading
 
 namespace fincept::screens::equity {
 class EquityTickerBar;
@@ -43,6 +48,7 @@ class EquityTradingScreen : public QWidget {
     void on_symbol_selected(const QString& symbol);
     void on_mode_toggled();
     void on_api_clicked();
+    void handle_token_expired();
     void on_order_submitted(const trading::UnifiedOrder& order);
     void on_cancel_order(const QString& order_id);
     void on_ob_price_clicked(double price);
@@ -53,12 +59,23 @@ class EquityTradingScreen : public QWidget {
     void refresh_candles();
     void update_clock();
 
+    // WebSocket slots
+    void on_ws_tick(const trading::AoTick& tick);
+    void on_ws_connected();
+    void on_ws_disconnected();
+
   private:
     void setup_ui();
     void setup_timers();
     void init_broker();
     void load_portfolio();
     void switch_symbol(const QString& symbol);
+
+    // WebSocket helpers
+    void ws_init();           // create + connect ws_ for current broker (Angel One only)
+    void ws_teardown();       // close + delete ws_
+    void ws_resubscribe();    // push current symbol + watchlist tokens to ws_
+    bool ws_active() const;   // true when ws_ is non-null and connected
 
     void async_fetch_quote();
     void async_fetch_candles(const QString& symbol, const QString& timeframe);
@@ -94,6 +111,9 @@ class EquityTradingScreen : public QWidget {
     equity::EquityOrderBook* orderbook_ = nullptr;
     equity::EquityBottomPanel* bottom_panel_ = nullptr;
 
+    // ── WebSocket (Angel One only — null for other brokers) ──
+    trading::AngelOneWebSocket* ws_ = nullptr;
+
     // ── Timers ──
     QTimer* quote_timer_ = nullptr;
     QTimer* portfolio_timer_ = nullptr;
@@ -113,6 +133,7 @@ class EquityTradingScreen : public QWidget {
     int fill_cb_id_ = -1; // OrderMatcher fill callback
 
     // Async guards
+    std::atomic<bool> token_expired_shown_{false};
     std::atomic<bool> quote_fetching_{false};
     std::atomic<bool> candles_fetching_{false};
     std::atomic<bool> portfolio_fetching_{false};

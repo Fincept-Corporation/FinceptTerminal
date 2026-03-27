@@ -12,10 +12,12 @@
 #include "storage/sqlite/CacheDatabase.h"
 #include "storage/sqlite/Database.h"
 #include "storage/sqlite/migrations/MigrationRunner.h"
+#include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
 #include <QDir>
+#include <QFile>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QStandardPaths>
@@ -29,6 +31,24 @@ int main(int argc, char* argv[]) {
     // Initialize logging
     QString log_dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(log_dir);
+
+    // Remove stale SQLite WAL/SHM lock files left by a previous crash.
+    // qsqlite.dll crashes on WAL recovery if the lock files are orphaned.
+    for (const QString& db : {log_dir + "/fincept.db", log_dir + "/cache.db"}) {
+        QFile::remove(db + "-wal");
+        QFile::remove(db + "-shm");
+    }
+    // Also clean legacy DB location
+    {
+        const QString local_dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+        const QString legacy1 = local_dir.section('/', 0, -3) + "/FinceptTerminal/fincept_settings.db";
+        const QString legacy2 = QString(local_dir).replace("Fincept/FinceptTerminal", "FinceptTerminal")
+                                + "/fincept_settings.db";
+        for (const QString& db : {legacy1, legacy2}) {
+            QFile::remove(db + "-wal");
+            QFile::remove(db + "-shm");
+        }
+    }
     fincept::Logger::instance().set_file(log_dir + "/fincept.log");
     LOG_INFO("App", "Fincept Terminal v4.0.0 starting...");
 
@@ -52,12 +72,22 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v006();
     fincept::register_migration_v007();
     fincept::register_migration_v008();
+    fincept::register_migration_v009();
+    fincept::register_migration_v010();
 
     // Open main database
     QString db_path = log_dir + "/fincept.db";
     auto db_result = fincept::Database::instance().open(db_path);
     if (db_result.is_err()) {
         LOG_ERROR("App", "Failed to open database: " + QString::fromStdString(db_result.error()));
+    } else {
+        // Warm InstrumentService cache from DB (non-blocking, no network).
+        // If the table is empty on first run, the first broker login triggers a refresh.
+        LOG_INFO("App", "Loading instruments from DB...");
+        fincept::trading::InstrumentService::instance().load_from_db("zerodha");
+        LOG_INFO("App", "Zerodha instruments loaded");
+        fincept::trading::InstrumentService::instance().load_from_db("angelone");
+        LOG_INFO("App", "AngelOne instruments loaded");
     }
 
     // Open cache database (non-fatal if fails)
@@ -67,10 +97,13 @@ int main(int argc, char* argv[]) {
         LOG_WARN("App", "Cache DB failed (non-fatal): " + QString::fromStdString(cache_result.error()));
     }
 
+    LOG_INFO("App", "Checking settings for legacy migration...");
     // One-time migration: copy settings from old DB (Local\FinceptTerminal\fincept_settings.db)
     // to new DB (Roaming\Fincept\FinceptTerminal\fincept.db) if the new DB has no settings yet.
     {
+        LOG_INFO("App", "Querying settings...");
         auto existing = fincept::SettingsRepository::instance().get("fincept_session");
+        LOG_INFO("App", "Settings query done");
         bool new_db_empty = existing.is_err() || existing.value().isEmpty();
         if (new_db_empty) {
             QString local_base = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
@@ -101,6 +134,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    LOG_INFO("App", "Starting session manager...");
     // Start session
     fincept::SessionManager::instance().start_session();
 

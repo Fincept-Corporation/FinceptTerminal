@@ -192,8 +192,17 @@ struct SessionData {
     UserSubscription subscription;
     bool has_subscription = false;
 
+    // Single authoritative source for the current plan.
+    // Subscription API is the most up-to-date; user_info is the fallback
+    // populated at login before the subscription endpoint is called.
+    const QString& account_type() const {
+        return subscription.account_type.isEmpty()
+                   ? user_info.account_type
+                   : subscription.account_type;
+    }
+
     bool has_paid_plan() const {
-        QString at = user_info.account_type.toLower();
+        const QString at = account_type().toLower();
         return at == "basic" || at == "standard" || at == "pro" || at == "enterprise";
     }
 
@@ -244,6 +253,11 @@ struct SessionData {
             auto sub = obj["subscription"].toObject();
             s.subscription = UserSubscription::from_json(sub);
             s.has_subscription = !s.subscription.account_type.isEmpty();
+            // Keep user_info in sync so legacy readers are consistent
+            if (!s.subscription.account_type.isEmpty())
+                s.user_info.account_type = s.subscription.account_type;
+            if (s.subscription.credit_balance > 0)
+                s.user_info.credit_balance = s.subscription.credit_balance;
         }
         return s;
     }

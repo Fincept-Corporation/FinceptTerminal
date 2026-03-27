@@ -23,7 +23,7 @@ from typing import Dict, Any, Optional, List
 import time
 
 # --- 1. CONFIGURATION ---
-BASE_URL = "https://data.gov.au/api/3/action"
+BASE_URL = "https://data.gov.au/data/api/3/action"
 API_KEY = os.environ.get('AUS_DATA_API_KEY')  # Optional API key
 TIMEOUT = 30
 RATE_LIMIT_DELAY = 0.5  # Conservative delay for respectful usage
@@ -750,6 +750,14 @@ def main():
 
     command = sys.argv[1]
 
+    # Aliases used by the C++ GovDataProviderPanel
+    if command == "publishers":
+        command = "organizations"
+    elif command == "datasets":
+        command = "org-datasets"
+    elif command == "resources":
+        command = "resource-details"
+
     try:
         if command == "organizations":
             result = get_organizations()
@@ -828,6 +836,23 @@ def main():
                 ]
             }))
             sys.exit(1)
+
+        # Normalize resource-details: C++ populate_resources expects data as array
+        if command == "resource-details" and isinstance(result, dict):
+            single = result.get("data", {})
+            if isinstance(single, dict) and single:
+                single.setdefault("name", single.get("id", ""))
+                single.setdefault("last_modified", single.get("created", ""))
+                result["data"] = [single]
+            elif not isinstance(single, list):
+                result["data"] = []
+
+        # Normalize org-datasets: ensure data items have num_resources and metadata_modified
+        if command == "org-datasets" and isinstance(result, dict):
+            for item in result.get("data", []):
+                if isinstance(item, dict):
+                    item.setdefault("num_resources", item.get("num_resources", 0))
+                    item.setdefault("metadata_modified", item.get("metadata_modified", item.get("metadata_created", "")))
 
         # Add execution timestamp
         if isinstance(result, dict):

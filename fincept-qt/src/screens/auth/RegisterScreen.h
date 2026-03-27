@@ -26,6 +26,7 @@ class RegisterScreen : public QWidget {
     QLineEdit* last_name_ = nullptr;
     QLineEdit* email_ = nullptr;
     QLineEdit* phone_ = nullptr;
+    QLineEdit* country_code_ = nullptr;
     QLineEdit* password_ = nullptr;
     QLineEdit* confirm_pw_ = nullptr;
     QPushButton* register_btn_ = nullptr;
