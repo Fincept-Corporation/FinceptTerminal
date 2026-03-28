@@ -228,6 +228,8 @@ QString LlmService::get_endpoint_url() const {
         return "https://api.deepseek.com/v1/chat/completions";
     if (p == "openrouter")
         return "https://openrouter.ai/api/v1/chat/completions";
+    if (p == "minimax")
+        return "https://api.minimax.io/v1/chat/completions";
     if (p == "ollama")
         return "http://localhost:11434/v1/chat/completions";
     return {};
@@ -277,7 +279,13 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
     QJsonObject req;
     req["model"] = model_;
     req["messages"] = messages;
-    req["temperature"] = temperature_;
+    // MiniMax requires temperature in (0.0, 1.0]; clamp if needed
+    if (provider_ == "minimax") {
+        double t = std::max(0.01, std::min(temperature_, 1.0));
+        req["temperature"] = t;
+    } else {
+        req["temperature"] = temperature_;
+    }
     req["max_tokens"] = max_tokens_;
     if (stream)
         req["stream"] = true;
@@ -1491,6 +1499,7 @@ QString LlmService::get_models_url(const QString& provider, const QString& api_k
             base.chop(1);
         return base + "/api/tags";
     }
+    // minimax: no public /v1/models endpoint — fallback models used instead
     return {};
 }
 

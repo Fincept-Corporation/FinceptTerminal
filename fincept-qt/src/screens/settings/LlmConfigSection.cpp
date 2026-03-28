@@ -26,7 +26,7 @@ namespace fincept::screens {
 static constexpr const char* TAG = "LlmConfigSection";
 
 const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",   "anthropic",  "gemini", "groq",
-                                                       "deepseek", "openrouter", "ollama", "fincept"};
+                                                       "deepseek", "openrouter", "minimax", "ollama", "fincept"};
 
 QString LlmConfigSection::default_base_url(const QString& provider) {
     const QString p = provider.toLower();
@@ -42,6 +42,8 @@ QString LlmConfigSection::default_base_url(const QString& provider) {
         return {};
     if (p == "openrouter")
         return {};
+    if (p == "minimax")
+        return "https://api.minimax.io/v1";
     if (p == "ollama")
         return "http://localhost:11434";
     if (p == "fincept")
@@ -64,6 +66,8 @@ QStringList LlmConfigSection::fallback_models(const QString& provider) {
         return {"deepseek-chat", "deepseek-reasoner"};
     if (p == "openrouter")
         return {"openai/gpt-4o", "anthropic/claude-sonnet-4-5", "google/gemini-2.5-flash"};
+    if (p == "minimax")
+        return {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"};
     if (p == "ollama")
         return {"llama3:8b", "mistral:7b", "codellama:7b"};
     if (p == "fincept")
