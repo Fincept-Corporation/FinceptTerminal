@@ -118,6 +118,7 @@ class CreateAgentPanel : public QWidget {
     QVector<AgentConfig> saved_agents_;
     QStringList available_tools_;
     QString editing_id_;
+    QString pending_request_id_;
     bool data_loaded_ = false;
 };
 

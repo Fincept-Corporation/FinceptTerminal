@@ -251,6 +251,13 @@ static QList<SchemaInfo> g_schemas = build_schemas();
 
 // ── Template definitions ────────────────────────────────────────────────────
 
+struct FieldMapping {
+    QString target;
+    QString expression;
+    QString transform;
+    QString default_val;
+};
+
 struct MappingTemplate {
     QString id;
     QString name;
@@ -259,66 +266,357 @@ struct MappingTemplate {
     QString schema;
     QStringList tags;
     bool verified;
+    // Real API details
+    QString base_url;
+    QString endpoint;
+    QString method;
+    QString auth_type;
+    QString headers;
+    QString body;
+    QString parser;
+    QList<FieldMapping> field_mappings;
 };
 
 static QList<MappingTemplate> build_templates() {
     return {
-        {"upstox_ohlcv",
-         "Upstox Historical Candles → OHLCV",
-         "Map Upstox historical candle data to standard OHLCV format",
-         "Upstox",
+        // ── Free Public APIs (no auth) ─────────────────────────────────────
+
+        {"coingecko_quote",
+         "CoinGecko Coin Price → QUOTE",
+         "Fetch real-time crypto prices from CoinGecko. Free, no API key required. "
+         "Returns price, market cap, 24h volume, and change data.",
+         "CoinGecko",
+         "QUOTE",
+         {"crypto", "coingecko", "free", "public"},
+         true,
+         "https://api.coingecko.com",
+         "/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true",
+         "GET",
+         "None",
+         "Accept: application/json",
+         "",
+         "JSONPath",
+         {{"symbol", "$.bitcoin", "", "bitcoin"},
+          {"price", "$.bitcoin.usd", "", "0"},
+          {"volume", "$.bitcoin.usd_24h_vol", "", "0"},
+          {"changePercent", "$.bitcoin.usd_24h_change", "", "0"},
+          {"timestamp", "$.bitcoin.last_updated_at", "unix_to_iso", ""}}},
+
+        {"coingecko_ohlcv",
+         "CoinGecko OHLC → OHLCV",
+         "Fetch OHLC candlestick data for any crypto from CoinGecko. Free API. "
+         "Returns 1/7/14/30/90/180/365 day candles. Array format: [timestamp, O, H, L, C].",
+         "CoinGecko",
          "OHLCV",
-         {"upstox", "historical", "candles", "india"},
-         true},
-        {"upstox_quote",
-         "Upstox Market Quote → QUOTE",
-         "Map Upstox market quote data to standard QUOTE format",
-         "Upstox",
+         {"crypto", "coingecko", "ohlc", "candles", "free"},
+         true,
+         "https://api.coingecko.com",
+         "/api/v3/coins/bitcoin/ohlc?vs_currency=usd&days=30",
+         "GET",
+         "None",
+         "Accept: application/json",
+         "",
+         "JSONPath",
+         {{"timestamp", "$[*][0]", "unix_ms_to_iso", ""},
+          {"open", "$[*][1]", "", "0"},
+          {"high", "$[*][2]", "", "0"},
+          {"low", "$[*][3]", "", "0"},
+          {"close", "$[*][4]", "", "0"},
+          {"symbol", "", "", "bitcoin"}}},
+
+        {"yahoo_quote",
+         "Yahoo Finance Spark → QUOTE",
+         "Fetch real-time stock quotes from Yahoo Finance. Free, no API key. "
+         "Returns last price, volume, and market state for any symbol.",
+         "Yahoo Finance",
          "QUOTE",
-         {"upstox", "quote", "realtime", "india"},
-         true},
-        {"fyers_quote",
-         "Fyers Quotes → QUOTE",
-         "Map Fyers quote data to standard QUOTE format",
-         "Fyers",
-         "QUOTE",
-         {"fyers", "quote", "realtime", "india"},
-         true},
-        {"fyers_positions",
-         "Fyers Positions → POSITION",
-         "Map Fyers position data to standard POSITION format",
-         "Fyers",
-         "POSITION",
-         {"fyers", "position", "portfolio", "india"},
-         true},
-        {"dhan_positions",
-         "Dhan Positions → POSITION",
-         "Map Dhan position data to standard POSITION format",
-         "Dhan",
-         "POSITION",
-         {"dhan", "position", "portfolio", "india"},
-         true},
-        {"dhan_orders",
-         "Dhan Orders → ORDER",
-         "Map Dhan order data to standard ORDER format",
-         "Dhan",
-         "ORDER",
-         {"dhan", "order", "trading", "india"},
-         true},
-        {"zerodha_ohlc",
-         "Zerodha OHLC → OHLCV",
-         "Map Zerodha Kite OHLC data to standard OHLCV format",
-         "Zerodha",
+         {"stocks", "yahoo", "free", "public", "us"},
+         true,
+         "https://query1.finance.yahoo.com",
+         "/v8/finance/spark?symbols=AAPL&range=1d&interval=1d",
+         "GET",
+         "None",
+         "Accept: application/json\nUser-Agent: Mozilla/5.0",
+         "",
+         "JSONPath",
+         {{"symbol", "$.spark.result[0].symbol", "", ""},
+          {"price", "$.spark.result[0].response[0].meta.regularMarketPrice", "", "0"},
+          {"previousClose", "$.spark.result[0].response[0].meta.previousClose", "", "0"},
+          {"volume", "$.spark.result[0].response[0].meta.regularMarketVolume", "", "0"},
+          {"timestamp", "$.spark.result[0].response[0].meta.regularMarketTime", "unix_to_iso", ""}}},
+
+        {"binance_ohlcv",
+         "Binance Klines → OHLCV",
+         "Fetch candlestick/kline data from Binance. Free, no API key required for market data. "
+         "Supports intervals: 1m, 3m, 5m, 15m, 30m, 1h, 4h, 1d, 1w, 1M.",
+         "Binance",
          "OHLCV",
-         {"zerodha", "kite", "ohlc", "india"},
-         true},
-        {"angelone_quote",
-         "Angel One Quote → QUOTE",
-         "Map Angel One market data to standard QUOTE format",
-         "Angel One",
+         {"crypto", "binance", "klines", "candles", "free"},
+         true,
+         "https://api.binance.com",
+         "/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100",
+         "GET",
+         "None",
+         "Accept: application/json",
+         "",
+         "JSONPath",
+         {{"timestamp", "$[*][0]", "unix_ms_to_iso", ""},
+          {"open", "$[*][1]", "to_number", "0"},
+          {"high", "$[*][2]", "to_number", "0"},
+          {"low", "$[*][3]", "to_number", "0"},
+          {"close", "$[*][4]", "to_number", "0"},
+          {"volume", "$[*][5]", "to_number", "0"},
+          {"trades", "$[*][8]", "to_number", "0"},
+          {"symbol", "", "", "BTCUSDT"}}},
+
+        {"binance_quote",
+         "Binance 24hr Ticker → QUOTE",
+         "Fetch 24-hour price statistics from Binance. Free, no API key. "
+         "Returns price, bid/ask, volume, and 24h change for any trading pair.",
+         "Binance",
          "QUOTE",
-         {"angelone", "quote", "india"},
-         true},
+         {"crypto", "binance", "ticker", "free"},
+         true,
+         "https://api.binance.com",
+         "/api/v3/ticker/24hr?symbol=BTCUSDT",
+         "GET",
+         "None",
+         "Accept: application/json",
+         "",
+         "JSONPath",
+         {{"symbol", "$.symbol", "", ""},
+          {"price", "$.lastPrice", "to_number", "0"},
+          {"bid", "$.bidPrice", "to_number", "0"},
+          {"ask", "$.askPrice", "to_number", "0"},
+          {"bidSize", "$.bidQty", "to_number", "0"},
+          {"askSize", "$.askQty", "to_number", "0"},
+          {"volume", "$.volume", "to_number", "0"},
+          {"change", "$.priceChange", "to_number", "0"},
+          {"changePercent", "$.priceChangePercent", "to_number", "0"},
+          {"open", "$.openPrice", "to_number", "0"},
+          {"high", "$.highPrice", "to_number", "0"},
+          {"low", "$.lowPrice", "to_number", "0"},
+          {"previousClose", "$.prevClosePrice", "to_number", "0"}}},
+
+        {"kraken_ohlcv",
+         "Kraken OHLC → OHLCV",
+         "Fetch OHLC data from Kraken. Free public endpoint, no API key required. "
+         "Intervals: 1, 5, 15, 30, 60, 240, 1440, 10080, 21600 minutes.",
+         "Kraken",
+         "OHLCV",
+         {"crypto", "kraken", "ohlc", "free"},
+         true,
+         "https://api.kraken.com",
+         "/0/public/OHLC?pair=XBTUSD&interval=60",
+         "GET",
+         "None",
+         "Accept: application/json",
+         "",
+         "JSONPath",
+         {{"timestamp", "$.result.XXBTZUSD[*][0]", "unix_to_iso", ""},
+          {"open", "$.result.XXBTZUSD[*][1]", "to_number", "0"},
+          {"high", "$.result.XXBTZUSD[*][2]", "to_number", "0"},
+          {"low", "$.result.XXBTZUSD[*][3]", "to_number", "0"},
+          {"close", "$.result.XXBTZUSD[*][4]", "to_number", "0"},
+          {"vwap", "$.result.XXBTZUSD[*][5]", "to_number", "0"},
+          {"volume", "$.result.XXBTZUSD[*][6]", "to_number", "0"},
+          {"trades", "$.result.XXBTZUSD[*][7]", "to_number", "0"},
+          {"symbol", "", "", "XBTUSD"}}},
+
+        // ── API Key Required (Free Tier) ───────────────────────────────────
+
+        {"alphavantage_ohlcv",
+         "Alpha Vantage Intraday → OHLCV",
+         "Fetch intraday OHLCV from Alpha Vantage. Free tier: 25 requests/day. "
+         "Intervals: 1min, 5min, 15min, 30min, 60min. Set your API key in AUTH VALUE.",
+         "Alpha Vantage",
+         "OHLCV",
+         {"stocks", "alphavantage", "intraday", "free-tier"},
+         true,
+         "https://www.alphavantage.co",
+         "/query?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=5min&apikey=YOUR_KEY",
+         "GET",
+         "API Key",
+         "Accept: application/json",
+         "",
+         "JSONPath",
+         {{"timestamp", "$.['Time Series (5min)'].*~", "", ""},
+          {"open", "$.['Time Series (5min)'].*.['1. open']", "to_number", "0"},
+          {"high", "$.['Time Series (5min)'].*.['2. high']", "to_number", "0"},
+          {"low", "$.['Time Series (5min)'].*.['3. low']", "to_number", "0"},
+          {"close", "$.['Time Series (5min)'].*.['4. close']", "to_number", "0"},
+          {"volume", "$.['Time Series (5min)'].*.['5. volume']", "to_number", "0"},
+          {"symbol", "", "", "IBM"}}},
+
+        {"twelvedata_ohlcv",
+         "Twelve Data Time Series → OHLCV",
+         "Fetch OHLCV time series from Twelve Data. Free tier: 800 requests/day. "
+         "Supports stocks, forex, crypto. Set API key in AUTH VALUE field.",
+         "Twelve Data",
+         "OHLCV",
+         {"stocks", "forex", "crypto", "twelvedata", "free-tier"},
+         true,
+         "https://api.twelvedata.com",
+         "/time_series?symbol=AAPL&interval=1h&outputsize=30&apikey=YOUR_KEY",
+         "GET",
+         "API Key",
+         "Accept: application/json",
+         "",
+         "JSONPath",
+         {{"timestamp", "$.values[*].datetime", "", ""},
+          {"open", "$.values[*].open", "to_number", "0"},
+          {"high", "$.values[*].high", "to_number", "0"},
+          {"low", "$.values[*].low", "to_number", "0"},
+          {"close", "$.values[*].close", "to_number", "0"},
+          {"volume", "$.values[*].volume", "to_number", "0"},
+          {"symbol", "$.meta.symbol", "", ""}}},
+
+        {"finnhub_quote",
+         "Finnhub Quote → QUOTE",
+         "Fetch real-time stock quote from Finnhub. Free tier: 60 calls/min. "
+         "Returns current price, change, high/low, open, previous close. Set API key in AUTH VALUE.",
+         "Finnhub",
+         "QUOTE",
+         {"stocks", "finnhub", "free-tier", "us"},
+         true,
+         "https://finnhub.io",
+         "/api/v1/quote?symbol=AAPL&token=YOUR_KEY",
+         "GET",
+         "API Key",
+         "Accept: application/json",
+         "",
+         "JSONPath",
+         {{"price", "$.c", "", "0"},
+          {"change", "$.d", "", "0"},
+          {"changePercent", "$.dp", "", "0"},
+          {"high", "$.h", "", "0"},
+          {"low", "$.l", "", "0"},
+          {"open", "$.o", "", "0"},
+          {"previousClose", "$.pc", "", "0"},
+          {"timestamp", "$.t", "unix_to_iso", ""},
+          {"symbol", "", "", "AAPL"}}},
+
+        {"coinmarketcap_quote",
+         "CoinMarketCap Latest → QUOTE",
+         "Fetch latest crypto quotes from CoinMarketCap. Free tier: 10,000 calls/month. "
+         "Returns price, volume, market cap, and 24h change. Set API key in AUTH VALUE.",
+         "CoinMarketCap",
+         "QUOTE",
+         {"crypto", "coinmarketcap", "free-tier"},
+         true,
+         "https://pro-api.coinmarketcap.com",
+         "/v1/cryptocurrency/quotes/latest?symbol=BTC&convert=USD",
+         "GET",
+         "API Key",
+         "Accept: application/json\nX-CMC_PRO_API_KEY: YOUR_KEY",
+         "",
+         "JSONPath",
+         {{"symbol", "$.data.BTC.symbol", "", ""},
+          {"price", "$.data.BTC.quote.USD.price", "", "0"},
+          {"volume", "$.data.BTC.quote.USD.volume_24h", "", "0"},
+          {"change", "$.data.BTC.quote.USD.percent_change_24h", "", "0"},
+          {"changePercent", "$.data.BTC.quote.USD.percent_change_24h", "", "0"},
+          {"timestamp", "$.data.BTC.quote.USD.last_updated", "", ""}}},
+
+        // ── Global Broker APIs (Auth Required) ─────────────────────────────
+
+        {"alpaca_ohlcv",
+         "Alpaca Bars → OHLCV",
+         "Fetch historical bar data from Alpaca Markets. Free paper trading account available. "
+         "Set API key as 'APCA-API-KEY-ID' and secret as 'APCA-API-SECRET-KEY' in headers.",
+         "Alpaca",
+         "OHLCV",
+         {"stocks", "alpaca", "bars", "us"},
+         true,
+         "https://data.alpaca.markets",
+         "/v2/stocks/AAPL/bars?timeframe=1Hour&start=2024-03-01&limit=100",
+         "GET",
+         "API Key",
+         "Accept: application/json\nAPCA-API-KEY-ID: YOUR_KEY\nAPCA-API-SECRET-KEY: YOUR_SECRET",
+         "",
+         "JSONPath",
+         {{"timestamp", "$.bars[*].t", "", ""},
+          {"open", "$.bars[*].o", "", "0"},
+          {"high", "$.bars[*].h", "", "0"},
+          {"low", "$.bars[*].l", "", "0"},
+          {"close", "$.bars[*].c", "", "0"},
+          {"volume", "$.bars[*].v", "", "0"},
+          {"vwap", "$.bars[*].vw", "", "0"},
+          {"trades", "$.bars[*].n", "", "0"},
+          {"symbol", "$.symbol", "", "AAPL"}}},
+
+        {"alpaca_positions",
+         "Alpaca Positions → POSITION",
+         "Fetch open positions from Alpaca. Works with paper or live accounts. "
+         "Set API credentials in headers.",
+         "Alpaca",
+         "POSITION",
+         {"stocks", "alpaca", "positions", "us"},
+         true,
+         "https://paper-api.alpaca.markets",
+         "/v2/positions",
+         "GET",
+         "API Key",
+         "Accept: application/json\nAPCA-API-KEY-ID: YOUR_KEY\nAPCA-API-SECRET-KEY: YOUR_SECRET",
+         "",
+         "JSONPath",
+         {{"symbol", "$[*].symbol", "", ""},
+          {"quantity", "$[*].qty", "to_number", "0"},
+          {"averagePrice", "$[*].avg_entry_price", "to_number", "0"},
+          {"currentPrice", "$[*].current_price", "to_number", "0"},
+          {"marketValue", "$[*].market_value", "to_number", "0"},
+          {"costBasis", "$[*].cost_basis", "to_number", "0"},
+          {"pnl", "$[*].unrealized_pl", "to_number", "0"},
+          {"pnlPercent", "$[*].unrealized_plpc", "to_number", "0"},
+          {"exchange", "$[*].exchange", "", ""}}},
+
+        {"tradier_quote",
+         "Tradier Quote → QUOTE",
+         "Fetch stock quotes from Tradier. Free sandbox available. "
+         "Set Bearer token in AUTH VALUE. Use sandbox URL for testing.",
+         "Tradier",
+         "QUOTE",
+         {"stocks", "tradier", "us", "options"},
+         true,
+         "https://sandbox.tradier.com",
+         "/v1/markets/quotes?symbols=AAPL",
+         "GET",
+         "Bearer Token",
+         "Accept: application/json",
+         "",
+         "JSONPath",
+         {{"symbol", "$.quotes.quote.symbol", "", ""},
+          {"price", "$.quotes.quote.last", "", "0"},
+          {"bid", "$.quotes.quote.bid", "", "0"},
+          {"ask", "$.quotes.quote.ask", "", "0"},
+          {"volume", "$.quotes.quote.volume", "", "0"},
+          {"change", "$.quotes.quote.change", "", "0"},
+          {"changePercent", "$.quotes.quote.change_percentage", "", "0"},
+          {"open", "$.quotes.quote.open", "", "0"},
+          {"high", "$.quotes.quote.high", "", "0"},
+          {"low", "$.quotes.quote.low", "", "0"},
+          {"previousClose", "$.quotes.quote.prevclose", "", "0"}}},
+
+        // ── Macro / Economic Data ──────────────────────────────────────────
+
+        {"dbnomics_ohlcv",
+         "DBnomics Series → OHLCV",
+         "Fetch economic time series from DBnomics. Free, no API key. "
+         "Access 100M+ series from ECB, Fed, World Bank, IMF. Replace provider/dataset/series in endpoint.",
+         "DBnomics",
+         "OHLCV",
+         {"economics", "macro", "dbnomics", "free"},
+         true,
+         "https://api.db.nomics.world",
+         "/v22/series/IMF/WEO:2024-04/USA.NGDP_RPCH.pcent_change?observations=1",
+         "GET",
+         "None",
+         "Accept: application/json",
+         "",
+         "JSONPath",
+         {{"timestamp", "$.series.docs[0].period", "", ""},
+          {"close", "$.series.docs[0].value", "", "0"},
+          {"symbol", "$.series.docs[0].series_code", "", ""}}},
     };
 }
 
@@ -741,8 +1039,10 @@ QWidget* DataMappingScreen::create_schema_panel() {
                 schema_fields_table_->setItem(i, 2, new QTableWidgetItem(fields[i].required ? "Yes" : "No"));
                 schema_fields_table_->setItem(i, 3, new QTableWidgetItem(fields[i].description));
             }
-            right_schema_info_->setText("Schema: " + g_schemas[idx].name);
-            right_fields_info_->setText("Fields: " + QString::number(fields.size()));
+            if (right_schema_info_)
+                right_schema_info_->setText("Schema: " + g_schemas[idx].name);
+            if (right_fields_info_)
+                right_fields_info_->setText("Fields: " + QString::number(fields.size()));
         }
     });
     bl->addWidget(create_form_row("SELECT SCHEMA", schema_select_));
@@ -1033,12 +1333,33 @@ QWidget* DataMappingScreen::create_template_view() {
     connect(use_btn, &QPushButton::clicked, this, [this]() {
         int row = template_list_->currentRow();
         if (row >= 0 && row < g_templates.size()) {
-            // Pre-populate create form from template
-            api_name_->setText(g_templates[row].name);
-            schema_select_->setCurrentText(g_templates[row].schema);
+            const auto& tmpl = g_templates[row];
+            // Pre-populate all form fields from template
+            api_name_->setText(tmpl.name);
+            api_base_url_->setText(tmpl.base_url);
+            api_endpoint_->setText(tmpl.endpoint);
+            api_method_->setCurrentText(tmpl.method);
+            api_auth_type_->setCurrentText(tmpl.auth_type);
+            api_headers_->setPlainText(tmpl.headers);
+            api_body_->setPlainText(tmpl.body);
+            schema_select_->setCurrentText(tmpl.schema);
+            parser_engine_->setCurrentText(tmpl.parser);
+
+            // Pre-populate field mapping table
+            mapping_table_->setRowCount(tmpl.field_mappings.size());
+            for (int i = 0; i < tmpl.field_mappings.size(); ++i) {
+                const auto& fm = tmpl.field_mappings[i];
+                auto* name_item = new QTableWidgetItem(fm.target);
+                name_item->setFlags(name_item->flags() & ~Qt::ItemIsEditable);
+                mapping_table_->setItem(i, 0, name_item);
+                mapping_table_->setItem(i, 1, new QTableWidgetItem(fm.expression));
+                mapping_table_->setItem(i, 2, new QTableWidgetItem(fm.transform));
+                mapping_table_->setItem(i, 3, new QTableWidgetItem(fm.default_val));
+            }
+
             on_view_changed(2); // switch to create
             on_step_changed(0);
-            LOG_INFO("DataMapping", "Template applied: " + g_templates[row].name);
+            LOG_INFO("DataMapping", "Template applied: " + tmpl.name);
         }
     });
     dvl->addWidget(use_btn);
@@ -1419,13 +1740,23 @@ void DataMappingScreen::on_template_selected(int index) {
 
     const auto& tmpl = g_templates[index];
     QString detail = QString("NAME: %1\n\n"
-                             "BROKER: %2\n"
+                             "PROVIDER: %2\n"
                              "SCHEMA: %3\n"
                              "VERIFIED: %4\n\n"
                              "DESCRIPTION:\n%5\n\n"
-                             "TAGS: %6")
-                         .arg(tmpl.name, tmpl.broker, tmpl.schema, tmpl.verified ? "Yes" : "No", tmpl.description,
-                              tmpl.tags.join(", "));
+                             "API DETAILS:\n"
+                             "  Base URL: %6\n"
+                             "  Endpoint: %7\n"
+                             "  Method: %8\n"
+                             "  Auth: %9\n\n"
+                             "FIELD MAPPINGS: %10 fields configured\n"
+                             "PARSER: %11\n\n"
+                             "TAGS: %12")
+                         .arg(tmpl.name, tmpl.broker, tmpl.schema,
+                              tmpl.verified ? "Yes" : "No", tmpl.description,
+                              tmpl.base_url, tmpl.endpoint, tmpl.method,
+                              tmpl.auth_type, QString::number(tmpl.field_mappings.size()),
+                              tmpl.parser, tmpl.tags.join(", "));
 
     template_detail_->setText(detail);
 }

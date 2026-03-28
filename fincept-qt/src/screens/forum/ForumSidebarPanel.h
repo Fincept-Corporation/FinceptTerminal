@@ -3,6 +3,7 @@
 #include "services/forum/ForumModels.h"
 
 #include <QLabel>
+#include <QLineEdit>
 #include <QVBoxLayout>
 #include <QVector>
 #include <QWidget>
@@ -30,20 +31,23 @@ class ForumSidebarPanel : public QWidget {
     void build_ui();
     void rebuild_categories();
     void rebuild_contributors();
-    void update_activity_bars();
+
+    // Brand
+    QWidget* brand_accent_ = nullptr;
 
     // Profile card
     QLabel* avatar_lbl_ = nullptr;
     QLabel* profile_name_lbl_ = nullptr;
     QLabel* profile_sub_lbl_ = nullptr;
+    QLabel* profile_rep_lbl_ = nullptr;
 
-    // Stats gauges
+    // Search
+    QLineEdit* search_input_ = nullptr;
+
+    // Stats
     QLabel* stat_posts_val_ = nullptr;
     QLabel* stat_comments_val_ = nullptr;
-    QLabel* stat_votes_val_ = nullptr;
-    QLabel* stat_24h_val_ = nullptr;
-    QWidget* stat_posts_bar_ = nullptr;
-    QWidget* stat_activity_bar_ = nullptr;
+    QLabel* stat_active_val_ = nullptr;
 
     // Categories
     QVBoxLayout* cat_layout_ = nullptr;
@@ -57,7 +61,6 @@ class ForumSidebarPanel : public QWidget {
     QVector<services::ForumContributor> contributors_;
     services::ForumStats cached_stats_;
     int active_category_id_ = -1;
-    int active_cat_for_post_ = 0;
 };
 
 } // namespace fincept::screens

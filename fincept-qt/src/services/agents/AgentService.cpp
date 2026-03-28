@@ -14,6 +14,7 @@
 #include <QJsonDocument>
 #include <QPointer>
 #include <QProcess>
+#include <QUuid>
 
 namespace fincept::services {
 
@@ -335,22 +336,23 @@ void AgentService::discover_agents() {
 
 // ── Agent execution ──────────────────────────────────────────────────────────
 
-void AgentService::run_agent(const QString& query, const QJsonObject& config) {
-    LOG_INFO("AgentService", QString("Running agent query: %1").arg(query.left(80)));
+QString AgentService::run_agent(const QString& query, const QJsonObject& config) {
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    LOG_INFO("AgentService", QString("Running agent query [%1]: %2").arg(req_id.left(8), query.left(80)));
 
     QJsonObject params;
     params["query"] = query;
 
     QPointer<AgentService> self = this;
-    run_python_stdin("run", params, config, [self](bool ok, QJsonObject result) {
+    run_python_stdin("run", params, config, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;
+        r.request_id = req_id;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
 
         if (r.success) {
-            // Extract response text from various formats
             if (result.contains("response"))
                 r.response = result["response"].toString();
             else if (result.contains("result"))
@@ -365,20 +367,23 @@ void AgentService::run_agent(const QString& query, const QJsonObject& config) {
 
         emit self->agent_result(r);
     });
+    return req_id;
 }
 
 // ── Streaming agent execution ─────────────────────────────────────────────────
 
-void AgentService::run_agent_streaming(const QString& query, const QJsonObject& config) {
-    LOG_INFO("AgentService", QString("Streaming agent query: %1").arg(query.left(80)));
+QString AgentService::run_agent_streaming(const QString& query, const QJsonObject& config) {
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    LOG_INFO("AgentService", QString("Streaming agent query [%1]: %2").arg(req_id.left(8), query.left(80)));
 
     auto& py = python::PythonRunner::instance();
     if (!py.is_available()) {
         AgentExecutionResult r;
+        r.request_id = req_id;
         r.success = false;
         r.error = "Python not available";
         emit agent_stream_done(r);
-        return;
+        return req_id;
     }
 
     QJsonObject params;
@@ -399,7 +404,7 @@ void AgentService::run_agent_streaming(const QString& query, const QJsonObject& 
     QString* accumulated = new QString;
 
     // Read stdout line by line as process writes
-    connect(proc, &QProcess::readyReadStandardOutput, this, [self, proc, accumulated]() {
+    connect(proc, &QProcess::readyReadStandardOutput, this, [self, proc, accumulated, req_id]() {
         if (!self) return;
         while (proc->canReadLine()) {
             QString line = QString::fromUtf8(proc->readLine()).trimmed();
@@ -408,13 +413,14 @@ void AgentService::run_agent_streaming(const QString& query, const QJsonObject& 
             if (line.startsWith("TOKEN: ")) {
                 QString token = line.mid(7);
                 *accumulated += token + " ";
-                emit self->agent_stream_token(token);
+                emit self->agent_stream_token(req_id, token);
             } else if (line.startsWith("THINKING: ")) {
-                emit self->agent_stream_thinking(line.mid(10));
+                emit self->agent_stream_thinking(req_id, line.mid(10));
             } else if (line.startsWith("TOOL: ")) {
-                emit self->agent_stream_thinking("Tool: " + line.mid(6));
+                emit self->agent_stream_thinking(req_id, "Tool: " + line.mid(6));
             } else if (line.startsWith("ERROR: ")) {
                 AgentExecutionResult r;
+                r.request_id = req_id;
                 r.success = false;
                 r.error = line.mid(7);
                 emit self->agent_stream_done(r);
@@ -424,7 +430,7 @@ void AgentService::run_agent_streaming(const QString& query, const QJsonObject& 
     });
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [self, proc, accumulated, timer](int exit_code, QProcess::ExitStatus) {
+            [self, proc, accumulated, timer, req_id](int exit_code, QProcess::ExitStatus) {
                 int elapsed = timer->elapsed();
                 delete timer;
 
@@ -443,16 +449,15 @@ void AgentService::run_agent_streaming(const QString& query, const QJsonObject& 
                 }
 
                 AgentExecutionResult r;
+                r.request_id = req_id;
                 r.execution_time_ms = elapsed;
 
                 QJsonDocument doc = QJsonDocument::fromJson(final_json.toUtf8());
                 if (!doc.isNull() && doc.object()["success"].toBool()) {
-                    // Prefer full response from JSON if available, else use accumulated tokens
                     QString json_response = doc.object()["response"].toString();
                     r.success = true;
                     r.response = json_response.isEmpty() ? accumulated->trimmed() : json_response;
                 } else if (!accumulated->trimmed().isEmpty()) {
-                    // Tokens arrived but no final JSON — use accumulated
                     r.success = true;
                     r.response = accumulated->trimmed();
                 } else {
@@ -465,13 +470,14 @@ void AgentService::run_agent_streaming(const QString& query, const QJsonObject& 
                 emit self->agent_stream_done(r);
             });
 
-    connect(proc, &QProcess::errorOccurred, this, [self, proc, accumulated, timer](QProcess::ProcessError) {
+    connect(proc, &QProcess::errorOccurred, this, [self, proc, accumulated, timer, req_id](QProcess::ProcessError) {
         delete timer;
         QString err = proc->errorString();
         proc->deleteLater();
         delete accumulated;
         if (!self) return;
         AgentExecutionResult r;
+        r.request_id = req_id;
         r.success = false;
         r.error = "Process error: " + err;
         emit self->agent_stream_done(r);
@@ -481,21 +487,24 @@ void AgentService::run_agent_streaming(const QString& query, const QJsonObject& 
     proc->start(python_path, {script_path, "--stdin", "--stream"});
     proc->write(payload_bytes);
     proc->closeWriteChannel();
+    return req_id;
 }
 
 // ── Query routing ────────────────────────────────────────────────────────────
 
-void AgentService::route_query(const QString& query) {
+QString AgentService::route_query(const QString& query) {
     LOG_INFO("AgentService", QString("Routing query: %1").arg(query.left(80)));
 
     QJsonObject params;
     params["query"] = query;
 
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QPointer<AgentService> self = this;
-    run_python_stdin("route_query", params, {}, [self](bool ok, QJsonObject result) {
+    run_python_stdin("route_query", params, {}, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         RoutingResult r;
+        r.request_id = req_id;
         r.success = ok && result["success"].toBool(ok);
         r.agent_id = result["agent_id"].toString();
         r.intent = result["intent"].toString();
@@ -508,11 +517,12 @@ void AgentService::route_query(const QString& query) {
 
         emit self->routing_result(r);
     });
+    return req_id;
 }
 
 // ── Team execution ───────────────────────────────────────────────────────────
 
-void AgentService::run_team(const QString& query, const QJsonObject& team_config) {
+QString AgentService::run_team(const QString& query, const QJsonObject& team_config) {
     LOG_INFO("AgentService", QString("Running team query: %1").arg(query.left(80)));
 
     QJsonObject params;
@@ -525,11 +535,13 @@ void AgentService::run_team(const QString& query, const QJsonObject& team_config
     if (team_config.contains("model"))
         coord_as_config["model"] = team_config["model"];
 
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QPointer<AgentService> self = this;
-    run_python_stdin("run_team", params, coord_as_config, [self](bool ok, QJsonObject result) {
+    run_python_stdin("run_team", params, coord_as_config, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;
+        r.request_id = req_id;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
@@ -537,21 +549,24 @@ void AgentService::run_team(const QString& query, const QJsonObject& team_config
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
+    return req_id;
 }
 
 // ── Workflow execution ───────────────────────────────────────────────────────
 
-void AgentService::run_workflow(const QString& workflow_type, const QJsonObject& params) {
-    LOG_INFO("AgentService", QString("Running workflow: %1").arg(workflow_type));
+QString AgentService::run_workflow(const QString& workflow_type, const QJsonObject& params) {
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    LOG_INFO("AgentService", QString("Running workflow [%1]: %2").arg(req_id.left(8), workflow_type));
 
     QJsonObject p = params;
     p["workflow_type"] = workflow_type;
 
     QPointer<AgentService> self = this;
-    run_python_stdin(workflow_type, p, {}, [self](bool ok, QJsonObject result) {
+    run_python_stdin(workflow_type, p, {}, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;
+        r.request_id = req_id;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
@@ -559,18 +574,23 @@ void AgentService::run_workflow(const QString& workflow_type, const QJsonObject&
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
+    return req_id;
 }
 
 // ── Planner ──────────────────────────────────────────────────────────────────
 
-void AgentService::create_plan(const QString& query) {
+QString AgentService::create_plan(const QString& query, const QJsonObject& config) {
     LOG_INFO("AgentService", QString("Creating plan for: %1").arg(query.left(80)));
 
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject params;
     params["query"] = query;
+    if (!config.isEmpty())
+        for (auto it = config.begin(); it != config.end(); ++it)
+            params[it.key()] = it.value();
 
     QPointer<AgentService> self = this;
-    run_python_stdin("generate_dynamic_plan", params, {}, [self](bool ok, QJsonObject result) {
+    run_python_stdin("generate_dynamic_plan", params, {}, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         if (!ok) {
@@ -579,6 +599,7 @@ void AgentService::create_plan(const QString& query) {
         }
 
         ExecutionPlan plan;
+        plan.request_id = req_id;
         plan.id = result["id"].toString();
         plan.name = result["name"].toString();
         plan.description = result["description"].toString();
@@ -602,16 +623,21 @@ void AgentService::create_plan(const QString& query) {
 
         emit self->plan_created(plan);
     });
+    return req_id;
 }
 
-void AgentService::execute_plan(const QJsonObject& plan) {
+QString AgentService::execute_plan(const QJsonObject& plan, const QJsonObject& config) {
     LOG_INFO("AgentService", "Executing plan");
 
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject params;
     params["plan"] = plan;
+    if (!config.isEmpty())
+        for (auto it = config.begin(); it != config.end(); ++it)
+            params[it.key()] = it.value();
 
     QPointer<AgentService> self = this;
-    run_python_stdin("execute_plan", params, {}, [self](bool ok, QJsonObject result) {
+    run_python_stdin("execute_plan", params, {}, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         if (!ok) {
@@ -620,6 +646,7 @@ void AgentService::execute_plan(const QJsonObject& plan) {
         }
 
         ExecutionPlan plan;
+        plan.request_id = req_id;
         plan.id = result["id"].toString();
         plan.status = result["status"].toString();
         plan.is_complete = result["is_complete"].toBool();
@@ -639,6 +666,7 @@ void AgentService::execute_plan(const QJsonObject& plan) {
 
         emit self->plan_executed(plan);
     });
+    return req_id;
 }
 
 // ── System info ──────────────────────────────────────────────────────────────
@@ -793,17 +821,19 @@ void AgentService::set_active_config(const QString& id) {
 
 // ── Structured output ────────────────────────────────────────────────────────
 
-void AgentService::run_agent_structured(const QString& query, const QJsonObject& config, const QString& output_model) {
-    LOG_INFO("AgentService", QString("Running structured agent (%1): %2").arg(output_model, query.left(60)));
+QString AgentService::run_agent_structured(const QString& query, const QJsonObject& config, const QString& output_model) {
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    LOG_INFO("AgentService", QString("Running structured agent [%1] (%2): %3").arg(req_id.left(8), output_model, query.left(60)));
     QJsonObject params;
     params["query"] = query;
     params["output_model"] = output_model;
 
     QPointer<AgentService> self = this;
-    run_python_stdin("run_structured", params, config, [self](bool ok, QJsonObject result) {
+    run_python_stdin("run_structured", params, config, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;
+        r.request_id = req_id;
         r.success = ok && result["success"].toBool(ok);
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
@@ -811,6 +841,7 @@ void AgentService::run_agent_structured(const QString& query, const QJsonObject&
         r.error = result["error"].toString();
         emit self->agent_result(r);
     });
+    return req_id;
 }
 
 // ── Routed query execution ───────────────────────────────────────────────────
@@ -939,13 +970,14 @@ void AgentService::run_portfolio_analysis(const QString& analysis_type, const QJ
 
 // ── Plan variants ────────────────────────────────────────────────────────────
 
-void AgentService::create_stock_analysis_plan(const QString& symbol) {
+QString AgentService::create_stock_analysis_plan(const QString& symbol, const QJsonObject& config) {
     LOG_INFO("AgentService", QString("Stock analysis plan: %1").arg(symbol));
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject params;
     params["symbol"] = symbol;
 
     QPointer<AgentService> self = this;
-    run_python_stdin("create_stock_plan", params, {}, [self](bool ok, QJsonObject result) {
+    run_python_stdin("create_stock_plan", params, {}, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         if (!ok) {
@@ -953,6 +985,7 @@ void AgentService::create_stock_analysis_plan(const QString& symbol) {
             return;
         }
         ExecutionPlan plan;
+        plan.request_id = req_id;
         plan.id = result["id"].toString();
         plan.name = result["name"].toString();
         plan.status = result["status"].toString("pending");
@@ -969,16 +1002,18 @@ void AgentService::create_stock_analysis_plan(const QString& symbol) {
         }
         emit self->plan_created(plan);
     });
+    return req_id;
 }
 
-void AgentService::create_portfolio_plan(const QJsonObject& goals) {
+QString AgentService::create_portfolio_plan(const QJsonObject& goals, const QJsonObject& config) {
     LOG_INFO("AgentService", "Portfolio plan");
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject params;
     if (!goals.isEmpty())
         params["goals"] = goals;
 
     QPointer<AgentService> self = this;
-    run_python_stdin("create_portfolio_plan", params, {}, [self](bool ok, QJsonObject result) {
+    run_python_stdin("create_portfolio_plan", params, {}, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         if (!ok) {
@@ -986,6 +1021,7 @@ void AgentService::create_portfolio_plan(const QJsonObject& goals) {
             return;
         }
         ExecutionPlan plan;
+        plan.request_id = req_id;
         plan.id = result["id"].toString();
         plan.name = result["name"].toString();
         plan.status = result["status"].toString("pending");
@@ -1002,6 +1038,7 @@ void AgentService::create_portfolio_plan(const QJsonObject& goals) {
         }
         emit self->plan_created(plan);
     });
+    return req_id;
 }
 
 // ── Memory & Knowledge ───────────────────────────────────────────────────────

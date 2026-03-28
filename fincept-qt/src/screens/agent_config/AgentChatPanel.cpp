@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
+#include "storage/repositories/PortfolioRepository.h"
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
@@ -124,6 +125,24 @@ void AgentChatPanel::build_ui() {
     title->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER));
     hl->addWidget(title);
     hl->addStretch();
+
+    // Agent selector — lets user target a specific configured agent
+    auto* agent_lbl = new QLabel("AGENT:");
+    agent_lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:600;padding-right:4px;")
+                                 .arg(ui::colors::TEXT_SECONDARY));
+    hl->addWidget(agent_lbl);
+
+    agent_selector_ = new QComboBox;
+    agent_selector_->addItem("Default", QString{});
+    agent_selector_->setMinimumWidth(140);
+    agent_selector_->setToolTip("Select a specific agent, or leave as Default to use auto-routing or global default.");
+    agent_selector_->setStyleSheet(
+        QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:2px 8px;font-size:10px;}"
+                "QComboBox::drop-down{border:none;}"
+                "QComboBox QAbstractItemView{background:%1;color:%2;selection-background-color:%4;}")
+            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED, ui::colors::AMBER_DIM));
+    hl->addWidget(agent_selector_);
+    hl->addSpacing(8);
 
     route_toggle_ = new QPushButton("AUTO-ROUTE: OFF");
     route_toggle_->setCheckable(true);
@@ -255,7 +274,31 @@ void AgentChatPanel::setup_connections() {
     connect(route_toggle_, &QPushButton::toggled, this, [this](bool c) {
         auto_routing_ = c;
         route_toggle_->setText(c ? "AUTO-ROUTE: ON" : "AUTO-ROUTE: OFF");
+        // When auto-routing is on, agent selector is irrelevant
+        agent_selector_->setEnabled(!c);
     });
+
+    // Populate agent selector when agents are discovered
+    connect(&services::AgentService::instance(), &services::AgentService::agents_discovered, this,
+            [this](QVector<services::AgentInfo> agents, QVector<services::AgentCategory>) {
+                const QString prev_id = agent_selector_->currentData().toString();
+                agent_selector_->blockSignals(true);
+                agent_selector_->clear();
+                agent_selector_->addItem("Default", QString{});
+                for (const auto& a : agents)
+                    agent_selector_->addItem(QString("[%1] %2").arg(a.category, a.name), a.id);
+                // Restore previous selection
+                int restore = 0;
+                if (!prev_id.isEmpty()) {
+                    for (int i = 1; i < agent_selector_->count(); ++i) {
+                        if (agent_selector_->itemData(i).toString() == prev_id) {
+                            restore = i; break;
+                        }
+                    }
+                }
+                agent_selector_->blockSignals(false);
+                agent_selector_->setCurrentIndex(restore);
+            });
 
     // Portfolio quick actions
     connect(analyze_btn_, &QPushButton::clicked, this, [this]() {
@@ -284,38 +327,48 @@ void AgentChatPanel::setup_connections() {
     auto& svc = services::AgentService::instance();
 
     connect(&svc, &services::AgentService::routing_result, this, [this](services::RoutingResult r) {
+        if (r.request_id != pending_request_id_) return;
         if (r.success) {
             add_system_bubble(QString("Routed to: %1 (intent: %2, confidence: %3%)")
                                   .arg(r.agent_id, r.intent)
                                   .arg(int(r.confidence * 100)));
-            services::AgentService::instance().run_agent(last_query_, r.config);
+            pending_request_id_ = services::AgentService::instance().run_agent_streaming(last_query_, r.config);
         } else {
             add_system_bubble("Routing failed, using default agent.");
-            services::AgentService::instance().run_agent(last_query_, {});
+            pending_request_id_ = services::AgentService::instance().run_agent_streaming(last_query_, {});
         }
     });
 
-    connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& status) {
-        if (!executing_) return;
+    connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& request_id, const QString& status) {
+        if (request_id != pending_request_id_) return;
         status_label_->setText(status);
     });
-    connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& token) {
-        if (!executing_) return;
-        // Append tokens to the last assistant bubble's label if present,
-        // otherwise fall back to a new bubble finalised on stream_done.
+    connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& request_id, const QString& token) {
+        if (request_id != pending_request_id_) return;
+        streaming_text_ += token + " ";
         status_label_->setText("Streaming...");
-        // Accumulate in last_query_ temporarily — reset on send_message already saved it
-        // We use a dedicated streaming_buffer_ approach: just update status here,
-        // full response rendered on agent_stream_done below.
-        Q_UNUSED(token)
+        // Append token live into the streaming bubble widget
+        if (streaming_bubble_widget_) {
+            streaming_bubble_widget_->setPlainText(streaming_text_);
+            // Resize bubble to fit new content
+            streaming_bubble_widget_->setFixedHeight(
+                static_cast<int>(streaming_bubble_widget_->document()->size().height()) + 4);
+            scroll_to_bottom();
+        }
     });
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
-        if (!executing_) return;
+        if (r.request_id != pending_request_id_) return;
         executing_ = false;
+        pending_request_id_.clear();
         send_btn_->setEnabled(true);
         send_btn_->setText("SEND");
+        streaming_bubble_widget_ = nullptr;
+        streaming_text_.clear();
         if (r.success) {
-            add_assistant_bubble(r.response);
+            // Replace the streaming bubble content with the final rendered response
+            // The last assistant bubble is already in the layout — just add_assistant_bubble
+            // would duplicate it, so we only add a new bubble if streaming never started.
+            // Since we streamed live above, the bubble is already there — nothing to add.
             status_label_->setText(QString("Response received (%1ms)").arg(r.execution_time_ms));
         } else {
             add_system_bubble("Error: " + r.error);
@@ -323,14 +376,23 @@ void AgentChatPanel::setup_connections() {
         }
     });
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
-        if (!executing_) return;
+        if (r.request_id != pending_request_id_) return;
         executing_ = false;
+        pending_request_id_.clear();
         send_btn_->setEnabled(true);
         send_btn_->setText("SEND");
-        if (r.success) {
+        // If a streaming bubble was created, update it with final text; else add a new bubble
+        if (streaming_bubble_widget_) {
+            if (r.success)
+                streaming_bubble_widget_->setPlainText(r.response);
+            streaming_bubble_widget_ = nullptr;
+        } else if (r.success) {
             add_assistant_bubble(r.response);
+        }
+        streaming_text_.clear();
+        if (r.success)
             status_label_->setText(QString("Response received (%1ms)").arg(r.execution_time_ms));
-        } else {
+        else {
             add_system_bubble("Error: " + r.error);
             status_label_->setText("Agent execution failed");
         }
@@ -350,11 +412,18 @@ void AgentChatPanel::send_message() {
     add_user_bubble(text);
     last_query_ = text;
     input_edit_->clear();
+    start_streaming_bubble(); // create live bubble before streaming begins
 
-    if (auto_routing_)
-        services::AgentService::instance().route_query(last_query_);
-    else
-        services::AgentService::instance().run_agent(last_query_, {});
+    if (auto_routing_) {
+        pending_request_id_ = services::AgentService::instance().route_query(last_query_);
+    } else {
+        // Build config for the selected agent (empty = global default)
+        const QString agent_id = agent_selector_->currentData().toString();
+        QJsonObject config;
+        if (!agent_id.isEmpty())
+            config["agent_id"] = agent_id;
+        pending_request_id_ = services::AgentService::instance().run_agent_streaming(last_query_, config);
+    }
 }
 
 void AgentChatPanel::add_user_bubble(const QString& text) {
@@ -372,6 +441,17 @@ void AgentChatPanel::add_assistant_bubble(const QString& text, const QString& ag
 void AgentChatPanel::add_system_bubble(const QString& text) {
     auto* b = make_bubble(text, "system", QDateTime::currentDateTime().toString("hh:mm"));
     messages_layout_->insertWidget(messages_layout_->count() - 1, b);
+    scroll_to_bottom();
+}
+
+void AgentChatPanel::start_streaming_bubble() {
+    streaming_text_.clear();
+    // Create a live assistant bubble with empty text — tokens will append into it
+    auto* b = make_bubble("", "assistant", QDateTime::currentDateTime().toString("hh:mm"));
+    messages_layout_->insertWidget(messages_layout_->count() - 1, b);
+    // The QTextEdit inside the bubble card is the last child of the card's layout
+    // make_bubble() structure: bubble > vl > row > card > cl > [hdr_row, content(QTextEdit)]
+    streaming_bubble_widget_ = b->findChild<QTextEdit*>();
     scroll_to_bottom();
 }
 
@@ -397,6 +477,21 @@ void AgentChatPanel::showEvent(QShowEvent* event) {
     if (!data_loaded_) {
         data_loaded_ = true;
         add_system_bubble("Agent Chat ready. Type a message or use the quick actions below.");
+
+        // Populate portfolio combo from repository
+        const QString prev = portfolio_combo_->currentText();
+        portfolio_combo_->blockSignals(true);
+        portfolio_combo_->clear();
+        portfolio_combo_->addItem("None");
+        const auto result = PortfolioRepository::instance().list_portfolios();
+        if (result.is_ok()) {
+            for (const auto& p : result.value())
+                portfolio_combo_->addItem(p.name, p.id);
+        }
+        // Restore previous selection if still present
+        const int idx = portfolio_combo_->findText(prev);
+        portfolio_combo_->setCurrentIndex(idx >= 0 ? idx : 0);
+        portfolio_combo_->blockSignals(false);
     }
 }
 

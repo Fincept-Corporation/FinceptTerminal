@@ -2006,7 +2006,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             auto* lbl = new QLabel(
                 QString("Prediction: %1").arg(pred.isNull() ? "N/A" : QString::number(pred.toDouble(), 'f', 6)), this);
             lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:700;")
-                                   .arg(module_.color.name()).arg(ui::fonts::NORMAL).arg(ui::fonts::DATA_FAMILY));
+                                   .arg(module_.color.name()).arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
             results_layout_->addWidget(lbl);
             status_label_->setText("Prediction ready");
             return;

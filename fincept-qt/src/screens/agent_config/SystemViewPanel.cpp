@@ -368,6 +368,17 @@ void SystemViewPanel::refresh_data() {
         }
     }
 
+    // Update cache stats immediately from in-process cache
+    {
+        const QJsonObject stats = svc.get_cache_stats();
+        const int agent_cached  = svc.cached_agent_count();
+        const int resp_cached   = stats["response_cache_size"].toInt(0);
+        const int total         = agent_cached + resp_cached;
+        cache_count_->setText(QString::number(total));
+        cache_count_->setToolTip(
+            QString("Agents: %1  |  Responses: %2").arg(agent_cached).arg(resp_cached));
+    }
+
     // Trigger async loads
     svc.get_system_info();
     svc.list_tools();

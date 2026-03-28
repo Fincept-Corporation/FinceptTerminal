@@ -39,6 +39,7 @@ class BacktestingScreen : public QWidget {
     void on_run();
     void on_result(const QString& provider, const QString& command, const QJsonObject& data);
     void on_error(const QString& context, const QString& message);
+    void on_command_options_loaded(const QString& provider, const QJsonObject& options);
 
   private:
     void build_ui();

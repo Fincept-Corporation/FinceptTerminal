@@ -630,6 +630,33 @@ class FastTradeProvider(BacktestingProviderBase):
         """Optimization - not implemented"""
         raise NotImplementedError('Optimization not natively supported by Fast-Trade')
 
+    def get_strategies(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return strategy catalog in BT shape: {strategies: {category: [...]}}."""
+        from ft_strategies import get_strategy_catalog
+        catalog = get_strategy_catalog()
+        return {'success': True, 'data': {'provider': 'fasttrade', 'strategies': catalog}}
+
+    def get_indicators(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return indicator catalog normalized to {indicators: {Category: [{id, name}]}}."""
+        from ft_indicators import get_catalog
+        return get_catalog()
+
+    def get_command_options(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return provider-specific option lists. FastTrade only supports backtest."""
+        return {
+            'success': True,
+            'data': {
+                'position_sizing_methods': ['percent', 'fixed'],
+                'optimize_objectives':     [],
+                'optimize_methods':        [],
+                'label_types':             [],
+                'splitter_types':          [],
+                'signal_generators':       [],
+                'indicator_signal_modes':  [],
+                'returns_analysis_types':  [],
+            },
+        }
+
 
 # ============================================================================
 # CLI Entry Point
@@ -665,6 +692,12 @@ def main():
             result = provider.calculate_indicator(indicator_type, params)
         elif command == 'optimize':
             result = provider.optimize(args)
+        elif command == 'get_strategies':
+            result = provider.get_strategies(args)
+        elif command == 'get_indicators':
+            result = provider.get_indicators(args)
+        elif command == 'get_command_options':
+            result = provider.get_command_options(args)
         elif command == 'disconnect':
             provider.disconnect()
             result = {'success': True, 'message': 'Disconnected'}

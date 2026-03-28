@@ -26,10 +26,12 @@ class AgentService : public QObject {
     void get_system_info();
 
     // ── Core agent execution ─────────────────────────────────────────────────
-    void run_agent(const QString& query, const QJsonObject& config);
-    void run_agent_streaming(const QString& query, const QJsonObject& config);
-    void run_agent_structured(const QString& query, const QJsonObject& config, const QString& output_model);
-    void route_query(const QString& query);
+    // Returns a request_id that will be echoed in the emitted result signals,
+    // so callers can guard on their own request and ignore results from other panels.
+    QString run_agent(const QString& query, const QJsonObject& config);
+    QString run_agent_streaming(const QString& query, const QJsonObject& config);
+    QString run_agent_structured(const QString& query, const QJsonObject& config, const QString& output_model);
+    QString route_query(const QString& query);
     void execute_routed_query(const QString& query, const QJsonObject& config = {}, const QString& session_id = {});
 
     // ── Multi-query & parallel ───────────────────────────────────────────────
@@ -42,16 +44,16 @@ class AgentService : public QObject {
     void run_portfolio_analysis(const QString& analysis_type, const QJsonObject& portfolio_summary = {});
 
     // ── Team execution ───────────────────────────────────────────────────────
-    void run_team(const QString& query, const QJsonObject& team_config);
+    QString run_team(const QString& query, const QJsonObject& team_config);
 
     // ── Workflow execution ───────────────────────────────────────────────────
-    void run_workflow(const QString& workflow_type, const QJsonObject& params = {});
+    QString run_workflow(const QString& workflow_type, const QJsonObject& params = {});
 
     // ── Planner ──────────────────────────────────────────────────────────────
-    void create_plan(const QString& query);
-    void create_stock_analysis_plan(const QString& symbol);
-    void create_portfolio_plan(const QJsonObject& goals = {});
-    void execute_plan(const QJsonObject& plan);
+    QString create_plan(const QString& query, const QJsonObject& config = {});
+    QString create_stock_analysis_plan(const QString& symbol, const QJsonObject& config = {});
+    QString create_portfolio_plan(const QJsonObject& goals = {}, const QJsonObject& config = {});
+    QString execute_plan(const QJsonObject& plan, const QJsonObject& config = {});
 
     // ── Memory & Knowledge ───────────────────────────────────────────────────
     void store_memory(const QString& content, const QString& memory_type = "general", const QJsonObject& metadata = {});
@@ -90,9 +92,9 @@ class AgentService : public QObject {
   signals:
     void agents_discovered(QVector<AgentInfo> agents, QVector<AgentCategory> categories);
     void agent_result(AgentExecutionResult result);
-    void agent_stream_token(const QString& token);    // emitted per TOKEN chunk
-    void agent_stream_thinking(const QString& status); // emitted per THINKING chunk
-    void agent_stream_done(AgentExecutionResult result); // emitted when stream ends
+    void agent_stream_token(const QString& request_id, const QString& token);
+    void agent_stream_thinking(const QString& request_id, const QString& status);
+    void agent_stream_done(AgentExecutionResult result);
     void routing_result(RoutingResult result);
     void tools_loaded(AgentToolsInfo info);
     void models_loaded(AgentModelsInfo info);

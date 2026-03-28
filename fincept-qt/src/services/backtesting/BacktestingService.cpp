@@ -45,6 +45,41 @@ void BacktestingService::execute(const QString& provider, const QString& command
         });
 }
 
+void BacktestingService::load_strategies(const QString& provider) {
+    auto script = QString("Analytics/backtesting/%1/%1_provider.py").arg(provider);
+    QPointer<BacktestingService> self = this;
+    python::PythonRunner::instance().run(
+        script, {"get_strategies", "{}"}, [self, provider](python::PythonResult result) {
+            if (!self) return;
+            if (!result.success) {
+                emit self->error_occurred("load_strategies/" + provider, result.error);
+                return;
+            }
+            auto doc = QJsonDocument::fromJson(python::extract_json(result.output).toUtf8());
+            if (!doc.isNull())
+                emit self->result_ready(provider, "get_strategies", doc.object());
+        });
+}
+
+void BacktestingService::load_command_options(const QString& provider) {
+    auto script = QString("Analytics/backtesting/%1/%1_provider.py").arg(provider);
+    QPointer<BacktestingService> self = this;
+    python::PythonRunner::instance().run(
+        script, {"get_command_options", "{}"}, [self, provider](python::PythonResult result) {
+            if (!self) return;
+            if (!result.success) {
+                LOG_WARN("Backtesting", QString("get_command_options failed for %1 — using defaults").arg(provider));
+                return;
+            }
+            auto doc = QJsonDocument::fromJson(python::extract_json(result.output).toUtf8());
+            if (doc.isNull()) return;
+            auto obj  = doc.object();
+            // Unwrap "data" wrapper if present
+            auto data = obj.contains("data") ? obj.value("data").toObject() : obj;
+            emit self->command_options_loaded(provider, data);
+        });
+}
+
 void BacktestingService::list_strategies() {
     QPointer<BacktestingService> self = this;
     python::PythonRunner::instance().run(

@@ -901,3 +901,62 @@ def list_available_indicators() -> List[str]:
         Sorted list of indicator name strings
     """
     return sorted(get_transformer_map().keys())
+
+
+def get_catalog() -> Dict[str, Any]:
+    """
+    Return indicator catalog normalized to {indicators: {Category: [{id, name}]}}.
+    Used by C++ BacktestingScreen via get_indicators command.
+    """
+    return {
+        'indicators': {
+            'Moving Average': [
+                {'id': 'sma',   'name': 'SMA'},
+                {'id': 'ema',   'name': 'EMA'},
+                {'id': 'dema',  'name': 'DEMA'},
+                {'id': 'tema',  'name': 'TEMA'},
+                {'id': 'wma',   'name': 'WMA'},
+                {'id': 'hma',   'name': 'HMA'},
+                {'id': 'kama',  'name': 'KAMA'},
+                {'id': 'alma',  'name': 'ALMA'},
+                {'id': 'zlema', 'name': 'ZLEMA'},
+            ],
+            'Oscillator': [
+                {'id': 'rsi',      'name': 'RSI'},
+                {'id': 'stoch',    'name': 'Stochastic'},
+                {'id': 'macd',     'name': 'MACD'},
+                {'id': 'mom',      'name': 'Momentum'},
+                {'id': 'roc',      'name': 'ROC'},
+                {'id': 'cci',      'name': 'CCI'},
+                {'id': 'williams', 'name': 'Williams %R'},
+                {'id': 'uo',       'name': 'Ultimate Oscillator'},
+                {'id': 'tsi',      'name': 'TSI'},
+                {'id': 'ao',       'name': 'Awesome Oscillator'},
+            ],
+            'Volatility': [
+                {'id': 'bbands', 'name': 'Bollinger Bands'},
+                {'id': 'atr',    'name': 'ATR'},
+                {'id': 'tr',     'name': 'True Range'},
+                {'id': 'kc',     'name': 'Keltner Channel'},
+            ],
+            'Volume': [
+                {'id': 'obv',     'name': 'OBV'},
+                {'id': 'adl',     'name': 'Accumulation/Distribution'},
+                {'id': 'chaikin', 'name': 'Chaikin'},
+                {'id': 'mfi',     'name': 'Money Flow Index'},
+            ],
+            'Trend': [
+                {'id': 'adx',      'name': 'ADX'},
+                {'id': 'dmi',      'name': 'DMI'},
+                {'id': 'ichimoku', 'name': 'Ichimoku Cloud'},
+                {'id': 'psar',     'name': 'Parabolic SAR'},
+                {'id': 'vortex',   'name': 'Vortex'},
+            ],
+            'Other': [
+                {'id': 'tp',    'name': 'Typical Price'},
+                {'id': 'bop',   'name': 'Balance of Power'},
+                {'id': 'pivot', 'name': 'Pivot Points'},
+                {'id': 'vwap',  'name': 'VWAP'},
+            ],
+        }
+    }

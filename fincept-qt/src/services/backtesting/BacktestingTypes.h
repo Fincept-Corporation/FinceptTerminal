@@ -1,6 +1,7 @@
 // src/services/backtesting/BacktestingTypes.h
 #pragma once
 #include <QColor>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
 #include <QStringList>
@@ -77,237 +78,81 @@ struct Strategy {
     QVector<StrategyParam> params;
 };
 
+/// Returns empty — Python is the source of truth. Strategies are loaded dynamically
+/// via BacktestingService::load_strategies() → result_ready("get_strategies").
 inline QVector<Strategy> default_strategies() {
-    return {
-        // ── Trend Following ─────────────────────────────────────────────
-        {"sma_crossover",
-         "SMA Crossover",
-         "trend",
-         {
-             {"fastPeriod", "Fast Period", 10, 2, 100, 1},
-             {"slowPeriod", "Slow Period", 20, 5, 200, 1},
-         }},
-        {"ema_crossover",
-         "EMA Crossover",
-         "trend",
-         {
-             {"fastPeriod", "Fast Period", 12, 2, 100, 1},
-             {"slowPeriod", "Slow Period", 26, 5, 200, 1},
-         }},
-        {"macd",
-         "MACD",
-         "trend",
-         {
-             {"fast", "Fast Period", 12, 2, 50, 1},
-             {"slow", "Slow Period", 26, 5, 100, 1},
-             {"signal", "Signal Period", 9, 2, 50, 1},
-         }},
-        {"adx_trend",
-         "ADX Trend",
-         "trend",
-         {
-             {"period", "Period", 14, 5, 50, 1},
-             {"threshold", "Threshold", 25, 10, 50, 1},
-         }},
-        {"triple_ma",
-         "Triple MA",
-         "trend",
-         {
-             {"fast", "Fast Period", 5, 2, 50, 1},
-             {"medium", "Medium Period", 20, 5, 100, 1},
-             {"slow", "Slow Period", 50, 10, 200, 1},
-         }},
-        {"keltner",
-         "Keltner Channel",
-         "trend",
-         {
-             {"period", "Period", 20, 5, 50, 1},
-             {"multiplier", "Multiplier", 2.0, 0.5, 5.0, 0.1},
-         }},
-        {"williams_r",
-         "Williams %R",
-         "trend",
-         {
-             {"period", "Period", 14, 5, 50, 1},
-             {"overbought", "Overbought", -20, -50, -5, 1},
-             {"oversold", "Oversold", -80, -95, -50, 1},
-         }},
-        {"cci_trend",
-         "CCI Trend",
-         "trend",
-         {
-             {"period", "Period", 20, 5, 50, 1},
-             {"threshold", "Threshold", 100, 50, 200, 10},
-         }},
-        {"obv_trend",
-         "OBV Trend",
-         "trend",
-         {
-             {"maPeriod", "MA Period", 20, 5, 50, 1},
-         }},
-
-        // ── Mean Reversion ──────────────────────────────────────────────
-        {"zscore",
-         "Z-Score",
-         "mean_reversion",
-         {
-             {"period", "Period", 20, 5, 100, 1},
-             {"entry_z", "Entry Z", 2.0, 0.5, 4.0, 0.1},
-             {"exit_z", "Exit Z", 0.5, 0.0, 2.0, 0.1},
-         }},
-        {"bollinger",
-         "Bollinger Bands",
-         "mean_reversion",
-         {
-             {"period", "Period", 20, 5, 50, 1},
-             {"std_dev", "Std Dev", 2.0, 0.5, 4.0, 0.1},
-         }},
-        {"rsi",
-         "RSI",
-         "mean_reversion",
-         {
-             {"period", "Period", 14, 2, 50, 1},
-             {"oversold", "Oversold", 30, 10, 40, 1},
-             {"overbought", "Overbought", 70, 60, 90, 1},
-         }},
-        {"stochastic",
-         "Stochastic",
-         "mean_reversion",
-         {
-             {"k_period", "K Period", 14, 5, 50, 1},
-             {"d_period", "D Period", 3, 2, 20, 1},
-         }},
-        {"mfi",
-         "Money Flow Index",
-         "mean_reversion",
-         {
-             {"period", "Period", 14, 5, 50, 1},
-             {"oversold", "Oversold", 20, 10, 40, 1},
-             {"overbought", "Overbought", 80, 60, 90, 1},
-         }},
-
-        // ── Momentum ────────────────────────────────────────────────────
-        {"momentum",
-         "Momentum (ROC)",
-         "momentum",
-         {
-             {"period", "Period", 14, 2, 50, 1},
-         }},
-        {"dual_momentum",
-         "Dual Momentum",
-         "momentum",
-         {
-             {"period", "Period", 12, 2, 50, 1},
-             {"lookback", "Lookback", 6, 1, 24, 1},
-         }},
-        {"macd_zero_cross",
-         "MACD Zero Cross",
-         "momentum",
-         {
-             {"fast", "Fast Period", 12, 2, 50, 1},
-             {"slow", "Slow Period", 26, 5, 100, 1},
-             {"signal", "Signal Period", 9, 2, 50, 1},
-         }},
-
-        // ── Breakout ────────────────────────────────────────────────────
-        {"donchian",
-         "Donchian Breakout",
-         "breakout",
-         {
-             {"period", "Period", 20, 5, 100, 1},
-         }},
-        {"volatility_bo",
-         "Volatility Breakout",
-         "breakout",
-         {
-             {"period", "Period", 20, 5, 50, 1},
-             {"multiplier", "Multiplier", 2.0, 0.5, 5.0, 0.1},
-         }},
-        {"atr_trailing",
-         "ATR Trailing Stop",
-         "breakout",
-         {
-             {"period", "Period", 14, 5, 50, 1},
-             {"multiplier", "Multiplier", 3.0, 1.0, 6.0, 0.5},
-         }},
-        {"keltner_breakout",
-         "Keltner Breakout",
-         "breakout",
-         {
-             {"period", "Period", 20, 5, 50, 1},
-             {"multiplier", "Multiplier", 1.5, 0.5, 4.0, 0.1},
-         }},
-
-        // ── Multi-Indicator ─────────────────────────────────────────────
-        {"rsi_macd",
-         "RSI + MACD",
-         "multi",
-         {
-             {"rsi_period", "RSI Period", 14, 5, 50, 1},
-             {"macd_fast", "MACD Fast", 12, 2, 50, 1},
-             {"macd_slow", "MACD Slow", 26, 5, 100, 1},
-         }},
-        {"macd_adx",
-         "MACD + ADX",
-         "multi",
-         {
-             {"macd_fast", "MACD Fast", 12, 2, 50, 1},
-             {"adx_period", "ADX Period", 14, 5, 50, 1},
-         }},
-        {"bollinger_rsi",
-         "Bollinger + RSI",
-         "multi",
-         {
-             {"bb_period", "BB Period", 20, 5, 50, 1},
-             {"rsi_period", "RSI Period", 14, 5, 50, 1},
-         }},
-        {"trend_momentum",
-         "Trend + Momentum",
-         "multi",
-         {
-             {"ma_period", "MA Period", 50, 10, 200, 5},
-             {"rsi_period", "RSI Period", 14, 5, 50, 1},
-             {"adx_period", "ADX Period", 14, 5, 50, 1},
-         }},
-
-        // ── Portfolio Allocation (BT provider) ──────────────────────────
-        {"equal_weight", "Equal Weight", "portfolio", {}},
-        {"inverse_vol",
-         "Inverse Volatility",
-         "portfolio",
-         {
-             {"lookback", "Lookback Days", 60, 20, 252, 5},
-         }},
-        {"mean_variance",
-         "Mean-Variance",
-         "portfolio",
-         {
-             {"lookback", "Lookback Days", 252, 60, 504, 20},
-         }},
-        {"risk_parity",
-         "Risk Parity",
-         "portfolio",
-         {
-             {"lookback", "Lookback Days", 60, 20, 252, 5},
-         }},
-        {"target_vol",
-         "Target Volatility",
-         "portfolio",
-         {
-             {"targetVol", "Target Vol %", 15, 5, 30, 1},
-             {"lookback", "Lookback Days", 60, 20, 252, 5},
-         }},
-        {"min_variance",
-         "Min Variance",
-         "portfolio",
-         {
-             {"lookback", "Lookback Days", 252, 60, 504, 20},
-         }},
-    };
+    return {};
 }
 
-inline QStringList strategy_categories() {
-    return {"trend", "mean_reversion", "momentum", "breakout", "multi", "portfolio", "custom"};
+/// Derive categories from a loaded strategy list (no hardcoded list needed).
+inline QStringList categories_from_strategies(const QVector<Strategy>& strategies) {
+    QStringList cats;
+    for (const auto& s : strategies)
+        if (!cats.contains(s.category))
+            cats.append(s.category);
+    return cats;
+}
+
+/// Parse a single strategy parameter from JSON.
+/// Handles both BT shape {name, label, default, min, max, step}
+/// and VectorBT shape {id, name, default, min, max, step}.
+inline StrategyParam param_from_json(const QJsonObject& p) {
+    StrategyParam sp;
+    sp.name      = p.contains("name") ? p.value("name").toString() : p.value("id").toString();
+    sp.label     = p.contains("label") ? p.value("label").toString() : p.value("name").toString(sp.name);
+    sp.default_val = p.value("default").toDouble(14);
+    sp.min_val   = p.value("min").toDouble(1);
+    sp.max_val   = p.value("max").toDouble(200);
+    sp.step      = p.value("step").toDouble(1);
+    return sp;
+}
+
+/// Parse strategies from a Python get_strategies JSON response.
+///
+/// Handles two shapes:
+///   BT/backtestingpy: {"success":true,"data":{"strategies":{"category":[{id,name,params:[]}]}}}
+///   VectorBT:         {"success":true,"data":[{"type","category","parameters":[{id,name,...}]}]}
+inline QVector<Strategy> strategies_from_json(const QJsonObject& root) {
+    QVector<Strategy> out;
+    auto data_val = root.value("data");
+
+    // VectorBT shape: data is an array
+    if (data_val.isArray()) {
+        for (const auto& item : data_val.toArray()) {
+            auto obj = item.toObject();
+            Strategy s;
+            s.id       = obj.value("type").toString();
+            s.name     = obj.value("name").toString(s.id);
+            s.category = obj.value("category").toString("other");
+            for (const auto& pv : obj.value("parameters").toArray())
+                s.params.append(param_from_json(pv.toObject()));
+            if (!s.id.isEmpty())
+                out.append(s);
+        }
+        return out;
+    }
+
+    // BT/backtestingpy shape: data.strategies is an object keyed by category
+    auto data_obj = data_val.isObject() ? data_val.toObject() : root;
+    auto strategies_val = data_obj.value("strategies");
+    if (!strategies_val.isObject())
+        return out;
+
+    auto cats_obj = strategies_val.toObject();
+    for (const auto& cat : cats_obj.keys()) {
+        for (const auto& sv : cats_obj.value(cat).toArray()) {
+            auto obj = sv.toObject();
+            Strategy s;
+            s.id       = obj.value("id").toString();
+            s.name     = obj.value("name").toString(s.id);
+            s.category = cat;
+            for (const auto& pv : obj.value("params").toArray())
+                s.params.append(param_from_json(pv.toObject()));
+            if (!s.id.isEmpty())
+                out.append(s);
+        }
+    }
+    return out;
 }
 
 // ── Indicator definitions ───────────────────────────────────────────────────
@@ -318,90 +163,46 @@ struct Indicator {
     QVector<StrategyParam> params;
 };
 
+/// Returns empty — Python is the source of truth. Indicators are loaded dynamically
+/// via BacktestingService::execute(provider, "get_indicators", {}) → result_ready.
 inline QVector<Indicator> all_indicators() {
-    return {
-        {"ma", "Moving Average (SMA)", {{"period", "Period", 20, 2, 200, 1}}},
-        {"ema", "Moving Average (EMA)", {{"period", "Period", 20, 2, 200, 1}}},
-        {"rsi", "RSI", {{"period", "Period", 14, 2, 50, 1}}},
-        {"macd",
-         "MACD",
-         {
-             {"fast", "Fast", 12, 2, 50, 1},
-             {"slow", "Slow", 26, 5, 100, 1},
-             {"signal", "Signal", 9, 2, 50, 1},
-         }},
-        {"stoch",
-         "Stochastic",
-         {
-             {"k_period", "K Period", 14, 5, 50, 1},
-             {"d_period", "D Period", 3, 2, 20, 1},
-         }},
-        {"cci", "CCI", {{"period", "Period", 20, 5, 50, 1}}},
-        {"williams", "Williams %R", {{"period", "Period", 14, 5, 50, 1}}},
-        {"adx", "ADX", {{"period", "Period", 14, 5, 50, 1}}},
-        {"momentum", "Momentum", {{"period", "Period", 14, 2, 50, 1}}},
-        {"atr", "ATR", {{"period", "Period", 14, 5, 50, 1}}},
-        {"bbands",
-         "Bollinger Bands",
-         {
-             {"period", "Period", 20, 5, 50, 1},
-             {"std_dev", "Std Dev", 2.0, 0.5, 4.0, 0.1},
-         }},
-        {"obv", "On Balance Volume", {}},
-        {"vwap", "VWAP", {}},
-        {"ichimoku",
-         "Ichimoku Cloud",
-         {
-             {"tenkan", "Tenkan", 9, 5, 20, 1},
-             {"kijun", "Kijun", 26, 10, 52, 1},
-             {"senkou", "Senkou", 52, 20, 120, 1},
-         }},
-    };
+    return {};
 }
 
-// ── Position sizing ─────────────────────────────────────────────────────────
+// ── Command options ─────────────────────────────────────────────────────────
+// These are compile-time fallbacks used ONLY when a provider does not support
+// the "get_command_options" command (e.g. FastTrade, Zipline).
+// Real providers (bt, vectorbt, backtestingpy, fincept) override these at
+// runtime via BacktestingService::execute(provider, "get_command_options", {})
+// → result_ready → BacktestingScreen::on_command_options_loaded().
 
 inline QStringList position_sizing_methods() {
     return {"percent", "fixed", "kelly", "vol_target", "risk"};
 }
 
-// ── Optimize objectives ─────────────────────────────────────────────────────
-
 inline QStringList optimize_objectives() {
     return {"sharpe", "sortino", "calmar", "return"};
 }
-
-// ── Optimize methods ────────────────────────────────────────────────────────
 
 inline QStringList optimize_methods() {
     return {"grid", "random"};
 }
 
-// ── ML Label types ──────────────────────────────────────────────────────────
-
 inline QStringList label_types() {
     return {"FIXLB", "MEANLB", "LEXLB", "TRENDLB", "BOLB"};
 }
-
-// ── Splitter types ──────────────────────────────────────────────────────────
 
 inline QStringList splitter_types() {
     return {"RollingSplitter", "ExpandingSplitter", "PurgedKFold"};
 }
 
-// ── Signal generators ───────────────────────────────────────────────────────
-
 inline QStringList signal_generators() {
     return {"RAND", "RANDX", "RANDNX", "RPROB", "RPROBX"};
 }
 
-// ── Indicator signal modes ──────────────────────────────────────────────────
-
 inline QStringList indicator_signal_modes() {
     return {"crossover", "threshold", "breakout", "mean_reversion", "filter"};
 }
-
-// ── Returns analysis types ──────────────────────────────────────────────────
 
 inline QStringList returns_analysis_types() {
     return {"cumulative", "rolling", "drawdown", "distribution", "benchmark_comparison"};

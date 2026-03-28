@@ -13,7 +13,7 @@
 
 namespace fincept::screens {
 
-static QString mono(int sz = 12) {
+static QString M(int sz = 12) {
     return QString("font-family:'Consolas','Courier New',monospace;font-size:%1px;").arg(sz);
 }
 
@@ -29,27 +29,26 @@ static QString rel_time(const QString& iso) {
     if (sec < 0)
         sec = 0;
     if (sec < 60)
-        return QString("%1s").arg(sec);
+        return QString("%1s ago").arg(sec);
     if (sec < 3600)
-        return QString("%1m").arg(sec / 60);
+        return QString("%1m ago").arg(sec / 60);
     if (sec < 86400)
-        return QString("%1h").arg(sec / 3600);
-    return QString("%1d").arg(sec / 86400);
+        return QString("%1h ago").arg(sec / 3600);
+    return QString("%1d ago").arg(sec / 86400);
 }
 
-// Compact number formatter
 static QString fmt_num(int n) {
+    if (n >= 10000)
+        return QString("%1K").arg(n / 1000);
     if (n >= 1000)
-        return QString("%1k").arg(n / 1000);
+        return QString("%1.%2K").arg(n / 1000).arg((n % 1000) / 100);
     return QString::number(n);
 }
 
-// Deterministic color from string
-static QString str_color(const QString& s) {
-    static const QString palette[] = {"#d97706", "#06b6d4", "#10b981", "#8b5cf6", "#ef4444",
-                                      "#f97316", "#3b82f6", "#84cc16", "#ec4899", "#14b8a6"};
-    uint h = qHash(s);
-    return palette[h % 10];
+static QString det_color(const QString& s) {
+    static const char* pal[] = {"#d97706", "#06b6d4", "#10b981", "#8b5cf6", "#f97316",
+                                "#3b82f6", "#ec4899", "#14b8a6", "#84cc16", "#ef4444"};
+    return pal[qHash(s) % 10];
 }
 
 ForumPostListPanel::ForumPostListPanel(QWidget* parent) : QWidget(parent) {
@@ -57,47 +56,57 @@ ForumPostListPanel::ForumPostListPanel(QWidget* parent) : QWidget(parent) {
 }
 
 void ForumPostListPanel::build_ui() {
-    setStyleSheet("background:#080808;");
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
     // ── Channel header ────────────────────────────────────────────────────────
     auto* hdr = new QWidget;
-    hdr->setFixedHeight(38);
-    hdr->setStyleSheet("background:#0a0a0a;border-bottom:1px solid #111111;");
+    hdr->setFixedHeight(44);
+    hdr->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;")
+            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
     auto* hdr_hl = new QHBoxLayout(hdr);
-    hdr_hl->setContentsMargins(12, 0, 12, 0);
-    hdr_hl->setSpacing(8);
+    hdr_hl->setContentsMargins(16, 0, 16, 0);
+    hdr_hl->setSpacing(10);
 
     auto* hash = new QLabel("#");
     hash->setStyleSheet(
-        QString("color:#333333;font-size:18px;font-weight:700;background:transparent;%1").arg(mono(18)));
-    hash->setFixedWidth(16);
+        QString("color:%1;font-size:20px;font-weight:700;background:transparent;%2")
+            .arg(ui::colors::AMBER, M(20)));
+    hash->setFixedWidth(18);
 
     channel_label_ = new QLabel("all-posts");
     channel_label_->setStyleSheet(
-        QString("color:#888888;font-size:13px;font-weight:700;background:transparent;%1").arg(mono(13)));
+        QString("color:%1;font-size:14px;font-weight:700;background:transparent;%2")
+            .arg(ui::colors::TEXT_PRIMARY, M(14)));
 
     count_label_ = new QLabel;
-    count_label_->setStyleSheet(QString("color:#2a2a2a;font-size:11px;background:transparent;%1").arg(mono(11)));
+    count_label_->setStyleSheet(
+        QString("color:%1;font-size:11px;background:transparent;%2")
+            .arg(ui::colors::TEXT_TERTIARY, M(11)));
 
     hdr_hl->addWidget(hash);
     hdr_hl->addWidget(channel_label_, 1);
     hdr_hl->addWidget(count_label_);
     root->addWidget(hdr);
 
-    // ── Scrollable card feed ───────────────────────────────────────────────────
+    // ── Scrollable card feed ──────────────────────────────────────────────────
     scroll_ = new QScrollArea;
     scroll_->setWidgetResizable(true);
     scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll_->setStyleSheet("QScrollArea{border:none;background:#080808;}"
-                           "QScrollBar:vertical{width:3px;background:transparent;margin:0;}"
-                           "QScrollBar::handle:vertical{background:#1a1a1a;min-height:20px;}"
-                           "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}");
+    scroll_->setStyleSheet(
+        QString("QScrollArea{border:none;background:%1;}"
+                "QScrollBar:vertical{width:6px;background:transparent;margin:0;}"
+                "QScrollBar::handle:vertical{background:%2;min-height:40px;"
+                "border-radius:3px;}"
+                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical"
+                "{height:0;}")
+            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
 
     feed_container_ = new QWidget;
-    feed_container_->setStyleSheet("background:#080808;");
+    feed_container_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     feed_layout_ = new QVBoxLayout(feed_container_);
     feed_layout_->setContentsMargins(0, 0, 0, 0);
     feed_layout_->setSpacing(0);
@@ -106,10 +115,10 @@ void ForumPostListPanel::build_ui() {
     scroll_->setWidget(feed_container_);
     root->addWidget(scroll_, 1);
 
-    // Skeleton timer
     skeleton_timer_ = new QTimer(this);
     skeleton_timer_->setInterval(400);
-    connect(skeleton_timer_, &QTimer::timeout, this, &ForumPostListPanel::pulse_skeleton);
+    connect(skeleton_timer_, &QTimer::timeout, this,
+            &ForumPostListPanel::pulse_skeleton);
 }
 
 void ForumPostListPanel::set_header(const QString& title, const QString& color) {
@@ -137,29 +146,34 @@ void ForumPostListPanel::show_skeleton() {
 
     skeleton_widget_ = new QWidget(feed_container_);
     auto* sk_vl = new QVBoxLayout(skeleton_widget_);
-    sk_vl->setContentsMargins(0, 0, 0, 0);
-    sk_vl->setSpacing(1);
+    sk_vl->setContentsMargins(12, 8, 12, 8);
+    sk_vl->setSpacing(6);
 
     for (int i = 0; i < 8; ++i) {
         auto* card = new QWidget;
-        card->setFixedHeight(72);
-        card->setStyleSheet("background:#0a0a0a;border-bottom:1px solid #0d0d0d;");
+        card->setFixedHeight(68);
+        card->setStyleSheet(
+            QString("background:%1;border:1px solid %2;border-radius:4px;")
+                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
         auto* cvl = new QVBoxLayout(card);
-        cvl->setContentsMargins(12, 10, 12, 10);
-        cvl->setSpacing(6);
+        cvl->setContentsMargins(14, 10, 14, 10);
+        cvl->setSpacing(8);
 
-        // Title shimmer bar
         auto* bar1 = new QWidget;
         bar1->setFixedHeight(10);
-        bar1->setStyleSheet(QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-                                    "stop:0 #111111,stop:%1 #1a1a1a,stop:1 #111111);")
-                                .arg(0.3 + (i % 4) * 0.15));
+        bar1->setStyleSheet(
+            QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                    "stop:0 %1,stop:%2 %3,stop:1 %1);border-radius:5px;")
+                .arg(ui::colors::BORDER_DIM)
+                .arg(0.3 + (i % 4) * 0.15)
+                .arg(ui::colors::BORDER_MED));
         bar1->setMaximumWidth(200 + i * 20);
 
-        // Meta shimmer bar
         auto* bar2 = new QWidget;
-        bar2->setFixedHeight(8);
-        bar2->setStyleSheet("background:#0d0d0d;");
+        bar2->setFixedHeight(7);
+        bar2->setStyleSheet(
+            QString("background:%1;border-radius:3px;")
+                .arg(ui::colors::BORDER_DIM));
         bar2->setMaximumWidth(120);
 
         cvl->addWidget(bar1);
@@ -181,8 +195,10 @@ void ForumPostListPanel::pulse_skeleton() {
     double s = off / 100.0;
     double e = std::min(1.0, s + 0.3);
     QString bg = QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-                         "stop:0 #090909,stop:%1 #1c1c1c,stop:%2 #090909);")
+                         "stop:0 %1,stop:%2 %3,stop:%4 %1);border-radius:5px;")
+                     .arg(ui::colors::BORDER_DIM)
                      .arg(s, 0, 'f', 2)
+                     .arg(ui::colors::BORDER_MED)
                      .arg(e, 0, 'f', 2);
 
     auto* lay = qobject_cast<QVBoxLayout*>(skeleton_widget_->layout());
@@ -198,7 +214,8 @@ void ForumPostListPanel::pulse_skeleton() {
             continue;
         for (int j = 0; j < cvl->count(); ++j) {
             auto* ci = cvl->itemAt(j);
-            if (ci && ci->widget() && ci->widget()->height() >= 8 && ci->widget()->height() <= 12)
+            if (ci && ci->widget() && ci->widget()->height() >= 7 &&
+                ci->widget()->height() <= 12)
                 ci->widget()->setStyleSheet(bg);
         }
     }
@@ -220,7 +237,8 @@ void ForumPostListPanel::set_active_post(const QString& uuid) {
     active_uuid_ = uuid;
 }
 
-void ForumPostListPanel::set_posts(const services::ForumPostsPage& page, const QString& category_color) {
+void ForumPostListPanel::set_posts(const services::ForumPostsPage& page,
+                                    const QString& category_color) {
     current_page_ = page;
     category_color_ = category_color;
     skeleton_timer_->stop();
@@ -233,25 +251,39 @@ void ForumPostListPanel::set_posts(const services::ForumPostsPage& page, const Q
 
 void ForumPostListPanel::rebuild_feed() {
     clear();
-    count_label_->setText(QString("%1 posts").arg(current_page_.total));
+    count_label_->setText(
+        current_page_.total > 0 ? QString("%1 posts").arg(current_page_.total) : "");
 
     if (current_page_.posts.isEmpty()) {
         auto* empty = new QWidget;
-        empty->setFixedHeight(80);
+        empty->setMinimumHeight(120);
         empty->setStyleSheet("background:transparent;");
         auto* el = new QVBoxLayout(empty);
+        el->setAlignment(Qt::AlignCenter);
+        el->setSpacing(6);
+
+        auto* icon = new QLabel("◇");
+        icon->setAlignment(Qt::AlignCenter);
+        icon->setStyleSheet(
+            QString("color:%1;font-size:24px;background:transparent;")
+                .arg(ui::colors::BORDER_DIM));
+
         auto* lbl = new QLabel("NO POSTS YET");
         lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet(QString("color:#222222;font-size:13px;font-weight:700;letter-spacing:1px;"
-                                   "background:transparent;%1")
-                               .arg(mono(13)));
+        lbl->setStyleSheet(
+            QString("color:%1;font-size:13px;font-weight:700;letter-spacing:1.5px;"
+                    "background:transparent;%2")
+                .arg(ui::colors::TEXT_TERTIARY, M(13)));
+
         auto* sub = new QLabel("Be the first to start a discussion");
         sub->setAlignment(Qt::AlignCenter);
-        sub->setStyleSheet(QString("color:#1a1a1a;font-size:11px;background:transparent;%1").arg(mono(11)));
-        el->addStretch();
+        sub->setStyleSheet(
+            QString("color:%1;font-size:11px;background:transparent;%2")
+                .arg(ui::colors::TEXT_DIM, M(11)));
+
+        el->addWidget(icon);
         el->addWidget(lbl);
         el->addWidget(sub);
-        el->addStretch();
         feed_layout_->addWidget(empty);
         feed_layout_->addStretch();
         return;
@@ -262,21 +294,25 @@ void ForumPostListPanel::rebuild_feed() {
     for (int i = 0; i < current_page_.posts.size(); ++i) {
         const auto& post = current_page_.posts[i];
         const bool active = (post.post_uuid == active_uuid_);
+        QString cat_color = post.category_color.isEmpty()
+                                ? det_color(post.category_name)
+                                : post.category_color;
 
-        // ── Post card ─────────────────────────────────────────────────────────
         auto* card = new QWidget;
         card->setCursor(Qt::PointingHandCursor);
-
-        QString cat_color = post.category_color.isEmpty() ? str_color(post.category_name) : post.category_color;
-
-        card->setStyleSheet(active ? QString("background:#0d0d0d;border-bottom:1px solid #111111;"
-                                             "border-left:3px solid %1;")
-                                         .arg(cat_color)
-                                   : "background:#080808;border-bottom:1px solid #0d0d0d;"
-                                     "border-left:3px solid transparent;");
+        card->setStyleSheet(
+            active
+                ? QString("background:rgba(217,119,6,0.04);"
+                          "border-bottom:1px solid %1;"
+                          "border-left:3px solid %2;")
+                      .arg(ui::colors::BORDER_DIM, cat_color)
+                : QString("background:%1;"
+                          "border-bottom:1px solid %2;"
+                          "border-left:3px solid transparent;")
+                      .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
 
         auto* card_vl = new QVBoxLayout(card);
-        card_vl->setContentsMargins(12, 8, 12, 6);
+        card_vl->setContentsMargins(14, 10, 14, 8);
         card_vl->setSpacing(4);
 
         // ── Top row: avatar + name + category chip + time ─────────────────────
@@ -284,32 +320,37 @@ void ForumPostListPanel::rebuild_feed() {
         top_row->setStyleSheet("background:transparent;");
         auto* top_hl = new QHBoxLayout(top_row);
         top_hl->setContentsMargins(0, 0, 0, 0);
-        top_hl->setSpacing(6);
+        top_hl->setSpacing(8);
 
-        // Avatar square with initials
-        auto* avatar = new QLabel;
-        avatar->setFixedSize(22, 22);
+        auto* avatar = new QLabel(
+            post.author_display_name.isEmpty()
+                ? "?"
+                : post.author_display_name.left(2).toUpper());
+        avatar->setFixedSize(24, 24);
         avatar->setAlignment(Qt::AlignCenter);
-        QString av_color = str_color(post.author_display_name);
-        QString initials = post.author_display_name.isEmpty() ? "?" : post.author_display_name.left(2).toUpper();
-        avatar->setText(initials);
         avatar->setStyleSheet(
-            QString("color:#080808;font-size:9px;font-weight:700;background:%1;%2").arg(av_color, mono(9)));
+            QString("color:%1;font-size:9px;font-weight:700;background:%2;"
+                    "border-radius:12px;%3")
+                .arg(ui::colors::BG_BASE, det_color(post.author_display_name),
+                     M(9)));
 
-        // Author name
         auto* author = new QLabel(post.author_display_name.left(16));
         author->setStyleSheet(
-            QString("color:#888888;font-size:11px;font-weight:600;background:transparent;%1").arg(mono(11)));
+            QString("color:%1;font-size:11px;font-weight:600;"
+                    "background:transparent;%2")
+                .arg(ui::colors::TEXT_PRIMARY, M(11)));
 
-        // Category chip
         auto* cat_chip = new QLabel(post.category_name.toUpper().left(12));
-        cat_chip->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;background:rgba(0,0,0,0);"
-                                        "border:1px solid %1;padding:0 4px;letter-spacing:0.5px;%2")
-                                    .arg(cat_color, mono(9)));
+        cat_chip->setStyleSheet(
+            QString("color:%1;font-size:9px;font-weight:700;background:transparent;"
+                    "border:1px solid %1;padding:1px 6px;letter-spacing:0.5px;"
+                    "border-radius:8px;%2")
+                .arg(cat_color, M(9)));
 
-        // Time
         auto* time_lbl = new QLabel(rel_time(post.created_at));
-        time_lbl->setStyleSheet(QString("color:#2a2a2a;font-size:10px;background:transparent;%1").arg(mono(10)));
+        time_lbl->setStyleSheet(
+            QString("color:%1;font-size:10px;background:transparent;%2")
+                .arg(ui::colors::TEXT_DIM, M(10)));
 
         top_hl->addWidget(avatar);
         top_hl->addWidget(author);
@@ -324,52 +365,51 @@ void ForumPostListPanel::rebuild_feed() {
         title_lbl->setWordWrap(false);
         title_lbl->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         title_lbl->setStyleSheet(
-            active ? QString("color:#e5e5e5;font-size:13px;font-weight:700;background:transparent;%1").arg(mono(13))
-                   : QString("color:#cccccc;font-size:13px;background:transparent;%1").arg(mono(13)));
+            active
+                ? QString("color:%1;font-size:13px;font-weight:700;"
+                          "background:transparent;%2")
+                      .arg(ui::colors::TEXT_PRIMARY, M(13))
+                : QString("color:#c0c0c0;font-size:13px;font-weight:600;"
+                          "background:transparent;%1")
+                      .arg(M(13)));
         card_vl->addWidget(title_lbl);
 
-        // ── Engagement bar ────────────────────────────────────────────────────
+        // ── Engagement ────────────────────────────────────────────────────────
         auto* eng_row = new QWidget;
         eng_row->setStyleSheet("background:transparent;");
         auto* eng_hl = new QHBoxLayout(eng_row);
-        eng_hl->setContentsMargins(0, 0, 0, 0);
-        eng_hl->setSpacing(12);
+        eng_hl->setContentsMargins(0, 2, 0, 0);
+        eng_hl->setSpacing(14);
 
-        auto make_eng = [&](const QString& icon, const QString& val, const QString& color) {
-            auto* w = new QWidget;
-            w->setStyleSheet("background:transparent;");
-            auto* hl = new QHBoxLayout(w);
-            hl->setContentsMargins(0, 0, 0, 0);
-            hl->setSpacing(3);
-            auto* ic = new QLabel(icon);
-            ic->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;%2").arg(color, mono(10)));
-            auto* vl = new QLabel(val);
-            vl->setStyleSheet(QString("color:#444444;font-size:10px;background:transparent;%1").arg(mono(10)));
-            hl->addWidget(ic);
-            hl->addWidget(vl);
-            return w;
+        auto mk_eng = [&](const QString& icon, const QString& val,
+                          const QString& color) {
+            auto* lbl = new QLabel(icon + " " + val);
+            lbl->setStyleSheet(
+                QString("color:%1;font-size:10px;background:transparent;%2")
+                    .arg(color, M(10)));
+            return lbl;
         };
 
-        QString like_color = post.likes > 0 ? "#d97706" : "#2a2a2a";
-        QString rep_color = post.reply_count > 0 ? "#06b6d4" : "#2a2a2a";
+        QString like_color = post.likes > 0 ? ui::colors::AMBER : "#1e1e1e";
+        QString rep_color = post.reply_count > 0 ? ui::colors::CYAN : "#1e1e1e";
 
-        eng_hl->addWidget(make_eng("▲", fmt_num(post.likes), like_color));
-        eng_hl->addWidget(make_eng("◆", fmt_num(post.reply_count), rep_color));
-        eng_hl->addWidget(make_eng("◉", fmt_num(post.views), "#2a2a2a"));
+        eng_hl->addWidget(mk_eng("▲", fmt_num(post.likes), like_color));
+        eng_hl->addWidget(mk_eng("◆", fmt_num(post.reply_count), rep_color));
+        eng_hl->addWidget(mk_eng("◉", fmt_num(post.views), "#1e1e1e"));
         eng_hl->addStretch();
 
-        // Hot indicator if replies > 5
         if (post.reply_count > 5) {
-            auto* hot = new QLabel("HOT");
-            hot->setStyleSheet(QString("color:#ef4444;font-size:9px;font-weight:700;letter-spacing:0.8px;"
-                                       "background:transparent;%1")
-                                   .arg(mono(9)));
+            auto* hot = new QLabel("● HOT");
+            hot->setStyleSheet(
+                QString("color:%1;font-size:9px;font-weight:700;"
+                        "background:rgba(220,38,38,0.08);padding:1px 6px;"
+                        "border-radius:6px;%2")
+                    .arg(ui::colors::NEGATIVE, M(9)));
             eng_hl->addWidget(hot);
         }
-
         card_vl->addWidget(eng_row);
 
-        // ── Click handler ────────────────────────────────────────────────────
+        // ── Click handler ─────────────────────────────────────────────────────
         auto* click_btn = new QPushButton(card);
         click_btn->setGeometry(0, 0, 3000, 200);
         click_btn->setFlat(true);
@@ -389,16 +429,20 @@ void ForumPostListPanel::rebuild_feed() {
     // ── Load more ─────────────────────────────────────────────────────────────
     if (current_page_.page < current_page_.pages) {
         int remaining = current_page_.total - current_page_.posts.size();
-        auto* more_btn = new QPushButton(QString("↓  LOAD %1 MORE POSTS").arg(remaining));
-        more_btn->setFixedHeight(32);
+        auto* more_btn = new QPushButton(
+            QString("Load %1 more posts").arg(remaining));
+        more_btn->setFixedHeight(34);
         more_btn->setCursor(Qt::PointingHandCursor);
-        more_btn->setStyleSheet(QString("QPushButton{background:#0a0a0a;color:#333333;border:none;"
-                                        "border-top:1px solid #111111;font-size:11px;font-weight:700;"
-                                        "letter-spacing:0.5px;%1}"
-                                        "QPushButton:hover{background:#0d0d0d;color:%2;}")
-                                    .arg(mono(11), ui::colors::AMBER));
+        more_btn->setStyleSheet(
+            QString("QPushButton{background:%1;color:%2;border:none;"
+                    "border-top:1px solid %3;font-size:12px;font-weight:600;%4}"
+                    "QPushButton:hover{color:%5;"
+                    "background:rgba(217,119,6,0.04);}")
+                .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY,
+                     ui::colors::BORDER_DIM, M(12), ui::colors::AMBER));
         int next = current_page_.page + 1;
-        connect(more_btn, &QPushButton::clicked, this, [this, next]() { emit load_more_requested(next); });
+        connect(more_btn, &QPushButton::clicked, this,
+                [this, next]() { emit load_more_requested(next); });
         feed_layout_->addWidget(more_btn);
     }
 

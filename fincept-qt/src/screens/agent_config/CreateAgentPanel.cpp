@@ -538,16 +538,20 @@ void CreateAgentPanel::setup_connections() {
         editing_id_.clear();
         load_saved_agents();
     });
-    connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& status) {
+    connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& request_id, const QString& status) {
+        if (request_id != pending_request_id_) return;
         status_label_->setText(status);
     });
-    connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& token) {
+    connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& request_id, const QString& token) {
+        if (request_id != pending_request_id_) return;
         QTextCursor cursor = test_result_->textCursor();
         cursor.movePosition(QTextCursor::End);
         test_result_->setTextCursor(cursor);
         test_result_->insertPlainText(token + " ");
     });
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
+        if (r.request_id != pending_request_id_) return;
+        pending_request_id_.clear();
         test_btn_->setEnabled(true);
         test_btn_->setText("TEST");
         if (r.success) {
@@ -561,6 +565,8 @@ void CreateAgentPanel::setup_connections() {
         }
     });
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
+        if (r.request_id != pending_request_id_) return;
+        pending_request_id_.clear();
         test_btn_->setEnabled(true);
         test_btn_->setText("TEST");
         if (r.success) {
@@ -861,7 +867,7 @@ void CreateAgentPanel::test_agent() {
     test_result_->clear();
     status_label_->setText("Testing agent...");
     status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:4px 0;").arg(ui::colors::AMBER));
-    services::AgentService::instance().run_agent("Hello, introduce yourself briefly.", build_config_json());
+    pending_request_id_ = services::AgentService::instance().run_agent_streaming("Hello, introduce yourself briefly.", build_config_json());
 }
 
 void CreateAgentPanel::export_json() {

@@ -526,6 +526,44 @@ class BacktestingPyProvider(BacktestingProviderBase):
             self._error('Failed to calculate indicator', e)
             return self._create_error_result(f'Indicator calculation failed: {str(e)}')
 
+    def get_strategies(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return strategy catalog in BT shape: {strategies: {category: [...]}}."""
+        import btp_strategies as _strat
+        catalog = _strat.get_strategy_catalog()
+        return {'success': True, 'data': {'provider': 'backtestingpy', 'strategies': catalog}}
+
+    def get_indicators(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return indicator catalog normalized to {indicators: {Category: [{id, name}]}}."""
+        try:
+            import btp_indicators as _ind
+            flat = _ind.get_catalog()
+            grouped: Dict[str, Any] = {}
+            for entry in flat:
+                cat = entry.get('category', 'Other')
+                grouped.setdefault(cat, []).append({
+                    'id':   entry.get('id', ''),
+                    'name': entry.get('label', entry.get('id', '')),
+                })
+        except Exception:
+            grouped = {}
+        return {'indicators': grouped}
+
+    def get_command_options(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return provider-specific option lists for all command dropdowns."""
+        return {
+            'success': True,
+            'data': {
+                'position_sizing_methods': ['percent', 'fixed', 'kelly'],
+                'optimize_objectives':     ['sharpe', 'sortino', 'calmar', 'return'],
+                'optimize_methods':        ['grid', 'random'],
+                'label_types':             [],
+                'splitter_types':          [],
+                'signal_generators':       [],
+                'indicator_signal_modes':  ['crossover', 'threshold', 'breakout', 'mean_reversion', 'filter'],
+                'returns_analysis_types':  [],
+            },
+        }
+
     # ========================================================================
     # Helper Methods
     # ========================================================================
@@ -1563,6 +1601,12 @@ def main():
             result = provider.calculate_indicator(indicator_type, params)
         elif command == 'optimize':
             result = provider.optimize(args)
+        elif command == 'get_strategies':
+            result = provider.get_strategies(args)
+        elif command == 'get_indicators':
+            result = provider.get_indicators(args)
+        elif command == 'get_command_options':
+            result = provider.get_command_options(args)
         elif command == 'disconnect':
             provider.disconnect()
             result = {'success': True, 'message': 'Disconnected'}

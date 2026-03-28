@@ -3,10 +3,12 @@
 
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
+#include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
 #include <QClipboard>
+#include <QComboBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
@@ -61,6 +63,27 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     auto* t = new QLabel("PLAN TEMPLATES");
     t->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;letter-spacing:1px;").arg(ui::colors::AMBER));
     vl->addWidget(t);
+
+    // ── LLM Profile picker ───────────────────────────────────────────────────
+    auto* profile_lbl = new QLabel("LLM PROFILE:");
+    profile_lbl->setStyleSheet(
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+    vl->addWidget(profile_lbl);
+
+    llm_profile_combo_ = new QComboBox;
+    llm_profile_combo_->setToolTip("LLM profile used for plan generation and execution");
+    llm_profile_combo_->setStyleSheet(
+        QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:11px;}"
+                "QComboBox::drop-down{border:none;}")
+            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+    llm_profile_combo_->addItem("Default (Global)", QString{});
+    {
+        const auto pr       = fincept::LlmProfileRepository::instance().list_profiles();
+        const auto profiles = pr.is_ok() ? pr.value() : QVector<fincept::LlmProfile>{};
+        for (const auto& p : profiles)
+            llm_profile_combo_->addItem(p.is_default ? p.name + " [default]" : p.name, p.id);
+    }
+    vl->addWidget(llm_profile_combo_);
 
     template_list_ = new QListWidget;
     template_list_->addItems({"Stock Analysis Plan", "Portfolio Rebalance Plan", "Market Overview Plan",
@@ -261,7 +284,9 @@ void PlannerViewPanel::setup_connections() {
     connect(copy_btn_, &QPushButton::clicked, this, &PlannerViewPanel::copy_result);
 
     connect(&svc, &services::AgentService::plan_created, this, [this](services::ExecutionPlan plan) {
+        if (plan.request_id != pending_request_id_) return;
         generating_ = false;
+        pending_request_id_.clear();
         generate_btn_->setEnabled(true);
         generate_btn_->setText("GENERATE PLAN");
         current_plan_ = plan;
@@ -274,7 +299,9 @@ void PlannerViewPanel::setup_connections() {
     });
 
     connect(&svc, &services::AgentService::plan_executed, this, [this](services::ExecutionPlan plan) {
+        if (plan.request_id != pending_request_id_) return;
         executing_ = false;
+        pending_request_id_.clear();
         execute_btn_->setEnabled(true);
         execute_btn_->setText("EXECUTE PLAN");
         current_plan_ = plan;
@@ -302,8 +329,12 @@ void PlannerViewPanel::setup_connections() {
         if (ctx == "create_plan" || ctx == "execute_plan") {
             generating_ = false;
             executing_ = false;
+            pending_request_id_.clear();
             generate_btn_->setEnabled(true);
             generate_btn_->setText("GENERATE PLAN");
+            execute_btn_->setEnabled(!current_plan_.steps.isEmpty());
+            execute_btn_->setText("EXECUTE PLAN");
+            progress_bar_->setValue(0);
             plan_status_->setText("ERROR");
             plan_status_->setStyleSheet(
                 QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
@@ -359,7 +390,13 @@ void PlannerViewPanel::generate_plan() {
     plan_status_->setText("GENERATING");
     plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
                                     .arg(ui::colors::AMBER, ui::colors::BG_RAISED));
-    services::AgentService::instance().create_plan(q);
+    QJsonObject cfg;
+    if (llm_profile_combo_) {
+        const QString pid = llm_profile_combo_->currentData().toString();
+        if (!pid.isEmpty())
+            cfg["llm_profile_id"] = pid;
+    }
+    pending_request_id_ = services::AgentService::instance().create_plan(q, cfg);
 }
 
 void PlannerViewPanel::execute_plan() {
@@ -391,7 +428,13 @@ void PlannerViewPanel::execute_plan() {
         steps.append(so);
     }
     pj["steps"] = steps;
-    services::AgentService::instance().execute_plan(pj);
+    QJsonObject cfg;
+    if (llm_profile_combo_) {
+        const QString pid = llm_profile_combo_->currentData().toString();
+        if (!pid.isEmpty())
+            cfg["llm_profile_id"] = pid;
+    }
+    pending_request_id_ = services::AgentService::instance().execute_plan(pj, cfg);
 }
 
 void PlannerViewPanel::populate_plan(const services::ExecutionPlan& plan) {

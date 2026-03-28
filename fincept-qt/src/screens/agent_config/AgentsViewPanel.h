@@ -91,8 +91,9 @@ class AgentsViewPanel : public QWidget {
     // ── State ────────────────────────────────────────────────────────────────
     QVector<services::AgentInfo> all_agents_;
     QVector<services::AgentInfo> filtered_agents_;
-    int  selected_agent_idx_ = -1;
-    bool executing_          = false;
+    int     selected_agent_idx_ = -1;
+    bool    executing_          = false;
+    QString pending_request_id_; // guards against cross-panel signal contamination
 };
 
 } // namespace fincept::screens

@@ -2,6 +2,7 @@
 #pragma once
 #include "services/agents/AgentTypes.h"
 
+#include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -30,15 +31,17 @@ class WorkflowsViewPanel : public QWidget {
                                     const QString& action_text, QVBoxLayout* parent_layout);
 
     // Workflow inputs
-    QLineEdit* symbol_input_ = nullptr;
+    QLineEdit*  symbol_input_      = nullptr;
+    QComboBox*  llm_profile_combo_ = nullptr;
 
     // Results
     QTextEdit* result_display_ = nullptr;
     QLabel* result_status_ = nullptr;
     QLabel* workflow_title_ = nullptr;
 
-    bool executing_   = false;
-    bool data_loaded_ = false;
+    bool    executing_          = false;
+    bool    data_loaded_        = false;
+    QString pending_request_id_;
 };
 
 } // namespace fincept::screens

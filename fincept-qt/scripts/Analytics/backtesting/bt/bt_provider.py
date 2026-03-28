@@ -1127,13 +1127,26 @@ class BtProvider(BacktestingProviderBase):
         }
 
     def get_indicators(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Return indicator catalog."""
+        """Return indicator catalog normalized to {indicators: {Category: [{id, name}]}}."""
         from bt_strategies import INDICATOR_CATALOG
+        grouped = {}
+        for cat, items in INDICATOR_CATALOG.items():
+            grouped[cat] = [{'id': it['id'], 'name': it.get('name', it['id'])} for it in items]
+        return {'indicators': grouped}
+
+    def get_command_options(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return provider-specific option lists for all command dropdowns."""
         return {
             'success': True,
             'data': {
-                'provider': 'bt',
-                'indicators': INDICATOR_CATALOG,
+                'position_sizing_methods': ['percent', 'fixed', 'kelly', 'vol_target', 'risk'],
+                'optimize_objectives':     ['sharpe', 'sortino', 'calmar', 'return'],
+                'optimize_methods':        ['grid', 'random'],
+                'label_types':             ['FIXLB', 'MEANLB', 'LEXLB', 'TRENDLB', 'BOLB'],
+                'splitter_types':          ['RollingSplitter', 'ExpandingSplitter', 'PurgedKFold'],
+                'signal_generators':       ['RAND', 'RANDX', 'RANDNX', 'RPROB', 'RPROBX'],
+                'indicator_signal_modes':  ['crossover', 'threshold', 'breakout', 'mean_reversion', 'filter'],
+                'returns_analysis_types':  ['cumulative', 'rolling', 'drawdown', 'distribution', 'benchmark_comparison'],
             },
         }
 
@@ -1305,6 +1318,9 @@ def main():
             result_str = json_response(result)
         elif command == 'get_indicators':
             result = provider.get_indicators(args)
+            result_str = json_response(result)
+        elif command == 'get_command_options':
+            result = provider.get_command_options(args)
             result_str = json_response(result)
         elif command == 'get_historical_data':
             result = provider.get_historical_data(args)

@@ -2,6 +2,7 @@
 #pragma once
 #include "services/forum/ForumModels.h"
 
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QScrollArea>
 #include <QTimer>
@@ -31,30 +32,28 @@ class ForumFeedPanel : public QWidget {
     void load_more_requested(int page);
     void category_clicked(int id, const QString& name, const QString& color);
     void profile_edit_requested();
+    void new_post_clicked();
+    void vote_post_requested(const QString& post_uuid, const QString& vote_type);
 
   private:
     void build_ui();
+    void build_toolbar();
     void rebuild_posts();
-    void rebuild_stats();
-    void rebuild_profile();
-    void rebuild_categories();
-    void rebuild_contributors();
+    void rebuild_category_chips();
     void show_skeleton();
     void pulse_skeleton();
 
+    // Toolbar
+    QWidget* toolbar_ = nullptr;
+    QLabel* header_lbl_ = nullptr;
+    QLabel* header_count_lbl_ = nullptr;
+    QWidget* chips_container_ = nullptr;
+    QHBoxLayout* chips_layout_ = nullptr;
+
+    // Scroll + posts
     QScrollArea* scroll_ = nullptr;
     QWidget* content_w_ = nullptr;
     QVBoxLayout* content_vl_ = nullptr;
-
-    // Dashboard sections
-    QWidget* stats_section_ = nullptr;
-    QWidget* profile_section_ = nullptr;
-    QWidget* cats_section_ = nullptr;
-    QWidget* contrib_section_ = nullptr;
-
-    // Posts section
-    QLabel* posts_header_lbl_ = nullptr;
-    QLabel* posts_count_lbl_ = nullptr;
     QWidget* posts_container_ = nullptr;
     QVBoxLayout* posts_vl_ = nullptr;
 
@@ -71,8 +70,6 @@ class ForumFeedPanel : public QWidget {
     QString active_uuid_;
     QString cat_color_;
     bool stats_loaded_ = false;
-    bool profile_loaded_ = false;
-    bool cats_loaded_ = false;
 };
 
 } // namespace fincept::screens

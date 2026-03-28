@@ -28,6 +28,39 @@ class FinceptProvider:
     def __init__(self):
         self.runner = FinceptStrategyRunner()
 
+    def get_strategies(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return strategy catalog in BT shape: {strategies: {category: [{id, name, params:[]}]}}."""
+        flat = self.runner.list_strategies()
+        grouped: Dict[str, List] = {}
+        for s in flat:
+            cat = s.get('category', 'General Strategy')
+            grouped.setdefault(cat, []).append({
+                'id':     s['id'],
+                'name':   s['name'],
+                'params': [],  # Fincept strategies use free-form strategy_params dict
+            })
+        return {'success': True, 'data': {'provider': 'fincept', 'strategies': grouped}}
+
+    def get_indicators(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Fincept strategies are self-contained — no separate indicator catalog."""
+        return {'indicators': {}}
+
+    def get_command_options(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return provider-specific option lists."""
+        return {
+            'success': True,
+            'data': {
+                'position_sizing_methods': ['percent', 'fixed', 'kelly', 'vol_target', 'risk'],
+                'optimize_objectives':     ['sharpe', 'sortino', 'calmar', 'return'],
+                'optimize_methods':        ['grid', 'random'],
+                'label_types':             [],
+                'splitter_types':          [],
+                'signal_generators':       [],
+                'indicator_signal_modes':  [],
+                'returns_analysis_types':  [],
+            },
+        }
+
     def run_backtest(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a backtest for a Fincept Engine strategy.
@@ -144,10 +177,16 @@ def main():
     # Route command
     if command == "run_backtest" or command == "execute_fincept_strategy":
         result = provider.run_backtest(args)
+    elif command == "get_strategies":
+        result = provider.get_strategies(args)
+    elif command == "get_indicators":
+        result = provider.get_indicators(args)
+    elif command == "get_command_options":
+        result = provider.get_command_options(args)
     else:
         result = {
             "success": False,
-            "error": f"Unknown command: {command}. Supported: run_backtest"
+            "error": f"Unknown command: {command}"
         }
 
     print(json.dumps(result))

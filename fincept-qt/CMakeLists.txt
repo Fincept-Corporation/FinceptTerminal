@@ -400,6 +400,9 @@ set(SCREEN_SOURCES
     src/screens/news/NewsTickerStrip.cpp
     src/screens/forum/ForumScreen.cpp
     src/screens/forum/ForumFeedPanel.cpp
+    src/screens/forum/ForumSidebarPanel.cpp
+    src/screens/forum/ForumPostListPanel.cpp
+    src/screens/forum/ForumPostReaderPanel.cpp
     src/screens/forum/ForumThreadPanel.cpp
     src/services/forum/ForumService.cpp
     src/screens/crypto_trading/CryptoTradingScreen.cpp

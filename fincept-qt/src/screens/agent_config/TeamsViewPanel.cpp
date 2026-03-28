@@ -271,9 +271,9 @@ void TeamsViewPanel::setup_connections() {
                 populate_available_agents(agents);
             });
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
-        if (!executing_)
-            return;
+        if (r.request_id != pending_request_id_) return;
         executing_ = false;
+        pending_request_id_.clear();
         run_btn_->setEnabled(true);
         run_btn_->setText("RUN TEAM");
         if (r.success) {
@@ -289,13 +289,13 @@ void TeamsViewPanel::setup_connections() {
         }
     });
 
-    connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& status) {
-        if (!executing_) return;
+    connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& request_id, const QString& status) {
+        if (request_id != pending_request_id_) return;
         exec_status_->setText(status);
     });
 
-    connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& token) {
-        if (!executing_) return;
+    connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& request_id, const QString& token) {
+        if (request_id != pending_request_id_) return;
         QTextCursor cursor = result_display_->textCursor();
         cursor.movePosition(QTextCursor::End);
         result_display_->setTextCursor(cursor);
@@ -303,8 +303,9 @@ void TeamsViewPanel::setup_connections() {
     });
 
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
-        if (!executing_) return;
+        if (r.request_id != pending_request_id_) return;
         executing_ = false;
+        pending_request_id_.clear();
         run_btn_->setEnabled(true);
         run_btn_->setText("RUN TEAM");
         if (r.success) {
@@ -325,6 +326,20 @@ void TeamsViewPanel::setup_connections() {
     connect(team_profile_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &TeamsViewPanel::refresh_team_llm_label);
     load_team_profile_combo();
+
+    // Reset executing_ if Python crashes before emitting agent_result/stream_done
+    connect(&svc, &services::AgentService::error_occurred, this,
+            [this](const QString&, const QString& msg) {
+                if (!executing_) return;
+                executing_ = false;
+                pending_request_id_.clear();
+                run_btn_->setEnabled(true);
+                run_btn_->setText("RUN TEAM");
+                exec_status_->setText("ERROR");
+                exec_status_->setStyleSheet(
+                    QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+                log_display_->append("[ERROR] " + msg);
+            });
 
     connect(run_btn_, &QPushButton::clicked, this, &TeamsViewPanel::run_team);
     connect(available_list_, &QListWidget::itemDoubleClicked, this, [this]() {
@@ -504,23 +519,37 @@ void TeamsViewPanel::run_team() {
         }
         member["model"] = mc;
 
-        if (m.config.contains("tools"))
+        // Use agent's own tools if set; otherwise fall back to TOOLS-tab selection
+        if (m.config.contains("tools") && !m.config["tools"].toArray().isEmpty()) {
             member["tools"] = m.config["tools"];
+        } else if (!selected_tools_.isEmpty()) {
+            QJsonArray ta;
+            for (const auto& t : selected_tools_) ta.append(t);
+            member["tools"] = ta;
+        }
         if (m.config.contains("instructions"))
             member["instructions"] = m.config["instructions"];
         members.append(member);
         log_display_->append(QString("  [MEMBER] %1").arg(m.name));
     }
     tc["members"] = members;
-    services::AgentService::instance().run_team(q, tc);
+    pending_request_id_ = services::AgentService::instance().run_team(q, tc);
+}
+
+void TeamsViewPanel::apply_tools_selection(const QStringList& tools) {
+    selected_tools_ = tools;
+    log_display_->append(QString("[TOOLS] %1 tool(s) selected from TOOLS tab").arg(tools.size()));
 }
 
 void TeamsViewPanel::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     if (!data_loaded_) {
         data_loaded_ = true;
-        if (all_agents_.isEmpty())
-            services::AgentService::instance().discover_agents();
+        // AgentConfigScreen fires discover_agents() on first show and on every
+        // config_saved/deleted — TeamsViewPanel just listens to agents_discovered.
+        // Do NOT call discover_agents() here to avoid a duplicate Python spawn.
+        if (!all_agents_.isEmpty())
+            populate_available_agents(all_agents_);
     }
 }
 

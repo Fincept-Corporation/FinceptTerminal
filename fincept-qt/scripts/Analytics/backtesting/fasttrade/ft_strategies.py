@@ -720,3 +720,94 @@ def list_strategies() -> List[Dict[str, str]]:
         {'name': 'bb_rsi_combined', 'category': 'Combined', 'description': 'Bollinger + RSI confirmation'},
         {'name': 'trend_momentum', 'category': 'Combined', 'description': 'ADX + RSI + EMA trend momentum'},
     ]
+
+
+def get_strategy_catalog() -> Dict[str, Any]:
+    """
+    Return strategy catalog in BT shape: {category: [{id, name, params:[{name,label,default,min,max,step}]}]}.
+    Used by C++ BacktestingScreen via get_strategies command.
+    """
+    return {
+        'Moving Average': [
+            {'id': 'sma_crossover', 'name': 'SMA Crossover', 'params': [
+                {'name': 'fast_period', 'label': 'Fast Period', 'default': 9,  'min': 2,  'max': 100, 'step': 1},
+                {'name': 'slow_period', 'label': 'Slow Period', 'default': 21, 'min': 5,  'max': 200, 'step': 1},
+            ]},
+            {'id': 'ema_crossover', 'name': 'EMA Crossover', 'params': [
+                {'name': 'fast_period', 'label': 'Fast Period', 'default': 12, 'min': 2,  'max': 100, 'step': 1},
+                {'name': 'slow_period', 'label': 'Slow Period', 'default': 26, 'min': 5,  'max': 200, 'step': 1},
+            ]},
+            {'id': 'triple_ma', 'name': 'Triple MA', 'params': [
+                {'name': 'fast',   'label': 'Fast',   'default': 5,  'min': 2,  'max': 50,  'step': 1},
+                {'name': 'medium', 'label': 'Medium', 'default': 13, 'min': 5,  'max': 100, 'step': 1},
+                {'name': 'slow',   'label': 'Slow',   'default': 34, 'min': 10, 'max': 200, 'step': 1},
+            ]},
+            {'id': 'ma_ribbon', 'name': 'MA Ribbon', 'params': []},
+        ],
+        'Oscillator': [
+            {'id': 'rsi_strategy', 'name': 'RSI', 'params': [
+                {'name': 'period',     'label': 'Period',     'default': 14, 'min': 2,  'max': 50, 'step': 1},
+                {'name': 'oversold',   'label': 'Oversold',   'default': 30, 'min': 10, 'max': 45, 'step': 1},
+                {'name': 'overbought', 'label': 'Overbought', 'default': 70, 'min': 55, 'max': 90, 'step': 1},
+            ]},
+            {'id': 'stochastic_strategy', 'name': 'Stochastic', 'params': [
+                {'name': 'period', 'label': 'Period', 'default': 14, 'min': 5, 'max': 50, 'step': 1},
+            ]},
+            {'id': 'macd_strategy', 'name': 'MACD', 'params': [
+                {'name': 'fast',   'label': 'Fast',   'default': 12, 'min': 2,  'max': 50,  'step': 1},
+                {'name': 'slow',   'label': 'Slow',   'default': 26, 'min': 5,  'max': 100, 'step': 1},
+                {'name': 'signal', 'label': 'Signal', 'default': 9,  'min': 2,  'max': 50,  'step': 1},
+            ]},
+            {'id': 'macd_zero_cross', 'name': 'MACD Zero Cross', 'params': [
+                {'name': 'fast',   'label': 'Fast',   'default': 12, 'min': 2,  'max': 50,  'step': 1},
+                {'name': 'slow',   'label': 'Slow',   'default': 26, 'min': 5,  'max': 100, 'step': 1},
+                {'name': 'signal', 'label': 'Signal', 'default': 9,  'min': 2,  'max': 50,  'step': 1},
+            ]},
+            {'id': 'cci_strategy', 'name': 'CCI', 'params': [
+                {'name': 'period', 'label': 'Period', 'default': 20, 'min': 5, 'max': 50, 'step': 1},
+            ]},
+        ],
+        'Volatility': [
+            {'id': 'bollinger_bands_strategy', 'name': 'Bollinger Bands', 'params': [
+                {'name': 'period',  'label': 'Period',  'default': 20,  'min': 5,   'max': 50,  'step': 1},
+                {'name': 'std_dev', 'label': 'Std Dev', 'default': 2.0, 'min': 0.5, 'max': 4.0, 'step': 0.1},
+            ]},
+            {'id': 'keltner_channel_strategy', 'name': 'Keltner Channel', 'params': [
+                {'name': 'period', 'label': 'Period', 'default': 20, 'min': 5, 'max': 50, 'step': 1},
+            ]},
+            {'id': 'atr_trailing_stop', 'name': 'ATR Trailing Stop', 'params': [
+                {'name': 'period',     'label': 'Period',     'default': 14, 'min': 5,   'max': 50,  'step': 1},
+                {'name': 'multiplier', 'label': 'Multiplier', 'default': 2.0, 'min': 0.5, 'max': 5.0, 'step': 0.5},
+            ]},
+        ],
+        'Volume': [
+            {'id': 'obv_strategy', 'name': 'OBV Trend', 'params': []},
+            {'id': 'mfi_strategy', 'name': 'Money Flow Index', 'params': [
+                {'name': 'period', 'label': 'Period', 'default': 14, 'min': 5, 'max': 50, 'step': 1},
+            ]},
+        ],
+        'Trend': [
+            {'id': 'adx_trend', 'name': 'ADX Trend', 'params': [
+                {'name': 'period',    'label': 'Period',    'default': 14, 'min': 5,  'max': 50, 'step': 1},
+                {'name': 'threshold', 'label': 'Threshold', 'default': 25, 'min': 10, 'max': 50, 'step': 1},
+            ]},
+            {'id': 'ichimoku_strategy', 'name': 'Ichimoku Cloud', 'params': []},
+            {'id': 'psar_strategy', 'name': 'Parabolic SAR', 'params': []},
+        ],
+        'Combined': [
+            {'id': 'rsi_macd_combined', 'name': 'RSI + MACD', 'params': [
+                {'name': 'rsi_period', 'label': 'RSI Period', 'default': 14, 'min': 5, 'max': 50, 'step': 1},
+                {'name': 'macd_fast',  'label': 'MACD Fast',  'default': 12, 'min': 2, 'max': 50, 'step': 1},
+                {'name': 'macd_slow',  'label': 'MACD Slow',  'default': 26, 'min': 5, 'max': 100, 'step': 1},
+            ]},
+            {'id': 'bb_rsi_combined', 'name': 'Bollinger + RSI', 'params': [
+                {'name': 'bb_period',  'label': 'BB Period',  'default': 20, 'min': 5, 'max': 50, 'step': 1},
+                {'name': 'rsi_period', 'label': 'RSI Period', 'default': 14, 'min': 5, 'max': 50, 'step': 1},
+            ]},
+            {'id': 'trend_momentum', 'name': 'Trend + Momentum', 'params': [
+                {'name': 'adx_period', 'label': 'ADX Period', 'default': 14, 'min': 5,  'max': 50,  'step': 1},
+                {'name': 'rsi_period', 'label': 'RSI Period', 'default': 14, 'min': 5,  'max': 50,  'step': 1},
+                {'name': 'ma_period',  'label': 'MA Period',  'default': 50, 'min': 10, 'max': 200, 'step': 5},
+            ]},
+        ],
+    }

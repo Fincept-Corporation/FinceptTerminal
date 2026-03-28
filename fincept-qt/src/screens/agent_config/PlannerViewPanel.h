@@ -2,6 +2,7 @@
 #pragma once
 #include "services/agents/AgentTypes.h"
 
+#include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -43,7 +44,8 @@ class PlannerViewPanel : public QWidget {
     void copy_result();
 
     // Left
-    QListWidget* template_list_ = nullptr;
+    QComboBox*   llm_profile_combo_ = nullptr;
+    QListWidget* template_list_     = nullptr;
     QPlainTextEdit* custom_query_ = nullptr;
     QPushButton* generate_btn_ = nullptr;
     QListWidget* history_list_ = nullptr;
@@ -69,9 +71,10 @@ class PlannerViewPanel : public QWidget {
     // State
     services::ExecutionPlan current_plan_;
     QVector<services::ExecutionPlan> plan_history_;
-    bool generating_  = false;
-    bool executing_   = false;
-    bool data_loaded_ = false;
+    bool    generating_          = false;
+    bool    executing_           = false;
+    bool    data_loaded_         = false;
+    QString pending_request_id_;
 };
 
 } // namespace fincept::screens

@@ -3,8 +3,10 @@
 
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
+#include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
 
+#include <QComboBox>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -96,6 +98,28 @@ QWidget* WorkflowsViewPanel::build_workflow_cards() {
     auto* title = new QLabel("FINANCIAL WORKFLOWS");
     title->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;").arg(ui::colors::AMBER));
     vl->addWidget(title);
+
+    // ── LLM Profile picker ───────────────────────────────────────────────────
+    auto* profile_row = new QHBoxLayout;
+    auto* profile_lbl = new QLabel("LLM PROFILE:");
+    profile_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;")
+                                   .arg(ui::colors::TEXT_SECONDARY));
+    llm_profile_combo_ = new QComboBox;
+    llm_profile_combo_->setToolTip("LLM profile used by all workflows on this tab");
+    llm_profile_combo_->setStyleSheet(
+        QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:11px;}"
+                "QComboBox::drop-down{border:none;}")
+            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+    // Populate
+    llm_profile_combo_->addItem("Default (Global)", QString{});
+    const auto pr = fincept::LlmProfileRepository::instance().list_profiles();
+    const auto profiles = pr.is_ok() ? pr.value() : QVector<fincept::LlmProfile>{};
+    for (const auto& p : profiles)
+        llm_profile_combo_->addItem(p.is_default ? p.name + " [default]" : p.name, p.id);
+
+    profile_row->addWidget(profile_lbl);
+    profile_row->addWidget(llm_profile_combo_, 1);
+    vl->addLayout(profile_row);
 
     // ── Stock Analysis ───────────────────────────────────────────────────────
     auto* stock_card = new QFrame;
@@ -228,10 +252,9 @@ void WorkflowsViewPanel::setup_connections() {
     auto& svc = services::AgentService::instance();
 
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
-        if (!executing_)
-            return;
+        if (r.request_id != pending_request_id_) return;
         executing_ = false;
-
+        pending_request_id_.clear();
         if (r.success) {
             result_display_->setPlainText(r.response);
             result_status_->setText(QString("Completed in %1ms").arg(r.execution_time_ms));
@@ -242,6 +265,17 @@ void WorkflowsViewPanel::setup_connections() {
             result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
         }
     });
+
+    connect(&svc, &services::AgentService::error_occurred, this,
+            [this](const QString&, const QString& msg) {
+                if (!executing_) return;
+                executing_ = false;
+                pending_request_id_.clear();
+                result_display_->setPlainText("Error: " + msg);
+                result_status_->setText("ERROR");
+                result_status_->setStyleSheet(
+                    QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE));
+            });
 }
 
 // ── Run workflow ─────────────────────────────────────────────────────────────
@@ -256,14 +290,18 @@ void WorkflowsViewPanel::run_workflow(const QString& type, const QJsonObject& pa
     result_status_->setText("Executing...");
     result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::AMBER));
 
-    services::AgentService::instance().run_workflow(type, params);
+    QJsonObject p = params;
+    const QString profile_id = llm_profile_combo_ ? llm_profile_combo_->currentData().toString() : QString{};
+    if (!profile_id.isEmpty())
+        p["llm_profile_id"] = profile_id;
+
+    pending_request_id_ = services::AgentService::instance().run_workflow(type, p);
 }
 
 void WorkflowsViewPanel::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     if (!data_loaded_) {
         data_loaded_ = true;
-        services::AgentService::instance().discover_agents();
     }
 }
 

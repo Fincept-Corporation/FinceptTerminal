@@ -15,12 +15,19 @@ class BacktestingService : public QObject {
     /// Execute a backtesting command on a specific provider
     void execute(const QString& provider, const QString& command, const QJsonObject& args);
 
-    /// List available strategies from Fincept provider (dynamic)
+    /// Load strategies dynamically from any provider
+    void load_strategies(const QString& provider);
+
+    /// Load command option lists (label_types, splitter_types, etc.) for a provider
+    void load_command_options(const QString& provider);
+
+    /// Legacy: load strategies from fincept provider only
     void list_strategies();
 
   signals:
     void result_ready(QString provider, QString command, QJsonObject data);
     void strategies_loaded(QJsonObject strategies);
+    void command_options_loaded(QString provider, QJsonObject options);
     void error_occurred(QString context, QString message);
 
   private:

@@ -27,6 +27,7 @@ class TeamsViewPanel : public QWidget {
 
   public slots:
     void add_agent_from_panel(const services::AgentInfo& agent);
+    void apply_tools_selection(const QStringList& tools);
 
   private:
     void build_ui();
@@ -67,8 +68,10 @@ class TeamsViewPanel : public QWidget {
     // State
     QVector<services::AgentInfo> all_agents_;
     QVector<services::AgentInfo> team_members_;
-    bool executing_ = false;
-    bool data_loaded_ = false;
+    QStringList selected_tools_;          // synced from TOOLS tab
+    bool    executing_          = false;
+    bool    data_loaded_        = false;
+    QString pending_request_id_;
 };
 
 } // namespace fincept::screens

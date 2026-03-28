@@ -430,7 +430,9 @@ void AgentsViewPanel::setup_connections() {
 
     connect(&svc, &services::AgentService::agent_result, this,
             [this](services::AgentExecutionResult r) {
+                if (r.request_id != pending_request_id_) return;
                 executing_ = false;
+                pending_request_id_.clear();
                 run_btn_->setEnabled(true);
                 run_btn_->setText("RUN AGENT");
                 if (r.success) {
@@ -448,13 +450,14 @@ void AgentsViewPanel::setup_connections() {
 
     // ── Streaming signals ─────────────────────────────────────────────────────
     connect(&svc, &services::AgentService::agent_stream_thinking, this,
-            [this](const QString& status) {
+            [this](const QString& request_id, const QString& status) {
+                if (request_id != pending_request_id_) return;
                 result_status_->setText(status);
             });
 
     connect(&svc, &services::AgentService::agent_stream_token, this,
-            [this](const QString& token) {
-                // Append token as plain text during streaming — fast, no re-parse
+            [this](const QString& request_id, const QString& token) {
+                if (request_id != pending_request_id_) return;
                 QTextCursor cursor = result_display_->textCursor();
                 cursor.movePosition(QTextCursor::End);
                 result_display_->setTextCursor(cursor);
@@ -463,11 +466,12 @@ void AgentsViewPanel::setup_connections() {
 
     connect(&svc, &services::AgentService::agent_stream_done, this,
             [this](services::AgentExecutionResult r) {
+                if (r.request_id != pending_request_id_) return;
                 executing_ = false;
+                pending_request_id_.clear();
                 run_btn_->setEnabled(true);
                 run_btn_->setText("RUN AGENT");
                 if (r.success) {
-                    // Re-render full response as markdown now streaming is complete
                     result_display_->setMarkdown(r.response);
                     result_status_->setText(QString("Completed in %1ms").arg(r.execution_time_ms));
                     result_status_->setStyleSheet(
@@ -482,6 +486,7 @@ void AgentsViewPanel::setup_connections() {
 
     connect(&svc, &services::AgentService::routing_result, this,
             [this](services::RoutingResult r) {
+                if (r.request_id != pending_request_id_) return;
                 if (r.success) {
                     routing_info_label_->setText(
                         QString("Routed → %1 (intent: %2, confidence: %3%)")
@@ -787,14 +792,14 @@ void AgentsViewPanel::run_query() {
     auto& svc = services::AgentService::instance();
 
     if (auto_route_check_->isChecked()) {
-        svc.route_query(q);
+        pending_request_id_ = svc.route_query(q);
         svc.execute_routed_query(q, config);
     } else {
         const QString om = output_model_combo_->currentText();
         if (om != "text")
-            svc.run_agent_structured(q, config, om);
+            pending_request_id_ = svc.run_agent_structured(q, config, om);
         else
-            svc.run_agent_streaming(q, config);
+            pending_request_id_ = svc.run_agent_streaming(q, config);
     }
 }
 

@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "screens/forum/ForumFeedPanel.h"
+#include "screens/forum/ForumSidebarPanel.h"
 #include "screens/forum/ForumThreadPanel.h"
 #include "services/forum/ForumService.h"
 #include "ui/theme/Theme.h"
@@ -16,6 +17,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QShowEvent>
+#include <QSplitter>
 #include <QTextEdit>
 #include <QVBoxLayout>
 
@@ -30,18 +32,26 @@ ForumScreen::ForumScreen(QWidget* parent) : QWidget(parent) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// build_ui — single stacked widget, NO splitter, NO columns
+// build_ui — 3-column: sidebar | feed | thread (via splitter)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 void ForumScreen::build_ui() {
-    setStyleSheet("background:#080808;");
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    build_toolbar();
-    root->addWidget(toolbar_);
+    // ── Splitter: sidebar | main content ──────────────────────────────────────
+    splitter_ = new QSplitter(Qt::Horizontal);
+    splitter_->setHandleWidth(1);
+    splitter_->setStyleSheet(
+        QString("QSplitter{background:%1;}"
+                "QSplitter::handle{background:%2;}")
+            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
 
-    // ── Main content: stacked feed / thread ───────────────────────────────────
+    // ── Left: Sidebar ─────────────────────────────────────────────────────────
+    sidebar_ = new ForumSidebarPanel;
+
+    // ── Center+Right: Stacked feed/thread ─────────────────────────────────────
     main_stack_ = new QStackedWidget;
     feed_ = new ForumFeedPanel;
     thread_ = new ForumThreadPanel;
@@ -49,263 +59,260 @@ void ForumScreen::build_ui() {
     main_stack_->addWidget(thread_); // 1
     main_stack_->setCurrentIndex(0);
 
-    root->addWidget(main_stack_, 1);
+    splitter_->addWidget(sidebar_);
+    splitter_->addWidget(main_stack_);
+    splitter_->setStretchFactor(0, 0); // sidebar fixed
+    splitter_->setStretchFactor(1, 1); // feed stretches
+    splitter_->setSizes({240, 800});
 
-    // ── Wire signals ──────────────────────────────────────────────────────────
-    connect(feed_, &ForumFeedPanel::post_selected, this, &ForumScreen::on_post_selected);
+    root->addWidget(splitter_, 1);
 
-    connect(feed_, &ForumFeedPanel::category_clicked, this, &ForumScreen::on_category_selected);
+    // ── Wire sidebar signals ──────────────────────────────────────────────────
+    connect(sidebar_, &ForumSidebarPanel::category_selected,
+            this, &ForumScreen::on_category_selected);
+
+    connect(sidebar_, &ForumSidebarPanel::trending_clicked,
+            this, &ForumScreen::on_trending);
+
+    connect(sidebar_, &ForumSidebarPanel::search_requested,
+            this, &ForumScreen::on_search);
+
+    connect(sidebar_, &ForumSidebarPanel::new_post_requested,
+            this, [this](int cat_id) { show_new_post_dialog(cat_id); });
+
+    // ── Wire feed signals ─────────────────────────────────────────────────────
+    connect(feed_, &ForumFeedPanel::post_selected,
+            this, &ForumScreen::on_post_selected);
+
+    connect(feed_, &ForumFeedPanel::category_clicked,
+            this, &ForumScreen::on_category_selected);
 
     connect(feed_, &ForumFeedPanel::load_more_requested, this, [this](int page) {
         if (active_category_id_ > 0) {
             feed_->set_loading(true);
-            services::ForumService::instance().fetch_posts(active_category_id_, page, "latest",
-                                                           [this](bool ok, services::ForumPostsPage p) {
-                                                               if (ok)
-                                                                   feed_->set_posts(p, active_category_color_);
-                                                               else
-                                                                   feed_->set_loading(false);
-                                                           });
+            services::ForumService::instance().fetch_posts(
+                active_category_id_, page, "latest",
+                [this](bool ok, services::ForumPostsPage p) {
+                    if (ok)
+                        feed_->set_posts(p, active_category_color_);
+                    else
+                        feed_->set_loading(false);
+                });
         }
     });
 
-    // Thread panel back button → return to feed
-    connect(thread_, &ForumThreadPanel::back_requested, this, &ForumScreen::navigate_back_to_feed);
+    connect(feed_, &ForumFeedPanel::new_post_clicked,
+            this, [this]() { on_new_post_requested(); });
 
-    connect(thread_, &ForumThreadPanel::comment_submitted, this, [this](const QString& uuid, const QString& content) {
-        services::ForumService::instance().create_comment(uuid, content, [this, uuid](bool ok, const QString&) {
-            if (ok) {
-                thread_->set_loading(true);
-                services::ForumService::instance().fetch_post(uuid, [this](bool ok2, services::ForumPostDetail d) {
-                    if (ok2)
-                        thread_->show_post(d);
-                    else
-                        thread_->set_loading(false);
-                });
-            }
-        });
-    });
+    connect(feed_, &ForumFeedPanel::vote_post_requested,
+            this, [this](const QString& uuid, const QString& vtype) {
+                LOG_INFO("ForumScreen", "Feed vote: " + uuid + " type=" + vtype);
+                services::ForumService::instance().vote_post(
+                    uuid, vtype, [this](bool ok, const QString&) {
+                        LOG_INFO("ForumScreen", QString("Feed vote result: ok=%1").arg(ok));
+                        if (ok && active_category_id_ > 0) {
+                            // Refresh current feed to show updated vote
+                            services::ForumService::instance().fetch_posts(
+                                active_category_id_, 1, "latest",
+                                [this](bool ok2, services::ForumPostsPage p) {
+                                    if (ok2)
+                                        feed_->set_posts(p, active_category_color_);
+                                });
+                        }
+                    });
+            });
 
-    connect(thread_, &ForumThreadPanel::vote_post, this, [this](const QString& uuid, const QString& vtype) {
-        services::ForumService::instance().vote_post(uuid, vtype, [this, uuid](bool ok, const QString&) {
-            if (ok) {
-                services::ForumService::instance().fetch_post(uuid, [this](bool ok2, services::ForumPostDetail d) {
-                    if (ok2)
-                        thread_->show_post(d);
-                });
-            }
-        });
-    });
+    // ── Wire thread signals ───────────────────────────────────────────────────
+    connect(thread_, &ForumThreadPanel::back_requested,
+            this, &ForumScreen::navigate_back_to_feed);
 
-    connect(thread_, &ForumThreadPanel::vote_comment, this, [this](const QString& uuid, const QString& vtype) {
-        services::ForumService::instance().vote_comment(uuid, vtype, [this](bool, const QString&) {
-            if (!current_detail_uuid_.isEmpty()) {
-                services::ForumService::instance().fetch_post(current_detail_uuid_,
-                                                              [this](bool ok, services::ForumPostDetail d) {
-                                                                  if (ok)
-                                                                      thread_->show_post(d);
-                                                              });
-            }
-        });
-    });
+    connect(thread_, &ForumThreadPanel::comment_submitted,
+            this, [this](const QString& uuid, const QString& content) {
+                services::ForumService::instance().create_comment(
+                    uuid, content, [this, uuid](bool ok, const QString&) {
+                        if (ok) {
+                            thread_->set_loading(true);
+                            services::ForumService::instance().fetch_post(
+                                uuid, [this](bool ok2, services::ForumPostDetail d) {
+                                    if (ok2)
+                                        thread_->show_post(d);
+                                    else
+                                        thread_->set_loading(false);
+                                });
+                        }
+                    });
+            });
 
-    connect(thread_, &ForumThreadPanel::author_clicked, this, [this](const QString& username) {
-        services::ForumService::instance().fetch_profile(username, [this](bool ok, services::ForumProfile profile) {
-            if (!ok)
-                return;
-            // Profile popup dialog
-            auto* dlg = new QDialog(this);
-            dlg->setWindowTitle("USER PROFILE");
-            dlg->setFixedSize(340, 280);
-            dlg->setStyleSheet("QDialog{background:#0a0a0a;border:1px solid #1a1a1a;}"
-                               "QLabel{background:transparent;"
-                               "font-family:'Consolas','Courier New',monospace;}");
-            auto* vl = new QVBoxLayout(dlg);
-            vl->setContentsMargins(20, 16, 20, 14);
-            vl->setSpacing(8);
+    connect(thread_, &ForumThreadPanel::vote_post,
+            this, [this](const QString& uuid, const QString& vtype) {
+                LOG_INFO("ForumScreen", "Vote post: " + uuid + " type=" + vtype);
+                services::ForumService::instance().vote_post(
+                    uuid, vtype, [this, uuid](bool ok, const QString& msg) {
+                        LOG_INFO("ForumScreen", QString("Vote result: ok=%1 msg=%2").arg(ok).arg(msg));
+                        if (ok) {
+                            services::ForumService::instance().fetch_post(
+                                uuid, [this](bool ok2, services::ForumPostDetail d) {
+                                    if (ok2)
+                                        thread_->show_post(d);
+                                });
+                        }
+                    });
+            });
 
-            auto* name_lbl = new QLabel(profile.display_name.toUpper());
-            name_lbl->setStyleSheet(QString("color:%1;font-size:16px;font-weight:700;%2")
-                                        .arg(profile.avatar_color.isEmpty() ? "#d97706" : profile.avatar_color, M(16)));
-            vl->addWidget(name_lbl);
+    connect(thread_, &ForumThreadPanel::vote_comment,
+            this, [this](const QString& uuid, const QString& vtype) {
+                services::ForumService::instance().vote_comment(
+                    uuid, vtype, [this](bool, const QString&) {
+                        if (!current_detail_uuid_.isEmpty()) {
+                            services::ForumService::instance().fetch_post(
+                                current_detail_uuid_,
+                                [this](bool ok, services::ForumPostDetail d) {
+                                    if (ok)
+                                        thread_->show_post(d);
+                                });
+                        }
+                    });
+            });
 
-            if (!profile.bio.isEmpty()) {
-                auto* bio = new QLabel(profile.bio);
-                bio->setWordWrap(true);
-                bio->setStyleSheet(QString("color:#444444;font-size:12px;font-style:italic;%1").arg(M(12)));
-                vl->addWidget(bio);
-            }
+    connect(thread_, &ForumThreadPanel::author_clicked,
+            this, [this](const QString& username) {
+                services::ForumService::instance().fetch_profile(
+                    username, [this](bool ok, services::ForumProfile profile) {
+                        if (!ok)
+                            return;
+                        // Profile popup
+                        auto* dlg = new QDialog(this);
+                        dlg->setWindowTitle("USER PROFILE");
+                        dlg->setFixedSize(380, 340);
+                        dlg->setStyleSheet(
+                            QString("QDialog{background:%1;border:1px solid %2;}"
+                                    "QLabel{background:transparent;"
+                                    "font-family:'Consolas','Courier New',monospace;}")
+                                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                        auto* vl = new QVBoxLayout(dlg);
+                        vl->setContentsMargins(24, 20, 24, 18);
+                        vl->setSpacing(10);
 
-            auto* sep = new QFrame;
-            sep->setFixedHeight(1);
-            sep->setStyleSheet("background:#151515;border:none;");
-            vl->addWidget(sep);
+                        // Profile header with gradient accent
+                        auto* hdr = new QWidget;
+                        hdr->setFixedHeight(4);
+                        QString avc = profile.avatar_color.isEmpty() ? ui::colors::AMBER : profile.avatar_color;
+                        hdr->setStyleSheet(
+                            QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                                    "stop:0 %1,stop:0.5 %2,stop:1 transparent);")
+                                .arg(avc, ui::colors::AMBER));
+                        vl->addWidget(hdr);
 
-            auto mk_row = [&](const QString& l, const QString& v, const QString& vc) {
-                auto* w = new QWidget;
-                w->setStyleSheet("background:transparent;");
-                auto* hl = new QHBoxLayout(w);
-                hl->setContentsMargins(0, 0, 0, 0);
-                auto* ll = new QLabel(l);
-                ll->setStyleSheet(QString("color:#252525;font-size:11px;%1").arg(M(11)));
-                auto* vl2 = new QLabel(v);
-                vl2->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;%2").arg(vc, M(11)));
-                hl->addWidget(ll);
-                hl->addStretch();
-                hl->addWidget(vl2);
-                return w;
-            };
-            vl->addWidget(mk_row("REPUTATION", QString::number(profile.reputation), "#d97706"));
-            vl->addWidget(mk_row("POSTS", QString::number(profile.posts_count), "#888888"));
-            vl->addWidget(mk_row("COMMENTS", QString::number(profile.comments_count), "#888888"));
-            vl->addWidget(mk_row("LIKES GIVEN", QString::number(profile.likes_given), "#16a34a"));
+                        // Avatar + name
+                        auto* top = new QWidget;
+                        top->setStyleSheet("background:transparent;");
+                        auto* th = new QHBoxLayout(top);
+                        th->setContentsMargins(0, 0, 0, 0);
+                        th->setSpacing(14);
 
-            if (profile.is_own_profile) {
-                auto* edit_btn = new QPushButton("EDIT MY PROFILE");
-                edit_btn->setFixedHeight(28);
-                edit_btn->setCursor(Qt::PointingHandCursor);
-                edit_btn->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);"
-                                                "color:#444444;border:1px solid #1e1e1e;"
-                                                "font-size:11px;font-weight:700;%1}"
-                                                "QPushButton:hover{color:#d97706;"
-                                                "border-color:rgba(217,119,6,0.4);}")
-                                            .arg(M(11)));
-                connect(edit_btn, &QPushButton::clicked, this, [this, dlg, profile]() {
-                    dlg->accept();
-                    show_edit_profile_dialog(profile);
-                });
-                vl->addStretch();
-                vl->addWidget(edit_btn);
-            } else {
-                vl->addStretch();
-            }
-            dlg->exec();
-        });
-    });
-}
+                        auto* av = new QLabel(profile.display_name.left(2).toUpper());
+                        av->setFixedSize(48, 48);
+                        av->setAlignment(Qt::AlignCenter);
+                        av->setStyleSheet(
+                            QString("color:%1;font-size:16px;font-weight:700;"
+                                    "background:%2;border-radius:24px;%3")
+                                .arg(ui::colors::BG_BASE, avc, M(16)));
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Toolbar: brand | scrollable category chips | live stats | search | compose btn
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-void ForumScreen::build_toolbar() {
-    toolbar_ = new QWidget;
-    toolbar_->setFixedHeight(44);
-    toolbar_->setStyleSheet("background:#050505;border-bottom:1px solid #111111;");
-    auto* tb = new QHBoxLayout(toolbar_);
-    tb->setContentsMargins(0, 0, 0, 0);
-    tb->setSpacing(0);
+                        auto* info = new QVBoxLayout;
+                        info->setSpacing(2);
+                        auto* nm = new QLabel(profile.display_name.toUpper());
+                        nm->setStyleSheet(
+                            QString("color:%1;font-size:16px;font-weight:700;%2")
+                                .arg(avc, M(16)));
+                        auto* un = new QLabel("@" + profile.username);
+                        un->setStyleSheet(
+                            QString("color:%1;font-size:11px;%2")
+                                .arg(ui::colors::TEXT_SECONDARY, M(11)));
+                        info->addWidget(nm);
+                        info->addWidget(un);
+                        th->addWidget(av);
+                        th->addLayout(info, 1);
+                        vl->addWidget(top);
 
-    // ── Brand block ───────────────────────────────────────────────────────────
-    auto* brand = new QWidget;
-    brand->setFixedWidth(120);
-    brand->setStyleSheet("background:transparent;border-right:1px solid #111111;");
-    auto* brand_hl = new QHBoxLayout(brand);
-    brand_hl->setContentsMargins(14, 0, 14, 0);
-    brand_hl->setSpacing(8);
+                        if (!profile.bio.isEmpty()) {
+                            auto* bio = new QLabel(profile.bio);
+                            bio->setWordWrap(true);
+                            bio->setStyleSheet(
+                                QString("color:%1;font-size:12px;font-style:italic;%2")
+                                    .arg(ui::colors::TEXT_TERTIARY, M(12)));
+                            vl->addWidget(bio);
+                        }
 
-    auto* diamond = new QLabel("◈");
-    diamond->setStyleSheet("color:#d97706;font-size:16px;background:transparent;");
-    auto* forum_lbl = new QLabel("FORUM");
-    forum_lbl->setStyleSheet(QString("color:#e5e5e5;font-size:12px;font-weight:700;letter-spacing:0.8px;"
-                                     "background:transparent;%1")
-                                 .arg(M(12)));
-    brand_hl->addWidget(diamond);
-    brand_hl->addWidget(forum_lbl);
-    tb->addWidget(brand);
+                        auto* sep = new QFrame;
+                        sep->setFixedHeight(1);
+                        sep->setStyleSheet(
+                            QString("background:%1;border:none;")
+                                .arg(ui::colors::BORDER_DIM));
+                        vl->addWidget(sep);
 
-    // ── Category chips (horizontal scrollable) ────────────────────────────────
-    auto* chips_scroll = new QScrollArea;
-    chips_scroll->setFixedHeight(44);
-    chips_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    chips_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    chips_scroll->setStyleSheet("QScrollArea{border:none;background:transparent;border-right:1px solid #111111;}");
-    chips_scroll->setWidgetResizable(false);
+                        // Stats grid
+                        auto* grid = new QWidget;
+                        grid->setStyleSheet("background:transparent;");
+                        auto* gh = new QHBoxLayout(grid);
+                        gh->setContentsMargins(0, 0, 0, 0);
+                        gh->setSpacing(0);
 
-    chips_container_ = new QWidget;
-    chips_container_->setFixedHeight(44);
-    chips_container_->setStyleSheet("background:transparent;");
-    chips_layout_ = new QHBoxLayout(chips_container_);
-    chips_layout_->setContentsMargins(8, 0, 8, 0);
-    chips_layout_->setSpacing(4);
+                        auto mk_stat = [&](const QString& val, const QString& lbl,
+                                           const QString& col) {
+                            auto* cell = new QWidget;
+                            cell->setStyleSheet("background:transparent;");
+                            auto* cv = new QVBoxLayout(cell);
+                            cv->setContentsMargins(0, 8, 0, 8);
+                            cv->setSpacing(2);
+                            cv->setAlignment(Qt::AlignCenter);
+                            auto* v = new QLabel(val);
+                            v->setAlignment(Qt::AlignCenter);
+                            v->setStyleSheet(
+                                QString("color:%1;font-size:18px;font-weight:700;%2")
+                                    .arg(col, M(18)));
+                            auto* l = new QLabel(lbl);
+                            l->setAlignment(Qt::AlignCenter);
+                            l->setStyleSheet(
+                                QString("color:%1;font-size:9px;letter-spacing:1px;%2")
+                                    .arg(ui::colors::TEXT_TERTIARY, M(9)));
+                            cv->addWidget(v);
+                            cv->addWidget(l);
+                            return cell;
+                        };
 
-    // Trending chip — always present
-    auto* trend_chip = new QPushButton("▲ TRENDING");
-    trend_chip->setFixedHeight(26);
-    trend_chip->setCursor(Qt::PointingHandCursor);
-    trend_chip->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.08);color:#d97706;"
-                                      "border:1px solid rgba(217,119,6,0.25);padding:0 12px;"
-                                      "font-size:10px;font-weight:700;letter-spacing:0.5px;%1}"
-                                      "QPushButton:hover{background:rgba(217,119,6,0.15);"
-                                      "border-color:rgba(217,119,6,0.5);}")
-                                  .arg(M(10)));
-    connect(trend_chip, &QPushButton::clicked, this, &ForumScreen::on_trending);
-    chips_layout_->addWidget(trend_chip);
+                        gh->addWidget(mk_stat(QString::number(profile.reputation), "REP", ui::colors::AMBER));
+                        gh->addWidget(mk_stat(QString::number(profile.posts_count), "POSTS", ui::colors::TEXT_PRIMARY));
+                        gh->addWidget(mk_stat(QString::number(profile.comments_count), "REPLIES", ui::colors::CYAN));
+                        gh->addWidget(mk_stat(QString::number(profile.likes_received), "LIKES", ui::colors::POSITIVE));
+                        vl->addWidget(grid);
 
-    chips_layout_->addStretch();
-    chips_container_->adjustSize();
-    chips_scroll->setWidget(chips_container_);
-    tb->addWidget(chips_scroll, 1);
-
-    // ── Live stats chips ──────────────────────────────────────────────────────
-    auto* stats_w = new QWidget;
-    stats_w->setFixedWidth(160);
-    stats_w->setStyleSheet("background:transparent;border-right:1px solid #111111;");
-    auto* stats_hl = new QHBoxLayout(stats_w);
-    stats_hl->setContentsMargins(10, 0, 10, 0);
-    stats_hl->setSpacing(10);
-
-    stat_posts_lbl_ = new QLabel("—");
-    stat_posts_lbl_->setStyleSheet(QString("color:#666666;font-size:11px;background:transparent;%1").arg(M(11)));
-    stat_active_lbl_ = new QLabel("—");
-    stat_active_lbl_->setStyleSheet(
-        QString("color:#d97706;font-size:11px;font-weight:700;background:transparent;%1").arg(M(11)));
-
-    stats_hl->addWidget(stat_posts_lbl_);
-    stats_hl->addStretch();
-    stats_hl->addWidget(stat_active_lbl_);
-    tb->addWidget(stats_w);
-
-    // ── Search + profile avatar + compose ─────────────────────────────────────
-    auto* right_w = new QWidget;
-    right_w->setFixedWidth(300);
-    right_w->setStyleSheet("background:transparent;");
-    auto* right_hl = new QHBoxLayout(right_w);
-    right_hl->setContentsMargins(8, 7, 10, 7);
-    right_hl->setSpacing(6);
-
-    search_input_ = new QLineEdit;
-    search_input_->setPlaceholderText("search posts...");
-    search_input_->setStyleSheet(QString("QLineEdit{background:#0a0a0a;color:#888888;border:1px solid #141414;"
-                                         "padding:3px 10px;font-size:11px;%1}"
-                                         "QLineEdit:focus{border-color:#252525;color:#e5e5e5;}"
-                                         "QLineEdit::placeholder{color:#555555;}")
-                                     .arg(M(11)));
-    connect(search_input_, &QLineEdit::returnPressed, this, [this]() { on_search(search_input_->text().trimmed()); });
-
-    // Profile avatar
-    profile_avatar_ = new QLabel("?");
-    profile_avatar_->setFixedSize(28, 28);
-    profile_avatar_->setAlignment(Qt::AlignCenter);
-    profile_avatar_->setStyleSheet(QString("color:#080808;font-size:11px;font-weight:700;"
-                                           "background:#d97706;%1")
-                                       .arg(M(11)));
-
-    // New post button
-    auto* new_btn = new QPushButton("+ NEW POST");
-    new_btn->setFixedHeight(28);
-    new_btn->setCursor(Qt::PointingHandCursor);
-    new_btn->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:#555555;"
-                                   "border:1px solid #1a1a1a;padding:0 12px;"
-                                   "font-size:10px;font-weight:700;%1}"
-                                   "QPushButton:hover{color:#d97706;border-color:rgba(217,119,6,0.4);"
-                                   "background:rgba(217,119,6,0.18);}")
-                               .arg(M(10)));
-    connect(new_btn, &QPushButton::clicked, this, [this]() { on_new_post_requested(); });
-
-    right_hl->addWidget(search_input_, 1);
-    right_hl->addWidget(profile_avatar_);
-    right_hl->addWidget(new_btn);
-    tb->addWidget(right_w);
+                        if (profile.is_own_profile) {
+                            auto* edit_btn = new QPushButton("EDIT MY PROFILE");
+                            edit_btn->setFixedHeight(32);
+                            edit_btn->setCursor(Qt::PointingHandCursor);
+                            edit_btn->setStyleSheet(
+                                QString("QPushButton{background:rgba(217,119,6,0.08);"
+                                        "color:%1;border:1px solid %2;"
+                                        "font-size:11px;font-weight:700;%3}"
+                                        "QPushButton:hover{color:%4;"
+                                        "border-color:rgba(217,119,6,0.5);"
+                                        "background:rgba(217,119,6,0.15);}")
+                                    .arg(ui::colors::TEXT_TERTIARY,
+                                         ui::colors::BORDER_DIM,
+                                         M(11), ui::colors::AMBER));
+                            connect(edit_btn, &QPushButton::clicked, this,
+                                    [this, dlg, profile]() {
+                                        dlg->accept();
+                                        show_edit_profile_dialog(profile);
+                                    });
+                            vl->addStretch();
+                            vl->addWidget(edit_btn);
+                        } else {
+                            vl->addStretch();
+                        }
+                        dlg->exec();
+                    });
+            });
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -325,37 +332,34 @@ void ForumScreen::load_initial_data() {
     initial_load_done_ = true;
     feed_->set_loading(true);
 
-    // Stats → toolbar + feed dashboard
-    services::ForumService::instance().fetch_stats([this](bool ok, services::ForumStats s) {
-        if (!ok)
-            return;
-        stat_posts_lbl_->setText(QString("%1 posts").arg(s.total_posts));
-        stat_active_lbl_->setText(QString("%1 today").arg(s.recent_posts_24h));
-        feed_->set_stats(s);
-    });
+    // Stats
+    services::ForumService::instance().fetch_stats(
+        [this](bool ok, services::ForumStats s) {
+            if (!ok)
+                return;
+            sidebar_->set_stats(s);
+            feed_->set_stats(s);
+        });
 
-    // My profile → toolbar avatar + feed dashboard
-    services::ForumService::instance().fetch_my_profile([this](bool ok, services::ForumProfile p) {
-        if (!ok)
-            return;
-        QString col = p.avatar_color.isEmpty() ? "#d97706" : p.avatar_color;
-        QString ini = p.display_name.isEmpty() ? "?" : p.display_name.left(2).toUpper();
-        profile_avatar_->setText(ini);
-        profile_avatar_->setStyleSheet(QString("color:#080808;font-size:11px;font-weight:700;"
-                                               "background:%1;%2")
-                                           .arg(col, M(11)));
-        feed_->set_profile(p);
-    });
+    // My profile
+    services::ForumService::instance().fetch_my_profile(
+        [this](bool ok, services::ForumProfile p) {
+            if (!ok)
+                return;
+            sidebar_->set_my_profile(p);
+            feed_->set_profile(p);
+        });
 
-    // Categories → toolbar chips + feed dashboard cards
+    // Categories
     services::ForumService::instance().fetch_categories(
-        [this](bool ok, QVector<services::ForumCategory> cats, services::ForumPermissions) {
+        [this](bool ok, QVector<services::ForumCategory> cats,
+               services::ForumPermissions) {
             if (!ok || cats.isEmpty())
                 return;
             categories_ = cats;
-            rebuild_category_chips();
+            sidebar_->set_categories(cats);
 
-            // Auto-select first category with posts, else just first
+            // Auto-select first category with posts
             int sel_idx = 0;
             for (int i = 0; i < cats.size(); ++i) {
                 if (cats[i].post_count > 0) {
@@ -367,54 +371,19 @@ void ForumScreen::load_initial_data() {
             active_category_id_ = first.id;
             active_category_name_ = first.name;
             active_category_color_ = first.color;
+            sidebar_->set_active_category(first.id);
             feed_->set_header(first.name);
             feed_->set_categories(cats, first.id);
 
-            services::ForumService::instance().fetch_posts(first.id, 1, "latest",
-                                                           [this, first](bool ok2, services::ForumPostsPage p) {
-                                                               if (ok2)
-                                                                   feed_->set_posts(p, first.color);
-                                                               else
-                                                                   feed_->set_loading(false);
-                                                           });
+            services::ForumService::instance().fetch_posts(
+                first.id, 1, "latest",
+                [this, first](bool ok2, services::ForumPostsPage p) {
+                    if (ok2)
+                        feed_->set_posts(p, first.color);
+                    else
+                        feed_->set_loading(false);
+                });
         });
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Category chip bar
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-void ForumScreen::rebuild_category_chips() {
-    // Remove everything except trending chip (index 0) and stretch
-    while (chips_layout_->count() > 1) {
-        auto* item = chips_layout_->takeAt(1);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
-
-    for (const auto& cat : categories_) {
-        const bool active = (cat.id == active_category_id_);
-        QString cc = cat.color.isEmpty() ? "#d97706" : cat.color;
-
-        auto* chip = new QPushButton(cat.name.toUpper());
-        chip->setFixedHeight(26);
-        chip->setCursor(Qt::PointingHandCursor);
-        chip->setStyleSheet(active ? QString("QPushButton{background:%1;color:#080808;"
-                                             "border:1px solid %1;padding:0 12px;"
-                                             "font-size:10px;font-weight:700;letter-spacing:0.3px;%2}")
-                                         .arg(cc, M(10))
-                                   : QString("QPushButton{background:transparent;color:#777777;"
-                                             "border:1px solid #1a1a1a;padding:0 12px;"
-                                             "font-size:10px;letter-spacing:0.3px;%1}"
-                                             "QPushButton:hover{color:#888888;border-color:#2a2a2a;}")
-                                         .arg(M(10)));
-        connect(chip, &QPushButton::clicked, this,
-                [this, cat]() { on_category_selected(cat.id, cat.name, cat.color); });
-        chips_layout_->addWidget(chip);
-    }
-
-    chips_layout_->addStretch();
-    chips_container_->adjustSize();
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -424,7 +393,8 @@ void ForumScreen::navigate_back_to_feed() {
     main_stack_->setCurrentIndex(0);
 }
 
-void ForumScreen::on_category_selected(int id, const QString& name, const QString& color) {
+void ForumScreen::on_category_selected(int id, const QString& name,
+                                        const QString& color) {
     active_category_id_ = id;
     active_category_name_ = name;
     active_category_color_ = color;
@@ -432,65 +402,67 @@ void ForumScreen::on_category_selected(int id, const QString& name, const QStrin
     feed_->set_loading(true);
     feed_->clear_active();
     feed_->set_categories(categories_, id);
-    main_stack_->setCurrentIndex(0); // Go back to feed if in thread
-    rebuild_category_chips();
+    sidebar_->set_active_category(id);
+    main_stack_->setCurrentIndex(0);
 
-    services::ForumService::instance().fetch_posts(id, 1, "latest", [this, color](bool ok, services::ForumPostsPage p) {
-        if (ok)
-            feed_->set_posts(p, color);
-        else
-            feed_->set_loading(false);
-    });
+    services::ForumService::instance().fetch_posts(
+        id, 1, "latest", [this, color](bool ok, services::ForumPostsPage p) {
+            if (ok)
+                feed_->set_posts(p, color);
+            else
+                feed_->set_loading(false);
+        });
 }
 
 void ForumScreen::on_post_selected(const services::ForumPost& post) {
     current_detail_uuid_ = post.post_uuid;
     feed_->set_active_post(post.post_uuid);
     thread_->set_loading(true);
-    main_stack_->setCurrentIndex(1); // Switch to thread view — FULL SCREEN
+    main_stack_->setCurrentIndex(1);
 
-    services::ForumService::instance().fetch_post(post.post_uuid, [this](bool ok, services::ForumPostDetail d) {
-        if (ok)
-            thread_->show_post(d);
-        else
-            thread_->set_loading(false);
-    });
+    services::ForumService::instance().fetch_post(
+        post.post_uuid, [this](bool ok, services::ForumPostDetail d) {
+            if (ok)
+                thread_->show_post(d);
+            else
+                thread_->set_loading(false);
+        });
 }
 
 void ForumScreen::on_search(const QString& query) {
     if (query.isEmpty())
         return;
     active_category_id_ = 0;
-    active_category_color_ = "#06b6d4";
+    active_category_color_ = ui::colors::CYAN;
     feed_->set_header("SEARCH: " + query);
     feed_->set_loading(true);
     feed_->clear_active();
     main_stack_->setCurrentIndex(0);
-    rebuild_category_chips();
 
-    services::ForumService::instance().search(query, 1, [this](bool ok, services::ForumPostsPage p) {
-        if (ok)
-            feed_->set_posts(p, "#06b6d4");
-        else
-            feed_->set_loading(false);
-    });
+    services::ForumService::instance().search(
+        query, 1, [this](bool ok, services::ForumPostsPage p) {
+            if (ok)
+                feed_->set_posts(p, ui::colors::CYAN);
+            else
+                feed_->set_loading(false);
+        });
 }
 
 void ForumScreen::on_trending() {
     active_category_id_ = 0;
-    active_category_color_ = "#d97706";
+    active_category_color_ = ui::colors::AMBER;
     feed_->set_header("TRENDING");
     feed_->set_loading(true);
     feed_->clear_active();
     main_stack_->setCurrentIndex(0);
-    rebuild_category_chips();
 
-    services::ForumService::instance().fetch_trending([this](bool ok, services::ForumPostsPage p) {
-        if (ok)
-            feed_->set_posts(p, "#d97706");
-        else
-            feed_->set_loading(false);
-    });
+    services::ForumService::instance().fetch_trending(
+        [this](bool ok, services::ForumPostsPage p) {
+            if (ok)
+                feed_->set_posts(p, ui::colors::AMBER);
+            else
+                feed_->set_loading(false);
+        });
 }
 
 void ForumScreen::on_new_post_requested() {
@@ -503,76 +475,112 @@ void ForumScreen::on_new_post_requested() {
 void ForumScreen::show_new_post_dialog(int category_id) {
     auto* dlg = new QDialog(this);
     dlg->setWindowTitle("NEW POST");
-    dlg->setMinimumSize(520, 340);
-    dlg->setStyleSheet("QDialog{background:#0a0a0a;border:1px solid #1a1a1a;}"
-                       "QLabel{color:#888888;font-size:11px;background:transparent;"
-                       "font-family:'Consolas','Courier New',monospace;}"
-                       "QLineEdit,QTextEdit{background:#080808;color:#e5e5e5;"
-                       "border:1px solid #1a1a1a;font-size:12px;"
-                       "font-family:'Consolas','Courier New',monospace;padding:4px 10px;}"
-                       "QLineEdit:focus,QTextEdit:focus{border-color:#2a2a2a;}");
+    dlg->setMinimumSize(560, 400);
+    dlg->setStyleSheet(
+        QString("QDialog{background:%1;border:1px solid %2;}"
+                "QLabel{color:%3;font-size:11px;background:transparent;"
+                "font-family:'Consolas','Courier New',monospace;}"
+                "QLineEdit,QTextEdit{background:%4;color:%5;"
+                "border:1px solid %2;font-size:13px;"
+                "font-family:'Consolas','Courier New',monospace;padding:8px 12px;}"
+                "QLineEdit:focus,QTextEdit:focus{border-color:%6;}")
+            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM,
+                 ui::colors::TEXT_SECONDARY, ui::colors::BG_BASE,
+                 ui::colors::TEXT_PRIMARY, ui::colors::BORDER_BRIGHT));
     auto* vl = new QVBoxLayout(dlg);
-    vl->setContentsMargins(18, 16, 18, 14);
-    vl->setSpacing(10);
+    vl->setContentsMargins(24, 20, 24, 18);
+    vl->setSpacing(12);
 
-    auto* hdr = new QLabel("NEW POST");
-    hdr->setStyleSheet(QString("color:#d97706;font-size:14px;font-weight:700;letter-spacing:1px;%1").arg(M(14)));
+    // Gradient accent bar
+    auto* accent = new QWidget;
+    accent->setFixedHeight(3);
+    accent->setStyleSheet(
+        QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                "stop:0 %1,stop:0.6 %2,stop:1 transparent);")
+            .arg(ui::colors::AMBER, ui::colors::ORANGE));
+    vl->addWidget(accent);
+
+    auto* hdr = new QLabel("CREATE NEW POST");
+    hdr->setStyleSheet(
+        QString("color:%1;font-size:15px;font-weight:700;letter-spacing:1.5px;%2")
+            .arg(ui::colors::TEXT_PRIMARY, M(15)));
     vl->addWidget(hdr);
 
-    auto* sep = new QFrame;
-    sep->setFixedHeight(1);
-    sep->setStyleSheet("background:#111111;border:none;");
-    vl->addWidget(sep);
+    auto* sub = new QLabel("Share your insights with the community");
+    sub->setStyleSheet(
+        QString("color:%1;font-size:11px;%2")
+            .arg(ui::colors::TEXT_TERTIARY, M(11)));
+    vl->addWidget(sub);
 
+    vl->addSpacing(4);
+
+    auto* title_lbl = new QLabel("TITLE");
+    title_lbl->setStyleSheet(
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;%2")
+            .arg(ui::colors::TEXT_TERTIARY, M(10)));
     auto* title_edit = new QLineEdit;
-    title_edit->setPlaceholderText("Post title...");
-    title_edit->setFixedHeight(32);
-    auto* body_edit = new QTextEdit;
-    body_edit->setPlaceholderText("Write your post content...");
+    title_edit->setPlaceholderText("Give your post a descriptive title...");
+    title_edit->setFixedHeight(36);
 
-    vl->addWidget(new QLabel("TITLE"));
+    auto* content_lbl = new QLabel("CONTENT");
+    content_lbl->setStyleSheet(
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;%2")
+            .arg(ui::colors::TEXT_TERTIARY, M(10)));
+    auto* body_edit = new QTextEdit;
+    body_edit->setPlaceholderText("Write your thoughts...");
+
+    vl->addWidget(title_lbl);
     vl->addWidget(title_edit);
-    vl->addWidget(new QLabel("CONTENT"));
+    vl->addWidget(content_lbl);
     vl->addWidget(body_edit, 1);
 
     auto* btn_row = new QWidget;
     btn_row->setStyleSheet("background:transparent;");
     auto* btn_hl = new QHBoxLayout(btn_row);
-    btn_hl->setContentsMargins(0, 0, 0, 0);
-    btn_hl->setSpacing(8);
+    btn_hl->setContentsMargins(0, 4, 0, 0);
+    btn_hl->setSpacing(10);
 
     auto* cancel = new QPushButton("CANCEL");
-    cancel->setFixedHeight(28);
-    cancel->setStyleSheet(QString("QPushButton{background:transparent;color:#333333;"
-                                  "border:1px solid #1a1a1a;font-size:11px;font-weight:700;"
-                                  "padding:0 16px;%1}"
-                                  "QPushButton:hover{color:#888888;}")
-                              .arg(M(11)));
+    cancel->setFixedHeight(32);
+    cancel->setCursor(Qt::PointingHandCursor);
+    cancel->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;"
+                "border:1px solid %2;font-size:11px;font-weight:700;"
+                "padding:0 20px;%3}"
+                "QPushButton:hover{color:%4;border-color:%5;}")
+            .arg(ui::colors::TEXT_TERTIARY, ui::colors::BORDER_DIM,
+                 M(11), ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED));
     connect(cancel, &QPushButton::clicked, dlg, &QDialog::reject);
 
-    auto* submit = new QPushButton("SUBMIT POST");
-    submit->setFixedHeight(28);
+    auto* submit = new QPushButton("PUBLISH POST");
+    submit->setFixedHeight(32);
     submit->setCursor(Qt::PointingHandCursor);
-    submit->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.12);color:#555555;"
-                                  "border:1px solid #1e1e1e;font-size:11px;font-weight:700;"
-                                  "padding:0 16px;%1}"
-                                  "QPushButton:hover{color:#d97706;"
-                                  "border-color:rgba(217,119,6,0.4);}")
-                              .arg(M(11)));
-    connect(submit, &QPushButton::clicked, this, [this, dlg, title_edit, body_edit, category_id]() {
-        QString title = title_edit->text().trimmed();
-        QString content = body_edit->toPlainText().trimmed();
-        if (title.isEmpty() || content.isEmpty())
-            return;
-        dlg->accept();
-        services::ForumService::instance().create_post(
-            category_id, title, content, [this](bool ok, const QString& msg) {
-                if (ok)
-                    on_category_selected(active_category_id_, active_category_name_, active_category_color_);
-                else
-                    LOG_WARN("ForumScreen", "Create post failed: " + msg);
+    submit->setStyleSheet(
+        QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;"
+                "border:1px solid rgba(217,119,6,0.3);font-size:11px;"
+                "font-weight:700;padding:0 20px;%2}"
+                "QPushButton:hover{color:%3;"
+                "border-color:rgba(217,119,6,0.6);"
+                "background:rgba(217,119,6,0.2);}")
+            .arg(ui::colors::TEXT_SECONDARY, M(11), ui::colors::AMBER));
+    connect(submit, &QPushButton::clicked, this,
+            [this, dlg, title_edit, body_edit, category_id]() {
+                QString title = title_edit->text().trimmed();
+                QString content = body_edit->toPlainText().trimmed();
+                if (title.isEmpty() || content.isEmpty())
+                    return;
+                dlg->accept();
+                services::ForumService::instance().create_post(
+                    category_id, title, content,
+                    [this](bool ok, const QString& msg) {
+                        if (ok)
+                            on_category_selected(active_category_id_,
+                                                  active_category_name_,
+                                                  active_category_color_);
+                        else
+                            LOG_WARN("ForumScreen", "Create post failed: " + msg);
+                    });
             });
-    });
 
     btn_hl->addStretch();
     btn_hl->addWidget(cancel);
@@ -584,83 +592,99 @@ void ForumScreen::show_new_post_dialog(int category_id) {
 void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile) {
     auto* dlg = new QDialog(this);
     dlg->setWindowTitle("EDIT PROFILE");
-    dlg->setMinimumSize(400, 280);
-    dlg->setStyleSheet("QDialog{background:#0a0a0a;border:1px solid #1a1a1a;}"
-                       "QLabel{color:#888888;font-size:11px;background:transparent;"
-                       "font-family:'Consolas','Courier New',monospace;}"
-                       "QLineEdit{background:#080808;color:#e5e5e5;border:1px solid #1a1a1a;"
-                       "font-size:12px;font-family:'Consolas','Courier New',monospace;"
-                       "padding:3px 10px;}"
-                       "QLineEdit:focus{border-color:#2a2a2a;}");
+    dlg->setMinimumSize(440, 320);
+    dlg->setStyleSheet(
+        QString("QDialog{background:%1;border:1px solid %2;}"
+                "QLabel{color:%3;font-size:11px;background:transparent;"
+                "font-family:'Consolas','Courier New',monospace;}"
+                "QLineEdit{background:%4;color:%5;border:1px solid %2;"
+                "font-size:12px;font-family:'Consolas','Courier New',monospace;"
+                "padding:6px 12px;}"
+                "QLineEdit:focus{border-color:%6;}")
+            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM,
+                 ui::colors::TEXT_SECONDARY, ui::colors::BG_BASE,
+                 ui::colors::TEXT_PRIMARY, ui::colors::BORDER_BRIGHT));
     auto* vl = new QVBoxLayout(dlg);
-    vl->setContentsMargins(18, 16, 18, 14);
-    vl->setSpacing(8);
+    vl->setContentsMargins(24, 20, 24, 18);
+    vl->setSpacing(10);
+
+    // Gradient accent
+    auto* accent = new QWidget;
+    accent->setFixedHeight(3);
+    accent->setStyleSheet(
+        QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                "stop:0 %1,stop:0.6 %2,stop:1 transparent);")
+            .arg(ui::colors::CYAN, ui::colors::AMBER));
+    vl->addWidget(accent);
 
     auto* hdr = new QLabel("EDIT PROFILE");
-    hdr->setStyleSheet(QString("color:#d97706;font-size:14px;font-weight:700;letter-spacing:1px;%1").arg(M(14)));
+    hdr->setStyleSheet(
+        QString("color:%1;font-size:15px;font-weight:700;letter-spacing:1.5px;%2")
+            .arg(ui::colors::TEXT_PRIMARY, M(15)));
     vl->addWidget(hdr);
-
-    auto* sep = new QFrame;
-    sep->setFixedHeight(1);
-    sep->setStyleSheet("background:#111111;border:none;");
-    vl->addWidget(sep);
+    vl->addSpacing(4);
 
     auto mk = [&](const QString& lbl, const QString& val) -> QLineEdit* {
-        vl->addWidget(new QLabel(lbl));
+        auto* l = new QLabel(lbl);
+        l->setStyleSheet(
+            QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;%2")
+                .arg(ui::colors::TEXT_TERTIARY, M(10)));
+        vl->addWidget(l);
         auto* e = new QLineEdit(val);
-        e->setFixedHeight(28);
+        e->setFixedHeight(30);
         vl->addWidget(e);
         return e;
     };
     auto* name_e = mk("DISPLAY NAME", profile.display_name);
     auto* bio_e = mk("BIO", profile.bio);
     auto* sig_e = mk("SIGNATURE", profile.signature);
-    auto* col_e = mk("AVATAR COLOR", profile.avatar_color);
+    auto* col_e = mk("AVATAR COLOR (HEX)", profile.avatar_color);
 
     auto* btn_row = new QWidget;
     btn_row->setStyleSheet("background:transparent;");
     auto* bh = new QHBoxLayout(btn_row);
-    bh->setContentsMargins(0, 0, 0, 0);
-    bh->setSpacing(8);
+    bh->setContentsMargins(0, 4, 0, 0);
+    bh->setSpacing(10);
 
     auto* cc = new QPushButton("CANCEL");
-    cc->setFixedHeight(28);
-    cc->setStyleSheet(QString("QPushButton{background:transparent;color:#333333;"
-                              "border:1px solid #1a1a1a;font-size:11px;font-weight:700;"
-                              "padding:0 16px;%1}"
-                              "QPushButton:hover{color:#888888;}")
-                          .arg(M(11)));
+    cc->setFixedHeight(32);
+    cc->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;"
+                "border:1px solid %2;font-size:11px;font-weight:700;"
+                "padding:0 20px;%3}"
+                "QPushButton:hover{color:%4;}")
+            .arg(ui::colors::TEXT_TERTIARY, ui::colors::BORDER_DIM,
+                 M(11), ui::colors::TEXT_SECONDARY));
     connect(cc, &QPushButton::clicked, dlg, &QDialog::reject);
 
-    auto* sc = new QPushButton("SAVE");
-    sc->setFixedHeight(28);
+    auto* sc = new QPushButton("SAVE CHANGES");
+    sc->setFixedHeight(32);
     sc->setCursor(Qt::PointingHandCursor);
-    sc->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.12);color:#555555;"
-                              "border:1px solid #1e1e1e;font-size:11px;font-weight:700;"
-                              "padding:0 16px;%1}"
-                              "QPushButton:hover{color:#d97706;"
-                              "border-color:rgba(217,119,6,0.4);}")
-                          .arg(M(11)));
-    connect(sc, &QPushButton::clicked, this, [this, dlg, name_e, bio_e, sig_e, col_e]() {
-        dlg->accept();
-        services::ForumService::instance().update_profile(
-            name_e->text().trimmed(), bio_e->text().trimmed(), sig_e->text().trimmed(), col_e->text().trimmed(),
-            [this](bool ok, const QString&) {
-                if (ok) {
-                    // Refresh avatar
-                    services::ForumService::instance().fetch_my_profile([this](bool ok2, services::ForumProfile p) {
-                        if (!ok2)
-                            return;
-                        QString col = p.avatar_color.isEmpty() ? "#d97706" : p.avatar_color;
-                        QString ini = p.display_name.isEmpty() ? "?" : p.display_name.left(2).toUpper();
-                        profile_avatar_->setText(ini);
-                        profile_avatar_->setStyleSheet(QString("color:#080808;font-size:11px;"
-                                                               "font-weight:700;background:%1;%2")
-                                                           .arg(col, M(11)));
+    sc->setStyleSheet(
+        QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;"
+                "border:1px solid rgba(217,119,6,0.3);font-size:11px;"
+                "font-weight:700;padding:0 20px;%2}"
+                "QPushButton:hover{color:%3;"
+                "border-color:rgba(217,119,6,0.6);"
+                "background:rgba(217,119,6,0.2);}")
+            .arg(ui::colors::TEXT_SECONDARY, M(11), ui::colors::AMBER));
+    connect(sc, &QPushButton::clicked, this,
+            [this, dlg, name_e, bio_e, sig_e, col_e]() {
+                dlg->accept();
+                services::ForumService::instance().update_profile(
+                    name_e->text().trimmed(), bio_e->text().trimmed(),
+                    sig_e->text().trimmed(), col_e->text().trimmed(),
+                    [this](bool ok, const QString&) {
+                        if (ok) {
+                            services::ForumService::instance().fetch_my_profile(
+                                [this](bool ok2, services::ForumProfile p) {
+                                    if (!ok2)
+                                        return;
+                                    sidebar_->set_my_profile(p);
+                                });
+                        }
                     });
-                }
             });
-    });
 
     bh->addStretch();
     bh->addWidget(cc);

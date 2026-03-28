@@ -80,8 +80,8 @@ static void clear_layout(QLayout* layout) {
 
 BacktestingScreen::BacktestingScreen(QWidget* parent) : QWidget(parent) {
     providers_ = all_providers();
-    commands_ = all_commands();
-    strategies_ = default_strategies();
+    commands_  = all_commands();
+    // strategies_ starts empty — populated dynamically per provider via load_strategies()
     build_ui();
     connect_service();
     LOG_INFO("Backtesting", "Screen constructed");
@@ -102,8 +102,9 @@ void BacktestingScreen::hideEvent(QHideEvent* e) {
 
 void BacktestingScreen::connect_service() {
     auto& svc = BacktestingService::instance();
-    connect(&svc, &BacktestingService::result_ready, this, &BacktestingScreen::on_result);
-    connect(&svc, &BacktestingService::error_occurred, this, &BacktestingScreen::on_error);
+    connect(&svc, &BacktestingService::result_ready,           this, &BacktestingScreen::on_result);
+    connect(&svc, &BacktestingService::error_occurred,         this, &BacktestingScreen::on_error);
+    connect(&svc, &BacktestingService::command_options_loaded, this, &BacktestingScreen::on_command_options_loaded);
 }
 
 void BacktestingScreen::build_ui() {
@@ -254,8 +255,7 @@ QWidget* BacktestingScreen::build_left_panel() {
     vl->addWidget(cat_lbl);
     strategy_category_combo_ = new QComboBox(content);
     strategy_category_combo_->setStyleSheet(combo_style);
-    for (const auto& cat : strategy_categories())
-        strategy_category_combo_->addItem(cat);
+    // Populated dynamically via on_result("get_strategies")
     connect(strategy_category_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { populate_strategies(); });
     vl->addWidget(strategy_category_combo_);
@@ -713,8 +713,7 @@ QWidget* BacktestingScreen::build_right_panel() {
         pl->addWidget(il);
         indicator_combo_ = new QComboBox(page);
         indicator_combo_->setStyleSheet(combo_style);
-        for (const auto& ind : all_indicators())
-            indicator_combo_->addItem(ind.label, ind.id);
+        // Populated dynamically via on_result("get_indicators")
         pl->addWidget(indicator_combo_);
 
         pl->addStretch();
@@ -736,8 +735,7 @@ QWidget* BacktestingScreen::build_right_panel() {
         pl->addWidget(isl);
         ind_signal_indicator_combo_ = new QComboBox(page);
         ind_signal_indicator_combo_->setStyleSheet(combo_style);
-        for (const auto& ind : all_indicators())
-            ind_signal_indicator_combo_->addItem(ind.label, ind.id);
+        // Populated dynamically via on_result("get_indicators")
         pl->addWidget(ind_signal_indicator_combo_);
 
         auto* ml = new QLabel("SIGNAL MODE", page);
@@ -951,7 +949,18 @@ void BacktestingScreen::on_provider_changed(int index) {
     active_provider_ = index;
     update_provider_buttons();
     update_command_buttons();
-    populate_strategies();
+
+    // Clear stale strategies and show loading state
+    strategies_.clear();
+    strategy_category_combo_->clear();
+    strategy_category_combo_->addItem("Loading...");
+    strategy_combo_->clear();
+
+    const auto& slug = providers_[index].slug;
+    auto& svc = BacktestingService::instance();
+    svc.load_strategies(slug);
+    svc.load_command_options(slug);
+    svc.execute(slug, "get_indicators", {});
 }
 
 void BacktestingScreen::update_provider_buttons() {
@@ -1131,11 +1140,12 @@ QJsonObject BacktestingScreen::gather_args() {
         if (take_profit_spin_->value() > 0)
             args["takeProfit"] = take_profit_spin_->value() / 100.0;
 
-        // Strategy
+        // Strategy — type = ID (used by Python), name = display name
         QJsonObject strategy;
-        strategy["name"] = strategy_combo_->currentData().toString();
-        strategy["type"] = strategy_category_combo_->currentText();
-        strategy["params"] = gather_strategy_params();
+        strategy["type"]     = strategy_combo_->currentData().toString();  // strategy ID
+        strategy["name"]     = strategy_combo_->currentText();             // display name
+        strategy["category"] = strategy_category_combo_->currentText();
+        strategy["params"]   = gather_strategy_params();
         args["strategy"] = strategy;
     }
 
@@ -1429,6 +1439,42 @@ void BacktestingScreen::display_error(const QString& msg) {
 // ── Signal handlers ──────────────────────────────────────────────────────────
 
 void BacktestingScreen::on_result(const QString& provider, const QString& command, const QJsonObject& data) {
+    // Route background metadata commands — don't touch run state or results UI
+    if (command == "get_strategies") {
+        // Only apply if result is for the currently-active provider
+        if (provider != providers_[active_provider_].slug)
+            return;
+        strategies_ = services::backtest::strategies_from_json(data);
+        auto cats = services::backtest::categories_from_strategies(strategies_);
+        strategy_category_combo_->blockSignals(true);
+        strategy_category_combo_->clear();
+        for (const auto& cat : cats)
+            strategy_category_combo_->addItem(cat);
+        strategy_category_combo_->blockSignals(false);
+        populate_strategies();
+        LOG_INFO("Backtesting", QString("[%1] Loaded %2 strategies").arg(provider).arg(strategies_.size()));
+        return;
+    }
+    if (command == "get_indicators") {
+        if (provider != providers_[active_provider_].slug)
+            return;
+        // Populate both indicator combos from {indicators:{Cat:[{id,name}]}}
+        auto ind_obj = data.value("indicators").toObject();
+        indicator_combo_->clear();
+        ind_signal_indicator_combo_->clear();
+        for (const auto& cat : ind_obj.keys()) {
+            for (const auto& iv : ind_obj.value(cat).toArray()) {
+                auto o = iv.toObject();
+                auto id   = o.value("id").toString();
+                auto name = o.value("name").toString(id);
+                indicator_combo_->addItem(name, id);
+                ind_signal_indicator_combo_->addItem(name, id);
+            }
+        }
+        return;
+    }
+
+    // Regular command result — update run state and display
     is_running_ = false;
     run_button_->setEnabled(true);
     status_label_->setText("READY");
@@ -1443,6 +1489,30 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
                                    .arg(ui::fonts::DATA_FAMILY));
     display_result(data);
     LOG_INFO("Backtesting", QString("[%1/%2] Complete").arg(provider, command));
+}
+
+void BacktestingScreen::on_command_options_loaded(const QString& provider, const QJsonObject& options) {
+    if (provider != providers_[active_provider_].slug)
+        return;
+
+    auto repopulate = [](QComboBox* combo, const QJsonArray& arr) {
+        if (arr.isEmpty()) return;
+        combo->clear();
+        for (const auto& v : arr)
+            combo->addItem(v.toString());
+        combo->setCurrentIndex(0);
+    };
+
+    repopulate(pos_sizing_combo_,      options.value("position_sizing_methods").toArray());
+    repopulate(opt_objective_combo_,   options.value("optimize_objectives").toArray());
+    repopulate(opt_method_combo_,      options.value("optimize_methods").toArray());
+    repopulate(labels_type_combo_,     options.value("label_types").toArray());
+    repopulate(splitter_type_combo_,   options.value("splitter_types").toArray());
+    repopulate(signal_gen_combo_,      options.value("signal_generators").toArray());
+    repopulate(ind_signal_mode_combo_, options.value("indicator_signal_modes").toArray());
+    repopulate(returns_type_combo_,    options.value("returns_analysis_types").toArray());
+
+    LOG_INFO("Backtesting", QString("[%1] Command options loaded").arg(provider));
 }
 
 void BacktestingScreen::on_error(const QString& context, const QString& message) {

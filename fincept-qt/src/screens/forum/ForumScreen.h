@@ -5,6 +5,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QSplitter>
 #include <QStackedWidget>
 #include <QWidget>
 
@@ -12,6 +13,7 @@ namespace fincept::screens {
 
 class ForumFeedPanel;
 class ForumThreadPanel;
+class ForumSidebarPanel;
 
 class ForumScreen : public QWidget {
     Q_OBJECT
@@ -32,22 +34,15 @@ class ForumScreen : public QWidget {
 
   private:
     void build_ui();
-    void build_toolbar();
     void load_initial_data();
-    void rebuild_category_chips();
     void show_new_post_dialog(int category_id);
     void show_edit_profile_dialog(const services::ForumProfile& profile);
 
-    // Toolbar
-    QWidget* toolbar_ = nullptr;
-    QWidget* chips_container_ = nullptr;
-    QHBoxLayout* chips_layout_ = nullptr;
-    QLineEdit* search_input_ = nullptr;
-    QLabel* stat_posts_lbl_ = nullptr;
-    QLabel* stat_active_lbl_ = nullptr;
-    QLabel* profile_avatar_ = nullptr;
+    // Layout
+    QSplitter* splitter_ = nullptr;
+    ForumSidebarPanel* sidebar_ = nullptr;
 
-    // Main stacked view: 0=feed, 1=thread
+    // Main content: stacked feed / thread
     QStackedWidget* main_stack_ = nullptr;
     ForumFeedPanel* feed_ = nullptr;
     ForumThreadPanel* thread_ = nullptr;

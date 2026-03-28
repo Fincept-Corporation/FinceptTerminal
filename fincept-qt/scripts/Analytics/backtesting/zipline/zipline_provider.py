@@ -1589,32 +1589,46 @@ class ZiplineProvider(BacktestingProviderBase):
         }
 
     def get_indicators(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Return comprehensive indicator catalog."""
-        indicators = {
-            'ma': {'name': 'Simple Moving Average', 'params': ['period'], 'category': 'trend'},
-            'ema': {'name': 'Exponential Moving Average', 'params': ['period'], 'category': 'trend'},
-            'rsi': {'name': 'Relative Strength Index', 'params': ['period'], 'category': 'momentum'},
-            'bbands': {'name': 'Bollinger Bands', 'params': ['period', 'alpha'], 'category': 'volatility'},
-            'atr': {'name': 'Average True Range', 'params': ['period'], 'category': 'volatility'},
-            'mstd': {'name': 'Moving Std Dev', 'params': ['period'], 'category': 'volatility'},
-            'macd': {'name': 'MACD', 'params': ['fastPeriod', 'slowPeriod', 'signalPeriod'], 'category': 'momentum'},
-            'stochastic': {'name': 'Stochastic Oscillator', 'params': ['kPeriod', 'dPeriod'], 'category': 'momentum'},
-            'williams_r': {'name': 'Williams %R', 'params': ['period'], 'category': 'momentum'},
-            'cci': {'name': 'Commodity Channel Index', 'params': ['period'], 'category': 'momentum'},
-            'obv': {'name': 'On-Balance Volume', 'params': [], 'category': 'volume'},
-            'adx': {'name': 'Average Directional Index', 'params': ['period'], 'category': 'trend'},
-            'keltner': {'name': 'Keltner Channel', 'params': ['period', 'multiplier'], 'category': 'volatility'},
-            'donchian': {'name': 'Donchian Channel', 'params': ['period'], 'category': 'volatility'},
-            'momentum': {'name': 'Momentum (ROC)', 'params': ['period'], 'category': 'momentum'},
-            'zscore': {'name': 'Z-Score', 'params': ['period'], 'category': 'statistical'},
-            'vwap': {'name': 'Volume Weighted Avg Price', 'params': [], 'category': 'volume'},
+        """Return indicator catalog normalized to {indicators: {Category: [{id, name}]}}."""
+        flat = {
+            'ma':         {'name': 'Simple Moving Average',    'category': 'Trend'},
+            'ema':        {'name': 'Exponential Moving Average','category': 'Trend'},
+            'adx':        {'name': 'ADX',                      'category': 'Trend'},
+            'keltner':    {'name': 'Keltner Channel',          'category': 'Trend'},
+            'donchian':   {'name': 'Donchian Channel',         'category': 'Trend'},
+            'rsi':        {'name': 'RSI',                      'category': 'Momentum'},
+            'macd':       {'name': 'MACD',                     'category': 'Momentum'},
+            'stochastic': {'name': 'Stochastic Oscillator',    'category': 'Momentum'},
+            'williams_r': {'name': 'Williams %R',              'category': 'Momentum'},
+            'cci':        {'name': 'CCI',                      'category': 'Momentum'},
+            'momentum':   {'name': 'Momentum (ROC)',           'category': 'Momentum'},
+            'bbands':     {'name': 'Bollinger Bands',          'category': 'Volatility'},
+            'atr':        {'name': 'ATR',                      'category': 'Volatility'},
+            'mstd':       {'name': 'Moving Std Dev',           'category': 'Volatility'},
+            'zscore':     {'name': 'Z-Score',                  'category': 'Volatility'},
+            'obv':        {'name': 'On-Balance Volume',        'category': 'Volume'},
+            'vwap':       {'name': 'VWAP',                     'category': 'Volume'},
         }
+        grouped: Dict[str, Any] = {}
+        for ind_id, info in flat.items():
+            cat = info['category']
+            grouped.setdefault(cat, []).append({'id': ind_id, 'name': info['name']})
+        return {'indicators': grouped}
+
+    def get_command_options(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return provider-specific option lists for all command dropdowns."""
         return {
             'success': True,
             'data': {
-                'provider': 'zipline',
-                'indicators': indicators,
-            }
+                'position_sizing_methods': ['percent', 'fixed', 'kelly', 'vol_target', 'risk'],
+                'optimize_objectives':     ['sharpe', 'sortino', 'calmar', 'return'],
+                'optimize_methods':        ['grid', 'random'],
+                'label_types':             [],
+                'splitter_types':          [],
+                'signal_generators':       [],
+                'indicator_signal_modes':  ['crossover', 'threshold', 'breakout', 'mean_reversion', 'filter'],
+                'returns_analysis_types':  [],
+            },
         }
 
     # ========================================================================
@@ -2733,6 +2747,9 @@ def main():
             result_str = json_response(result)
         elif command == 'get_indicators':
             result = provider.get_indicators(args)
+            result_str = json_response(result)
+        elif command == 'get_command_options':
+            result = provider.get_command_options(args)
             result_str = json_response(result)
         elif command == 'get_historical_data':
             result = provider.get_historical_data(args)

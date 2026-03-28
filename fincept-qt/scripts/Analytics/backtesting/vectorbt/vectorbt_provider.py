@@ -408,9 +408,33 @@ class VectorBTProvider(BacktestingProviderBase):
         return {'success': True, 'data': strat.get_strategy_catalog()}
 
     def get_indicators(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Return available indicator catalog."""
+        """Return indicator catalog normalized to {indicators: {Category: [{id, name}]}}."""
         import vbt_indicators as ind
-        return {'success': True, 'data': ind.get_indicator_catalog()}
+        raw = ind.get_indicator_catalog()
+        grouped = {}
+        for cat in raw.get('categories', []):
+            cat_name = cat.get('name', 'Other')
+            grouped[cat_name] = [
+                {'id': it['id'], 'name': it.get('name', it['id'])}
+                for it in cat.get('indicators', [])
+            ]
+        return {'indicators': grouped}
+
+    def get_command_options(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Return provider-specific option lists for all command dropdowns."""
+        return {
+            'success': True,
+            'data': {
+                'position_sizing_methods': ['percent', 'fixed', 'kelly', 'vol_target', 'risk'],
+                'optimize_objectives':     ['sharpe', 'sortino', 'calmar', 'return', 'omega'],
+                'optimize_methods':        ['grid', 'random', 'optuna'],
+                'label_types':             ['FIXLB', 'MEANLB', 'LEXLB', 'TRENDLB', 'BOLB'],
+                'splitter_types':          ['RollingSplitter', 'ExpandingSplitter', 'PurgedKFold'],
+                'signal_generators':       ['RAND', 'RANDX', 'RANDNX', 'RPROB', 'RPROBX'],
+                'indicator_signal_modes':  ['crossover', 'threshold', 'breakout', 'mean_reversion', 'filter'],
+                'returns_analysis_types':  ['cumulative', 'rolling', 'drawdown', 'distribution', 'benchmark_comparison'],
+            },
+        }
 
     def get_historical_data(self, request: Dict[str, Any]) -> list:
         """Get historical data using yfinance."""
@@ -1844,6 +1868,9 @@ def main():
             result_str = json_response(result)
         elif command == 'get_indicators':
             result = provider.get_indicators(args)
+            result_str = json_response(result)
+        elif command == 'get_command_options':
+            result = provider.get_command_options(args)
             result_str = json_response(result)
         elif command == 'generate_signals':
             result = provider.generate_signals(args)
