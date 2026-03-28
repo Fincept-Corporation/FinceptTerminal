@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numeric>
 
 namespace fincept::screens {
 
@@ -232,6 +233,31 @@ void RiskManagementView::update_overview() {
 
 void RiskManagementView::update_stress_test() {
     double total_mv = summary_.total_market_value;
+
+    // ── Compute actual sector weights from holdings ───────────────────────────
+    // Classify each holding into equity / bond / commodity / crypto / other
+    // based on symbol patterns — mirrors PortfolioSectorPanel::infer_sector
+    double equity_wt = 0, bond_wt = 0, commodity_wt = 0, crypto_wt = 0;
+    for (const auto& h : summary_.holdings) {
+        const QString s = h.symbol.toUpper();
+        bool is_crypto = s.endsWith("-USD") || s.endsWith("-USDT");
+        bool is_bond   = s == "TLT" || s == "AGG" || s == "BND" || s == "IEF" ||
+                         s == "SHY" || s == "LQD" || s == "HYG" || s == "EMB" ||
+                         s.contains("BOND") || s.contains("TREAS");
+        bool is_comm   = s == "GLD" || s == "IAU" || s == "SLV" || s == "USO" ||
+                         s.contains("OIL") || s.contains("GOLD");
+
+        if (is_crypto)      crypto_wt    += h.weight;
+        else if (is_bond)   bond_wt      += h.weight;
+        else if (is_comm)   commodity_wt += h.weight;
+        else                equity_wt    += h.weight;
+    }
+    // Normalise to fractions
+    equity_wt    /= 100.0;
+    bond_wt      /= 100.0;
+    commodity_wt /= 100.0;
+    crypto_wt    /= 100.0;
+
     int n = sizeof(kScenarios) / sizeof(kScenarios[0]);
     stress_table_->setRowCount(n);
 
@@ -248,18 +274,25 @@ void RiskManagementView::update_stress_test() {
             stress_table_->setItem(r, col, item);
         };
 
-        // Portfolio impact = weighted equity shock (simplified)
-        double impact_pct = s.equity_shock * 0.85; // assume ~85% equity exposure
+        // Weighted impact using actual portfolio composition
+        double impact_pct = s.equity_shock    * equity_wt
+                          + s.bond_shock      * bond_wt
+                          + s.commodity_shock * commodity_wt
+                          + s.equity_shock * 1.5 * crypto_wt; // crypto amplified
         double loss = total_mv * std::abs(impact_pct) / 100.0;
 
         set_cell(0, s.name, ui::colors::TEXT_PRIMARY);
         set_cell(1, s.description, ui::colors::TEXT_SECONDARY);
         set_cell(2, QString("%1%").arg(QString::number(s.equity_shock, 'f', 1)),
-                 s.equity_shock < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE, Qt::AlignRight | Qt::AlignVCenter);
-        set_cell(3, QString("%1%2%").arg(impact_pct < 0 ? "" : "+").arg(QString::number(impact_pct, 'f', 1)),
-                 impact_pct < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE, Qt::AlignRight | Qt::AlignVCenter);
-        set_cell(4, QString("-%1 %2").arg(currency_, QString::number(loss, 'f', 0)), ui::colors::NEGATIVE,
+                 s.equity_shock < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE,
                  Qt::AlignRight | Qt::AlignVCenter);
+        set_cell(3, QString("%1%2%")
+                        .arg(impact_pct < 0 ? "" : "+")
+                        .arg(QString::number(impact_pct, 'f', 1)),
+                 impact_pct < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE,
+                 Qt::AlignRight | Qt::AlignVCenter);
+        set_cell(4, QString("-%1 %2").arg(currency_, QString::number(loss, 'f', 0)),
+                 ui::colors::NEGATIVE, Qt::AlignRight | Qt::AlignVCenter);
     }
 }
 

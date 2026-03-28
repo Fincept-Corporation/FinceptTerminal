@@ -63,7 +63,6 @@ MarketsScreen::MarketsScreen(QWidget* parent) : QWidget(parent) {
     for (int i = 0; i < globals.size(); i++) {
         auto* p = new MarketPanel(globals[i].category, globals[i].tickers, false);
         global_panels_.append(p);
-        connect(p, &MarketPanel::refresh_finished, this, &MarketsScreen::on_panel_refresh_finished);
         gg->addWidget(p, i / 3, i % 3);
     }
     cvl->addLayout(gg);
@@ -101,7 +100,6 @@ MarketsScreen::MarketsScreen(QWidget* parent) : QWidget(parent) {
             syms << t.symbol;
         auto* p = new MarketPanel(regionals[i].region, syms, true);
         regional_panels_.append(p);
-        connect(p, &MarketPanel::refresh_finished, this, &MarketsScreen::on_panel_refresh_finished);
         rg->addWidget(p, 0, i);
     }
     cvl->addLayout(rg);
@@ -113,13 +111,6 @@ MarketsScreen::MarketsScreen(QWidget* parent) : QWidget(parent) {
     auto_refresh_timer_->setInterval(update_interval_ms_);
     connect(auto_refresh_timer_, &QTimer::timeout, this, &MarketsScreen::refresh_all);
     // Timer starts via showEvent, not eagerly
-
-    loading_animation_timer_ = new QTimer(this);
-    loading_animation_timer_->setInterval(150);
-    connect(loading_animation_timer_, &QTimer::timeout, this, [this]() {
-        if (status_label_)
-            status_label_->setText(loading_text());
-    });
 }
 
 void MarketsScreen::showEvent(QShowEvent* event) {
@@ -320,78 +311,55 @@ QWidget* MarketsScreen::build_controls() {
 }
 
 void MarketsScreen::refresh_all() {
-    if (loading_in_progress_) {
-        refresh_queued_ = true;
+    if (refresh_in_progress_)
         return;
-    }
+    refresh_in_progress_ = true;
 
-    begin_loading();
+    if (status_label_) {
+        status_label_->setText("● LOADING");
+        status_label_->setStyleSheet("color:#d97706;font-size:11px;font-weight:700;background:transparent;"
+                                     "font-family:'Consolas',monospace;");
+    }
 
     for (auto* p : global_panels_)
         p->refresh();
     for (auto* p : regional_panels_)
         p->refresh();
-}
 
-void MarketsScreen::begin_loading() {
-    loading_in_progress_ = true;
-    refresh_queued_ = false;
-    loading_frame_ = 0;
-    pending_panels_ = global_panels_.size() + regional_panels_.size();
-    if (pending_panels_ == 0) {
-        finish_loading();
-        return;
-    }
-    if (status_label_) {
-        status_label_->setText(loading_text());
-        status_label_->setStyleSheet("color:#d97706;font-size:11px;font-weight:700;background:transparent;"
-                                     "font-family:'Consolas',monospace;");
-    }
-    if (loading_animation_timer_)
-        loading_animation_timer_->start();
-}
-
-void MarketsScreen::finish_loading() {
-    loading_in_progress_ = false;
-    pending_panels_ = 0;
-    if (loading_animation_timer_)
-        loading_animation_timer_->stop();
-    if (status_label_) {
-        status_label_->setText("● READY");
-        status_label_->setStyleSheet("color:#22c55e;font-size:11px;font-weight:700;background:transparent;"
-                                     "font-family:'Consolas',monospace;");
-    }
-    if (last_update_label_) {
-        last_update_label_->setText(
-            QString("LAST UPDATE  %1")
-                .arg(QDateTime::currentDateTime().toString("HH:mm:ss")));
-        last_update_label_->setStyleSheet("color:#404040;font-size:11px;background:transparent;"
-                                          "font-family:'Consolas',monospace;");
-    }
-    if (refresh_queued_)
-        refresh_all();
-}
-
-void MarketsScreen::on_panel_refresh_finished() {
-    if (!loading_in_progress_)
-        return;
-
-    if (pending_panels_ > 0)
-        --pending_panels_;
-    if (status_label_)
-        status_label_->setText(loading_text());
-
-    if (pending_panels_ == 0)
-        finish_loading();
-}
-
-QString MarketsScreen::loading_text() {
-    static const QStringList frames = {"LOADING   ", "LOADING.  ", "LOADING.. ", "LOADING..."};
-    const int idx = loading_frame_ % frames.size();
-    const int completed = (global_panels_.size() + regional_panels_.size()) - pending_panels_;
+    // Panels handle their own overlay; update the status bar when done.
+    // We use a single-shot approach: once all panels have emitted refresh_finished,
+    // we mark the screen ready. Use a shared counter via lambda capture.
     const int total = global_panels_.size() + regional_panels_.size();
-    loading_frame_ = loading_frame_ + 1;
-    return QString("%1 %2/%3").arg(frames[idx]).arg(completed).arg(total);
+    if (total == 0) {
+        refresh_in_progress_ = false;
+        return;
+    }
+
+    auto* counter = new QObject(this);
+    auto* remaining = new int(total);
+    auto finish = [this, counter, remaining]() {
+        --(*remaining);
+        if (*remaining > 0)
+            return;
+        refresh_in_progress_ = false;
+        delete remaining;
+        counter->deleteLater();
+        if (status_label_) {
+            status_label_->setText("● READY");
+            status_label_->setStyleSheet("color:#22c55e;font-size:11px;font-weight:700;background:transparent;"
+                                         "font-family:'Consolas',monospace;");
+        }
+        if (last_update_label_) {
+            last_update_label_->setText(
+                QString("LAST UPDATE  %1").arg(QDateTime::currentDateTime().toString("HH:mm:ss")));
+            last_update_label_->setStyleSheet("color:#404040;font-size:11px;background:transparent;"
+                                              "font-family:'Consolas',monospace;");
+        }
+    };
+    for (auto* p : global_panels_)
+        connect(p, &MarketPanel::refresh_finished, counter, finish, Qt::SingleShotConnection);
+    for (auto* p : regional_panels_)
+        connect(p, &MarketPanel::refresh_finished, counter, finish, Qt::SingleShotConnection);
 }
 
 } // namespace fincept::screens

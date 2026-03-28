@@ -16,6 +16,7 @@ class PortfolioPerfChart : public QWidget {
     explicit PortfolioPerfChart(QWidget* parent = nullptr);
 
     void set_summary(const portfolio::PortfolioSummary& summary);
+    void set_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots);
     void set_currency(const QString& currency);
 
   private:
@@ -38,6 +39,7 @@ class PortfolioPerfChart : public QWidget {
 
     // Data
     portfolio::PortfolioSummary summary_;
+    QVector<portfolio::PortfolioSnapshot> snapshots_;
     QString currency_ = "USD";
 };
 

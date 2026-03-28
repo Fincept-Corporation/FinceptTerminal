@@ -279,6 +279,8 @@ set(SERVICE_SOURCES
     src/services/backtesting/BacktestingService.cpp
     src/services/algo_trading/AlgoTradingService.cpp
     src/services/portfolio/PortfolioService.cpp
+    src/services/quantlib/QuantLibClient.cpp
+    src/services/economics/EconomicsService.cpp
     src/services/agents/AgentService.cpp
     src/services/file_manager/FileManagerService.cpp
     src/services/workflow/NodeRegistry.cpp
@@ -459,6 +461,13 @@ set(SCREEN_SOURCES
     src/screens/gov_data/GovDataProviderPanel.cpp
     src/screens/gov_data/GovDataTreasuryPanel.cpp
     src/screens/gov_data/GovDataCongressPanel.cpp
+    src/screens/gov_data/GovDataCanadaPanel.cpp
+    src/screens/gov_data/GovDataSwissPanel.cpp
+    src/screens/gov_data/GovDataFrancePanel.cpp
+    src/screens/gov_data/GovDataHKPanel.cpp
+    src/screens/gov_data/GovDataCKANPanel.cpp
+    src/screens/gov_data/GovDataUKPanel.cpp
+    src/screens/gov_data/GovDataAustraliaPanel.cpp
 
     # Derivatives Pricing
     src/screens/derivatives/DerivativesScreen.cpp
@@ -498,6 +507,38 @@ set(SCREEN_SOURCES
 
     # Economics
     src/screens/economics/EconomicsScreen.cpp
+    src/screens/economics/panels/EconPanelBase.cpp
+    src/screens/economics/panels/WorldBankPanel.cpp
+    src/screens/economics/panels/ImfPanel.cpp
+    src/screens/economics/panels/FredPanel.cpp
+    src/screens/economics/panels/FredAnalyticsPanel.cpp
+    src/screens/economics/panels/OecdPanel.cpp
+    src/screens/economics/panels/EcbPanel.cpp
+    src/screens/economics/panels/EurostatPanel.cpp
+    src/screens/economics/panels/BlsPanel.cpp
+    src/screens/economics/panels/CensusPanel.cpp
+    src/screens/economics/panels/EconDbPanel.cpp
+    src/screens/economics/panels/TradingEconomicsPanel.cpp
+    src/screens/economics/panels/EconomicCalendarPanel.cpp
+    src/screens/economics/panels/BcbPanel.cpp
+    src/screens/economics/panels/AkShareChinaPanel.cpp
+    src/screens/economics/panels/OnsPanel.cpp
+    src/screens/economics/panels/GlobalCentralBanksPanel.cpp
+    src/screens/economics/panels/FederalReservePanel.cpp
+    src/screens/economics/panels/FiscalDataPanel.cpp
+    src/screens/economics/panels/OwIdPanel.cpp
+    src/screens/economics/panels/StatCanPanel.cpp
+    src/screens/economics/panels/IlostatPanel.cpp
+    src/screens/economics/panels/UnComtradePanel.cpp
+    src/screens/economics/panels/WorldBankHealthPanel.cpp
+    src/screens/economics/panels/BisPanel.cpp
+    src/screens/economics/panels/AdbPanel.cpp
+    src/screens/economics/panels/CftcPanel.cpp
+    src/screens/economics/panels/EiaPanel.cpp
+    src/screens/economics/panels/WtoPanel.cpp
+    src/screens/economics/panels/UnescoPanel.cpp
+    src/screens/economics/panels/BeaPanel.cpp
+    src/screens/economics/panels/FinceptMacroPanel.cpp
 
     # Polymarket
     src/screens/polymarket/PolymarketScreen.cpp
@@ -719,6 +760,13 @@ set_source_files_properties(
     src/screens/gov_data/GovDataProviderPanel.cpp
     src/screens/gov_data/GovDataScreen.cpp
     src/screens/gov_data/GovDataTreasuryPanel.cpp
+    src/screens/gov_data/GovDataCanadaPanel.cpp
+    src/screens/gov_data/GovDataSwissPanel.cpp
+    src/screens/gov_data/GovDataFrancePanel.cpp
+    src/screens/gov_data/GovDataHKPanel.cpp
+    src/screens/gov_data/GovDataCKANPanel.cpp
+    src/screens/gov_data/GovDataUKPanel.cpp
+    src/screens/gov_data/GovDataAustraliaPanel.cpp
     src/screens/info/ContactScreen.cpp
     src/screens/info/HelpScreen.cpp
     src/screens/info/PrivacyScreen.cpp

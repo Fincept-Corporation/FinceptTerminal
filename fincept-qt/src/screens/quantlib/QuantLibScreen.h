@@ -49,6 +49,7 @@ class QuantLibScreen : public QWidget {
     void populate_panels(int module_index);
     void execute_api(const QString& endpoint, const QJsonObject& params);
     void display_result(const QJsonObject& result);
+    void display_result_array(const QJsonArray& arr);
     void display_error(const QString& error);
     void set_loading(bool loading);
 

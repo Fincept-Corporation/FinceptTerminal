@@ -1,9 +1,9 @@
 #pragma once
 #include "services/markets/MarketDataService.h"
+#include "ui/widgets/LoadingOverlay.h"
 
 #include <QLabel>
 #include <QTableWidget>
-#include <QTimer>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -21,10 +21,11 @@ class MarketPanel : public QWidget {
   signals:
     void refresh_finished();
 
+  protected:
+    void resizeEvent(QResizeEvent* event) override;
+
   private:
     void populate(const QVector<services::QuoteData>& quotes);
-    void show_skeleton();
-    void pulse_skeleton();
 
     QString title_;
     QStringList symbols_;
@@ -33,9 +34,7 @@ class MarketPanel : public QWidget {
     QLabel* title_label_ = nullptr;
     QLabel* status_label_ = nullptr;
     QTableWidget* table_ = nullptr;
-    QTimer* skeleton_timer_ = nullptr;
-    int skeleton_offset_ = 0; // shimmer position 0..100
-    bool has_loaded_data_ = false;
+    ui::LoadingOverlay* loading_overlay_ = nullptr;
 };
 
 } // namespace fincept::screens

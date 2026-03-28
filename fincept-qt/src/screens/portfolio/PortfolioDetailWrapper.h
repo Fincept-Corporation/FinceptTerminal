@@ -20,6 +20,7 @@ class PortfolioDetailWrapper : public QWidget {
 
     void show_view(portfolio::DetailView view, const portfolio::PortfolioSummary& summary, const QString& currency);
     void update_data(const portfolio::PortfolioSummary& summary, const QString& currency);
+    void update_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots);
 
   signals:
     void back_requested();
@@ -41,6 +42,7 @@ class PortfolioDetailWrapper : public QWidget {
     // Data passed to views
     portfolio::PortfolioSummary current_summary_;
     QString current_currency_;
+    QVector<portfolio::PortfolioSnapshot> current_snapshots_;
 };
 
 } // namespace fincept::screens

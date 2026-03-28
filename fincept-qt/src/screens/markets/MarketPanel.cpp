@@ -5,9 +5,8 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QPointer>
+#include <QResizeEvent>
 #include <QVBoxLayout>
-
-#include <cmath>
 
 namespace fincept::screens {
 
@@ -75,10 +74,7 @@ MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool 
     }
     vl->addWidget(table_, 1);
 
-    // Skeleton pulse timer — shimmer every 350ms
-    skeleton_timer_ = new QTimer(this);
-    skeleton_timer_->setInterval(350);
-    connect(skeleton_timer_, &QTimer::timeout, this, &MarketPanel::pulse_skeleton);
+    loading_overlay_ = new ui::LoadingOverlay(this);
 
     refresh();
 }
@@ -89,97 +85,36 @@ void MarketPanel::set_symbols(const QStringList& s) {
 }
 
 void MarketPanel::refresh() {
-    status_label_->setText(has_loaded_data_ ? "UPDATING" : "LOADING");
+    status_label_->setText("LOADING");
     status_label_->setStyleSheet(
         "color:#d97706;font-size:12px;background:transparent;font-family:'Consolas',monospace;");
 
-    // Keep existing table visible during background refreshes.
-    // Show skeleton only for first load or empty table.
-    if (!has_loaded_data_ || table_->rowCount() == 0)
-        show_skeleton();
+    loading_overlay_->show_loading("LOADING\xe2\x80\xa6");
 
     QPointer<MarketPanel> self = this;
     services::MarketDataService::instance().fetch_quotes(symbols_, [self](bool ok, QVector<services::QuoteData> q) {
         if (!self)
             return;
-        self->skeleton_timer_->stop();
+        self->loading_overlay_->hide_loading();
         if (!ok) {
-            self->status_label_->setText(self->has_loaded_data_ ? "STALE" : "FAIL");
+            self->status_label_->setText("FAIL");
             self->status_label_->setStyleSheet(
                 "color:#dc2626;font-size:12px;background:transparent;font-family:'Consolas',monospace;");
-            if (!self->has_loaded_data_) {
-                // First load failed: clear any skeleton rows.
-                self->table_->setRowCount(0);
-            }
             emit self->refresh_finished();
             return;
         }
         self->status_label_->setText(QString::number(q.size()));
         self->status_label_->setStyleSheet(
             "color:#333333;font-size:12px;background:transparent;font-family:'Consolas',monospace;");
-        self->has_loaded_data_ = !q.isEmpty();
         self->populate(q);
         emit self->refresh_finished();
     });
 }
 
-void MarketPanel::show_skeleton() {
-    skeleton_offset_ = 0;
-    int cols = show_name_ ? 6 : 7;
-    int rows = std::max(6, static_cast<int>(symbols_.size()));
-
-    table_->setUpdatesEnabled(false);
-    table_->setRowCount(0);
-    table_->setRowCount(rows);
-
-    for (int r = 0; r < rows; r++) {
-        // Vary placeholder width per row for a natural stagger
-        int w = 30 + (r % 4) * 15; // 30%, 45%, 60%, 75%, repeat
-        QString bg = QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-                             "stop:0 #111111,stop:%1 #1a1a1a,stop:1 #111111);")
-                         .arg(w / 100.0, 0, 'f', 2);
-        for (int c = 0; c < cols; c++) {
-            auto* item = new QTableWidgetItem;
-            item->setBackground(QBrush(QColor(c == 0 ? "#111111" : "#0d0d0d")));
-            item->setFlags(Qt::NoItemFlags);
-            table_->setItem(r, c, item);
-        }
-        table_->setRowHeight(r, 26);
-        (void)bg; // used in pulse_skeleton
-    }
-    table_->setUpdatesEnabled(true);
-    skeleton_timer_->start();
-}
-
-void MarketPanel::pulse_skeleton() {
-    skeleton_offset_ = (skeleton_offset_ + 20) % 100;
-    double s = skeleton_offset_ / 100.0;
-    double e = std::min(1.0, s + 0.3);
-
-    int cols = table_->columnCount();
-    int rows = table_->rowCount();
-
-    table_->setUpdatesEnabled(false);
-    for (int r = 0; r < rows; r++) {
-        // Shift phase per row so shimmer appears diagonal
-        double rs = std::fmod(s + r * 0.05, 1.0);
-        double re = std::min(1.0, rs + 0.3);
-        QColor dark(r % 2 == 0 ? 0x11 : 0x0d, r % 2 == 0 ? 0x11 : 0x0d, r % 2 == 0 ? 0x11 : 0x0d);
-        QColor light(0x1e, 0x1e, 0x1e);
-        // Interpolate: cells before shimmer=dark, at shimmer=light, after=dark
-        for (int c = 0; c < cols; c++) {
-            double pos = c / static_cast<double>(std::max(1, cols - 1));
-            double t = 0.0;
-            if (pos >= rs && pos <= re)
-                t = 1.0 - std::abs((pos - (rs + re) / 2.0) / (re - rs + 0.001));
-            int rv = static_cast<int>(dark.red() + t * (light.red() - dark.red()));
-            int gv = static_cast<int>(dark.green() + t * (light.green() - dark.green()));
-            int bv = static_cast<int>(dark.blue() + t * (light.blue() - dark.blue()));
-            if (auto* item = table_->item(r, c))
-                item->setBackground(QBrush(QColor(rv, gv, bv)));
-        }
-    }
-    table_->setUpdatesEnabled(true);
+void MarketPanel::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    if (loading_overlay_)
+        loading_overlay_->setGeometry(rect());
 }
 
 void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {

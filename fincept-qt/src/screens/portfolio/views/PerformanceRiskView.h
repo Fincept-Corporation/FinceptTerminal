@@ -16,6 +16,7 @@ class PerformanceRiskView : public QWidget {
     explicit PerformanceRiskView(QWidget* parent = nullptr);
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
+    void set_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots);
 
   private:
     void build_ui();
@@ -49,6 +50,7 @@ class PerformanceRiskView : public QWidget {
 
     // Data
     portfolio::PortfolioSummary summary_;
+    QVector<portfolio::PortfolioSnapshot> snapshots_;
     QString currency_;
 };
 

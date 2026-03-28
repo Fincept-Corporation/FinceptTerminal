@@ -375,7 +375,8 @@ void GovDataTreasuryPanel::populate_prices(const QJsonObject& data) {
         prices_table_->setItem(i, 1, type_item);
 
         prices_table_->setItem(i, 2, new QTableWidgetItem(fmt(r["rate"])));
-        prices_table_->setItem(i, 3, new QTableWidgetItem(r["maturity_date"].toString("—")));
+        QString mat = r["maturity_date"].toString();
+        prices_table_->setItem(i, 3, new QTableWidgetItem(mat.isEmpty() ? "—" : mat));
 
         for (int c : {4, 5, 6}) {
             auto* it = new QTableWidgetItem(fmt(r[c == 4 ? "bid" : c == 5 ? "offer" : "eod_price"]));
@@ -405,7 +406,8 @@ void GovDataTreasuryPanel::populate_auctions(const QJsonObject& data) {
         auctions_table_->setItem(i, 1, type_item);
 
         auctions_table_->setItem(i, 2, new QTableWidgetItem(r["securityTerm"].toString()));
-        auctions_table_->setItem(i, 3, new QTableWidgetItem(r["auctionDate"].toString("—")));
+        QString adate = r["auctionDate"].toString();
+        auctions_table_->setItem(i, 3, new QTableWidgetItem(adate.isEmpty() ? "—" : adate));
 
         for (int c : {4, 5, 6}) {
             auto key = c == 4 ? "highDiscountRate" : c == 5 ? "highPrice" : "bidToCoverRatio";

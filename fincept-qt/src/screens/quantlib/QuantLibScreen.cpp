@@ -1,20 +1,16 @@
 #include "screens/quantlib/QuantLibScreen.h"
 
-#include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "services/quantlib/QuantLibClient.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QPointer>
 #include <QScrollArea>
 #include <QSplitter>
-#include <QUrl>
 #include <QVBoxLayout>
 
 namespace {
@@ -132,10 +128,6 @@ static QList<QuantModule> build_modules() {
         {"volatility", "Volatility", 14, {"Surface", "SABR", "Local Vol"}},
     };
 }
-
-// ── API base URL ────────────────────────────────────────────────────────────
-
-static const QString API_BASE = QStringLiteral("https://api.fincept.in");
 
 // ── Constructor ─────────────────────────────────────────────────────────────
 
@@ -322,7 +314,7 @@ QWidget* QuantLibScreen::create_center_panel() {
 
     param_input1_ = new QLineEdit;
     param_input1_->setPlaceholderText(
-        "{\"spot\": 100, \"strike\": 105, \"risk_free_rate\": 0.05, \"volatility\": 0.2, \"time_to_maturity\": 1.0}");
+        "{\"spot\": 100, \"strike\": 105, \"r\": 0.05, \"sigma\": 0.2, \"T\": 1.0, \"option_type\": \"call\"}");
     param_input1_->setMinimumHeight(28);
     ebl->addWidget(param_input1_);
 
@@ -343,11 +335,15 @@ QWidget* QuantLibScreen::create_center_panel() {
         helpers->addWidget(btn);
     };
 
-    add_helper("BS Price", "{\"spot\":100,\"strike\":105,\"risk_free_rate\":0.05,\"volatility\":0.2,\"time_to_"
-                           "maturity\":1.0,\"option_type\":\"call\"}");
-    add_helper("GBM Sim", "{\"S0\":100,\"mu\":0.05,\"sigma\":0.2,\"T\":1.0,\"n_steps\":252,\"n_paths\":5}");
-    add_helper("VaR", "{\"portfolio_value\":1000000,\"volatility\":0.02,\"confidence_level\":0.99,\"horizon\":1}");
-    add_helper("Bond Yield", "{\"face_value\":1000,\"coupon_rate\":0.05,\"price\":950,\"periods\":10,\"frequency\":2}");
+    add_helper("BS Price",
+               "{\"spot\":100,\"strike\":105,\"r\":0.05,\"sigma\":0.2,\"T\":1.0,\"option_type\":\"call\"}");
+    add_helper("GBM Sim",
+               "{\"S0\":100,\"mu\":0.05,\"sigma\":0.2,\"T\":1.0,\"n_steps\":252,\"n_paths\":5}");
+    add_helper("VaR",
+               "{\"portfolio_value\":1000000,\"volatility\":0.02,\"confidence\":0.99,\"horizon\":1}");
+    add_helper("Heston",
+               "{\"spot\":100,\"strike\":105,\"r\":0.05,\"T\":1.0,\"v0\":0.04,\"kappa\":1.5,"
+               "\"theta\":0.04,\"sigma_v\":0.3,\"rho\":-0.7,\"option_type\":\"call\"}");
     helpers->addStretch(1);
     ebl->addLayout(helpers);
 
@@ -1013,70 +1009,25 @@ void QuantLibScreen::execute_api(const QString& endpoint, const QJsonObject& par
     set_loading(true);
     result_status_->setText("Computing...");
 
-    QString url = API_BASE + "/quantlib/" + endpoint;
-
-    // 5 GET-only endpoints, everything else is POST
-    static const QStringList GET_ENDPOINTS = {
-        "core/types/currencies",           "core/types/frequencies",        "scheduling/calendar/list",
-        "scheduling/daycount/conventions", "scheduling/adjustment/methods",
-    };
-    bool is_get = GET_ENDPOINTS.contains(endpoint);
-
-    auto* nam = new QNetworkAccessManager(this);
-    QUrl request_url(url);
-    QNetworkRequest req{request_url};
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setRawHeader("Accept", "application/json");
-    req.setRawHeader("User-Agent", "FinceptTerminal/4.0.0");
-
-    // Add API key from auth session
-    auto& auth_mgr = auth::AuthManager::instance();
-    if (auth_mgr.is_authenticated()) {
-        req.setRawHeader("X-API-Key", auth_mgr.session().api_key.toUtf8());
-    }
-
     QPointer<QuantLibScreen> self = this;
-    QNetworkReply* reply = nullptr;
-    if (is_get) {
-        reply = nam->get(req);
-    } else {
-        QByteArray body = QJsonDocument(params).toJson(QJsonDocument::Compact);
-        reply = nam->post(req, body);
-    }
-
-    connect(reply, &QNetworkReply::finished, this, [self, reply, nam, endpoint]() {
-        reply->deleteLater();
-        nam->deleteLater();
+    services::QuantLibClient::instance().call(endpoint, params, [self, endpoint](mcp::ToolResult result) {
         if (!self)
             return;
 
         self->set_loading(false);
 
-        if (reply->error() != QNetworkReply::NoError) {
-            self->display_error(reply->errorString());
+        if (!result.success) {
+            self->display_error(result.error);
             return;
         }
 
-        auto data = reply->readAll();
-        QJsonParseError err;
-        auto doc = QJsonDocument::fromJson(data, &err);
-        if (doc.isNull()) {
-            self->display_error("JSON parse error: " + err.errorString());
-            return;
-        }
-
-        if (doc.isObject()) {
-            auto obj = doc.object();
-            if (obj.contains("error")) {
-                self->display_error(obj["error"].toString());
-                return;
-            }
-            self->display_result(obj);
-        } else {
-            // Display raw JSON
-            self->result_view_->setPlainText(doc.toJson(QJsonDocument::Indented));
-            self->result_stack_->setCurrentIndex(0);
-        }
+        auto payload = result.data;
+        if (payload.isArray())
+            self->display_result_array(payload.toArray());
+        else if (payload.isObject())
+            self->display_result(payload.toObject());
+        else
+            self->display_result(QJsonObject{}); // empty / null payload
 
         self->status_endpoint_->setText(endpoint);
         LOG_INFO("QuantLib", "Executed: " + endpoint);
@@ -1085,50 +1036,117 @@ void QuantLibScreen::execute_api(const QString& endpoint, const QJsonObject& par
 
 // ── Display ─────────────────────────────────────────────────────────────────
 
+void QuantLibScreen::display_result_array(const QJsonArray& arr) {
+    if (arr.isEmpty()) {
+        result_view_->setPlainText("[]");
+        result_stack_->setCurrentIndex(0);
+        result_status_->setText("Empty");
+        return;
+    }
+
+    if (arr[0].isObject()) {
+        // Array of objects → table
+        auto first = arr[0].toObject();
+        QStringList cols;
+        for (auto it = first.begin(); it != first.end(); ++it)
+            cols << it.key();
+
+        result_table_->setSortingEnabled(false);
+        result_table_->setColumnCount(cols.size());
+        result_table_->setHorizontalHeaderLabels(cols);
+
+        int rows = qMin(arr.size(), 1000);
+        result_table_->setRowCount(rows);
+
+        for (int r = 0; r < rows; ++r) {
+            auto obj = arr[r].toObject();
+            for (int c = 0; c < cols.size(); ++c) {
+                auto val = obj.value(cols[c]);
+                QString text = val.isDouble() ? QString::number(val.toDouble(), 'g', 10)
+                               : val.isNull()  ? "--"
+                                               : val.toVariant().toString();
+                auto* item = new QTableWidgetItem(text);
+                item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                if (val.isDouble())
+                    item->setForeground(QColor(val.toDouble() < 0 ? colors::NEGATIVE : colors::CYAN));
+                result_table_->setItem(r, c, item);
+            }
+        }
+        result_table_->resizeColumnsToContents();
+        result_table_->setSortingEnabled(true);
+        result_stack_->setCurrentIndex(1);
+        result_status_->setText(QString::number(rows) + " results");
+    } else {
+        // Array of scalars (e.g. currency list, calendar list) → two-column table: Index | Value
+        result_table_->setSortingEnabled(false);
+        result_table_->setColumnCount(2);
+        result_table_->setHorizontalHeaderLabels({"#", "Value"});
+        int rows = qMin(arr.size(), 1000);
+        result_table_->setRowCount(rows);
+        for (int r = 0; r < rows; ++r) {
+            result_table_->setItem(r, 0, new QTableWidgetItem(QString::number(r + 1)));
+            result_table_->setItem(r, 1, new QTableWidgetItem(arr[r].toVariant().toString()));
+        }
+        result_table_->resizeColumnsToContents();
+        result_table_->setSortingEnabled(true);
+        result_stack_->setCurrentIndex(1);
+        result_status_->setText(QString::number(rows) + " items");
+    }
+}
+
 void QuantLibScreen::display_result(const QJsonObject& result) {
-    // Try to display as table if result has data array
-    if (result.contains("data") && result["data"].isArray()) {
-        auto data = result["data"].toArray();
-        if (!data.isEmpty() && data[0].isObject()) {
-            // Table view
-            auto first = data[0].toObject();
-            QStringList cols;
-            for (auto it = first.begin(); it != first.end(); ++it) {
-                cols << it.key();
-            }
+    // result is already the unwrapped payload from QuantLibClient
+    if (result.isEmpty()) {
+        result_view_->setPlainText("(empty response)");
+        result_stack_->setCurrentIndex(0);
+        result_status_->setText("OK");
+        return;
+    }
 
+    {  // flat object → Key/Value table
+        // Flat object result (e.g. {"price": 8.02, "delta": 0.45, ...}) → two-column table: Key | Value
+        auto obj = payload.toObject();
+        if (!obj.isEmpty()) {
             result_table_->setSortingEnabled(false);
-            result_table_->setColumnCount(cols.size());
-            result_table_->setHorizontalHeaderLabels(cols);
+            result_table_->setColumnCount(2);
+            result_table_->setHorizontalHeaderLabels({"Field", "Value"});
+            result_table_->setRowCount(obj.size());
+            int r = 0;
+            for (auto it = obj.begin(); it != obj.end(); ++it, ++r) {
+                auto* key_item = new QTableWidgetItem(it.key());
+                key_item->setForeground(QColor(colors::TEXT_SECONDARY));
+                result_table_->setItem(r, 0, key_item);
 
-            int rows = qMin(data.size(), 1000);
-            result_table_->setRowCount(rows);
+                QString text;
+                auto val = it.value();
+                if (val.isDouble())
+                    text = QString::number(val.toDouble(), 'g', 10);
+                else if (val.isBool())
+                    text = val.toBool() ? "true" : "false";
+                else if (val.isNull() || val.isUndefined())
+                    text = "--";
+                else if (val.isArray() || val.isObject())
+                    text = QJsonDocument(val.isArray() ? QJsonDocument(val.toArray())
+                                                       : QJsonDocument(val.toObject()))
+                               .toJson(QJsonDocument::Compact);
+                else
+                    text = val.toString();
 
-            for (int r = 0; r < rows; ++r) {
-                auto obj = data[r].toObject();
-                for (int c = 0; c < cols.size(); ++c) {
-                    auto val = obj.value(cols[c]);
-                    QString text = val.isDouble() ? QString::number(val.toDouble(), 'g', 10)
-                                   : val.isNull() ? "--"
-                                                  : val.toVariant().toString();
-                    auto* item = new QTableWidgetItem(text);
-                    item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    if (val.isDouble()) {
-                        item->setForeground(QColor(val.toDouble() < 0 ? colors::NEGATIVE : colors::CYAN));
-                    }
-                    result_table_->setItem(r, c, item);
-                }
+                auto* val_item = new QTableWidgetItem(text);
+                val_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                if (val.isDouble())
+                    val_item->setForeground(QColor(val.toDouble() < 0 ? colors::NEGATIVE : colors::CYAN));
+                result_table_->setItem(r, 1, val_item);
             }
-
             result_table_->resizeColumnsToContents();
             result_table_->setSortingEnabled(true);
             result_stack_->setCurrentIndex(1);
-            result_status_->setText(QString::number(rows) + " results");
+            result_status_->setText(QString::number(obj.size()) + " fields");
             return;
         }
     }
 
-    // JSON view fallback
+    // Fallback: raw JSON
     result_view_->setPlainText(QJsonDocument(result).toJson(QJsonDocument::Indented));
     result_stack_->setCurrentIndex(0);
     result_status_->setText("OK");

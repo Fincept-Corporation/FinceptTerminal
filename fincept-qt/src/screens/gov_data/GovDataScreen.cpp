@@ -2,9 +2,15 @@
 #include "screens/gov_data/GovDataScreen.h"
 
 #include "core/logging/Logger.h"
+#include "screens/gov_data/GovDataAustraliaPanel.h"
+#include "screens/gov_data/GovDataCanadaPanel.h"
+#include "screens/gov_data/GovDataCKANPanel.h"
 #include "screens/gov_data/GovDataCongressPanel.h"
-#include "screens/gov_data/GovDataProviderPanel.h"
+#include "screens/gov_data/GovDataFrancePanel.h"
+#include "screens/gov_data/GovDataHKPanel.h"
+#include "screens/gov_data/GovDataSwissPanel.h"
 #include "screens/gov_data/GovDataTreasuryPanel.h"
+#include "screens/gov_data/GovDataUKPanel.h"
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
@@ -108,13 +114,21 @@ void GovDataScreen::build_ui() {
             panel = new GovDataTreasuryPanel(panel_stack_);
         } else if (prov.id == "us-congress") {
             panel = new GovDataCongressPanel(panel_stack_);
+        } else if (prov.id == "canada-gov") {
+            panel = new GovDataCanadaPanel(panel_stack_);
+        } else if (prov.id == "swiss") {
+            panel = new GovDataSwissPanel(panel_stack_);
+        } else if (prov.id == "france") {
+            panel = new GovDataFrancePanel(panel_stack_);
+        } else if (prov.id == "hk") {
+            panel = new GovDataHKPanel(panel_stack_);
+        } else if (prov.id == "universal-ckan") {
+            panel = new GovDataCKANPanel(panel_stack_);
+        } else if (prov.id == "australia") {
+            panel = new GovDataAustraliaPanel(panel_stack_);
         } else {
-            QString org_label = "Publishers";
-            if (prov.id == "openafrica" || prov.id == "universal-ckan")
-                org_label = "Organizations";
-            else if (prov.id == "hk")
-                org_label = "Categories";
-            panel = new GovDataProviderPanel(prov.script, prov.color, org_label, panel_stack_);
+            // openafrica, spain — still use generic until dedicated scripts exist
+            panel = new GovDataProviderPanel(prov.script, prov.color, "Organizations", panel_stack_);
         }
         panel_stack_->addWidget(panel);
     }
@@ -144,7 +158,9 @@ QWidget* GovDataScreen::build_toolbar() {
     header_title_ = new QLabel("GOVERNMENT DATA EXPLORER");
     header_title_->setObjectName("govToolbarTitle");
 
-    header_subtitle_ = new QLabel("Open government portals · 12 sovereign sources");
+    header_subtitle_ = new QLabel(
+        QString("Open government portals · %1 sovereign sources")
+            .arg(services::GovDataService::providers().size()));
     header_subtitle_->setObjectName("govToolbarSub");
 
     cvl->addWidget(header_title_);

@@ -257,7 +257,7 @@ void GovDataCongressPanel::on_fetch_bills() {
         args << QString::number(congress);
         if (!bill_type.isEmpty()) args << bill_type;
         services::GovDataService::instance().execute(
-            kScript, "bills", args, "gov_congress_bills");
+            kScript, "congress_bills", args, "gov_congress_bills");
     }
 }
 
@@ -327,10 +327,12 @@ void GovDataCongressPanel::populate_bills(const QJsonObject& data) {
         if (title.length() > 120) title = title.left(120) + "…";
         bills_table_->setItem(i, 3, new QTableWidgetItem(title));
 
+        QString action = b["latest_action"].toString();
         bills_table_->setItem(i, 4,
-            new QTableWidgetItem(b["latest_action"].toString("—")));
+            new QTableWidgetItem(action.isEmpty() ? "—" : action));
 
-        QString date = b["latest_action_date"].toString(b["update_date"].toString());
+        QString date = b["latest_action_date"].toString();
+        if (date.isEmpty()) date = b["update_date"].toString();
         if (date.length() > 10) date = date.left(10);
         bills_table_->setItem(i, 5, new QTableWidgetItem(date));
     }

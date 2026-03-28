@@ -91,6 +91,18 @@ void PortfolioDetailWrapper::show_view(portfolio::DetailView view, const portfol
     update_data(summary, currency);
 }
 
+void PortfolioDetailWrapper::update_snapshots(
+    const QVector<portfolio::PortfolioSnapshot>& snapshots) {
+    current_snapshots_ = snapshots;
+    // Push to any already-created PerformanceRiskView
+    int key = static_cast<int>(portfolio::DetailView::PerfRisk);
+    auto it  = views_.find(key);
+    if (it != views_.end()) {
+        if (auto* v = qobject_cast<PerformanceRiskView*>(*it))
+            v->set_snapshots(snapshots);
+    }
+}
+
 void PortfolioDetailWrapper::update_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
     current_summary_ = summary;
     current_currency_ = currency;
@@ -104,6 +116,7 @@ void PortfolioDetailWrapper::update_data(const portfolio::PortfolioSummary& summ
         v->set_data(summary, currency);
     } else if (auto* v = qobject_cast<PerformanceRiskView*>(current)) {
         v->set_data(summary, currency);
+        v->set_snapshots(current_snapshots_);
     } else if (auto* v = qobject_cast<RiskManagementView*>(current)) {
         v->set_data(summary, currency);
     } else if (auto* v = qobject_cast<PortfolioOptimizationView*>(current)) {
@@ -132,9 +145,13 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
         case portfolio::DetailView::AnalyticsSectors:
             widget = new AnalyticsSectorsView;
             break;
-        case portfolio::DetailView::PerfRisk:
-            widget = new PerformanceRiskView;
+        case portfolio::DetailView::PerfRisk: {
+            auto* prv = new PerformanceRiskView;
+            if (!current_snapshots_.isEmpty())
+                prv->set_snapshots(current_snapshots_);
+            widget = prv;
             break;
+        }
         case portfolio::DetailView::RiskMgmt:
             widget = new RiskManagementView;
             break;

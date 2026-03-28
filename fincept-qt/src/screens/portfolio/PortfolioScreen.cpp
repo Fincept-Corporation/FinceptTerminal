@@ -41,6 +41,7 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::PortfolioService::portfolio_deleted, this, &PortfolioScreen::on_portfolio_deleted);
     connect(&svc, &services::PortfolioService::asset_added, this, &PortfolioScreen::on_asset_changed);
     connect(&svc, &services::PortfolioService::asset_sold, this, &PortfolioScreen::on_asset_changed);
+    connect(&svc, &services::PortfolioService::snapshots_loaded, this, &PortfolioScreen::on_snapshots_loaded);
 
     // Refresh timer (P3: only set interval, don't start)
     refresh_timer_ = new QTimer(this);
@@ -386,6 +387,9 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
 
     // Trigger metrics computation
     services::PortfolioService::instance().compute_metrics(summary);
+
+    // Load performance history for the chart
+    services::PortfolioService::instance().load_snapshots(summary.portfolio.id);
 }
 
 void PortfolioScreen::on_summary_error(QString portfolio_id, QString error) {
@@ -401,6 +405,16 @@ void PortfolioScreen::on_metrics_computed(portfolio::ComputedMetrics metrics) {
     stats_ribbon_->set_metrics(metrics);
     if (heatmap_)
         heatmap_->set_metrics(metrics);
+}
+
+void PortfolioScreen::on_snapshots_loaded(QString portfolio_id,
+                                          QVector<portfolio::PortfolioSnapshot> snapshots) {
+    if (portfolio_id != selected_id_)
+        return;
+    if (perf_chart_)
+        perf_chart_->set_snapshots(snapshots);
+    if (detail_wrapper_)
+        detail_wrapper_->update_snapshots(snapshots);
 }
 
 void PortfolioScreen::on_portfolio_created(portfolio::Portfolio portfolio) {

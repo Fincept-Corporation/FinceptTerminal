@@ -38,6 +38,7 @@ class PortfolioScreen : public QWidget {
     void on_summary_loaded(portfolio::PortfolioSummary summary);
     void on_summary_error(QString portfolio_id, QString error);
     void on_metrics_computed(portfolio::ComputedMetrics metrics);
+    void on_snapshots_loaded(QString portfolio_id, QVector<portfolio::PortfolioSnapshot> snapshots);
     void on_portfolio_created(portfolio::Portfolio portfolio);
     void on_portfolio_deleted(QString id);
     void on_asset_changed(QString portfolio_id);

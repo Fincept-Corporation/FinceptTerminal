@@ -49,6 +49,9 @@ class PortfolioService : public QObject {
     void export_json(const QString& portfolio_id, const QString& file_path);
     void import_json(const QString& file_path, portfolio::ImportMode mode, const QString& merge_target_id = {});
 
+    // ── Snapshots (performance history) ─────────────────────────────────────
+    void load_snapshots(const QString& portfolio_id, int days = 365);
+
     // ── Cache control ────────────────────────────────────────────────────────
     void invalidate_cache(const QString& portfolio_id);
 
@@ -63,6 +66,7 @@ class PortfolioService : public QObject {
     void transactions_loaded(QVector<portfolio::Transaction> transactions);
 
     void metrics_computed(portfolio::ComputedMetrics metrics);
+    void snapshots_loaded(QString portfolio_id, QVector<portfolio::PortfolioSnapshot> snapshots);
 
     void asset_added(QString portfolio_id);
     void asset_sold(QString portfolio_id);

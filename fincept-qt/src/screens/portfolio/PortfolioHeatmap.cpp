@@ -207,16 +207,26 @@ QColor PortfolioHeatmap::block_color(const portfolio::HoldingWithQuote& h) const
     }
 
     if (mode_ == portfolio::HeatmapMode::Weight) {
-        // Amber gradient by weight
-        int alpha = static_cast<int>(std::min(val / 50.0, 1.0) * 180) + 30;
-        return QColor(217, 119, 6, alpha); // amber
+        // Amber: darker base, brighter at higher weights
+        double t = std::min(val / 40.0, 1.0);
+        int r = static_cast<int>(100 + t * 117);  // 100 → 217
+        int g = static_cast<int>(50  + t * 69);   // 50  → 119
+        int b = static_cast<int>(6);
+        return QColor(r, g, b);
     }
 
-    // Green/Red gradient by value
-    double intensity = std::min(std::abs(val) / 10.0, 1.0);
-    int alpha = static_cast<int>(intensity * 160) + 40;
-    return val >= 0 ? QColor(22, 163, 74, alpha)  // green
-                    : QColor(220, 38, 38, alpha); // red
+    // Green/Red: solid colors, brightness scales with magnitude
+    double intensity = std::min(std::abs(val) / 20.0, 1.0); // saturates at ±20%
+    if (val >= 0) {
+        // Dark green → bright green
+        int g = static_cast<int>(80 + intensity * 123);  // 80 → 203
+        int r = static_cast<int>(intensity * 22);
+        return QColor(r, g, static_cast<int>(intensity * 30));
+    } else {
+        // Dark red → bright red
+        int r = static_cast<int>(100 + intensity * 120); // 100 → 220
+        return QColor(r, static_cast<int>(intensity * 20), static_cast<int>(intensity * 20));
+    }
 }
 
 void PortfolioHeatmap::rebuild_blocks() {
@@ -248,13 +258,13 @@ void PortfolioHeatmap::rebuild_blocks() {
         QString border_style = selected ? QString("border:2px solid %1;").arg(ui::colors::AMBER)
                                         : QString("border:1px solid %1;").arg(ui::colors::BORDER_DIM);
 
-        block->setStyleSheet(QString("QPushButton { background:rgba(%1,%2,%3,%4); %5"
-                                     "  text-align:left; padding:4px 6px; }"
-                                     "QPushButton:hover { border-color:%6; }")
+        block->setStyleSheet(QString("QPushButton { background:rgb(%1,%2,%3); %4"
+                                     "  text-align:left; padding:4px 6px;"
+                                     "  color:#ffffff; font-size:9px; font-weight:700; }"
+                                     "QPushButton:hover { border-color:%5; }")
                                  .arg(bg.red())
                                  .arg(bg.green())
                                  .arg(bg.blue())
-                                 .arg(bg.alpha())
                                  .arg(border_style, ui::colors::AMBER));
 
         // Content

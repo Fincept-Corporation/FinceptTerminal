@@ -542,6 +542,17 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
              QString("Imported %1 transactions into %2, %3 errors").arg(replayed).arg(target_id).arg(errors.size()));
 }
 
+// ── Snapshots ────────────────────────────────────────────────────────────────
+
+void PortfolioService::load_snapshots(const QString& portfolio_id, int days) {
+    auto r = PortfolioRepository::instance().get_snapshots(portfolio_id, days);
+    if (r.is_ok()) {
+        emit snapshots_loaded(portfolio_id, r.value());
+    } else {
+        LOG_WARN("PortfolioSvc", "Failed to load snapshots: " + QString::fromStdString(r.error()));
+    }
+}
+
 // ── Cache control ────────────────────────────────────────────────────────────
 
 void PortfolioService::invalidate_cache(const QString& portfolio_id) {
