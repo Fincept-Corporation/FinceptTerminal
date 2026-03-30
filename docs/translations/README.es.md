@@ -12,7 +12,7 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 [📥 Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 Documentos](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 Discusiones](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 Discordia](https://discord.gg/ae87a8ygbN)·[🤝 Socio](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
-![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
+![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png)
 
 </div>
 
@@ -20,7 +20,7 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 ## Acerca de
 
-**Terminal fincept vch**es una aplicación de escritorio nativa pura de C++20: una reescritura completa de la pila anterior de Tauri/React/Rust. se utiliza**qt6**para interfaz de usuario y renderizado, integrado**Pitón**para análisis y ofrece rendimiento de clase terminal Bloomberg en un único binario nativo.
+**Terminal fincept vch**es una aplicación de escritorio nativa pura de C++20: una reescritura completa de la pila anterior de Tauri/React/Rust. se utiliza**Qt6**para interfaz de usuario y renderizado, integrado**Pitón**para análisis y ofrece rendimiento de clase terminal Bloomberg en un único binario nativo.
 
 * * *
 
@@ -40,16 +40,16 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 ## Características
 
-| **Característica**                   | **Descripción**                                                                                                           |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| 📊**Análisis a nivel CFA**           | Modelos DCF, optimización de cartera, métricas de riesgo (VaR, Sharpe), precios de derivados a través de Python integrado |
-| 🤖**Agentes de IA**                  | Más de 20 personas de inversores (Buffett, Dalio, Graham), estrategias de fondos de cobertura, soporte local de LLM       |
-| 🌐**Más de 100 conectores de datos** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, FMI, Banco Mundial, AkShare, API gubernamentales                          |
-| 📈**Comercio en tiempo real**        | Cripto (Kraken/HyperLiquid WebSocket), acciones, comercio algorítmico, motor de comercio de papel                         |
-| 🔬**Suite QuantLib**                 | 18 módulos de análisis cuantitativo: fijación de precios, riesgo, estocástico, volatilidad, renta fija                    |
-| 🚢**Inteligencia global**            | Seguimiento marítimo, análisis geopolítico, mapeo de relaciones, datos satelitales.                                       |
-| 🎨**Flujos de trabajo visuales**     | Editor de nodos para canales de automatización, integración de herramientas MCP                                           |
-| 🧠**Laboratorio cuantitativo de IA** | Modelos de aprendizaje automático, descubrimiento de factores, HFT, comercio de aprendizaje por refuerzo                  |
+| **Característica**                   | **Descripción**                                                                                                                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 📊**Análisis a nivel CFA**           | Modelos DCF, optimización de cartera, métricas de riesgo (VaR, Sharpe), precios de derivados a través de Python integrado                                                                                           |
+| 🤖**Agentes de IA**                  | Más de 20 personas de inversores (Buffett, Dalio, Graham), estrategias de fondos de cobertura, soporte de LLM local, múltiples proveedores (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
+| 🌐**Más de 100 conectores de datos** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, FMI, Banco Mundial, AkShare, API gubernamentales                                                                                                                    |
+| 📈**Comercio en tiempo real**        | Cripto (Kraken/HyperLiquid WebSocket), acciones, comercio algorítmico, motor de comercio de papel                                                                                                                   |
+| 🔬**Suite QuantLib**                 | 18 módulos de análisis cuantitativo: fijación de precios, riesgo, estocástico, volatilidad, renta fija                                                                                                              |
+| 🚢**Inteligencia global**            | Seguimiento marítimo, análisis geopolítico, mapeo de relaciones, datos satelitales.                                                                                                                                 |
+| 🎨**Flujos de trabajo visuales**     | Editor de nodos para canales de automatización, integración de herramientas MCP                                                                                                                                     |
+| 🧠**Laboratorio cuantitativo de IA** | Modelos de aprendizaje automático, descubrimiento de factores, HFT, comercio de aprendizaje por refuerzo                                                                                                            |
 
 * * *
 
@@ -135,7 +135,7 @@ docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-ter
 | **git**                | el último | `winget install Git.Git`                                          | `apt install git`     | `brew install git`                 |
 | **Chacer**             | 3.20+     | `winget install Kitware.CMake`                                    | `apt install cmake`   | `brew install cmake`               |
 | **compilador de C ++** | C++20     | MSVC 2022 ([estudio visual](https://visualstudio.microsoft.com/)) | `apt install g++`     | Xcode CLT:`xcode-select --install` |
-| **qt6**                | 6.5+      | Vea abajo                                                         | Vea abajo             | Vea abajo                          |
+| **Qt6**                | 6.5+      | Vea abajo                                                         | Vea abajo             | Vea abajo                          |
 | **Pitón**              | 3.11+     | [python.org](https://www.python.org/downloads/)                   | `apt install python3` | `brew install python`              |
 
 #### Instalar Qt6
@@ -204,7 +204,7 @@ cmake --build build --config Release --parallel
 
 ## Hoja de ruta
 
-**Primer trimestre de 2026:**Migración Qt6 completa, transmisión en tiempo real mejorada, backtesting avanzado**Mayo de 2026:**Creador de estrategias de opciones, gestión de carteras múltiples, más de 50 agentes de IA**Futuro:**Complemento móvil, funciones institucionales, API programática, interfaz de usuario de capacitación de aprendizaje automático
+**Primer trimestre de 2026:**Migración Qt6 completa, transmisión en tiempo real mejorada, backtesting avanzado**2026:**Creador de estrategias de opciones, gestión de carteras múltiples, más de 50 agentes de IA**Futuro:**Complemento móvil, funciones institucionales, API programática, interfaz de usuario de capacitación de aprendizaje automático
 
 * * *
 

@@ -12,7 +12,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 [📥 Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 Documents](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 Discorde](https://discord.gg/ae87a8ygbN)·[🤝 Partenaire](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
-![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
+![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png)
 
 </div>
 
@@ -20,7 +20,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 ## À propos
 
-**Fincept Terminal vch**est une application de bureau C++20 purement native – une réécriture complète de la précédente pile Tauri/React/Rust. Il utilise**Qt6**pour l'interface utilisateur et le rendu, intégré**Python** for analytics, and delivers Bloomberg-terminal-class performance in a single native binary.
+**Fincept Terminal vch**est une application de bureau C++20 purement native – une réécriture complète de la précédente pile Tauri/React/Rust. Il utilise**Qt6**pour l'interface utilisateur et le rendu, intégré**Python**pour l'analyse et offre des performances de classe terminal Bloomberg dans un seul binaire natif.
 
 * * *
 
@@ -40,16 +40,16 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 ## Caractéristiques
 
-| **Fonctionnalité**                       | **Description**                                                                                                                  |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| 📊**Analyses de niveau CFA**             | Modèles DCF, optimisation de portefeuille, mesures de risque (VaR, Sharpe), tarification des produits dérivés via Python intégré |
-| 🤖**AI Agents**                          | Plus de 20 personnalités d'investisseurs (Buffett, Dalio, Graham), stratégies de hedge funds, support LLM local                  |
-| 🌐**Plus de 100 connecteurs de données** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, FMI, Banque mondiale, AkShare, API gouvernementales                              |
-| 📈**Trading en temps réel**              | Crypto (Kraken/HyperLiquid WebSocket), actions, trading algo, moteur de trading papier                                           |
-| 🔬**QuantLib Suite**                     | 18 modules d'analyse quantitative — tarification, risque, stochastique, volatilité, titres à revenu fixe                         |
-| 🚢**Renseignement mondial**              | Suivi maritime, analyse géopolitique, cartographie des relations, données satellite                                              |
-| 🎨**Flux de travail visuels**            | Éditeur de nœuds pour les pipelines d'automatisation, intégration de l'outil MCP                                                 |
-| 🧠**AI Quant Lab**                       | Modèles ML, découverte de facteurs, HFT, trading d'apprentissage par renforcement                                                |
+| **Fonctionnalité**                       | **Description**                                                                                                                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 📊**Analyses de niveau CFA**             | Modèles DCF, optimisation de portefeuille, mesures de risque (VaR, Sharpe), tarification des produits dérivés via Python intégré                                                                             |
+| 🤖**AI Agents**                          | Plus de 20 personnalités d'investisseurs (Buffett, Dalio, Graham), stratégies de hedge funds, support LLM local, multi-fournisseurs (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
+| 🌐**Plus de 100 connecteurs de données** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, FMI, Banque mondiale, AkShare, API gouvernementales                                                                                                          |
+| 📈**Trading en temps réel**              | Crypto (Kraken/HyperLiquid WebSocket), actions, trading algo, moteur de trading papier                                                                                                                       |
+| 🔬**QuantLib Suite**                     | 18 modules d'analyse quantitative — tarification, risque, stochastique, volatilité, titres à revenu fixe                                                                                                     |
+| 🚢**Renseignement mondial**              | Suivi maritime, analyse géopolitique, cartographie des relations, données satellite                                                                                                                          |
+| 🎨**Flux de travail visuels**            | Éditeur de nœuds pour les pipelines d'automatisation, intégration de l'outil MCP                                                                                                                             |
+| 🧠**AI Quant Lab**                       | Modèles ML, découverte de facteurs, HFT, trading d'apprentissage par renforcement                                                                                                                            |
 
 * * *
 
@@ -204,11 +204,11 @@ cmake --build build --config Release --parallel
 
 ## Feuille de route
 
-**T1 2026 :**Migration Qt6 terminée, streaming en temps réel amélioré, backtesting avancé**Mai 2026 :**Constructeur de stratégie d'options, gestion multi-portefeuilles, plus de 50 agents IA**Avenir:**Compagnon mobile, fonctionnalités institutionnelles, API programmatique, interface utilisateur de formation ML
+**T1 2026 :**Migration Qt6 terminée, streaming en temps réel amélioré, backtesting avancé**2026 :**Constructeur de stratégie d'options, gestion multi-portefeuilles, plus de 50 agents IA**Avenir:**Compagnon mobile, fonctionnalités institutionnelles, API programmatique, interface utilisateur de formation ML
 
 * * *
 
-## Contributing
+## Contribuer
 
 Nous construisons l’avenir de l’analyse financière – ensemble.
 
@@ -243,7 +243,7 @@ Nous construisons l’avenir de l’analyse financière – ensemble.
 
 ### Source ouverte (AGPL-3.0)
 
--   Free for personal, educational, and non-commercial use
+-   Gratuit pour un usage personnel, éducatif et non commercial
 -   Nécessite des modifications de partage lorsqu'il est distribué ou utilisé comme service réseau
 -   Transparence totale du code source
 

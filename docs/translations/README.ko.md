@@ -8,11 +8,11 @@
 
 ### **당신의 생각이 유일한 한계입니다. 데이터는 그렇지 않습니다.**
 
-CFA 수준 분석, AI 자동화, 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼입니다.
+CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼입니다.
 
 [📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 문서](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 불화](https://discord.gg/ae87a8ygbN)·[🤝 파트너](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
-![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
+![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png)
 
 </div>
 
@@ -26,30 +26,30 @@ CFA 수준 분석, AI 자동화, 무제한 데이터 연결을 갖춘 최첨단 
 
 ## 기술 스택
 
-| 층             | 기술                               |
-| ------------- | -------------------------------- |
-| **언어**        | C++20(MSVC/GCC/클랭)               |
-| **UI 프레임워크**  | Qt6 위젯                           |
-| **차트**        | Qt6 차트                           |
-| **네트워킹**      | Qt6 네트워크 + Qt6 WebSocket         |
-| **데이터 베이스**   | Qt6 SQL(SQLite)                  |
-| **Analytics** | 임베디드 Python 3.11+(100개 이상의 스크립트) |
-| **짓다**        | CMake 3.20+                      |
+| 층            | 기술                               |
+| ------------ | -------------------------------- |
+| **언어**       | C++20(MSVC/GCC/클랭)               |
+| **UI 프레임워크** | Qt6 위젯                           |
+| **차트**       | Qt6 차트                           |
+| **네트워킹**     | Qt6 네트워크 + Qt6 WebSocket         |
+| **데이터 베이스**  | Qt6 SQL(SQLite)                  |
+| **해석학**      | 임베디드 Python 3.11+(100개 이상의 스크립트) |
+| **짓다**       | CMake 3.20+                      |
 
 * * *
 
 ## 특징
 
-| **특징**                 | **설명**                                                                           |
-| ---------------------- | -------------------------------------------------------------------------------- |
-| 📊**CFA 수준 분석**        | DCF 모델, 포트폴리오 최적화, 위험 지표(VaR, Sharpe), 내장된 Python을 통한 파생 상품 가격 책정                |
-| 🤖**AI 에이전트**          | 20명 이상의 투자자 페르소나(Buffett, Dalio, Graham), 헤지펀드 전략, 현지 LLM 지원                     |
-| 🌐**100개 이상의 데이터 커넥터** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IMF, World Bank, AkShare, 정부 API |
-| 📈**실시간 거래**           | 암호화폐(Kraken/HyperLiquid WebSocket), 주식, 알고 트레이딩, 종이 트레이딩 엔진                      |
-| 🔬**QuantLib 스위트**     | 18개의 정량 분석 ​​모듈 — 가격 책정, 리스크, 확률론적, 변동성, 채권                                      |
-| 🚢**글로벌 인텔리전스**        | 해양 추적, 지정학적 분석, 관계 매핑, 위성 데이터                                                    |
-| 🎨**시각적 워크플로우**        | 자동화 파이프라인을 위한 노드 편집기, MCP 도구 통합                                                  |
-| 🧠**AI 퀀트 연구실**        | ML 모델, 요인 발견, HFT, 강화 학습 거래                                                      |
+| **특징**                 | **설명**                                                                                                                                        |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 📊**CFA 수준 분석**        | DCF 모델, 포트폴리오 최적화, 위험 지표(VaR, Sharpe), 내장된 Python을 통한 파생 상품 가격 책정                                                                             |
+| 🤖**AI 에이전트**          | 20명 이상의 투자자 페르소나(Buffett, Dalio, Graham), 헤지 펀드 전략, 현지 LLM 지원, 다중 제공자(OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
+| 🌐**100개 이상의 데이터 커넥터** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IMF, World Bank, AkShare, 정부 API                                                              |
+| 📈**실시간 거래**           | 암호화폐(Kraken/HyperLiquid WebSocket), 주식, 알고 트레이딩, 종이 트레이딩 엔진                                                                                   |
+| 🔬**QuantLib 스위트**     | 18개의 정량 분석 ​​모듈 — 가격 책정, 리스크, 확률론적, 변동성, 채권                                                                                                   |
+| 🚢**글로벌 인텔리전스**        | 해양 추적, 지정학적 분석, 관계 매핑, 위성 데이터                                                                                                                 |
+| 🎨**시각적 워크플로우**        | 자동화 파이프라인을 위한 노드 편집기, MCP 도구 통합                                                                                                               |
+| 🧠**AI 퀀트 연구실**        | ML 모델, 요인 발견, HFT, 강화 학습 거래                                                                                                                   |
 
 * * *
 
@@ -128,7 +128,7 @@ docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-ter
 
 ### 옵션 4 - 소스에서 빌드(수동)
 
-#### 전제조건
+#### 전제 조건
 
 | 도구           | 버전    | 윈도우                                                         | 리눅스                   | macOS                              |
 | ------------ | ----- | ----------------------------------------------------------- | --------------------- | ---------------------------------- |
@@ -204,7 +204,7 @@ cmake --build build --config Release --parallel
 
 ## 로드맵
 
-**2026년 1분기:**Qt6 마이그레이션 완료, 향상된 실시간 스트리밍, 고급 백테스팅**2026년 5월:**옵션 전략 빌더, 다중 포트폴리오 관리, 50개 이상의 AI 에이전트**미래:**모바일 컴패니언, 기관 기능, 프로그래밍 방식 API, ML 교육 UI
+**2026년 1분기:**Qt6 마이그레이션 완료, 향상된 실시간 스트리밍, 고급 백테스팅**2026년:**옵션 전략 빌더, 다중 포트폴리오 관리, 50개 이상의 AI 에이전트**미래:**모바일 컴패니언, 기관 기능, 프로그래밍 방식 API, ML 교육 UI
 
 * * *
 
@@ -212,7 +212,7 @@ cmake --build build --config Release --parallel
 
 우리는 재무 분석의 미래를 함께 만들어가고 있습니다.
 
-**기여하다:**새로운 데이터 커넥터, AI 에이전트, 분석 모듈, C++ 화면, 문서
+**Contribute:**새로운 데이터 커넥터, AI 에이전트, 분석 모듈, C++ 화면, 문서
 
 -   [기여 가이드](docs/CONTRIBUTING.md)
 -   [C++ 기여 가이드](fincept-qt/CONTRIBUTING.md)
