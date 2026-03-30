@@ -28,20 +28,6 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 ---
 
-## Technology Stack
-
-| Layer | Technologies |
-|-------|-------------|
-| **Language** | C++20 (MSVC / GCC / Clang) |
-| **UI Framework** | Qt6 Widgets |
-| **Charts** | Qt6 Charts |
-| **Networking** | Qt6 Network + Qt6 WebSockets |
-| **Database** | Qt6 Sql (SQLite) |
-| **Analytics** | Embedded Python 3.11+ (100+ scripts) |
-| **Build** | CMake 3.20+ |
-
----
-
 ## Features
 
 | **Feature** | **Description** |
@@ -57,22 +43,6 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 ---
 
-## 40+ Screens
-
-| Category | Screens |
-|----------|---------|
-| **Core** | Dashboard, Markets, News, Watchlist |
-| **Trading** | Crypto Trading, Equity Trading, Algo Trading, Backtesting, Trade Visualization |
-| **Research** | Equity Research, Screener, Portfolio, Surface Analytics, M&A Analytics, Derivatives, Alt Investments |
-| **QuantLib** | Core, Analysis, Curves, Economics, Instruments, ML, Models, Numerical, Physics, Portfolio, Pricing, Regulatory, Risk, Scheduling, Solver, Statistics, Stochastic, Volatility |
-| **AI/ML** | AI Quant Lab, Agent Studio, AI Chat, Alpha Arena |
-| **Economics** | Economics, DBnomics, AkShare, Asia Markets |
-| **Geopolitics** | Geopolitics, Gov Data, Relationship Map, Maritime, Polymarket |
-| **Tools** | Code Editor, Node Editor, Excel, Report Builder, Notes, Data Sources, Data Mapping, MCP Servers |
-| **Community** | Forum, Profile, Settings, Support, Docs, About |
-
----
-
 ## Installation
 
 ### Option 1 — Download Pre-built Binary (Recommended)
@@ -82,7 +52,8 @@ Pre-built binaries are available on the [Releases page](https://github.com/Fince
 | Platform | Download | Run |
 |----------|----------|-----|
 | **Windows x64** | `FinceptTerminal-Windows-x64.zip` | Extract → `FinceptTerminal.exe` |
-| **Linux x64** | `FinceptTerminal-Linux-x64.tar.gz` | Extract → `./FinceptTerminal` |
+| **Windows ARM64** | `FinceptTerminal-Windows-arm64.zip` | Extract → `FinceptTerminal.exe` |
+| **Linux x64** | `FinceptTerminal-Linux-x86_64.AppImage` | `chmod +x` → `./FinceptTerminal-Linux-x86_64.AppImage` |
 | **macOS (Apple Silicon)** | `FinceptTerminal-macOS-arm64.tar.gz` | Extract → `./FinceptTerminal` |
 | **macOS (Intel)** | `FinceptTerminal-macOS-x64.tar.gz` | Extract → `./FinceptTerminal` |
 | **macOS (Universal)** | `FinceptTerminal-macOS-universal.tar.gz` | Extract → `./FinceptTerminal` |
@@ -205,9 +176,12 @@ cmake --build build --config Release --parallel
 
 ## Roadmap
 
-**Q1 2026:** Qt6 migration complete, enhanced real-time streaming, advanced backtesting
-**Q2 2026:** Options strategy builder, multi-portfolio management, 50+ AI agents
-**Future:** Mobile companion, institutional features, programmatic API, ML training UI
+| Timeline | Milestone |
+|----------|-----------|
+| **Q1 2026** | Real-time streaming, advanced backtesting, broker integrations |
+| **Q2 2026** | Options strategy builder, multi-portfolio management, 50+ AI agents |
+| **Q3 2026** | Programmatic API, ML training UI, institutional features |
+| **Future** | Mobile companion, cloud sync, community marketplace |
 
 ---
 
