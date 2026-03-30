@@ -226,6 +226,7 @@ jobs:
               --release \
               --no-translations \
               --compiler-runtime \
+              --include-soft-plugins \
               --force \
               dist/${{ matrix.exe }}
           else
@@ -243,7 +244,7 @@ jobs:
             Qt6Charts.dll Qt6PrintSupport.dll \
             Qt6Network.dll Qt6Sql.dll Qt6Concurrent.dll \
             Qt6WebSockets.dll \
-            Qt6Multimedia.dll Qt6MultimediaWidgets.dll \
+            Qt6Multimedia.dll \
             Qt6OpenGL.dll Qt6OpenGLWidgets.dll \
             Qt6Svg.dll Qt6Xml.dll; do
             if [ -f "${QT_BIN}/${qt_dll}" ] && [ ! -f "dist/${qt_dll}" ]; then
@@ -269,10 +270,12 @@ jobs:
           # ----------------------------------------------------------------
           # MSVC Runtime DLLs — --compiler-runtime covers most, but copy
           # from System32 as a fallback for anything missed.
+          # msvcp170 / vcruntime140_2 are the VS2022 v17.x toolset DLLs.
           # ----------------------------------------------------------------
           for vcrt_dll in \
-            vcruntime140.dll vcruntime140_1.dll \
+            vcruntime140.dll vcruntime140_1.dll vcruntime140_2.dll \
             msvcp140.dll msvcp140_1.dll msvcp140_2.dll \
+            msvcp170.dll \
             concrt140.dll vccorlib140.dll; do
             SYS32="/c/Windows/System32/${vcrt_dll}"
             if [ -f "$SYS32" ] && [ ! -f "dist/${vcrt_dll}" ]; then
@@ -363,6 +366,57 @@ jobs:
           fi
 
           # ----------------------------------------------------------------
+          # Qt MultimediaWidgets DLL — required when HAS_QT_MULTIMEDIA is set
+          # (Qt6Multimedia.dll is in the core list above; this is the separate
+          #  widgets integration DLL that windeployqt may miss)
+          # ----------------------------------------------------------------
+          if [ -f "${QT_BIN}/Qt6MultimediaWidgets.dll" ] && [ ! -f "dist/Qt6MultimediaWidgets.dll" ]; then
+            cp "${QT_BIN}/Qt6MultimediaWidgets.dll" dist/
+            echo "Copied Qt6MultimediaWidgets.dll"
+          fi
+
+          # ----------------------------------------------------------------
+          # Qt TextToSpeech DLL + SAPI plugin (Windows TTS backend)
+          # ----------------------------------------------------------------
+          if [ -f "${QT_BIN}/Qt6TextToSpeech.dll" ] && [ ! -f "dist/Qt6TextToSpeech.dll" ]; then
+            cp "${QT_BIN}/Qt6TextToSpeech.dll" dist/
+            echo "Copied Qt6TextToSpeech.dll"
+          fi
+          if [ -d "${QT_PLUGINS}/texttospeech" ]; then
+            mkdir -p dist/texttospeech
+            cp -n "${QT_PLUGINS}/texttospeech/"*.dll dist/texttospeech/ 2>/dev/null || true
+            echo "Copied texttospeech plugins"
+          fi
+
+          # ----------------------------------------------------------------
+          # Qt Network Information plugins (Qt 6.2+ — used by QNetworkInformation)
+          # ----------------------------------------------------------------
+          if [ -d "${QT_PLUGINS}/networkinformation" ]; then
+            mkdir -p dist/networkinformation
+            cp -n "${QT_PLUGINS}/networkinformation/"*.dll dist/networkinformation/ 2>/dev/null || true
+            echo "Copied networkinformation plugins"
+          fi
+
+          # ----------------------------------------------------------------
+          # Qt Platform Input Contexts — IME support (CJK, on-screen keyboard)
+          # ----------------------------------------------------------------
+          if [ -d "${QT_PLUGINS}/platforminputcontexts" ]; then
+            mkdir -p dist/platforminputcontexts
+            cp -n "${QT_PLUGINS}/platforminputcontexts/"*.dll dist/platforminputcontexts/ 2>/dev/null || true
+            echo "Copied platforminputcontexts plugins"
+          fi
+
+          # ----------------------------------------------------------------
+          # Qt Print Support Plugin — required by Qt6::PrintSupport
+          # (the DLL is in the core list; this is the Windows printer backend plugin)
+          # ----------------------------------------------------------------
+          if [ -d "${QT_PLUGINS}/printsupport" ]; then
+            mkdir -p dist/printsupport
+            cp -n "${QT_PLUGINS}/printsupport/"*.dll dist/printsupport/ 2>/dev/null || true
+            echo "Copied printsupport plugins"
+          fi
+
+          # ----------------------------------------------------------------
           # Qt Generic Plugins (touch/tablet input)
           # ----------------------------------------------------------------
           if [ -d "${QT_PLUGINS}/generic" ]; then
@@ -372,9 +426,12 @@ jobs:
 
           # ----------------------------------------------------------------
           # Direct3D compiler + OpenGL SW fallback
-          # Needed on machines without a proper GPU driver (VMs, headless CI)
+          # Needed on machines without a proper GPU driver (VMs, headless CI).
+          # dxcompiler.dll + dxil.dll: Qt 6.6+ D3D12 backend (DXC shader compiler).
           # ----------------------------------------------------------------
-          for d3d_dll in d3dcompiler_47.dll opengl32sw.dll libEGL.dll libGLESv2.dll; do
+          for d3d_dll in \
+            d3dcompiler_47.dll opengl32sw.dll libEGL.dll libGLESv2.dll \
+            dxcompiler.dll dxil.dll; do
             if [ -f "${QT_BIN}/${d3d_dll}" ] && [ ! -f "dist/${d3d_dll}" ]; then
               cp "${QT_BIN}/${d3d_dll}" dist/
               echo "Copied ${d3d_dll}"
@@ -391,6 +448,18 @@ jobs:
               echo "Copied ${base}"
             fi
           done
+
+          # ----------------------------------------------------------------
+          # qt.conf — pins plugin and data paths relative to the executable.
+          # Without this, Qt falls back to hardcoded build-time paths which
+          # don't exist on a clean machine and can cause plugin load failures.
+          # ----------------------------------------------------------------
+          cat > dist/qt.conf <<'QTCONF'
+[Paths]
+Prefix = .
+Plugins = .
+Libraries = .
+QTCONF
 
           # ----------------------------------------------------------------
           # Copy app resources and Python analytics scripts
