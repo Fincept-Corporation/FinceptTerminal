@@ -47,7 +47,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 | **Feature** | **Description** |
 |-------------|-----------------|
 | 📊 **CFA-Level Analytics** | DCF models, portfolio optimization, risk metrics (VaR, Sharpe), derivatives pricing via embedded Python |
-| 🤖 **AI Agents** | 20+ investor personas (Buffett, Dalio, Graham), hedge fund strategies, local LLM support |
+| 🤖 **AI Agents** | 20+ investor personas (Buffett, Dalio, Graham), hedge fund strategies, local LLM support, multi-provider (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
 | 🌐 **100+ Data Connectors** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IMF, World Bank, AkShare, government APIs |
 | 📈 **Real-Time Trading** | Crypto (Kraken/HyperLiquid WebSocket), equity, algo trading, paper trading engine |
 | 🔬 **QuantLib Suite** | 18 quantitative analysis modules — pricing, risk, stochastic, volatility, fixed income |
