@@ -97,23 +97,25 @@ set(BUILD_SHARED_LIBS      OFF CACHE BOOL "" FORCE)
 # SDL2 is only needed by the stream example — not required when embedding.
 set(WHISPER_SDL2           OFF CACHE BOOL "" FORCE)
 
-# GGML_NATIVE=ON tells GGML to compile for the *host* CPU features. This breaks
-# in two cross-compile scenarios:
-#   1. macOS ARM64 runner building x86_64 target — detects apple-m3 (invalid for x86)
-#      and also triggers i8mm intrinsics not available on the runner's CPU variant.
-#   2. Windows ARM64 (clang-cl) — detects host ARM features and emits
-#      'native+nodotprod+noi8mm+nosve' which clang-cl on Windows does not support.
-# Disable GGML_NATIVE for all cross-compile targets; keep it ON only for native builds.
-if(CMAKE_OSX_ARCHITECTURES AND NOT CMAKE_OSX_ARCHITECTURES STREQUAL CMAKE_SYSTEM_PROCESSOR)
-    # macOS cross-compile (e.g. ARM64 runner → x86_64 target)
+# Whisper/GGML build guards — prevent CI failures across all platforms:
+#
+# GGML_NATIVE: detects host CPU features at configure time and enables
+#   architecture-specific intrinsics. Breaks in three ways on CI:
+#   - macOS ARM64 native: runner may lack i8mm support → vmmlaq_s32 build error
+#   - macOS ARM64 → x86_64 cross: detects apple-m3 CPU, invalid for x86 target
+#   - Windows ARM64 (clang-cl): emits 'native+nodotprod+noi8mm+nosve', unsupported
+#   We embed whisper for STT only — native CPU tuning gives negligible benefit
+#   vs the build fragility it introduces across CI runners.
+#
+# GGML_METAL: uses Objective-C (.m files). GGML's CMake unity build merges .m
+#   into a .c translation unit, which breaks ObjC syntax (@class, @protocol etc.)
+#   on all macOS jobs. We use CPU inference only (use_gpu=false in WhisperService),
+#   so Metal provides no benefit.
+if(APPLE)
     set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
-    # Metal GPU backend uses Objective-C (.m files). GGML's unity build merges .m
-    # into a .c translation unit which breaks ObjC syntax when cross-compiling.
-    # Metal is only useful on Apple Silicon anyway — disable for x86_64 target.
     set(GGML_METAL  OFF CACHE BOOL "" FORCE)
 elseif(MSVC AND CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
-    # Windows ARM64 cross-compile: clang-cl does not accept GGML's native ARM
-    # feature string (e.g. 'native+nodotprod+noi8mm+nosve').
+    # Windows ARM64 cross-compile: clang-cl rejects GGML's native ARM feature string.
     set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 endif()
 FetchContent_Declare(
