@@ -54,13 +54,15 @@ jobs:
             cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=arm64"
 
           # ---- macOS x64 (Intel) ----
+          # Cross-compiled on ARM64 runner — disable GGML_NATIVE (would detect apple-m3,
+          # invalid for x86 target) and GGML_METAL (Metal GPU backend is ARM/Apple Silicon only).
           - os: macos-15
             arch: x64
             platform: macOS
             artifact: FinceptTerminal-macOS-x64
             exe: FinceptTerminal
             qt_arch: clang_64
-            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
+            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64 -DGGML_NATIVE=OFF -DGGML_METAL=OFF"
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.platform }} ${{ matrix.arch }}
