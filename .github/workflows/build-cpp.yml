@@ -78,6 +78,7 @@ jobs:
         with:
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ env.QT_VERSION }}
           max-size: 500M
+          update-package-index: true
 
       # ---- System dependencies (Linux) ----
       - name: Install system dependencies (Linux)
@@ -152,10 +153,17 @@ jobs:
         run: |
           # jurplel/install-qt-action with dir set installs into <dir>/Qt/<version>/<arch>
           HOST_QT="${{ runner.temp }}/qt-host/Qt/${{ env.QT_VERSION }}/msvc2022_64"
+          # clang-cl ships with VS 2022 and is required by whisper.cpp's GGML CPU backend
+          # for ARM64 — pure MSVC cl.exe is rejected by ggml-cpu/CMakeLists.txt.
+          # Using clang-cl gives full ARM NEON acceleration while keeping the MSVC ABI
+          # so Qt ARM64 libs link correctly.
+          CLANG_CL=$(find "/c/Program Files/Microsoft Visual Studio/2022" -name "clang-cl.exe" 2>/dev/null | head -1)
           cmake -B build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DQT_HOST_PATH="${HOST_QT}" \
+            -DCMAKE_C_COMPILER="${CLANG_CL}" \
+            -DCMAKE_CXX_COMPILER="${CLANG_CL}" \
             ${{ matrix.cmake_extra }}
 
       # ---- Build ----

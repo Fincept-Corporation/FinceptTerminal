@@ -9,10 +9,11 @@
 // Complies with P1 (never block UI thread), P6 (service layer), P8 (QPointer guards).
 //
 // Model lifecycle:
-//   1. On first start_listening(), check AppDataLocation for ggml-base.en-q5_0.bin
-//   2. If missing, download from HuggingFace — emit model_download_progress(int %)
-//   3. On download complete, emit model_ready() and begin capture
-//   4. On all subsequent calls the model is already loaded — zero overhead
+//   1. SetupScreen calls download_for_setup() during first-run setup.
+//      Progress is reported via model_download_progress(int %).
+//      Model is stored at: com.fincept.terminal/models/ggml-base.en-q5_0.bin
+//   2. On first start_listening(), model is already present — loads immediately.
+//   3. If model is somehow absent (manual delete), it auto-downloads on mic press.
 
 #include <QAudioFormat>
 #include <QAudioSource>
@@ -67,10 +68,19 @@ class WhisperService : public QObject {
     /// discarded — its result will not be emitted.
     void stop_listening();
 
-    [[nodiscard]] bool is_listening()  const noexcept;
-    [[nodiscard]] bool is_model_ready() const noexcept;
+    [[nodiscard]] bool is_listening()        const noexcept;
+    [[nodiscard]] bool is_model_ready()      const noexcept;
+
+    /// True if the model file exists on disk (downloaded during setup or previously).
+    [[nodiscard]] static bool is_model_downloaded();
+
+    /// Called by SetupScreen during first-run setup to pre-download the model.
+    /// Emits model_download_progress(0-100) and model_ready() on completion,
+    /// or error_occurred() on failure.  No-op if model is already present.
+    void download_for_setup();
 
     /// Absolute path to the model file (may not exist yet).
+    /// Located at: com.fincept.terminal/models/ggml-base.en-q5_0.bin
     [[nodiscard]] QString model_path() const;
 
   signals:

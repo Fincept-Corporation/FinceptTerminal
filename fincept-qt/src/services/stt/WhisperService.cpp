@@ -10,6 +10,7 @@
 
 #include "services/stt/WhisperService.h"
 #include "core/logging/Logger.h"
+#include "python/PythonSetupManager.h"
 
 // whisper.cpp public C API
 #include "whisper.h"
@@ -24,7 +25,6 @@
 #include <QNetworkRequest>
 #include <QPointer>
 #include <QSaveFile>
-#include <QStandardPaths>
 #include <QtConcurrent/QtConcurrent>
 
 #include <algorithm>
@@ -90,9 +90,26 @@ bool WhisperService::is_model_ready() const noexcept {
 }
 
 QString WhisperService::model_path() const {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+    // Co-locate with all other Fincept data under com.fincept.terminal/models/
+    // to keep the install footprint in one place.
+    const QString dir = python::PythonSetupManager::instance().install_dir()
                         + QStringLiteral("/models");
     return dir + u'/' + kModelFilename;
+}
+
+// static
+bool WhisperService::is_model_downloaded() {
+    return QFile::exists(instance().model_path());
+}
+
+void WhisperService::download_for_setup() {
+    if (is_model_downloaded()) {
+        // Already present — just report 100% so the setup step goes green.
+        emit model_download_progress(100);
+        emit model_ready();
+        return;
+    }
+    download_model();
 }
 
 // ── Model management ──────────────────────────────────────────────────────────
@@ -116,7 +133,7 @@ void WhisperService::ensure_model() {
 }
 
 void WhisperService::download_model() {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+    const QString dir = python::PythonSetupManager::instance().install_dir()
                         + QStringLiteral("/models");
     QDir().mkpath(dir);
 

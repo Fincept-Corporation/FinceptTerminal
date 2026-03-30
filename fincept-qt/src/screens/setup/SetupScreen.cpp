@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonSetupManager.h"
+#include "services/stt/WhisperService.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -27,11 +28,18 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
     prefill_completed_steps();
 
-    connect(&python::PythonSetupManager::instance(), &python::PythonSetupManager::progress_changed, this,
-            &SetupScreen::on_progress);
+    connect(&python::PythonSetupManager::instance(), &python::PythonSetupManager::progress_changed,
+            this, &SetupScreen::on_progress);
+    connect(&python::PythonSetupManager::instance(), &python::PythonSetupManager::setup_complete,
+            this, &SetupScreen::on_setup_done);
 
-    connect(&python::PythonSetupManager::instance(), &python::PythonSetupManager::setup_complete, this,
-            &SetupScreen::on_setup_done);
+    auto& ws = services::WhisperService::instance();
+    connect(&ws, &services::WhisperService::model_download_progress,
+            this, &SetupScreen::on_whisper_progress);
+    connect(&ws, &services::WhisperService::model_ready,
+            this, &SetupScreen::on_whisper_ready);
+    connect(&ws, &services::WhisperService::error_occurred,
+            this, &SetupScreen::on_whisper_error);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +83,7 @@ void SetupScreen::build_ui() {
     cl->addWidget(build_step_row("Virtual Environments", "venv"));
     cl->addWidget(build_step_row("NumPy 1.x Packages", "packages-numpy1"));
     cl->addWidget(build_step_row("NumPy 2.x Packages", "packages-numpy2"));
+    cl->addWidget(build_step_row("Whisper Voice Model", "whisper"));
 
     cl->addSpacing(20);
 
@@ -209,15 +218,14 @@ void SetupScreen::on_progress(const python::SetupProgress& progress) {
 
 void SetupScreen::on_setup_done(bool success, const QString& error) {
     if (success) {
-        status_label_->setText("Setup complete! Starting Fincept Terminal...");
-        status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:8px;")
-                                         .arg(colors::GREEN, fonts::DATA_FAMILY));
-        begin_btn_->setText("SETUP COMPLETE");
+        LOG_INFO("SetupScreen", "Python setup completed — starting Whisper model download");
+        status_label_->setText("Downloading Whisper voice model...");
+        status_label_->setStyleSheet(
+            QString("color:%1; font-family:%2; font-size:10px; margin-top:8px;").arg(kAccent, fonts::DATA_FAMILY));
 
-        LOG_INFO("SetupScreen", "Setup completed successfully");
-
-        // Emit signal after a short delay so user sees the success message
-        QTimer::singleShot(1500, this, [this]() { emit setup_complete(); });
+        // Kick off whisper model download as the final setup step.
+        // on_whisper_ready() will emit setup_complete() when done.
+        services::WhisperService::instance().download_for_setup();
     } else {
         begin_btn_->setEnabled(true);
         begin_btn_->setText("RETRY SETUP");
@@ -227,6 +235,45 @@ void SetupScreen::on_setup_done(bool success, const QString& error) {
 
         LOG_ERROR("SetupScreen", "Setup failed: " + error);
     }
+}
+
+void SetupScreen::on_whisper_progress(int percent) {
+    if (!steps_.contains("whisper")) return;
+    auto& ui = steps_["whisper"];
+    ui.bar->setValue(percent);
+    if (percent < 100) {
+        ui.status->setText(QString("%1%").arg(percent));
+        ui.status->setStyleSheet(
+            QString("color:%1; font-family:%2; font-size:9px;").arg(kAccent, fonts::DATA_FAMILY));
+    }
+    status_label_->setText(QString("Downloading Whisper voice model... %1%").arg(percent));
+}
+
+void SetupScreen::on_whisper_ready() {
+    mark_step_done("whisper");
+    status_label_->setText("All components installed! Starting Fincept Terminal...");
+    status_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; margin-top:8px;")
+                                     .arg(colors::GREEN, fonts::DATA_FAMILY));
+    begin_btn_->setText("SETUP COMPLETE");
+
+    LOG_INFO("SetupScreen", "Whisper model ready — setup fully complete");
+    QTimer::singleShot(1500, this, [this]() { emit setup_complete(); });
+}
+
+void SetupScreen::on_whisper_error(const QString& message) {
+    if (steps_.contains("whisper")) {
+        auto& ui = steps_["whisper"];
+        ui.status->setText("FAILED");
+        ui.status->setStyleSheet(
+            QString("color:%1; font-family:%2; font-size:9px;").arg(colors::RED, fonts::DATA_FAMILY));
+    }
+    // Non-fatal — voice commands won't work but app can still launch.
+    LOG_WARN("SetupScreen", "Whisper model download failed: " + message);
+    status_label_->setText("Voice model download failed — voice commands unavailable. Continuing...");
+    status_label_->setStyleSheet(
+        QString("color:%1; font-family:%2; font-size:10px; margin-top:8px;").arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+    begin_btn_->setText("SETUP COMPLETE");
+    QTimer::singleShot(2500, this, [this]() { emit setup_complete(); });
 }
 
 void SetupScreen::mark_step_done(const QString& key) {
@@ -239,7 +286,8 @@ void SetupScreen::mark_step_done(const QString& key) {
 }
 
 void SetupScreen::prefill_completed_steps() {
-    const auto status = python::PythonSetupManager::instance().check_status();
+    const auto status  = python::PythonSetupManager::instance().check_status();
+    const bool whisper = services::WhisperService::is_model_downloaded();
 
     // Pre-fill completed steps as green DONE
     if (status.uv_installed)        mark_step_done("uv");
@@ -247,11 +295,14 @@ void SetupScreen::prefill_completed_steps() {
     if (status.venv_numpy1_ready && status.venv_numpy2_ready) mark_step_done("venv");
     if (status.venv_numpy1_ready)   mark_step_done("packages-numpy1");
     if (status.venv_numpy2_ready)   mark_step_done("packages-numpy2");
+    if (whisper)                    mark_step_done("whisper");
 
     const bool any_done = status.uv_installed || status.python_installed
-                          || status.venv_numpy1_ready || status.venv_numpy2_ready;
+                          || status.venv_numpy1_ready || status.venv_numpy2_ready
+                          || whisper;
     const bool all_done = status.uv_installed && status.python_installed
-                          && status.venv_numpy1_ready && status.venv_numpy2_ready;
+                          && status.venv_numpy1_ready && status.venv_numpy2_ready
+                          && whisper;
 
     summary_lbl_->setText({});
 

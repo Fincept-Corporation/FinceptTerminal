@@ -27,6 +27,9 @@ class SetupScreen : public QWidget {
     void on_begin_setup();
     void on_progress(const fincept::python::SetupProgress& progress);
     void on_setup_done(bool success, const QString& error);
+    void on_whisper_progress(int percent);
+    void on_whisper_ready();
+    void on_whisper_error(const QString& message);
 
   private:
     void build_ui();
