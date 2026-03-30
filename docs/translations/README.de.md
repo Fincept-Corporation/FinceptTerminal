@@ -6,7 +6,7 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
-### **Your Thinking is the Only Limit. The Data Isn't.**
+### **Ihr Denken ist die einzige Grenze. Die Daten sind es nicht.**
 
 Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Automatisierung und unbegrenzter Datenkonnektivität.
 
@@ -24,26 +24,12 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 * * *
 
-## Technologie-Stack
-
-| Schicht          | Technologien                                  |
-| ---------------- | --------------------------------------------- |
-| **Sprache**      | C++20 (MSVC / GCC / Clang)                    |
-| **UI-Framework** | Qt6-Widgets                                   |
-| **Diagramme**    | Qt6-Diagramme                                 |
-| **Vernetzung**   | Qt6-Netzwerk + Qt6-WebSockets                 |
-| **Datenbank**    | Qt6 SQL (SQLite)                              |
-| **Analytik**     | Eingebettetes Python 3.11+ (über 100 Skripte) |
-| **Bauen**        | CMake 3.20+                                   |
-
-* * *
-
 ## Merkmale
 
 | **Besonderheit**               | **Beschreibung**                                                                                                                                                                                      |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 📊**Analysen auf CFA-Ebene**   | DCF-Modelle, Portfoliooptimierung, Risikometriken (VaR, Sharpe), Derivatpreisgestaltung über eingebettetes Python                                                                                     |
-| 🤖**AI Agents**                | Über 20 Investorenpersönlichkeiten (Buffett, Dalio, Graham), Hedgefonds-Strategien, lokale LLM-Unterstützung, Multi-Provider (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
+| 🤖**KI-Agenten**               | Über 20 Investorenpersönlichkeiten (Buffett, Dalio, Graham), Hedgefonds-Strategien, lokale LLM-Unterstützung, Multi-Provider (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
 | 🌐**Über 100 Datenanschlüsse** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IWF, Weltbank, AkShare, Regierungs-APIs                                                                                                               |
 | 📈**Echtzeithandel**           | Krypto (Kraken/HyperLiquid WebSocket), Aktien, Algo-Handel, Papierhandelsmaschine                                                                                                                     |
 | 🔬**QuantLib Suite**           | 18 quantitative Analysemodule – Preisgestaltung, Risiko, Stochastik, Volatilität, festverzinsliche Wertpapiere                                                                                        |
@@ -53,35 +39,20 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 * * *
 
-## Über 40 Bildschirme
-
-| Kategorie        | Bildschirme                                                                                                                                                                                |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Kern**         | Dashboard, Märkte, Nachrichten, Beobachtungsliste                                                                                                                                          |
-| **Handel**       | Krypto-Handel, Aktienhandel, Algo-Handel, Backtesting, Handelsvisualisierung                                                                                                               |
-| **Forschung**    | Aktienanalyse, Screener, Portfolio, Oberflächenanalyse, M&A-Analyse, Derivate, Altinvestitionen                                                                                            |
-| **QuantLib**     | Kern, Analyse, Kurven, Wirtschaft, Instrumente, ML, Modelle, Numerisch, Physik, Portfolio, Preisgestaltung, Regulierung, Risiko, Terminplanung, Solver, Statistik, Stochastik, Volatilität |
-| **KI/ML**        | AI Quant Lab, Agent Studio, AI Chat, Alpha Arena                                                                                                                                           |
-| **Wirtschaft**   | Wirtschaft, DBnomics, AkShare, Asiatische Märkte                                                                                                                                           |
-| **Geopolitik**   | Geopolitik, Regierungsdaten, Beziehungskarte, Maritim, Polymarket                                                                                                                          |
-| **Werkzeuge**    | Code-Editor, Knoten-Editor, Excel, Report Builder, Notizen, Datenquellen, Datenzuordnung, MCP-Server                                                                                       |
-| **Gemeinschaft** | Forum, Profil, Einstellungen, Support, Dokumente, Info                                                                                                                                     |
-
-* * *
-
 ## Installation
 
 ### Option 1 – Vorgefertigte Binärdatei herunterladen (empfohlen)
 
 Vorgefertigte Binärdateien sind auf der verfügbar[Seite „Veröffentlichungen“.](https://github.com/Fincept-Corporation/FinceptTerminal/releases). Keine Build-Tools erforderlich – einfach extrahieren und ausführen.
 
-| Plattform                 | Herunterladen                            | Laufen                             |
-| ------------------------- | ---------------------------------------- | ---------------------------------- |
-| **Windows x64**           | `FinceptTerminal-Windows-x64.zip`        | Extrahieren →`FinceptTerminal.exe` |
-| **Linux x64**             | `FinceptTerminal-Linux-x64.tar.gz`       | Extrahieren →`./FinceptTerminal`   |
-| **macOS (Apple Silicon)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extrahieren →`./FinceptTerminal`   |
-| **macOS (Intel)**         | `FinceptTerminal-macOS-x64.tar.gz`       | Extrahieren →`./FinceptTerminal`   |
-| **macOS (universell)**    | `FinceptTerminal-macOS-universal.tar.gz` | Extrahieren →`./FinceptTerminal`   |
+| Plattform                 | Herunterladen                            | Laufen                                               |
+| ------------------------- | ---------------------------------------- | ---------------------------------------------------- |
+| **Windows x64**           | `FinceptTerminal-Windows-x64.zip`        | Extrahieren →`FinceptTerminal.exe`                   |
+| **Windows ARM64**         | `FinceptTerminal-Windows-arm64.zip`      | Extrahieren →`FinceptTerminal.exe`                   |
+| **Linux x64**             | `FinceptTerminal-Linux-x86_64.AppImage`  | `chmod +x`→`./FinceptTerminal-Linux-x86_64.AppImage` |
+| **macOS (Apple Silicon)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extrahieren →`./FinceptTerminal`                     |
+| **macOS (Intel)**         | `FinceptTerminal-macOS-x64.tar.gz`       | Extrahieren →`./FinceptTerminal`                     |
+| **macOS (universell)**    | `FinceptTerminal-macOS-universal.tar.gz` | Extrahieren →`./FinceptTerminal`                     |
 
 * * *
 
@@ -204,7 +175,12 @@ cmake --build build --config Release --parallel
 
 ## Roadmap
 
-**Q1 2026:**Qt6-Migration abgeschlossen, verbessertes Echtzeit-Streaming, erweitertes Backtesting**2026:**Optionsstrategie-Builder, Multi-Portfolio-Management, über 50 KI-Agenten**Zukunft:**Mobiler Begleiter, institutionelle Funktionen, programmatische API, ML-Trainings-Benutzeroberfläche
+| Zeitleiste          | Meilenstein                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| **1. Quartal 2026** | Echtzeit-Streaming, erweitertes Backtesting, Broker-Integrationen                   |
+| **Erbrechen 2026**  | Optionsstrategie-Builder, Multi-Portfolio-Management, über 50 KI-Agenten            |
+| **Kz 2026**         | Programmatische API, Benutzeroberfläche für ML-Training, institutionelle Funktionen |
+| **Zukunft**         | Mobiler Begleiter, Cloud-Synchronisierung, Community-Marktplatz                     |
 
 * * *
 

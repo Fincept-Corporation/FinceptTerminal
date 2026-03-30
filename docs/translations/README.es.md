@@ -24,20 +24,6 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 * * *
 
-## Pila de tecnología
-
-| Capa                             | Tecnologías                                 |
-| -------------------------------- | ------------------------------------------- |
-| **Idioma**                       | C++20 (MSVC/GCC/Clang)                      |
-| **Marco de interfaz de usuario** | Widgets Qt6                                 |
-| **Gráficos**                     | Gráficos Qt6                                |
-| **Redes**                        | Red Qt6 + WebSockets Qt6                    |
-| **Base de datos**                | Qt6 SQL (SQLite)                            |
-| **Analítica**                    | Python integrado 3.11+ (más de 100 scripts) |
-| **Construir**                    | CMake 3.20+                                 |
-
-* * *
-
 ## Características
 
 | **Característica**                   | **Descripción**                                                                                                                                                                                                     |
@@ -53,35 +39,20 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 * * *
 
-## Más de 40 pantallas
-
-| Categoría               | Pantallas                                                                                                                                                                               |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Centro**              | Panel de control, Mercados, Noticias, Lista de seguimiento                                                                                                                              |
-| **Comercio**            | Comercio de criptomonedas, comercio de acciones, comercio de algoritmos, pruebas retrospectivas, visualización comercial                                                                |
-| **Investigación**       | Investigación de acciones, evaluador, cartera, análisis de superficie, análisis de fusiones y adquisiciones, derivados, inversiones alternativas                                        |
-| **QuantLib**            | Núcleo, Análisis, Curvas, Economía, Instrumentos, ML, Modelos, Numérico, Física, Portafolio, Precios, Regulatorio, Riesgo, Programación, Solver, Estadísticas, Estocástico, Volatilidad |
-| **IA/ML**               | AI Quant Lab, Agent Studio, AI Chat, Alpha Arena                                                                                                                                        |
-| **Ciencias económicas** | Economía, DBnomics, AkShare, Mercados de Asia                                                                                                                                           |
-| **Geopolítica**         | Geopolítica, datos gubernamentales, mapa de relaciones, marítimo, polimercado                                                                                                           |
-| **Herramientas**        | Editor de código, Editor de nodos, Excel, Generador de informes, Notas, Fuentes de datos, Mapeo de datos, Servidores MCP                                                                |
-| **Comunidad**           | Foro, Perfil, Configuración, Soporte, Documentos, Acerca de                                                                                                                             |
-
-* * *
-
 ## Instalación
 
 ### Opción 1: descargar binario prediseñado (recomendado)
 
 Los archivos binarios prediseñados están disponibles en[Página de lanzamientos](https://github.com/Fincept-Corporation/FinceptTerminal/releases). No se requieren herramientas de compilación: simplemente extraiga y ejecute.
 
-| Plataforma                | Descargar                                | Correr                         |
-| ------------------------- | ---------------------------------------- | ------------------------------ |
-| **Ventanas x64**          | `FinceptTerminal-Windows-x64.zip`        | Extraer →`FinceptTerminal.exe` |
-| **Linuxx64**              | `FinceptTerminal-Linux-x64.tar.gz`       | Extraer →`./FinceptTerminal`   |
-| **macOS (Apple Silicio)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extraer →`./FinceptTerminal`   |
-| **MacOS (Intel)**         | `FinceptTerminal-macOS-x64.tar.gz`       | Extraer →`./FinceptTerminal`   |
-| **macOS (universal)**     | `FinceptTerminal-macOS-universal.tar.gz` | Extraer →`./FinceptTerminal`   |
+| Plataforma                | Descargar                                | Correr                                               |
+| ------------------------- | ---------------------------------------- | ---------------------------------------------------- |
+| **Ventanas x64**          | `FinceptTerminal-Windows-x64.zip`        | Extraer →`FinceptTerminal.exe`                       |
+| **ventanas ARM64**        | `FinceptTerminal-Windows-arm64.zip`      | Extraer →`FinceptTerminal.exe`                       |
+| **Linuxx64**              | `FinceptTerminal-Linux-x86_64.AppImage`  | `chmod +x`→`./FinceptTerminal-Linux-x86_64.AppImage` |
+| **macOS (Apple Silicio)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extraer →`./FinceptTerminal`                         |
+| **MacOS (Intel)**         | `FinceptTerminal-macOS-x64.tar.gz`       | Extraer →`./FinceptTerminal`                         |
+| **macOS (universal)**     | `FinceptTerminal-macOS-universal.tar.gz` | Extraer →`./FinceptTerminal`                         |
 
 * * *
 
@@ -204,7 +175,12 @@ cmake --build build --config Release --parallel
 
 ## Hoja de ruta
 
-**Primer trimestre de 2026:**Migración Qt6 completa, transmisión en tiempo real mejorada, backtesting avanzado**2026:**Creador de estrategias de opciones, gestión de carteras múltiples, más de 50 agentes de IA**Futuro:**Complemento móvil, funciones institucionales, API programática, interfaz de usuario de capacitación de aprendizaje automático
+| Línea de tiempo              | Hito                                                                                                             |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Primer trimestre de 2026** | Transmisión en tiempo real, backtesting avanzado, integraciones de corredores                                    |
+| **vómitos 2026**             | Creador de estrategias de opciones, gestión de carteras múltiples, más de 50 agentes de IA                       |
+| **2026**                     | API programática, interfaz de usuario de capacitación de aprendizaje automático, características institucionales |
+| **Futuro**                   | Compañero móvil, sincronización en la nube, mercado comunitario                                                  |
 
 * * *
 
@@ -239,7 +215,7 @@ Estamos construyendo juntos el futuro del análisis financiero.
 
 ## Licencia
 
-**Licencia dual: AGPL-3.0 (código abierto) + Comercial**
+**Dual Licensed: AGPL-3.0 (Open Source) + Commercial**
 
 ### Código abierto (AGPL-3.0)
 
