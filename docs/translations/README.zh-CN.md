@@ -24,20 +24,6 @@
 
 * * *
 
-## 技术栈
-
-| 层          | 技术                        |
-| ---------- | ------------------------- |
-| **语言**     | C++20（MSVC/GCC/Clang）     |
-| **用户界面框架** | Qt6 小部件                   |
-| **图表**     | Qt6 图表                    |
-| **联网**     | Qt6 网络 + Qt6 WebSockets   |
-| **数据库**    | Qt6 SQL（SQLite）           |
-| **分析**     | 嵌入式 Python 3.11+（100+ 脚本） |
-| **建造**     | CMake 3.20+               |
-
-* * *
-
 ## 特征
 
 | **特征**            | **描述**                                                                                                         |
@@ -53,35 +39,20 @@
 
 * * *
 
-## 40+ 屏幕
-
-| 类别            | 屏幕                                                           |
-| ------------- | ------------------------------------------------------------ |
-| **核**         | 仪表板、市场、新闻、观察列表                                               |
-| **贸易**        | 加密货币交易、股票交易、算法交易、回测、交易可视化                                    |
-| **研究**        | 股票研究、筛选、投资组合、表面分析、并购分析、衍生品、另类投资                              |
-| **定量库**       | 核心、分析、曲线、经济学、仪器、机器学习、模型、数值、物理、投资组合、定价、监管、风险、调度、求解器、统计、随机、波动性 |
-| **人工智能/机器学习** | AI Quant Lab、Agent Studio、AI Chat、Alpha Arena                |
-| **经济学**       | 经济学、DBnomics、AkShare、亚洲市场                                    |
-| **地缘政治**      | 地缘政治、政府数据、关系图、海事、综合市场                                        |
-| **工具**        | 代码编辑器、节点编辑器、Excel、报告生成器、注释、数据源、数据映射、MCP 服务器                  |
-| **社区**        | 论坛、个人资料、设置、支持、文档、关于                                          |
-
-* * *
-
 ## 安装
 
 ### 选项 1 — 下载预构建的二进制文件（推荐）
 
 预构建的二进制文件可在[发布页面](https://github.com/Fincept-Corporation/FinceptTerminal/releases)。不需要构建工具 - 只需提取并运行。
 
-| 平台              | 下载                                       | 跑步                        |
-| --------------- | ---------------------------------------- | ------------------------- |
-| **Windows x64** | `FinceptTerminal-Windows-x64.zip`        | 提取 →`FinceptTerminal.exe` |
-| **Linux x64**   | `FinceptTerminal-Linux-x64.tar.gz`       | 提取 →`./FinceptTerminal`   |
-| **macOS（苹果芯片）** | `FinceptTerminal-macOS-arm64.tar.gz`     | 提取 →`./FinceptTerminal`   |
-| **macOS（英特尔）**  | `FinceptTerminal-macOS-x64.tar.gz`       | 提取 →`./FinceptTerminal`   |
-| **macOS（通用）**   | `FinceptTerminal-macOS-universal.tar.gz` | 提取 →`./FinceptTerminal`   |
+| 平台              | 下载                                       | 跑步                                                   |
+| --------------- | ---------------------------------------- | ---------------------------------------------------- |
+| **Windows x64** | `FinceptTerminal-Windows-x64.zip`        | 提取 →`FinceptTerminal.exe`                            |
+| **视窗ARM64**     | `FinceptTerminal-Windows-arm64.zip`      | 提取 →`FinceptTerminal.exe`                            |
+| **Linux x64**   | `FinceptTerminal-Linux-x86_64.AppImage`  | `chmod +x`→`./FinceptTerminal-Linux-x86_64.AppImage` |
+| **macOS（苹果芯片）** | `FinceptTerminal-macOS-arm64.tar.gz`     | 提取 →`./FinceptTerminal`                              |
+| **macOS（英特尔）**  | `FinceptTerminal-macOS-x64.tar.gz`       | 提取 →`./FinceptTerminal`                              |
+| **macOS（通用）**   | `FinceptTerminal-macOS-universal.tar.gz` | 提取 →`./FinceptTerminal`                              |
 
 * * *
 
@@ -204,7 +175,12 @@ cmake --build build --config Release --parallel
 
 ## 路线图
 
-**2026 年第一季度：**Qt6迁移完成，增强实时流，高级回测**2026：**期权策略构建器、多投资组合管理、50 多个人工智能代理**未来：**移动伴侣、机构功能、编程 API、ML 培训 UI
+| 时间轴            | 里程碑                         |
+| -------------- | --------------------------- |
+| **2026 年第一季度** | 实时流媒体、高级回测、经纪商集成            |
+| **呕吐 2026**    | 期权策略构建器、多投资组合管理、50 多个人工智能代理 |
+| **喀兹 2026**    | 编程式 API、ML 培训 UI、机构功能       |
+| **未来**         | 移动伴侣、云同步、社区市场               |
 
 * * *
 

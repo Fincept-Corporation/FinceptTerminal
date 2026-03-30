@@ -24,20 +24,6 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 * * *
 
-## Pile technologique
-
-| Couche                            | Technologies                               |
-| --------------------------------- | ------------------------------------------ |
-| **Langue**                        | C++20 (MSVC/GCC/Clang)                     |
-| **Cadre d'interface utilisateur** | Widget Qt6                                 |
-| **Graphiques**                    | Graphiques Qt6                             |
-| **Réseautage**                    | Réseau Qt6 + WebSockets Qt6                |
-| **Base de données**               | Qt6 SQL (SQLite)                           |
-| **Analytique**                    | Python intégré 3.11+ (plus de 100 scripts) |
-| **Construire**                    | CMake 3.20+                                |
-
-* * *
-
 ## Caractéristiques
 
 | **Fonctionnalité**                       | **Description**                                                                                                                                                                                              |
@@ -53,35 +39,20 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 * * *
 
-## 40+ écrans
-
-| Catégorie        | Écrans                                                                                                                                                                                               |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Cœur**         | Tableau de bord, marchés, actualités, liste de surveillance                                                                                                                                          |
-| **Commerce**     | Trading de crypto, trading d'actions, trading d'algorithmes, backtesting, visualisation commerciale                                                                                                  |
-| **Recherche**    | Recherche sur les actions, filtre, portefeuille, analyses de surface, analyses de fusions et acquisitions, produits dérivés, investissements alternatifs                                             |
-| **QuantLib**     | Noyau, Analyse, Courbes, Économie, Instruments, ML, Modèles, Numérique, Physique, Portefeuille, Tarification, Réglementation, Risque, Planification, Solveur, Statistiques, Stochastique, Volatilité |
-| **AI/ML**        | AI Quant Lab, Agent Studio, AI Chat, Alpha Arena                                                                                                                                                     |
-| **Économie**     | Économie, DBnomics, AkShare, marchés asiatiques                                                                                                                                                      |
-| **Géopolitique** | Géopolitique, données gouvernementales, carte des relations, maritime, polymarché                                                                                                                    |
-| **Outils**       | Éditeur de code, éditeur de nœuds, Excel, générateur de rapports, notes, sources de données, mappage de données, serveurs MCP                                                                        |
-| **Communauté**   | Forum, Profil, Paramètres, Assistance, Docs, À propos                                                                                                                                                |
-
-* * *
-
 ## Installation
 
 ### Option 1 — Télécharger le binaire prédéfini (recommandé)
 
 Des binaires prédéfinis sont disponibles sur le[Page des versions](https://github.com/Fincept-Corporation/FinceptTerminal/releases). Aucun outil de construction requis : il suffit d'extraire et d'exécuter.
 
-| Plate-forme                | Télécharger                              | Courir                          |
-| -------------------------- | ---------------------------------------- | ------------------------------- |
-| **Windows x64**            | `FinceptTerminal-Windows-x64.zip`        | Extraire →`FinceptTerminal.exe` |
-| **Linuxx64**               | `FinceptTerminal-Linux-x64.tar.gz`       | Extraire →`./FinceptTerminal`   |
-| **macOS (Apple Silicium)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extraire →`./FinceptTerminal`   |
-| **macOS (Intel)**          | `FinceptTerminal-macOS-x64.tar.gz`       | Extraire →`./FinceptTerminal`   |
-| **macOS (universel)**      | `FinceptTerminal-macOS-universal.tar.gz` | Extraire →`./FinceptTerminal`   |
+| Plate-forme                | Télécharger                              | Courir                                               |
+| -------------------------- | ---------------------------------------- | ---------------------------------------------------- |
+| **Windows x64**            | `FinceptTerminal-Windows-x64.zip`        | Extraire →`FinceptTerminal.exe`                      |
+| **WindowsARM64**           | `FinceptTerminal-Windows-arm64.zip`      | Extraire →`FinceptTerminal.exe`                      |
+| **Linuxx64**               | `FinceptTerminal-Linux-x86_64.AppImage`  | `chmod +x`→`./FinceptTerminal-Linux-x86_64.AppImage` |
+| **macOS (Apple Silicium)** | `FinceptTerminal-macOS-arm64.tar.gz`     | Extraire →`./FinceptTerminal`                        |
+| **macOS (Intel)**          | `FinceptTerminal-macOS-x64.tar.gz`       | Extraire →`./FinceptTerminal`                        |
+| **macOS (universel)**      | `FinceptTerminal-macOS-universal.tar.gz` | Extraire →`./FinceptTerminal`                        |
 
 * * *
 
@@ -204,7 +175,12 @@ cmake --build build --config Release --parallel
 
 ## Feuille de route
 
-**T1 2026 :**Migration Qt6 terminée, streaming en temps réel amélioré, backtesting avancé**2026 :**Constructeur de stratégie d'options, gestion multi-portefeuilles, plus de 50 agents IA**Avenir:**Compagnon mobile, fonctionnalités institutionnelles, API programmatique, interface utilisateur de formation ML
+| Chronologie           | Jalon                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------- |
+| **T1 2026**           | Streaming en temps réel, backtesting avancé, intégrations de courtiers                       |
+| **vomissements 2026** | Constructeur de stratégie d'options, gestion multi-portefeuilles, plus de 50 agents IA       |
+| **Kz 2026**           | API programmatique, interface utilisateur de formation ML, fonctionnalités institutionnelles |
+| **Avenir**            | Compagnon mobile, synchronisation cloud, marché communautaire                                |
 
 * * *
 
