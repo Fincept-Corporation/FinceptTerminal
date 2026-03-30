@@ -16,11 +16,11 @@
 
 namespace fincept::services {
 
-static constexpr const char* TAG = "QuantLibClient";
+static constexpr const char* kQuantLibClientTag = "QuantLibClient";
 
 const QString QuantLibClient::API_BASE = QStringLiteral("https://api.fincept.in");
 
-// Endpoints that use GET (no request body) — everything else is POST.
+// Endpoints that use GET (no request body).
 static const QStringList GET_ENDPOINTS = {
     "core/types/currencies",
     "core/types/frequencies",
@@ -29,8 +29,17 @@ static const QStringList GET_ENDPOINTS = {
     "scheduling/adjustment/methods",
 };
 
+// Endpoints that take body fields as URL query params (POST with empty body).
+static const QStringList QUERY_PARAM_ENDPOINTS = {
+    "core/types/spread/from-bps",
+};
+
 bool QuantLibClient::is_get_endpoint(const QString& endpoint) {
     return GET_ENDPOINTS.contains(endpoint);
+}
+
+bool QuantLibClient::is_query_param_endpoint(const QString& endpoint) {
+    return QUERY_PARAM_ENDPOINTS.contains(endpoint);
 }
 
 // ── Singleton ────────────────────────────────────────────────────────────────
@@ -44,16 +53,24 @@ QuantLibClient& QuantLibClient::instance() {
 
 // ── Request builder ──────────────────────────────────────────────────────────
 
-static QNetworkRequest build_request(const QString& endpoint) {
+static QNetworkRequest build_request(const QString& endpoint, const QJsonObject& query_params = {}) {
     QString url = QuantLibClient::API_BASE + "/quantlib/" + endpoint;
+
+    if (!query_params.isEmpty()) {
+        QStringList parts;
+        for (auto it = query_params.begin(); it != query_params.end(); ++it)
+            parts << (it.key() + "=" + it.value().toVariant().toString());
+        url += "?" + parts.join("&");
+    }
+
     QNetworkRequest req{QUrl(url)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setRawHeader("Accept", "application/json");
     req.setRawHeader("User-Agent", "FinceptTerminal/4.0.0");
 
-    auto& auth = auth::AuthManager::instance();
-    if (auth.is_authenticated())
-        req.setRawHeader("X-API-Key", auth.session().api_key.toUtf8());
+    auto& auth_mgr = auth::AuthManager::instance();
+    if (auth_mgr.is_authenticated())
+        req.setRawHeader("X-API-Key", auth_mgr.session().api_key.toUtf8());
 
     return req;
 }
@@ -119,12 +136,17 @@ mcp::ToolResult QuantLibClient::parse_response(int http_status, const QByteArray
 
 void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, QuantLibCallback callback) {
     auto* nam = new QNetworkAccessManager(this);
-    auto req = build_request(endpoint);
 
     QNetworkReply* reply = nullptr;
     if (is_get_endpoint(endpoint)) {
+        auto req = build_request(endpoint);
         reply = nam->get(req);
+    } else if (is_query_param_endpoint(endpoint)) {
+        // Body fields become URL query params; POST with empty body
+        auto req = build_request(endpoint, body);
+        reply = nam->post(req, QByteArray("{}"));
     } else {
+        auto req = build_request(endpoint);
         QByteArray data = QJsonDocument(body).toJson(QJsonDocument::Compact);
         reply = nam->post(req, data);
     }
@@ -137,7 +159,7 @@ void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, Quan
         if (!self) return;
 
         if (reply->error() != QNetworkReply::NoError) {
-            LOG_ERROR(TAG, "Network error on " + endpoint + ": " + reply->errorString());
+            LOG_ERROR(kQuantLibClientTag, "Network error on " + endpoint + ": " + reply->errorString());
             callback(mcp::ToolResult::fail(reply->errorString()));
             return;
         }
@@ -146,7 +168,7 @@ void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, Quan
         auto raw = reply->readAll();
         auto result = parse_response(http_status, raw);
 
-        LOG_DEBUG(TAG, QString("HTTP %1 — %2 — %3")
+        LOG_DEBUG(kQuantLibClientTag, QString("HTTP %1 — %2 — %3")
                            .arg(http_status)
                            .arg(endpoint)
                            .arg(result.success ? "OK" : result.error));

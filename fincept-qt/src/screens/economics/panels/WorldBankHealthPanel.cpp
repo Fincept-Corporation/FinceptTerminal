@@ -18,10 +18,12 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "worldbank_health_data.py";
-static constexpr const char* kSourceId = "wb_health";
-static constexpr const char* kColor    = "#16A34A";  // green
+static constexpr const char* kWorldBankHealthScript   = "worldbank_health_data.py";
+static constexpr const char* kWorldBankHealthSourceId = "wb_health";
+static constexpr const char* kWorldBankHealthColor    = "#16A34A";  // green
+} // namespace
 
 struct WbHealthIndicator {
     QString label;
@@ -29,7 +31,7 @@ struct WbHealthIndicator {
     QString unit;
 };
 
-static const QList<WbHealthIndicator> kIndicators = {
+static const QList<WbHealthIndicator> kWbHealthIndicators = {
     { "Life Expectancy",                "life_expectancy",  "years"     },
     { "Infant Mortality Rate",          "infant_mortality", "per 1,000" },
     { "Literacy Rate (Adult)",          "literacy",         "%"         },
@@ -38,7 +40,7 @@ static const QList<WbHealthIndicator> kIndicators = {
     { "Poverty Rate ($2.15/day)",       "poverty",          "%"         },
 };
 
-static const QList<QPair<QString,QString>> kCountries = {
+static const QList<QPair<QString,QString>> kWbHealthCountries = {
     { "United States",    "US" }, { "China",          "CN" }, { "Germany",       "DE" },
     { "Japan",            "JP" }, { "United Kingdom", "GB" }, { "France",        "FR" },
     { "India",            "IN" }, { "Brazil",         "BR" }, { "Canada",        "CA" },
@@ -77,7 +79,7 @@ QJsonArray WorldBankHealthPanel::flatten_wb(const QJsonObject& response) {
 }
 
 WorldBankHealthPanel::WorldBankHealthPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kWorldBankHealthSourceId, kWorldBankHealthColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -98,13 +100,13 @@ void WorldBankHealthPanel::build_controls(QHBoxLayout* thl) {
     };
 
     indicator_combo_ = new QComboBox;
-    for (const auto& ind : kIndicators)
+    for (const auto& ind : kWbHealthIndicators)
         indicator_combo_->addItem(ind.label, ind.command);
     indicator_combo_->setFixedHeight(26);
     indicator_combo_->setMinimumWidth(200);
 
     country_combo_ = new QComboBox;
-    for (const auto& c : kCountries)
+    for (const auto& c : kWbHealthCountries)
         country_combo_->addItem(c.first, c.second);
     country_combo_->setFixedHeight(26);
     country_combo_->setMinimumWidth(130);
@@ -123,14 +125,14 @@ void WorldBankHealthPanel::on_fetch() {
                  + " — " + country_combo_->currentText() + "…");
 
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, command,
+        kWorldBankHealthSourceId, kWorldBankHealthScript, command,
         { country },
         "wbhealth_" + command + "_" + country);
 }
 
 void WorldBankHealthPanel::on_result(const QString& request_id,
                                       const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kWorldBankHealthSourceId) return;
     if (!request_id.startsWith("wbhealth_")) return;
     if (!result.success) { show_error(result.error); return; }
 
@@ -145,8 +147,8 @@ void WorldBankHealthPanel::on_result(const QString& request_id,
     }
 
     const int idx = indicator_combo_->currentIndex();
-    const QString unit = (idx >= 0 && idx < kIndicators.size())
-                             ? " (" + kIndicators[idx].unit + ")"
+    const QString unit = (idx >= 0 && idx < kWbHealthIndicators.size())
+                             ? " (" + kWbHealthIndicators[idx].unit + ")"
                              : "";
     const QString title = "WB Health: " + indicator_combo_->currentText()
                         + unit + " — " + country_combo_->currentText();

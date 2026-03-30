@@ -15,10 +15,12 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "trading_economics_data.py";
-static constexpr const char* kSourceId = "trading_economics";
-static constexpr const char* kColor    = "#F59E0B";  // amber
+static constexpr const char* kTradingEconomicsScript   = "trading_economics_data.py";
+static constexpr const char* kTradingEconomicsSourceId = "trading_economics";
+static constexpr const char* kTradingEconomicsColor    = "#F59E0B";  // amber
+} // namespace
 
 struct TeDataset {
     QString label;
@@ -26,7 +28,7 @@ struct TeDataset {
     QString country_arg;  // "required", "optional", or ""
 };
 
-static const QList<TeDataset> kDatasets = {
+static const QList<TeDataset> kTEDatasets = {
     { "Credit Ratings (All)",           "ratings",           ""         },
     { "Credit Ratings by Agency",       "ratings_by_agency", ""         },
     { "US Treasuries",                  "us_treasuries",     ""         },
@@ -36,7 +38,7 @@ static const QList<TeDataset> kDatasets = {
     { "Economic Calendar",              "calendar",          ""         },
 };
 
-static const QList<QPair<QString,QString>> kCountries = {
+static const QList<QPair<QString,QString>> kTECountries = {
     { "United States", "US" }, { "Germany",        "DE" }, { "Japan",          "JP" },
     { "United Kingdom","GB" }, { "France",         "FR" }, { "Italy",          "IT" },
     { "China",         "CN" }, { "Brazil",         "BR" }, { "India",          "IN" },
@@ -44,7 +46,7 @@ static const QList<QPair<QString,QString>> kCountries = {
 };
 
 TradingEconomicsPanel::TradingEconomicsPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kTradingEconomicsSourceId, kTradingEconomicsColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -65,13 +67,13 @@ void TradingEconomicsPanel::build_controls(QHBoxLayout* thl) {
     };
 
     dataset_combo_ = new QComboBox;
-    for (const auto& d : kDatasets)
+    for (const auto& d : kTEDatasets)
         dataset_combo_->addItem(d.label, d.command);
     dataset_combo_->setFixedHeight(26);
     dataset_combo_->setMinimumWidth(200);
 
     country_combo_ = new QComboBox;
-    for (const auto& c : kCountries)
+    for (const auto& c : kTECountries)
         country_combo_->addItem(c.first, c.second);
     country_combo_->setFixedHeight(26);
     country_combo_->setMinimumWidth(130);
@@ -85,7 +87,7 @@ void TradingEconomicsPanel::build_controls(QHBoxLayout* thl) {
 
 void TradingEconomicsPanel::on_fetch() {
     const int   idx     = dataset_combo_->currentIndex();
-    const auto& dataset = kDatasets[idx];
+    const auto& dataset = kTEDatasets[idx];
     const QString country = country_combo_->currentData().toString();
 
     show_loading("Fetching Trading Economics: " + dataset.label + "…");
@@ -95,7 +97,7 @@ void TradingEconomicsPanel::on_fetch() {
         args << country;
 
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, dataset.command, args,
+        kTradingEconomicsSourceId, kTradingEconomicsScript, dataset.command, args,
         "te_" + dataset.command + (args.size() > 1 ? "_" + country : ""));
 }
 
@@ -133,7 +135,7 @@ static QJsonArray extract_te_rows(const QJsonObject& data) {
 
 void TradingEconomicsPanel::on_result(const QString& request_id,
                                        const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kTradingEconomicsSourceId) return;
     if (!request_id.startsWith("te_")) return;
 
     if (!result.success) {
@@ -171,7 +173,7 @@ void TradingEconomicsPanel::on_result(const QString& request_id,
 
     const int idx = dataset_combo_->currentIndex();
     const QString title = "Trading Economics: "
-        + (idx >= 0 && idx < kDatasets.size() ? kDatasets[idx].label : request_id.mid(3));
+        + (idx >= 0 && idx < kTEDatasets.size() ? kTEDatasets[idx].label : request_id.mid(3));
     display(rows, title);
     LOG_INFO("TradingEconomicsPanel", QString("Displayed %1 rows: %2")
                                           .arg(rows.size()).arg(title));

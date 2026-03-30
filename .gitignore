@@ -122,3 +122,12 @@ lightning_logs/
 
 # ── Duplicate nested agents folder ───────────────────────────
 fincept-qt/scripts/agents/agents/
+
+# ── Firecrawl research artifacts ─────────────────────────────
+.firecrawl/
+
+# ── Exchange runtime cache ────────────────────────────────────
+fincept-qt/scripts/exchange/.cache/
+
+# ── Internal planning docs ────────────────────────────────────
+fincept-qt/docs/superpowers/

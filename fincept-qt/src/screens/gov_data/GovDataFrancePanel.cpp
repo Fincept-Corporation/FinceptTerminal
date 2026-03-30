@@ -17,6 +17,10 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
+static constexpr const char* kGovDataFranceScript = "french_gov_api.py";
+static constexpr const char* kGovDataFranceColor  = "#2563EB";
+} // namespace
 
 // ── Stylesheet ────────────────────────────────────────────────────────────────
 
@@ -280,7 +284,7 @@ QWidget* GovDataFrancePanel::build_toolbar() {
 void GovDataFrancePanel::load_initial_data() {
     show_loading("Loading data services from data.gouv.fr…");
     services::GovDataService::instance().execute(
-        kScript, "publishers", {}, "fr_services");
+        kGovDataFranceScript, "publishers", {}, "fr_services");
 }
 
 // ── Toolbar actions ───────────────────────────────────────────────────────────
@@ -336,7 +340,7 @@ void GovDataFrancePanel::on_fetch() {
         // Re-load services
         show_loading("Loading data services…");
         services::GovDataService::instance().execute(
-            kScript, "publishers", {}, "fr_services");
+            kGovDataFranceScript, "publishers", {}, "fr_services");
         return;
     }
 
@@ -346,11 +350,11 @@ void GovDataFrancePanel::on_fetch() {
     if (current_view_ == Datasets) {
         show_loading("Searching datasets for "" + query + ""…");
         services::GovDataService::instance().execute(
-            kScript, "datasets", {query, "50"}, "fr_datasets");
+            kGovDataFranceScript, "datasets", {query, "50"}, "fr_datasets");
     } else if (current_view_ == Geo) {
         show_loading("Searching municipalities for "" + query + ""…");
         services::GovDataService::instance().execute(
-            kScript, "municipalities", {query}, "fr_geo");
+            kGovDataFranceScript, "municipalities", {query}, "fr_geo");
     }
 }
 
@@ -362,7 +366,7 @@ void GovDataFrancePanel::on_dataset_row_double_clicked(int row) {
 
     show_loading("Loading column schema for "" + item->text() + ""…");
     services::GovDataService::instance().execute(
-        kScript, "resources", {selected_dataset_id_}, "fr_resources");
+        kGovDataFranceScript, "resources", {selected_dataset_id_}, "fr_resources");
 }
 
 void GovDataFrancePanel::on_back() {
@@ -460,7 +464,7 @@ void GovDataFrancePanel::populate_services(const QJsonArray& data) {
         if (name.isEmpty()) name = obj["name"].toString();
 
         auto* name_item = new QTableWidgetItem(name);
-        name_item->setForeground(QColor(kColor));
+        name_item->setForeground(QColor(kGovDataFranceColor));
         // Full description as tooltip (may be in French)
         QString desc = obj["description"].toString();
         if (!desc.isEmpty()) name_item->setToolTip(desc);
@@ -519,7 +523,7 @@ void GovDataFrancePanel::populate_datasets(const QJsonArray& data) {
         int num_res = obj["num_resources"].toInt(0);
         auto* res_item = new QTableWidgetItem(QString::number(num_res));
         res_item->setTextAlignment(Qt::AlignCenter);
-        res_item->setForeground(QColor(kColor));
+        res_item->setForeground(QColor(kGovDataFranceColor));
         datasets_table_->setItem(i, 3, res_item);
 
         QString modified = obj["metadata_modified"].toString();
@@ -538,7 +542,7 @@ void GovDataFrancePanel::populate_geo(const QJsonArray& data) {
         const auto obj = data[i].toObject();
 
         auto* name_item = new QTableWidgetItem(obj["name"].toString());
-        name_item->setForeground(QColor(kColor));
+        name_item->setForeground(QColor(kGovDataFranceColor));
         geo_table_->setItem(i, 0, name_item);
 
         geo_table_->setItem(i, 1, new QTableWidgetItem(obj["code"].toString()));
@@ -575,7 +579,7 @@ void GovDataFrancePanel::populate_resources(const QJsonArray& data) {
 
         // Schema rows: name = column name, format = type
         auto* col_item = new QTableWidgetItem(obj["name"].toString());
-        col_item->setForeground(QColor(kColor));
+        col_item->setForeground(QColor(kGovDataFranceColor));
         resources_table_->setItem(i, 0, col_item);
 
         QString type = obj["format"].toString();
@@ -592,7 +596,7 @@ void GovDataFrancePanel::populate_resources(const QJsonArray& data) {
 
 void GovDataFrancePanel::show_loading(const QString& message) {
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:13px; background:transparent;").arg(kColor));
+        QString("color:%1; font-size:13px; background:transparent;").arg(kGovDataFranceColor));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(Status);
 }

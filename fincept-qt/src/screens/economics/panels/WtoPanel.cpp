@@ -30,13 +30,13 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "wto_data.py";
-static constexpr const char* kSourceId = "wto";
-static constexpr const char* kColor    = "#E91E63";  // pink-red
-
+static constexpr const char* kWtoScript   = "wto_data.py";
+static constexpr const char* kWtoSourceId = "wto";
+static constexpr const char* kWtoColor    = "#E91E63";  // pink-red
 // Trade Statistics indicators (WTO Timeseries API)
-static const QList<QPair<QString,QString>> kIndicators = {
+static const QList<QPair<QString,QString>> kWtoIndicators = {
     {"Total Merchandise Trade (TP_A_0010)",     "TP_A_0010"},
     {"Merchandise Exports (TX_A_0010)",         "TX_A_0010"},
     {"Merchandise Imports (TM_A_0010)",         "TM_A_0010"},
@@ -46,10 +46,12 @@ static const QList<QPair<QString,QString>> kIndicators = {
     {"Tariff Rate, All Products (TRF_A_0010)",  "TRF_A_0010"},
 };
 
+} // namespace
+
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 WtoPanel::WtoPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kWtoSourceId, kWtoColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -82,7 +84,7 @@ void WtoPanel::build_controls(QHBoxLayout* thl) {
             this, &WtoPanel::on_section_changed);
 
     indicator_combo_ = new QComboBox;
-    for (const auto& ind : kIndicators)
+    for (const auto& ind : kWtoIndicators)
         indicator_combo_->addItem(ind.first, ind.second);
     indicator_combo_->setFixedHeight(26);
     indicator_combo_->setMinimumWidth(270);
@@ -150,7 +152,7 @@ void WtoPanel::on_fetch() {
         show_loading("Fetching WTO Trade Statistics: " +
                      indicator_combo_->currentText() + " for " + reporter + "…");
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, "timeseries_data",
+            kWtoSourceId, kWtoScript, "timeseries_data",
             {"--i=" + indicator,
              "--r=" + reporter,
              "--ps=" + (years.isEmpty() ? "default" : years)},
@@ -161,7 +163,7 @@ void WtoPanel::on_fetch() {
         if (!reporter.isEmpty()) args << "--member_code=" + reporter;
         show_loading("Fetching WTO QR Members…");
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, "qr_members",
+            kWtoSourceId, kWtoScript, "qr_members",
             args,
             "wto_qrm_" + reporter);
 
@@ -171,7 +173,7 @@ void WtoPanel::on_fetch() {
         if (!reporter.isEmpty()) args << "--reporter_member_code=" + reporter;
         show_loading("Fetching WTO QR Notifications for " + reporter + "…");
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, "qr_notifications",
+            kWtoSourceId, kWtoScript, "qr_notifications",
             args,
             "wto_qrn_" + reporter);
     }
@@ -181,7 +183,7 @@ void WtoPanel::on_fetch() {
 
 void WtoPanel::on_result(const QString& request_id,
                          const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kWtoSourceId) return;
 
     if (!result.success) {
         if (result.error.contains("subscription") ||
@@ -219,7 +221,7 @@ void WtoPanel::on_result(const QString& request_id,
             row["year"]      = obj["Year"];
             row["value"]     = obj["Value"];
             row["product"]   = obj["ProductOrSectorCode"];
-            row["indicator"] = indicator_combo_->currentData();
+            row["indicator"] = indicator_combo_->currentData().toString();
             rows.append(row);
         }
 

@@ -12,13 +12,14 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "imf_datamapper_data.py";
-static constexpr const char* kSourceId = "imf";
-static constexpr const char* kColor    = "#3B82F6";  // blue
+static constexpr const char* kImfScript   = "imf_datamapper_data.py";
+static constexpr const char* kImfSourceId = "imf";
+static constexpr const char* kImfColor    = "#3B82F6";  // blue
 
 // Curated indicator list: display name → IMF DataMapper code
-static const QList<QPair<QString,QString>> kIndicators = {
+static const QList<QPair<QString,QString>> kImfIndicators = {
     {"Real GDP Growth (%)",                   "NGDP_RPCH"},
     {"Nominal GDP (USD billions)",             "NGDPD"},
     {"GDP per capita (USD)",                   "NGDPDPC"},
@@ -38,7 +39,7 @@ static const QList<QPair<QString,QString>> kIndicators = {
 };
 
 // Curated country list
-static const QList<QPair<QString,QString>> kCountries = {
+static const QList<QPair<QString,QString>> kImfCountries = {
     {"All Countries",       ""},
     {"United States",       "USA"},
     {"China",               "CHN"},
@@ -61,10 +62,12 @@ static const QList<QPair<QString,QString>> kCountries = {
     {"Argentina",           "ARG"},
 };
 
+} // namespace
+
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 ImfPanel::ImfPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kImfSourceId, kImfColor, parent) {
 
     auto* main = new QHBoxLayout(this);
     main->setContentsMargins(0, 0, 0, 0);
@@ -101,8 +104,8 @@ ImfPanel::ImfPanel(QWidget* parent)
             "  border-bottom:1px solid #111111; font-size:11px; }"
             "QListWidget::item:hover { color:#e5e5e5; background:#161616; }"
             "QListWidget::item:selected { color:%1; background:rgba(0,0,0,0.3);"
-            "  border-left:2px solid %1; font-weight:700; }").arg(kColor));
-    for (const auto& pair : kIndicators) {
+            "  border-left:2px solid %1; font-weight:700; }").arg(kImfColor));
+    for (const auto& pair : kImfIndicators) {
         auto* item = new QListWidgetItem(pair.first, indicator_list_);
         item->setData(Qt::UserRole, pair.second);
     }
@@ -133,7 +136,7 @@ void ImfPanel::build_controls(QHBoxLayout* thl) {
     lbl->setStyleSheet(
         "color:#525252; font-size:9px; font-weight:700; background:transparent;");
     country_combo_ = new QComboBox;
-    for (const auto& pair : kCountries)
+    for (const auto& pair : kImfCountries)
         country_combo_->addItem(pair.first, pair.second);
     country_combo_->setFixedHeight(26);
     country_combo_->setMinimumWidth(140);
@@ -152,7 +155,7 @@ void ImfPanel::on_fetch() {
 
     show_loading("Fetching IMF DataMapper data…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, "data",
+        kImfSourceId, kImfScript, "data",
         {code},
         "imf_data_" + code + "_" + country);
 }
@@ -161,7 +164,7 @@ void ImfPanel::on_fetch() {
 
 void ImfPanel::on_result(const QString& request_id,
                          const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kImfSourceId) return;
     if (!result.success) { show_error(result.error); return; }
 
     if (request_id.startsWith("imf_data_")) {

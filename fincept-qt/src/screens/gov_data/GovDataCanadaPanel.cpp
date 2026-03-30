@@ -18,6 +18,10 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
+static constexpr const char* kGovDataCanadaScript = "canada_gov_api.py";
+static constexpr const char* kGovDataCanadaColor  = "#EF4444";
+} // namespace
 
 using namespace fincept::ui;
 
@@ -263,7 +267,7 @@ QWidget* GovDataCanadaPanel::build_toolbar() {
 void GovDataCanadaPanel::load_initial_data() {
     show_loading("Loading publishers…");
     services::GovDataService::instance().execute(
-        kScript, "publishers", {}, "gov_orgs_canada_gov_api.py");
+        kGovDataCanadaScript, "publishers", {}, "gov_orgs_canada_gov_api.py");
 }
 
 void GovDataCanadaPanel::on_result(const QString&                  request_id,
@@ -339,7 +343,7 @@ void GovDataCanadaPanel::populate_publishers(const QJsonArray& data) {
 
         auto* name_item = new QTableWidgetItem(name);
         name_item->setData(Qt::UserRole, id);
-        name_item->setForeground(QColor(kColor));
+        name_item->setForeground(QColor(kGovDataCanadaColor));
         publishers_table_->setItem(i, 0, name_item);
 
         // dataset_count may not be present in Canada API — show "—" when absent
@@ -381,7 +385,7 @@ void GovDataCanadaPanel::populate_datasets(const QJsonArray& data, int total_cou
         int num_res = obj["num_resources"].toInt(0);
         auto* res_item = new QTableWidgetItem(QString::number(num_res));
         res_item->setTextAlignment(Qt::AlignCenter);
-        res_item->setForeground(QColor(kColor));
+        res_item->setForeground(QColor(kGovDataCanadaColor));
         datasets_table_->setItem(i, 1, res_item);
 
         QString modified = obj["metadata_modified"].toString();
@@ -422,7 +426,7 @@ void GovDataCanadaPanel::populate_resources(const QJsonArray& data) {
 
         QString format = obj["format"].toString().toUpper();
         auto* fmt_item = new QTableWidgetItem(format.isEmpty() ? "—" : format);
-        fmt_item->setForeground(QColor(kColor));
+        fmt_item->setForeground(QColor(kGovDataCanadaColor));
         fmt_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 1, fmt_item);
 
@@ -449,7 +453,7 @@ void GovDataCanadaPanel::populate_resources(const QJsonArray& data) {
         const QString url = obj["url"].toString();
         auto* url_item = new QTableWidgetItem(url.isEmpty() ? "—" : "↗ OPEN");
         url_item->setData(Qt::UserRole, url);
-        if (!url.isEmpty()) url_item->setForeground(QColor(kColor));
+        if (!url.isEmpty()) url_item->setForeground(QColor(kGovDataCanadaColor));
         url_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 4, url_item);
     }
@@ -504,7 +508,7 @@ void GovDataCanadaPanel::on_publisher_clicked(int row) {
     selected_publisher_name_ = item->text();
     show_loading("Loading datasets for "" + selected_publisher_name_ + ""…");
     services::GovDataService::instance().execute(
-        kScript, "datasets", {selected_publisher_, "100"},
+        kGovDataCanadaScript, "datasets", {selected_publisher_, "100"},
         "gov_datasets_canada_gov_api.py");
 }
 
@@ -514,7 +518,7 @@ void GovDataCanadaPanel::on_dataset_clicked(int row) {
     selected_dataset_ = item->data(Qt::UserRole).toString();
     show_loading("Loading resources…");
     services::GovDataService::instance().execute(
-        kScript, "resources", {selected_dataset_},
+        kGovDataCanadaScript, "resources", {selected_dataset_},
         "gov_resources_canada_gov_api.py");
 }
 
@@ -523,7 +527,7 @@ void GovDataCanadaPanel::on_search() {
     if (query.isEmpty()) return;
     show_loading("Searching for "" + query + ""…");
     services::GovDataService::instance().execute(
-        kScript, "search", {query, "50"},
+        kGovDataCanadaScript, "search", {query, "50"},
         "gov_search_canada_gov_api.py");
 }
 

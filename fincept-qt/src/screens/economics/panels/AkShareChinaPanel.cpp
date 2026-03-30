@@ -15,10 +15,12 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "akshare_economics_china.py";
-static constexpr const char* kSourceId = "akshare_cn";
-static constexpr const char* kColor    = "#DC2626";  // China red
+static constexpr const char* kAkShareChinaScript   = "akshare_economics_china.py";
+static constexpr const char* kAkShareChinaSourceId = "akshare_cn";
+static constexpr const char* kAkShareChinaColor    = "#DC2626";  // China red
+} // namespace
 
 struct AkCnSeries {
     QString label;
@@ -26,7 +28,7 @@ struct AkCnSeries {
     QString description;
 };
 
-static const QList<AkCnSeries> kSeries = {
+static const QList<AkCnSeries> kAkShareSeries = {
     { "CPI (Consumer Price Index)",      "cpi", "Monthly CPI year-on-year & month-on-month"  },
     { "PPI (Producer Price Index)",      "ppi", "Monthly PPI change rates"                   },
     { "GDP (Gross Domestic Product)",    "gdp", "Quarterly GDP by expenditure approach"       },
@@ -34,7 +36,7 @@ static const QList<AkCnSeries> kSeries = {
 };
 
 AkShareChinaPanel::AkShareChinaPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kAkShareChinaSourceId, kAkShareChinaColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -53,7 +55,7 @@ void AkShareChinaPanel::build_controls(QHBoxLayout* thl) {
         "color:#525252; font-size:9px; font-weight:700; background:transparent;");
 
     series_combo_ = new QComboBox;
-    for (const auto& s : kSeries)
+    for (const auto& s : kAkShareSeries)
         series_combo_->addItem(s.label, s.command);
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(260);
@@ -65,17 +67,17 @@ void AkShareChinaPanel::build_controls(QHBoxLayout* thl) {
 
 void AkShareChinaPanel::on_fetch() {
     const int   idx    = series_combo_->currentIndex();
-    const auto& series = kSeries[idx];
+    const auto& series = kAkShareSeries[idx];
 
     show_loading("Fetching AkShare China: " + series.label + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, series.command, {},
+        kAkShareChinaSourceId, kAkShareChinaScript, series.command, {},
         "akcn_" + series.command);
 }
 
 void AkShareChinaPanel::on_result(const QString& request_id,
                                    const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kAkShareChinaSourceId) return;
     if (!request_id.startsWith("akcn_")) return;
     if (!result.success) { show_error(result.error); return; }
 
@@ -90,7 +92,7 @@ void AkShareChinaPanel::on_result(const QString& request_id,
 
     const int idx = series_combo_->currentIndex();
     const QString title = "AkShare China: "
-        + (idx >= 0 && idx < kSeries.size() ? kSeries[idx].label : request_id.mid(6));
+        + (idx >= 0 && idx < kAkShareSeries.size() ? kAkShareSeries[idx].label : request_id.mid(6));
 
     display(rows, title);
     LOG_INFO("AkShareChinaPanel", QString("Displayed %1 rows: %2")

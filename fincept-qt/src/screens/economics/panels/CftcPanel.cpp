@@ -21,10 +21,12 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "cftc_data.py";
-static constexpr const char* kSourceId = "cftc";
-static constexpr const char* kColor    = "#FF5722";  // deep orange
+static constexpr const char* kCftcScript   = "cftc_data.py";
+static constexpr const char* kCftcSourceId = "cftc";
+static constexpr const char* kCftcColor    = "#FF5722";  // deep orange
+} // namespace
 
 static const QList<QPair<QString,QString>> kMarkets = {
     // Metals
@@ -89,7 +91,7 @@ static const QList<QPair<QString,QString>> kViews = {
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 CftcPanel::CftcPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kCftcSourceId, kCftcColor, parent) {
     build_base_ui(this);
     build_sentiment_widget();
     connect(&services::EconomicsService::instance(),
@@ -160,7 +162,7 @@ void CftcPanel::build_sentiment_widget() {
     sent_market_lbl_ = new QLabel("—");
     sent_market_lbl_->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; background:transparent;")
-        .arg(kColor));
+        .arg(kCftcColor));
     sent_date_lbl_ = new QLabel("—");
     sent_date_lbl_->setStyleSheet(
         "color:#525252; font-size:10px; background:transparent;");
@@ -264,17 +266,17 @@ void CftcPanel::on_fetch() {
 
     if (view == "cot") {
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, "cot_data",
+            kCftcSourceId, kCftcScript, "cot_data",
             {market, report_type},
             "cftc_cot_" + market);
     } else if (view == "sentiment") {
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, "market_sentiment",
+            kCftcSourceId, kCftcScript, "market_sentiment",
             {market, report_type},
             "cftc_sent_" + market);
     } else {
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, "cot_historical_trend",
+            kCftcSourceId, kCftcScript, "cot_historical_trend",
             {market, report_type},
             "cftc_trend_" + market);
     }
@@ -284,7 +286,7 @@ void CftcPanel::on_fetch() {
 
 void CftcPanel::on_result(const QString& request_id,
                           const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kCftcSourceId) return;
 
     if (!result.success) {
         show_error(result.error);
@@ -362,7 +364,7 @@ void CftcPanel::show_sentiment(const QJsonObject& s) {
     sent_date_lbl_->setText("Report: " + s["latest_report"].toString("—"));
 
     const double oi = s["open_interest"].toDouble();
-    sent_oi_lbl_->setText(oi > 0 ? QString::number(static_cast<qint64>(oi), 'd') : "—");
+    sent_oi_lbl_->setText(oi > 0 ? QString::number(static_cast<qint64>(oi)) : "—");
 
     const QString oi_trend = s["overall_sentiment"].toObject()["oi_trend"].toString();
     sent_oi_trend_->setText(oi_trend.isEmpty() ? "—" : oi_trend.toUpper());

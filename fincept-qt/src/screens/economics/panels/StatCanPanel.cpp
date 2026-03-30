@@ -14,10 +14,11 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "statcan_data.py";
-static constexpr const char* kSourceId = "statcan";
-static constexpr const char* kColor    = "#EF4444";  // Canada red
+static constexpr const char* kStatCanScript   = "statcan_data.py";
+static constexpr const char* kStatCanSourceId = "statcan";
+static constexpr const char* kStatCanColor    = "#EF4444";  // Canada red
 
 struct StatCanSeries {
     QString label;
@@ -25,7 +26,7 @@ struct StatCanSeries {
     QString description;
 };
 
-static const QList<StatCanSeries> kSeries = {
+static const QList<StatCanSeries> kStatCanSeries = {
     { "Real GDP (Chained 2017 $, SA)",  "gdp",          "Table 36-10-0104-01, v65201210, quarterly"  },
     { "CPI All-Items, Canada",          "cpi",          "Table 18-10-0004-01, v41690973, monthly"    },
     { "Unemployment Rate",              "unemployment", "Table 14-10-0287-01, v2062815, monthly"     },
@@ -34,8 +35,10 @@ static const QList<StatCanSeries> kSeries = {
     { "Housing Starts (SA, SAAR)",      "housing",      "Table 34-10-0158-01, v52300157, monthly"    },
 };
 
+} // namespace
+
 StatCanPanel::StatCanPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kStatCanSourceId, kStatCanColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -54,14 +57,14 @@ void StatCanPanel::build_controls(QHBoxLayout* thl) {
         "color:#525252; font-size:9px; font-weight:700; background:transparent;");
 
     series_combo_ = new QComboBox;
-    for (const auto& s : kSeries)
+    for (const auto& s : kStatCanSeries)
         series_combo_->addItem(s.label, s.command);
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(240);
 
     // Show description as tooltip
-    for (int i = 0; i < kSeries.size(); ++i)
-        series_combo_->setItemData(i, kSeries[i].description, Qt::ToolTipRole);
+    for (int i = 0; i < kStatCanSeries.size(); ++i)
+        series_combo_->setItemData(i, kStatCanSeries[i].description, Qt::ToolTipRole);
 
     thl->addWidget(lbl);
     thl->addWidget(series_combo_);
@@ -69,17 +72,17 @@ void StatCanPanel::build_controls(QHBoxLayout* thl) {
 
 void StatCanPanel::on_fetch() {
     const int   idx    = series_combo_->currentIndex();
-    const auto& series = kSeries[idx];
+    const auto& series = kStatCanSeries[idx];
 
     show_loading("Fetching StatCan: " + series.label + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, series.command, {},
+        kStatCanSourceId, kStatCanScript, series.command, {},
         "statcan_" + series.command);
 }
 
 void StatCanPanel::on_result(const QString& request_id,
                               const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kStatCanSourceId) return;
     if (!request_id.startsWith("statcan_")) return;
     if (!result.success) { show_error(result.error); return; }
 
@@ -98,8 +101,8 @@ void StatCanPanel::on_result(const QString& request_id,
     QString label = result.data["label"].toString().trimmed();
     const QString series_key = result.data["series"].toString();
     if (label.isEmpty()) {
-        // Find display label from kSeries
-        for (const auto& s : kSeries) {
+        // Find display label from kStatCanSeries
+        for (const auto& s : kStatCanSeries) {
             if (s.command == series_key) { label = s.label; break; }
         }
     }

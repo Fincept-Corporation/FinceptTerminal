@@ -18,10 +18,12 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "economic_calendar.py";
-static constexpr const char* kSourceId = "econ_calendar";
-static constexpr const char* kColor    = "#D97706";  // amber
+static constexpr const char* kEconomicCalendarScript   = "economic_calendar.py";
+static constexpr const char* kEconomicCalendarSourceId = "econ_calendar";
+static constexpr const char* kEconomicCalendarColor    = "#D97706";  // amber
+} // namespace
 
 // Convert QDate to Forex Factory date string: "mar28.2026"
 static QString to_ff_date(const QDate& d) {
@@ -36,7 +38,7 @@ static QString to_ff_date(const QDate& d) {
 }
 
 EconomicCalendarPanel::EconomicCalendarPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kEconomicCalendarSourceId, kEconomicCalendarColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -86,13 +88,13 @@ void EconomicCalendarPanel::on_fetch() {
     show_loading("Fetching economic calendar for " + date.toString("MMM d, yyyy") + "…");
 
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, ff_date, {},
+        kEconomicCalendarSourceId, kEconomicCalendarScript, ff_date, {},
         "calendar_" + ff_date);
 }
 
 void EconomicCalendarPanel::on_result(const QString& request_id,
                                        const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kEconomicCalendarSourceId) return;
     if (!request_id.startsWith("calendar_")) return;
     if (!result.success) { show_error(result.error); return; }
 

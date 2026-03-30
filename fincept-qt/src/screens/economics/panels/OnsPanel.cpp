@@ -14,17 +14,19 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "ons_data.py";
-static constexpr const char* kSourceId = "ons";
-static constexpr const char* kColor    = "#005EB8";  // ONS blue
+static constexpr const char* kOnsScript   = "ons_data.py";
+static constexpr const char* kOnsSourceId = "ons";
+static constexpr const char* kOnsColor    = "#005EB8";  // ONS blue
+} // namespace
 
 struct OnsSeries {
     QString label;
     QString command;
 };
 
-static const QList<OnsSeries> kSeries = {
+static const QList<OnsSeries> kOnsSeries = {
     { "GDP (Chained Volume, SA)",      "gdp"           },
     { "CPI All Items",                 "cpi"           },
     { "CPIH (incl. Housing Costs)",    "cpih"          },
@@ -38,7 +40,7 @@ static const QList<OnsSeries> kSeries = {
 };
 
 OnsPanel::OnsPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kOnsSourceId, kOnsColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -57,7 +59,7 @@ void OnsPanel::build_controls(QHBoxLayout* thl) {
         "color:#525252; font-size:9px; font-weight:700; background:transparent;");
 
     series_combo_ = new QComboBox;
-    for (const auto& s : kSeries)
+    for (const auto& s : kOnsSeries)
         series_combo_->addItem(s.label, s.command);
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(240);
@@ -68,17 +70,17 @@ void OnsPanel::build_controls(QHBoxLayout* thl) {
 
 void OnsPanel::on_fetch() {
     const int   idx    = series_combo_->currentIndex();
-    const auto& series = kSeries[idx];
+    const auto& series = kOnsSeries[idx];
 
     show_loading("Fetching ONS: " + series.label + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, series.command, {},
+        kOnsSourceId, kOnsScript, series.command, {},
         "ons_" + series.command);
 }
 
 void OnsPanel::on_result(const QString& request_id,
                           const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kOnsSourceId) return;
     if (!request_id.startsWith("ons_")) return;
     if (!result.success) { show_error(result.error); return; }
 
@@ -98,7 +100,7 @@ void OnsPanel::on_result(const QString& request_id,
     const QString unit  = result.data["unit"].toString();
     const QString title = "ONS: " + (label.isEmpty()
         ? (series_combo_->currentIndex() >= 0
-               ? kSeries[series_combo_->currentIndex()].label
+               ? kOnsSeries[series_combo_->currentIndex()].label
                : request_id.mid(4))
         : label)
         + (unit.isEmpty() ? "" : " (" + unit + ")");

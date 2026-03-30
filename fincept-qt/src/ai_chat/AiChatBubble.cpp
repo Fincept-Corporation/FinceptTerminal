@@ -1,24 +1,17 @@
 #include "ai_chat/AiChatBubble.h"
 
+#include "services/stt/WhisperService.h"
 #include "storage/repositories/ChatRepository.h"
 #include "ui/theme/Theme.h"
 
 #include <QAudioOutput>
-#include <QBuffer>
 #include <QDateTime>
 #include <QEvent>
 #include <QHBoxLayout>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QLabel>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QRegularExpression>
 #include <QResizeEvent>
 #include <QScrollBar>
-#include <QTemporaryFile>
 #include <QUrl>
 #include <QUuid>
 
@@ -56,6 +49,22 @@ AiChatBubble::AiChatBubble(QWidget* parent) : QWidget(parent) {
 
     connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::finished_streaming,
             this, &AiChatBubble::on_streaming_done);
+
+    // ── WhisperService wiring ─────────────────────────────────────────────────
+    auto& stt = services::WhisperService::instance();
+    connect(&stt, &services::WhisperService::transcription_ready,
+            this, &AiChatBubble::on_transcription);
+    connect(&stt, &services::WhisperService::listening_changed,
+            this, &AiChatBubble::on_stt_listening_changed);
+    connect(&stt, &services::WhisperService::error_occurred,
+            this, &AiChatBubble::on_stt_error);
+    connect(&stt, &services::WhisperService::model_download_progress,
+            this, &AiChatBubble::on_model_download_progress);
+    connect(&stt, &services::WhisperService::model_ready,
+            this, [this]() {
+                update_voice_status();
+                if (voice_mode_) start_listening();
+            });
 
     if (parent) parent->installEventFilter(this);
     reposition();
@@ -600,7 +609,8 @@ void AiChatBubble::update_unread(int delta) {
     }
 }
 
-// ── Voice input (STT) ─────────────────────────────────────────────────────────
+// ── Voice input (STT — whisper.cpp offline, cross-platform) ──────────────────
+
 void AiChatBubble::on_toggle_mic() {
     if (is_listening_) stop_listening();
     else               start_listening();
@@ -608,58 +618,44 @@ void AiChatBubble::on_toggle_mic() {
 
 void AiChatBubble::start_listening() {
     if (is_listening_ || is_speaking_) return;
-
-    if (stt_process_) { stt_process_->kill(); stt_process_->deleteLater(); }
-    stt_process_ = new QProcess(this);
-    connect(stt_process_, &QProcess::finished, this, &AiChatBubble::on_stt_finished);
-
-    const QString script = R"(
-Add-Type -AssemblyName System.Speech
-$rec = New-Object System.Speech.Recognition.SpeechRecognitionEngine
-$rec.SetInputToDefaultAudioDevice()
-$grammar = New-Object System.Speech.Recognition.DictationGrammar
-$rec.LoadGrammar($grammar)
-$result = $rec.Recognize([System.TimeSpan]::FromSeconds(8))
-if ($result) { Write-Host $result.Text }
-)";
-    stt_process_->start("powershell",
-        QStringList() << "-NoProfile" << "-NonInteractive" << "-Command" << script);
-
-    is_listening_ = true;
-    update_voice_status();
-    mic_btn_->setChecked(true);
-    pulse_timer_->start();
+    services::WhisperService::instance().start_listening();
+    // is_listening_ state is updated via on_stt_listening_changed signal.
 }
 
 void AiChatBubble::stop_listening() {
-    if (stt_process_) {
-        stt_process_->kill();
-        stt_process_->deleteLater();
-        stt_process_ = nullptr;
+    services::WhisperService::instance().stop_listening();
+    // is_listening_ state is updated via on_stt_listening_changed signal.
+}
+
+void AiChatBubble::on_stt_listening_changed(bool active) {
+    is_listening_ = active;
+    mic_btn_->setChecked(active);
+    if (active) {
+        pulse_timer_->start();
+    } else {
+        pulse_timer_->stop();
+        mic_btn_->setChecked(false);
     }
-    is_listening_ = false;
-    pulse_timer_->stop();
-    mic_btn_->setChecked(false);
     update_voice_status();
 }
 
-void AiChatBubble::on_stt_finished(int, QProcess::ExitStatus) {
-    is_listening_ = false;
-    pulse_timer_->stop();
-    mic_btn_->setChecked(false);
+void AiChatBubble::on_transcription(const QString& text) {
+    if (text.isEmpty()) return;
 
-    const QString transcript = stt_process_
-        ? QString::fromUtf8(stt_process_->readAllStandardOutput()).trimmed()
-        : QString();
-    if (stt_process_) { stt_process_->deleteLater(); stt_process_ = nullptr; }
-
-    if (!transcript.isEmpty()) {
-        input_box_->setPlainText(transcript);
-        if (voice_mode_) on_send();
-    } else if (voice_mode_ && !is_speaking_ && !streaming_) {
-        QTimer::singleShot(500, this, &AiChatBubble::start_listening);
-    }
+    input_box_->setPlainText(text);
+    if (voice_mode_) on_send();
     update_voice_status();
+}
+
+void AiChatBubble::on_stt_error(const QString& message) {
+    if (voice_status_lbl_)
+        voice_status_lbl_->setText(QStringLiteral("⚠ ") + message);
+}
+
+void AiChatBubble::on_model_download_progress(int percent) {
+    if (voice_status_lbl_)
+        voice_status_lbl_->setText(
+            QStringLiteral("Downloading voice model… %1%").arg(percent));
 }
 
 // ── Voice mode ────────────────────────────────────────────────────────────────
@@ -680,42 +676,59 @@ void AiChatBubble::on_toggle_voice_mode() {
 void AiChatBubble::speak_text(const QString& text) {
     if (text.isEmpty()) return;
 
+    // Strip markdown formatting — TTS engines speak raw text.
     QString clean = text;
-    clean.remove(QRegularExpression(R"(\*\*|__|~~|\`\`\`[^\`]*\`\`\`|\`[^\`]*\`)"));
-    clean.remove(QRegularExpression(R"(#{1,6}\s)"));
+    clean.remove(QRegularExpression(R"(\*\*|__|~~|```[^`]*```|`[^`]*`)"));
+    clean.remove(QRegularExpression(R"(#{1,6} )"));
     clean = clean.trimmed();
-    if (clean.isEmpty()) { if (voice_mode_) start_listening(); return; }
+
+    if (clean.isEmpty()) {
+        if (voice_mode_) start_listening();
+        return;
+    }
 
     is_speaking_ = true;
     update_voice_status();
     stop_speech_btn_->show();
 
-    QPointer<AiChatBubble> self = this;
-    auto* proc = new QProcess(this);
-    const QString script = QString(R"(
-Add-Type -AssemblyName System.Speech
-$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
-$synth.Rate = 2
-$synth.Speak('%1')
-)").arg(clean.replace("'", " ").left(800));
-
-    proc->start("powershell",
-        QStringList() << "-NoProfile" << "-NonInteractive" << "-Command" << script);
-    connect(proc, &QProcess::finished, this, [self, proc](int, QProcess::ExitStatus) {
-        proc->deleteLater();
-        if (!self) return;
-        self->is_speaking_ = false;
-        self->stop_speech_btn_->hide();
-        self->update_voice_status();
-        if (self->voice_mode_ && !self->is_listening_ && !self->streaming_)
-            QTimer::singleShot(400, self, &AiChatBubble::start_listening);
-    });
+    // TTS via Qt's cross-platform QTextToSpeech (Qt 6.4+).
+    // Instantiated lazily — avoids cost when voice mode is never used.
+    // QTextToSpeech uses platform engines: SAPI on Windows, AVSpeech on macOS,
+    // speech-dispatcher on Linux.  No subprocess, no PowerShell.
+#ifdef HAS_QT_TTS
+    if (!tts_engine_) {
+        tts_engine_ = new QTextToSpeech(this);
+        tts_engine_->setRate(0.15);
+        connect(tts_engine_, &QTextToSpeech::stateChanged,
+                this, [this](QTextToSpeech::State state) {
+                    if (state == QTextToSpeech::Ready ||
+                        state == QTextToSpeech::Error) {
+                        is_speaking_ = false;
+                        stop_speech_btn_->hide();
+                        update_voice_status();
+                        if (voice_mode_ && !is_listening_ && !streaming_)
+                            QTimer::singleShot(400, this, &AiChatBubble::start_listening);
+                    }
+                });
+    }
+    tts_engine_->say(clean.left(1200));
+#else
+    // Qt TextToSpeech module not available — skip TTS, resume listening.
+    is_speaking_ = false;
+    stop_speech_btn_->hide();
+    update_voice_status();
+    if (voice_mode_ && !is_listening_ && !streaming_)
+        QTimer::singleShot(400, this, &AiChatBubble::start_listening);
+#endif
 }
 
 void AiChatBubble::stop_tts() {
     is_speaking_ = false;
     stop_speech_btn_->hide();
     tts_player_->stop();
+#ifdef HAS_QT_TTS
+    if (tts_engine_) tts_engine_->stop();
+#endif
     update_voice_status();
 }
 

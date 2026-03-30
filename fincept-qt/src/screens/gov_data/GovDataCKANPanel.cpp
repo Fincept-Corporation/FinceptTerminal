@@ -19,6 +19,10 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
+static constexpr const char* kGovDataCKANScript = "datagovuk_api.py";
+static constexpr const char* kGovDataCKANColor  = "#10B981";
+} // namespace
 
 // ── Stylesheet ────────────────────────────────────────────────────────────────
 
@@ -313,7 +317,7 @@ QWidget* GovDataCKANPanel::build_toolbar() {
 void GovDataCKANPanel::load_initial_data() {
     show_loading("Loading publishers from data.gov.uk…");
     services::GovDataService::instance().execute(
-        kScript, "publishers", {}, "ckan_publishers");
+        kGovDataCKANScript, "publishers", {}, "ckan_publishers");
 }
 
 // ── Toolbar actions ───────────────────────────────────────────────────────────
@@ -358,7 +362,7 @@ void GovDataCKANPanel::on_search() {
 
     show_loading("Searching for "" + query + ""…");
     services::GovDataService::instance().execute(
-        kScript, "search", {query, "50"}, "ckan_search");
+        kGovDataCKANScript, "search", {query, "50"}, "ckan_search");
 }
 
 void GovDataCKANPanel::on_publisher_clicked(int row) {
@@ -369,7 +373,7 @@ void GovDataCKANPanel::on_publisher_clicked(int row) {
 
     show_loading("Loading datasets for "" + selected_publisher_name_ + ""…");
     services::GovDataService::instance().execute(
-        kScript, "datasets", {selected_publisher_, "100"}, "ckan_datasets");
+        kGovDataCKANScript, "datasets", {selected_publisher_, "100"}, "ckan_datasets");
 }
 
 void GovDataCKANPanel::on_dataset_clicked(int row) {
@@ -380,7 +384,7 @@ void GovDataCKANPanel::on_dataset_clicked(int row) {
 
     show_loading("Loading resources…");
     services::GovDataService::instance().execute(
-        kScript, "resources", {selected_dataset_}, "ckan_resources");
+        kGovDataCKANScript, "resources", {selected_dataset_}, "ckan_resources");
 }
 
 void GovDataCKANPanel::on_back() {
@@ -520,7 +524,7 @@ void GovDataCKANPanel::populate_publishers(const QJsonArray& data) {
         if (name.isEmpty()) name = obj["id"].toString();
 
         auto* name_item = new QTableWidgetItem(name);
-        name_item->setForeground(QColor(kColor));
+        name_item->setForeground(QColor(kGovDataCKANColor));
         name_item->setData(Qt::UserRole,
             obj["id"].toString().isEmpty() ? obj["name"].toString() : obj["id"].toString());
         publishers_table_->setItem(i, 0, name_item);
@@ -547,7 +551,7 @@ void GovDataCKANPanel::populate_datasets(const QJsonArray& data, int total_count
         int num_res = obj["num_resources"].toInt(0);
         auto* res_item = new QTableWidgetItem(QString::number(num_res));
         res_item->setTextAlignment(Qt::AlignCenter);
-        res_item->setForeground(QColor(kColor));
+        res_item->setForeground(QColor(kGovDataCKANColor));
         datasets_table_->setItem(i, 1, res_item);
 
         QString modified = obj["metadata_modified"].toString();
@@ -583,7 +587,7 @@ void GovDataCKANPanel::populate_resources(const QJsonArray& data) {
 
         QString format = obj["format"].toString().toUpper();
         auto* fmt_item = new QTableWidgetItem(format.isEmpty() ? "—" : format);
-        fmt_item->setForeground(QColor(kColor));
+        fmt_item->setForeground(QColor(kGovDataCKANColor));
         fmt_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 1, fmt_item);
 
@@ -608,7 +612,7 @@ void GovDataCKANPanel::populate_resources(const QJsonArray& data) {
         QString url = obj["url"].toString();
         auto* url_item = new QTableWidgetItem(url.isEmpty() ? "—" : "↗ OPEN");
         url_item->setData(Qt::UserRole, url);
-        if (!url.isEmpty()) url_item->setForeground(QColor(kColor));
+        if (!url.isEmpty()) url_item->setForeground(QColor(kGovDataCKANColor));
         url_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 4, url_item);
     }
@@ -620,7 +624,7 @@ void GovDataCKANPanel::populate_resources(const QJsonArray& data) {
 
 void GovDataCKANPanel::show_loading(const QString& message) {
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:13px; background:transparent;").arg(kColor));
+        QString("color:%1; font-size:13px; background:transparent;").arg(kGovDataCKANColor));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(3);
 }

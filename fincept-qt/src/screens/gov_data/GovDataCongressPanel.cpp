@@ -18,12 +18,12 @@ namespace fincept::screens {
 
 using namespace fincept::ui;
 
-static const QString kColor  = "#8B5CF6";
-static const QString kScript = "congress_gov_data.py";
+static const QString kGovDataCongressColor  = "#8B5CF6";
+static const QString kGovDataCongressScript = "congress_gov_data.py";
 
 // ── Stylesheet ───────────────────────────────────────────────────────────────
 
-static const char* kStyle =
+static const char* kGovDataCongressStyle =
     "#govCongressToolbar { background:#111111; border-bottom:1px solid #1a1a1a; }"
 
     "#govCongressTab { background:transparent; color:#808080; border:1px solid #1a1a1a;"
@@ -73,7 +73,7 @@ static const char* kStyle =
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 GovDataCongressPanel::GovDataCongressPanel(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(kStyle);
+    setStyleSheet(kGovDataCongressStyle);
     build_ui();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready,
             this, &GovDataCongressPanel::on_result);
@@ -250,14 +250,14 @@ void GovDataCongressPanel::on_fetch_bills() {
     if (current_view_ == SummaryView) {
         show_loading("Loading Congress summary…");
         services::GovDataService::instance().execute(
-            kScript, "summary", {QString::number(congress)}, "gov_congress_summary");
+            kGovDataCongressScript, "summary", {QString::number(congress)}, "gov_congress_summary");
     } else {
         show_loading("Loading bills…");
         QStringList args;
         args << QString::number(congress);
         if (!bill_type.isEmpty()) args << bill_type;
         services::GovDataService::instance().execute(
-            kScript, "congress_bills", args, "gov_congress_bills");
+            kGovDataCongressScript, "congress_bills", args, "gov_congress_bills");
     }
 }
 
@@ -274,7 +274,7 @@ void GovDataCongressPanel::on_bill_clicked(int row) {
     show_loading("Loading bill detail…");
     back_btn_->setVisible(true);
     services::GovDataService::instance().execute(
-        kScript, "bill_info",
+        kGovDataCongressScript, "bill_info",
         {QString::number(congress), bill_type.toLower(), bill_num},
         "gov_congress_detail");
 }
@@ -316,7 +316,7 @@ void GovDataCongressPanel::populate_bills(const QJsonObject& data) {
             new QTableWidgetItem(QString::number(b["congress"].toInt())));
 
         auto* type_item = new QTableWidgetItem(b["bill_type"].toString().toUpper());
-        type_item->setForeground(QColor(kColor));
+        type_item->setForeground(QColor(kGovDataCongressColor));
         type_item->setData(Qt::UserRole, b["bill_type"].toString());
         bills_table_->setItem(i, 1, type_item);
 
@@ -353,10 +353,10 @@ void GovDataCongressPanel::populate_bill_detail(const QJsonObject& data) {
     html.replace("\n\n", "<br><br>");
     html.replace(
         QRegularExpression("^# (.+)$", QRegularExpression::MultilineOption),
-        "<h2 style='color:" + kColor + ";font-weight:700;'>\\1</h2>");
+        "<h2 style='color:" + kGovDataCongressColor + ";font-weight:700;'>\\1</h2>");
     html.replace(
         QRegularExpression("^## (.+)$", QRegularExpression::MultilineOption),
-        "<h3 style='color:" + kColor + ";'>\\1</h3>");
+        "<h3 style='color:" + kGovDataCongressColor + ";'>\\1</h3>");
     html.replace(QRegularExpression("\\*\\*(.+?)\\*\\*"), "<b>\\1</b>");
 
     detail_browser_->setHtml(
@@ -374,7 +374,7 @@ void GovDataCongressPanel::populate_summary(const QJsonObject& data) {
     int row = 0;
     for (auto it = bill_types.begin(); it != bill_types.end(); ++it, ++row) {
         auto* name_item = new QTableWidgetItem(it.key().toUpper());
-        name_item->setForeground(QColor(kColor));
+        name_item->setForeground(QColor(kGovDataCongressColor));
         summary_table_->setItem(row, 0, name_item);
         summary_table_->setItem(row, 1,
             new QTableWidgetItem(QString::number(it.value().toObject()["count"].toInt())));
@@ -386,7 +386,7 @@ void GovDataCongressPanel::populate_summary(const QJsonObject& data) {
 
 void GovDataCongressPanel::show_loading(const QString& message) {
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:13px; background:transparent;").arg(kColor));
+        QString("color:%1; font-size:13px; background:transparent;").arg(kGovDataCongressColor));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(3);
 }

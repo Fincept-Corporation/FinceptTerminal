@@ -1,0 +1,95 @@
+--- #8_principal POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "principal"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: principal"}
+
+--- #8_par POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "par"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: par"}
+
+--- #8_face POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "face"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: face"}
+
+--- #8_outstanding POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "outstanding"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: outstanding"}
+
+--- #8_remaining POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "remaining"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: remaining"}
+
+--- #8_proportional POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "proportional"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: proportional"}
+
+--- #8_staggered POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "staggered"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: staggered"}
+
+--- #8_even POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "even"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: even"}
+
+--- #8_regular POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "regular"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: regular"}
+
+--- #8_level POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "level"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: level"}
+
+--- #47L POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "fixings": [0.04, 0.041, 0.042, 0.043, 0.044, 0.045, 0.046, 0.047]}
+  Status: 422 FAIL
+  detail: {"success": false, "message": "body -> fixings: Input should be a valid dictionary", "error_code": "VALIDATION_ERROR"}
+
+--- #47M POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "discount_curve": [0.04, 0.041, 0.042, 0.043]}
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot calculate cashflow: no fixing rate, fixed rate, or curve provided", "error_code": "VALIDATION_ERROR"}
+
+--- #47N POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "zero_rates": [0.04, 0.041, 0.042, 0.043]}
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot calculate cashflow: no fixing rate, fixed rate, or curve provided", "error_code": "VALIDATION_ERROR"}
+
+--- #47O POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "forward_rates": [0.04, 0.041, 0.042, 0.043]}
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot calculate cashflow: no fixing rate, fixed rate, or curve provided", "error_code": "VALIDATION_ERROR"}
+
+--- #50_min POST /quantlib/core/periods/fixed-coupon
+  Body: {"notional": 1000000, "rate": 0.05, "start_date": "2024-01-01", "end_date": "2024-07-01", "day_count_fraction": 0.5}
+  Status: 500 FAIL
+  detail: {"success": false, "message": "Internal server error", "error_code": "INTERNAL_ERROR"}
+
+--- #51_nolib POST /quantlib/core/periods/float-coupon
+  Body: {"notional": 1000000, "spread": 0.01, "start_date": "2024-01-01", "end_date": "2024-04-01"}
+  Status: 500 FAIL
+  detail: {"success": false, "message": "Internal server error", "error_code": "INTERNAL_ERROR"}
+
+--- #51_nolib2 POST /quantlib/core/periods/float-coupon
+  Body: {"notional": 1000000, "spread": 0.0, "start_date": "2024-01-01", "end_date": "2024-04-01"}
+  Status: 500 FAIL
+  detail: {"success": false, "message": "Internal server error", "error_code": "INTERNAL_ERROR"}
+

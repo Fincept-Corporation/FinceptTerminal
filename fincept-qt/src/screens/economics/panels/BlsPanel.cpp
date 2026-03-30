@@ -19,10 +19,11 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "bls_data.py";
-static constexpr const char* kSourceId = "bls";
-static constexpr const char* kColor    = "#DC2626";  // BLS red
+static constexpr const char* kBlsScript   = "bls_data.py";
+static constexpr const char* kBlsSourceId = "bls";
+static constexpr const char* kBlsColor    = "#DC2626";  // BLS red
 
 struct BlsPreset {
     QString label;
@@ -30,7 +31,7 @@ struct BlsPreset {
     QString series_id;  // non-empty -> use get_series command
 };
 
-static const QList<BlsPreset> kPresets = {
+static const QList<BlsPreset> kBlsPresets = {
     { "-- Select a series --",             "",                      ""             },
     { "Total Nonfarm Employment",          "get_series",            "CES0000000001"},
     { "Unemployment Rate (U-3)",           "get_series",            "LNS14000000"  },
@@ -46,8 +47,10 @@ static const QList<BlsPreset> kPresets = {
     { "Productivity & Costs",              "get_productivity_costs",""},
 };
 
+} // namespace
+
 BlsPanel::BlsPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kBlsSourceId, kBlsColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -68,15 +71,15 @@ void BlsPanel::build_controls(QHBoxLayout* thl) {
     };
 
     preset_combo_ = new QComboBox;
-    for (const auto& p : kPresets)
+    for (const auto& p : kBlsPresets)
         preset_combo_->addItem(p.label, p.command + "|" + p.series_id);
     preset_combo_->setFixedHeight(26);
     preset_combo_->setMinimumWidth(240);
 
     connect(preset_combo_, &QComboBox::currentIndexChanged, this,
             [this](int idx) {
-                if (idx > 0 && idx < kPresets.size()) {
-                    const auto& p = kPresets[idx];
+                if (idx > 0 && idx < kBlsPresets.size()) {
+                    const auto& p = kBlsPresets[idx];
                     if (!p.series_id.isEmpty())
                         series_input_->setText(p.series_id);
                 }
@@ -105,22 +108,22 @@ void BlsPanel::on_fetch() {
         if (sid.isEmpty()) { show_empty("Select a preset or enter a series ID"); return; }
         show_loading("Fetching BLS series " + sid + "…");
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, "get_series", {sid}, "bls_series_" + sid);
+            kBlsSourceId, kBlsScript, "get_series", {sid}, "bls_series_" + sid);
         return;
     }
 
-    const auto& preset = kPresets[idx];
+    const auto& preset = kBlsPresets[idx];
     show_loading("Fetching BLS: " + preset.label + "…");
 
     if (preset.command == "get_series") {
         const QString sid = series_input_->text().trimmed().toUpper();
         const QString use_sid = sid.isEmpty() ? preset.series_id : sid;
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, "get_series", {use_sid},
+            kBlsSourceId, kBlsScript, "get_series", {use_sid},
             "bls_series_" + use_sid);
     } else {
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, preset.command, {},
+            kBlsSourceId, kBlsScript, preset.command, {},
             "bls_" + preset.command);
     }
 }
@@ -158,7 +161,7 @@ static QJsonArray extract_bls_rows(const QJsonObject& data) {
 
 void BlsPanel::on_result(const QString& request_id,
                          const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kBlsSourceId) return;
     if (!request_id.startsWith("bls_")) return;
 
     if (!result.success) {
@@ -194,8 +197,8 @@ void BlsPanel::on_result(const QString& request_id,
     }
 
     const int idx = preset_combo_->currentIndex();
-    const QString title = (idx > 0 && idx < kPresets.size())
-                              ? "BLS: " + kPresets[idx].label
+    const QString title = (idx > 0 && idx < kBlsPresets.size())
+                              ? "BLS: " + kBlsPresets[idx].label
                               : "BLS: " + series_input_->text().trimmed().toUpper();
     display(rows, title);
     LOG_INFO("BlsPanel", QString("Displayed %1 rows").arg(rows.size()));

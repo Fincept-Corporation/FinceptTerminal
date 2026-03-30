@@ -27,10 +27,12 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "unesco_data.py";
-static constexpr const char* kSourceId = "unesco";
-static constexpr const char* kColor    = "#00ACC1";  // cyan
+static constexpr const char* kUnescoScript   = "unesco_data.py";
+static constexpr const char* kUnescoSourceId = "unesco";
+static constexpr const char* kUnescoColor    = "#00ACC1";  // cyan
+} // namespace
 
 // Curated preset indicators per theme — used before live list loads
 struct UnescoIndicatorDef { QString name; QString code; };
@@ -73,7 +75,7 @@ static const QList<UnescoIndicatorDef> kCultureIndicators = {
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 UnescoPanel::UnescoPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kUnescoSourceId, kUnescoColor, parent) {
 
     // Outer layout: left selector | right base UI
     auto* main = new QHBoxLayout(this);
@@ -122,12 +124,12 @@ UnescoPanel::UnescoPanel(QWidget* parent)
     // Indicator list
     indicator_list_ = new QListWidget;
     indicator_list_->setStyleSheet(
-        "QListWidget { background:#080808; border:none; outline:none; font-size:10px; }"
-        "QListWidget::item { color:#808080; padding:4px 10px;"
-        "  border-bottom:1px solid #111111; }"
-        "QListWidget::item:hover { color:#e5e5e5; background:#0f0f0f; }"
-        QString("QListWidget::item:selected { color:%1; background:rgba(0,172,193,0.08);"
-        "  border-left:2px solid %1; padding-left:8px; }").arg(kColor));
+        QString("QListWidget { background:#080808; border:none; outline:none; font-size:10px; }"
+                "QListWidget::item { color:#808080; padding:4px 10px;"
+                "  border-bottom:1px solid #111111; }"
+                "QListWidget::item:hover { color:#e5e5e5; background:#0f0f0f; }"
+                "QListWidget::item:selected { color:%1; background:rgba(0,172,193,0.08);"
+                "  border-left:2px solid %1; padding-left:8px; }").arg(kUnescoColor));
     indicator_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     lvl->addWidget(indicator_list_, 1);
 
@@ -198,7 +200,7 @@ void UnescoPanel::on_theme_changed(int index) {
     else                 list = kCultureIndicators;
 
     for (const auto& ind : list) {
-        current_indicators_.append(ind);
+        current_indicators_.append({ind.name, ind.code});
         auto* item = new QListWidgetItem(ind.name);
         item->setData(Qt::UserRole, ind.code);
         item->setToolTip(ind.code);
@@ -224,7 +226,7 @@ void UnescoPanel::load_indicators() {
     // Fetch live indicator list from API — fires once per session
     indicators_loaded_ = true;
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, "list_indicators", {},
+        kUnescoSourceId, kUnescoScript, "list_indicators", {},
         "unesco_list_indicators");
 }
 
@@ -252,7 +254,7 @@ void UnescoPanel::on_fetch() {
 
     show_loading("Fetching UNESCO: " + sel_item->text() + " for " + country + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, "fetch",
+        kUnescoSourceId, kUnescoScript, "fetch",
         args,
         "unesco_fetch_" + indicator_code + "_" + country);
 }
@@ -261,7 +263,7 @@ void UnescoPanel::on_fetch() {
 
 void UnescoPanel::on_result(const QString& request_id,
                             const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kUnescoSourceId) return;
 
     // Handle live indicator list load
     if (request_id == "unesco_list_indicators") {

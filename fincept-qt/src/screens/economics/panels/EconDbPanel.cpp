@@ -16,12 +16,14 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "econdb_data.py";
-static constexpr const char* kSourceId = "econdb";
-static constexpr const char* kColor    = "#059669";  // green
+static constexpr const char* kEconDbScript   = "econdb_data.py";
+static constexpr const char* kEconDbSourceId = "econdb";
+static constexpr const char* kEconDbColor    = "#059669";  // green
+} // namespace
 
-static const QList<QPair<QString,QString>> kIndicators = {
+static const QList<QPair<QString,QString>> kEconDbIndicators = {
     { "GDP (Nominal)",              "gdp"   },
     { "Real GDP",                   "rgdp"  },
     { "CPI Inflation",              "cpi"   },
@@ -46,7 +48,7 @@ static const QList<QPair<QString,QString>> kIndicators = {
 };
 
 // 49 countries available in EconDB (ISO2 codes)
-static const QList<QPair<QString,QString>> kCountries = {
+static const QList<QPair<QString,QString>> kEconDbCountries = {
     { "United States",    "US" },
     { "China",            "CN" },
     { "Germany",          "DE" },
@@ -100,7 +102,7 @@ static const QList<QPair<QString,QString>> kCountries = {
 };
 
 EconDbPanel::EconDbPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kEconDbSourceId, kEconDbColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -121,13 +123,13 @@ void EconDbPanel::build_controls(QHBoxLayout* thl) {
     };
 
     indicator_combo_ = new QComboBox;
-    for (const auto& p : kIndicators)
+    for (const auto& p : kEconDbIndicators)
         indicator_combo_->addItem(p.first, p.second);
     indicator_combo_->setFixedHeight(26);
     indicator_combo_->setMinimumWidth(180);
 
     country_combo_ = new QComboBox;
-    for (const auto& c : kCountries)
+    for (const auto& c : kEconDbCountries)
         country_combo_->addItem(c.first, c.second);
     country_combo_->setFixedHeight(26);
     country_combo_->setMinimumWidth(130);
@@ -146,14 +148,14 @@ void EconDbPanel::on_fetch() {
                  + " — " + country_combo_->currentText() + "…");
 
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, "indicator",
+        kEconDbSourceId, kEconDbScript, "indicator",
         { indicator, country },
         "econdb_" + indicator + "_" + country);
 }
 
 void EconDbPanel::on_result(const QString& request_id,
                              const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kEconDbSourceId) return;
     if (!request_id.startsWith("econdb_")) return;
     if (!result.success) { show_error(result.error); return; }
 

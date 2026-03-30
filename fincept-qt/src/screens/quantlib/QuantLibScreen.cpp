@@ -336,9 +336,9 @@ QWidget* QuantLibScreen::create_center_panel() {
     };
 
     add_helper("BS Price",
-               "{\"spot\":100,\"strike\":105,\"r\":0.05,\"sigma\":0.2,\"T\":1.0,\"option_type\":\"call\"}");
+               "{\"spot\":100,\"strike\":105,\"risk_free_rate\":0.05,\"volatility\":0.2,\"time_to_maturity\":1.0,\"option_type\":\"call\"}");
     add_helper("GBM Sim",
-               "{\"S0\":100,\"mu\":0.05,\"sigma\":0.2,\"T\":1.0,\"n_steps\":252,\"n_paths\":5}");
+               "{\"S0\":100,\"mu\":0.05,\"sigma\":0.2,\"T\":1.0,\"n_steps\":52,\"n_paths\":5}");
     add_helper("VaR",
                "{\"portfolio_value\":1000000,\"volatility\":0.02,\"confidence\":0.99,\"horizon\":1}");
     add_helper("Heston",
@@ -464,8 +464,19 @@ void QuantLibScreen::on_panel_changed(QListWidgetItem* item) {
 }
 
 void QuantLibScreen::on_endpoint_changed(int index) {
-    if (index >= 0) {
-        status_endpoint_->setText(endpoint_combo_->currentText());
+    if (index < 0)
+        return;
+    const QString ep = endpoint_combo_->currentText();
+    status_endpoint_->setText(ep);
+
+    // Auto-fill example body if user hasn't typed anything
+    if (param_input1_->text().trimmed().isEmpty()) {
+        const auto& examples = endpoint_examples();
+        auto it = examples.find(ep);
+        if (it != examples.end())
+            param_input1_->setText(it.value());
+        else
+            param_input1_->clear();
     }
 }
 
@@ -990,6 +1001,154 @@ static const QHash<QString, QStringList> MODULE_ENDPOINTS = {
       "analysis/industry/utilities"}},
 };
 
+// ── Endpoint example bodies (verified against live API) ─────────────────────
+
+const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
+    static const QHash<QString, QString> map = {
+        // core/types
+        {"core/types/money/create",         R"({"amount":100,"currency":"USD"})"},
+        {"core/types/money/convert",        R"({"amount":100,"from_currency":"USD","to_currency":"EUR","rate":0.92})"},
+        {"core/types/rate/convert",         R"({"value":0.05,"from_type":"annual","to_type":"continuous"})"},
+        {"core/types/spread/from-bps",      R"({"bps":50})"},
+        {"core/types/tenor/add-to-date",    R"({"start_date":"2024-01-01","tenor":"3M"})"},
+        {"core/types/notional-schedule",    R"({"notional":1000000,"periods":4,"schedule_type":"constant"})"},
+        // core/conventions
+        {"core/conventions/parse-date",             R"({"date_string":"2024-01-15","format":"%Y-%m-%d"})"},
+        {"core/conventions/format-date",            R"({"date_str":"2024-01-15","format":"%d/%m/%Y"})"},
+        {"core/conventions/days-to-years",          R"({"value":365,"day_count":"ACT/365"})"},
+        {"core/conventions/years-to-days",          R"({"value":1.0,"day_count":"ACT/365"})"},
+        {"core/conventions/normalize-rate",         R"({"value":0.05,"compounding":"annual"})"},
+        {"core/conventions/normalize-volatility",   R"({"value":0.2,"tenor":"1Y"})"},
+        // core/autodiff
+        {"core/autodiff/dual-eval",     R"({"func_name":"sin","x":1.0})"},
+        {"core/autodiff/gradient",      R"({"func_name":"sin","x":[1.0]})"},
+        {"core/autodiff/taylor-expand", R"({"func_name":"sin","x0":0.0,"order":3})"},
+        // core/distributions
+        {"core/distributions/normal/cdf",           R"({"x":1.645,"mean":0,"std":1})"},
+        {"core/distributions/normal/pdf",           R"({"x":0.0,"mean":0,"std":1})"},
+        {"core/distributions/normal/ppf",           R"({"p":0.95,"mean":0,"std":1})"},
+        {"core/distributions/t/cdf",                R"({"x":1.96,"df":30})"},
+        {"core/distributions/t/pdf",                R"({"x":0.0,"df":10})"},
+        {"core/distributions/t/ppf",                R"({"p":0.975,"df":30})"},
+        {"core/distributions/chi2/cdf",             R"({"x":3.84,"df":1})"},
+        {"core/distributions/chi2/pdf",             R"({"x":2.0,"df":3})"},
+        {"core/distributions/gamma/cdf",            R"({"x":2.0,"alpha":2.0,"beta":1.0})"},
+        {"core/distributions/gamma/pdf",            R"({"x":2.0,"alpha":2.0,"beta":1.0})"},
+        {"core/distributions/exponential/cdf",      R"({"x":1.0,"rate":1.0})"},
+        {"core/distributions/exponential/pdf",      R"({"x":1.0,"rate":1.0})"},
+        {"core/distributions/exponential/ppf",      R"({"p":0.95,"rate":1.0})"},
+        {"core/distributions/bivariate-normal/cdf", R"({"x":1.0,"y":1.0,"rho":0.5})"},
+        // core/math
+        {"core/math/eval",    R"({"func_name":"sqrt","x":2.0})"},
+        {"core/math/two-arg", R"({"func_name":"power","x":2.0,"y":10.0})"},
+        // core/ops
+        {"core/ops/black-scholes",      R"({"spot":100,"strike":105,"rate":0.05,"volatility":0.2,"time":1.0,"option_type":"call"})"},
+        {"core/ops/black76",            R"({"forward":100,"strike":105,"discount_factor":0.95,"volatility":0.2,"time":1.0,"option_type":"call"})"},
+        {"core/ops/forward-rate",       R"({"df1":0.95,"df2":0.90,"t1":1.0,"t2":2.0})"},
+        {"core/ops/discount-cashflows", R"({"cashflows":[100,100,1100],"times":[1,2,3],"discount_factors":[0.95,0.90,0.86]})"},
+        {"core/ops/interpolate",        R"({"x_data":[1,2,3,4],"y_data":[1,4,9,16],"x":2.5,"method":"linear"})"},
+        {"core/ops/statistics",         R"({"values":[1,2,3,4,5,6,7,8,9,10]})"},
+        {"core/ops/var",                R"({"returns":[-0.02,0.01,-0.015,0.03,-0.01,0.02],"confidence":0.95,"method":"historical"})"},
+        {"core/ops/percentile",         R"({"values":[1,2,3,4,5,6,7,8,9,10],"p":0.9})"},
+        {"core/ops/covariance-matrix",  R"({"returns":[[0.01,0.02],[0.03,-0.01],[0.02,0.01],[-0.01,0.03]]})"},
+        {"core/ops/cholesky",           R"({"matrix":[[4,2],[2,3]]})"},
+        {"core/ops/gbm-paths",          R"({"spot":100,"drift":0.05,"volatility":0.2,"time":1.0,"n_steps":52,"n_paths":5})"},
+        {"core/ops/zero-rate-convert",  R"({"direction":"continuous_to_annual","value":0.05,"t":1.0})"},
+        // core/legs
+        {"core/legs/fixed",       R"({"notional":1000000,"rate":0.05,"frequency":"6M","start_date":"2024-01-01","end_date":"2026-01-01"})"},
+        {"core/legs/float",       R"({"notional":1000000,"spread":0.01,"frequency":"3M","start_date":"2024-01-01","end_date":"2026-01-01"})"},
+        {"core/legs/zero-coupon", R"({"notional":1000000,"rate":0.05,"start_date":"2024-01-01","end_date":"2029-01-01"})"},
+        // core/periods
+        {"core/periods/day-count-fraction", R"({"start_date":"2024-01-01","end_date":"2024-07-01","convention":"ACT/365"})"},
+        {"core/periods/fixed-coupon",       R"({"notional":1000000,"rate":0.05,"start_date":"2024-01-01","end_date":"2024-07-01"})"},
+        {"core/periods/float-coupon",       R"({"notional":1000000,"spread":0.01,"start_date":"2024-01-01","end_date":"2024-04-01"})"},
+
+        // pricing/bs
+        {"pricing/bs/price",              R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"option_type":"call"})"},
+        {"pricing/bs/greeks",             R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"option_type":"call"})"},
+        {"pricing/bs/greeks-full",        R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"option_type":"call"})"},
+        {"pricing/bs/implied-vol",        R"({"spot":100,"strike":105,"risk_free_rate":0.05,"time_to_maturity":1.0,"market_price":8.0,"option_type":"call"})"},
+        {"pricing/bs/digital-call",       R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0})"},
+        {"pricing/bs/digital-put",        R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0})"},
+        {"pricing/bs/asset-or-nothing-call", R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0})"},
+        {"pricing/bs/asset-or-nothing-put",  R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0})"},
+        // pricing/black76
+        {"pricing/black76/price",      R"({"forward":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"option_type":"call"})"},
+        {"pricing/black76/greeks",     R"({"forward":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"option_type":"call"})"},
+        {"pricing/black76/greeks-full",R"({"forward":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"option_type":"call"})"},
+        {"pricing/black76/implied-vol",R"({"forward":100,"strike":105,"risk_free_rate":0.05,"time_to_maturity":1.0,"market_price":8.0,"option_type":"call"})"},
+        {"pricing/black76/caplet",     R"({"forward_rate":0.05,"discount_factor":0.95,"volatility":0.2,"t_start":1.0,"t_end":1.25,"strike":0.048,"notional":1000000})"},
+        {"pricing/black76/floorlet",   R"({"forward_rate":0.05,"discount_factor":0.95,"volatility":0.2,"t_start":1.0,"t_end":1.25,"strike":0.052,"notional":1000000})"},
+        {"pricing/black76/swaption",   R"({"forward_swap_rate":0.05,"annuity":4.5,"volatility":0.2,"t_expiry":1.0,"strike":0.055,"notional":1000000,"option_type":"call"})"},
+        // pricing/bachelier
+        {"pricing/bachelier/price",            R"({"forward":100,"strike":105,"normal_volatility":5.0,"time_to_maturity":1.0,"risk_free_rate":0.05,"option_type":"call"})"},
+        {"pricing/bachelier/greeks",           R"({"forward":100,"strike":105,"normal_volatility":5.0,"time_to_maturity":1.0,"risk_free_rate":0.05,"option_type":"call"})"},
+        {"pricing/bachelier/greeks-full",      R"({"forward":100,"strike":105,"normal_volatility":5.0,"time_to_maturity":1.0,"risk_free_rate":0.05,"option_type":"call"})"},
+        {"pricing/bachelier/implied-vol",      R"({"forward":100,"strike":105,"time_to_maturity":1.0,"market_price":5.0,"risk_free_rate":0.05,"option_type":"call"})"},
+        {"pricing/bachelier/shifted-lognormal",R"({"forward":100,"strike":105,"volatility":0.2,"time_to_maturity":1.0,"shift":0.03,"risk_free_rate":0.05,"option_type":"call"})"},
+        {"pricing/bachelier/vol-conversion",   R"({"normal_vol":5.0,"volatility":0.2,"forward":100,"strike":105,"time_to_maturity":1.0})"},
+        // pricing/binomial
+        {"pricing/binomial/european", R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"steps":100,"option_type":"call"})"},
+        {"pricing/binomial/american", R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"steps":100,"option_type":"call"})"},
+        {"pricing/binomial/bermudan", R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"steps":100,"exercise_dates":[0.5,1.0],"option_type":"call"})"},
+        {"pricing/binomial/barrier",  R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"steps":100,"barrier":110,"is_knock_in":false,"is_down":false,"option_type":"call"})"},
+        // pricing/kirk & exotic
+        {"pricing/kirk/spread-price",  R"({"F1":100,"F2":95,"strike":5,"sigma1":0.2,"sigma2":0.18,"rho":0.7,"risk_free_rate":0.05,"time_to_maturity":1.0})"},
+        {"pricing/kirk/spread-greeks", R"({"F1":100,"F2":95,"strike":5,"sigma1":0.2,"sigma2":0.18,"rho":0.7,"risk_free_rate":0.05,"time_to_maturity":1.0})"},
+        {"pricing/margrabe",    R"({"S1":100,"S2":95,"sigma1":0.2,"sigma2":0.18,"rho":0.7,"r":0.05,"time_to_maturity":1.0,"Q1":0,"Q2":0})"},
+        {"pricing/basket-levy", R"({"forwards":[100,95,105],"weights":[0.4,0.3,0.3],"strike":100,"sigmas":[0.2,0.18,0.22],"correlations":[1,0.5,0.3,0.5,1,0.4,0.3,0.4,1],"risk_free_rate":0.05,"time_to_maturity":1.0,"option_type":"call"})"},
+
+        // stochastic/gbm
+        {"stochastic/gbm/simulate",   R"({"S0":100,"mu":0.05,"sigma":0.2,"T":1.0,"n_steps":52,"n_paths":3})"},
+        {"stochastic/gbm/properties", R"({"S0":100,"mu":0.05,"sigma":0.2,"T":0.999})"},
+        // stochastic/ou
+        {"stochastic/ou/simulate", R"({"X0":0.0,"kappa":2.0,"theta":0.05,"sigma":0.1,"T":1.0,"n_steps":52,"n_paths":3})"},
+        // stochastic/cir
+        {"stochastic/cir/simulate",   R"({"r0":0.05,"kappa":1.5,"theta":0.04,"sigma":0.1,"T":1.0,"n_steps":52,"n_paths":3})"},
+        {"stochastic/cir/bond-price", R"({"r0":0.05,"kappa":1.5,"theta":0.04,"sigma":0.1,"T":5.0})"},
+        // stochastic/heston
+        {"stochastic/heston/simulate", R"({"S0":100,"v0":0.04,"r":0.05,"kappa":1.5,"theta":0.04,"sigma_v":0.3,"rho":-0.7,"T":1.0,"n_steps":52,"n_paths":3})"},
+        // stochastic/merton
+        {"stochastic/merton/simulate", R"({"S0":100,"mu":0.05,"sigma":0.2,"lam":0.5,"jump_mean":0.0,"jump_std":0.1,"T":1.0,"n_steps":52,"n_paths":3})"},
+        // stochastic/vasicek
+        {"stochastic/vasicek/simulate",   R"({"r0":0.05,"kappa":1.5,"theta":0.04,"sigma":0.01,"T":1.0,"n_steps":52,"n_paths":3})"},
+        {"stochastic/vasicek/bond-price", R"({"r0":0.05,"kappa":1.5,"theta":0.04,"sigma":0.01,"T":5.0})"},
+        // stochastic misc processes
+        {"stochastic/wiener/simulate",           R"({"T":1.0,"n_steps":52,"n_paths":3})"},
+        {"stochastic/poisson/simulate",          R"({"lam":2.0,"T":1.0,"n_paths":3})"},
+        {"stochastic/variance-gamma/simulate",   R"({"S0":100,"mu":0.05,"sigma":0.2,"nu":0.2,"theta_vg":0.1,"r":0.02,"T":1.0,"n_steps":52,"n_paths":3})"},
+        {"stochastic/brownian-bridge/simulate",  R"({"x0":0.0,"x_end":1.0,"T":1.0,"n_steps":52,"n_paths":3})"},
+        {"stochastic/correlated-bm/simulate",    R"({"n_assets":2,"correlation_matrix":[[1,0.7],[0.7,1]],"T":1.0,"n_steps":52,"n_paths":3})"},
+        // stochastic/exact
+        {"stochastic/exact/gbm",    R"({"S0":100,"mu":0.05,"sigma":0.2,"T":1.0,"n_paths":100})"},
+        {"stochastic/exact/ou",     R"({"X0":0.0,"kappa":2.0,"theta":0.05,"sigma":0.1,"T":1.0,"n_paths":100})"},
+        {"stochastic/exact/cir",    R"({"r0":0.05,"kappa":1.5,"theta":0.04,"sigma":0.1,"T":1.0,"n_paths":100})"},
+        {"stochastic/exact/heston", R"({"S0":100,"v0":0.04,"r":0.05,"kappa":1.5,"theta":0.04,"sigma_v":0.3,"rho":-0.7,"T":1.0,"n_paths":100})"},
+        // stochastic/simulation
+        {"stochastic/simulation/euler-maruyama",    R"({"x0":1.0,"mu":0.05,"sigma":0.2,"T":1.0,"n_steps":52,"n_paths":3})"},
+        {"stochastic/simulation/milstein",          R"({"x0":1.0,"mu":0.05,"sigma":0.2,"T":1.0,"n_steps":52,"n_paths":3})"},
+        {"stochastic/simulation/euler-maruyama-nd", R"({"x0":[1.0,1.0],"mu":[0.05,0.03],"sigma":[[0.2,0.05],[0.05,0.15]],"T":1.0,"n_steps":52,"n_paths":3})"},
+        {"stochastic/simulation/milstein-nd",       R"({"x0":[1.0,1.0],"mu":[0.05,0.03],"sigma":[[0.2,0.05],[0.05,0.15]],"T":1.0,"n_steps":52,"n_paths":3})"},
+        {"stochastic/simulation/multilevel-mc",     R"({"S0":100,"mu":0.05,"sigma":0.2,"T":1.0,"levels":4})"},
+        // stochastic/sampling
+        {"stochastic/sampling/sobol",              R"({"n":100,"dim":3})"},
+        {"stochastic/sampling/antithetic",         R"({"S0":100,"mu":0.05,"sigma":0.2,"T":1.0,"n_steps":52,"n":50})"},
+        {"stochastic/sampling/correlated-normals", R"({"rho":0.7,"n":100})"},
+        {"stochastic/sampling/multivariate-normal",R"({"mean":[0,0],"cov":[[1,0.5],[0.5,1]],"n_samples":100})"},
+        {"stochastic/sampling/distribution",       R"({"distribution":"gamma","params":{"shape":2.0,"scale":1.0},"n_samples":100})"},
+        {"stochastic/sampling/jump",               R"({"lam":0.5,"mu_j":0.0,"sigma_j":0.1,"T":1.0,"n_paths":100})"},
+        // stochastic/theory
+        {"stochastic/theory/ito-lemma",          R"({"path":[100,101,99,102,103],"times":[0,0.25,0.5,0.75,1.0]})"},
+        {"stochastic/theory/ito-product-rule",   R"({"path_X":[100,101,99,102],"path_Y":[50,51,49,52],"times":[0,0.33,0.67,1.0]})"},
+        {"stochastic/theory/quadratic-variation", R"({"path":[100,101,99,102,103],"times":[0,0.25,0.5,0.75,1.0]})"},
+        {"stochastic/theory/covariation",        R"({"path_X":[100,101,99,102],"path_Y":[50,51,49,52],"times":[0,0.33,0.67,1.0]})"},
+        {"stochastic/theory/martingale-test",    R"({"paths":[[100,102,101,103],[100,99,101,100]],"times":[0,0.33,0.67,1.0],"drift":0.0})"},
+        {"stochastic/theory/girsanov/measure-change",   R"({"paths":[[100,102,101,103],[100,99,101,100]],"times":[0,0.33,0.67,1.0],"theta":0.5,"T":1.0})"},
+        {"stochastic/theory/girsanov/risk-neutral-drift",R"({"mu":0.05,"r":0.02,"sigma":0.2})"},
+    };
+    return map;
+}
+
 void QuantLibScreen::populate_panels(int module_index) {
     endpoint_combo_->clear();
 
@@ -1105,7 +1264,7 @@ void QuantLibScreen::display_result(const QJsonObject& result) {
 
     {  // flat object → Key/Value table
         // Flat object result (e.g. {"price": 8.02, "delta": 0.45, ...}) → two-column table: Key | Value
-        auto obj = payload.toObject();
+        auto obj = result;
         if (!obj.isEmpty()) {
             result_table_->setSortingEnabled(false);
             result_table_->setColumnCount(2);

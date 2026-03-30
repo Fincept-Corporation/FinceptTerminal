@@ -19,12 +19,12 @@ namespace fincept::screens {
 
 using namespace fincept::ui;
 
-static const QString kColor  = "#3B82F6";
-static const QString kScript = "government_us_data.py";
+static const QString kGovDataTreasuryColor  = "#3B82F6";
+static const QString kGovDataTreasuryScript = "government_us_data.py";
 
 // ── Stylesheet ───────────────────────────────────────────────────────────────
 
-static const char* kStyle =
+static const char* kGovDataTreasuryStyle =
     "#govTreasuryToolbar { background:#111111; border-bottom:1px solid #1a1a1a; }"
 
     "#govTreasTab { background:transparent; color:#808080; border:1px solid #1a1a1a;"
@@ -79,7 +79,7 @@ static const char* kStyle =
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 GovDataTreasuryPanel::GovDataTreasuryPanel(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(kStyle);
+    setStyleSheet(kGovDataTreasuryStyle);
     build_ui();
     connect(&services::GovDataService::instance(), &services::GovDataService::result_ready,
             this, &GovDataTreasuryPanel::on_result);
@@ -334,7 +334,7 @@ void GovDataTreasuryPanel::on_fetch() {
 
     show_loading("Loading US Treasury data…");
     services::GovDataService::instance().execute(
-        kScript, command, args, "gov_treasury_" + command);
+        kGovDataTreasuryScript, command, args, "gov_treasury_" + command);
 }
 
 void GovDataTreasuryPanel::on_result(const QString& request_id,
@@ -371,7 +371,7 @@ void GovDataTreasuryPanel::populate_prices(const QJsonObject& data) {
         prices_table_->setItem(i, 0, new QTableWidgetItem(r["cusip"].toString()));
 
         auto* type_item = new QTableWidgetItem(r["security_type"].toString());
-        type_item->setForeground(QColor(kColor));
+        type_item->setForeground(QColor(kGovDataTreasuryColor));
         prices_table_->setItem(i, 1, type_item);
 
         prices_table_->setItem(i, 2, new QTableWidgetItem(fmt(r["rate"])));
@@ -402,7 +402,7 @@ void GovDataTreasuryPanel::populate_auctions(const QJsonObject& data) {
         auctions_table_->setItem(i, 0, new QTableWidgetItem(r["cusip"].toString()));
 
         auto* type_item = new QTableWidgetItem(r["securityType"].toString());
-        type_item->setForeground(QColor(kColor));
+        type_item->setForeground(QColor(kGovDataTreasuryColor));
         auctions_table_->setItem(i, 1, type_item);
 
         auctions_table_->setItem(i, 2, new QTableWidgetItem(r["securityTerm"].toString()));
@@ -444,7 +444,7 @@ void GovDataTreasuryPanel::populate_summary(const QJsonObject& data) {
     int row = 0;
     for (auto it = types.begin(); it != types.end(); ++it, ++row) {
         auto* name_item = new QTableWidgetItem(it.key());
-        name_item->setForeground(QColor(kColor));
+        name_item->setForeground(QColor(kGovDataTreasuryColor));
         type_breakdown_table_->setItem(row, 0, name_item);
         type_breakdown_table_->setItem(row, 1, new QTableWidgetItem(
             QString::number(it.value().toInt())));
@@ -456,7 +456,7 @@ void GovDataTreasuryPanel::populate_summary(const QJsonObject& data) {
 
 void GovDataTreasuryPanel::show_loading(const QString& message) {
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:13px; background:transparent;").arg(kColor));
+        QString("color:%1; font-size:13px; background:transparent;").arg(kGovDataTreasuryColor));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(3);
 }

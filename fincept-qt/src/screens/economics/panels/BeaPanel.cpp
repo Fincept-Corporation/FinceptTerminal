@@ -31,10 +31,11 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "bea_data.py";
-static constexpr const char* kSourceId = "bea";
-static constexpr const char* kColor    = "#E65100";  // deep orange
+static constexpr const char* kBeaScript   = "bea_data.py";
+static constexpr const char* kBeaSourceId = "bea";
+static constexpr const char* kBeaColor    = "#E65100";  // deep orange
 
 struct BeaIndicatorDef { QString name; QString id; QString unit; };
 
@@ -94,7 +95,7 @@ struct BeaCategoryDef {
     const QList<BeaIndicatorDef>* indicators;
 };
 
-static const QList<BeaCategoryDef> kCategories = {
+static const QList<BeaCategoryDef> kBeaCategories = {
     {"GDP & Output",          &kGdpIndicators},
     {"Consumption & Investment", &kConsumptionIndicators},
     {"Trade & External",      &kTradeIndicators},
@@ -102,10 +103,12 @@ static const QList<BeaCategoryDef> kCategories = {
     {"Government",            &kGovtIndicators},
 };
 
+} // namespace
+
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 BeaPanel::BeaPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kBeaSourceId, kBeaColor, parent) {
 
     // Outer layout: left selector | right base UI
     auto* main = new QHBoxLayout(this);
@@ -130,7 +133,7 @@ BeaPanel::BeaPanel(QWidget* parent)
     cat_lbl->setStyleSheet(
         "color:#808080; font-size:9px; font-weight:700; background:transparent;");
     category_combo_ = new QComboBox;
-    for (const auto& c : kCategories)
+    for (const auto& c : kBeaCategories)
         category_combo_->addItem(c.label);
     category_combo_->setFixedHeight(22);
     connect(category_combo_, &QComboBox::currentIndexChanged,
@@ -153,13 +156,13 @@ BeaPanel::BeaPanel(QWidget* parent)
     // Indicator list
     indicator_list_ = new QListWidget;
     indicator_list_->setStyleSheet(
-        "QListWidget { background:#080808; border:none; outline:none; font-size:10px; }"
-        "QListWidget::item { color:#808080; padding:4px 10px;"
-        "  border-bottom:1px solid #111111; }"
-        "QListWidget::item:hover { color:#e5e5e5; background:#0f0f0f; }"
-        QString("QListWidget::item:selected { color:%1;"
-        "  background:rgba(230,81,0,0.08);"
-        "  border-left:2px solid %1; padding-left:8px; }").arg(kColor));
+        QString("QListWidget { background:#080808; border:none; outline:none; font-size:10px; }"
+                "QListWidget::item { color:#808080; padding:4px 10px;"
+                "  border-bottom:1px solid #111111; }"
+                "QListWidget::item:hover { color:#e5e5e5; background:#0f0f0f; }"
+                "QListWidget::item:selected { color:%1;"
+                "  background:rgba(230,81,0,0.08);"
+                "  border-left:2px solid %1; padding-left:8px; }").arg(kBeaColor));
     indicator_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     lvl->addWidget(indicator_list_, 1);
 
@@ -220,12 +223,12 @@ void BeaPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void BeaPanel::on_category_changed(int index) {
-    if (index < 0 || index >= kCategories.size()) return;
+    if (index < 0 || index >= kBeaCategories.size()) return;
     indicator_list_->clear();
     indicator_search_->clear();
     current_indicators_.clear();
 
-    const auto& inds = *kCategories[index].indicators;
+    const auto& inds = *kBeaCategories[index].indicators;
     for (const auto& ind : inds) {
         current_indicators_.append({ind.name, ind.id, ind.unit});
         auto* item = new QListWidgetItem(
@@ -268,7 +271,7 @@ void BeaPanel::on_fetch() {
     // CLI: fetch <indicator_id> <start_year>-01-01 <end_year>-12-31
     show_loading("Fetching BEA: " + sel->text().split("  [").first() + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, "fetch",
+        kBeaSourceId, kBeaScript, "fetch",
         {indicator_id, start + "-01-01", end + "-12-31"},
         "bea_fetch_" + indicator_id);
 }
@@ -277,7 +280,7 @@ void BeaPanel::on_fetch() {
 
 void BeaPanel::on_result(const QString& request_id,
                          const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kBeaSourceId) return;
     if (!request_id.startsWith("bea_fetch_")) return;
 
     if (!result.success) {

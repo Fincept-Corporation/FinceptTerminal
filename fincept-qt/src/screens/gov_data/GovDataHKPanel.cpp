@@ -19,6 +19,10 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
+static constexpr const char* kGovDataHKScript = "data_gov_hk_api.py";
+static constexpr const char* kGovDataHKColor  = "#F43F5E";
+} // namespace
 
 // ── Stylesheet ────────────────────────────────────────────────────────────────
 
@@ -253,7 +257,7 @@ QWidget* GovDataHKPanel::build_toolbar() {
 void GovDataHKPanel::load_initial_data() {
     show_loading("Loading categories from data.gov.hk…");
     services::GovDataService::instance().execute(
-        kScript, "publishers", {}, "hk_categories");
+        kGovDataHKScript, "publishers", {}, "hk_categories");
 }
 
 // ── Toolbar actions ───────────────────────────────────────────────────────────
@@ -299,7 +303,7 @@ void GovDataHKPanel::on_fetch() {
             show_loading("Loading full dataset list for filtering…");
             // Store query so we can filter after datasets_list returns
             services::GovDataService::instance().execute(
-                kScript, "datasets_list", {}, "hk_datasets_list");
+                kGovDataHKScript, "datasets_list", {}, "hk_datasets_list");
         } else {
             filter_datasets_list(query);
         }
@@ -364,7 +368,7 @@ void GovDataHKPanel::on_category_clicked(int row) {
 
     show_loading("Loading datasets for "" + selected_category_name_ + ""…");
     services::GovDataService::instance().execute(
-        kScript, "datasets", {selected_category_id_, "100"}, "hk_datasets");
+        kGovDataHKScript, "datasets", {selected_category_id_, "100"}, "hk_datasets");
 }
 
 void GovDataHKPanel::on_dataset_clicked(int row) {
@@ -375,7 +379,7 @@ void GovDataHKPanel::on_dataset_clicked(int row) {
 
     show_loading("Loading resources…");
     services::GovDataService::instance().execute(
-        kScript, "resources", {selected_dataset_id_}, "hk_resources");
+        kGovDataHKScript, "resources", {selected_dataset_id_}, "hk_resources");
 }
 
 void GovDataHKPanel::on_back() {
@@ -490,7 +494,7 @@ void GovDataHKPanel::populate_categories(const QJsonArray& data) {
         if (name.isEmpty()) name = obj["id"].toString();
 
         auto* name_item = new QTableWidgetItem(name);
-        name_item->setForeground(QColor(kColor));
+        name_item->setForeground(QColor(kGovDataHKColor));
         name_item->setData(Qt::UserRole,
             obj["id"].toString().isEmpty() ? obj["name"].toString() : obj["id"].toString());
         categories_table_->setItem(i, 0, name_item);
@@ -520,7 +524,7 @@ void GovDataHKPanel::populate_datasets(const QJsonArray& data) {
             num_res = obj["resources"].toArray().size();
         auto* res_item = new QTableWidgetItem(num_res > 0 ? QString::number(num_res) : "—");
         res_item->setTextAlignment(Qt::AlignCenter);
-        res_item->setForeground(QColor(kColor));
+        res_item->setForeground(QColor(kGovDataHKColor));
         datasets_table_->setItem(i, 1, res_item);
 
         QString modified = obj["metadata_modified"].toString();
@@ -544,7 +548,7 @@ void GovDataHKPanel::populate_resources(const QJsonArray& data) {
 
         QString format = obj["format"].toString().toUpper();
         auto* fmt_item = new QTableWidgetItem(format.isEmpty() ? "—" : format);
-        fmt_item->setForeground(QColor(kColor));
+        fmt_item->setForeground(QColor(kGovDataHKColor));
         fmt_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 1, fmt_item);
 
@@ -555,7 +559,7 @@ void GovDataHKPanel::populate_resources(const QJsonArray& data) {
         mod_item->setData(Qt::UserRole, url);
         if (!url.isEmpty()) {
             mod_item->setText("↗ OPEN");
-            mod_item->setForeground(QColor(kColor));
+            mod_item->setForeground(QColor(kGovDataHKColor));
             mod_item->setTextAlignment(Qt::AlignCenter);
         }
         resources_table_->setItem(i, 2, mod_item);
@@ -568,7 +572,7 @@ void GovDataHKPanel::populate_resources(const QJsonArray& data) {
 
 void GovDataHKPanel::show_loading(const QString& message) {
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:13px; background:transparent;").arg(kColor));
+        QString("color:%1; font-size:13px; background:transparent;").arg(kGovDataHKColor));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(Status);
 }

@@ -2,6 +2,8 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/repositories/LlmConfigRepository.h"
+#include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
 
 #include <QGridLayout>
@@ -157,11 +159,13 @@ AlphaArenaScreen::AlphaArenaScreen(QWidget* parent) : QWidget(parent) {
     connect(auto_timer_, &QTimer::timeout, this, &AlphaArenaScreen::on_run_cycle);
 
     setup_ui();
+    populate_model_list();
     LOG_INFO("AlphaArena", "Screen constructed");
 }
 
 void AlphaArenaScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
+    populate_model_list(); // refresh in case user changed LLM config in Settings
     if (is_auto_running_)
         auto_timer_->start();
 }
@@ -353,13 +357,6 @@ QWidget* AlphaArenaScreen::create_create_panel() {
     model_list_->setObjectName("aaModelList");
     model_list_->setSelectionMode(QAbstractItemView::MultiSelection);
     model_list_->setFixedHeight(80);
-    // Populate from LLM configs (placeholder models)
-    model_list_->addItem("GPT-4o (OpenAI)");
-    model_list_->addItem("Claude Sonnet 4 (Anthropic)");
-    model_list_->addItem("Gemini 2.5 Pro (Google)");
-    model_list_->addItem("Llama 3.3 70B (Meta)");
-    model_list_->addItem("DeepSeek V3 (DeepSeek)");
-    model_list_->addItem("Qwen 2.5 72B (Alibaba)");
     bl->addWidget(model_list_);
 
     // Create button
@@ -618,25 +615,78 @@ void AlphaArenaScreen::on_create_competition() {
 
     set_loading(true);
 
-    // Build config
-    QJsonObject config;
-    config["name"] = comp_name_->text();
-    config["type"] = comp_type_->currentIndex() == 0 ? "crypto" : "polymarket";
-    config["symbol"] = comp_symbol_->currentText();
-    config["mode"] = comp_mode_->currentText();
-    config["initial_capital"] = comp_capital_->value();
-    config["cycle_interval"] = comp_interval_->value();
-
     QJsonArray models;
+    QJsonObject api_keys; // collected per-provider for top-level payload field
     for (auto* item : selected) {
-        models.append(item->text());
+        int row = model_list_->row(item);
+        if (row >= 0 && row < model_entries_.size()) {
+            const auto& entry = model_entries_[row];
+            QJsonObject m;
+            m["name"]         = entry.display_name; // Python reads "name"
+            m["provider"]     = entry.provider;
+            m["model_id"]     = entry.model_id;
+            m["api_key"]      = entry.api_key;
+            m["base_url"]     = entry.base_url;
+            if (!entry.profile_id.isEmpty())
+                m["profile_id"] = entry.profile_id;
+            models.append(m);
+            // Populate top-level api_keys map expected by Python
+            if (!entry.provider.isEmpty() && !entry.api_key.isEmpty())
+                api_keys[entry.provider] = entry.api_key;
+        }
     }
-    config["models"] = models;
 
+    // Python reads params fields directly — inline config into params
     QJsonObject params;
-    params["config_json"] = QString(QJsonDocument(config).toJson(QJsonDocument::Compact));
+    params["competition_name"]    = comp_name_->text();
+    params["symbols"]             = QJsonArray{comp_symbol_->currentText()};
+    params["mode"]                = comp_mode_->currentText();
+    params["initial_capital"]     = comp_capital_->value();
+    params["cycle_interval_seconds"] = comp_interval_->value();
+    params["models"]              = models;
 
-    run_python_action("create_competition", params);
+    QJsonObject payload;
+    payload["action"]   = "create_competition";
+    payload["params"]   = params;
+    payload["api_keys"] = api_keys;
+
+    QString json_arg = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
+
+    QPointer<AlphaArenaScreen> self = this;
+    python::PythonRunner::instance().run(
+        "alpha_arena/main.py", {json_arg}, [self](const python::PythonResult& result) {
+            if (!self) return;
+            self->set_loading(false);
+            if (!result.success) {
+                self->status_info_->setText("Error: " + result.error.left(60));
+                LOG_ERROR("AlphaArena", QString("create_competition failed: ") + result.error);
+                return;
+            }
+            QString json_str = python::extract_json(result.output);
+            if (json_str.isEmpty()) { self->status_info_->setText("No response from engine"); return; }
+            QJsonParseError err;
+            auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+            if (doc.isNull() || !doc.isObject()) { self->status_info_->setText("Invalid response"); return; }
+            auto obj = doc.object();
+            if (!obj.value("success").toBool(false)) {
+                self->status_info_->setText("Error: " + obj.value("error").toString().left(60));
+                return;
+            }
+            // Python returns competition_id at top level
+            self->competition_id_ = obj["competition_id"].toString();
+            self->competition_status_ = "created";
+            self->create_panel_->hide();
+            self->run_btn_->setEnabled(true);
+            self->auto_btn_->setEnabled(true);
+            self->status_badge_->setText("CREATED");
+            self->status_badge_->setStyleSheet(
+                QString("color: %1; background: rgba(22,163,74,0.15); font-size: 8px; font-weight: 700; padding: 2px 6px;")
+                    .arg(colors::POSITIVE));
+            self->status_comp_->setText("COMP: " + self->competition_id_.left(8) + "...");
+            self->status_models_->setText(QString::number(self->model_list_->selectedItems().size()) + " models");
+            self->interval_label_->setText("INTERVAL: " + QString::number(self->comp_interval_->value()) + "s");
+            LOG_INFO("AlphaArena", "Competition created: " + self->competition_id_);
+        });
 }
 
 void AlphaArenaScreen::on_run_cycle() {
@@ -793,29 +843,10 @@ void AlphaArenaScreen::run_python_action(const QString& action, const QJsonObjec
                 return;
             }
 
-            auto data = obj["data"].toObject();
-
-            if (action == "create_competition") {
-                self->competition_id_ = data["competition_id"].toString();
-                self->competition_status_ = "created";
-                self->create_panel_->hide();
-                self->run_btn_->setEnabled(true);
-                self->auto_btn_->setEnabled(true);
-
-                self->status_badge_->setText("CREATED");
-                self->status_badge_->setStyleSheet(QString("color: %1; background: rgba(22,163,74,0.15); "
-                                                           "font-size: 8px; font-weight: 700; padding: 2px 6px;")
-                                                       .arg(colors::POSITIVE));
-                self->status_comp_->setText("COMP: " + self->competition_id_.left(8) + "...");
-
-                int model_count = self->model_list_->selectedItems().size();
-                self->status_models_->setText(QString::number(model_count) + " models");
-                self->interval_label_->setText("INTERVAL: " + QString::number(self->comp_interval_->value()) + "s");
-
-                LOG_INFO("AlphaArena", "Competition created: " + self->competition_id_);
-
-            } else if (action == "run_cycle") {
-                self->cycle_count_++;
+            // Python returns fields at top level, not nested under "data"
+            if (action == "run_cycle") {
+                int cycle_number = obj["cycle_number"].toInt(self->cycle_count_ + 1);
+                self->cycle_count_ = cycle_number;
                 self->cycle_label_->setText("CYCLE " + QString::number(self->cycle_count_));
                 self->leaderboard_cycle_->setText("Cycle " + QString::number(self->cycle_count_));
 
@@ -824,27 +855,40 @@ void AlphaArenaScreen::run_python_action(const QString& action, const QJsonObjec
                                                            "font-size: 8px; font-weight: 700; padding: 2px 6px;")
                                                        .arg(colors::POSITIVE));
 
-                if (data.contains("leaderboard")) {
-                    self->update_leaderboard(data["leaderboard"].toArray());
-                }
-                if (data.contains("decisions")) {
-                    self->update_decisions(data["decisions"].toArray());
+                if (obj.contains("leaderboard"))
+                    self->update_leaderboard(obj["leaderboard"].toArray());
+
+                // Decisions extracted from events (DECISION_COMPLETED events)
+                if (obj.contains("events")) {
+                    QJsonArray decisions;
+                    for (const auto& ev : obj["events"].toArray()) {
+                        auto eo = ev.toObject();
+                        if (eo["event"].toString().contains("decision")) {
+                            auto meta = eo["metadata"].toObject();
+                            if (!meta.isEmpty())
+                                decisions.append(meta);
+                        }
+                    }
+                    if (!decisions.isEmpty())
+                        self->update_decisions(decisions);
                 }
 
                 self->status_info_->setText("Cycle " + QString::number(self->cycle_count_) + " complete");
                 LOG_INFO("AlphaArena", "Cycle " + QString::number(self->cycle_count_) + " complete");
 
             } else if (action == "get_leaderboard") {
-                if (data.contains("leaderboard")) {
-                    self->update_leaderboard(data["leaderboard"].toArray());
-                }
+                if (obj.contains("leaderboard"))
+                    self->update_leaderboard(obj["leaderboard"].toArray());
 
             } else if (action == "list_competitions") {
-                auto comps = data["competitions"].toArray();
+                auto comps = obj["competitions"].toArray();
                 self->past_list_->clear();
                 for (const auto& c : comps) {
                     auto co = c.toObject();
-                    QString label = co["name"].toString() + " — " + co["status"].toString() + " (" +
+                    // config is a nested object containing competition_name
+                    auto cfg = co["config"].toObject();
+                    QString name = cfg["competition_name"].toString(co["competition_id"].toString().left(8));
+                    QString label = name + " — " + co["status"].toString() + " (" +
                                     QString::number(co["cycle_count"].toInt()) + " cycles)";
                     auto* item = new QListWidgetItem(label);
                     item->setData(Qt::UserRole, co["competition_id"].toString());
@@ -959,6 +1003,84 @@ void AlphaArenaScreen::set_loading(bool loading) {
     create_btn_->setEnabled(!loading);
     run_btn_->setEnabled(!loading && !competition_id_.isEmpty());
     run_btn_->setText(loading ? "RUNNING..." : "RUN CYCLE");
+}
+
+// ── Model list population ────────────────────────────────────────────────────
+
+void AlphaArenaScreen::populate_model_list() {
+    // Preserve previously selected display names so we can restore selection
+    QStringList previously_selected;
+    for (auto* item : model_list_->selectedItems())
+        previously_selected << item->text();
+
+    model_list_->clear();
+    model_entries_.clear();
+
+    // 1. Named profiles (highest fidelity — user configured them explicitly)
+    auto profiles_res = LlmProfileRepository::instance().list_profiles();
+    if (profiles_res.is_ok()) {
+        for (const auto& p : profiles_res.value()) {
+            if (p.provider.isEmpty() || p.model_id.isEmpty())
+                continue;
+            ArenaModelEntry entry;
+            entry.display_name = p.name + " (" + p.provider + ")";
+            entry.provider     = p.provider;
+            entry.model_id     = p.model_id;
+            entry.api_key      = p.api_key;
+            entry.base_url     = p.base_url;
+            entry.profile_id   = p.id;
+            model_entries_.append(entry);
+            model_list_->addItem(entry.display_name);
+        }
+    }
+
+    // 2. Configured providers (one entry per provider using its active model)
+    auto providers_res = LlmConfigRepository::instance().list_providers();
+    if (providers_res.is_ok()) {
+        for (const auto& c : providers_res.value()) {
+            if (c.provider.isEmpty() || c.model.isEmpty())
+                continue;
+            // Avoid duplicating a provider already covered by a profile
+            bool already_added = false;
+            for (const auto& e : std::as_const(model_entries_)) {
+                if (e.provider == c.provider && e.model_id == c.model) {
+                    already_added = true;
+                    break;
+                }
+            }
+            if (already_added)
+                continue;
+
+            ArenaModelEntry entry;
+            entry.display_name = c.model + " (" + c.provider + ")";
+            entry.provider     = c.provider;
+            entry.model_id     = c.model;
+            entry.api_key      = c.api_key;
+            entry.base_url     = c.base_url;
+            model_entries_.append(entry);
+            model_list_->addItem(entry.display_name);
+        }
+    }
+
+    // 3. Fallback: show a hint if nothing is configured
+    if (model_entries_.isEmpty()) {
+        auto* placeholder = new QListWidgetItem("No LLM providers configured — go to Settings → LLM Config");
+        placeholder->setFlags(Qt::NoItemFlags); // not selectable
+        placeholder->setForeground(QColor(colors::TEXT_DIM));
+        model_list_->addItem(placeholder);
+        LOG_WARN("AlphaArena", "No LLM providers or profiles configured");
+        return;
+    }
+
+    // Restore previous selections by display name
+    for (int i = 0; i < model_list_->count(); ++i) {
+        auto* item = model_list_->item(i);
+        if (previously_selected.contains(item->text()))
+            item->setSelected(true);
+    }
+
+    LOG_DEBUG("AlphaArena",
+              QString("Model list populated: %1 entries").arg(model_entries_.size()));
 }
 
 } // namespace fincept::screens

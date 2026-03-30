@@ -26,6 +26,7 @@ class VideoPlayerWidget : public BaseWidget {
   private slots:
     void play_preset(int index);
     void play_custom_url();
+    void refresh_data();
     void stop_playback();
     void on_ytdlp_finished(int exit_code, QProcess::ExitStatus status);
 
@@ -45,6 +46,8 @@ class VideoPlayerWidget : public BaseWidget {
     QLabel* status_label_ = nullptr; // loading / error indicator
 
     QString pending_title_; // title while yt-dlp is resolving
+    QString current_url_;   // currently selected stream URL (original, may be YouTube)
+    QString current_title_; // title of current stream for refresh
 
 #ifdef HAS_QT_MULTIMEDIA
     QMediaPlayer* player_ = nullptr;

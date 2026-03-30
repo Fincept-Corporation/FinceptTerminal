@@ -27,10 +27,12 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "eia_data.py";
-static constexpr const char* kSourceId = "eia";
-static constexpr const char* kColor    = "#4CAF50";  // green
+static constexpr const char* kEiaScript   = "eia_data.py";
+static constexpr const char* kEiaSourceId = "eia";
+static constexpr const char* kEiaColor    = "#4CAF50";  // green
+} // namespace
 
 // ── WPSR categories (no API key needed, downloads public XLS)
 static const QList<QPair<QString,QString>> kWpsrCategories = {
@@ -62,7 +64,7 @@ static const QList<QPair<QString,QString>> kSteoTables = {
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 EiaPanel::EiaPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kEiaSourceId, kEiaColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -147,14 +149,14 @@ void EiaPanel::on_fetch() {
                      category_combo_->currentText() + "…\n"
                      "(Downloads public XLS file — may take a few seconds)");
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, "get_petroleum",
+            kEiaSourceId, kEiaScript, "get_petroleum",
             {category},
             "eia_wpsr_" + category);
     } else {
         show_loading("Fetching EIA STEO Table " +
                      category_combo_->currentText() + "…");
         services::EconomicsService::instance().execute(
-            kSourceId, kScript, "get_steo",
+            kEiaSourceId, kEiaScript, "get_steo",
             {category},
             "eia_steo_" + category);
     }
@@ -164,7 +166,7 @@ void EiaPanel::on_fetch() {
 
 void EiaPanel::on_result(const QString& request_id,
                          const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kEiaSourceId) return;
 
     if (!result.success) {
         // Detect API key error for STEO

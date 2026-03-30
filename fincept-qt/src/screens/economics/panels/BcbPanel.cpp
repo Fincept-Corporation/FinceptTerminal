@@ -16,10 +16,12 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "bcb_data.py";
-static constexpr const char* kSourceId = "bcb";
-static constexpr const char* kColor    = "#16A34A";  // green (Brazil flag)
+static constexpr const char* kBcbScript   = "bcb_data.py";
+static constexpr const char* kBcbSourceId = "bcb";
+static constexpr const char* kBcbColor    = "#16A34A";  // green (Brazil flag)
+} // namespace
 
 struct BcbSeries {
     QString label;
@@ -28,7 +30,7 @@ struct BcbSeries {
     QString unit;
 };
 
-static const QList<BcbSeries> kSeries = {
+static const QList<BcbSeries> kBcbSeries = {
     { "Selic Target Rate",          "selic",        "selic_target",  "% p.a."    },
     { "IPCA Inflation",             "ipca",         "ipca",          "% monthly" },
     { "GDP Growth Rate",            "gdp",          "gdp_growth",    "% annual"  },
@@ -47,7 +49,7 @@ static QString bcb_date_to_iso(const QString& d) {
 }
 
 BcbPanel::BcbPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kBcbSourceId, kBcbColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -65,7 +67,7 @@ void BcbPanel::build_controls(QHBoxLayout* thl) {
         "color:#525252; font-size:9px; font-weight:700; background:transparent;");
 
     series_combo_ = new QComboBox;
-    for (const auto& s : kSeries)
+    for (const auto& s : kBcbSeries)
         series_combo_->addItem(s.label + " (" + s.unit + ")", s.command);
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(260);
@@ -76,24 +78,24 @@ void BcbPanel::build_controls(QHBoxLayout* thl) {
 
 void BcbPanel::on_fetch() {
     const int     idx    = series_combo_->currentIndex();
-    const auto&   series = kSeries[idx];
+    const auto&   series = kBcbSeries[idx];
 
     show_loading("Fetching BCB: " + series.label + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, series.command, {},
+        kBcbSourceId, kBcbScript, series.command, {},
         "bcb_" + series.command);
 }
 
 void BcbPanel::on_result(const QString& request_id,
                           const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kBcbSourceId) return;
     if (!request_id.startsWith("bcb_")) return;
     if (!result.success) { show_error(result.error); return; }
 
     // Find series descriptor from command suffix
     const QString cmd = request_id.mid(4);  // strip "bcb_"
     const BcbSeries* series_ptr = nullptr;
-    for (const auto& s : kSeries)
+    for (const auto& s : kBcbSeries)
         if (s.command == cmd) { series_ptr = &s; break; }
 
     // Extract data array — may be under "data" key directly or wrapped by service
@@ -126,8 +128,8 @@ void BcbPanel::on_result(const QString& request_id,
     }
 
     const int idx = series_combo_->currentIndex();
-    const QString unit = (idx >= 0 && idx < kSeries.size())
-                             ? " (" + kSeries[idx].unit + ")" : "";
+    const QString unit = (idx >= 0 && idx < kBcbSeries.size())
+                             ? " (" + kBcbSeries[idx].unit + ")" : "";
     const QString title = "BCB: " + (series_ptr ? series_ptr->label : cmd) + unit;
 
     display(rows, title);

@@ -4,10 +4,11 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMediaPlayer>
-#include <QMutex>
+#ifdef HAS_QT_TTS
+#include <QTextToSpeech>
+#endif
 #include <QPlainTextEdit>
 #include <QPointer>
-#include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QTextEdit>
@@ -15,22 +16,28 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-#include <atomic>
 #include <vector>
 
 namespace fincept {
 
 // ── AiChatBubble ─────────────────────────────────────────────────────────────
 // Floating AI assistant bubble — fixed bottom-right corner of the main window.
-// Features: streaming chat, voice input (Windows SAPI), TTS output (ElevenLabs
-// / OpenAI / browser via QMediaPlayer), session persistence via ChatRepository.
+// Features: streaming chat, voice input (whisper.cpp offline STT — cross-platform),
+// TTS output via QMediaPlayer, session persistence via ChatRepository.
+//
+// Voice flow:
+//   mic_btn / voice_mode_btn
+//       → WhisperService::start_listening()
+//       → WhisperService::transcription_ready(text)   [signal on UI thread]
+//       → on_transcription(text)
+//       → input_box_ populated → on_send()
 
 class AiChatBubble : public QWidget {
     Q_OBJECT
   public:
     explicit AiChatBubble(QWidget* parent = nullptr);
 
-    // Call from parent's resizeEvent to reposition
+    // Call from parent's resizeEvent to reposition.
     void reposition();
 
   protected:
@@ -45,36 +52,39 @@ class AiChatBubble : public QWidget {
     void on_toggle_voice_mode();
     void on_toggle_mic();
     void on_stop_speech();
-    void on_stt_finished(int exit_code, QProcess::ExitStatus status);
+    void on_transcription(const QString& text);
+    void on_stt_listening_changed(bool active);
+    void on_stt_error(const QString& message);
+    void on_model_download_progress(int percent);
     void on_tts_media_status(QMediaPlayer::MediaStatus status);
 
   private:
     // ── UI panels ────────────────────────────────────────────────────────────
-    QWidget* bubble_btn_  = nullptr;  // floating round button
-    QWidget* chat_panel_  = nullptr;  // expanded chat panel
-    QLabel*  unread_badge_= nullptr;
+    QWidget* bubble_btn_   = nullptr;
+    QWidget* chat_panel_   = nullptr;
+    QLabel*  unread_badge_ = nullptr;
 
     // Panel internals
-    QScrollArea*   scroll_area_    = nullptr;
-    QWidget*       msg_container_  = nullptr;
-    QVBoxLayout*   msg_layout_     = nullptr;
-    QPlainTextEdit* input_box_     = nullptr;
-    QPushButton*   send_btn_       = nullptr;
-    QPushButton*   mic_btn_        = nullptr;
-    QPushButton*   voice_mode_btn_ = nullptr;
-    QPushButton*   stop_speech_btn_= nullptr;
-    QPushButton*   new_btn_        = nullptr;
-    QPushButton*   close_btn_      = nullptr;
-    QWidget*       voice_status_bar_ = nullptr;
-    QLabel*        voice_status_lbl_ = nullptr;
+    QScrollArea*    scroll_area_      = nullptr;
+    QWidget*        msg_container_    = nullptr;
+    QVBoxLayout*    msg_layout_       = nullptr;
+    QPlainTextEdit* input_box_        = nullptr;
+    QPushButton*    send_btn_         = nullptr;
+    QPushButton*    mic_btn_          = nullptr;
+    QPushButton*    voice_mode_btn_   = nullptr;
+    QPushButton*    stop_speech_btn_  = nullptr;
+    QPushButton*    new_btn_          = nullptr;
+    QPushButton*    close_btn_        = nullptr;
+    QWidget*        voice_status_bar_ = nullptr;
+    QLabel*         voice_status_lbl_ = nullptr;
 
     // ── State ────────────────────────────────────────────────────────────────
-    bool is_open_       = false;
-    bool voice_mode_    = false;
-    bool is_listening_  = false;
-    bool is_speaking_   = false;
-    bool streaming_     = false;
-    int  unread_count_  = 0;
+    bool is_open_      = false;
+    bool voice_mode_   = false;
+    bool is_listening_ = false;
+    bool is_speaking_  = false;
+    bool streaming_    = false;
+    int  unread_count_ = 0;
 
     QString active_session_id_;
     std::vector<ai_chat::ConversationMessage> history_;
@@ -82,9 +92,11 @@ class AiChatBubble : public QWidget {
 
     // ── TTS ──────────────────────────────────────────────────────────────────
     QMediaPlayer* tts_player_  = nullptr;
-    QProcess*     stt_process_ = nullptr;  // Windows SAPI STT
-    QTimer*       pulse_timer_ = nullptr;  // button animation
+    QTimer*       pulse_timer_ = nullptr;
     int           pulse_step_  = 0;
+#ifdef HAS_QT_TTS
+    QTextToSpeech* tts_engine_ = nullptr;
+#endif
 
     // ── Build ────────────────────────────────────────────────────────────────
     void build_bubble_button();

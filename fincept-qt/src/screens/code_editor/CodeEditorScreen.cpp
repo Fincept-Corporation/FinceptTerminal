@@ -8,17 +8,21 @@
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
+#include <QAction>
 #include <QAbstractTextDocumentLayout>
 #include <QApplication>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
@@ -318,6 +322,7 @@ void CellWidget::adjust_editor_height() {
 void CellWidget::set_cell_data(const NotebookCell& cell) {
     cell_id_ = cell.id;
     cell_type_ = cell.cell_type;
+    title_ = cell.title;
     execution_count_ = cell.execution_count;
     running_ = cell.running;
 
@@ -351,6 +356,7 @@ NotebookCell CellWidget::cell_data() const {
     NotebookCell cell;
     cell.id = cell_id_;
     cell.cell_type = cell_type_;
+    cell.title = title_;
     cell.source = editor_->toPlainText();
     cell.execution_count = execution_count_;
     return cell;
@@ -723,12 +729,42 @@ CellNavigator::CellNavigator(QWidget* parent) : QWidget(parent) {
             .arg(fonts::TINY)
             .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM,
                  colors::BG_HOVER, colors::AMBER, colors::BG_HOVER));
+    list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    list_->setTextElideMode(Qt::ElideRight);
+    list_->setWordWrap(false);
+    list_->setUniformItemSizes(true);
+    list_->setContextMenuPolicy(Qt::CustomContextMenu);
 
     connect(list_, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row >= 0 && row < list_->count()) {
             emit cell_selected(list_->item(row)->data(Qt::UserRole).toString());
         }
     });
+
+    connect(list_, &QListWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        auto* item = list_->itemAt(pos);
+        if (!item)
+            return;
+
+        QMenu menu(this);
+        auto* rename_action = menu.addAction("Rename Cell");
+        QAction* chosen = menu.exec(list_->viewport()->mapToGlobal(pos));
+        if (chosen == rename_action) {
+            emit rename_requested(item->data(Qt::UserRole).toString());
+        }
+    });
+
+    auto* rename_shortcut = new QAction("Rename Cell", this);
+    rename_shortcut->setShortcut(QKeySequence(Qt::Key_F2));
+    rename_shortcut->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    list_->addAction(rename_shortcut);
+    connect(rename_shortcut, &QAction::triggered, this, [this]() {
+        auto* item = list_->currentItem();
+        if (!item)
+            return;
+        emit rename_requested(item->data(Qt::UserRole).toString());
+    });
+
     layout->addWidget(list_, 1);
 }
 
@@ -744,13 +780,16 @@ void CellNavigator::rebuild(const QVector<NotebookCell>& cells, const QString& s
         if (cell.execution_count > 0)
             exec_tag = QString(" [%1]").arg(cell.execution_count);
 
-        QString preview = cell.source.split('\n').first().trimmed();
-        if (preview.length() > 28) preview = preview.left(25) + "...";
-        if (preview.isEmpty()) preview = "(empty)";
+        QString preview = cell.title.trimmed();
+        if (preview.isEmpty())
+            preview = cell.source.split('\n').first().trimmed();
+        if (preview.isEmpty())
+            preview = "(empty)";
 
-        auto* item = new QListWidgetItem(
-            QString("%1  %2  %3%4").arg(i + 1, 2).arg(type_tag, -2).arg(preview, exec_tag), list_);
+        const QString label = QString("%1  %2  %3%4").arg(i + 1, 2).arg(type_tag, -2).arg(preview, exec_tag);
+        auto* item = new QListWidgetItem(label, list_);
         item->setData(Qt::UserRole, cell.id);
+        item->setToolTip(label);
 
         if (cell.id == selected_id) selected_row = i;
     }
@@ -799,6 +838,7 @@ void CodeEditorScreen::build_ui() {
     navigator_->setMinimumWidth(180);
     navigator_->setMaximumWidth(300);
     connect(navigator_, &CellNavigator::cell_selected, this, &CodeEditorScreen::on_select_cell);
+    connect(navigator_, &CellNavigator::rename_requested, this, &CodeEditorScreen::on_rename_cell);
     splitter_->addWidget(navigator_);
 
     scroll_area_ = new QScrollArea(splitter_);
@@ -1082,6 +1122,29 @@ void CodeEditorScreen::on_select_cell(const QString& cell_id) {
     update_navigator();
 }
 
+void CodeEditorScreen::on_rename_cell(const QString& cell_id) {
+    int idx = find_cell_index(cell_id);
+    if (idx < 0)
+        return;
+
+    QString current_name = cells_[idx].title.trimmed();
+    if (current_name.isEmpty()) {
+        current_name = cells_[idx].source.split('\n').first().trimmed();
+        if (current_name.isEmpty())
+            current_name = QString("Cell %1").arg(idx + 1);
+    }
+
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, "Rename Cell", "Cell name:", QLineEdit::Normal, current_name, &ok)
+                             .trimmed();
+    if (!ok)
+        return;
+
+    // Empty name means "use auto preview from source"
+    cells_[idx].title = name;
+    update_navigator();
+}
+
 void CodeEditorScreen::on_clear_outputs() {
     for (auto& cell : cells_) {
         cell.outputs.clear();
@@ -1246,6 +1309,8 @@ void CodeEditorScreen::on_open_notebook() {
             cell.source = src.toString();
         }
 
+        QJsonObject cell_metadata = co["metadata"].toObject();
+        cell.title = cell_metadata["fincept_title"].toString().trimmed();
         cell.execution_count = co["execution_count"].toInt(0);
         cells_.append(cell);
     }
@@ -1286,7 +1351,10 @@ void CodeEditorScreen::on_save_notebook() {
         for (const auto& line : cell.source.split('\n'))
             src_lines.append(line + "\n");
         co["source"] = src_lines;
-        co["metadata"] = QJsonObject();
+        QJsonObject cell_metadata;
+        if (!cell.title.trimmed().isEmpty())
+            cell_metadata["fincept_title"] = cell.title.trimmed();
+        co["metadata"] = cell_metadata;
 
         if (cell.cell_type == "code") {
             co["execution_count"] = cell.execution_count > 0 ? QJsonValue(cell.execution_count) : QJsonValue();

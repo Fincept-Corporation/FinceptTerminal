@@ -39,6 +39,7 @@ RecentFilesWidget::RecentFilesWidget(QWidget* parent)
     // Refresh when service changes
     connect(&FileManagerService::instance(), &FileManagerService::files_changed,
             this, &RecentFilesWidget::refresh_data);
+    connect(this, &BaseWidget::refresh_requested, this, &RecentFilesWidget::refresh_data);
 }
 
 void RecentFilesWidget::showEvent(QShowEvent* e) {

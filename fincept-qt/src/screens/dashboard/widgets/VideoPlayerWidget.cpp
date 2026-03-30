@@ -46,6 +46,8 @@ VideoPlayerWidget::VideoPlayerWidget(QWidget* parent) : BaseWidget("LIVE TV / ST
     build_channel_list();
     build_player_view();
 
+    connect(this, &BaseWidget::refresh_requested, this, &VideoPlayerWidget::refresh_data);
+
     stack_->setCurrentIndex(0);
 }
 
@@ -251,6 +253,8 @@ void VideoPlayerWidget::play_custom_url() {
 }
 
 void VideoPlayerWidget::play_url(const QString& url, const QString& title) {
+    current_url_ = url;
+    current_title_ = title;
     pending_title_ = title;
     now_playing_->setText(QString(QChar(0x25B6)) + " " + title);
     set_title("LIVE TV — " + title.toUpper());
@@ -264,6 +268,13 @@ void VideoPlayerWidget::play_url(const QString& url, const QString& title) {
 #else
     QDesktopServices::openUrl(QUrl(url));
 #endif
+}
+
+void VideoPlayerWidget::refresh_data() {
+    if (current_url_.isEmpty())
+        return;
+
+    play_url(current_url_, current_title_.isEmpty() ? "Custom Stream" : current_title_);
 }
 
 void VideoPlayerWidget::resolve_youtube_and_play(const QString& youtube_url, const QString& title) {
@@ -327,6 +338,8 @@ void VideoPlayerWidget::stop_playback() {
     player_->stop();
     player_->setSource(QUrl());
 #endif
+    current_url_.clear();
+    current_title_.clear();
     set_loading(false);
     status_label_->hide();
     set_title("LIVE TV / STREAMS");
@@ -343,3 +356,4 @@ void VideoPlayerWidget::set_loading(bool loading) {
 }
 
 } // namespace fincept::screens::widgets
+

@@ -13,10 +13,11 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "ecb_sdmx_data.py";
-static constexpr const char* kSourceId = "ecb";
-static constexpr const char* kColor    = "#2563EB";  // ECB blue
+static constexpr const char* kEcbScript   = "ecb_sdmx_data.py";
+static constexpr const char* kEcbSourceId = "ecb";
+static constexpr const char* kEcbColor    = "#2563EB";  // ECB blue
 
 // Series: display name -> {command, arg (optional currency)}
 struct EcbSeries {
@@ -26,7 +27,7 @@ struct EcbSeries {
     QString result_key; // top-level JSON key in response
 };
 
-static const QList<EcbSeries> kSeries = {
+static const QList<EcbSeries> kEcbSeries = {
     { "EUR/USD Exchange Rate",   "exchange_rates", "USD",  "exchange_rates" },
     { "EUR/GBP Exchange Rate",   "exchange_rates", "GBP",  "exchange_rates" },
     { "EUR/JPY Exchange Rate",   "exchange_rates", "JPY",  "exchange_rates" },
@@ -36,8 +37,10 @@ static const QList<EcbSeries> kSeries = {
     { "M3 Money Supply",         "money_supply",   "",     "money_supply"   },
 };
 
+} // namespace
+
 EcbPanel::EcbPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kEcbSourceId, kEcbColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -58,7 +61,7 @@ void EcbPanel::build_controls(QHBoxLayout* thl) {
     };
 
     series_combo_ = new QComboBox;
-    for (const auto& s : kSeries)
+    for (const auto& s : kEcbSeries)
         series_combo_->addItem(s.label, s.command + "|" + s.arg);
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(220);
@@ -70,7 +73,7 @@ void EcbPanel::build_controls(QHBoxLayout* thl) {
 void EcbPanel::on_fetch() {
     const QString data   = series_combo_->currentData().toString();
     const int     idx    = series_combo_->currentIndex();
-    const auto&   series = kSeries[idx];
+    const auto&   series = kEcbSeries[idx];
 
     show_loading("Fetching ECB data: " + series.label + "…");
 
@@ -81,21 +84,21 @@ void EcbPanel::on_fetch() {
                          + (series.arg.isEmpty() ? "" : "_" + series.arg);
 
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, series.command, args, req_id);
+        kEcbSourceId, kEcbScript, series.command, args, req_id);
 }
 
 // ECB response: {<result_key>: [{dimensions:{}, observations:[{period,value}], obs_count}], ...}
 // Flatten the first series' observations into a plain [{period, value}] array for display().
 void EcbPanel::on_result(const QString& request_id,
                          const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kEcbSourceId) return;
     if (!result.success) { show_error(result.error); return; }
     if (!request_id.startsWith("ecb_")) return;
 
     // Find which series was fetched
     const int idx = series_combo_->currentIndex();
-    if (idx < 0 || idx >= kSeries.size()) return;
-    const auto& series = kSeries[idx];
+    if (idx < 0 || idx >= kEcbSeries.size()) return;
+    const auto& series = kEcbSeries[idx];
 
     // Extract observations from first element of the result array
     const QJsonValue top = result.data[series.result_key];

@@ -15,10 +15,12 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "census_data.py";
-static constexpr const char* kSourceId = "census";
-static constexpr const char* kColor    = "#7C3AED";  // purple
+static constexpr const char* kCensusScript   = "census_data.py";
+static constexpr const char* kCensusSourceId = "census";
+static constexpr const char* kCensusColor    = "#7C3AED";  // purple
+} // namespace
 
 struct CensusDataset {
     QString label;
@@ -26,7 +28,7 @@ struct CensusDataset {
     QString description;
 };
 
-static const QList<CensusDataset> kDatasets = {
+static const QList<CensusDataset> kCensusDatasets = {
     { "Population by State (ACS)",      "acs",     "Total population estimate by US state" },
     { "Housing by State (ACS)",         "housing", "Housing units, occupancy & tenure by state" },
 };
@@ -65,7 +67,7 @@ QJsonArray CensusPanel::flatten_census(const QJsonObject& response) {
 }
 
 CensusPanel::CensusPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kCensusSourceId, kCensusColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -83,7 +85,7 @@ void CensusPanel::build_controls(QHBoxLayout* thl) {
         "color:#525252; font-size:9px; font-weight:700; background:transparent;");
 
     dataset_combo_ = new QComboBox;
-    for (const auto& d : kDatasets)
+    for (const auto& d : kCensusDatasets)
         dataset_combo_->addItem(d.label, d.command);
     dataset_combo_->setFixedHeight(26);
     dataset_combo_->setMinimumWidth(220);
@@ -95,17 +97,17 @@ void CensusPanel::build_controls(QHBoxLayout* thl) {
 
 void CensusPanel::on_fetch() {
     const int     idx     = dataset_combo_->currentIndex();
-    const auto&   dataset = kDatasets[idx];
+    const auto&   dataset = kCensusDatasets[idx];
 
     show_loading("Fetching Census: " + dataset.label + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, dataset.command, {},
+        kCensusSourceId, kCensusScript, dataset.command, {},
         "census_" + dataset.command);
 }
 
 void CensusPanel::on_result(const QString& request_id,
                              const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kCensusSourceId) return;
     if (!request_id.startsWith("census_")) return;
     if (!result.success) { show_error(result.error); return; }
 
@@ -123,8 +125,8 @@ void CensusPanel::on_result(const QString& request_id,
     }
 
     const int idx = dataset_combo_->currentIndex();
-    const QString title = "Census: " + (idx >= 0 && idx < kDatasets.size()
-                                            ? kDatasets[idx].label
+    const QString title = "Census: " + (idx >= 0 && idx < kCensusDatasets.size()
+                                            ? kCensusDatasets[idx].label
                                             : request_id.mid(7));
     display(rows, title);
     LOG_INFO("CensusPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(title));

@@ -14,8 +14,20 @@
 #include <QTextEdit>
 #include <QTimer>
 #include <QWidget>
+#include <QVector>
 
 namespace fincept::screens {
+
+/// Lightweight descriptor for a user-configured LLM model entry.
+/// Populated from LlmConfigRepository providers and LlmProfileRepository profiles.
+struct ArenaModelEntry {
+    QString display_name; // shown in the list widget
+    QString provider;     // e.g. "openai", "anthropic"
+    QString model_id;     // e.g. "gpt-4o", "claude-sonnet-4-5-20250514"
+    QString api_key;
+    QString base_url;
+    QString profile_id;   // non-empty when sourced from a named profile
+};
 
 /// Alpha Arena — AI trading competition platform.
 /// Pits multiple LLM agents against each other in crypto or prediction markets.
@@ -58,12 +70,20 @@ class AlphaArenaScreen : public QWidget {
     void load_past_competitions();
     void set_loading(bool loading);
 
+    /// Repopulate model_list_ from configured LLM providers and profiles.
+    /// Called on construction and whenever the screen becomes visible.
+    void populate_model_list();
+
     // State
     QString competition_id_;
     QString competition_status_; // created, running, paused, completed, failed
     int cycle_count_ = 0;
     bool is_auto_running_ = false;
     bool loading_ = false;
+
+    // Model entries sourced from LlmConfigRepository / LlmProfileRepository.
+    // Index matches model_list_ row order.
+    QVector<ArenaModelEntry> model_entries_;
 
     // Timer for auto-run
     QTimer* auto_timer_ = nullptr;

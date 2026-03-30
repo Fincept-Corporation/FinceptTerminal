@@ -11,12 +11,14 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "fred_data.py";
-static constexpr const char* kSourceId = "fred";
-static constexpr const char* kColor    = "#EF4444";  // red
+static constexpr const char* kFredScript   = "fred_data.py";
+static constexpr const char* kFredSourceId = "fred";
+static constexpr const char* kFredColor    = "#EF4444";  // red
+} // namespace
 
-static const QList<QPair<QString,QString>> kPresets = {
+static const QList<QPair<QString,QString>> kFredPresets = {
     {"-- Custom series ID --",                    ""},
     {"Real GDP (GDPC1)",                          "GDPC1"},
     {"Nominal GDP (GDP)",                         "GDP"},
@@ -38,7 +40,7 @@ static const QList<QPair<QString,QString>> kPresets = {
 };
 
 FredPanel::FredPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kFredSourceId, kFredColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -56,7 +58,7 @@ void FredPanel::build_controls(QHBoxLayout* thl) {
         "color:#525252; font-size:9px; font-weight:700; background:transparent;");
 
     preset_combo_ = new QComboBox;
-    for (const auto& p : kPresets) preset_combo_->addItem(p.first, p.second);
+    for (const auto& p : kFredPresets) preset_combo_->addItem(p.first, p.second);
     preset_combo_->setFixedHeight(26);
     preset_combo_->setMinimumWidth(200);
     connect(preset_combo_, &QComboBox::currentIndexChanged, this,
@@ -89,13 +91,13 @@ void FredPanel::on_fetch() {
     }
     show_loading("Fetching FRED series " + series + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, "series", {series},
+        kFredSourceId, kFredScript, "series", {series},
         "fred_" + series);
 }
 
 void FredPanel::on_result(const QString& request_id,
                           const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kFredSourceId) return;
     if (!result.success) {
         // Check for API key error specifically
         if (result.error.contains("API key") || result.error.contains("api_key")) {

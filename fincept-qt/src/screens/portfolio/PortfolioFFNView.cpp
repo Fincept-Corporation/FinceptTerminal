@@ -22,8 +22,6 @@
 #include <algorithm>
 #include <cmath>
 
-QT_CHARTS_USE_NAMESPACE
-
 using fincept::python::PythonResult;
 using fincept::python::PythonRunner;
 

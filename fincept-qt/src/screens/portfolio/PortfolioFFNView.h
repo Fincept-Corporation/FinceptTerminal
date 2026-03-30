@@ -17,8 +17,6 @@
 #include <QValueAxis>
 #include <QWidget>
 
-QT_CHARTS_USE_NAMESPACE
-
 namespace fincept::screens {
 
 /// FFN (Financial Functions) analytics view with 6 sub-tabs.
@@ -72,19 +70,19 @@ class PortfolioFFNView : public QWidget {
     QTableWidget*  opt_stats_table_        = nullptr;
 
     // ── Rebased tab ───────────────────────────────────────────────────────────
-    QWidget*       rebased_panel_  = nullptr;
-    QStackedWidget* rebased_stack_ = nullptr;   // 0=placeholder, 1=chart
-    QChartView*    rebased_chart_view_ = nullptr;
+    QWidget*           rebased_panel_      = nullptr;
+    QStackedWidget*    rebased_stack_      = nullptr;   // 0=placeholder, 1=chart
+    QChartView* rebased_chart_view_ = nullptr;
 
     // ── Drawdowns tab ─────────────────────────────────────────────────────────
-    QWidget*       drawdowns_panel_  = nullptr;
-    QStackedWidget* drawdowns_stack_ = nullptr;
-    QChartView*    drawdowns_chart_view_ = nullptr;
+    QWidget*           drawdowns_panel_        = nullptr;
+    QStackedWidget*    drawdowns_stack_        = nullptr;
+    QChartView* drawdowns_chart_view_ = nullptr;
 
     // ── Rolling correlations tab ──────────────────────────────────────────────
-    QWidget*       rolling_panel_  = nullptr;
-    QStackedWidget* rolling_stack_ = nullptr;
-    QChartView*    rolling_chart_view_ = nullptr;
+    QWidget*           rolling_panel_      = nullptr;
+    QStackedWidget*    rolling_stack_      = nullptr;
+    QChartView* rolling_chart_view_ = nullptr;
 
     // ── State ─────────────────────────────────────────────────────────────────
     portfolio::PortfolioSummary summary_;

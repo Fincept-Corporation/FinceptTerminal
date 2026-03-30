@@ -20,10 +20,12 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "fred_economic_data.py";
-static constexpr const char* kSourceId = "fred_analytics";
-static constexpr const char* kColor    = "#F97316";  // orange (distinct from FredPanel red)
+static constexpr const char* kFredAnalyticsScript   = "fred_economic_data.py";
+static constexpr const char* kFredAnalyticsSourceId = "fred_analytics";
+static constexpr const char* kFredAnalyticsColor    = "#F97316";  // orange (distinct from FredPanel red)
+} // namespace
 
 struct FredAnalDataset {
     QString label;
@@ -31,7 +33,7 @@ struct FredAnalDataset {
     QStringList args;
 };
 
-static const QList<FredAnalDataset> kDatasets = {
+static const QList<FredAnalDataset> kFredAnalDatasets = {
     { "Yield Curve (Treasury Rates)",   "yield_curve",   {}              },
     { "M1 Money Supply",                "money_supply",  {"m1"}          },
     { "M2 Money Supply",                "money_supply",  {"m2"}          },
@@ -44,7 +46,7 @@ static const QList<FredAnalDataset> kDatasets = {
 };
 
 FredAnalyticsPanel::FredAnalyticsPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kFredAnalyticsSourceId, kFredAnalyticsColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -62,7 +64,7 @@ void FredAnalyticsPanel::build_controls(QHBoxLayout* thl) {
         "color:#525252; font-size:9px; font-weight:700; background:transparent;");
 
     dataset_combo_ = new QComboBox;
-    for (const auto& d : kDatasets)
+    for (const auto& d : kFredAnalDatasets)
         dataset_combo_->addItem(d.label, d.command);
     dataset_combo_->setFixedHeight(26);
     dataset_combo_->setMinimumWidth(240);
@@ -73,7 +75,7 @@ void FredAnalyticsPanel::build_controls(QHBoxLayout* thl) {
 
 void FredAnalyticsPanel::on_fetch() {
     const int   idx     = dataset_combo_->currentIndex();
-    const auto& dataset = kDatasets[idx];
+    const auto& dataset = kFredAnalDatasets[idx];
 
     show_loading("Fetching FRED Analytics: " + dataset.label + "…");
 
@@ -82,7 +84,7 @@ void FredAnalyticsPanel::on_fetch() {
 
     const QString arg_suffix = dataset.args.isEmpty() ? "" : "_" + dataset.args.join("_");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, dataset.command, args,
+        kFredAnalyticsSourceId, kFredAnalyticsScript, dataset.command, args,
         "fredan_" + dataset.command + arg_suffix);
 }
 
@@ -103,7 +105,7 @@ static QJsonArray extract_fred_analytics_rows(const QJsonObject& data) {
 
 void FredAnalyticsPanel::on_result(const QString& request_id,
                                     const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kFredAnalyticsSourceId) return;
     if (!request_id.startsWith("fredan_")) return;
 
     if (!result.success) {
@@ -148,7 +150,7 @@ void FredAnalyticsPanel::on_result(const QString& request_id,
 
     const int idx = dataset_combo_->currentIndex();
     const QString title = "FRED Analytics: "
-        + (idx >= 0 && idx < kDatasets.size() ? kDatasets[idx].label : request_id.mid(7));
+        + (idx >= 0 && idx < kFredAnalDatasets.size() ? kFredAnalDatasets[idx].label : request_id.mid(7));
 
     display(rows, title);
     LOG_INFO("FredAnalyticsPanel", QString("Displayed %1 rows: %2")

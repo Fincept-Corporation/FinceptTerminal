@@ -24,10 +24,11 @@
 #include <QMap>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "eurostat_extra_data.py";
-static constexpr const char* kSourceId = "eurostat";
-static constexpr const char* kColor    = "#0369A1";  // EU blue
+static constexpr const char* kEurostatScript   = "eurostat_extra_data.py";
+static constexpr const char* kEurostatSourceId = "eurostat";
+static constexpr const char* kEurostatColor    = "#0369A1";  // EU blue
 
 struct EurostatDataset {
     QString label;
@@ -35,7 +36,7 @@ struct EurostatDataset {
     bool    has_country;  // whether this command takes a country arg
 };
 
-static const QList<EurostatDataset> kDatasets = {
+static const QList<EurostatDataset> kEurostatDatasets = {
     { "Industrial Production",  "industrial",   true  },
     { "Retail Trade",           "retail",       true  },
     { "Energy Balance",         "energy",       true  },
@@ -44,7 +45,7 @@ static const QList<EurostatDataset> kDatasets = {
     { "Tourism Statistics",     "tourism",      true  },
 };
 
-static const QList<QPair<QString,QString>> kCountries = {
+static const QList<QPair<QString,QString>> kEurostatCountries = {
     { "Germany",        "DE" },
     { "France",         "FR" },
     { "Italy",          "IT" },
@@ -63,6 +64,8 @@ static const QList<QPair<QString,QString>> kCountries = {
     { "EU27",           "EU27_2020" },
     { "Euro Area",      "EA20" },
 };
+
+} // namespace
 
 // ── SDMX-JSON flattener ───────────────────────────────────────────────────────
 
@@ -117,7 +120,7 @@ QJsonArray EurostatPanel::flatten_sdmx(const QJsonObject& response) {
 // ── Panel ─────────────────────────────────────────────────────────────────────
 
 EurostatPanel::EurostatPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kEurostatSourceId, kEurostatColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -138,13 +141,13 @@ void EurostatPanel::build_controls(QHBoxLayout* thl) {
     };
 
     dataset_combo_ = new QComboBox;
-    for (const auto& d : kDatasets)
+    for (const auto& d : kEurostatDatasets)
         dataset_combo_->addItem(d.label, d.command);
     dataset_combo_->setFixedHeight(26);
     dataset_combo_->setMinimumWidth(180);
 
     country_combo_ = new QComboBox;
-    for (const auto& c : kCountries)
+    for (const auto& c : kEurostatCountries)
         country_combo_->addItem(c.first, c.second);
     country_combo_->setFixedHeight(26);
 
@@ -156,7 +159,7 @@ void EurostatPanel::build_controls(QHBoxLayout* thl) {
 
 void EurostatPanel::on_fetch() {
     const int     ds_idx  = dataset_combo_->currentIndex();
-    const auto&   dataset = kDatasets[ds_idx];
+    const auto&   dataset = kEurostatDatasets[ds_idx];
     const QString country = country_combo_->currentData().toString();
 
     show_loading("Fetching Eurostat: " + dataset.label + " — "
@@ -168,18 +171,18 @@ void EurostatPanel::on_fetch() {
     const QString req_id = "eurostat_" + dataset.command + "_" + country;
 
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, dataset.command, args, req_id);
+        kEurostatSourceId, kEurostatScript, dataset.command, args, req_id);
 }
 
 void EurostatPanel::on_result(const QString& request_id,
                                const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kEurostatSourceId) return;
     if (!request_id.startsWith("eurostat_")) return;
     if (!result.success) { show_error(result.error); return; }
 
     const int ds_idx = dataset_combo_->currentIndex();
-    if (ds_idx < 0 || ds_idx >= kDatasets.size()) return;
-    const auto& dataset = kDatasets[ds_idx];
+    if (ds_idx < 0 || ds_idx >= kEurostatDatasets.size()) return;
+    const auto& dataset = kEurostatDatasets[ds_idx];
 
     // Try SDMX flatten first (raw Eurostat format)
     QJsonArray rows = flatten_sdmx(result.data);

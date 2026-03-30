@@ -11,12 +11,13 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "oecd_data.py";
-static constexpr const char* kSourceId = "oecd";
-static constexpr const char* kColor    = "#F59E0B";  // amber
+static constexpr const char* kOecdScript   = "oecd_data.py";
+static constexpr const char* kOecdSourceId = "oecd";
+static constexpr const char* kOecdColor    = "#F59E0B";  // amber
 
-static const QList<QPair<QString,QString>> kDatasets = {
+static const QList<QPair<QString,QString>> kOecdDatasets = {
     {"GDP (Real)",          "gdp_real"},
     {"CPI / Inflation",     "cpi"},
     {"GDP Forecast",        "gdp_forecast"},
@@ -25,7 +26,7 @@ static const QList<QPair<QString,QString>> kDatasets = {
     {"Trade Balance",       "trade_balance"},
 };
 
-static const QList<QPair<QString,QString>> kCountries = {
+static const QList<QPair<QString,QString>> kOecdCountries = {
     {"United States", "US"},
     {"Germany",       "DE"},
     {"Japan",         "JP"},
@@ -40,8 +41,10 @@ static const QList<QPair<QString,QString>> kCountries = {
     {"OECD Total",    "OECD"},
 };
 
+} // namespace
+
 OecdPanel::OecdPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kOecdSourceId, kOecdColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -61,11 +64,11 @@ void OecdPanel::build_controls(QHBoxLayout* thl) {
     };
 
     dataset_combo_ = new QComboBox;
-    for (const auto& p : kDatasets) dataset_combo_->addItem(p.first, p.second);
+    for (const auto& p : kOecdDatasets) dataset_combo_->addItem(p.first, p.second);
     dataset_combo_->setFixedHeight(26);
 
     country_combo_ = new QComboBox;
-    for (const auto& p : kCountries) country_combo_->addItem(p.first, p.second);
+    for (const auto& p : kOecdCountries) country_combo_->addItem(p.first, p.second);
     country_combo_->setFixedHeight(26);
 
     frequency_combo_ = new QComboBox;
@@ -89,14 +92,14 @@ void OecdPanel::on_fetch() {
 
     show_loading("Fetching OECD data…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, cmd,
+        kOecdSourceId, kOecdScript, cmd,
         {country, freq},
         "oecd_" + cmd + "_" + country);
 }
 
 void OecdPanel::on_result(const QString& request_id,
                           const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kOecdSourceId) return;
     if (!result.success) { show_error(result.error); return; }
     if (request_id.startsWith("oecd_")) {
         const QJsonArray arr = result.data["data"].toArray();

@@ -33,6 +33,7 @@ struct CellOutput {
 struct NotebookCell {
     QString id;
     QString cell_type; // "code" or "markdown"
+    QString title;     // optional custom name for sidebar navigator
     QString source;
     QVector<CellOutput> outputs;
     int execution_count = 0;
@@ -99,6 +100,7 @@ class CellWidget : public QWidget {
     bool hovered_ = false;
     bool output_collapsed_ = false;
     bool md_editing_ = false;
+    QString title_;
 
     // Gutter
     QWidget* gutter_ = nullptr;
@@ -134,6 +136,7 @@ class CellNavigator : public QWidget {
 
   signals:
     void cell_selected(const QString& cell_id);
+    void rename_requested(const QString& cell_id);
 
   private:
     QListWidget* list_ = nullptr;
@@ -166,6 +169,7 @@ class CodeEditorScreen : public QWidget {
     void on_insert_below(const QString& cell_id);
     void on_clear_outputs();
     void on_toggle_sidebar();
+    void on_rename_cell(const QString& cell_id);
 
   private:
     void build_ui();

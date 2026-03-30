@@ -18,10 +18,12 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "bis_data.py";
-static constexpr const char* kSourceId = "bis";
-static constexpr const char* kColor    = "#9D4EDD";  // purple
+static constexpr const char* kBisScript   = "bis_data.py";
+static constexpr const char* kBisSourceId = "bis";
+static constexpr const char* kBisColor    = "#9D4EDD";  // purple
+} // namespace
 
 // Dataset combo entries: { display label, CLI command, placeholder country hint }
 struct BisDataset {
@@ -31,7 +33,7 @@ struct BisDataset {
     QString default_country;
 };
 
-static const QList<BisDataset> kDatasets = {
+static const QList<BisDataset> kBisDatasets = {
     {"Central Bank Policy Rates",        "get_central_bank_policy_rates", "e.g. US, GB, JP, DE", "US"},
     {"Effective Exchange Rates",         "get_effective_exchange_rates",  "e.g. US, GB, JP",     "US"},
     {"Exchange Rates vs USD",            "get_exchange_rates",            "e.g. GB, JP, DE, AU", "GB"},
@@ -45,7 +47,7 @@ static const QList<BisDataset> kDatasets = {
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 BisPanel::BisPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kBisSourceId, kBisColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -68,7 +70,7 @@ void BisPanel::build_controls(QHBoxLayout* thl) {
     };
 
     dataset_combo_ = new QComboBox;
-    for (const auto& d : kDatasets)
+    for (const auto& d : kBisDatasets)
         dataset_combo_->addItem(d.label);
     dataset_combo_->setFixedHeight(26);
     dataset_combo_->setMinimumWidth(230);
@@ -102,12 +104,12 @@ void BisPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void BisPanel::on_dataset_changed(int index) {
-    if (index < 0 || index >= kDatasets.size()) return;
-    const auto& ds = kDatasets[index];
+    if (index < 0 || index >= kBisDatasets.size()) return;
+    const auto& ds = kBisDatasets[index];
     country_input_->setPlaceholderText(ds.country_hint);
     // If user hasn't typed anything custom, fill in default
     if (country_input_->text().isEmpty() ||
-        country_input_->text() == kDatasets[qMax(0, index - 1)].default_country) {
+        country_input_->text() == kBisDatasets[qMax(0, index - 1)].default_country) {
         country_input_->setText(ds.default_country);
     }
     // Economic overview doesn't use a country filter
@@ -118,8 +120,8 @@ void BisPanel::on_dataset_changed(int index) {
 
 void BisPanel::on_fetch() {
     const int idx = dataset_combo_->currentIndex();
-    if (idx < 0 || idx >= kDatasets.size()) return;
-    const auto& ds = kDatasets[idx];
+    if (idx < 0 || idx >= kBisDatasets.size()) return;
+    const auto& ds = kBisDatasets[idx];
 
     QStringList args;
     const QString country = country_input_->text().trimmed().toUpper();
@@ -139,7 +141,7 @@ void BisPanel::on_fetch() {
 
     show_loading("Fetching BIS " + ds.label + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, ds.command, args,
+        kBisSourceId, kBisScript, ds.command, args,
         "bis_" + ds.command + "_" + country);
 }
 
@@ -147,7 +149,7 @@ void BisPanel::on_fetch() {
 
 void BisPanel::on_result(const QString& request_id,
                          const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kBisSourceId) return;
 
     if (!result.success) {
         show_error(result.error);

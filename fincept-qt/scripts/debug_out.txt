@@ -1,0 +1,4 @@
+starting
+200 OK
+{"success": true, "message": "Success", "data": {"original": {"amount": 100.0, "currency": "USD"}, "converted": {"amount": 92.0, "currency": "EUR"}, "rate": 0.92}}
+done

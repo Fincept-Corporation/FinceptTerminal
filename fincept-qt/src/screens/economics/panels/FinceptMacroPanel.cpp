@@ -12,12 +12,14 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kSourceId = "fincept";
-static constexpr const char* kColor    = "#d97706";  // amber
+static constexpr const char* kFinceptMacroSourceId = "fincept";
+static constexpr const char* kFinceptMacroColor    = "#d97706";  // amber
+} // namespace
 
 FinceptMacroPanel::FinceptMacroPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kFinceptMacroSourceId, kFinceptMacroColor, parent) {
     build_base_ui(this);
     // No service connection — Coming Soon panel
 }
@@ -39,7 +41,7 @@ void FinceptMacroPanel::build_controls(QHBoxLayout* thl) {
     auto* lbl = new QLabel("FINCEPT MACRO — COMING SOON");
     lbl->setStyleSheet(
         QString("color:%1; font-size:9px; font-weight:700;"
-                "background:transparent; letter-spacing:1px;").arg(kColor));
+                "background:transparent; letter-spacing:1px;").arg(kFinceptMacroColor));
     thl->addWidget(lbl);
 }
 

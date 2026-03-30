@@ -2,6 +2,9 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QSize>
+#include <QStyle>
+
 namespace fincept::screens::widgets {
 
 BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& accent_color)
@@ -45,22 +48,36 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     hl->addStretch();
 
     // Refresh button
-    refresh_btn_ = new QPushButton(QChar(0x21BB)); // ↻
+    refresh_btn_ = new QPushButton;
     refresh_btn_->setFixedSize(20, 20);
+    refresh_btn_->setText("");
+    refresh_btn_->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
+    refresh_btn_->setIconSize(QSize(12, 12));
+    refresh_btn_->setToolTip("Refresh widget data");
+    refresh_btn_->setCursor(Qt::PointingHandCursor);
     refresh_btn_->setStyleSheet(
-        QString("QPushButton { color: %1; background: transparent; border: none; font-size: 11px; }"
-                "QPushButton:hover { color: %2; }")
-            .arg(ui::colors::TEXT_TERTIARY, ui::colors::TEXT_PRIMARY));
+        QString("QPushButton { color: %1; background: %2; border: 1px solid %3; border-radius: 2px; "
+                "padding: 0px; }"
+                "QPushButton:hover { color: %4; border-color: %4; background: %5; }")
+            .arg(accent_color_, ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::TEXT_PRIMARY,
+                 ui::colors::BG_HOVER));
     connect(refresh_btn_, &QPushButton::clicked, this, &BaseWidget::refresh_requested);
     hl->addWidget(refresh_btn_);
 
     // Close button
-    auto* close_btn = new QPushButton(QChar(0x2715)); // ✕
+    auto* close_btn = new QPushButton;
     close_btn->setFixedSize(20, 20);
+    close_btn->setText("");
+    close_btn->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+    close_btn->setIconSize(QSize(11, 11));
+    close_btn->setToolTip("Close widget");
+    close_btn->setCursor(Qt::PointingHandCursor);
     close_btn->setStyleSheet(
-        QString("QPushButton { color: %1; background: transparent; border: none; font-size: 10px; }"
-                "QPushButton:hover { color: %2; }")
-            .arg(ui::colors::TEXT_TERTIARY, ui::colors::NEGATIVE));
+        QString("QPushButton { color: %1; background: %2; border: 1px solid %3; border-radius: 2px; "
+                "padding: 0px; }"
+                "QPushButton:hover { color: %4; border-color: %4; background: %5; }")
+            .arg(ui::colors::TEXT_TERTIARY, ui::colors::BG_SURFACE, ui::colors::BORDER_DIM, ui::colors::NEGATIVE,
+                 ui::colors::BG_HOVER));
     connect(close_btn, &QPushButton::clicked, this, &BaseWidget::close_requested);
     hl->addWidget(close_btn);
 
@@ -105,3 +122,5 @@ void BaseWidget::set_title(const QString& title) {
 }
 
 } // namespace fincept::screens::widgets
+
+

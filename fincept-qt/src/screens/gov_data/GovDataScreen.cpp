@@ -4,6 +4,7 @@
 #include "core/logging/Logger.h"
 #include "screens/gov_data/GovDataAustraliaPanel.h"
 #include "screens/gov_data/GovDataCanadaPanel.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 #include "screens/gov_data/GovDataCKANPanel.h"
 #include "screens/gov_data/GovDataCongressPanel.h"
 #include "screens/gov_data/GovDataFrancePanel.h"

@@ -16,6 +16,10 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
+static constexpr const char* kGovDataUKScript = "datagovuk_api.py";
+static constexpr const char* kGovDataUKColor  = "#10B981";
+} // namespace
 
 // ── Panel stylesheet ─────────────────────────────────────────────────────────
 
@@ -283,7 +287,7 @@ QWidget* GovDataUKPanel::build_toolbar() {
 void GovDataUKPanel::load_initial_data() {
     show_loading("Loading UK Government publishers…");
     services::GovDataService::instance().execute(
-        kScript, "publishers", {}, "ukgov_publishers");
+        kGovDataUKScript, "publishers", {}, "ukgov_publishers");
 }
 
 // ── Result handler ────────────────────────────────────────────────────────────
@@ -373,7 +377,7 @@ void GovDataUKPanel::populate_publishers(const QJsonArray& data) {
         auto* name_item = new QTableWidgetItem(name);
         name_item->setData(Qt::UserRole, id);
         name_item->setData(Qt::UserRole + 1, name); // store display name for breadcrumb
-        name_item->setForeground(QColor(kColor));
+        name_item->setForeground(QColor(kGovDataUKColor));
         publishers_table_->setItem(i, 0, name_item);
     }
 
@@ -401,7 +405,7 @@ void GovDataUKPanel::populate_datasets(const QJsonArray& data, int total_count) 
         const int num_res = obj["num_resources"].toInt(0);
         auto*     res_item = new QTableWidgetItem(QString::number(num_res));
         res_item->setTextAlignment(Qt::AlignCenter);
-        res_item->setForeground(QColor(kColor));
+        res_item->setForeground(QColor(kGovDataUKColor));
         datasets_table_->setItem(i, 1, res_item);
 
         QString modified = obj["metadata_modified"].toString();
@@ -439,7 +443,7 @@ void GovDataUKPanel::populate_resources(const QJsonArray& data) {
 
         const QString format = obj["format"].toString().toUpper();
         auto* fmt_item = new QTableWidgetItem(format.isEmpty() ? "—" : format);
-        fmt_item->setForeground(QColor(kColor));
+        fmt_item->setForeground(QColor(kGovDataUKColor));
         fmt_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 1, fmt_item);
 
@@ -464,7 +468,7 @@ void GovDataUKPanel::populate_resources(const QJsonArray& data) {
         const QString url = obj["url"].toString();
         auto* url_item = new QTableWidgetItem(url.isEmpty() ? "—" : "↗ OPEN");
         url_item->setData(Qt::UserRole, url);
-        if (!url.isEmpty()) url_item->setForeground(QColor(kColor));
+        if (!url.isEmpty()) url_item->setForeground(QColor(kGovDataUKColor));
         url_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 4, url_item);
     }
@@ -485,7 +489,7 @@ void GovDataUKPanel::on_publisher_doubleclicked(int row, int /*col*/) {
 
     show_loading("Loading datasets for "" + selected_publisher_ + ""…");
     services::GovDataService::instance().execute(
-        kScript, "datasets",
+        kGovDataUKScript, "datasets",
         {selected_publisher_id_, "100"},
         "ukgov_datasets_" + selected_publisher_id_);
 }
@@ -497,7 +501,7 @@ void GovDataUKPanel::on_dataset_doubleclicked(int row, int /*col*/) {
     selected_dataset_id_ = item->data(Qt::UserRole).toString();
     show_loading("Loading resources…");
     services::GovDataService::instance().execute(
-        kScript, "resources",
+        kGovDataUKScript, "resources",
         {selected_dataset_id_},
         "ukgov_resources_" + selected_dataset_id_);
 }
@@ -518,7 +522,7 @@ void GovDataUKPanel::on_search() {
 
     show_loading("Searching for "" + query + ""…");
     services::GovDataService::instance().execute(
-        kScript, "search",
+        kGovDataUKScript, "search",
         {query, "50"},
         "ukgov_search_" + query);
 }
@@ -526,7 +530,7 @@ void GovDataUKPanel::on_search() {
 void GovDataUKPanel::on_popular() {
     show_loading("Loading popular publishers…");
     services::GovDataService::instance().execute(
-        kScript, "popular-publishers", {}, "ukgov_popular");
+        kGovDataUKScript, "popular-publishers", {}, "ukgov_popular");
 }
 
 void GovDataUKPanel::on_back() {
@@ -578,7 +582,7 @@ void GovDataUKPanel::update_breadcrumb() {
 
 void GovDataUKPanel::show_loading(const QString& message) {
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:13px; background:transparent;").arg(kColor));
+        QString("color:%1; font-size:13px; background:transparent;").arg(kGovDataUKColor));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(Status);
 }

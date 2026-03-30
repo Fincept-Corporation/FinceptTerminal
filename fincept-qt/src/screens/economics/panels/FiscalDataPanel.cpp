@@ -14,10 +14,12 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "fiscal_data.py";
-static constexpr const char* kSourceId = "fiscal_data";
-static constexpr const char* kColor    = "#0EA5E9";  // Treasury blue
+static constexpr const char* kFiscalDataScript   = "fiscal_data.py";
+static constexpr const char* kFiscalDataSourceId = "fiscal_data";
+static constexpr const char* kFiscalDataColor    = "#0EA5E9";  // Treasury blue
+} // namespace
 
 struct FiscalSeries {
     QString label;
@@ -25,7 +27,7 @@ struct FiscalSeries {
     QStringList args;
 };
 
-static const QList<FiscalSeries> kSeries = {
+static const QList<FiscalSeries> kFiscalDataSeries = {
     { "Debt to the Penny",             "debt-to-penny",      {"--all"}      },
     { "Avg Interest Rates",            "avg-interest-rates", {"--all"}      },
     { "Interest Expense",              "interest-expense",   {"--all"}      },
@@ -34,7 +36,7 @@ static const QList<FiscalSeries> kSeries = {
 };
 
 FiscalDataPanel::FiscalDataPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kFiscalDataSourceId, kFiscalDataColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -53,7 +55,7 @@ void FiscalDataPanel::build_controls(QHBoxLayout* thl) {
         "color:#525252; font-size:9px; font-weight:700; background:transparent;");
 
     series_combo_ = new QComboBox;
-    for (const auto& s : kSeries)
+    for (const auto& s : kFiscalDataSeries)
         series_combo_->addItem(s.label, s.command);
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(240);
@@ -64,7 +66,7 @@ void FiscalDataPanel::build_controls(QHBoxLayout* thl) {
 
 void FiscalDataPanel::on_fetch() {
     const int   idx    = series_combo_->currentIndex();
-    const auto& series = kSeries[idx];
+    const auto& series = kFiscalDataSeries[idx];
 
     show_loading("Fetching FiscalData: " + series.label + "…");
 
@@ -72,13 +74,13 @@ void FiscalDataPanel::on_fetch() {
     args << series.args;
 
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, series.command, series.args,
+        kFiscalDataSourceId, kFiscalDataScript, series.command, series.args,
         "fiscal_" + QString(series.command).replace('-', '_'));
 }
 
 void FiscalDataPanel::on_result(const QString& request_id,
                                  const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kFiscalDataSourceId) return;
     if (!request_id.startsWith("fiscal_")) return;
     if (!result.success) { show_error(result.error); return; }
 
@@ -95,7 +97,7 @@ void FiscalDataPanel::on_result(const QString& request_id,
 
     const int idx = series_combo_->currentIndex();
     const QString title = "FiscalData: "
-        + (idx >= 0 && idx < kSeries.size() ? kSeries[idx].label
+        + (idx >= 0 && idx < kFiscalDataSeries.size() ? kFiscalDataSeries[idx].label
                                               : request_id.mid(7));
 
     display(rows, title);

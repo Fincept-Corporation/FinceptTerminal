@@ -12,10 +12,12 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "un_comtrade_data.py";
-static constexpr const char* kSourceId = "un_comtrade";
-static constexpr const char* kColor    = "#0891B2";  // cyan
+static constexpr const char* kUnComtradeScript   = "un_comtrade_data.py";
+static constexpr const char* kUnComtradeSourceId = "un_comtrade";
+static constexpr const char* kUnComtradeColor    = "#0891B2";  // cyan
+} // namespace
 
 // ISO numeric reporter codes for major economies
 static const QList<QPair<QString,QString>> kReporters = {
@@ -36,7 +38,7 @@ static const QList<QPair<QString,QString>> kReporters = {
 };
 
 UnComtradePanel::UnComtradePanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kUnComtradeSourceId, kUnComtradeColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -94,14 +96,14 @@ void UnComtradePanel::on_fetch() {
 
     show_loading("Fetching UN Comtrade data…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, "trade_balance",
+        kUnComtradeSourceId, kUnComtradeScript, "trade_balance",
         {reporter, period},
         "comtrade_" + reporter + "_" + period + "_" + flow);
 }
 
 void UnComtradePanel::on_result(const QString& request_id,
                                 const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kUnComtradeSourceId) return;
     if (!result.success) { show_error(result.error); return; }
 
     if (request_id.startsWith("comtrade_")) {

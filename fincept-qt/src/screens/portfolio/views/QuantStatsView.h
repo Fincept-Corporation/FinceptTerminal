@@ -2,16 +2,25 @@
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
 
+#include <QAreaSeries>
+#include <QChart>
+#include <QChartView>
+#include <QJsonObject>
 #include <QLabel>
+#include <QLineSeries>
+#include <QPointer>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QTabWidget>
 #include <QTableWidget>
-#include <QTextBrowser>
+#include <QValueAxis>
 #include <QWidget>
 
 namespace fincept::screens {
 
-/// QuantStats report view with metrics, returns, drawdown, rolling, and Monte Carlo tabs.
+/// QuantStats analytics view — 5 tabs: METRICS, RETURNS, DRAWDOWN, ROLLING, MONTE CARLO.
+/// Calls quantstats_analysis.py automatically on set_data(), and quantstats_monte_carlo.py
+/// on user request. All Python calls are async via PythonRunner (P8 compliant).
 class QuantStatsView : public QWidget {
     Q_OBJECT
   public:
@@ -21,32 +30,60 @@ class QuantStatsView : public QWidget {
 
   private:
     void build_ui();
+
+    // Per-tab update methods — called after qs_data_ is populated
     void update_metrics();
+    void update_returns();
+    void update_drawdown();
+    void update_rolling();
+    void update_monte_carlo_chart();
+
+    // Python runners
     void run_quantstats();
     void run_monte_carlo();
 
+    /// Creates a dark-themed QChartView with title label. Returns nullptr on first call
+    /// (chart is built lazily inside update methods). Used by MC tab.
+    QChartView* make_chart_view(const QString& title);
+
+    // ── Tab container ─────────────────────────────────────────────────────────
     QTabWidget* tabs_ = nullptr;
 
-    // Metrics tab
+    // ── Header controls ───────────────────────────────────────────────────────
+    QPushButton* qs_run_btn_  = nullptr;
+    QLabel*      qs_status_  = nullptr;
+
+    // ── METRICS tab ───────────────────────────────────────────────────────────
     QTableWidget* metrics_table_ = nullptr;
 
-    // Returns tab
-    QWidget* returns_panel_ = nullptr;
+    // ── RETURNS tab ───────────────────────────────────────────────────────────
+    QStackedWidget* returns_stack_ = nullptr;   // 0 = placeholder, 1 = content widget
 
-    // Drawdown tab
-    QWidget* drawdown_panel_ = nullptr;
+    // ── DRAWDOWN tab ──────────────────────────────────────────────────────────
+    QStackedWidget* drawdown_stack_ = nullptr;  // 0 = placeholder, 1 = content widget
 
-    // Rolling tab
-    QWidget* rolling_panel_ = nullptr;
+    // ── ROLLING tab ───────────────────────────────────────────────────────────
+    QStackedWidget* rolling_stack_ = nullptr;   // 0 = placeholder, 1 = content widget
 
-    // Monte Carlo tab
-    QPushButton* mc_run_btn_ = nullptr;
-    QLabel* mc_status_ = nullptr;
-    QWidget* mc_results_ = nullptr;
+    // ── MONTE CARLO tab ───────────────────────────────────────────────────────
+    QPushButton*           mc_run_btn_  = nullptr;
+    QLabel*                mc_status_  = nullptr;
+    QWidget*               mc_results_ = nullptr;  // kept for compat
+    QStackedWidget*        mc_stack_   = nullptr;  // 0 = placeholder, 1 = live content
+    QChartView*  mc_chart_   = nullptr;
 
+    // ── Unused chart members (reserved for future time-series data) ───────────
+    QChartView* returns_chart_  = nullptr;
+    QChartView* drawdown_chart_ = nullptr;
+    QChartView* rolling_chart_  = nullptr;
+
+    // ── State ─────────────────────────────────────────────────────────────────
     portfolio::PortfolioSummary summary_;
-    QString currency_;
-    bool mc_running_ = false;
+    QString     currency_;
+    QJsonObject qs_data_;   // parsed result from quantstats_analysis.py
+    QJsonObject mc_data_;   // parsed result from quantstats_monte_carlo.py
+    bool        qs_running_ = false;
+    bool        mc_running_ = false;
 };
 
 } // namespace fincept::screens

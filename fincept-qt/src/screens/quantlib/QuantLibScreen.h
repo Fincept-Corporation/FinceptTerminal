@@ -53,6 +53,9 @@ class QuantLibScreen : public QWidget {
     void display_error(const QString& error);
     void set_loading(bool loading);
 
+    // Endpoint example bodies (auto-filled on selection)
+    static const QHash<QString, QString>& endpoint_examples();
+
     // Modules
     QList<QuantModule> modules_;
     int active_module_ = 0;

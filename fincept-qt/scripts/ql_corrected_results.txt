@@ -1,0 +1,60 @@
+--- #8_linear POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "linear"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: linear"}
+
+--- #8_mortgage POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "mortgage", "rate": 0.05}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: mortgage"}
+
+--- #8_bullet POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "bullet"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: bullet"}
+
+--- #8_LINEAR POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "LINEAR"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: LINEAR"}
+
+--- #47_fixings_ok POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "fixings": {"2024-01-01": 0.04, "2024-04-01": 0.041, "2024-07-01": 0.042, "2024-10-01": 0.043, "2025-01-01": 0.044, "2025-04-01": 0.045, "2025-07-01": 0.046, "2025-10-01": 0.047}}
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot calculate cashflow: no fixing rate, fixed rate, or curve provided", "error_code": "VALIDATION_ERROR"}
+
+--- #50_daycount POST /quantlib/core/periods/fixed-coupon
+  Body: {"notional": 1000000, "rate": 0.05, "start_date": "2024-01-01", "end_date": "2024-07-01", "day_count": "ACT/360"}
+  Status: 500 FAIL
+  detail: {"success": false, "message": "Internal server error", "error_code": "INTERNAL_ERROR"}
+
+--- #50_minimal POST /quantlib/core/periods/fixed-coupon
+  Body: {"notional": 1000000, "rate": 0.05, "start_date": "2024-01-01", "end_date": "2024-07-01"}
+  Status: 500 FAIL
+  detail: {"success": false, "message": "Internal server error", "error_code": "INTERNAL_ERROR"}
+
+--- #51_fixing_rate POST /quantlib/core/periods/float-coupon
+  Body: {"notional": 1000000, "spread": 0.01, "start_date": "2024-01-01", "end_date": "2024-04-01", "fixing_rate": 0.04}
+  Status: 500 FAIL
+  detail: {"success": false, "message": "Internal server error", "error_code": "INTERNAL_ERROR"}
+
+--- #51_fixing_rate_dc POST /quantlib/core/periods/float-coupon
+  Body: {"notional": 1000000, "spread": 0.01, "start_date": "2024-01-01", "end_date": "2024-04-01", "fixing_rate": 0.04, "day_count": "ACT/360"}
+  Status: 500 FAIL
+  detail: {"success": false, "message": "Internal server error", "error_code": "INTERNAL_ERROR"}
+
+--- #51_no_fixing POST /quantlib/core/periods/float-coupon
+  Body: {"notional": 1000000, "spread": 0.01, "start_date": "2024-01-01", "end_date": "2024-04-01", "day_count": "ACT/360"}
+  Status: 500 FAIL
+  detail: {"success": false, "message": "Internal server error", "error_code": "INTERNAL_ERROR"}
+
+--- #45_check POST /quantlib/core/ops/zero-rate-convert
+  Body: {"direction": "continuous_to_annual", "value": 0.05, "t": 1.0}
+  Status: 200 OK
+  data keys: ['discount_factor']
+  data: {"discount_factor": 0.951229424500714}
+

@@ -17,10 +17,12 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "adb_data.py";
-static constexpr const char* kSourceId = "adb";
-static constexpr const char* kColor    = "#0072BC";  // ADB blue
+static constexpr const char* kAdbScript   = "adb_data.py";
+static constexpr const char* kAdbSourceId = "adb";
+static constexpr const char* kAdbColor    = "#0072BC";  // ADB blue
+} // namespace
 
 struct AdbCategory {
     QString label;
@@ -30,7 +32,7 @@ struct AdbCategory {
     bool    uses_indicator;
 };
 
-static const QList<AdbCategory> kCategories = {
+static const QList<AdbCategory> kAdbCategories = {
     {"GDP / National Accounts",   "get_gdp",        "NGDP_XDC",       "e.g. NGDP_XDC, NGDPPC_XDC", true},
     {"Population",                "get_population", "LP_PE_NUM_MOP",   "e.g. LP_PE_NUM_MOP",          true},
     {"Financial Indicators",      "get_financial",  "",                "(all indicators)",             false},
@@ -70,7 +72,7 @@ static const QList<QPair<QString,QString>> kGdpIndicators = {
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 AdbPanel::AdbPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kAdbSourceId, kAdbColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -99,7 +101,7 @@ void AdbPanel::build_controls(QHBoxLayout* thl) {
     economy_combo_->setMinimumWidth(165);
 
     category_combo_ = new QComboBox;
-    for (const auto& c : kCategories)
+    for (const auto& c : kAdbCategories)
         category_combo_->addItem(c.label);
     category_combo_->setFixedHeight(26);
     category_combo_->setMinimumWidth(185);
@@ -107,8 +109,8 @@ void AdbPanel::build_controls(QHBoxLayout* thl) {
             this, &AdbPanel::on_category_changed);
 
     indicator_input_ = new QLineEdit;
-    indicator_input_->setPlaceholderText(kCategories[0].indicator_hint);
-    indicator_input_->setText(kCategories[0].default_indicator);
+    indicator_input_->setPlaceholderText(kAdbCategories[0].indicator_hint);
+    indicator_input_->setText(kAdbCategories[0].default_indicator);
     indicator_input_->setFixedHeight(26);
     indicator_input_->setFixedWidth(130);
 
@@ -135,8 +137,8 @@ void AdbPanel::build_controls(QHBoxLayout* thl) {
 }
 
 void AdbPanel::on_category_changed(int index) {
-    if (index < 0 || index >= kCategories.size()) return;
-    const auto& cat = kCategories[index];
+    if (index < 0 || index >= kAdbCategories.size()) return;
+    const auto& cat = kAdbCategories[index];
     indicator_input_->setPlaceholderText(cat.indicator_hint);
     indicator_input_->setText(cat.default_indicator);
     indicator_input_->setEnabled(cat.uses_indicator);
@@ -146,8 +148,8 @@ void AdbPanel::on_category_changed(int index) {
 
 void AdbPanel::on_fetch() {
     const int cat_idx = category_combo_->currentIndex();
-    if (cat_idx < 0 || cat_idx >= kCategories.size()) return;
-    const auto& cat = kCategories[cat_idx];
+    if (cat_idx < 0 || cat_idx >= kAdbCategories.size()) return;
+    const auto& cat = kAdbCategories[cat_idx];
 
     const QString economy   = economy_combo_->currentData().toString();
     const QString indicator = indicator_input_->text().trimmed().toUpper();
@@ -171,7 +173,7 @@ void AdbPanel::on_fetch() {
 
     show_loading("Fetching ADB " + cat.label + " for " + economy + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, cat.command, args,
+        kAdbSourceId, kAdbScript, cat.command, args,
         "adb_" + cat.command + "_" + economy + "_" + indicator);
 }
 
@@ -179,7 +181,7 @@ void AdbPanel::on_fetch() {
 
 void AdbPanel::on_result(const QString& request_id,
                          const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kAdbSourceId) return;
 
     if (!result.success) {
         // ADB uses "error" key at top level

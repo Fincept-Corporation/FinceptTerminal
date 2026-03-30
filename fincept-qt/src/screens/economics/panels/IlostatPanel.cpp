@@ -14,10 +14,12 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "ilostat_data.py";
-static constexpr const char* kSourceId = "ilostat";
-static constexpr const char* kColor    = "#3B82F6";  // ILO blue
+static constexpr const char* kIlostatScript   = "ilostat_data.py";
+static constexpr const char* kIlostatSourceId = "ilostat";
+static constexpr const char* kIlostatColor    = "#3B82F6";  // ILO blue
+} // namespace
 
 struct IloSeries {
     QString label;
@@ -25,14 +27,14 @@ struct IloSeries {
     QString description;
 };
 
-static const QList<IloSeries> kSeries = {
+static const QList<IloSeries> kIlostatSeries = {
     { "Unemployment Rate",               "unemployment", "UNE_DEAP_SEX_AGE_RT — annual, total, 15+"  },
     { "Labour Force Participation Rate", "lfpr",         "EAP_DWAP_SEX_AGE_RT — annual, total, 15+" },
     { "Employment-to-Population Ratio",  "emp_to_pop",   "EMP_DWAP_SEX_AGE_RT — annual, total, 15+" },
 };
 
 IlostatPanel::IlostatPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kIlostatSourceId, kIlostatColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -53,13 +55,13 @@ void IlostatPanel::build_controls(QHBoxLayout* thl) {
     };
 
     series_combo_ = new QComboBox;
-    for (const auto& s : kSeries)
+    for (const auto& s : kIlostatSeries)
         series_combo_->addItem(s.label, s.command);
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(220);
 
-    for (int i = 0; i < kSeries.size(); ++i)
-        series_combo_->setItemData(i, kSeries[i].description, Qt::ToolTipRole);
+    for (int i = 0; i < kIlostatSeries.size(); ++i)
+        series_combo_->setItemData(i, kIlostatSeries[i].description, Qt::ToolTipRole);
 
     country_edit_ = new QLineEdit("USA");
     country_edit_->setFixedHeight(26);
@@ -91,7 +93,7 @@ void IlostatPanel::build_controls(QHBoxLayout* thl) {
 
 void IlostatPanel::on_fetch() {
     const int   idx    = series_combo_->currentIndex();
-    const auto& series = kSeries[idx];
+    const auto& series = kIlostatSeries[idx];
 
     const QString country = country_edit_->text().trimmed().toUpper();
     const QString start   = start_edit_->text().trimmed();
@@ -102,14 +104,14 @@ void IlostatPanel::on_fetch() {
     show_loading("Fetching ILO: " + series.label + " — " + country + "…");
 
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, series.command,
+        kIlostatSourceId, kIlostatScript, series.command,
         { country, "A", "SEX_T", "AGE_YTHADULT_YGE15", start, end },
         "ilostat_" + series.command);
 }
 
 void IlostatPanel::on_result(const QString& request_id,
                               const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kIlostatSourceId) return;
     if (!request_id.startsWith("ilostat_")) return;
     if (!result.success) { show_error(result.error); return; }
 
@@ -127,7 +129,7 @@ void IlostatPanel::on_result(const QString& request_id,
     // Build title
     const QString cmd = request_id.mid(8);  // strip "ilostat_"
     QString label;
-    for (const auto& s : kSeries) {
+    for (const auto& s : kIlostatSeries) {
         if (s.command == cmd) { label = s.label; break; }
     }
     const QString country  = country_edit_->text().trimmed().toUpper();

@@ -13,12 +13,14 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript    = "worldbank_data.py";
-static constexpr const char* kSourceId  = "worldbank";
-static constexpr const char* kColor     = "#22C55E";
+static constexpr const char* kWorldBankScript    = "worldbank_data.py";
+static constexpr const char* kWorldBankSourceId  = "worldbank";
+static constexpr const char* kWorldBankColor     = "#22C55E";
+} // namespace
 
-static const QList<QPair<QString,QString>> kIndicators = {
+static const QList<QPair<QString,QString>> kWbIndicators = {
     {"GDP (current US$)",                    "NY.GDP.MKTP.CD"},
     {"GDP per capita (current US$)",         "NY.GDP.PCAP.CD"},
     {"GDP growth (annual %)",                "NY.GDP.MKTP.KD.ZG"},
@@ -44,7 +46,7 @@ static const QList<QPair<QString,QString>> kIndicators = {
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 WorldBankPanel::WorldBankPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kWorldBankSourceId, kWorldBankColor, parent) {
 
     // Outer layout: left selector | right content (base UI)
     auto* main = new QHBoxLayout(this);
@@ -93,7 +95,7 @@ WorldBankPanel::WorldBankPanel(QWidget* parent)
     lvl->addWidget(country_search_);
 
     country_list_ = new QListWidget;
-    country_list_->setStyleSheet(list_style(kColor));
+    country_list_->setStyleSheet(list_style(kWorldBankColor));
     connect(country_list_, &QListWidget::currentItemChanged, this,
             [this](QListWidgetItem* item) {
                 if (item) selected_country_ = item->data(Qt::UserRole).toString();
@@ -110,13 +112,13 @@ WorldBankPanel::WorldBankPanel(QWidget* parent)
     lvl->addWidget(indicator_search_);
 
     indicator_list_ = new QListWidget;
-    indicator_list_->setStyleSheet(list_style(kColor));
-    for (const auto& pair : kIndicators) {
+    indicator_list_->setStyleSheet(list_style(kWorldBankColor));
+    for (const auto& pair : kWbIndicators) {
         auto* item = new QListWidgetItem(pair.first, indicator_list_);
         item->setData(Qt::UserRole, pair.second);
     }
     indicator_list_->setCurrentRow(0);
-    selected_indicator_ = kIndicators[0].second;
+    selected_indicator_ = kWbIndicators[0].second;
     lvl->addWidget(indicator_list_, 3);
 
     main->addWidget(left);
@@ -141,7 +143,7 @@ void WorldBankPanel::load_countries() {
     countries_loaded_ = true;
     show_loading("Loading countries…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, "countries", {}, "wb_countries");
+        kWorldBankSourceId, kWorldBankScript, "countries", {}, "wb_countries");
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -181,7 +183,7 @@ void WorldBankPanel::on_fetch() {
 
     show_loading("Fetching World Bank data…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, "indicators",
+        kWorldBankSourceId, kWorldBankScript, "indicators",
         {selected_country_, selected_indicator_, range},
         "wb_data_" + selected_country_ + "_" + selected_indicator_);
 }
@@ -190,7 +192,7 @@ void WorldBankPanel::on_fetch() {
 
 void WorldBankPanel::on_result(const QString& request_id,
                                const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kWorldBankSourceId) return;
     if (!result.success) { show_error(result.error); return; }
 
     if (request_id == "wb_countries") {

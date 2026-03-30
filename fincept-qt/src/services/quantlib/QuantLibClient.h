@@ -32,6 +32,9 @@ class QuantLibClient : public QObject {
     /// GET-only endpoints (no request body).
     static bool is_get_endpoint(const QString& endpoint);
 
+    /// Query-param endpoints: body fields become URL query params, POST with empty body.
+    static bool is_query_param_endpoint(const QString& endpoint);
+
     QuantLibClient(const QuantLibClient&) = delete;
     QuantLibClient& operator=(const QuantLibClient&) = delete;
 

@@ -1,0 +1,158 @@
+--- #4 POST /quantlib/core/types/money/convert
+  Status: 200 OK
+  data keys: ['original', 'converted', 'rate']
+  data sample: {"original": {"amount": 100.0, "currency": "USD"}, "converted": {"amount": 92.0, "currency": "EUR"}, "rate": 0.92}
+
+--- #5 POST /quantlib/core/types/rate/convert
+  Status: 200 OK
+  data keys: ['decimal', 'percentage', 'bps', 'display']
+  data sample: {"decimal": 0.05, "percentage": 5.0, "bps": 500.0, "display": "5.0000%"}
+
+--- #6 GET /quantlib/core/types/spread/from-bps?bps=50
+  Status: 405 FAIL
+  detail: "Method Not Allowed"
+
+--- #7 POST /quantlib/core/types/tenor/add-to-date
+  Status: 200 OK
+  data keys: ['result_date', 'tenor', 'start_date']
+  data sample: {"result_date": "2024-04-01", "tenor": "3M", "start_date": "2024-01-01"}
+
+--- #8 POST /quantlib/core/types/notional-schedule
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data sample: {"success": false, "message": "Unknown schedule type: linear"}
+
+--- #10 POST /quantlib/core/conventions/format-date
+  Status: 200 OK
+  data keys: ['formatted']
+  data sample: {"formatted": "2024-01-15"}
+
+--- #11 POST /quantlib/core/conventions/days-to-years
+  Status: 200 OK
+  data keys: ['years']
+  data sample: {"years": 0.999315537303217}
+
+--- #12 POST /quantlib/core/conventions/years-to-days
+  Status: 200 OK
+  data keys: ['days']
+  data sample: {"days": 365}
+
+--- #13 POST /quantlib/core/conventions/normalize-rate
+  Status: 200 OK
+  data keys: ['normalized']
+  data sample: {"normalized": 0.05}
+
+--- #14 POST /quantlib/core/conventions/normalize-volatility
+  Status: 200 OK
+  data keys: ['normalized']
+  data sample: {"normalized": 0.2}
+
+--- #15 POST /quantlib/core/autodiff/dual-eval
+  Status: 200 OK
+  data keys: ['x', 'f_x', 'f_prime_x', 'function']
+  data sample: {"x": 1.0, "f_x": 0.8414709848078965, "f_prime_x": 0.5403023058681398, "function": "sin"}
+
+--- #16 POST /quantlib/core/autodiff/gradient
+  Status: 422 FAIL
+  detail: {"success": false, "message": "body -> x: Input should be a valid list", "error_code": "VALIDATION_ERROR"}
+
+--- #17 POST /quantlib/core/autodiff/taylor-expand
+  Status: 422 FAIL
+  detail: {"success": false, "message": "body -> x0: Field required", "error_code": "VALIDATION_ERROR"}
+
+--- #26 POST /quantlib/core/distributions/gamma/cdf
+  Status: 200 OK
+  data keys: ['x', 'alpha', 'beta', 'cdf']
+  data sample: {"x": 2.0, "alpha": 2.0, "beta": 1.0, "cdf": 0.5939941502901617}
+
+--- #27 POST /quantlib/core/distributions/gamma/pdf
+  Status: 200 OK
+  data keys: ['x', 'alpha', 'beta', 'pdf']
+  data sample: {"x": 2.0, "alpha": 2.0, "beta": 1.0, "pdf": 0.2706705664732254}
+
+--- #32 POST /quantlib/core/math/eval
+  Status: 200 OK
+  data keys: ['function', 'x', 'result']
+  data sample: {"function": "sqrt", "x": 2.0, "result": 1.4142135623730951}
+
+--- #33 POST /quantlib/core/math/two-arg
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data sample: {"success": false, "message": "Unknown function. Available: maximum, minimum, power"}
+
+--- #34 POST /quantlib/core/ops/black-scholes
+  Status: 200 OK
+  data keys: ['option_type', 'price']
+  data sample: {"option_type": "call", "price": 8.021352235143176}
+
+--- #35 POST /quantlib/core/ops/black76
+  Status: 200 OK
+  data keys: ['option_type', 'price']
+  data sample: {"option_type": "call", "price": 5.6103137979777165}
+
+--- #36 POST /quantlib/core/ops/forward-rate
+  Status: 200 OK
+  data keys: ['forward_rate']
+  data sample: {"forward_rate": 0.05555555555555558}
+
+--- #37 POST /quantlib/core/ops/discount-cashflows
+  Status: 200 OK
+  data keys: ['present_value']
+  data sample: {"present_value": 1131.0}
+
+--- #38 POST /quantlib/core/ops/interpolate
+  Status: 200 OK
+  data keys: ['method', 'x', 'interpolated_value']
+  data sample: {"method": "linear", "x": 2.5, "interpolated_value": 6.5}
+
+--- #39 POST /quantlib/core/ops/statistics
+  Status: 200 OK
+  data keys: ['mean', 'std']
+  data sample: {"mean": 5.5, "std": 2.8722813232690143}
+
+--- #40 POST /quantlib/core/ops/var
+  Status: 200 OK
+  data keys: ['method', 'var', 'expected_shortfall', 'confidence']
+  data sample: {"method": "historical", "var": 0.01875, "expected_shortfall": 0.02, "confidence": 0.95}
+
+--- #41 POST /quantlib/core/ops/percentile
+  Status: 200 OK
+  data keys: ['percentile', 'value']
+  data sample: {"percentile": 0.9, "value": 1.081}
+
+--- #42 POST /quantlib/core/ops/covariance-matrix
+  Status: 200 OK
+  data keys: ['covariance_matrix']
+  data sample: {"covariance_matrix": [[0.0002916666666666667, -0.000275], [-0.000275, 0.00029166666666666664]]}
+
+--- #44 POST /quantlib/core/ops/gbm-paths
+  Status: 200 OK
+  data keys: ['n_paths', 'n_steps', 'paths']
+  data sample: {"n_paths": 3, "n_steps": 10, "paths": [[100.0, 99.39055742071399, 98.60497626250829, 98.20739286493368, 102.974238502196, 102.45354268413615, 93.47635426000927, 95.7486152874648, 94.42617001688603, 93.41917159359475, 94.38911741909445], [100.0, 101.78492257702875, 109.88692666433222, 114.8906994462369, 116.0441038420629, 111.08267747800558, 104.49109823818493, 106.45069624136136, 116.00136567265582, 116.65683320858784, 116.22315579932328], [100.0, 103.73117192575477, 94.90462033160532, 93.32819310162508, 96.55719129663343, 102.34755592486744, 101.10460515431208, 103.85274079901804, 105.812889
+
+--- #45 POST /quantlib/core/ops/zero-rate-convert
+  Status: 200 OK
+  data keys: ['discount_factor']
+  data sample: {"discount_factor": 0.951229424500714}
+
+--- #46 POST /quantlib/core/legs/fixed
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot parse tenor: SEMIANNUAL", "error_code": "VALIDATION_ERROR"}
+
+--- #47 POST /quantlib/core/legs/float
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot parse tenor: QUARTERLY", "error_code": "VALIDATION_ERROR"}
+
+--- #48 POST /quantlib/core/legs/zero-coupon
+  Status: 200 OK
+  data keys: ['cashflows', 'compounded_rate', 'cashflow_amount']
+  data sample: {"cashflows": [{"date": "2029-01-01", "amount": 280960.3667873155}], "compounded_rate": 0.2809603667873155, "cashflow_amount": 280960.3667873155}
+
+--- #50 POST /quantlib/core/periods/fixed-coupon
+  Status: 500 FAIL
+  detail: {"success": false, "message": "Internal server error", "error_code": "INTERNAL_ERROR"}
+
+--- #51 POST /quantlib/core/periods/float-coupon
+  Status: 500 FAIL
+  detail: {"success": false, "message": "Internal server error", "error_code": "INTERNAL_ERROR"}
+

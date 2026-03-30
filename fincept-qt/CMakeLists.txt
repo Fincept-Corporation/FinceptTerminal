@@ -14,7 +14,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Unity build for infrastructure layers (safe — no local symbol conflicts)
 # Screens are excluded below via SKIP_UNITY_BUILD_INCLUSION (too many local statics/functions)
 set(CMAKE_UNITY_BUILD ON)
-set(CMAKE_UNITY_BUILD_BATCH_SIZE 24)
+set(CMAKE_UNITY_BUILD_BATCH_SIZE 32)
 
 # MSVC: /MP = multi-processor compilation (uses all cores within one project)
 # /Z7 = embed debug info in .obj files instead of shared PDB → eliminates PDB
@@ -42,6 +42,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Network
     Sql
     Concurrent
+    Multimedia
 )
 
 # Optional: WebSockets (not always installed)
@@ -50,10 +51,17 @@ if(Qt6WebSockets_FOUND)
     set(HAS_WEBSOCKETS TRUE)
 endif()
 
-# Optional: Multimedia (for inline video/stream playback)
-find_package(Qt6 QUIET COMPONENTS Multimedia MultimediaWidgets)
-if(Qt6Multimedia_FOUND AND Qt6MultimediaWidgets_FOUND)
+# Optional: MultimediaWidgets (for inline video/stream playback)
+# Qt6::Multimedia is already required above (needed for QAudioSource / WhisperService).
+find_package(Qt6 QUIET COMPONENTS MultimediaWidgets)
+if(Qt6MultimediaWidgets_FOUND)
     set(HAS_MULTIMEDIA TRUE)
+endif()
+
+# Optional: TextToSpeech (cross-platform TTS — SAPI/AVSpeech/speech-dispatcher)
+find_package(Qt6 QUIET COMPONENTS TextToSpeech)
+if(Qt6TextToSpeech_FOUND)
+    set(HAS_TTS TRUE)
 endif()
 
 # ── QXlsx (Excel file I/O) ────────────────────────────────────────────────────
@@ -79,6 +87,27 @@ else()
         -UQT_NO_CAST_FROM_ASCII -UQT_NO_CAST_FROM_BYTEARRAY
         -UQT_NO_CAST_TO_ASCII   -UQT_NO_URL_CAST_FROM_STRING
     )
+endif()
+
+# ── whisper.cpp (offline speech-to-text, cross-platform) ─────────────────────
+# Disable all whisper examples/tests — we only need the static library + header.
+set(WHISPER_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS      OFF CACHE BOOL "" FORCE)
+# SDL2 is only needed by the stream example — not required when embedding.
+set(WHISPER_SDL2           OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    whisper
+    GIT_REPOSITORY https://github.com/ggml-org/whisper.cpp.git
+    GIT_TAG        v1.7.4
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(whisper)
+# whisper.cpp uses C-style casts internally — suppress warnings for third-party code
+if(MSVC)
+    target_compile_options(whisper PRIVATE /W0)
+else()
+    target_compile_options(whisper PRIVATE -w)
 endif()
 
 # ── QSimpleUpdater (cross-platform auto-update) ──────────────────────────────
@@ -170,6 +199,7 @@ set(STORAGE_SOURCES
     src/storage/repositories/ContextRecordingRepository.cpp
     src/storage/repositories/PortfolioRepository.cpp
     src/storage/repositories/WorkflowRepository.cpp
+    src/storage/repositories/CustomIndexRepository.cpp
 
     # Workflow migration
     src/storage/sqlite/migrations/v008_workflows.cpp
@@ -179,6 +209,9 @@ set(STORAGE_SOURCES
 
     # LLM Profiles — multi-provider support
     src/storage/sqlite/migrations/v010_llm_profiles.cpp
+
+    # Custom Indices — user-defined index creation
+    src/storage/sqlite/migrations/v011_custom_indices.cpp
 )
 
 # Python runner
@@ -311,6 +344,9 @@ set(SERVICE_SOURCES
     src/services/workflow/adapters/ServiceBridges.cpp
     src/services/polymarket/PolymarketService.cpp
     src/services/polymarket/PolymarketWebSocket.cpp
+
+    # Whisper STT service (cross-platform offline speech recognition)
+    src/services/stt/WhisperService.cpp
 )
 
 # UI framework
@@ -863,6 +899,7 @@ set_source_files_properties(
     src/storage/repositories/SettingsRepository.cpp
     src/storage/repositories/WatchlistRepository.cpp
     src/storage/repositories/WorkflowRepository.cpp
+    src/storage/repositories/CustomIndexRepository.cpp
     # Migration files — each defines sql() helper in anonymous namespace
     src/storage/sqlite/migrations/v001_initial.cpp
     src/storage/sqlite/migrations/v002_llm_chat.cpp
@@ -872,6 +909,9 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v006_portfolio_multi.cpp
     src/storage/sqlite/migrations/v007_news_baselines.cpp
     src/storage/sqlite/migrations/v008_workflows.cpp
+    src/storage/sqlite/migrations/v009_instruments.cpp
+    src/storage/sqlite/migrations/v010_llm_profiles.cpp
+    src/storage/sqlite/migrations/v011_custom_indices.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -926,6 +966,8 @@ set_source_files_properties(
     src/mcp/tools/SettingsTools.cpp
     src/mcp/tools/PythonTools.cpp
     src/mcp/tools/SystemTools.cpp
+    # WhisperService has a static local QStringList — exclude from unity to avoid ODR issues
+    src/services/stt/WhisperService.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -947,12 +989,16 @@ add_executable(FinceptTerminal WIN32
     resources/app.rc
 )
 
-target_include_directories(FinceptTerminal PRIVATE src)
+target_include_directories(FinceptTerminal PRIVATE
+    src
+    ${whisper_SOURCE_DIR}/include
+    ${whisper_SOURCE_DIR}
+)
 
 # Precompiled header — Qt + std headers parsed once, reused across all TUs
 # QDebug excluded — it adds overhead in Release and is only needed for debugging
 target_precompile_headers(FinceptTerminal PRIVATE
-    # Core Qt
+    # ── Core Qt objects ───────────────────────────────────────────────────────
     <QObject>
     <QWidget>
     <QString>
@@ -965,56 +1011,125 @@ target_precompile_headers(FinceptTerminal PRIVATE
     <QSet>
     <QVariant>
     <QPointer>
-    # JSON
+    # ── JSON ──────────────────────────────────────────────────────────────────
     <QJsonObject>
     <QJsonArray>
     <QJsonDocument>
     <QJsonValue>
-    # Layouts & common widgets
+    # ── Layouts ───────────────────────────────────────────────────────────────
     <QVBoxLayout>
     <QHBoxLayout>
     <QGridLayout>
+    <QFormLayout>
+    <QStackedLayout>
+    # ── Common widgets ────────────────────────────────────────────────────────
     <QLabel>
     <QPushButton>
+    <QToolButton>
     <QLineEdit>
+    <QPlainTextEdit>
+    <QTextEdit>
     <QComboBox>
+    <QSpinBox>
+    <QDoubleSpinBox>
+    <QCheckBox>
+    <QRadioButton>
+    <QSlider>
+    <QProgressBar>
     <QScrollArea>
+    <QScrollBar>
     <QFrame>
     <QSplitter>
     <QTabWidget>
     <QStackedWidget>
     <QTableWidget>
+    <QTableView>
     <QTreeWidget>
+    <QTreeView>
+    <QListWidget>
+    <QListView>
     <QGroupBox>
-    <QCheckBox>
-    <QSpinBox>
-    <QTextEdit>
     <QMessageBox>
     <QDialog>
-    # Timers & dates
+    <QHeaderView>
+    <QAbstractItemView>
+    # ── Item models ───────────────────────────────────────────────────────────
+    <QStandardItemModel>
+    <QStandardItem>
+    <QSortFilterProxyModel>
+    # ── Timers & dates ────────────────────────────────────────────────────────
     <QTimer>
     <QDateTime>
-    # Network
+    <QDate>
+    <QTime>
+    # ── Network ───────────────────────────────────────────────────────────────
     <QNetworkAccessManager>
     <QNetworkRequest>
     <QNetworkReply>
-    # Process & concurrency
+    <QUrl>
+    <QUrlQuery>
+    # ── Concurrency & process ─────────────────────────────────────────────────
     <QProcess>
     <QtConcurrent/QtConcurrent>
     <QThread>
     <QMutex>
-    # Storage & settings
+    <QMutexLocker>
+    <QReadWriteLock>
+    <QAtomicInt>
+    <QFuture>
+    <QFutureWatcher>
+    # ── I/O & paths ───────────────────────────────────────────────────────────
     <QSettings>
     <QStandardPaths>
     <QDir>
     <QFile>
-    # std
+    <QFileInfo>
+    <QSaveFile>
+    <QTemporaryFile>
+    <QIODevice>
+    # ── Graphics & painting ───────────────────────────────────────────────────
+    <QPainter>
+    <QPen>
+    <QBrush>
+    <QColor>
+    <QFont>
+    <QFontMetrics>
+    <QPixmap>
+    <QIcon>
+    <QPalette>
+    <QCursor>
+    # ── Events ───────────────────────────────────────────────────────────────
+    <QEvent>
+    <QKeyEvent>
+    <QMouseEvent>
+    <QResizeEvent>
+    <QWheelEvent>
+    # ── Multimedia (always available — required dep) ───────────────────────────
+    <QAudioFormat>
+    <QMediaDevices>
+    # ── Misc Qt ──────────────────────────────────────────────────────────────
+    <QUuid>
+    <QRegularExpression>
+    <QSqlQuery>
+    <QApplication>
+    <QAbstractScrollArea>
+    # ── std ──────────────────────────────────────────────────────────────────
     <functional>
     <memory>
     <vector>
     <string>
     <optional>
     <variant>
+    <atomic>
+    <mutex>
+    <algorithm>
+    <numeric>
+    <cmath>
+    <cstdint>
+    <utility>
+    <tuple>
+    <array>
+    <span>
 )
 
 target_link_libraries(FinceptTerminal PRIVATE
@@ -1024,9 +1139,11 @@ target_link_libraries(FinceptTerminal PRIVATE
     Qt6::Network
     Qt6::Sql
     Qt6::Concurrent
+    Qt6::Multimedia
     QXlsx::QXlsx
     qgeoview
     QSimpleUpdater
+    whisper
 )
 
 if(HAS_WEBSOCKETS)
@@ -1035,8 +1152,13 @@ if(HAS_WEBSOCKETS)
 endif()
 
 if(HAS_MULTIMEDIA)
-    target_link_libraries(FinceptTerminal PRIVATE Qt6::Multimedia Qt6::MultimediaWidgets)
+    target_link_libraries(FinceptTerminal PRIVATE Qt6::MultimediaWidgets)
     target_compile_definitions(FinceptTerminal PRIVATE HAS_QT_MULTIMEDIA)
+endif()
+
+if(HAS_TTS)
+    target_link_libraries(FinceptTerminal PRIVATE Qt6::TextToSpeech)
+    target_compile_definitions(FinceptTerminal PRIVATE HAS_QT_TTS)
 endif()
 
 # ── Copy qgeoview DLL next to the exe so it's found at runtime ────────────────

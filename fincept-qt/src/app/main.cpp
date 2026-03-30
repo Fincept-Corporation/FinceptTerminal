@@ -74,6 +74,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v008();
     fincept::register_migration_v009();
     fincept::register_migration_v010();
+    fincept::register_migration_v011();
 
     // Open main database
     QString db_path = log_dir + "/fincept.db";

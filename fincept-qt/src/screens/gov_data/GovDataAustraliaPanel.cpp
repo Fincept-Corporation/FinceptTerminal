@@ -16,6 +16,10 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+namespace {
+static constexpr const char* kGovDataAustraliaScript = "datagov_au_api.py";
+static constexpr const char* kGovDataAustraliaColor  = "#0EA5E9";
+} // namespace
 
 // ── Panel stylesheet ─────────────────────────────────────────────────────────
 
@@ -283,7 +287,7 @@ QWidget* GovDataAustraliaPanel::build_toolbar() {
 void GovDataAustraliaPanel::load_initial_data() {
     show_loading("Loading Australian Government agencies…");
     services::GovDataService::instance().execute(
-        kScript, "organizations", {}, "ausgov_agencies");
+        kGovDataAustraliaScript, "organizations", {}, "ausgov_agencies");
 }
 
 // ── Result unwrapping helper ──────────────────────────────────────────────────
@@ -392,7 +396,7 @@ void GovDataAustraliaPanel::populate_agencies(const QJsonArray& data) {
         auto* name_item = new QTableWidgetItem(name);
         name_item->setData(Qt::UserRole,     id);
         name_item->setData(Qt::UserRole + 1, name); // for breadcrumb
-        name_item->setForeground(QColor(kColor));
+        name_item->setForeground(QColor(kGovDataAustraliaColor));
         agencies_table_->setItem(i, 0, name_item);
 
         // Description — truncate at 80 chars
@@ -454,7 +458,7 @@ void GovDataAustraliaPanel::populate_datasets(const QJsonArray& data, int total_
             res_count = obj["resources"].toArray().size();
         auto* res_item = new QTableWidgetItem(QString::number(res_count));
         res_item->setTextAlignment(Qt::AlignCenter);
-        res_item->setForeground(QColor(kColor));
+        res_item->setForeground(QColor(kGovDataAustraliaColor));
         datasets_table_->setItem(i, 3, res_item);
 
         // Modified date — try "modified" then "metadata_modified"
@@ -484,7 +488,7 @@ void GovDataAustraliaPanel::populate_resources(const QJsonArray& resources) {
 
         const QString format = obj["format"].toString().toUpper();
         auto* fmt_item = new QTableWidgetItem(format.isEmpty() ? "—" : format);
-        fmt_item->setForeground(QColor(kColor));
+        fmt_item->setForeground(QColor(kGovDataAustraliaColor));
         fmt_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 1, fmt_item);
 
@@ -505,7 +509,7 @@ void GovDataAustraliaPanel::populate_resources(const QJsonArray& resources) {
         const QString url = obj["url"].toString();
         auto* url_item = new QTableWidgetItem(url.isEmpty() ? "—" : "↗ OPEN");
         url_item->setData(Qt::UserRole, url);
-        if (!url.isEmpty()) url_item->setForeground(QColor(kColor));
+        if (!url.isEmpty()) url_item->setForeground(QColor(kGovDataAustraliaColor));
         url_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 3, url_item);
     }
@@ -528,7 +532,7 @@ void GovDataAustraliaPanel::on_agency_doubleclicked(int row, int /*col*/) {
     show_loading("Loading datasets for "" + selected_agency_ + ""…");
 
     services::GovDataService::instance().execute(
-        kScript, "org-datasets",
+        kGovDataAustraliaScript, "org-datasets",
         {selected_agency_id_, "100"},
         "ausgov_datasets_" + selected_agency_id_);
 }
@@ -573,7 +577,7 @@ void GovDataAustraliaPanel::on_search() {
 
     show_loading("Searching for "" + query + ""…");
     services::GovDataService::instance().execute(
-        kScript, "search",
+        kGovDataAustraliaScript, "search",
         {query, "50"},
         "ausgov_search_" + query);
 }
@@ -584,7 +588,7 @@ void GovDataAustraliaPanel::on_recent() {
 
     show_loading("Loading recent datasets…");
     services::GovDataService::instance().execute(
-        kScript, "recent", {"20"}, "ausgov_recent");
+        kGovDataAustraliaScript, "recent", {"20"}, "ausgov_recent");
 }
 
 void GovDataAustraliaPanel::on_back() {
@@ -647,7 +651,7 @@ void GovDataAustraliaPanel::update_breadcrumb() {
 
 void GovDataAustraliaPanel::show_loading(const QString& message) {
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:13px; background:transparent;").arg(kColor));
+        QString("color:%1; font-size:13px; background:transparent;").arg(kGovDataAustraliaColor));
     status_label_->setText(message);
     content_stack_->setCurrentIndex(Status);
 }

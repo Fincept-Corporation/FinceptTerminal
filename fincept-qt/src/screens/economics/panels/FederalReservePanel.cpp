@@ -14,10 +14,12 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kScript   = "federal_reserve_data.py";
-static constexpr const char* kSourceId = "federal_reserve";
-static constexpr const char* kColor    = "#DC2626";  // Fed red
+static constexpr const char* kFederalReserveScript   = "federal_reserve_data.py";
+static constexpr const char* kFederalReserveSourceId = "federal_reserve";
+static constexpr const char* kFederalReserveColor    = "#DC2626";  // Fed red
+} // namespace
 
 struct FedSeries {
     QString label;
@@ -25,7 +27,7 @@ struct FedSeries {
     QStringList args;
 };
 
-static const QList<FedSeries> kSeries = {
+static const QList<FedSeries> kFedReserveSeries = {
     { "Federal Funds Rate",          "federal_funds_rate", {} },
     { "SOFR Overnight Rate",         "sofr_rate",          {} },
     { "Treasury Rates (Yield Curve)","treasury_rates",     {} },
@@ -35,7 +37,7 @@ static const QList<FedSeries> kSeries = {
 };
 
 FederalReservePanel::FederalReservePanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kFederalReserveSourceId, kFederalReserveColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -54,7 +56,7 @@ void FederalReservePanel::build_controls(QHBoxLayout* thl) {
         "color:#525252; font-size:9px; font-weight:700; background:transparent;");
 
     series_combo_ = new QComboBox;
-    for (const auto& s : kSeries)
+    for (const auto& s : kFedReserveSeries)
         series_combo_->addItem(s.label, s.command);
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(240);
@@ -65,17 +67,17 @@ void FederalReservePanel::build_controls(QHBoxLayout* thl) {
 
 void FederalReservePanel::on_fetch() {
     const int   idx    = series_combo_->currentIndex();
-    const auto& series = kSeries[idx];
+    const auto& series = kFedReserveSeries[idx];
 
     show_loading("Fetching Federal Reserve: " + series.label + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, kScript, series.command, series.args,
+        kFederalReserveSourceId, kFederalReserveScript, series.command, series.args,
         "fed_" + series.command);
 }
 
 void FederalReservePanel::on_result(const QString& request_id,
                                      const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kFederalReserveSourceId) return;
     if (!request_id.startsWith("fed_")) return;
     if (!result.success) { show_error(result.error); return; }
 
@@ -111,7 +113,7 @@ void FederalReservePanel::on_result(const QString& request_id,
 
     const int idx = series_combo_->currentIndex();
     const QString title = "Federal Reserve: "
-        + (idx >= 0 && idx < kSeries.size() ? kSeries[idx].label
+        + (idx >= 0 && idx < kFedReserveSeries.size() ? kFedReserveSeries[idx].label
                                               : request_id.mid(4));
 
     display(clean, title);

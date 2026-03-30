@@ -1,0 +1,100 @@
+--- #8_amortization POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "amortization"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: amortization"}
+
+--- #8_amortized POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "amortized"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: amortized"}
+
+--- #8_annuity POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "annuity"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: annuity"}
+
+--- #8_schedule POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "schedule"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: schedule"}
+
+--- #8_notional POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "notional"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: notional"}
+
+--- #8_linearly_declining POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "linearly_declining"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: linearly_declining"}
+
+--- #8_step POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "step"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: step"}
+
+--- #8_balloon POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "balloon"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: balloon"}
+
+--- #8_interest_only POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "interest_only"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: interest_only"}
+
+--- #8_bond POST /quantlib/core/types/notional-schedule
+  Body: {"notional": 1000000, "periods": 4, "schedule_type": "bond"}
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: bond"}
+
+--- #47f POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "curve": [0.04, 0.042, 0.043, 0.044, 0.045, 0.046, 0.047, 0.048]}
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot calculate cashflow: no fixing rate, fixed rate, or curve provided", "error_code": "VALIDATION_ERROR"}
+
+--- #47g POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "curve": {"rates": [0.04, 0.042, 0.043, 0.044], "tenors": ["3M", "6M", "9M", "1Y"]}}
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot calculate cashflow: no fixing rate, fixed rate, or curve provided", "error_code": "VALIDATION_ERROR"}
+
+--- #47h POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "flat_rate": 0.04}
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot calculate cashflow: no fixing rate, fixed rate, or curve provided", "error_code": "VALIDATION_ERROR"}
+
+--- #47i POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "index_rate": 0.04}
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot calculate cashflow: no fixing rate, fixed rate, or curve provided", "error_code": "VALIDATION_ERROR"}
+
+--- #47j POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "libor": 0.04}
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot calculate cashflow: no fixing rate, fixed rate, or curve provided", "error_code": "VALIDATION_ERROR"}
+
+--- #47k POST /quantlib/core/legs/float
+  Body: {"notional": 1000000, "spread": 0.01, "frequency": "3M", "start_date": "2024-01-01", "end_date": "2026-01-01", "flat_forward": 0.04}
+  Status: 400 FAIL
+  detail: {"success": false, "message": "Cannot calculate cashflow: no fixing rate, fixed rate, or curve provided", "error_code": "VALIDATION_ERROR"}
+
+--- #50_probe POST /quantlib/core/periods/fixed-coupon
+  Body: {"notional": "X", "rate": "X", "start_date": "X", "end_date": "X", "day_count_fraction": "X"}
+  Status: 422 FAIL
+  detail: {"success": false, "message": "body -> notional: Input should be a valid number, unable to parse string as a number; body -> rate: Input should be a valid number, unable to parse string as a number", "error_code": "VALIDATION_ERROR"}
+
+--- #51_probe POST /quantlib/core/periods/float-coupon
+  Body: {"notional": "X", "start_date": "X", "end_date": "X", "libor_rate": "X", "spread": "X", "day_count_fraction": "X"}
+  Status: 422 FAIL
+  detail: {"success": false, "message": "body -> notional: Input should be a valid number, unable to parse string as a number; body -> spread: Input should be a valid number, unable to parse string as a number", "error_code": "VALIDATION_ERROR"}
+

@@ -20,9 +20,11 @@
 #include <QLabel>
 
 namespace fincept::screens {
+namespace {
 
-static constexpr const char* kSourceId = "global_cb";
-static constexpr const char* kColor    = "#6366F1";  // indigo
+static constexpr const char* kGlobalCentralBanksSourceId = "global_cb";
+static constexpr const char* kGlobalCentralBanksColor    = "#6366F1";  // indigo
+} // namespace
 
 // ── Per-bank descriptor ──────────────────────────────────────────────────────
 
@@ -109,7 +111,7 @@ static QJsonArray extract_cb_rows(const QJsonObject& data) {
 // ── Panel ────────────────────────────────────────────────────────────────────
 
 GlobalCentralBanksPanel::GlobalCentralBanksPanel(QWidget* parent)
-    : EconPanelBase(kSourceId, kColor, parent) {
+    : EconPanelBase(kGlobalCentralBanksSourceId, kGlobalCentralBanksColor, parent) {
     build_base_ui(this);
     connect(&services::EconomicsService::instance(),
             &services::EconomicsService::result_ready,
@@ -172,13 +174,13 @@ void GlobalCentralBanksPanel::on_fetch() {
 
     show_loading("Fetching " + bank.label + ": " + series.label + "…");
     services::EconomicsService::instance().execute(
-        kSourceId, bank.script, series.command, {},
+        kGlobalCentralBanksSourceId, bank.script, series.command, {},
         bank.req_prefix + "_" + series.command);
 }
 
 void GlobalCentralBanksPanel::on_result(const QString& request_id,
                                          const services::EconomicsResult& result) {
-    if (result.source_id != kSourceId) return;
+    if (result.source_id != kGlobalCentralBanksSourceId) return;
 
     // Check this result belongs to one of our banks
     bool matched = false;

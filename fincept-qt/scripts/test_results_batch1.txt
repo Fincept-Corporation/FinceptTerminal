@@ -1,0 +1,62 @@
+--- #4 POST /quantlib/core/types/money/convert
+  Status: 200 OK
+  data keys: ['original', 'converted', 'rate']
+  data: {"original": {"amount": 100.0, "currency": "USD"}, "converted": {"amount": 92.0, "currency": "EUR"}, "rate": 0.92}
+
+--- #5 POST /quantlib/core/types/rate/convert
+  Status: 200 OK
+  data keys: ['decimal', 'percentage', 'bps', 'display']
+  data: {"decimal": 0.05, "percentage": 5.0, "bps": 500.0, "display": "5.0000%"}
+
+--- #6 GET /quantlib/core/types/spread/from-bps?bps=50
+  Status: 405 FAIL
+  full_resp: {"detail": "Method Not Allowed"}
+
+--- #7 POST /quantlib/core/types/tenor/add-to-date
+  Status: 200 OK
+  data keys: ['result_date', 'tenor', 'start_date']
+  data: {"result_date": "2024-04-01", "tenor": "3M", "start_date": "2024-01-01"}
+
+--- #8 POST /quantlib/core/types/notional-schedule
+  Status: 200 OK
+  data keys: ['success', 'message']
+  data: {"success": false, "message": "Unknown schedule type: linear"}
+
+--- #10 POST /quantlib/core/conventions/format-date
+  Status: 200 OK
+  data keys: ['formatted']
+  data: {"formatted": "2024-01-15"}
+
+--- #11 POST /quantlib/core/conventions/days-to-years
+  Status: 200 OK
+  data keys: ['years']
+  data: {"years": 0.999315537303217}
+
+--- #12 POST /quantlib/core/conventions/years-to-days
+  Status: 200 OK
+  data keys: ['days']
+  data: {"days": 365}
+
+--- #13 POST /quantlib/core/conventions/normalize-rate
+  Status: 200 OK
+  data keys: ['normalized']
+  data: {"normalized": 0.05}
+
+--- #14 POST /quantlib/core/conventions/normalize-volatility
+  Status: 200 OK
+  data keys: ['normalized']
+  data: {"normalized": 0.2}
+
+--- #15 POST /quantlib/core/autodiff/dual-eval
+  Status: 200 OK
+  data keys: ['x', 'f_x', 'f_prime_x', 'function']
+  data: {"x": 1.0, "f_x": 0.8414709848078965, "f_prime_x": 0.5403023058681398, "function": "sin"}
+
+--- #16 POST /quantlib/core/autodiff/gradient
+  Status: 422 FAIL
+  full_resp: {"success": false, "message": "body -> x: Input should be a valid list", "error_code": "VALIDATION_ERROR"}
+
+--- #17 POST /quantlib/core/autodiff/taylor-expand
+  Status: 422 FAIL
+  full_resp: {"success": false, "message": "body -> x0: Field required", "error_code": "VALIDATION_ERROR"}
+

@@ -15,7 +15,7 @@
 
 namespace fincept::services {
 
-static constexpr const char* TAG = "FileManagerService";
+static constexpr const char* kFileManagerTag = "FileManagerService";
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ FileManagerService& FileManagerService::instance() {
 FileManagerService::FileManagerService(QObject* parent) : QObject(parent) {
     QDir().mkpath(storage_dir());
     files_cache_ = read_metadata();
-    LOG_INFO(TAG, QString("Loaded %1 managed files").arg(files_cache_.size()));
+    LOG_INFO(kFileManagerTag, QString("Loaded %1 managed files").arg(files_cache_.size()));
 }
 
 // ── Paths ────────────────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ QJsonArray FileManagerService::files_by_mime(const QString& mime_fragment) const
 QString FileManagerService::import_file(const QString& source_path, const QString& source_screen) {
     QFileInfo info(source_path);
     if (!info.exists()) {
-        LOG_WARN(TAG, "import_file: source does not exist: " + source_path);
+        LOG_WARN(kFileManagerTag, "import_file: source does not exist: " + source_path);
         return {};
     }
 
@@ -146,7 +146,7 @@ QString FileManagerService::import_file(const QString& source_path, const QStrin
     QString dest = full_path(stored_name);
 
     if (!QFile::copy(source_path, dest)) {
-        LOG_ERROR(TAG, "import_file: copy failed: " + source_path + " -> " + dest);
+        LOG_ERROR(kFileManagerTag, "import_file: copy failed: " + source_path + " -> " + dest);
         return {};
     }
 
@@ -164,7 +164,7 @@ QString FileManagerService::import_file(const QString& source_path, const QStrin
     files_cache_.append(to_json(f));
     write_metadata(files_cache_);
 
-    LOG_INFO(TAG, QString("Imported '%1' (id=%2, screen=%3)").arg(f.original_name, id, source_screen));
+    LOG_INFO(kFileManagerTag, QString("Imported '%1' (id=%2, screen=%3)").arg(f.original_name, id, source_screen));
     emit file_added(id);
     emit files_changed();
     return id;
@@ -189,7 +189,7 @@ QString FileManagerService::register_file(const QString& stored_name, const QStr
     files_cache_.append(to_json(f));
     write_metadata(files_cache_);
 
-    LOG_INFO(TAG, QString("Registered '%1' (id=%2, screen=%3)").arg(original_name, id, source_screen));
+    LOG_INFO(kFileManagerTag, QString("Registered '%1' (id=%2, screen=%3)").arg(original_name, id, source_screen));
     emit file_added(id);
     emit files_changed();
     return id;
@@ -207,12 +207,12 @@ bool FileManagerService::remove_file(const QString& id) {
         files_cache_.removeAt(i);
         write_metadata(files_cache_);
 
-        LOG_INFO(TAG, "Removed file id=" + id);
+        LOG_INFO(kFileManagerTag, "Removed file id=" + id);
         emit file_removed(id);
         emit files_changed();
         return true;
     }
-    LOG_WARN(TAG, "remove_file: id not found: " + id);
+    LOG_WARN(kFileManagerTag, "remove_file: id not found: " + id);
     return false;
 }
 
