@@ -454,12 +454,7 @@ jobs:
           # Without this, Qt falls back to hardcoded build-time paths which
           # don't exist on a clean machine and can cause plugin load failures.
           # ----------------------------------------------------------------
-          cat > dist/qt.conf <<'QTCONF'
-[Paths]
-Prefix = .
-Plugins = .
-Libraries = .
-QTCONF
+          printf '[Paths]\nPrefix = .\nPlugins = .\nLibraries = .\n' > dist/qt.conf
 
           # ----------------------------------------------------------------
           # Copy app resources and Python analytics scripts
