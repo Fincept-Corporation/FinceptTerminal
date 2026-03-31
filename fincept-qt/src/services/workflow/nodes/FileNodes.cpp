@@ -25,26 +25,6 @@ void register_file_nodes(NodeRegistry& registry) {
     });
 
     registry.register_type({
-        .type_id = "file.spreadsheet",
-        .display_name = "Spreadsheet File",
-        .category = "Files",
-        .description = "Read/write Excel or CSV files",
-        .icon_text = "F",
-        .accent_color = "#525252",
-        .version = 1,
-        .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
-        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
-        .parameters =
-            {
-                {"operation", "Operation", "select", "read", {"read", "write"}, ""},
-                {"path", "File Path", "string", "", {}, "", true},
-                {"format", "Format", "select", "csv", {"csv", "xlsx", "tsv"}, ""},
-                {"sheet", "Sheet Name", "string", "Sheet1", {}, "For Excel files"},
-            },
-        .execute = nullptr,
-    });
-
-    registry.register_type({
         .type_id = "file.binary",
         .display_name = "Binary File",
         .category = "Files",

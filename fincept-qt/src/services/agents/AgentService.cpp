@@ -42,6 +42,11 @@ void AgentService::clear_cache() {
     LOG_INFO("AgentService", "Cache cleared");
 }
 
+QVector<AgentInfo> AgentService::cached_agents() const {
+    QMutexLocker lock(&cache_mutex_);
+    return agents_cache_.data;
+}
+
 int AgentService::cached_agent_count() const {
     QMutexLocker lock(&cache_mutex_);
     return agents_cache_.data.size();

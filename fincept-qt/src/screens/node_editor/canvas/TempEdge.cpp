@@ -19,10 +19,12 @@ void TempEdge::update_target(const QPointF& scene_pos) {
     QPointF p2 = scene_pos;
 
     qreal dx = std::abs(p2.x() - p1.x()) * 0.5;
-    if (dx < 40.0)
-        dx = 40.0;
+    if (dx < 60.0)
+        dx = 60.0;
 
-    // Reverse control points if dragging from input port
+    // Always bow toward the target: output ports exit rightward, input ports enter leftward.
+    // When dragging from an output port: cp1 goes right, cp2 approaches from the left.
+    // When dragging from an input port (connecting backwards): mirror so the curve still looks natural.
     bool from_output = (source_->def().direction == PortDirection::Output);
     qreal cx1 = from_output ? p1.x() + dx : p1.x() - dx;
     qreal cx2 = from_output ? p2.x() - dx : p2.x() + dx;

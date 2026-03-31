@@ -1,8 +1,47 @@
 #include "services/workflow/nodes/MarketDataNodes.h"
 
 #include "services/workflow/NodeRegistry.h"
+#include "python/PythonRunner.h"
+
+#include <QJsonDocument>
 
 namespace fincept::workflow {
+
+using fincept::python::PythonRunner;
+using fincept::python::PythonResult;
+using fincept::python::extract_json;
+
+namespace {
+
+// Helper: run a Python script and parse the JSON result, calling cb with the outcome.
+void run_python_json(const QString& script, const QStringList& args,
+                     std::function<void(bool, QJsonValue, QString)> cb)
+{
+    PythonRunner::instance().run(script, args, [cb](const PythonResult& res) {
+        if (!res.success) {
+            cb(false, {}, res.error);
+            return;
+        }
+        QString json_str = extract_json(res.output).trimmed();
+        auto doc = QJsonDocument::fromJson(json_str.toUtf8());
+        if (doc.isNull()) {
+            cb(false, {}, "Invalid JSON: " + res.output.left(200));
+            return;
+        }
+        cb(true, doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array()), {});
+    });
+}
+
+// Helper: produce a clear "not yet implemented" result object.
+QJsonValue not_implemented(const QString& type_id)
+{
+    QJsonObject obj;
+    obj["error"] = "not_yet_implemented";
+    obj["node"]  = type_id;
+    return obj;
+}
+
+} // anonymous namespace
 
 void register_market_data_nodes(NodeRegistry& registry) {
     registry.register_type({
@@ -20,7 +59,12 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"symbol", "Symbol", "string", "AAPL", {}, "Ticker symbol", true},
                 {"source", "Source", "select", "yahoo", {"yahoo", "alpha_vantage", "polygon", "databento"}, ""},
             },
-        .execute = nullptr, // Wired via MarketDataService
+        .execute =
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                QString symbol = params.value("symbol").toString("AAPL");
+                run_python_json("yfinance_data.py", {"quote", symbol}, cb);
+            },
     });
 
     registry.register_type({
@@ -39,7 +83,14 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"period", "Period", "select", "1y", {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "max"}, ""},
                 {"interval", "Interval", "select", "1d", {"1m", "5m", "15m", "1h", "1d", "1wk", "1mo"}, ""},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                QString symbol   = params.value("symbol").toString("AAPL");
+                QString period   = params.value("period").toString("1y");
+                QString interval = params.value("interval").toString("1d");
+                run_python_json("yfinance_data.py", {"historical_period", symbol, period, interval}, cb);
+            },
     });
 
     registry.register_type({
@@ -57,7 +108,11 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"symbol", "Symbol", "string", "AAPL", {}, "Ticker symbol", true},
                 {"depth", "Depth", "number", 10, {}, "Number of levels"},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject&, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                cb(false, not_implemented("market.get_depth"), "not_yet_implemented");
+            },
     });
 
     registry.register_type({
@@ -74,7 +129,11 @@ void register_market_data_nodes(NodeRegistry& registry) {
             {
                 {"symbol", "Symbol", "string", "AAPL", {}, "Ticker symbol", true},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject&, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                cb(false, not_implemented("market.get_stats"), "not_yet_implemented");
+            },
     });
 
     registry.register_type({
@@ -92,7 +151,11 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"symbol", "Symbol", "string", "AAPL", {}, "Ticker symbol", true},
                 {"type", "Type", "select", "overview", {"overview", "income", "balance", "cashflow", "earnings"}, ""},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject&, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                cb(false, not_implemented("market.get_fundamentals"), "not_yet_implemented");
+            },
     });
 
     registry.register_type({
@@ -115,7 +178,11 @@ void register_market_data_nodes(NodeRegistry& registry) {
                  ""},
                 {"country", "Country", "string", "US", {}, "Country code"},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject&, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                cb(false, not_implemented("market.get_economics"), "not_yet_implemented");
+            },
     });
 
     registry.register_type({
@@ -133,7 +200,13 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"symbol", "Symbol", "string", "", {}, "Optional ticker filter"},
                 {"limit", "Limit", "number", 10, {}, "Number of articles"},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                QString symbol = params.value("symbol").toString();
+                QString limit  = QString::number(static_cast<int>(params.value("limit").toDouble(10)));
+                run_python_json("yfinance_data.py", {"news", symbol, limit}, cb);
+            },
     });
 
     // ── Tier 1 additions ───────────────────────────────────────────
@@ -154,7 +227,11 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"expiry", "Expiry", "string", "", {}, "YYYY-MM-DD or 'nearest'"},
                 {"type", "Type", "select", "both", {"calls", "puts", "both"}, ""},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject&, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                cb(false, not_implemented("market.get_options_chain"), "not_yet_implemented");
+            },
     });
 
     registry.register_type({
@@ -191,7 +268,11 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"base", "Base Currency", "string", "USD", {}, "", true},
                 {"quote", "Quote Currency", "string", "EUR", {}, "", true},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject&, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                cb(false, not_implemented("market.get_forex_rate"), "not_yet_implemented");
+            },
     });
 
     // ── Tier 3: Advanced Market Data ───────────────────────────────
@@ -221,7 +302,11 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"country", "Country", "select", "US", {"US", "UK", "IN", "JP", "DE", "FR", "CA", "AU"}, ""},
                 {"limit", "Max Results", "number", 50, {}, ""},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject&, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                cb(false, not_implemented("market.screener"), "not_yet_implemented");
+            },
     });
 
     registry.register_type({
@@ -241,7 +326,11 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"days_back", "Days Back", "number", 30, {}, ""},
                 {"min_value", "Min Transaction Value ($)", "number", 100000, {}, ""},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject&, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                cb(false, not_implemented("market.insider_trades"), "not_yet_implemented");
+            },
     });
 
     registry.register_type({
@@ -265,7 +354,11 @@ void register_market_data_nodes(NodeRegistry& registry) {
                  ""},
                 {"limit", "Limit", "number", 10, {}, ""},
             },
-        .execute = nullptr,
+        .execute =
+            [](const QJsonObject&, const QVector<QJsonValue>&,
+               std::function<void(bool, QJsonValue, QString)> cb) {
+                cb(false, not_implemented("market.sec_filings"), "not_yet_implemented");
+            },
     });
 }
 

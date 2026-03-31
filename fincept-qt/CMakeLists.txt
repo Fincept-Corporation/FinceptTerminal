@@ -1154,6 +1154,9 @@ target_precompile_headers(FinceptTerminal PRIVATE
     <span>
 )
 
+# ── OpenSSL (from vcpkg) — needed for Google Sheets JWT signing ───────────────
+set(VCPKG_OPENSSL "C:/windowsdisk/fincept-cpp/vcpkg_installed/x64-windows")
+target_include_directories(FinceptTerminal PRIVATE "${VCPKG_OPENSSL}/include")
 target_link_libraries(FinceptTerminal PRIVATE
     Qt6::Widgets
     Qt6::Charts
@@ -1166,6 +1169,19 @@ target_link_libraries(FinceptTerminal PRIVATE
     qgeoview
     QSimpleUpdater
     whisper
+    "${VCPKG_OPENSSL}/lib/libcrypto.lib"
+    "${VCPKG_OPENSSL}/lib/libssl.lib"
+)
+
+# Copy OpenSSL DLLs to build output
+add_custom_command(TARGET FinceptTerminal POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${VCPKG_OPENSSL}/bin/libcrypto-3-x64.dll"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/libcrypto-3-x64.dll"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${VCPKG_OPENSSL}/bin/libssl-3-x64.dll"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/libssl-3-x64.dll"
+    COMMENT "Copying OpenSSL DLLs..."
 )
 
 if(HAS_WEBSOCKETS)
@@ -1234,3 +1250,11 @@ if(WIN32)
         )
     endif()
 endif()
+
+# ── Copy Python scripts to build output ──────────────────────────────────────
+add_custom_command(TARGET FinceptTerminal POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/scripts"
+        "$<TARGET_FILE_DIR:FinceptTerminal>/scripts"
+    COMMENT "Copying Python scripts to build output..."
+)

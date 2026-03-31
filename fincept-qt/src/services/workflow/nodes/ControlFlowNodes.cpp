@@ -4,6 +4,7 @@
 #include "services/workflow/NodeRegistry.h"
 
 #include <QTimer>
+#include <QJsonArray>
 
 namespace fincept::workflow {
 
@@ -34,9 +35,32 @@ void register_control_flow_nodes(NodeRegistry& registry) {
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                Q_UNUSED(params);
-                // Simplified: always routes to first output
-                cb(true, data, {});
+                QString field = params.value("field").toString();
+                QString case1 = params.value("case1").toString();
+                QString case2 = params.value("case2").toString();
+
+                // Extract the field value from the input object
+                QString actual;
+                if (!field.isEmpty() && data.isObject())
+                    actual = data.toObject().value(field).toVariant().toString();
+                else if (data.isString())
+                    actual = data.toString();
+                else
+                    actual = QString::number(data.toDouble());
+
+                // Route: case1 → output_0, case2 → output_1, else → output_2 (default)
+                // The workflow executor uses the first output by default; we encode
+                // the route index in the result so ExecutionResultsPanel can show it.
+                // Actual port routing requires WorkflowExecutor support — we annotate
+                // the output with "_route" so downstream can branch.
+                QJsonObject out = data.isObject() ? data.toObject() : QJsonObject{{"value", data}};
+                if (!case1.isEmpty() && actual == case1)
+                    out["_route"] = 0;
+                else if (!case2.isEmpty() && actual == case2)
+                    out["_route"] = 1;
+                else
+                    out["_route"] = 2;
+                cb(true, out, {});
             },
     });
 

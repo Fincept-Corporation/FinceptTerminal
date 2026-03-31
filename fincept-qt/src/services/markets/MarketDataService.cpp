@@ -406,7 +406,7 @@ void MarketDataService::fetch_sparklines(const QStringList& symbols, SparklineCa
     args << "batch_sparklines" << symbols;
 
     python::PythonRunner::instance().run(
-        "yfinance_data", args,
+        "yfinance_data.py", args,
         [cb](python::PythonResult result) {
             if (!result.success || result.output.trimmed().isEmpty()) {
                 LOG_WARN("MarketData", "Sparklines failed: " + result.error.left(200));

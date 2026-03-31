@@ -5,6 +5,10 @@
 numpy>=1.26.4,<2.0
 pandas>=2.0.0,<2.3.0
 
+# Spreadsheet I/O (local xlsx/csv + Google Sheets)
+openpyxl>=3.1.0
+gspread>=6.0.0
+
 # Backtesting and trading (NumPy 1.x dependent)
 vectorbt==0.28.2
 backtesting==0.6.5

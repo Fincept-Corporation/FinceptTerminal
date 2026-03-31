@@ -87,6 +87,7 @@ class AgentService : public QObject {
     void clear_cache();
     void clear_response_cache();
     int cached_agent_count() const;
+    QVector<AgentInfo> cached_agents() const;
     QJsonObject get_cache_stats() const;
 
   signals:

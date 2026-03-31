@@ -1,12 +1,16 @@
 #include "services/workflow/adapters/ServiceBridges.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/McpService.h"
 #include "services/workflow/AuditLogger.h"
 #include "services/workflow/ConfirmationService.h"
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/RiskManager.h"
+#include "trading/ExchangeService.h"
 
 #include <QDateTime>
+#include <QPointer>
+#include <QtConcurrent/QtConcurrent>
 
 namespace fincept::workflow {
 
@@ -46,6 +50,42 @@ void wire_market_data_bridges(NodeRegistry& registry) {
             out["interval"] = params.value("interval").toString("1d");
             out["status"] = "pending_integration";
             cb(true, out, {});
+        };
+    }
+
+    // Crypto Price — uses ExchangeService (Kraken public API, no key needed)
+    auto* crypto_price_def = const_cast<NodeTypeDef*>(registry.find("market.get_crypto_price"));
+    if (crypto_price_def) {
+        crypto_price_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                       std::function<void(bool, QJsonValue, QString)> cb) {
+            QString base   = params.value("symbol").toString("BTC").toUpper();
+            QString quote  = params.value("quote").toString("USD").toUpper();
+            QString symbol = base + "/" + quote;   // Kraken format: BTC/USD
+
+            (void)QtConcurrent::run([symbol, cb]() {
+                auto& svc = trading::ExchangeService::instance();
+                trading::TickerData t = svc.fetch_ticker(symbol);
+
+                if (t.last <= 0.0) {
+                    cb(false, {}, QString("No price data for %1").arg(symbol));
+                    return;
+                }
+
+                QJsonObject out;
+                out["symbol"]       = symbol;
+                out["price"]        = t.last;
+                out["bid"]          = t.bid;
+                out["ask"]          = t.ask;
+                out["high"]         = t.high;
+                out["low"]          = t.low;
+                out["change"]       = t.change;
+                out["change_pct"]   = t.percentage;
+                out["volume"]       = t.base_volume;
+                out["exchange"]     = "kraken";
+                out["timestamp"]    = static_cast<qint64>(t.timestamp);
+                cb(true, out, {});
+                LOG_DEBUG("MarketBridge", QString("Crypto price fetched: %1 = %2").arg(symbol).arg(t.last));
+            });
         };
     }
 
@@ -323,7 +363,68 @@ static void wire_utility_bridges(NodeRegistry& registry) {
     LOG_INFO("ServiceBridges", "Utility bridges wired");
 }
 
+static void wire_mcp_bridges(NodeRegistry& registry) {
+    auto* def = const_cast<NodeTypeDef*>(registry.find("mcp.tool_call"));
+    if (!def) return;
+
+    def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                      std::function<void(bool, QJsonValue, QString)> cb) {
+        QString tool = params.value("tool").toString().trimmed();
+        if (tool.isEmpty()) {
+            cb(false, {}, "MCP Tool: 'tool' parameter is required");
+            return;
+        }
+
+        // If input is from a Tool Picker node it carries { "tool": "...", "args": {...} }
+        // — use those values when the param isn't explicitly set.
+        QJsonObject input_obj;
+        if (!inputs.isEmpty() && inputs[0].isObject())
+            input_obj = inputs[0].toObject();
+
+        if (tool.isEmpty())
+            tool = input_obj.value("tool").toString().trimmed();
+        if (tool.isEmpty()) {
+            cb(false, {}, "MCP Tool: no tool selected — set the 'Tool' param or connect a Tool Picker node");
+            return;
+        }
+
+        // Args: prefer "args" sub-object from Tool Picker, else pass the whole input object
+        QJsonObject args;
+        if (input_obj.contains("args") && input_obj.value("args").isObject())
+            args = input_obj.value("args").toObject();
+        else if (!input_obj.contains("tool"))
+            args = input_obj; // plain data input, not a Tool Picker output
+
+        (void)QtConcurrent::run([tool, args, cb]() {
+            auto& svc = mcp::McpService::instance();
+            mcp::ToolResult result;
+
+            // Support both "serverId__toolName" and bare tool name
+            if (tool.contains("__")) {
+                result = svc.execute_openai_function(tool, args);
+            } else {
+                result = svc.execute_tool(mcp::INTERNAL_SERVER_ID, tool, args);
+            }
+
+            if (!result.success) {
+                cb(false, {}, result.error.isEmpty() ? "MCP tool failed" : result.error);
+                return;
+            }
+
+            // Return the result data; wrap primitive values in an object
+            QJsonValue out = result.data.isNull() || result.data.isUndefined()
+                                 ? QJsonValue(result.to_json())
+                                 : result.data;
+            cb(true, out, {});
+            LOG_DEBUG("McpBridge", QString("Tool '%1' executed successfully").arg(tool));
+        });
+    };
+
+    LOG_INFO("ServiceBridges", "MCP bridge wired");
+}
+
 void wire_all_bridges(NodeRegistry& registry) {
+    wire_mcp_bridges(registry);
     wire_market_data_bridges(registry);
     wire_trading_bridges(registry);
     wire_agent_bridges(registry);

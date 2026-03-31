@@ -278,10 +278,14 @@ def get_batch_quotes(symbols):
                     continue
 
                 hist = hist.dropna(how='all')
-                current_price = float(hist['Close'].iloc[-1])
+                raw_price = hist['Close'].iloc[-1]
+                if pd.isna(raw_price):
+                    continue
+                current_price = float(raw_price)
                 # Use previous trading day close for accurate daily change.
                 # With period="5d" we always have >= 2 rows for normally-traded instruments.
-                previous_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else current_price
+                raw_prev = hist['Close'].iloc[-2] if len(hist) >= 2 else raw_price
+                previous_close = float(raw_prev) if not pd.isna(raw_prev) else current_price
                 change = current_price - previous_close
                 change_percent = (change / previous_close) * 100 if previous_close else 0
 

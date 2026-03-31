@@ -59,6 +59,7 @@ EdgeItem* NodeScene::add_edge(const EdgeDef& def) {
     edges_.insert(def.id, edge);
 
     connect(edge, &EdgeItem::edge_selected, this, [this](const QString& id) { Q_UNUSED(id); });
+    connect(edge, &EdgeItem::delete_requested, this, &NodeScene::remove_edge);
 
     emit edge_added(def.id);
     return edge;

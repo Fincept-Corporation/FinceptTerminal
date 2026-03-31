@@ -51,6 +51,10 @@ urllib3==2.5.0
 yarl==1.22.0
 zstandard==0.25.0
 
+# Spreadsheet I/O (local xlsx/csv + Google Sheets)
+openpyxl>=3.1.0
+gspread>=6.0.0
+
 # SEC EDGAR data
 edgartools>=5.6.0
 

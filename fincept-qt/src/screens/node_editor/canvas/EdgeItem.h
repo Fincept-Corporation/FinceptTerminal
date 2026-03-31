@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QGraphicsPathItem>
+#include <QGraphicsSceneContextMenuEvent>
+#include <QKeyEvent>
 #include <QObject>
 
 namespace fincept::workflow {
@@ -29,10 +31,13 @@ class EdgeItem : public QObject, public QGraphicsPathItem {
 
   signals:
     void edge_selected(const QString& id);
+    void delete_requested(const QString& id);
 
   protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
     void timerEvent(QTimerEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
   private:
     QString id_;

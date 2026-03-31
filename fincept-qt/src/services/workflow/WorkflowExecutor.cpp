@@ -141,8 +141,23 @@ void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& 
 }
 
 void WorkflowExecutor::stop() {
+    if (!running_)
+        return;
     stop_requested_ = true;
     LOG_INFO("Executor", "Stop requested");
+    // Force immediate completion — don't wait for the in-flight node to finish.
+    // Set running_ false and emit execution_finished right now so the UI unlocks.
+    running_ = false;
+    WorkflowExecutionResult wr;
+    wr.workflow_id = workflow_.id;
+    wr.total_duration_ms = static_cast<int>(QDateTime::currentMSecsSinceEpoch() - start_time_ms_);
+    wr.success = false;
+    wr.error = "Execution stopped by user";
+    for (auto it = results_.constBegin(); it != results_.constEnd(); ++it)
+        wr.node_results.append(it.value());
+    ExecutionHooks::instance().emit_workflow_end(workflow_.id, false, wr.total_duration_ms);
+    AuditLogger::instance().log(AuditAction::WorkflowFailed, workflow_.id, {}, {}, "Stopped by user");
+    emit execution_finished(wr);
 }
 
 // ── Graph construction ─────────────────────────────────────────────────
