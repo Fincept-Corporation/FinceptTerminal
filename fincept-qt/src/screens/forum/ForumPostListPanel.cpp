@@ -2,6 +2,7 @@
 #include "screens/forum/ForumPostListPanel.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
 #include <QFrame>
@@ -52,6 +53,7 @@ static QString det_color(const QString& s) {
 }
 
 ForumPostListPanel::ForumPostListPanel(QWidget* parent) : QWidget(parent) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) { setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY())); });
     build_ui();
 }
 
@@ -390,12 +392,12 @@ void ForumPostListPanel::rebuild_feed() {
             return lbl;
         };
 
-        QString like_color = post.likes > 0 ? ui::colors::AMBER() : "#1e1e1e";
-        QString rep_color = post.reply_count > 0 ? ui::colors::CYAN() : "#1e1e1e";
+        QString like_color = post.likes > 0 ? ui::colors::AMBER() : QString(ui::colors::BORDER_DIM());
+        QString rep_color = post.reply_count > 0 ? ui::colors::CYAN() : QString(ui::colors::BORDER_DIM());
 
         eng_hl->addWidget(mk_eng("▲", fmt_num(post.likes), like_color));
         eng_hl->addWidget(mk_eng("◆", fmt_num(post.reply_count), rep_color));
-        eng_hl->addWidget(mk_eng("◉", fmt_num(post.views), "#1e1e1e"));
+        eng_hl->addWidget(mk_eng("◉", fmt_num(post.views), QString(ui::colors::BORDER_DIM())));
         eng_hl->addStretch();
 
         if (post.reply_count > 5) {

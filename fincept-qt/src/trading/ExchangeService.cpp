@@ -242,6 +242,7 @@ void ExchangeService::poll_prices() {
                     }
                 }
 
+                LOG_DEBUG("ExchangeService", QString("Poll complete: %1 tickers updated").arg(results.size()));
                 self->poll_in_progress_ = false;
             },
             Qt::QueuedConnection);
@@ -324,7 +325,7 @@ void ExchangeService::start_daemon() {
         if (daemon_process_) {
             QString err = QString::fromUtf8(daemon_process_->readAllStandardError()).trimmed();
             if (!err.isEmpty())
-                LOG_WARN(TAG, "Daemon stderr: " + err);
+                LOG_DEBUG(TAG, "Daemon stderr: " + err);
         }
     });
     connect(daemon_process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,

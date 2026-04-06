@@ -30,6 +30,7 @@ class AuthManager : public QObject {
     // Session management
     void initialize();
     void refresh_user_data();
+    void attempt_session_recovery(std::function<void(bool)> cb);
 
   signals:
     void auth_state_changed();

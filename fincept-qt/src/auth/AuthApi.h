@@ -29,7 +29,6 @@ class AuthApi : public QObject {
 
     // Authenticated (uses api_key stored on HttpClient)
     void logout(Callback cb);
-    void validate_session_server(Callback cb);
     void session_pulse(Callback cb);
     void get_user_profile(Callback cb);
     void update_user_profile(const QJsonObject& data, Callback cb);

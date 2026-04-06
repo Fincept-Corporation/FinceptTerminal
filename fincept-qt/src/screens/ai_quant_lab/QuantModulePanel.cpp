@@ -6,6 +6,7 @@
 #include "services/file_manager/FileManagerService.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
 #include <QDesktopServices>
@@ -140,6 +141,11 @@ QJsonObject QuantModulePanel::llm_config_from_combo(QComboBox* combo) const {
 QuantModulePanel::QuantModulePanel(const QuantModule& mod, QWidget* parent) : QWidget(parent), module_(mod) {
     build_ui();
     connect_service();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                setStyleSheet(QString("background:%1;color:%2;")
+                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+            });
 }
 
 void QuantModulePanel::connect_service() {
@@ -173,12 +179,12 @@ void QuantModulePanel::build_ui() {
     hhl->addWidget(div);
     auto* cat = new QLabel(module_.category, header);
     cat->setStyleSheet(
-        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(cat);
     hhl->addStretch();
     status_label_ = new QLabel(header);
     status_label_->setStyleSheet(
-        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(status_label_);
     root->addWidget(header);
 
@@ -404,7 +410,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     svl->addWidget(build_input_row("Position Value ($)", st_pos, stress));
     auto* st_hint = new QLabel("Tests 9 historical crisis scenarios: 2008, COVID-19, etc.", stress);
     st_hint->setStyleSheet(
-        QString("color:%1; font-size:9px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
+        QString("color:%1; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY));
     svl->addWidget(st_hint);
     auto* stress_run = make_run_button("RUN STRESS TEST", stress);
     connect(stress_run, &QPushButton::clicked, this, [this]() {
@@ -510,7 +516,7 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
 
     // Data input
     auto* data_lbl = new QLabel("DATA INPUT", w);
-    data_lbl->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
+    data_lbl->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2;"
                                     "letter-spacing:1px;")
                                 .arg(module_.color.name())
                                 .arg(ui::fonts::DATA_FAMILY));
@@ -985,7 +991,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     sbl->setContentsMargins(12, 0, 12, 0);
     sbl->setSpacing(8);
     auto* status_dot = new QLabel("●", status_bar);
-    status_dot->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY));
+    status_dot->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_TERTIARY));
     sbl->addWidget(status_dot);
     auto* status_txt = new QLabel("RD-Agent ready", status_bar);
     status_txt->setObjectName("rdStatusTxt");
@@ -1247,18 +1253,18 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
 
     auto* stop_btn = new QPushButton("STOP", tm_toolbar);
     stop_btn->setCursor(Qt::PointingHandCursor);
-    stop_btn->setStyleSheet(QString("QPushButton { background:#c0392b; color:#fff; border:none;"
+    stop_btn->setStyleSheet(QString("QPushButton { background:" + QString(ui::colors::NEGATIVE()) + "; color:" + QString(ui::colors::TEXT_PRIMARY()) + "; border:none;"
                                     "font-family:%1; font-size:%2px; font-weight:700; padding:5px 12px; border-radius:2px; }"
-                                    "QPushButton:hover { background:#e74c3c; }")
+                                    "QPushButton:hover { background:" + QString(ui::colors::NEGATIVE()) + "; }")
                                 .arg(ui::fonts::DATA_FAMILY)
                                 .arg(ui::fonts::TINY));
     tm_hl->addWidget(stop_btn);
 
     auto* resume_btn = new QPushButton("RESUME", tm_toolbar);
     resume_btn->setCursor(Qt::PointingHandCursor);
-    resume_btn->setStyleSheet(QString("QPushButton { background:#27ae60; color:#fff; border:none;"
+    resume_btn->setStyleSheet(QString("QPushButton { background:" + QString(ui::colors::POSITIVE()) + "; color:" + QString(ui::colors::TEXT_PRIMARY()) + "; border:none;"
                                       "font-family:%1; font-size:%2px; font-weight:700; padding:5px 12px; border-radius:2px; }"
-                                      "QPushButton:hover { background:#2ecc71; }")
+                                      "QPushButton:hover { background:" + QString(ui::colors::POSITIVE()) + "; }")
                                   .arg(ui::fonts::DATA_FAMILY)
                                   .arg(ui::fonts::TINY));
     tm_hl->addWidget(resume_btn);
@@ -1371,7 +1377,7 @@ QWidget* QuantModulePanel::build_generic_panel() {
     vl->addWidget(desc);
 
     auto* script_lbl = new QLabel(QString("Python script: %1").arg(module_.script), w);
-    script_lbl->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;"
+    script_lbl->setStyleSheet(QString("color:%1; font-family:%2;"
                                       "padding:6px; background:%3; border:1px solid %4; border-radius:2px;")
                                   .arg(ui::colors::TEXT_TERTIARY)
                                   .arg(ui::fonts::DATA_FAMILY)
@@ -1479,7 +1485,7 @@ void QuantModulePanel::display_result(const QJsonObject& data) {
     clear_results();
 
     auto* header = new QLabel("RESULTS");
-    header->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
+    header->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2; letter-spacing:1px;")
                               .arg(module_.color.name())
                               .arg(ui::fonts::DATA_FAMILY));
     results_layout_->addWidget(header);
@@ -1635,11 +1641,11 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             auto status_str = obj["status"].toString();
             auto* status_item = new QTableWidgetItem(status_str);
             if (status_str == "running")
-                status_item->setForeground(QColor("#f39c12"));
+                status_item->setForeground(QColor("" + QString(ui::colors::WARNING()) + ""));
             else if (status_str == "completed")
-                status_item->setForeground(QColor("#27ae60"));
+                status_item->setForeground(QColor("" + QString(ui::colors::POSITIVE()) + ""));
             else if (status_str == "failed" || status_str == "stopped")
-                status_item->setForeground(QColor("#c0392b"));
+                status_item->setForeground(QColor("" + QString(ui::colors::NEGATIVE()) + ""));
             rd_task_table_->setItem(row, 2, status_item);
             rd_task_table_->setItem(row, 3, new QTableWidgetItem(
                 QString::number(obj["progress"].toDouble() * 100, 'f', 0) + "%"));
@@ -1995,7 +2001,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             auto* lbl = new QLabel(out, this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(drift ? QString("#EF5350") : ui::colors::TEXT_PRIMARY)
+                                   .arg(drift ? QString("" + QString(ui::colors::NEGATIVE()) + "") : ui::colors::TEXT_PRIMARY)
                                    .arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
             results_layout_->addWidget(lbl);
             status_label_->setText(drift ? "⚠ Drift detected" : QString("MAE: %1").arg(mae, 0, 'f', 4));
@@ -2187,7 +2193,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
                     .arg(data["classification"].toString("-")), this);
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(is_toxic ? QString("#EF5350") : ui::colors::TEXT_PRIMARY)
+                                   .arg(is_toxic ? QString("" + QString(ui::colors::NEGATIVE()) + "") : ui::colors::TEXT_PRIMARY)
                                    .arg(ui::fonts::SMALL).arg(ui::fonts::DATA_FAMILY));
             results_layout_->addWidget(lbl);
             status_label_->setText(is_toxic ? "⚠ Toxic flow detected" : "Flow normal");

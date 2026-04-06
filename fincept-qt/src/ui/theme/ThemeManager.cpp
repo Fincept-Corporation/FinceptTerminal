@@ -148,13 +148,7 @@ void ThemeManager::apply_accent(const QString& hex) {
 void ThemeManager::apply_font(const QString& family, int size_px) {
     font_family_  = family;
     font_size_px_ = (size_px > 0) ? size_px : 14;
-
-    QFont f(font_family_);
-    f.setStyleHint(QFont::Monospace);
-    f.setPixelSize(font_size_px_);
-    qApp->setFont(f);
-    // Also rebuild QSS so widgets with inline font-size rules get overridden by
-    // the global * { font-size } rule — otherwise 178+ hardcoded rules win.
+    // rebuild_and_apply() will sync qApp->setFont() and QSS together.
     rebuild_and_apply();
 }
 
@@ -185,6 +179,15 @@ QFont ThemeManager::current_font() const {
 }
 
 void ThemeManager::rebuild_and_apply() {
+    // Keep qApp->font() in sync with our font_family_/font_size_px_ so that
+    // widgets using inline setStyleSheet() (which bypass QSS font inheritance)
+    // still render with the correct font.
+    QFont f(font_family_);
+    f.setStyleHint(QFont::Monospace);
+    f.setPixelSize(font_size_px_);
+    if (qApp->font() != f)
+        qApp->setFont(f);
+
     QString qss = build_global_qss();
     if (qss != cached_qss_) {
         cached_qss_ = qss;

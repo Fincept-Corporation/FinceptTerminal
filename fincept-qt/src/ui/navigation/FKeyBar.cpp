@@ -15,21 +15,20 @@ TabBar::TabBar(QWidget* parent) : QWidget(parent) {
     auto* container = new QWidget;
     tab_layout_ = new QHBoxLayout(container);
     tab_layout_->setContentsMargins(4, 0, 4, 0);
-    tab_layout_->setSpacing(0);
+    tab_layout_->setSpacing(2);
 
-    // All 14 tabs matching Tauri's tab bar
     QVector<TabDef> tabs = {
         {"dashboard", "DASHBOARD"},
         {"markets", "MARKETS"},
-        {"crypto_trading", "CRYPTO TRADING"},
+        {"crypto_trading", "CRYPTO"},
         {"portfolio", "PORTFOLIO"},
         {"news", "NEWS"},
         {"ai_chat", "AI CHAT"},
-        {"backtesting", "BACKTESTING"},
-        {"algo_trading", "ALGO TRADING"},
-        {"node_editor", "NODE EDITOR"},
-        {"code_editor", "CODE EDITOR"},
-        {"ai_quant_lab", "AI QUANT LAB"},
+        {"backtesting", "BACKTEST"},
+        {"algo_trading", "ALGO"},
+        {"node_editor", "NODES"},
+        {"code_editor", "CODE"},
+        {"ai_quant_lab", "QUANT LAB"},
         {"quantlib", "QUANTLIB"},
         {"forum", "FORUM"},
         {"settings", "SETTINGS"},
@@ -47,9 +46,10 @@ TabBar::TabBar(QWidget* parent) : QWidget(parent) {
 void TabBar::add_tab(const TabDef& def) {
     auto* btn = new QPushButton(def.label);
     btn->setFixedHeight(32);
-    btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    btn->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setProperty("tab_id", def.id);
+    btn->setToolTip(def.label);
     connect(btn, &QPushButton::clicked, this, [this, id = def.id]() {
         set_active(id);
         emit tab_changed(id);
@@ -69,11 +69,9 @@ void TabBar::update_styles() {
     for (auto* btn : tab_buttons_) {
         bool active = btn->property("tab_id").toString() == active_id_;
         btn->setStyleSheet(active ? "QPushButton{background:#b45309;color:#e5e5e5;border:1px solid #4d3300;"
-                                    "padding:0 12px;font-size:13px;font-weight:600;letter-spacing:1px;"
-                                    "font-family:'Consolas',monospace;}"
+                                    "padding:0 8px;font-weight:600;letter-spacing:0.5px;}"
                                   : "QPushButton{background:transparent;color:#ffffff;border:none;"
-                                    "padding:0 12px;font-size:13px;letter-spacing:0.5px;"
-                                    "font-family:'Consolas',monospace;}"
+                                    "padding:0 8px;letter-spacing:0.5px;}"
                                     "QPushButton:hover{color:#d97706;background:#111111;}");
     }
 }

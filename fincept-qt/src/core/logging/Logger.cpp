@@ -11,6 +11,25 @@ void Logger::set_level(LogLevel level) {
     min_level_ = level;
 }
 
+void Logger::set_tag_level(const QString& tag, LogLevel level) {
+    QMutexLocker lock(&mutex_);
+    tag_levels_[tag] = level;
+}
+
+void Logger::clear_tag_level(const QString& tag) {
+    QMutexLocker lock(&mutex_);
+    tag_levels_.remove(tag);
+}
+
+void Logger::clear_all_tag_levels() {
+    QMutexLocker lock(&mutex_);
+    tag_levels_.clear();
+}
+
+QHash<QString, LogLevel> Logger::tag_levels() const {
+    return tag_levels_;
+}
+
 void Logger::set_file(const QString& path) {
     QMutexLocker lock(&mutex_);
     if (log_file_.isOpen())
@@ -42,7 +61,14 @@ void Logger::error(const QString& tag, const QString& msg) {
 }
 
 void Logger::write(LogLevel level, const QString& tag, const QString& msg) {
-    if (level < min_level_)
+    LogLevel effective = min_level_;
+    {
+        QMutexLocker lock(&mutex_);
+        auto it = tag_levels_.find(tag);
+        if (it != tag_levels_.end())
+            effective = it.value();
+    }
+    if (level < effective)
         return;
 
     static const char* names[] = {"DEBUG", "INFO", "WARN", "ERROR"};

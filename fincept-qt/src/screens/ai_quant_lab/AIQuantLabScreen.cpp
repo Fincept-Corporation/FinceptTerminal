@@ -4,6 +4,7 @@
 #include "core/logging/Logger.h"
 #include "screens/ai_quant_lab/QuantModulePanel.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QHBoxLayout>
 #include <QScrollArea>
@@ -15,6 +16,10 @@ using namespace fincept::services::quant;
 AIQuantLabScreen::AIQuantLabScreen(QWidget* parent) : QWidget(parent) {
     modules_ = all_quant_modules();
     build_ui();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+            });
     LOG_INFO("AIQuantLab", "Screen constructed");
 }
 
@@ -69,7 +74,7 @@ QWidget* AIQuantLabScreen::build_top_bar() {
     hl->setSpacing(12);
 
     auto* brand = new QLabel("AI QUANT LAB", bar);
-    brand->setStyleSheet(QString("color:#9D4EDD; font-size:%1px; font-weight:700; font-family:%2;"
+    brand->setStyleSheet(QString("color:" + QString(ui::colors::INFO()) + "; font-weight:700; font-family:%2;"
                                  "padding:4px 12px; background:rgba(157,78,221,0.08);"
                                  "border:1px solid rgba(157,78,221,0.25); border-radius:2px;")
                              .arg(ui::fonts::TINY)
@@ -88,7 +93,7 @@ QWidget* AIQuantLabScreen::build_top_bar() {
         btn->setToolTip(mod.label);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(
-            QString("QPushButton { color:%1; font-size:8px; font-family:%2;"
+            QString("QPushButton { color:%1; font-family:%2;"
                     "padding:3px 6px; border:1px solid transparent; border-radius:2px;"
                     "background:transparent; }"
                     "QPushButton:hover { background:rgba(%3,0.08); color:%4; }")
@@ -104,7 +109,7 @@ QWidget* AIQuantLabScreen::build_top_bar() {
     hl->addStretch(1);
 
     auto* ready = new QLabel("18 MODULES", bar);
-    ready->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2; padding:3px 8px;"
+    ready->setStyleSheet(QString("color:%1; font-family:%2; padding:3px 8px;"
                                  "background:rgba(22,163,74,0.08); border:1px solid rgba(22,163,74,0.25);"
                                  "border-radius:2px; font-weight:700;")
                              .arg(ui::colors::POSITIVE)
@@ -130,7 +135,7 @@ QWidget* AIQuantLabScreen::build_left_sidebar() {
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(12, 0, 12, 0);
     auto* title = new QLabel("MODULES", header);
-    title->setStyleSheet(QString("color:#9D4EDD; font-size:9px; font-weight:700; font-family:%1; letter-spacing:1px;")
+    title->setStyleSheet(QString("color:" + QString(ui::colors::INFO()) + "; font-weight:700; font-family:%1; letter-spacing:1px;")
                              .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(title);
     hhl->addStretch();
@@ -154,7 +159,7 @@ QWidget* AIQuantLabScreen::build_left_sidebar() {
             QString cat_label = mod.category;
             cat_label.replace('_', '/');
             auto* cat = new QLabel(cat_label, list);
-            cat->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;"
+            cat->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2;"
                                        "padding:8px 12px 4px 12px; letter-spacing:1px;")
                                    .arg(ui::colors::TEXT_TERTIARY)
                                    .arg(ui::fonts::DATA_FAMILY));
@@ -194,7 +199,7 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
     vl->setSpacing(10);
 
     auto* title = new QLabel("MODULE INFO", panel);
-    title->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2; letter-spacing:1px;")
+    title->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2; letter-spacing:1px;")
                              .arg(ui::colors::CYAN)
                              .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(title);
@@ -205,20 +210,20 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
     vl->addWidget(right_title_);
 
     right_category_ = new QLabel(panel);
-    right_category_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
+    right_category_->setStyleSheet(QString("color:%1; font-family:%2;")
                                        .arg(ui::colors::TEXT_SECONDARY)
                                        .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(right_category_);
 
     right_desc_ = new QLabel(panel);
     right_desc_->setWordWrap(true);
-    right_desc_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2; line-height:1.5;")
+    right_desc_->setStyleSheet(QString("color:%1; font-family:%2; line-height:1.5;")
                                    .arg(ui::colors::TEXT_PRIMARY)
                                    .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(right_desc_);
 
     right_script_ = new QLabel(panel);
-    right_script_->setStyleSheet(QString("color:%1; font-size:8px; font-family:%2; padding:6px;"
+    right_script_->setStyleSheet(QString("color:%1; font-family:%2; padding:6px;"
                                          "background:%3; border:1px solid %4; border-radius:2px;")
                                      .arg(ui::colors::TEXT_TERTIARY)
                                      .arg(ui::fonts::DATA_FAMILY)
@@ -235,7 +240,7 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
     svl->setContentsMargins(10, 10, 10, 10);
     svl->setSpacing(4);
     auto* st = new QLabel("PLATFORM STATS", stats);
-    st->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;")
+    st->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2;")
                           .arg(ui::colors::CYAN)
                           .arg(ui::fonts::DATA_FAMILY));
     svl->addWidget(st);
@@ -245,11 +250,11 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
         auto* rl = new QHBoxLayout(r);
         rl->setContentsMargins(0, 0, 0, 0);
         auto* lbl = new QLabel(l, r);
-        lbl->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2;")
+        lbl->setStyleSheet(QString("color:%1; font-family:%2;")
                                .arg(ui::colors::TEXT_TERTIARY)
                                .arg(ui::fonts::DATA_FAMILY));
         auto* val = new QLabel(v, r);
-        val->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;")
+        val->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2;")
                                .arg(ui::colors::TEXT_PRIMARY)
                                .arg(ui::fonts::DATA_FAMILY));
         rl->addWidget(lbl);
@@ -276,18 +281,18 @@ QWidget* AIQuantLabScreen::build_status_bar() {
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(16);
     auto s =
-        QString("color:%1; font-size:8px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY);
+        QString("color:%1; font-family:%2;").arg(ui::colors::TEXT_TERTIARY).arg(ui::fonts::DATA_FAMILY);
     auto* l1 = new QLabel("ENGINE:", bar);
     l1->setStyleSheet(s);
     auto* v1 = new QLabel("QLIB + GS QUANT + PYTHON", bar);
-    v1->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
+    v1->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2;")
                           .arg(ui::colors::POSITIVE)
                           .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(l1);
     hl->addWidget(v1);
     hl->addStretch();
     auto* v2 = new QLabel("READY", bar);
-    v2->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
+    v2->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2;")
                           .arg(ui::colors::POSITIVE)
                           .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(v2);
@@ -327,7 +332,7 @@ void AIQuantLabScreen::update_sidebar_selection() {
     for (int i = 0; i < quick_buttons_.size(); ++i) {
         const auto& mod = modules_[i];
         bool active = (i == active_index_);
-        quick_buttons_[i]->setStyleSheet(QString("QPushButton { color:%1; font-size:8px; font-family:%2;"
+        quick_buttons_[i]->setStyleSheet(QString("QPushButton { color:%1; font-family:%2;"
                                                  "padding:3px 6px; border:1px solid %3; border-radius:2px;"
                                                  "background:%4; font-weight:%5; }")
                                              .arg(active ? mod.color.name() : ui::colors::TEXT_TERTIARY)
@@ -349,7 +354,7 @@ void AIQuantLabScreen::update_sidebar_selection() {
 void AIQuantLabScreen::update_right_panel() {
     const auto& mod = modules_[active_index_];
     right_title_->setText(mod.label.toUpper());
-    right_title_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; font-family:%2;")
+    right_title_->setStyleSheet(QString("color:%1; font-weight:700; font-family:%2;")
                                     .arg(mod.color.name())
                                     .arg(ui::fonts::DATA_FAMILY));
     right_category_->setText(QString(mod.category).replace('_', '/') + " module");

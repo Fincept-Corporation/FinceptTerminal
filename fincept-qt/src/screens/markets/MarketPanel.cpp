@@ -1,6 +1,7 @@
 #include "screens/markets/MarketPanel.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -15,30 +16,32 @@ MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool 
     setMinimumWidth(280);
     setMaximumWidth(520);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setFixedHeight(show_name ? 322 : 322);
-    setStyleSheet("background:#0a0a0a;border:1px solid #1e1e1e;");
+    setFixedHeight(322);
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
+    // Header
     auto* header = new QWidget;
     header->setFixedHeight(32);
-    header->setStyleSheet("background:#111418;border-bottom:1px solid #1e1e1e;"
-                          "border-left:2px solid #d97706;");
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(10, 0, 8, 0);
+
     title_label_ = new QLabel(title.toUpper());
-    title_label_->setStyleSheet("color:#d97706;font-size:12px;font-weight:700;background:transparent;"
-                                "letter-spacing:1.2px;font-family:'Consolas',monospace;");
+    title_label_->setStyleSheet(
+        QString("color:%1;font-weight:700;letter-spacing:1.2px;background:transparent;")
+        .arg(ui::colors::AMBER()));
     hhl->addWidget(title_label_);
     hhl->addStretch();
+
     status_label_ = new QLabel;
     status_label_->setStyleSheet(
-        "color:#333333;font-size:11px;background:transparent;font-family:'Consolas',monospace;");
+        QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
     hhl->addWidget(status_label_);
     vl->addWidget(header);
 
+    // Table
     table_ = new QTableWidget;
     table_->setAlternatingRowColors(true);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
@@ -50,13 +53,6 @@ MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool 
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->horizontalHeader()->setHighlightSections(false);
     table_->horizontalHeader()->setFixedHeight(18);
-    table_->setStyleSheet("QTableWidget{background:#080808;alternate-background-color:#0d0d0d;border:none;"
-                          "font-family:'Consolas',monospace;font-size:13px;}"
-                          "QTableWidget::item{padding:0 6px;border-bottom:1px solid #161616;}"
-                          "QTableWidget::item:selected{background:#1a1a0a;}"
-                          "QHeaderView::section{background:#0e0e0e;color:#606060;border:none;"
-                          "border-bottom:1px solid #1e1e1e;font-size:10px;font-weight:600;"
-                          "letter-spacing:0.5px;padding:0 6px;font-family:'Consolas',monospace;}");
 
     if (show_name_) {
         table_->setColumnCount(6);
@@ -76,7 +72,39 @@ MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool 
 
     loading_overlay_ = new ui::LoadingOverlay(this);
 
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { refresh_theme(); });
+    refresh_theme();
     refresh();
+}
+
+void MarketPanel::refresh_theme() {
+    setStyleSheet(QString("background:%1;border:1px solid %2;")
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+
+    // Header
+    if (title_label_) {
+        title_label_->parentWidget()->setStyleSheet(
+            QString("background:%1;border-bottom:1px solid %2;border-left:2px solid %3;")
+            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+        title_label_->setStyleSheet(
+            QString("color:%1;font-weight:700;letter-spacing:1.2px;background:transparent;")
+            .arg(ui::colors::AMBER()));
+        status_label_->setStyleSheet(
+            QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+    }
+
+    // Table
+    if (table_)
+        table_->setStyleSheet(
+            QString("QTableWidget{background:%1;alternate-background-color:%2;border:none;}"
+                    "QTableWidget::item{padding:0 6px;border-bottom:1px solid %3;}"
+                    "QTableWidget::item:selected{background:%4;}"
+                    "QHeaderView::section{background:%5;color:%6;border:none;"
+                    "border-bottom:1px solid %3;font-weight:600;letter-spacing:0.5px;padding:0 6px;}")
+            .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(),
+                 ui::colors::BORDER_DIM(), ui::colors::BG_HOVER(),
+                 ui::colors::BG_RAISED(), ui::colors::TEXT_DIM()));
 }
 
 void MarketPanel::set_symbols(const QStringList& s) {
@@ -87,25 +115,23 @@ void MarketPanel::set_symbols(const QStringList& s) {
 void MarketPanel::refresh() {
     status_label_->setText("LOADING");
     status_label_->setStyleSheet(
-        "color:#d97706;font-size:12px;background:transparent;font-family:'Consolas',monospace;");
-
+        QString("color:%1;background:transparent;").arg(ui::colors::AMBER()));
     loading_overlay_->show_loading("LOADING\xe2\x80\xa6");
 
     QPointer<MarketPanel> self = this;
     services::MarketDataService::instance().fetch_quotes(symbols_, [self](bool ok, QVector<services::QuoteData> q) {
-        if (!self)
-            return;
+        if (!self) return;
         self->loading_overlay_->hide_loading();
         if (!ok) {
             self->status_label_->setText("FAIL");
             self->status_label_->setStyleSheet(
-                "color:#dc2626;font-size:12px;background:transparent;font-family:'Consolas',monospace;");
+                QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
             emit self->refresh_finished();
             return;
         }
         self->status_label_->setText(QString::number(q.size()));
         self->status_label_->setStyleSheet(
-            "color:#333333;font-size:12px;background:transparent;font-family:'Consolas',monospace;");
+            QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
         self->populate(q);
         emit self->refresh_finished();
     });
@@ -129,30 +155,21 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
             return i;
         };
         bool pos = q.change >= 0;
-        const QString cc  = pos ? "#22c55e" : "#ef4444";   // brighter green/red
+        const QString cc  = pos ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
         const QString arr = pos ? "▲" : "▼";
         int prec = q.price > 100 ? 2 : (q.price > 1 ? 2 : 4);
         int col = 0;
-        // Symbol — white identifier
-        table_->setItem(row, col++, mk(q.symbol, "#e5e5e5", Qt::AlignLeft | Qt::AlignVCenter));
-        // Name (regional panels)
+        table_->setItem(row, col++, mk(q.symbol,  ui::colors::TEXT_PRIMARY(),   Qt::AlignLeft | Qt::AlignVCenter));
         if (show_name_)
-            table_->setItem(row, col++, mk(q.name, "#505050", Qt::AlignLeft | Qt::AlignVCenter));
-        // LAST price — amber (the primary data point)
-        table_->setItem(row, col++, mk(QString::number(q.price, 'f', prec), "#e5a020"));
-        // CHG with directional arrow
-        table_->setItem(row, col++,
-            mk(QString("%1 %2").arg(arr).arg(std::abs(q.change), 0, 'f', 2), cc));
-        // CHG%
-        table_->setItem(row, col++,
-            mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc));
-        // HIGH / LOW — visible but secondary
+            table_->setItem(row, col++, mk(q.name, ui::colors::TEXT_TERTIARY(), Qt::AlignLeft | Qt::AlignVCenter));
+        table_->setItem(row, col++, mk(QString::number(q.price, 'f', prec), ui::colors::AMBER()));
+        table_->setItem(row, col++, mk(QString("%1 %2").arg(arr).arg(std::abs(q.change), 0, 'f', 2), cc));
+        table_->setItem(row, col++, mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc));
         if (!show_name_) {
-            table_->setItem(row, col++, mk(QString::number(q.high, 'f', 2), "#4a4a4a"));
-            table_->setItem(row, col++, mk(QString::number(q.low,  'f', 2), "#4a4a4a"));
+            table_->setItem(row, col++, mk(QString::number(q.high, 'f', 2), ui::colors::TEXT_SECONDARY()));
+            table_->setItem(row, col++, mk(QString::number(q.low,  'f', 2), ui::colors::TEXT_SECONDARY()));
         }
-        // VOL — dim placeholder (service doesn't provide volume yet)
-        table_->setItem(row, col++, mk("--", "#2a2a2a"));
+        table_->setItem(row, col++, mk("--", ui::colors::TEXT_DIM()));
         table_->setRowHeight(row, 26);
     }
 }

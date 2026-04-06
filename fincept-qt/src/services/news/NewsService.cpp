@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
+#include "storage/repositories/NewsArticleRepository.h"
 
 #include <QAtomicInt>
 #include <QDateTime>
@@ -60,6 +61,12 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
                 a.link      = o["link"].toString();
                 a.sort_ts   = o["sort_ts"].toVariant().toLongLong();
                 a.tier      = o["tier"].toInt(4);
+                a.priority  = priority_from_string(o["priority"].toString());
+                a.sentiment = sentiment_from_string(o["sentiment"].toString());
+                a.impact    = impact_from_string(o["impact"].toString());
+                a.lang      = o["lang"].toString();
+                for (const auto& t : o["tickers"].toArray())
+                    a.tickers << t.toString();
                 articles.append(a);
             }
             cb(true, articles);
@@ -122,16 +129,23 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
                 QJsonArray arr;
                 for (const auto& a : all) {
                     QJsonObject o;
-                    o["id"]       = a.id;
-                    o["time"]     = a.time;
-                    o["headline"] = a.headline;
-                    o["summary"]  = a.summary;
-                    o["source"]   = a.source;
-                    o["region"]   = a.region;
-                    o["category"] = a.category;
-                    o["link"]     = a.link;
-                    o["sort_ts"]  = static_cast<qint64>(a.sort_ts);
-                    o["tier"]     = a.tier;
+                    o["id"]        = a.id;
+                    o["time"]      = a.time;
+                    o["headline"]  = a.headline;
+                    o["summary"]   = a.summary;
+                    o["source"]    = a.source;
+                    o["region"]    = a.region;
+                    o["category"]  = a.category;
+                    o["link"]      = a.link;
+                    o["sort_ts"]   = static_cast<qint64>(a.sort_ts);
+                    o["tier"]      = a.tier;
+                    o["priority"]  = priority_string(a.priority);
+                    o["sentiment"] = sentiment_string(a.sentiment);
+                    o["impact"]    = impact_string(a.impact);
+                    o["lang"]      = a.lang;
+                    QJsonArray tickers;
+                    for (const auto& t : a.tickers) tickers.append(t);
+                    o["tickers"]   = tickers;
                     arr.append(o);
                 }
                 fincept::CacheManager::instance().put(
@@ -139,6 +153,9 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
                     QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
                     kArticleCacheTtlSec,
                     "news");
+
+                // Persist to DB (INSERT OR IGNORE — keeps history across refreshes)
+                fincept::NewsArticleRepository::instance().upsert_batch(all);
 
                 LOG_INFO("NewsService",
                          QString("Fetched %1 articles from %2 sources").arg(all.size()).arg(sources.size()));
@@ -164,16 +181,22 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
             for (const auto& v : arr) {
                 const QJsonObject o = v.toObject();
                 NewsArticle a;
-                a.id       = o["id"].toString();
-                a.time     = o["time"].toString();
-                a.headline = o["headline"].toString();
-                a.summary  = o["summary"].toString();
-                a.source   = o["source"].toString();
-                a.region   = o["region"].toString();
-                a.category = o["category"].toString();
-                a.link     = o["link"].toString();
-                a.sort_ts  = o["sort_ts"].toVariant().toLongLong();
-                a.tier     = o["tier"].toInt(4);
+                a.id        = o["id"].toString();
+                a.time      = o["time"].toString();
+                a.headline  = o["headline"].toString();
+                a.summary   = o["summary"].toString();
+                a.source    = o["source"].toString();
+                a.region    = o["region"].toString();
+                a.category  = o["category"].toString();
+                a.link      = o["link"].toString();
+                a.sort_ts   = o["sort_ts"].toVariant().toLongLong();
+                a.tier      = o["tier"].toInt(4);
+                a.priority  = priority_from_string(o["priority"].toString());
+                a.sentiment = sentiment_from_string(o["sentiment"].toString());
+                a.impact    = impact_from_string(o["impact"].toString());
+                a.lang      = o["lang"].toString();
+                for (const auto& t : o["tickers"].toArray())
+                    a.tickers << t.toString();
                 articles.append(a);
             }
             final_cb(true, articles);
@@ -244,16 +267,23 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
                 QJsonArray parr;
                 for (const auto& a : all) {
                     QJsonObject o;
-                    o["id"]       = a.id;
-                    o["time"]     = a.time;
-                    o["headline"] = a.headline;
-                    o["summary"]  = a.summary;
-                    o["source"]   = a.source;
-                    o["region"]   = a.region;
-                    o["category"] = a.category;
-                    o["link"]     = a.link;
-                    o["sort_ts"]  = static_cast<qint64>(a.sort_ts);
-                    o["tier"]     = a.tier;
+                    o["id"]        = a.id;
+                    o["time"]      = a.time;
+                    o["headline"]  = a.headline;
+                    o["summary"]   = a.summary;
+                    o["source"]    = a.source;
+                    o["region"]    = a.region;
+                    o["category"]  = a.category;
+                    o["link"]      = a.link;
+                    o["sort_ts"]   = static_cast<qint64>(a.sort_ts);
+                    o["tier"]      = a.tier;
+                    o["priority"]  = priority_string(a.priority);
+                    o["sentiment"] = sentiment_string(a.sentiment);
+                    o["impact"]    = impact_string(a.impact);
+                    o["lang"]      = a.lang;
+                    QJsonArray tickers;
+                    for (const auto& t : a.tickers) tickers.append(t);
+                    o["tickers"]   = tickers;
                     parr.append(o);
                 }
                 fincept::CacheManager::instance().put(
@@ -261,6 +291,9 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
                     QVariant(QString::fromUtf8(QJsonDocument(parr).toJson(QJsonDocument::Compact))),
                     kArticleCacheTtlSec,
                     "news");
+
+                // Persist to DB (INSERT OR IGNORE — keeps history across refreshes)
+                fincept::NewsArticleRepository::instance().upsert_batch(all);
 
                 LOG_INFO(
                     "NewsService",
@@ -615,7 +648,9 @@ QString NewsService::strip_html(const QString& html) {
 // ── Enrich article: sentiment, priority, category, tickers ──────────────────
 
 void NewsService::enrich_article(NewsArticle& article) {
-    QString text = (article.headline + " " + article.summary).toLower();
+    // Build once — reused for all keyword checks, ticker regex, and classify_threat
+    const QString combined = article.headline + " " + article.summary;
+    const QString text = combined.toLower();
 
     // Priority
     if (text.contains("breaking") || text.contains("alert"))
@@ -712,7 +747,7 @@ void NewsService::enrich_article(NewsArticle& article) {
     static QRegularExpression ticker_re("\\b[A-Z]{2,5}\\b");
     static QSet<QString> common_words = {"THE",  "FOR",  "AND",  "BUT",  "NOT",  "FROM", "WITH", "THIS", "THAT", "HAVE",
                                          "WILL", "BEEN", "THEY", "WERE", "SAID", "HAS",  "ITS",  "NEW",  "ARE",  "WAS"};
-    auto it = ticker_re.globalMatch(article.headline + " " + article.summary);
+    auto it = ticker_re.globalMatch(combined); // reuse already-built string
     QSet<QString> found;
     while (it.hasNext() && found.size() < 5) {
         auto m = it.next();
@@ -757,8 +792,8 @@ void NewsService::enrich_article(NewsArticle& article) {
     };
     article.lang = detect_lang(article.headline);
 
-    // Threat classification
-    article.threat = classify_threat(article);
+    // Threat classification — pass pre-built text to avoid a 3rd toLower()
+    article.threat = classify_threat(article, text);
 
     // Source credibility flag
     article.source_flag = source_flag_for(article.source);
@@ -767,7 +802,11 @@ void NewsService::enrich_article(NewsArticle& article) {
 // ── Threat classification with confidence ───────────────────────────────────
 
 ThreatClassification NewsService::classify_threat(const NewsArticle& article) {
-    QString text = (article.headline + " " + article.summary).toLower();
+    // Convenience overload — builds text itself (used only outside enrich_article)
+    return classify_threat(article, (article.headline + " " + article.summary).toLower());
+}
+
+ThreatClassification NewsService::classify_threat(const NewsArticle& article, const QString& text) {
     ThreatClassification tc;
     tc.category = "general";
     tc.confidence = 0.3; // base confidence from keyword matching
@@ -1159,6 +1198,25 @@ QString threat_level_color(ThreatLevel t) {
             return "#525252";
     }
     return "#525252";
+}
+
+Priority priority_from_string(const QString& s) {
+    if (s == "FLASH")    return Priority::FLASH;
+    if (s == "URGENT")   return Priority::URGENT;
+    if (s == "BREAKING") return Priority::BREAKING;
+    return Priority::ROUTINE;
+}
+
+Sentiment sentiment_from_string(const QString& s) {
+    if (s == "BULLISH") return Sentiment::BULLISH;
+    if (s == "BEARISH") return Sentiment::BEARISH;
+    return Sentiment::NEUTRAL;
+}
+
+Impact impact_from_string(const QString& s) {
+    if (s == "HIGH")   return Impact::HIGH;
+    if (s == "MEDIUM") return Impact::MEDIUM;
+    return Impact::LOW;
 }
 
 } // namespace fincept::services

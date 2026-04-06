@@ -1,6 +1,7 @@
 #include "screens/dashboard/widgets/BaseWidget.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QSize>
 #include <QStyle>
@@ -83,6 +84,13 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
 
     vl->addWidget(title_bar_);
 
+    // Auto-refresh styles on theme/font change — subclasses get this for free
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                refresh_base_theme();
+                on_theme_changed();
+            });
+
     // ── Content ──
     content_ = new QWidget;
     content_->setStyleSheet("background: transparent;");
@@ -91,6 +99,21 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     content_layout_->setSpacing(0);
 
     vl->addWidget(content_, 1);
+}
+
+void BaseWidget::refresh_base_theme() {
+    setStyleSheet(QString("BaseWidget{background:%1;border:1px solid %2;border-radius:2px;}")
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_BRIGHT()));
+    if (title_bar_)
+        title_bar_->setStyleSheet(
+            QString("background:%1;border-bottom:1px solid %2;")
+            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    if (refresh_btn_)
+        refresh_btn_->setStyleSheet(
+            QString("QPushButton{color:%1;background:%2;border:1px solid %3;border-radius:2px;padding:0;}"
+                    "QPushButton:hover{color:%4;border-color:%4;background:%5;}")
+            .arg(accent_color_, ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(),
+                 ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER()));
 }
 
 void BaseWidget::set_loading(bool loading) {

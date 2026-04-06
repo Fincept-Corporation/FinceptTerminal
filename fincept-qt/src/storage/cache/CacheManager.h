@@ -1,16 +1,12 @@
 #pragma once
-#include <QDateTime>
-#include <QHash>
-#include <QMutex>
 #include <QObject>
 #include <QString>
-#include <QTimer>
 #include <QVariant>
 
 namespace fincept {
 
-/// In-memory L1 cache with write-through to cache.db.
-/// Falls back to pure in-memory if CacheDatabase is not available.
+/// SQLite-backed cache. All reads and writes go directly to CacheDatabase (cache.db).
+/// No in-memory layer — avoids double-storage and keeps a single source of truth.
 class CacheManager : public QObject {
     Q_OBJECT
   public:
@@ -28,20 +24,6 @@ class CacheManager : public QObject {
 
   private:
     explicit CacheManager(QObject* parent = nullptr);
-
-    void evict_expired();
-    void persist(const QString& key, const QVariant& value, int ttl, const QString& category);
-    void remove_persisted(const QString& key);
-
-    struct Entry {
-        QVariant value;
-        QDateTime expires_at;
-        QString category;
-    };
-
-    mutable QMutex mutex_;
-    QHash<QString, Entry> cache_;
-    QTimer* evict_timer_ = nullptr;
 };
 
 } // namespace fincept

@@ -2,12 +2,14 @@
 #include "auth/AuthManager.h"
 #include "auth/SessionGuard.h"
 #include "core/config/AppConfig.h"
+#include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
 #include "mcp/McpInit.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonSetupManager.h"
 #include "screens/setup/SetupScreen.h"
+#include "storage/repositories/NewsArticleRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/sqlite/CacheDatabase.h"
 #include "storage/sqlite/Database.h"
@@ -30,40 +32,78 @@ int main(int argc, char* argv[]) {
     app.setOrganizationName("Fincept");
     app.setApplicationVersion("4.0.0");
 
-    // Initialize logging
-    QString log_dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir().mkpath(log_dir);
+    // Create all application directories under %LOCALAPPDATA%\com.fincept.terminal\
+    fincept::AppPaths::ensure_all();
+
+    // ── One-time migration: move files from old scattered locations ──────────
+    // Old log location: %APPDATA%\Fincept\FinceptTerminal\fincept.log
+    // Old DB  location: %APPDATA%\Fincept\FinceptTerminal\fincept.db / cache.db
+    {
+        const QString old_base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        const auto migrate_file = [](const QString& old_path, const QString& new_path) {
+            if (QFile::exists(old_path) && !QFile::exists(new_path))
+                QFile::rename(old_path, new_path);
+        };
+        migrate_file(old_base + "/fincept.db",   fincept::AppPaths::data() + "/fincept.db");
+        migrate_file(old_base + "/cache.db",     fincept::AppPaths::data() + "/cache.db");
+        migrate_file(old_base + "/fincept.log",  fincept::AppPaths::logs() + "/fincept.log");
+        migrate_file(old_base + "/fincept-files", fincept::AppPaths::files());
+        // Remove stale WAL/SHM from old location too
+        QFile::remove(old_base + "/fincept.db-wal");
+        QFile::remove(old_base + "/fincept.db-shm");
+        QFile::remove(old_base + "/cache.db-wal");
+        QFile::remove(old_base + "/cache.db-shm");
+    }
 
     // Remove stale SQLite WAL/SHM lock files left by a previous crash.
     // qsqlite.dll crashes on WAL recovery if the lock files are orphaned.
-    for (const QString& db : {log_dir + "/fincept.db", log_dir + "/cache.db"}) {
-        QFile::remove(db + "-wal");
-        QFile::remove(db + "-shm");
-    }
-    // Also clean legacy DB location
+    QFile::remove(fincept::AppPaths::data() + "/fincept.db-wal");
+    QFile::remove(fincept::AppPaths::data() + "/fincept.db-shm");
+    QFile::remove(fincept::AppPaths::data() + "/cache.db-wal");
+    QFile::remove(fincept::AppPaths::data() + "/cache.db-shm");
+    // Also clean legacy v3 DB location
     {
         const QString local_dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
         const QString legacy1 = local_dir.section('/', 0, -3) + "/FinceptTerminal/fincept_settings.db";
         const QString legacy2 = QString(local_dir).replace("Fincept/FinceptTerminal", "FinceptTerminal")
                                 + "/fincept_settings.db";
-        for (const QString& db : {legacy1, legacy2}) {
-            QFile::remove(db + "-wal");
-            QFile::remove(db + "-shm");
+        QFile::remove(legacy1 + "-wal");
+        QFile::remove(legacy1 + "-shm");
+        QFile::remove(legacy2 + "-wal");
+        QFile::remove(legacy2 + "-shm");
+    }
+
+    fincept::Logger::instance().set_file(fincept::AppPaths::logs() + "/fincept.log");
+    {
+        auto& log = fincept::Logger::instance();
+        auto& cfg = fincept::AppConfig::instance();
+
+        // Global level
+        const QString gl = cfg.get("log/global_level", "Info").toString();
+        const QHash<QString, fincept::LogLevel> lvl_map = {
+            {"Debug", fincept::LogLevel::Debug}, {"Info",  fincept::LogLevel::Info},
+            {"Warn",  fincept::LogLevel::Warn},  {"Error", fincept::LogLevel::Error}
+        };
+        log.set_level(lvl_map.value(gl, fincept::LogLevel::Info));
+
+        // Per-tag overrides
+        const int count = cfg.get("log/tag_count", 0).toInt();
+        for (int i = 0; i < count; ++i) {
+            const QString tag   = cfg.get(QString("log/tag_%1_name").arg(i)).toString();
+            const QString level = cfg.get(QString("log/tag_%1_level").arg(i)).toString();
+            if (!tag.isEmpty() && lvl_map.contains(level))
+                log.set_tag_level(tag, lvl_map.value(level));
         }
     }
-    fincept::Logger::instance().set_file(log_dir + "/fincept.log");
     LOG_INFO("App", "Fincept Terminal v4.0.0 starting...");
 
-    // Apply default theme immediately so the window is styled before anything shows
-    fincept::ui::apply_global_stylesheet();
+    // Theme is applied after DB is open so saved font/theme are respected from the start.
 
     // Initialize config
     auto& config = fincept::AppConfig::instance();
     fincept::HttpClient::instance().set_base_url(config.api_base_url());
-    const QString saved_token = config.auth_token();
-    if (!saved_token.isEmpty()) {
-        fincept::HttpClient::instance().set_auth_header(saved_token);
-    }
+    // Note: auth tokens are managed by AuthManager::initialize() which loads
+    // from SecureStorage (DPAPI) and SQLite — not from QSettings/Registry.
 
     // Register migrations explicitly (avoids MSVC /OPT:REF stripping static-init TUs)
     fincept::register_migration_v001();
@@ -78,12 +118,15 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v010();
     fincept::register_migration_v011();
     fincept::register_migration_v012();
+    fincept::register_migration_v013();
 
     // Open main database
-    QString db_path = log_dir + "/fincept.db";
+    QString db_path = fincept::AppPaths::data() + "/fincept.db";
     auto db_result = fincept::Database::instance().open(db_path);
     if (db_result.is_err()) {
         LOG_ERROR("App", "Failed to open database: " + QString::fromStdString(db_result.error()));
+        // DB unavailable — apply theme with built-in defaults so the UI is at least styled
+        fincept::ui::apply_global_stylesheet();
     } else {
         // Warm InstrumentService cache from DB (non-blocking, no network).
         // If the table is empty on first run, the first broker login triggers a refresh.
@@ -92,27 +135,35 @@ int main(int argc, char* argv[]) {
         LOG_INFO("App", "Zerodha instruments loaded");
         fincept::trading::InstrumentService::instance().load_from_db("angelone");
         LOG_INFO("App", "AngelOne instruments loaded");
+
+        // Prune news articles older than 30 days to keep DB size bounded
+        int64_t news_cutoff = QDateTime::currentSecsSinceEpoch() - (30LL * 86400);
+        fincept::NewsArticleRepository::instance().prune_older_than(news_cutoff);
+        LOG_INFO("App", "News articles pruned (keeping 30 days)");
+
+        // Load persisted appearance settings and apply theme+font in one shot,
+        // before any window is shown — eliminates the flash/wrong-font-on-startup issue.
+        {
+            auto& repo    = fincept::SettingsRepository::instance();
+            auto& tm      = fincept::ui::ThemeManager::instance();
+            auto r_theme  = repo.get("appearance.theme");
+            auto r_family = repo.get("appearance.font_family");
+            auto r_size   = repo.get("appearance.font_size");
+            QString theme  = r_theme.is_ok()  ? r_theme.value()  : "Obsidian";
+            QString family = r_family.is_ok() ? r_family.value() : "Consolas";
+            QString size_s = r_size.is_ok()   ? r_size.value()   : "14px";
+            int size_px    = size_s.left(size_s.indexOf("px")).toInt();
+            if (size_px <= 0) size_px = 14;
+            // Set font first so rebuild_and_apply inside apply_theme uses correct values
+            tm.apply_font(family, size_px);
+            tm.apply_theme(theme);
+            LOG_INFO("App", "Theme applied: " + theme + ", font: " + family + " " + size_s);
+        }
     }
 
-    // Load persisted appearance settings and re-apply theme/font
-    {
-        auto& repo    = fincept::SettingsRepository::instance();
-        auto& tm      = fincept::ui::ThemeManager::instance();
-        auto r_theme  = repo.get("appearance.theme");
-        auto r_family = repo.get("appearance.font_family");
-        auto r_size   = repo.get("appearance.font_size");
-        QString theme  = r_theme.is_ok()  ? r_theme.value()  : "Obsidian";
-        QString family = r_family.is_ok() ? r_family.value() : "Consolas";
-        QString size_s = r_size.is_ok()   ? r_size.value()   : "14px";
-        int size_px    = QString(size_s).replace("px", "").toInt();
-        if (size_px <= 0) size_px = 14;
-        tm.apply_font(family, size_px);
-        tm.apply_theme(theme);
-        LOG_INFO("App", "Theme applied: " + theme + ", font: " + family + " " + size_s);
-    }
 
     // Open cache database (non-fatal if fails)
-    QString cache_path = log_dir + "/cache.db";
+    QString cache_path = fincept::AppPaths::data() + "/cache.db";
     auto cache_result = fincept::CacheDatabase::instance().open(cache_path);
     if (cache_result.is_err()) {
         LOG_WARN("App", "Cache DB failed (non-fatal): " + QString::fromStdString(cache_result.error()));

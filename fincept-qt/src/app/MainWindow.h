@@ -7,6 +7,8 @@
 #include <QStackedWidget>
 #include <QTimer>
 
+namespace fincept::chat_mode { class ChatModeScreen; }
+
 namespace fincept {
 
 class MainWindow : public QMainWindow {
@@ -27,18 +29,23 @@ class MainWindow : public QMainWindow {
     QStackedWidget* app_stack_ = nullptr;
 
     // View state
-    bool focus_mode_ = false;
+    bool focus_mode_  = false;
+    bool chat_mode_   = false;
     bool always_on_top_ = false;
-    QWidget* tab_bar_widget_ = nullptr; // kept to hide/show in focus mode
+    QWidget* tab_bar_widget_    = nullptr;
     QWidget* status_bar_widget_ = nullptr;
-    AiChatBubble* chat_bubble_ = nullptr;
+    AiChatBubble* chat_bubble_  = nullptr;
     QTimer* user_refresh_timer_ = nullptr;
+
+    // Chat mode
+    chat_mode::ChatModeScreen* chat_mode_screen_ = nullptr;
+    QWidget*                   app_container_    = nullptr; // the normal terminal shell
 
     void setup_auth_screens();
     void setup_app_screens();
     void setup_navigation();
-    void restore_session();
     void on_auth_state_changed();
+    void toggle_chat_mode();
 
     // Info screens stack (Contact, Terms, Privacy, Trademarks, Help)
     QStackedWidget* info_stack_ = nullptr;

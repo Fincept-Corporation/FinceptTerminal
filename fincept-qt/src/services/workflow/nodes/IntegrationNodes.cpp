@@ -35,65 +35,6 @@ void register_integration_nodes(NodeRegistry& registry) {
         .execute = nullptr,   // wired in ServiceBridges::wire_all_bridges
     });
 
-    // ── Push Notification ──────────────────────────────────────────
-    registry.register_type({
-        .type_id = "notify.push",
-        .display_name = "Push Notification",
-        .category = "Notifications",
-        .description = "Send mobile push notification",
-        .icon_text = "@",
-        .accent_color = "#ca8a04",
-        .version = 1,
-        .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
-        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
-        .parameters =
-            {
-                {"title", "Title", "string", "", {}, "Notification title", true},
-                {"message", "Message", "string", "", {}, "Notification body", true},
-                {"priority", "Priority", "select", "normal", {"low", "normal", "high", "urgent"}, ""},
-                {"service", "Service", "select", "pushover", {"pushover", "ntfy", "pushbullet"}, ""},
-            },
-        .execute =
-            [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
-               std::function<void(bool, QJsonValue, QString)> cb) {
-                QJsonObject out;
-                out["title"] = params.value("title").toString();
-                out["message"] = params.value("message").toString();
-                out["sent"] = true;
-                if (!inputs.isEmpty())
-                    out["input"] = inputs[0];
-                cb(true, out, {});
-            },
-    });
-
-    // ── Audio Alert ────────────────────────────────────────────────
-    registry.register_type({
-        .type_id = "notify.audio_alert",
-        .display_name = "Audio Alert",
-        .category = "Notifications",
-        .description = "Play a sound alert on the local machine",
-        .icon_text = "@",
-        .accent_color = "#ca8a04",
-        .version = 1,
-        .inputs = {{"input_0", "Data In", PortDirection::Input, ConnectionType::Main}},
-        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
-        .parameters =
-            {
-                {"sound", "Sound", "select", "alert", {"alert", "success", "error", "notification", "custom"}, ""},
-                {"repeat", "Repeat", "number", 1, {}, "Times to play"},
-            },
-        .execute =
-            [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
-               std::function<void(bool, QJsonValue, QString)> cb) {
-                QJsonObject out;
-                out["sound"] = params.value("sound").toString();
-                out["played"] = true;
-                if (!inputs.isEmpty())
-                    out["input"] = inputs[0];
-                cb(true, out, {});
-            },
-    });
-
     // ── PDF Generate ───────────────────────────────────────────────
     registry.register_type({
         .type_id = "file.pdf_generate",

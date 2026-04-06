@@ -14,21 +14,38 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Unity build for infrastructure layers (safe — no local symbol conflicts)
 # Screens are excluded below via SKIP_UNITY_BUILD_INCLUSION (too many local statics/functions)
 set(CMAKE_UNITY_BUILD ON)
-set(CMAKE_UNITY_BUILD_BATCH_SIZE 32)
+# Batch size 14: sweet spot for MSVC — keeps each unity TU under ~30s to compile.
+# 32 was too large: one TU change forced a 32-file recompile; 14 limits blast radius.
+set(CMAKE_UNITY_BUILD_BATCH_SIZE 14)
 
-# MSVC: /MP = multi-processor compilation (uses all cores within one project)
-# /Z7 = embed debug info in .obj files instead of shared PDB → eliminates PDB
-#        write contention that serialises /MP builds (major speedup)
-# /Oi = enable intrinsics (faster codegen, no extra passes)
+# FetchContent: after first successful download, never hit the network again.
+# Cuts configure time by 5-15s on incremental configures (no git fetch for 5 deps).
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "" FORCE)
+
+# MSVC compiler flags for maximum build throughput:
+#   /MP        — multi-processor compilation (uses all logical cores within one project)
+#   /Z7        — embed debug info in .obj instead of shared PDB → no PDB write contention
+#                that serialises /MP builds (major speedup on 16+ core machines)
+#   /Oi        — enable intrinsics (faster codegen, no extra passes)
+#   /bigobj    — allow >65535 sections (needed by large unity TUs and MOC output)
+#   /d2FuncCache7 — MSVC internal: increase function-level cache for template-heavy code
 if(MSVC)
     add_compile_options(/MP /Z7 /Oi /bigobj)
-    # Replace /Zi (shared PDB) with /Z7 in all configs to avoid race conditions
+    # Replace /Zi and /ZI (shared PDB) with /Z7 in all configs
     foreach(flag_var
             CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELWITHDEBINFO
             CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_MINSIZEREL)
         string(REPLACE "/Zi" "/Z7" ${flag_var} "${${flag_var}}")
         string(REPLACE "/ZI" "/Z7" ${flag_var} "${${flag_var}}")
     endforeach()
+    # Release: enable whole-program optimisation + link-time code generation.
+    # /GL compiles to IL; /LTCG merges at link time for cross-TU inlining & DCE.
+    # Only for Release — Debug/RelWithDebInfo stay fast for iteration.
+    if(CMAKE_BUILD_TYPE STREQUAL "Release" OR
+       (DEFINED CMAKE_CONFIGURATION_TYPES AND "Release" IN_LIST CMAKE_CONFIGURATION_TYPES))
+        add_compile_options($<$<CONFIG:Release>:/GL>)
+        add_link_options($<$<CONFIG:Release>:/LTCG:incremental>)
+    endif()
 endif()
 
 # Suppress Windows min/max macros that break std::min/std::max in unity batches
@@ -123,6 +140,8 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/ggml-org/whisper.cpp.git
     GIT_TAG        v1.7.4
     GIT_SHALLOW    TRUE
+    # After first fetch, never touch the network again — saves 3-8s per configure
+    UPDATE_DISCONNECTED TRUE
 )
 FetchContent_MakeAvailable(whisper)
 # whisper.cpp uses C-style casts internally — suppress warnings for third-party code
@@ -175,6 +194,7 @@ set_target_properties(qgeoview PROPERTIES UNITY_BUILD OFF)
 # Core
 set(CORE_SOURCES
     src/core/config/AppConfig.cpp
+    src/core/config/AppPaths.cpp
     src/core/logging/Logger.cpp
     src/core/events/EventBus.cpp
     src/core/session/SessionManager.cpp
@@ -225,6 +245,7 @@ set(STORAGE_SOURCES
     src/storage/repositories/ReportRepository.cpp
     src/storage/repositories/PaperTradingRepository.cpp
     src/storage/repositories/NewsMonitorRepository.cpp
+    src/storage/repositories/NewsArticleRepository.cpp
     src/storage/repositories/PortfolioHoldingsRepository.cpp
     src/storage/repositories/ChatRepository.cpp
     src/storage/repositories/LlmConfigRepository.cpp
@@ -252,6 +273,9 @@ set(STORAGE_SOURCES
 
     # Data normalization — mapping persistence and normalized data storage
     src/storage/sqlite/migrations/v012_data_normalization.cpp
+
+    # News articles — dedicated news article storage
+    src/storage/sqlite/migrations/v013_news_articles.cpp
 )
 
 # Python runner
@@ -362,6 +386,10 @@ set(SERVICE_SOURCES
     src/services/workflow/WorkflowService.cpp
     src/services/workflow/WorkflowExecutor.cpp
     src/services/workflow/ExpressionEngine.cpp
+
+    src/services/workspace/WorkspaceSerializer.cpp
+    src/services/workspace/WorkspaceManager.cpp
+    src/services/workspace/WorkspaceTemplates.cpp
     src/services/workflow/nodes/TriggerNodes.cpp
     src/services/workflow/nodes/ControlFlowNodes.cpp
     src/services/workflow/nodes/UtilityNodes.cpp
@@ -389,6 +417,24 @@ set(SERVICE_SOURCES
 
     # Whisper STT service (cross-platform offline speech recognition)
     src/services/stt/WhisperService.cpp
+
+    # Modular notification system — service + 15 providers
+    src/services/notifications/NotificationService.cpp
+    src/services/notifications/providers/TelegramProvider.cpp
+    src/services/notifications/providers/DiscordProvider.cpp
+    src/services/notifications/providers/SlackProvider.cpp
+    src/services/notifications/providers/EmailProvider.cpp
+    src/services/notifications/providers/WhatsAppProvider.cpp
+    src/services/notifications/providers/PushoverProvider.cpp
+    src/services/notifications/providers/NtfyProvider.cpp
+    src/services/notifications/providers/PushbulletProvider.cpp
+    src/services/notifications/providers/GotifyProvider.cpp
+    src/services/notifications/providers/MattermostProvider.cpp
+    src/services/notifications/providers/TeamsProvider.cpp
+    src/services/notifications/providers/WebhookProvider.cpp
+    src/services/notifications/providers/PagerDutyProvider.cpp
+    src/services/notifications/providers/OpsgenieProvider.cpp
+    src/services/notifications/providers/SMSProvider.cpp
 )
 
 # UI framework
@@ -411,6 +457,15 @@ set(UI_SOURCES
     src/ui/navigation/StatusBar.cpp
     src/ui/navigation/ToolBar.cpp
     src/ui/navigation/CommandBar.cpp
+
+    src/ui/workspace/WorkspaceNewDialog.cpp
+    src/ui/workspace/WorkspaceOpenDialog.cpp
+    src/ui/workspace/WorkspaceSaveAsDialog.cpp
+
+    # In-app notification widgets
+    src/ui/widgets/NotifToast.cpp
+    src/ui/widgets/NotifBell.cpp
+    src/ui/widgets/NotifPanel.cpp
 )
 
 # Screens
@@ -428,6 +483,11 @@ set(SCREEN_SOURCES
     src/screens/trade_viz/TradeVizScreen.cpp
     src/screens/docs/DocsScreen.cpp
     src/screens/ComingSoonScreen.cpp
+    src/screens/chat_mode/ChatModeService.cpp
+    src/screens/chat_mode/ChatSessionPanel.cpp
+    src/screens/chat_mode/ChatMessagePanel.cpp
+    src/screens/chat_mode/ChatAgentPanel.cpp
+    src/screens/chat_mode/ChatModeScreen.cpp
     src/screens/setup/SetupScreen.cpp
     src/screens/info/ContactScreen.cpp
     src/screens/info/TermsScreen.cpp
@@ -941,6 +1001,7 @@ set_source_files_properties(
     src/storage/repositories/LlmConfigRepository.cpp
     src/storage/repositories/McpServerRepository.cpp
     src/storage/repositories/NewsMonitorRepository.cpp
+    src/storage/repositories/NewsArticleRepository.cpp
     src/storage/repositories/NotesRepository.cpp
     src/storage/repositories/PaperTradingRepository.cpp
     src/storage/repositories/PortfolioHoldingsRepository.cpp
@@ -964,6 +1025,7 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v010_llm_profiles.cpp
     src/storage/sqlite/migrations/v011_custom_indices.cpp
     src/storage/sqlite/migrations/v012_data_normalization.cpp
+    src/storage/sqlite/migrations/v013_news_articles.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -994,7 +1056,14 @@ set_source_files_properties(
     src/trading/brokers/ibkr/IBKRBroker.cpp
     src/trading/brokers/tradier/TradierBroker.cpp
     src/trading/brokers/saxo/SaxoBankBroker.cpp
-    # MCP core + tool files — each defines static constexpr TAG in same namespace
+    # WhisperService has a static local QStringList — exclude from unity to avoid ODR issues
+    src/services/stt/WhisperService.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# MCP core + tools: each defines TAG or kTimeoutMs in shared namespaces —
+# must stay excluded from unity (batch size 1 = each file its own TU)
+set_source_files_properties(
     src/mcp/McpProvider.cpp
     src/mcp/McpService.cpp
     src/mcp/McpClient.cpp
@@ -1019,9 +1088,55 @@ set_source_files_properties(
     src/mcp/tools/SettingsTools.cpp
     src/mcp/tools/PythonTools.cpp
     src/mcp/tools/SystemTools.cpp
-    # WhisperService has a static local QStringList — exclude from unity to avoid ODR issues
-    src/services/stt/WhisperService.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# Trading brokers: each defines static now_ts() / TAG at file scope —
+# ODR collision if batched, must stay excluded from unity
+set_source_files_properties(
+    src/trading/brokers/zerodha/ZerodhaBroker.cpp
+    src/trading/brokers/angelone/AngelOneBroker.cpp
+    src/trading/brokers/fyers/FyersBroker.cpp
+    src/trading/brokers/upstox/UpstoxBroker.cpp
+    src/trading/brokers/dhan/DhanBroker.cpp
+    src/trading/brokers/kotak/KotakBroker.cpp
+    src/trading/brokers/groww/GrowwBroker.cpp
+    src/trading/brokers/aliceblue/AliceBlueBroker.cpp
+    src/trading/brokers/fivepaisa/FivePaisaBroker.cpp
+    src/trading/brokers/iifl/IIFLBroker.cpp
+    src/trading/brokers/motilal/MotilalBroker.cpp
+    src/trading/brokers/shoonya/ShoonyaBroker.cpp
+    src/trading/brokers/alpaca/AlpacaBroker.cpp
+    src/trading/brokers/ibkr/IBKRBroker.cpp
+    src/trading/brokers/tradier/TradierBroker.cpp
+    src/trading/brokers/saxo/SaxoBankBroker.cpp
+    src/trading/websocket/ZerodhaWebSocket.cpp
+    src/trading/websocket/AngelOneWebSocket.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# Storage repositories: each defines kCols — safe to batch in groups of 3
+set_source_files_properties(
+    src/storage/repositories/AgentConfigRepository.cpp
+    src/storage/repositories/ChatRepository.cpp
+    src/storage/repositories/ContextRecordingRepository.cpp
+    src/storage/repositories/DashboardLayoutRepository.cpp
+    src/storage/repositories/DataSourceRepository.cpp
+    src/storage/repositories/LlmConfigRepository.cpp
+    src/storage/repositories/McpServerRepository.cpp
+    src/storage/repositories/NewsMonitorRepository.cpp
+    src/storage/repositories/NewsArticleRepository.cpp
+    src/storage/repositories/NotesRepository.cpp
+    src/storage/repositories/PaperTradingRepository.cpp
+    src/storage/repositories/PortfolioHoldingsRepository.cpp
+    src/storage/repositories/PortfolioRepository.cpp
+    src/storage/repositories/ReportRepository.cpp
+    src/storage/repositories/SettingsRepository.cpp
+    src/storage/repositories/WatchlistRepository.cpp
+    src/storage/repositories/WorkflowRepository.cpp
+    src/storage/repositories/CustomIndexRepository.cpp
+    src/storage/repositories/DataMappingRepository.cpp
+    PROPERTIES UNITY_BUILD_BATCH_SIZE 3
 )
 
 # ── Executable ────────────────────────────────────────────────────────────────
@@ -1211,6 +1326,15 @@ target_precompile_headers(FinceptTerminal PRIVATE
     <QMouseEvent>
     <QResizeEvent>
     <QWheelEvent>
+    # ── Charts (Qt6::Charts — required dep) ──────────────────────────────────
+    <QChart>
+    <QChartView>
+    <QLineSeries>
+    <QBarSeries>
+    <QBarSet>
+    <QValueAxis>
+    <QDateTimeAxis>
+    <QBarCategoryAxis>
     # ── Multimedia (always available — required dep) ───────────────────────────
     <QAudioFormat>
     <QMediaDevices>

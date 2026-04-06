@@ -32,6 +32,7 @@ class NewsDetailPanel : public QWidget {
     void related_article_clicked(const services::NewsArticle& article);
     void open_in_browser(const QString& url);
     void copy_url(const QString& url);
+    void bookmark_requested(const services::NewsArticle& article);
 
   private:
     QWidget* build_empty_state();
@@ -80,9 +81,10 @@ class NewsDetailPanel : public QWidget {
     QVBoxLayout* infra_layout_ = nullptr;
 
     // Action buttons
-    QPushButton* open_btn_  = nullptr;
-    QPushButton* copy_btn_  = nullptr;
-    QPushButton* save_btn_  = nullptr;
+    QPushButton* open_btn_      = nullptr;
+    QPushButton* copy_btn_      = nullptr;
+    QPushButton* save_btn_      = nullptr;
+    QPushButton* bookmark_btn_  = nullptr;
 
     QStackedWidget* stack_ = nullptr;
     services::NewsArticle current_article_;

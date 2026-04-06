@@ -5,6 +5,8 @@
 #include "screens/dashboard/TickerBar.h"
 #include "screens/dashboard/canvas/DashboardCanvas.h"
 
+namespace fincept::ui { class NotifToast; }  // forward declaration
+
 #include <QHideEvent>
 #include <QScrollArea>
 #include <QShowEvent>
@@ -26,20 +28,22 @@ class DashboardScreen : public QWidget {
     bool eventFilter(QObject* obj, QEvent* event) override;
 
   private:
+    void refresh_theme();
     void build_default_layout();
     void save_layout();
     void restore_layout();
 
-    DashboardToolBar* toolbar_ = nullptr;
-    TickerBar* ticker_bar_ = nullptr;
-    QScrollArea* scroll_area_ = nullptr;
-    DashboardCanvas* canvas_ = nullptr;
-    QSplitter* content_split_ = nullptr;
-    MarketPulsePanel* market_pulse_ = nullptr;
-    DashboardStatusBar* status_bar_ = nullptr;
-    QTimer* save_timer_ = nullptr;
-    bool pulse_visible_ = true;
-    bool layout_restored_ = false;
+    DashboardToolBar*        toolbar_      = nullptr;
+    TickerBar*               ticker_bar_   = nullptr;
+    QScrollArea*             scroll_area_  = nullptr;
+    DashboardCanvas*         canvas_       = nullptr;
+    QSplitter*               content_split_= nullptr;
+    MarketPulsePanel*        market_pulse_ = nullptr;
+    DashboardStatusBar*      status_bar_   = nullptr;
+    fincept::ui::NotifToast* notif_toast_  = nullptr;
+    QTimer*                  save_timer_   = nullptr;
+    bool pulse_visible_    = true;
+    bool layout_restored_  = false;
 };
 
 } // namespace fincept::screens

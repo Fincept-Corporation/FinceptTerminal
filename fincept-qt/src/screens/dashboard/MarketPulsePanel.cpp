@@ -2,6 +2,7 @@
 
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
 #include <QFrame>
@@ -34,7 +35,6 @@ static const QStringList kSnapshotSymbols = services::MarketDataService::global_
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(QString("background: %1;").arg(ui::colors::PANEL()));
     setMinimumWidth(260);
 
     auto* vl = new QVBoxLayout(this);
@@ -45,10 +45,12 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
 
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }"
-                          "QScrollBar:vertical { width: 6px; background: transparent; }"
-                          "QScrollBar::handle:vertical { background: #222222; border-radius: 3px; min-height: 20px; }"
-                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+    scroll->setStyleSheet(
+        QString("QScrollArea{border:none;background:transparent;}"
+                "QScrollBar:vertical{width:6px;background:transparent;}"
+                "QScrollBar::handle:vertical{background:%1;border-radius:3px;min-height:20px;}"
+                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+        .arg(ui::colors::BORDER_MED()));
 
     auto* content = new QWidget;
     auto* cl = new QVBoxLayout(content);
@@ -74,6 +76,12 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
     hours_timer_ = new QTimer(this);
     hours_timer_->setInterval(60000); // 1 min — market open/close status
     connect(hours_timer_, &QTimer::timeout, this, &MarketPulsePanel::refresh_market_hours);
+
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                setStyleSheet(QString("background:%1;").arg(ui::colors::PANEL()));
+            });
+    setStyleSheet(QString("background:%1;").arg(ui::colors::PANEL()));
 }
 
 void MarketPulsePanel::showEvent(QShowEvent* e) {

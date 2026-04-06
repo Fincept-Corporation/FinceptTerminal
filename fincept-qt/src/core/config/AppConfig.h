@@ -16,8 +16,6 @@ class AppConfig {
 
     // Typed accessors for common settings
     QString api_base_url() const;
-    QString auth_token() const;
-    void set_auth_token(const QString& token);
     bool dark_mode() const;
     int refresh_interval_ms() const;
 

@@ -4,6 +4,7 @@
 // Parallel venv creation + package installation.
 #include "python/PythonSetupManager.h"
 
+#include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
 
 #include <QCoreApplication>
@@ -14,7 +15,6 @@
 #include <QFuture>
 #include <QMetaObject>
 #include <QProcess>
-#include <QStandardPaths>
 #include <QSysInfo>
 #include <QtConcurrent>
 
@@ -38,22 +38,7 @@ PythonSetupManager::PythonSetupManager(QObject* parent) : QObject(parent) {}
 // ─────────────────────────────────────────────────────────────────────────────
 
 QString PythonSetupManager::install_dir() const {
-#ifdef _WIN32
-    // AppLocalDataLocation = %LOCALAPPDATA% — matches Tauri's com.fincept.terminal path.
-    // GenericDataLocation can return either Local or Roaming depending on Qt version/build,
-    // so pin to AppLocalDataLocation for consistency across all Windows builds.
-    QString base = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-    // AppLocalDataLocation = .../Local/Fincept/FinceptTerminal — strip to .../Local/
-    // by going up two levels, then append the app-specific folder name.
-    QDir d(base);
-    d.cdUp(); // .../Local/Fincept
-    d.cdUp(); // .../Local
-    return d.absolutePath() + "/com.fincept.terminal";
-#elif defined(__APPLE__)
-    return QDir::homePath() + "/Library/Application Support/com.fincept.terminal";
-#else
-    return QDir::homePath() + "/.local/share/com.fincept.terminal";
-#endif
+    return fincept::AppPaths::root();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -531,6 +516,7 @@ bool PythonSetupManager::install_packages(const QString& venv_name, const QStrin
     LOG_INFO("PythonSetup", QString("Installing packages into %1 from %2").arg(venv_name, req_path));
 
     QString venv_python = python_path(venv_name);
+    QString step_key = venv_name.contains("numpy1") ? "packages-numpy1" : "packages-numpy2";
 
     QStringList env = {
         "UV_PYTHON_INSTALL_DIR=" + install_dir() + "/python",
@@ -538,7 +524,119 @@ bool PythonSetupManager::install_packages(const QString& venv_name, const QStrin
         "PEEWEE_NO_C_EXTENSION=1",
     };
 
-    return run_command(uv_path(), {"pip", "install", "--python", venv_python, "-r", req_path}, env);
+    // ── Pass 1: try installing everything at once (fast path) ────────────────
+    // This succeeds on most machines and is 10-100x faster than one-by-one.
+    LOG_INFO("PythonSetup", QString("[%1] Pass 1: bulk install from %2").arg(venv_name, requirements_file));
+    emit_progress(step_key, 5, "Installing packages (bulk)...");
+
+    QString bulk_stderr;
+    bool bulk_ok = run_command_capture(
+        uv_path(),
+        {"pip", "install", "--python", venv_python, "-r", req_path},
+        env,
+        bulk_stderr);
+
+    if (bulk_ok) {
+        LOG_INFO("PythonSetup", QString("[%1] Bulk install succeeded").arg(venv_name));
+        emit_progress(step_key, 100, "All packages installed");
+        return true;
+    }
+
+    // ── Pass 2: bulk failed — install packages one-by-one, skip failures ────
+    LOG_WARN("PythonSetup",
+             QString("[%1] Bulk install failed (stderr: %2) — falling back to per-package install")
+                 .arg(venv_name, bulk_stderr.left(300)));
+    emit_progress(step_key, 10, "Bulk install failed — retrying package by package...");
+
+    QStringList packages = read_packages_from_file(req_path);
+    if (packages.isEmpty()) {
+        LOG_ERROR("PythonSetup", "No packages parsed from: " + req_path);
+        return false;
+    }
+
+    QStringList failed = install_packages_individually(venv_name, packages, env, step_key);
+
+    if (failed.isEmpty()) {
+        LOG_INFO("PythonSetup", QString("[%1] All packages installed individually").arg(venv_name));
+        emit_progress(step_key, 100, "All packages installed");
+    } else {
+        LOG_WARN("PythonSetup",
+                 QString("[%1] %2 package(s) skipped: %3")
+                     .arg(venv_name)
+                     .arg(failed.size())
+                     .arg(failed.join(", ").left(300)));
+        emit_progress(step_key, 100,
+                      QString("Done — %1 package(s) skipped (see log)").arg(failed.size()));
+    }
+
+    // Always return true from pass 2 — a partial environment is more useful
+    // than no environment. The skipped packages are logged for diagnosis.
+    return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Read packages from a requirements file, stripping comments and blank lines.
+// Returns one entry per non-empty, non-comment line.
+// ─────────────────────────────────────────────────────────────────────────────
+
+QStringList PythonSetupManager::read_packages_from_file(const QString& req_path) const {
+    QFile file(req_path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return {};
+
+    QStringList packages;
+    while (!file.atEnd()) {
+        QString line = QString::fromUtf8(file.readLine()).trimmed();
+        // Skip blank lines, comments, and pip options (-r, --extra-index-url, etc.)
+        if (line.isEmpty() || line.startsWith('#') || line.startsWith('-'))
+            continue;
+        // Strip inline comments  e.g. "numpy>=1.26  # required by X"
+        int comment_pos = line.indexOf('#');
+        if (comment_pos > 0)
+            line = line.left(comment_pos).trimmed();
+        if (!line.isEmpty())
+            packages << line;
+    }
+    return packages;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Install packages one by one, skipping any that fail.
+// Returns the list of packages that failed (for logging).
+// ─────────────────────────────────────────────────────────────────────────────
+
+QStringList PythonSetupManager::install_packages_individually(const QString& venv_name,
+                                                              const QStringList& packages,
+                                                              const QStringList& env_vars,
+                                                              const QString& step_key) {
+    QString venv_python = python_path(venv_name);
+    QStringList failed;
+    int total = packages.size();
+
+    for (int i = 0; i < total; ++i) {
+        const QString& pkg = packages[i];
+        int pct = 10 + static_cast<int>(90.0 * i / total);
+        emit_progress(step_key, pct,
+                      QString("Installing %1/%2: %3").arg(i + 1).arg(total).arg(pkg));
+
+        QString pkg_stderr;
+        bool ok = run_command_capture(
+            uv_path(),
+            {"pip", "install", "--python", venv_python, pkg},
+            env_vars,
+            pkg_stderr);
+
+        if (ok) {
+            LOG_INFO("PythonSetup", QString("[%1] Installed: %2").arg(venv_name, pkg));
+        } else {
+            LOG_WARN("PythonSetup",
+                     QString("[%1] Skipped (failed): %2 — %3")
+                         .arg(venv_name, pkg, pkg_stderr.left(200)));
+            failed << pkg;
+        }
+    }
+
+    return failed;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -617,6 +715,41 @@ bool PythonSetupManager::run_command(const QString& program, const QStringList& 
     }
 
     return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: run command, capture stderr (used for per-package failure diagnosis)
+// ─────────────────────────────────────────────────────────────────────────────
+
+bool PythonSetupManager::run_command_capture(const QString& program, const QStringList& args,
+                                             const QStringList& env_vars, QString& stderr_out) const {
+    QProcess proc;
+
+    if (!env_vars.isEmpty()) {
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        for (const auto& var : env_vars) {
+            int eq = var.indexOf('=');
+            if (eq > 0)
+                env.insert(var.left(eq), var.mid(eq + 1));
+        }
+        proc.setProcessEnvironment(env);
+    }
+
+#ifdef _WIN32
+    proc.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
+        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
+    });
+#endif
+
+    proc.start(program, args);
+    if (!proc.waitForFinished(30 * 60 * 1000)) {
+        proc.kill();
+        stderr_out = "timed out";
+        return false;
+    }
+
+    stderr_out = QString::fromUtf8(proc.readAllStandardError());
+    return proc.exitCode() == 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

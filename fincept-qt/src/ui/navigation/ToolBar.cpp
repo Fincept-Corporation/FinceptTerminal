@@ -4,31 +4,30 @@
 
 #include <QAction>
 #include <QDateTime>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QResizeEvent>
 
 namespace fincept::ui {
 
-static const char* MENU_SS = "QMenuBar{background:transparent;color:#808080;border:none;font-size:13px;"
-                             "font-family:'Consolas',monospace;spacing:0;}"
+static const char* MENU_SS = "QMenuBar{background:transparent;color:#808080;border:none;"
+                             "spacing:0;}"
                              "QMenuBar::item{background:transparent;padding:4px 10px;}"
                              "QMenuBar::item:selected{background:#1a1a1a;color:#e5e5e5;}";
 
 static const char* POPUP_SS = "QMenu{background:#0a0a0a;color:#e5e5e5;border:1px solid #1a1a1a;"
-                              "font-size:13px;font-family:'Consolas',monospace;padding:4px 0;}"
+                              "padding:4px 0;}"
                               "QMenu::item{padding:5px 24px 5px 12px;}"
                               "QMenu::item:selected{background:#1a1a1a;}"
                               "QMenu::item:disabled{color:#404040;}"
                               "QMenu::separator{background:#1a1a1a;height:1px;margin:4px 8px;}";
 
-static const char* MF = "font-family:'Consolas',monospace;";
-
 ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(32);
     setStyleSheet("background:#0a0a0a;border-bottom:1px solid #1a1a1a;");
     auto* hl = new QHBoxLayout(this);
-    hl->setContentsMargins(4, 0, 10, 0);
+    hl->setContentsMargins(4, 0, 6, 0);
     hl->setSpacing(0);
 
     // Menus
@@ -40,69 +39,82 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     menu_bar_->addMenu(build_help_menu());
     hl->addWidget(menu_bar_);
 
-    // Command bar — shrinks gracefully, min 120 max 260
+    // Command bar — shrinks gracefully
     command_bar_ = new CommandBar(this);
-    command_bar_->setMinimumWidth(120);
-    command_bar_->setMaximumWidth(260);
+    command_bar_->setMinimumWidth(80);
+    command_bar_->setMaximumWidth(240);
     command_bar_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     connect(command_bar_, &CommandBar::navigate_to, this, &ToolBar::navigate_to);
     hl->addWidget(command_bar_);
 
-    auto sep = [&]() {
+    auto sep = [&]() -> QLabel* {
         auto* s = new QLabel("|");
-        s->setStyleSheet("color:#333333;font-size:13px;background:transparent;padding:0 4px;");
+        s->setStyleSheet("color:#333333;background:transparent;padding:0 3px;");
         s->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         hl->addWidget(s);
+        separators_.append(s);
+        return s;
     };
 
-    auto mk = [](const QString& t, const QString& c, int sz = 13, bool b = false) -> QLabel* {
+    auto mk = [](const QString& t, const QString& c, bool b = false) -> QLabel* {
         auto* l = new QLabel(t);
-        l->setStyleSheet(QString("color:%1;font-size:%2px;%3background:transparent;%4")
+        l->setStyleSheet(QString("color:%1;%2background:transparent;")
                              .arg(c)
-                             .arg(sz)
-                             .arg(b ? "font-weight:700;" : "")
-                             .arg(MF));
+                             .arg(b ? "font-weight:700;" : ""));
         l->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         return l;
     };
 
     sep();
-    hl->addWidget(mk("FINCEPT ", "#d97706", 14, true));
-    hl->addWidget(mk("TERMINAL", "#e5e5e5", 14, true));
-    // subtitle — hidden below ~900px effective width via stretch absorbing
-    subtitle_label_ = mk("  |  PROFESSIONAL RESEARCH DESK", "#666666", 11);
-    subtitle_label_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    auto* fincept_lbl = mk("FINCEPT ", "#d97706", true);
+    hl->addWidget(fincept_lbl);
+    branding_label_ = mk("TERMINAL", "#e5e5e5", true);
+    hl->addWidget(branding_label_);
+    subtitle_label_ = mk("  |  PROFESSIONAL RESEARCH DESK", "#666666");
     hl->addWidget(subtitle_label_);
-    hl->addWidget(mk("  ", "#000"));
-    hl->addWidget(mk("\xe2\x97\x8f", "#16a34a", 9));
-    hl->addWidget(mk(" LIVE", "#16a34a", 11, true));
+    hl->addWidget(mk("  ", "#000000"));
+    live_dot_ = mk("\xe2\x97\x8f", "#16a34a");
+    hl->addWidget(live_dot_);
+    live_label_ = mk(" LIVE", "#16a34a", true);
+    hl->addWidget(live_label_);
 
     hl->addStretch(1);
 
-    clock_label_ = mk("", "#ffffff", 12);
-    clock_label_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    clock_label_->setMinimumWidth(160);
+    clock_label_ = mk("", "#ffffff");
+    clock_label_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     hl->addWidget(clock_label_);
 
     hl->addStretch(1);
 
-    user_label_ = mk("---", "#d97706", 12);
-    user_label_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    user_label_ = mk("---", "#d97706");
+    user_label_->setMaximumWidth(120);
     hl->addWidget(user_label_);
     sep();
-    credits_label_ = mk("---", "#16a34a", 12);
-    credits_label_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    credits_label_ = mk("---", "#16a34a");
+    credits_label_->setMaximumWidth(100);
     hl->addWidget(credits_label_);
     sep();
     plan_btn_ = new QPushButton("---");
     plan_btn_->setCursor(Qt::PointingHandCursor);
     plan_btn_->setToolTip("View Plans & Pricing");
     plan_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    plan_btn_->setStyleSheet("QPushButton{color:#ffffff;font-size:12px;background:transparent;border:none;"
-                             "font-family:'Consolas',monospace;padding:0 2px;}"
+    plan_btn_->setStyleSheet("QPushButton{color:#ffffff;background:transparent;border:none;padding:0 2px;}"
                              "QPushButton:hover{color:#d97706;}");
     connect(plan_btn_, &QPushButton::clicked, this, &ToolBar::plan_clicked);
     hl->addWidget(plan_btn_);
+    sep();
+
+    chat_mode_btn_ = new QPushButton("⬡ CHAT");
+    chat_mode_btn_->setFixedHeight(20);
+    chat_mode_btn_->setCursor(Qt::PointingHandCursor);
+    chat_mode_btn_->setToolTip("Switch to Chat Mode (F9)");
+    chat_mode_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    chat_mode_btn_->setStyleSheet(
+        "QPushButton{background:transparent;color:#d97706;border:1px solid #7a4700;"
+        "padding:0 8px;font-weight:700;}"
+        "QPushButton:hover{background:#7a4700;color:#fff;border-color:#d97706;}");
+    connect(chat_mode_btn_, &QPushButton::clicked, this, &ToolBar::chat_mode_toggled);
+    hl->addWidget(chat_mode_btn_);
     sep();
 
     auto* logout_btn = new QPushButton("LOGOUT");
@@ -110,7 +122,7 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     logout_btn->setCursor(Qt::PointingHandCursor);
     logout_btn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     logout_btn->setStyleSheet("QPushButton{background:transparent;color:#dc2626;border:1px solid #7f1d1d;"
-                              "padding:0 8px;font-size:11px;font-weight:700;font-family:'Consolas',monospace;}"
+                              "padding:0 8px;font-weight:700;}"
                               "QPushButton:hover{background:#dc2626;color:#e5e5e5;border-color:#dc2626;}");
     connect(logout_btn, &QPushButton::clicked, this, &ToolBar::logout_clicked);
     hl->addWidget(logout_btn);
@@ -128,14 +140,42 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
 
 void ToolBar::resizeEvent(QResizeEvent* e) {
     QWidget::resizeEvent(e);
-    // Hide subtitle below 900px to prevent collisions
-    if (subtitle_label_)
-        subtitle_label_->setVisible(e->size().width() >= 900);
+    apply_responsive_layout(e->size().width());
+}
+
+void ToolBar::apply_responsive_layout(int w) {
+    // Progressive disclosure: hide less-critical elements as width shrinks
+    // >= 1200: everything visible
+    // >= 1000: hide subtitle
+    //  >= 800: also hide clock, LIVE label
+    //  >= 650: also hide credits, chat button
+    //  <  650: minimal — menus + branding + user + plan + logout
+
+    bool show_subtitle = (w >= 1200);
+    bool show_clock    = (w >= 800);
+    bool show_live     = (w >= 800);
+    bool show_credits  = (w >= 650);
+    bool show_chat     = (w >= 650);
+
+    if (subtitle_label_) subtitle_label_->setVisible(show_subtitle);
+    if (clock_label_)    clock_label_->setVisible(show_clock);
+    if (live_dot_)       live_dot_->setVisible(show_live);
+    if (live_label_)     live_label_->setVisible(show_live);
+    if (credits_label_)  credits_label_->setVisible(show_credits);
+    if (chat_mode_btn_)  chat_mode_btn_->setVisible(show_chat);
+
+    // Hide separators adjacent to hidden widgets — check each separator's neighbors
+    // Simple approach: hide seps 3 (after credits) and 4 (after plan/before chat)
+    // when their adjacent content is hidden
+    if (separators_.size() >= 5) {
+        separators_[2]->setVisible(show_credits); // sep before credits
+        separators_[3]->setVisible(show_chat);    // sep before chat
+    }
 }
 
 void ToolBar::update_clock() {
     auto dt = QDateTime::currentDateTime();
-    clock_label_->setText(dt.toString("dd MMM yyyy").toUpper() + "  " + dt.toString("HH:mm:ss"));
+    clock_label_->setText(dt.toString("dd MMM yy").toUpper() + " " + dt.toString("HH:mm:ss"));
 }
 
 void ToolBar::refresh_user_display() {
@@ -146,24 +186,30 @@ void ToolBar::refresh_user_display() {
         plan_btn_->setText("---");
         return;
     }
-    user_label_->setText(s.user_info.username.isEmpty() ? s.user_info.email : s.user_info.username);
-    credits_label_->setText(QString("%1 CR").arg(s.user_info.credit_balance, 0, 'f', 2));
-    credits_label_->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;%2")
-                                      .arg(s.user_info.credit_balance > 0 ? "#16a34a" : "#dc2626")
-                                      .arg(MF));
+
+    // Elide username/email to fit within maxWidth
+    QString name = s.user_info.username.isEmpty() ? s.user_info.email : s.user_info.username;
+    QFontMetrics fm(user_label_->font());
+    user_label_->setText(fm.elidedText(name, Qt::ElideRight, user_label_->maximumWidth() - 4));
+    user_label_->setToolTip(name);
+
+    // Credits — compact format
+    int credits = static_cast<int>(s.user_info.credit_balance);
+    credits_label_->setText(QString("%1 CR").arg(credits));
+    credits_label_->setStyleSheet(QString("color:%1;background:transparent;")
+                                      .arg(s.user_info.credit_balance > 0 ? "#16a34a" : "#dc2626"));
 
     QString plan_text = s.account_type().toUpper();
-    if (!plan_text.isEmpty())
-        plan_text += " Plan";
     plan_btn_->setText(plan_text.isEmpty() ? "FREE" : plan_text);
 }
 
 QMenu* ToolBar::build_file_menu() {
     auto* m = new QMenu("File", this);
     m->setStyleSheet(POPUP_SS);
-    m->addAction("New Workspace", this, [this]() { emit action_triggered("new_workspace"); });
-    m->addAction("Open Workspace", this, [this]() { emit action_triggered("open_workspace"); });
-    m->addAction("Save Workspace", this, [this]() { emit action_triggered("save_workspace"); });
+    m->addAction("New Workspace",     this, [this]() { emit action_triggered("new_workspace"); });
+    m->addAction("Open Workspace",    this, [this]() { emit action_triggered("open_workspace"); });
+    m->addAction("Save Workspace",    this, [this]() { emit action_triggered("save_workspace"); });
+    m->addAction("Save Workspace As", this, [this]() { emit action_triggered("save_workspace_as"); });
     m->addSeparator();
     m->addAction("Import Data", this, [this]() { emit action_triggered("import_data"); });
     m->addAction("Export Data", this, [this]() { emit action_triggered("export_data"); });
@@ -176,8 +222,7 @@ QMenu* ToolBar::build_file_menu() {
 
 QMenu* ToolBar::build_navigate_menu() {
     auto* m = new QMenu("Navigate", this);
-    m->setStyleSheet("QMenu{background:#0a0a0a;color:#e5e5e5;border:1px solid #1a1a1a;"
-                     "font-size:13px;font-family:'Consolas',monospace;padding:2px 0;}"
+    m->setStyleSheet("QMenu{background:#0a0a0a;color:#e5e5e5;border:1px solid #1a1a1a;padding:2px 0;}"
                      "QMenu::item{padding:3px 20px 3px 10px;}"
                      "QMenu::item:selected{background:#1a1a1a;}"
                      "QMenu::item:disabled{color:#d97706;font-weight:700;padding:6px 10px 2px 10px;}"

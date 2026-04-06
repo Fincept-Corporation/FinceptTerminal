@@ -2,7 +2,9 @@
 
 #include "core/logging/Logger.h"
 #include "services/file_manager/FileManagerService.h"
+#include "storage/repositories/NewsArticleRepository.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -19,6 +21,11 @@
 namespace fincept::screens {
 
 NewsDetailPanel::NewsDetailPanel(QWidget* parent) : QWidget(parent) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                setStyleSheet(QString("background:%1;color:%2;")
+                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+            });
     setObjectName("newsDetailPanel");
     setFixedWidth(340);
 
@@ -146,10 +153,17 @@ QWidget* NewsDetailPanel::build_content_view() {
     save_btn_->setFixedHeight(24);
     save_btn_->setToolTip("Save article to File Manager");
 
+    bookmark_btn_ = new QPushButton("BOOKMARK", content);
+    bookmark_btn_->setObjectName("newsDetailSaveBtn");
+    bookmark_btn_->setFixedHeight(24);
+    bookmark_btn_->setToolTip("Bookmark article");
+    bookmark_btn_->setCheckable(true);
+
     action_layout->addWidget(open_btn_);
     action_layout->addWidget(copy_btn_);
     action_layout->addWidget(analyze_btn_);
     action_layout->addWidget(save_btn_);
+    action_layout->addWidget(bookmark_btn_);
     layout->addWidget(actions);
 
     connect(open_btn_, &QPushButton::clicked, this, [this]() {
@@ -193,6 +207,11 @@ QWidget* NewsDetailPanel::build_content_view() {
                 QFileInfo(dest).size(), "text/plain", "news");
             LOG_INFO("News", "Saved article: " + stored_name);
         }
+    });
+    connect(bookmark_btn_, &QPushButton::clicked, this, [this]() {
+        if (!has_article_)
+            return;
+        emit bookmark_requested(current_article_);
     });
 
     // Translate button
@@ -388,14 +407,14 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     // Source with credibility flag
     if (article.source_flag != services::SourceFlag::NONE) {
         QString flag_text = services::NewsService::source_flag_label(article.source_flag);
-        QString flag_color = article.source_flag == services::SourceFlag::STATE_MEDIA ? "#f97316" : ui::colors::WARNING();
+        QString flag_color = article.source_flag == services::SourceFlag::STATE_MEDIA ? "" + QString(ui::colors::WARNING()) + "" : ui::colors::WARNING();
         source_label_->setText(article.source.toUpper() + "  [" + flag_text + "]");
         source_label_->setStyleSheet(
-            QString("color: %1; font-size: 12px; font-weight: 700; background: transparent;").arg(flag_color));
+            QString("color: %1; font-weight: 700; background: transparent;").arg(flag_color));
     } else {
         source_label_->setText(article.source.toUpper());
         source_label_->setStyleSheet(
-            QString("color: %1; font-size: 12px; font-weight: 700; background: transparent;").arg(ui::colors::CYAN));
+            QString("color: %1; font-weight: 700; background: transparent;").arg(ui::colors::CYAN));
     }
 
     // Threat classification in impact label
@@ -405,7 +424,7 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
         impact_label_->setText(QString("Threat: %1 (%2, %3% conf)")
                                    .arg(threat_text, article.threat.category)
                                    .arg(static_cast<int>(article.threat.confidence * 100)));
-        impact_label_->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(threat_color));
+        impact_label_->setStyleSheet(QString("color: %1; background: transparent;").arg(threat_color));
     }
     summary_label_->setText(article.summary.isEmpty() ? "No summary available." : article.summary);
     impact_label_->setText(QString("Impact: %1").arg(services::impact_string(article.impact)));
@@ -420,6 +439,19 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     analyze_btn_->setText("ANALYZE");
     analyze_btn_->setEnabled(true);
     analyze_timeout_->stop();
+
+    // Reflect saved state from DB
+    {
+        auto r = fincept::NewsArticleRepository::instance().load_saved();
+        bool is_saved = false;
+        if (r.is_ok()) {
+            for (const auto& a : r.value()) {
+                if (a.id == article.id) { is_saved = true; break; }
+            }
+        }
+        bookmark_btn_->setChecked(is_saved);
+        bookmark_btn_->setText(is_saved ? "BOOKMARKED" : "BOOKMARK");
+    }
 
     // Clear related and monitors
     show_related({});

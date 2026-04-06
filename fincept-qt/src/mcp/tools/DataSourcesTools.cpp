@@ -281,7 +281,7 @@ std::vector<ToolDef> get_data_sources_tools() {
     {
         ToolDef t;
         t.name        = "ds_list_connectors";
-        t.description = "List all 78 available connector types with their ID, name, category, "
+        t.description = "List all available connector types with their ID, name, category, "
                         "auth requirement, and testability. Use this to discover valid provider IDs.";
         t.category    = "data-sources";
         t.input_schema.properties = QJsonObject{};
@@ -370,7 +370,7 @@ std::vector<ToolDef> get_data_sources_tools() {
         t.name        = "ds_connectors_by_category";
         t.description = "List connector types filtered by category. "
                         "Valid categories: database, api, file, streaming, cloud, "
-                        "timeseries, market-data, search, warehouse.";
+                        "timeseries, market-data, search, warehouse, alt-data, open-banking.";
         t.category    = "data-sources";
         t.input_schema.properties = QJsonObject{
             {"category", QJsonObject{{"type", "string"},
@@ -390,10 +390,12 @@ std::vector<ToolDef> get_data_sources_tools() {
             else if (cat == "cloud")       cat_enum = Category::Cloud;
             else if (cat == "timeseries")  cat_enum = Category::TimeSeries;
             else if (cat == "market-data") cat_enum = Category::MarketData;
-            else if (cat == "search")      cat_enum = Category::SearchAnalytics;
-            else if (cat == "warehouse")   cat_enum = Category::DataWarehouse;
+            else if (cat == "search")        cat_enum = Category::SearchAnalytics;
+            else if (cat == "warehouse")     cat_enum = Category::DataWarehouse;
+            else if (cat == "alt-data")      cat_enum = Category::AlternativeData;
+            else if (cat == "open-banking")  cat_enum = Category::OpenBanking;
             else return ToolResult::fail("Unknown category '" + cat +
-                "'. Valid: database, api, file, streaming, cloud, timeseries, market-data, search, warehouse");
+                "'. Valid: database, api, file, streaming, cloud, timeseries, market-data, search, warehouse, alt-data, open-banking");
 
             auto filtered = ConnectorRegistry::instance().by_category(cat_enum);
             QJsonArray arr;
@@ -454,7 +456,7 @@ std::vector<ToolDef> get_data_sources_tools() {
             int port = 80;
 
             // Try explicit URL fields first
-            for (const QString& key : {"url", "baseUrl", "endpoint", "wsdlUrl", "serviceRoot"}) {
+            for (const QString& key : {"url", "baseUrl", "endpoint", "wsdlUrl", "serviceRoot", "jobManagerUrl"}) {
                 QString val = config_obj[key].toString().trimmed();
                 if (!val.isEmpty()) {
                     QUrl u(val);
@@ -471,7 +473,7 @@ std::vector<ToolDef> get_data_sources_tools() {
                 QString h = config_obj["host"].toString().trimmed();
                 if (!h.isEmpty()) {
                     host = h;
-                    port = config_obj["port"].toInt(5432);
+                    port = config_obj["port"].toInt(80);
                 }
             }
 
@@ -482,6 +484,39 @@ std::vector<ToolDef> get_data_sources_tools() {
                 if (u.isValid() && !u.host().isEmpty()) {
                     host = u.host();
                     port = u.port(27017);
+                }
+            }
+
+            // Fallback: comma-separated host lists (kafka brokers, nats servers,
+            //           cassandra contactPoints, etcd hosts, memcached servers)
+            if (host.isEmpty()) {
+                for (const QString& key : {"brokers", "servers", "contactPoints", "hosts", "zkQuorum"}) {
+                    QString val = config_obj[key].toString().trimmed();
+                    if (!val.isEmpty()) {
+                        // Take the first entry — "host:port" or just "host"
+                        QString first = val.split(',').first().trimmed();
+                        int colon = first.lastIndexOf(':');
+                        if (colon > 0) {
+                            host = first.left(colon);
+                            port = first.mid(colon + 1).toInt();
+                        } else {
+                            host = first;
+                            port = config_obj["port"].toInt(80);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Fallback: bolt/neo4j URI in "uri" field
+            if (host.isEmpty()) {
+                QString uri = config_obj["uri"].toString().trimmed();
+                if (!uri.isEmpty()) {
+                    QUrl u(uri);
+                    if (u.isValid() && !u.host().isEmpty()) {
+                        host = u.host();
+                        port = u.port(7687);
+                    }
                 }
             }
 

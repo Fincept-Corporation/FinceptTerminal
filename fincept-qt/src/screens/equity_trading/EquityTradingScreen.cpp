@@ -2,6 +2,7 @@
 #include "screens/equity_trading/EquityTradingScreen.h"
 
 #include "core/logging/Logger.h"
+#include "services/workspace/WorkspaceManager.h"
 #include "screens/equity_trading/EquityBottomPanel.h"
 #include "screens/equity_trading/EquityChart.h"
 #include "screens/equity_trading/EquityCredentials.h"
@@ -47,9 +48,43 @@ EquityTradingScreen::EquityTradingScreen(QWidget* parent) : QWidget(parent) {
     watchlist_symbols_ = DEFAULT_WATCHLIST;
     setup_ui();
     setup_timers();
+    WorkspaceManager::instance().register_participant("equity_trading", this);
+}
+
+QJsonObject EquityTradingScreen::save_state() const {
+    QJsonObject s;
+    s["broker_id"]    = broker_id_;
+    s["symbol"]       = selected_symbol_;
+    s["exchange"]     = selected_exchange_;
+    s["trading_mode"] = (trading_mode_ == equity::TradingMode::Paper) ? "paper" : "live";
+    QJsonArray wl;
+    for (const auto& sym : watchlist_symbols_)
+        wl.append(sym);
+    s["watchlist_symbols"] = QJsonValue(wl);
+    return s;
+}
+
+void EquityTradingScreen::restore_state(const QJsonObject& state) {
+    if (state.contains("broker_id"))
+        broker_id_ = state["broker_id"].toString();
+    if (state.contains("symbol"))
+        selected_symbol_ = state["symbol"].toString();
+    if (state.contains("exchange"))
+        selected_exchange_ = state["exchange"].toString();
+    if (state.contains("trading_mode"))
+        trading_mode_ = (state["trading_mode"].toString() == "live")
+                            ? equity::TradingMode::Live
+                            : equity::TradingMode::Paper;
+    if (state.contains("watchlist_symbols")) {
+        watchlist_symbols_.clear();
+        for (const auto& v : state["watchlist_symbols"].toArray())
+            watchlist_symbols_.append(v.toString());
+    }
+    // Heavy init (broker connect, data fetch) happens in showEvent/init_broker
 }
 
 EquityTradingScreen::~EquityTradingScreen() {
+    WorkspaceManager::instance().unregister_participant("equity_trading");
     ws_teardown();
     if (fill_cb_id_ >= 0)
         OrderMatcher::instance().remove_fill_callback(fill_cb_id_);

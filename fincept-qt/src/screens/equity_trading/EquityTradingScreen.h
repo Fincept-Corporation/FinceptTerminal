@@ -3,6 +3,7 @@
 // Routes to live brokers (16 supported) or paper trading engine.
 
 #include "screens/equity_trading/EquityTypes.h"
+#include "services/workspace/IWorkspaceParticipant.h"
 #include "trading/TradingTypes.h"
 #include "trading/websocket/AngelOneTickTypes.h"
 
@@ -33,11 +34,14 @@ class EquityBottomPanel;
 
 namespace fincept::screens {
 
-class EquityTradingScreen : public QWidget {
+class EquityTradingScreen : public QWidget, public IWorkspaceParticipant {
     Q_OBJECT
   public:
     explicit EquityTradingScreen(QWidget* parent = nullptr);
     ~EquityTradingScreen();
+
+    QJsonObject save_state() const override;
+    void restore_state(const QJsonObject& state) override;
 
   protected:
     void showEvent(QShowEvent* event) override;

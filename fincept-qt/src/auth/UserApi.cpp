@@ -103,29 +103,6 @@ void UserApi::get_login_history(int limit, int offset, Callback cb) {
     request("GET", QString("/user/login-history?limit=%1&offset=%2").arg(limit).arg(offset), {}, cb);
 }
 
-// ── Notifications ────────────────────────────────────────────────────────────
-
-void UserApi::get_notifications(int limit, int offset, bool unread_only, Callback cb) {
-    request("GET",
-            QString("/user/notifications?limit=%1&offset=%2&unread_only=%3")
-                .arg(limit)
-                .arg(offset)
-                .arg(unread_only ? "true" : "false"),
-            {}, cb);
-}
-
-void UserApi::mark_notification_read(int id, Callback cb) {
-    request("PUT", QString("/user/notifications/%1/read").arg(id), {}, cb);
-}
-
-void UserApi::mark_all_notifications_read(Callback cb) {
-    request("PUT", "/user/notifications/read-all", {}, cb);
-}
-
-void UserApi::delete_notification(int id, Callback cb) {
-    request("DELETE", QString("/user/notifications/%1").arg(id), {}, cb);
-}
-
 // ── MFA ──────────────────────────────────────────────────────────────────────
 
 void UserApi::enable_mfa(Callback cb) {

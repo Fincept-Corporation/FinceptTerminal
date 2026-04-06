@@ -4,6 +4,7 @@
 #include "services/news/NewsService.h"
 
 #include <QAbstractListModel>
+#include <QHash>
 #include <QSet>
 #include <QVector>
 
@@ -24,6 +25,14 @@ enum NewsFeedRole {
     LanguageRole,
     HasGeoRole,
     PulsePhaseRole,
+    // Pre-formatted display strings — computed once in set_wire_articles,
+    // read directly in paint() to avoid per-frame allocations (P7/Per.19)
+    FormattedSourceRole,   // source.left(10).toUpper()
+    FormattedLangRole,     // lang.toUpper()
+    FormattedThreatRole,   // threat_level_string().left(4)
+    FormattedTickersRole,  // "$AAPL $MSFT" pre-joined string
+    ThreatColorRole,       // threat_level_color() string
+    PriorityColorRole,     // priority_color() string
 };
 
 /// QAbstractListModel holding article/cluster data for QListView.
@@ -62,10 +71,24 @@ class NewsFeedModel : public QAbstractListModel {
     QVector<services::NewsCluster> clusters_;
     QString view_mode_ = "WIRE";
     QString selected_id_;
-    QSet<QString> seen_ids_;
-    QMap<QString, QString> article_monitor_color_;
+    QSet<QString>    seen_ids_;
+    QHash<QString, int> article_id_to_row_;  // O(1) index lookup for WIRE mode
+    QHash<QString, int> cluster_id_to_row_;  // O(1) index lookup for CLUSTERS mode
+    QHash<QString, QString> article_monitor_color_; // O(1) vs QMap's O(log n)
     QSet<QString> geo_article_ids_;
-    int pulse_phase_ = 0; // 0-3 for animation cycle
+    int pulse_phase_  = 0;  // 0-3 for animation cycle
+    int unseen_count_ = 0;  // incremental counter, avoids O(n) scan
+
+    // Per-row pre-formatted display strings — avoids string allocations in paint()
+    struct FormattedRow {
+        QString source;      // source.left(10).toUpper()
+        QString lang;        // lang.toUpper()
+        QString threat;      // threat_level_string().left(4) or ""
+        QString tickers;     // "$AAPL $MSFT" or ""
+        QString threat_color;
+        QString priority_color;
+    };
+    QVector<FormattedRow> formatted_rows_;
 };
 
 } // namespace fincept::screens

@@ -12,6 +12,7 @@
 #include <QScrollArea>
 #include <QSplitter>
 #include <QVBoxLayout>
+#include "ui/theme/ThemeManager.h"
 
 namespace {
 using namespace fincept::ui;
@@ -20,54 +21,54 @@ inline QString kStyle() {
     return QStringLiteral("#qlScreen { background: %1; }"
 
                    "#qlHeader { background: %2; border-bottom: 2px solid %3; }"
-                   "#qlHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
-                   "#qlHeaderSub { color: %5; font-size: 9px; letter-spacing: 0.5px; background: transparent; }"
-                   "#qlHeaderBadge { color: %6; font-size: 8px; font-weight: 700; "
+                   "#qlHeaderTitle { color: %4; font-weight: 700; background: transparent; }"
+                   "#qlHeaderSub { color: %5; letter-spacing: 0.5px; background: transparent; }"
+                   "#qlHeaderBadge { color: %6; font-weight: 700; "
                    "  background: rgba(22,163,74,0.2); padding: 2px 6px; }"
 
                    "#qlSidebar { background: %7; border-right: 1px solid %8; }"
-                   "QTreeWidget { background: %1; color: %5; border: none; font-size: 11px; }"
+                   "QTreeWidget { background: %1; color: %5; border: none; }"
                    "QTreeWidget::item { padding: 4px 8px; border-bottom: 1px solid %8; }"
                    "QTreeWidget::item:hover { color: %4; background: %12; }"
                    "QTreeWidget::item:selected { color: %3; background: rgba(217,119,6,0.1); "
                    "  border-left: 2px solid %3; }"
 
                    "#qlCenterPanel { background: %1; }"
-                   "#qlCenterTitle { color: %4; font-size: 13px; font-weight: 700; background: transparent; }"
+                   "#qlCenterTitle { color: %4; font-weight: 700; background: transparent; }"
 
                    "#qlPanel { background: %7; border: 1px solid %8; }"
                    "#qlPanelHeader { background: %2; border-bottom: 1px solid %8; }"
-                   "#qlPanelTitle { color: %4; font-size: 11px; font-weight: 700; background: transparent; }"
-                   "#qlLabel { color: %5; font-size: 9px; font-weight: 700; "
+                   "#qlPanelTitle { color: %4; font-weight: 700; background: transparent; }"
+                   "#qlLabel { color: %5; font-weight: 700; "
                    "  letter-spacing: 0.5px; background: transparent; }"
 
                    "QLineEdit { background: %1; color: %4; border: 1px solid %8; "
-                   "  padding: 4px 8px; font-size: 11px; }"
+                   "  padding: 4px 8px; }"
                    "QLineEdit:focus { border-color: %9; }"
                    "QComboBox { background: %1; color: %4; border: 1px solid %8; "
-                   "  padding: 4px 8px; font-size: 11px; }"
+                   "  padding: 4px 8px; }"
                    "QComboBox::drop-down { border: none; width: 16px; }"
                    "QComboBox QAbstractItemView { background: %2; color: %4; border: 1px solid %8; "
                    "  selection-background-color: %3; }"
 
                    "#qlExecBtn { background: %3; color: %1; border: none; padding: 6px 20px; "
-                   "  font-size: 10px; font-weight: 700; }"
-                   "#qlExecBtn:hover { background: #FF8800; }"
+                   "  font-weight: 700; }"
+                   "#qlExecBtn:hover { background: %10; }"
                    "#qlExecBtn:disabled { background: %10; color: %11; }"
 
                    "#qlResultPanel { background: %7; border-left: 1px solid %8; }"
-                   "#qlResultStatus { color: %5; font-size: 9px; background: transparent; }"
-                   "QTextEdit { background: %1; color: %13; border: none; font-size: 11px; }"
+                   "#qlResultStatus { color: %5; background: transparent; }"
+                   "QTextEdit { background: %1; color: %13; border: none; }"
                    "QTableWidget { background: %1; color: %4; border: none; gridline-color: %8; "
-                   "  font-size: 11px; }"
+                   "  }"
                    "QTableWidget::item { padding: 2px 6px; border-bottom: 1px solid %8; }"
                    "QHeaderView::section { background: %2; color: %5; border: none; "
                    "  border-bottom: 1px solid %8; border-right: 1px solid %8; "
-                   "  padding: 4px 6px; font-size: 10px; font-weight: 700; }"
+                   "  padding: 4px 6px; font-weight: 700; }"
 
                    "#qlStatusBar { background: %2; border-top: 1px solid %8; }"
-                   "#qlStatusText { color: %5; font-size: 9px; background: transparent; }"
-                   "#qlStatusHighlight { color: %13; font-size: 9px; background: transparent; }"
+                   "#qlStatusText { color: %5; background: transparent; }"
+                   "#qlStatusHighlight { color: %13; background: transparent; }"
 
                    "QSplitter::handle { background: %8; }"
                    "QScrollBar:vertical { background: %1; width: 6px; }"
@@ -93,6 +94,7 @@ inline QString kStyle() {
 namespace fincept::screens {
 
 using namespace fincept::ui;
+#include "ui/theme/ThemeManager.h"
 
 // ── Module definitions ──────────────────────────────────────────────────────
 
@@ -137,6 +139,8 @@ QuantLibScreen::QuantLibScreen(QWidget* parent) : QWidget(parent) {
     setStyleSheet(kStyle());
     modules_ = build_modules();
     setup_ui();
+    connect(&ThemeManager::instance(), &ThemeManager::theme_changed,
+            this, [this](const ThemeTokens&) { setStyleSheet(kStyle()); });
     LOG_INFO("QuantLib", "Screen constructed — 18 modules, 590+ endpoints");
 }
 
@@ -209,7 +213,7 @@ QWidget* QuantLibScreen::create_sidebar() {
     vl->setSpacing(0);
 
     auto* title = new QLabel("MODULES");
-    title->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700; "
+    title->setStyleSheet(QString("color: %1; font-weight: 700; "
                                  "letter-spacing: 0.5px; background: transparent; "
                                  "padding: 8px 12px; border-bottom: 1px solid %2;")
                              .arg(colors::TEXT_SECONDARY, colors::BORDER_DIM));
@@ -329,7 +333,7 @@ QWidget* QuantLibScreen::create_center_panel() {
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(
             QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
-                    "padding: 2px 8px; font-size: 8px; font-weight: 700; } "
+                    "padding: 2px 8px; font-weight: 700; } "
                     "QPushButton:hover { color: %4; }")
                 .arg(colors::BG_SURFACE, colors::TEXT_SECONDARY, colors::BORDER_DIM, colors::TEXT_PRIMARY));
         connect(btn, &QPushButton::clicked, param_input1_, [this, json_text]() { param_input1_->setText(json_text); });

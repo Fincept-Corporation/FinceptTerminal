@@ -9,6 +9,7 @@
 #include "mcp/McpManager.h"
 #include "mcp/McpProvider.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -32,45 +33,45 @@
 namespace {
 using namespace fincept::ui;
 
-static const QString kStyle = QStringLiteral(
+inline QString kStyle() { return QString(
 
     // Screen / header
     "#mcpScreen  { background: %1; }"
     "#mcpHeader  { background: %2; border-bottom: 2px solid %3; }"
-    "#mcpHeaderTitle { color:%4; font-size:12px; font-weight:700; background:transparent; }"
+    "#mcpHeaderTitle { color:%4; font-weight:700; background:transparent; }"
 
     // Tab buttons
     "#mcpViewBtn { background:transparent; color:%5; border:1px solid %8; "
-    "  font-size:9px; font-weight:700; padding:4px 14px; }"
+    "  font-weight:700; padding:4px 14px; }"
     "#mcpViewBtn:hover { color:%4; border-color:%9; }"
     "#mcpViewBtn[active=\"true\"] { background:%3; color:%1; border-color:%3; }"
 
     // Search / refresh
     "#mcpSearchInput { background:%1; color:%4; border:1px solid %8; "
-    "  padding:4px 8px; font-size:11px; min-width:200px; }"
+    "  padding:4px 8px; min-width:200px; }"
     "#mcpSearchInput:focus { border-color:%9; }"
     "#mcpRefreshBtn { background:%7; color:%5; border:1px solid %8; "
-    "  padding:4px 10px; font-size:9px; font-weight:700; }"
+    "  padding:4px 10px; font-weight:700; }"
     "#mcpRefreshBtn:hover { color:%4; }"
 
     // ── Marketplace cards ──
     "#mktCard { background:%7; border:1px solid %8; min-height:130px; }"
     "#mktCard:hover { border-color:%9; }"
-    "#mktCardName  { color:%4; font-size:11px; font-weight:700; background:transparent; }"
-    "#mktCardDesc  { color:%5; font-size:10px; background:transparent; }"
-    "#mktCardCmd   { color:%13; font-size:9px; font-family:monospace; background:transparent; }"
-    "#mktCardEnv   { color:%3; font-size:9px; background:transparent; }"
-    "#mktCatBadge  { color:%3; font-size:8px; font-weight:700; "
+    "#mktCardName  { color:%4; font-weight:700; background:transparent; }"
+    "#mktCardDesc  { color:%5; background:transparent; }"
+    "#mktCardCmd   { color:%13; font-family:monospace; background:transparent; }"
+    "#mktCardEnv   { color:%3; background:transparent; }"
+    "#mktCatBadge  { color:%3; font-weight:700; "
     "  background:rgba(217,119,6,0.12); padding:1px 6px; border:1px solid rgba(217,119,6,0.3); }"
     "#mktAddBtn    { background:%3; color:%1; border:none; padding:5px 16px; "
-    "  font-size:9px; font-weight:700; }"
-    "#mktAddBtn:hover { background:#FF8800; }"
-    "#mktInstalledBadge { color:%6; font-size:9px; font-weight:700; "
+    "  font-weight:700; }"
+    "#mktAddBtn:hover { background:%10; }"
+    "#mktInstalledBadge { color:%6; font-weight:700; "
     "  background:rgba(22,163,74,0.12); padding:5px 12px; border:1px solid rgba(22,163,74,0.3); }"
 
     // Category filter sidebar
     "#catList { background:%2; border:none; outline:none; }"
-    "#catList::item { color:%5; font-size:9px; font-weight:700; padding:6px 12px; }"
+    "#catList::item { color:%5; font-weight:700; padding:6px 12px; }"
     "#catList::item:hover { color:%4; background:%12; }"
     "#catList::item:selected { color:%3; background:rgba(217,119,6,0.1); "
     "  border-left:2px solid %3; }"
@@ -78,56 +79,56 @@ static const QString kStyle = QStringLiteral(
     // ── Installed server cards ──
     "#srvCard { background:%7; border:1px solid %8; margin:4px 0px; }"
     "#srvCard:hover { border-color:%9; }"
-    "#srvCardName  { color:%4; font-size:12px; font-weight:700; background:transparent; }"
-    "#srvCardDesc  { color:%5; font-size:10px; background:transparent; }"
-    "#srvCardCmd   { color:%13; font-size:9px; font-family:monospace; background:transparent; }"
-    "#srvCardCat   { color:%5; font-size:9px; background:transparent; }"
-    "#pillRunning  { color:%6; font-size:9px; font-weight:700; "
+    "#srvCardName  { color:%4; font-weight:700; background:transparent; }"
+    "#srvCardDesc  { color:%5; background:transparent; }"
+    "#srvCardCmd   { color:%13; font-family:monospace; background:transparent; }"
+    "#srvCardCat   { color:%5; background:transparent; }"
+    "#pillRunning  { color:%6; font-weight:700; "
     "  background:rgba(22,163,74,0.15); padding:2px 10px; "
     "  border:1px solid rgba(22,163,74,0.4); }"
-    "#pillStopped  { color:%14; font-size:9px; font-weight:700; "
+    "#pillStopped  { color:%14; font-weight:700; "
     "  background:rgba(220,38,38,0.10); padding:2px 10px; "
     "  border:1px solid rgba(220,38,38,0.4); }"
-    "#pillError    { color:%14; font-size:9px; font-weight:700; "
+    "#pillError    { color:%14; font-weight:700; "
     "  background:rgba(220,38,38,0.10); padding:2px 10px; "
     "  border:1px solid rgba(220,38,38,0.4); }"
-    "#pillAutoOn   { color:%6; font-size:8px; background:transparent; }"
-    "#pillAutoOff  { color:%11; font-size:8px; background:transparent; }"
+    "#pillAutoOn   { color:%6; background:transparent; }"
+    "#pillAutoOff  { color:%11; background:transparent; }"
 
     // Inline card buttons
     "#cardToggleOn  { background:rgba(22,163,74,0.15); color:%6; "
     "  border:1px solid rgba(22,163,74,0.5); "
-    "  padding:4px 12px; font-size:9px; font-weight:700; }"
+    "  padding:4px 12px; font-weight:700; }"
     "#cardToggleOn:hover  { background:rgba(22,163,74,0.25); }"
     "#cardToggleOff { background:%7; color:%5; border:1px solid %8; "
-    "  padding:4px 12px; font-size:9px; font-weight:700; }"
+    "  padding:4px 12px; font-weight:700; }"
     "#cardToggleOff:hover { color:%4; border-color:%9; }"
     "#cardLogsBtn   { background:transparent; color:%5; border:1px solid %8; "
-    "  padding:4px 12px; font-size:9px; font-weight:700; }"
+    "  padding:4px 12px; font-weight:700; }"
     "#cardLogsBtn:hover   { color:%4; }"
     "#cardRemoveBtn { background:transparent; color:%14; border:1px solid %14; "
-    "  padding:4px 12px; font-size:9px; font-weight:700; }"
+    "  padding:4px 12px; font-weight:700; }"
     "#cardRemoveBtn:hover { background:rgba(220,38,38,0.12); }"
 
     // Add server button (full-width sticky)
     "#addSrvBtn { background:%3; color:%1; border:none; "
-    "  padding:8px; font-size:10px; font-weight:700; }"
-    "#addSrvBtn:hover { background:#FF8800; }"
+    "  padding:8px; font-weight:700; }"
+    "#addSrvBtn:hover { background:%10; }"
 
     // Log expander inside card
-    "QTextEdit { background:%1; color:%13; border:none; font-size:10px; font-family:monospace; }"
+    "QTextEdit { background:%1; color:%13; border:none; font-family:monospace; }"
 
     // Tools table
-    "QTableWidget { background:%1; color:%4; border:none; gridline-color:%8; font-size:11px; }"
+    "QTableWidget { background:%1; color:%4; border:none; gridline-color:%8; }"
     "QTableWidget::item { padding:2px 6px; border-bottom:1px solid %8; }"
     "QHeaderView::section { background:%2; color:%5; border:none; "
     "  border-bottom:1px solid %8; border-right:1px solid %8; "
-    "  padding:4px 6px; font-size:10px; font-weight:700; }"
+    "  padding:4px 6px; font-weight:700; }"
 
     // Status bar
     "#mcpStatusBar { background:%2; border-top:1px solid %8; }"
-    "#mcpStatusText      { color:%5;  font-size:9px; background:transparent; }"
-    "#mcpStatusHighlight { color:%13; font-size:9px; background:transparent; }"
+    "#mcpStatusText      { color:%5;  background:transparent; }"
+    "#mcpStatusHighlight { color:%13; background:transparent; }"
 
     // Scroll
     "QScrollBar:vertical { background:%1; width:6px; }"
@@ -149,7 +150,8 @@ static const QString kStyle = QStringLiteral(
 .arg(colors::BG_HOVER)       // %12
 .arg(colors::CYAN)           // %13
 .arg(colors::NEGATIVE)       // %14
-;
+; }
+
 } // namespace
 
 namespace fincept::screens {
@@ -202,7 +204,9 @@ static const QList<MarketplaceEntry> g_catalog = {
 
 McpServersScreen::McpServersScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("mcpScreen");
-    setStyleSheet(kStyle);
+    setStyleSheet(kStyle());
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { setStyleSheet(kStyle()); });
     setup_ui();
 
     connect(&McpManager::instance(), &McpManager::servers_changed, this, [this]() {

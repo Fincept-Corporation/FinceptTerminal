@@ -7,6 +7,7 @@
 #include "screens/forum/ForumThreadPanel.h"
 #include "services/forum/ForumService.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QDialog>
 #include <QFrame>
@@ -28,6 +29,7 @@ static QString M(int sz = 12) {
 }
 
 ForumScreen::ForumScreen(QWidget* parent) : QWidget(parent) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) { setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY())); });
     build_ui();
 }
 

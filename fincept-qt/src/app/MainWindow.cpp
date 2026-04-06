@@ -1,5 +1,6 @@
 #include "app/MainWindow.h"
 
+#include "screens/chat_mode/ChatModeScreen.h"
 #include "services/updater/UpdateService.h"
 #include "ai_chat/AiChatBubble.h"
 #include "ai_chat/AiChatScreen.h"
@@ -9,6 +10,10 @@
 #include "core/session/SessionManager.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "screens/ComingSoonScreen.h"
+#include "services/workspace/WorkspaceManager.h"
+#include "ui/workspace/WorkspaceNewDialog.h"
+#include "ui/workspace/WorkspaceOpenDialog.h"
+#include "ui/workspace/WorkspaceSaveAsDialog.h"
 #include "screens/about/AboutScreen.h"
 #include "screens/agent_config/AgentConfigScreen.h"
 #include "screens/ai_quant_lab/AIQuantLabScreen.h"
@@ -121,7 +126,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     master_stack->addWidget(auth_stack_);
 
     // ── App shell ────────────────────────────────────────────────────────────
-    auto* app_container = new QWidget;
+    app_container_ = new QWidget;
+    auto* app_container = app_container_;
     auto* vl = new QVBoxLayout(app_container);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
@@ -145,12 +151,33 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     status_bar_widget_ = status_bar;
 
     master_stack->addWidget(app_container);
+
+    // ── Chat Mode ─────────────────────────────────────────────────────────────
+    chat_mode_screen_ = new chat_mode::ChatModeScreen;
+    master_stack->addWidget(chat_mode_screen_);  // index 2
+    connect(chat_mode_screen_, &chat_mode::ChatModeScreen::exit_requested,
+            this, &MainWindow::toggle_chat_mode);
+
     setCentralWidget(master_stack);
     statusBar()->hide();
 
     stack_ = master_stack;
     router_ = new ScreenRouter(app_stack_, this);
     setup_app_screens();
+
+    // WorkspaceManager — wire router + main window
+    WorkspaceManager::instance().set_main_window(this);
+    WorkspaceManager::instance().set_router(router_);
+    connect(router_, &ScreenRouter::screen_changed,
+            &WorkspaceManager::instance(), &WorkspaceManager::on_screen_changed);
+    connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_loaded,
+            this, [this](const WorkspaceDef& ws) {
+                setWindowTitle(QString("Fincept Terminal — %1").arg(ws.metadata.name));
+            });
+    connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_error,
+            this, [this](const QString& msg) {
+                QMessageBox::warning(this, "Workspace Error", msg);
+            });
 
     // AI Chat Bubble — floats over app_stack_ content area
     chat_bubble_ = new AiChatBubble(app_stack_);
@@ -177,6 +204,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         }
     });
 
+    // Chat Mode toggle button in toolbar
+    connect(toolbar, &ui::ToolBar::chat_mode_toggled, this, &MainWindow::toggle_chat_mode);
+
     // Toolbar Navigate menu → router
     connect(toolbar, &ui::ToolBar::navigate_to, router_, &ScreenRouter::navigate);
 
@@ -190,6 +220,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     });
 
     // ── Keyboard shortcuts ────────────────────────────────────────────────────
+    auto* sc_chat = new QShortcut(QKeySequence(Qt::Key_F9), this);
+    connect(sc_chat, &QShortcut::activated, this, &MainWindow::toggle_chat_mode);
+
     auto* sc_fullscreen = new QShortcut(QKeySequence(Qt::Key_F11), this);
     connect(sc_fullscreen, &QShortcut::activated, this, [this]() {
         if (isFullScreen())
@@ -256,6 +289,34 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         } else if (action == "refresh") {
             if (auto* w = app_stack_->currentWidget())
                 QMetaObject::invokeMethod(w, "refresh", Qt::QueuedConnection);
+        } else if (action == "new_workspace") {
+            auto* dlg = new WorkspaceNewDialog(this);
+            if (dlg->exec() == QDialog::Accepted)
+                WorkspaceManager::instance().new_workspace(
+                    dlg->workspace_name(), dlg->workspace_description(), dlg->selected_template_id());
+            dlg->deleteLater();
+        } else if (action == "open_workspace") {
+            auto* dlg = new WorkspaceOpenDialog(this);
+            if (dlg->exec() == QDialog::Accepted && !dlg->selected_path().isEmpty())
+                WorkspaceManager::instance().open_workspace(dlg->selected_path());
+            dlg->deleteLater();
+        } else if (action == "save_workspace") {
+            WorkspaceManager::instance().save_workspace();
+        } else if (action == "save_workspace_as") {
+            auto* dlg = new WorkspaceSaveAsDialog(this);
+            if (dlg->exec() == QDialog::Accepted)
+                WorkspaceManager::instance().save_workspace_as(dlg->new_name(), dlg->chosen_path());
+            dlg->deleteLater();
+        } else if (action == "import_data") {
+            QString path = QFileDialog::getOpenFileName(
+                this, "Import Workspace", QDir::homePath(), "Fincept Workspace (*.fwsp)");
+            if (!path.isEmpty())
+                WorkspaceManager::instance().import_workspace(path);
+        } else if (action == "export_data") {
+            QString path = QFileDialog::getSaveFileName(
+                this, "Export Workspace", QDir::homePath(), "Fincept Workspace (*.fwsp)");
+            if (!path.isEmpty())
+                WorkspaceManager::instance().export_workspace(path);
         } else if (action == "screenshot") {
             QScreen* scr = this->screen();
             if (!scr)
@@ -315,6 +376,32 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
                 auth.refresh_user_data();
         }
     });
+}
+
+void MainWindow::toggle_chat_mode() {
+    chat_mode_ = !chat_mode_;
+
+    if (chat_mode_) {
+        // Enter chat mode: hide terminal chrome, show chat screen (index 2)
+        if (tab_bar_widget_)    tab_bar_widget_->setVisible(false);
+        if (status_bar_widget_) status_bar_widget_->setVisible(false);
+        if (chat_bubble_)       chat_bubble_->setVisible(false);
+        stack_->setCurrentIndex(2);
+        LOG_INFO("MainWindow", "Entered Chat Mode");
+    } else {
+        // Exit chat mode: restore terminal
+        stack_->setCurrentIndex(1);
+        if (tab_bar_widget_)    tab_bar_widget_->setVisible(true);
+        if (status_bar_widget_) status_bar_widget_->setVisible(true);
+        // Restore chat bubble based on setting
+        if (chat_bubble_) {
+            auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
+            const bool show = !r.is_ok() || r.value() != "false";
+            chat_bubble_->setVisible(show);
+            if (show) { chat_bubble_->reposition(); chat_bubble_->raise(); }
+        }
+        LOG_INFO("MainWindow", "Exited Chat Mode");
+    }
 }
 
 void MainWindow::setup_auth_screens() {
@@ -461,7 +548,7 @@ void MainWindow::on_auth_state_changed() {
         if (auth.session().has_paid_plan()) {
             // Paid user → straight to dashboard
             stack_->setCurrentIndex(1);
-            router_->navigate("dashboard");
+            WorkspaceManager::instance().load_last_workspace();
             // Trigger silent update check after login (delayed so UI settles first)
             QTimer::singleShot(3000, this, []() {
                 services::UpdateService::instance().check_for_updates(true);
@@ -510,9 +597,8 @@ void MainWindow::show_info_help() {
     auth_stack_->setCurrentIndex(4);
 }
 
-void MainWindow::restore_session() {}
-
 void MainWindow::closeEvent(QCloseEvent* event) {
+    WorkspaceManager::instance().save_workspace();
     SessionManager::instance().save_geometry(saveGeometry(), saveState());
     event->accept();
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include <QCheckBox>
 #include <QComboBox>
+#include <QFrame>
 #include <QHash>
 #include <QLabel>
 #include <QLineEdit>
@@ -13,7 +14,7 @@ namespace fincept::screens {
 
 /// Full-featured settings screen.
 /// Sections: Credentials | Appearance | Notifications | Storage & Cache |
-///           Data Sources | LLM Config | MCP Servers
+///           Data Sources | LLM Config | MCP Servers | Logging
 class SettingsScreen : public QWidget {
     Q_OBJECT
   public:
@@ -24,6 +25,7 @@ class SettingsScreen : public QWidget {
 
   private:
     QStackedWidget* sections_ = nullptr;
+    QWidget*        nav_      = nullptr;
 
     // ── Section builders ─────────────────────────────────────────────────────
     QWidget* build_credentials();
@@ -33,6 +35,7 @@ class SettingsScreen : public QWidget {
     QWidget* build_data_sources();
     QWidget* build_llm_config();
     QWidget* build_mcp_servers();
+    QWidget* build_logging();
 
     // ── Shared layout helper ──────────────────────────────────────────────────
     static QWidget* make_row(const QString& label, QWidget* control, const QString& description = {});
@@ -55,22 +58,46 @@ class SettingsScreen : public QWidget {
     QTimer*      appearance_debounce_ = nullptr; // coalesces rapid font/density changes
 
     // ── Notifications state ───────────────────────────────────────────────────
-    QCheckBox* notif_email_ = nullptr;
-    QLineEdit* notif_email_addr_ = nullptr;
-    QCheckBox* notif_inapp_ = nullptr;
-    QCheckBox* notif_price_ = nullptr;
-    QCheckBox* notif_news_ = nullptr;
-    QCheckBox* notif_orders_ = nullptr;
-    QCheckBox* notif_sound_ = nullptr;
+    // Per-provider accordion widgets (keyed by provider_id)
+    struct ProviderWidgets {
+        QCheckBox*                  enabled    = nullptr;
+        QHash<QString, QLineEdit*>  fields;      // field_key → input widget
+        QPushButton*                test_btn   = nullptr;
+        QFrame*                     body_frame = nullptr; // collapsible config area
+        QLabel*                     status_lbl = nullptr; // inline test result
+    };
+    QHash<QString, ProviderWidgets> provider_widgets_;
+
+    // Alert trigger checkboxes
+    QCheckBox* trigger_inapp_         = nullptr;
+    QCheckBox* trigger_price_         = nullptr;
+    QCheckBox* trigger_news_          = nullptr;
+    QCheckBox* trigger_orders_        = nullptr;
+
+    // News alert sub-options (visible only when trigger_news_ is checked)
+    QCheckBox* news_breaking_         = nullptr;
+    QCheckBox* news_monitors_         = nullptr;
+    QCheckBox* news_deviations_       = nullptr;
+    QCheckBox* news_flash_            = nullptr;
+    QFrame*    news_subopts_frame_    = nullptr;
 
     // ── Storage state ─────────────────────────────────────────────────────────
     QLabel* storage_count_ = nullptr;
 
+    // ── Logging state ─────────────────────────────────────────────────────────
+    QComboBox*   log_global_level_  = nullptr;
+    QWidget*     log_tag_list_      = nullptr;   // VBox container for tag rows
+    QVBoxLayout* log_tag_layout_    = nullptr;
+
     // ── Data loaders (called from showEvent) ──────────────────────────────────
+    void refresh_theme();
     void load_credentials();
     void load_appearance();
     void load_notifications();
     void refresh_storage_stats();
+
+    // ── Notification helpers ──────────────────────────────────────────────────
+    void save_provider_fields(const QString& provider_id, const ProviderWidgets& pw);
 };
 
 } // namespace fincept::screens

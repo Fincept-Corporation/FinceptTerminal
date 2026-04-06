@@ -2,11 +2,11 @@
 
 #include "auth/AuthApi.h"
 #include "auth/UserApi.h"
-#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "storage/secure/SecureStorage.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -72,22 +72,34 @@ void AuthManager::save_session() {
     if (r.is_err()) {
         LOG_ERROR("Auth", "Failed to save session: " + QString::fromStdString(r.error()));
     }
+
+    // Persist api_key to OS-native encrypted storage (DPAPI / Keychain) as the
+    // durable credential. SQLite session JSON is the fallback.
+    if (!session_.api_key.isEmpty()) {
+        auto sr = fincept::SecureStorage::instance().store("api_key", session_.api_key);
+        if (sr.is_err())
+            LOG_WARN("Auth", "SecureStorage: failed to persist api_key — using SQLite fallback");
+    }
 }
 
 void AuthManager::load_session() {
     auto r = fincept::SettingsRepository::instance().get("fincept_session");
-    if (r.is_err())
-        return;
+    if (r.is_ok() && !r.value().isEmpty()) {
+        auto doc = QJsonDocument::fromJson(r.value().toUtf8());
+        if (!doc.isNull())
+            session_ = SessionData::from_json(doc.object());
+    }
 
-    QString json = r.value();
-    if (json.isEmpty())
-        return;
+    // Try to recover api_key from SecureStorage (DPAPI / Keychain) — this is the
+    // most reliable source since it survives SQLite corruption and DB migrations.
+    auto secure_key = fincept::SecureStorage::instance().retrieve("api_key");
+    if (secure_key.is_ok() && !secure_key.value().isEmpty()) {
+        if (session_.api_key.isEmpty() || session_.api_key != secure_key.value()) {
+            LOG_INFO("Auth", "Restored api_key from SecureStorage");
+            session_.api_key = secure_key.value();
+        }
+    }
 
-    auto doc = QJsonDocument::fromJson(json.toUtf8());
-    if (doc.isNull())
-        return;
-
-    session_ = SessionData::from_json(doc.object());
     // Never trust saved authenticated flag — must be re-validated
     session_.authenticated = false;
 }
@@ -97,6 +109,7 @@ void AuthManager::clear_session() {
     clear_tokens();
     fincept::SettingsRepository::instance().remove("fincept_session");
     fincept::SettingsRepository::instance().remove("fincept_api_key");
+    fincept::SecureStorage::instance().remove("api_key");
 
     // Clear auto-configured fincept LLM provider and reset LlmService
     LlmConfigRepository::instance().delete_provider("fincept");
@@ -109,8 +122,14 @@ void AuthManager::initialize() {
     load_session();
 
     if (!session_.api_key.isEmpty()) {
-        // Restore tokens on HttpClient so API calls work
-        apply_tokens(session_.api_key, session_.session_token);
+        // Apply api_key ONLY — do NOT send the stale session_token during
+        // startup validation. The server enforces single-session via
+        // X-Session-Token; sending a stale one triggers 401 even though
+        // the api_key is perfectly valid and permanent.
+        auto& http = fincept::HttpClient::instance();
+        http.set_auth_header(session_.api_key);
+        http.clear_session_token();
+
         validate_saved_session();
         return;
     }
@@ -120,64 +139,55 @@ void AuthManager::initialize() {
 }
 
 void AuthManager::validate_saved_session() {
-    AuthApi::instance().validate_session_server([this](ApiResponse r) {
-        // 401/403 → session truly expired, must re-login
-        if (!r.success && (r.status_code == 401 || r.status_code == 403)) {
-            LOG_WARN("Auth", "Session expired (HTTP " + QString::number(r.status_code) + ") — clearing");
-            clear_session();
-            set_loading(false);
-            emit auth_state_changed();
-            return;
-        }
-
-        // Network/server error (500, 0) → treat as transient, keep session alive
-        // and proceed to dashboard; worst case the next API call will fail
-        if (!r.success) {
-            LOG_WARN("Auth", "Session validation network error — restoring session anyway");
-            session_.authenticated = true;
-            set_loading(false);
-            emit auth_state_changed();
-            return;
-        }
-
-        // Success — check response body
-        const auto data = unwrap_data(r.data);
-        LOG_DEBUG("Auth", "validate-session response: " +
-                              QString::fromUtf8(QJsonDocument(r.data).toJson(QJsonDocument::Compact)));
-
-        // Only clear if server explicitly says valid=false with a 200 OK.
-        // Some servers return {"valid": false} only when the token is truly revoked.
-        if (r.status_code == 200 && data.contains("valid") && !data["valid"].toBool()) {
-            LOG_WARN("Auth", "Session invalid (valid=false in body) — clearing");
-            clear_session();
-            set_loading(false);
-            emit auth_state_changed();
-            return;
-        }
-
-        // Session valid — refresh profile then proceed
-        fetch_user_profile([this] { emit subscription_fetched(); });
-    });
+    // Validate the saved api_key by fetching the user profile.
+    // We intentionally do NOT send X-Session-Token here — the api_key is
+    // the permanent credential. A stale session_token would cause a false 401.
+    //
+    // Flow:
+    //   api_key valid (200) → fetch subscription → mark authenticated → save
+    //   api_key revoked (401/403) → clear everything → show login
+    //   network error → trust cached session data (offline-friendly)
+    LOG_INFO("Auth", "Validating saved session via profile fetch (api_key only, no session_token)");
+    fetch_user_profile([this] { emit subscription_fetched(); });
 }
 
 void AuthManager::fetch_user_profile(std::function<void()> on_done) {
     AuthApi::instance().get_user_profile([this, on_done = std::move(on_done)](ApiResponse r) mutable {
+        if (!r.success && (r.status_code == 401 || r.status_code == 403)) {
+            // API key is revoked or invalid — force re-login
+            LOG_WARN("Auth", "Profile fetch returned 401/403 — API key invalid, clearing session");
+            clear_session();
+            set_loading(false);
+            emit auth_state_changed();
+            return;
+        }
         if (r.success) {
             const auto data = unwrap_data(r.data);
             session_.user_info = UserProfile::from_json(data);
+
+            // api_key confirmed valid — now restore session_token on HttpClient
+            // so subsequent authenticated requests include it. If the old
+            // session_token turns out to be stale during usage, SessionGuard
+            // will handle recovery without clearing the api_key.
+            if (!session_.session_token.isEmpty()) {
+                fincept::HttpClient::instance().set_session_token(session_.session_token);
+            }
+        } else {
+            // Network/server error — keep going with cached session data
+            LOG_WARN("Auth", "Profile fetch failed (non-auth error) — using cached data");
+            session_.authenticated = !session_.api_key.isEmpty();
+            // Restore session_token for subsequent requests even in offline mode
+            if (!session_.session_token.isEmpty()) {
+                fincept::HttpClient::instance().set_session_token(session_.session_token);
+            }
         }
         fetch_user_subscription(std::move(on_done));
     });
 }
 
 // ── Shared post-auth completion ───────────────────────────────────────────────
-// Fetches subscription, syncs state, saves session, emits success_signal.
-// Called at the tail of login / verify_otp / verify_mfa / session restore.
-
-// ── Shared post-auth completion ───────────────────────────────────────────────
 // Fetches subscription, syncs state, saves session, then calls on_done().
-// Used by login / verify_otp / verify_mfa / session restore to avoid
-// duplicating the same 8-line block in four places.
+// Used by login / verify_otp / verify_mfa / session restore.
 
 void AuthManager::complete_auth_flow(std::function<void()> on_done) {
     UserApi::instance().get_user_subscription([this, on_done = std::move(on_done)](ApiResponse r) {
@@ -321,6 +331,7 @@ void AuthManager::verify_otp(const QString& email, const QString& otp) {
         session_.session_token = session_token;
         session_.device_id = generate_device_id();
 
+        LOG_INFO("Auth", "OTP verified successfully");
         fetch_user_profile([this] { emit otp_verified(); });
     });
 }
@@ -353,6 +364,7 @@ void AuthManager::verify_mfa(const QString& email, const QString& otp) {
         session_.session_token = session_token;
         session_.device_id = generate_device_id();
 
+        LOG_INFO("Auth", "MFA verified successfully");
         fetch_user_profile([this] { emit mfa_verified(); });
     });
 }
@@ -409,6 +421,52 @@ void AuthManager::logout() {
 
     emit logged_out();
     emit auth_state_changed();
+}
+
+// ── Session recovery ─────────────────────────────────────────────────────────
+// Called by SessionGuard when it gets 401. Instead of immediately logging out,
+// we strip the stale session_token and re-validate with api_key only.
+// If the api_key is still valid → session recovered, no disruption.
+// If api_key is also invalid → truly expired, must re-login.
+
+void AuthManager::attempt_session_recovery(std::function<void(bool)> cb) {
+    if (session_.api_key.isEmpty()) {
+        if (cb) cb(false);
+        return;
+    }
+
+    LOG_INFO("Auth", "Attempting session recovery with api_key only");
+
+    // Temporarily strip session_token so the validation request doesn't 401
+    fincept::HttpClient::instance().clear_session_token();
+
+    AuthApi::instance().get_user_profile([this, cb = std::move(cb)](ApiResponse r) mutable {
+        if (r.success) {
+            LOG_INFO("Auth", "Session recovery succeeded — api_key is valid");
+            const auto data = unwrap_data(r.data);
+            session_.user_info = UserProfile::from_json(data);
+            session_.authenticated = true;
+
+            // The old session_token was stale. Clear it from our saved state.
+            // The app continues with api_key-only auth. A fresh session_token
+            // will be obtained on the next explicit login.
+            session_.session_token.clear();
+            save_session();
+
+            // Don't restore session_token — operate with api_key only
+            if (cb) cb(true);
+        } else if (r.status_code == 401 || r.status_code == 403) {
+            LOG_WARN("Auth", "Session recovery failed — api_key is invalid");
+            if (cb) cb(false);
+        } else {
+            // Network error — don't force logout, assume transient
+            LOG_WARN("Auth", "Session recovery: network error — keeping session alive");
+            // Restore session_token since we can't determine if it's stale
+            if (!session_.session_token.isEmpty())
+                fincept::HttpClient::instance().set_session_token(session_.session_token);
+            if (cb) cb(true);
+        }
+    });
 }
 
 // ── Refresh user data ────────────────────────────────────────────────────────

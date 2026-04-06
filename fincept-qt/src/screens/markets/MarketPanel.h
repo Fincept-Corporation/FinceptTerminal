@@ -26,6 +26,7 @@ class MarketPanel : public QWidget {
 
   private:
     void populate(const QVector<services::QuoteData>& quotes);
+    void refresh_theme();
 
     QString title_;
     QStringList symbols_;

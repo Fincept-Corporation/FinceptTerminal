@@ -1,6 +1,9 @@
 #include "screens/news/NewsScreen.h"
 
 #include "core/logging/Logger.h"
+#include "services/notifications/NotificationService.h"
+#include "storage/repositories/NewsArticleRepository.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "screens/news/NewsCommandBar.h"
 #include "screens/news/NewsDetailPanel.h"
 #include "screens/news/NewsFeedPanel.h"
@@ -10,6 +13,7 @@
 #include "services/news/NewsNlpService.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
 #include <QDesktopServices>
@@ -28,6 +32,11 @@
 namespace fincept::screens {
 
 NewsScreen::NewsScreen(QWidget* parent) : QWidget(parent) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                setStyleSheet(QString("background:%1;color:%2;")
+                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+            });
     setObjectName("newsScreen");
     setStyleSheet(ui::styles::news_screen_styles());
 
@@ -117,6 +126,15 @@ void NewsScreen::connect_signals() {
 
     // Detail panel
     connect(detail_panel_, &NewsDetailPanel::analyze_requested, this, &NewsScreen::on_analyze_requested);
+    connect(detail_panel_, &NewsDetailPanel::bookmark_requested, this, [this](const services::NewsArticle& article) {
+        auto r = fincept::NewsArticleRepository::instance().toggle_saved(article.id);
+        if (r.is_ok()) {
+            // Refresh saved section in side panel
+            auto saved_r = fincept::NewsArticleRepository::instance().load_saved();
+            if (saved_r.is_ok())
+                side_panel_->update_saved(saved_r.value());
+        }
+    });
 
     // RTL toggle
     connect(command_bar_, &NewsCommandBar::rtl_toggled, this, []() { ui::set_rtl(!ui::is_rtl()); });
@@ -146,18 +164,44 @@ void NewsScreen::connect_signals() {
     });
     // Started/stopped in showEvent/hideEvent (P3 compliance)
 
-    // Scroll-based seen tracking
+    // Debounced DB seen-write timer: flushes pending_seen_ids_ every 1s
+    // so scroll events never do synchronous DB I/O on the UI thread.
+    seen_flush_timer_ = new QTimer(this);
+    seen_flush_timer_->setInterval(1000);
+    seen_flush_timer_->setSingleShot(true);
+    connect(seen_flush_timer_, &QTimer::timeout, this, [this]() {
+        if (pending_seen_ids_.isEmpty())
+            return;
+        // Move to local copy and clear, then write in one transaction
+        const QSet<QString> ids = std::move(pending_seen_ids_);
+        pending_seen_ids_.clear();
+        QPointer<NewsScreen> self = this;
+        QtConcurrent::run([ids, self]() {
+            for (const auto& id : ids)
+                fincept::NewsArticleRepository::instance().mark_seen(id);
+            if (self) {
+                QMetaObject::invokeMethod(self, [self]() {
+                    if (self)
+                        LOG_DEBUG("NewsScreen", QString("Flushed %1 seen IDs to DB").arg(0));
+                }, Qt::QueuedConnection);
+            }
+        });
+    });
+
+    // Scroll-based seen tracking — model update is instant, DB write is batched
     connect(feed_panel_->list_view()->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
-        // Mark visible articles as seen
         auto* lv = feed_panel_->list_view();
+        const QRect viewport_rect = lv->viewport()->rect();
         for (int i = 0; i < feed_panel_->model()->rowCount(); ++i) {
-            auto idx = feed_panel_->model()->index(i, 0);
-            auto item_rect = lv->visualRect(idx);
-            if (item_rect.intersects(lv->viewport()->rect())) {
-                auto article = feed_panel_->model()->article_at(i);
-                feed_panel_->model()->mark_seen(article.id);
+            const auto idx = feed_panel_->model()->index(i, 0);
+            if (lv->visualRect(idx).intersects(viewport_rect)) {
+                const QString id = feed_panel_->model()->article_at(i).id;
+                feed_panel_->model()->mark_seen(id);
+                pending_seen_ids_.insert(id);
             }
         }
+        if (!pending_seen_ids_.isEmpty())
+            seen_flush_timer_->start(); // restart 1s debounce window
     });
 
     // Summarize button
@@ -218,6 +262,25 @@ void NewsScreen::showEvent(QShowEvent* e) {
 
     if (first_show_) {
         first_show_ = false;
+
+        // Ensure optional columns exist (idempotent, safe on every launch)
+        fincept::NewsArticleRepository::instance().ensure_seen_column();
+        fincept::NewsArticleRepository::instance().ensure_saved_column();
+
+        // Pre-populate seen state from DB so previously-read articles
+        // don't show the "new" glow after restart (last 30 days only)
+        int64_t since_ts = QDateTime::currentSecsSinceEpoch() - (30LL * 86400);
+        auto seen_result = fincept::NewsArticleRepository::instance().load_seen_ids(since_ts);
+        if (seen_result.is_ok()) {
+            for (const auto& id : seen_result.value())
+                feed_panel_->model()->mark_seen(id);
+        }
+
+        // Pre-populate saved/bookmarked articles in side panel
+        auto saved_result = fincept::NewsArticleRepository::instance().load_saved();
+        if (saved_result.is_ok())
+            side_panel_->update_saved(saved_result.value());
+
         on_refresh();
     }
 }
@@ -451,14 +514,46 @@ void NewsScreen::apply_filters_async() {
 
     QPointer<NewsScreen> self = this;
     auto articles_copy = all_articles_;
-    auto category = active_category_;
-    auto time_range = time_range_;
-    auto search = search_query_;
-    auto sort = sort_mode_;
-    auto variant = active_variant_;
+    const QString category  = active_category_;
+    const QString time_range = time_range_;
+    const QString search_lower = search_query_.toLower(); // pre-lowercase once
+    const QString sort    = sort_mode_;
+    const QString variant = active_variant_;
     int visible_count = visible_article_count_;
 
-    QtConcurrent::run([self, gen, articles_copy, category, time_range, search, sort, variant, visible_count]() {
+    // For 7D / 30D ranges, merge DB history with the current RSS batch so
+    // articles that aged out of the cache are still visible.
+    // Build live_ids once and reuse for both FTS and full-load paths.
+    if (time_range == "7D" || time_range == "30D") {
+        const int64_t window_sec = (time_range == "30D") ? (30LL * 86400) : (7LL * 86400);
+        const int64_t cutoff = QDateTime::currentSecsSinceEpoch() - window_sec;
+
+        // Build ID set once
+        QSet<QString> live_ids;
+        live_ids.reserve(articles_copy.size());
+        for (const auto& a : std::as_const(articles_copy))
+            live_ids.insert(a.id);
+
+        auto merge_into = [&](const QVector<services::NewsArticle>& extras) {
+            for (const auto& a : extras)
+                if (!live_ids.contains(a.id))
+                    articles_copy.append(a);
+        };
+
+        if (!search_lower.isEmpty()) {
+            auto fts_result = fincept::NewsArticleRepository::instance().search_fts(
+                search_lower, cutoff, 1000);
+            if (fts_result.is_ok())
+                merge_into(fts_result.value());
+        } else {
+            auto db_result = fincept::NewsArticleRepository::instance().load_recent(cutoff, {}, 5000);
+            if (db_result.is_ok())
+                merge_into(db_result.value());
+        }
+    }
+
+    QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy),
+                       category, time_range, search_lower, sort, variant, visible_count]() {
         // Time filter
         int64_t window_sec = 0;
         if (time_range == "1H")
@@ -471,6 +566,8 @@ void NewsScreen::apply_filters_async() {
             window_sec = 172800;
         else if (time_range == "7D")
             window_sec = 604800;
+        else if (time_range == "30D")
+            window_sec = 30LL * 86400;
 
         int64_t cutoff = 0;
         if (window_sec > 0)
@@ -498,25 +595,31 @@ void NewsScreen::apply_filters_async() {
                 continue;
             // "FULL" shows everything
 
-            // Category filter
+            // Category filter — static map at file scope (never rebuilt)
             if (category != "ALL") {
-                static const QMap<QString, QStringList> cat_map = {
-                    {"MKT", {"MARKETS"}}, {"EARN", {"EARNINGS"}}, {"ECO", {"ECONOMIC"}},    {"TECH", {"TECH"}},
-                    {"NRG", {"ENERGY"}},  {"CRPT", {"CRYPTO"}},   {"GEO", {"GEOPOLITICS"}}, {"DEF", {"DEFENSE"}},
+                static const QHash<QString, QString> cat_map = {
+                    {"MKT",  "MARKETS"},     {"EARN", "EARNINGS"},
+                    {"ECO",  "ECONOMIC"},    {"TECH", "TECH"},
+                    {"NRG",  "ENERGY"},      {"CRPT", "CRYPTO"},
+                    {"GEO",  "GEOPOLITICS"}, {"DEF",  "DEFENSE"},
                 };
                 auto it = cat_map.find(category);
-                if (it != cat_map.end() && !it.value().contains(a.category))
+                if (it != cat_map.end() && a.category != it.value())
                     continue;
             }
 
-            // Search filter
-            if (!search.isEmpty()) {
-                bool match = a.headline.contains(search, Qt::CaseInsensitive) ||
-                             a.summary.contains(search, Qt::CaseInsensitive) ||
-                             a.source.contains(search, Qt::CaseInsensitive);
-                for (const auto& t : a.tickers) {
-                    if (t.contains(search, Qt::CaseInsensitive))
-                        match = true;
+            // Search filter — search_lower already lowercased, compare against
+            // pre-lowercased article text to avoid per-call toLower() inside Qt
+            if (!search_lower.isEmpty()) {
+                const QString hl  = a.headline.toLower();
+                const QString sum = a.summary.toLower();
+                bool match = hl.contains(search_lower) ||
+                             sum.contains(search_lower) ||
+                             a.source.toLower().contains(search_lower);
+                if (!match) {
+                    for (const auto& t : std::as_const(a.tickers)) {
+                        if (t.toLower().contains(search_lower)) { match = true; break; }
+                    }
                 }
                 if (!match)
                     continue;
@@ -598,8 +701,35 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
 
     // Breaking banner
     auto breaking = services::get_breaking_clusters(clusters);
-    if (!breaking.isEmpty())
+    if (!breaking.isEmpty()) {
         feed_panel_->show_breaking(breaking);
+
+        // ── Notifications: Breaking news ────────────────────────────────────
+        auto& repo = fincept::SettingsRepository::instance();
+        auto get_bool = [&](const QString& key, bool def) -> bool {
+            auto r = repo.get(key);
+            return r.is_ok() && !r.value().isEmpty() ? (r.value() == "1") : def;
+        };
+        if (get_bool("notifications.news_breaking", true)) {
+            using namespace fincept::notifications;
+            for (const auto& cluster : breaking) {
+                const QString& lead_id = cluster.lead_article.id;
+                if (notified_breaking_.contains(lead_id))
+                    continue;
+                notified_breaking_.insert(lead_id);
+
+                NotificationRequest req;
+                req.title   = QString("BREAKING: %1").arg(cluster.lead_article.headline.left(80));
+                req.message = cluster.lead_article.summary.isEmpty()
+                                  ? cluster.lead_article.source
+                                  : cluster.lead_article.summary.left(160);
+                req.level   = cluster.lead_article.priority == services::Priority::FLASH
+                                  ? NotifLevel::Critical : NotifLevel::Alert;
+                req.trigger = NotifTrigger::NewsAlert;
+                NotificationService::instance().send(req);
+            }
+        }
+    }
 
     // Ticker strip
     QVector<services::NewsArticle> ticker_articles;
@@ -725,9 +855,36 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
 
 void NewsScreen::update_monitors() {
     auto monitors = services::NewsMonitorService::instance().get_monitors();
-    auto matches = services::NewsMonitorService::instance().scan_monitors(monitors, filtered_articles_);
+    auto matches  = services::NewsMonitorService::instance().scan_monitors(monitors, filtered_articles_);
     side_panel_->update_monitors(monitors, matches);
     feed_panel_->model()->set_monitor_matches(matches, monitors);
+
+    // ── Notifications: Monitor keyword matches ──────────────────────────────
+    auto& repo = fincept::SettingsRepository::instance();
+    auto get_bool = [&](const QString& key, bool def) -> bool {
+        auto r = repo.get(key);
+        return r.is_ok() && !r.value().isEmpty() ? (r.value() == "1") : def;
+    };
+    if (get_bool("notifications.news_monitors", true)) {
+        using namespace fincept::notifications;
+        for (const auto& monitor : monitors) {
+            if (!monitor.enabled) continue;
+            const auto& articles = matches.value(monitor.id);
+            for (const auto& article : articles) {
+                const QString dedup_key = monitor.id + ":" + article.id;
+                if (notified_monitors_.contains(dedup_key))
+                    continue;
+                notified_monitors_.insert(dedup_key);
+
+                NotificationRequest req;
+                req.title   = QString("WATCH \"%1\": %2").arg(monitor.label, article.headline.left(70));
+                req.message = article.summary.isEmpty() ? article.source : article.summary.left(160);
+                req.level   = NotifLevel::Warning;
+                req.trigger = NotifTrigger::NewsAlert;
+                NotificationService::instance().send(req);
+            }
+        }
+    }
 }
 
 void NewsScreen::compute_deviations() {
@@ -779,6 +936,51 @@ void NewsScreen::compute_deviations() {
     std::sort(deviations.begin(), deviations.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
 
     side_panel_->update_deviations(deviations);
+
+    // ── Notifications: Category deviations & FLASH articles ────────────────
+    auto& repo = fincept::SettingsRepository::instance();
+    auto get_bool = [&](const QString& key, bool def) -> bool {
+        auto r = repo.get(key);
+        return r.is_ok() && !r.value().isEmpty() ? (r.value() == "1") : def;
+    };
+
+    if (get_bool("notifications.news_deviations", true)) {
+        using namespace fincept::notifications;
+        for (const auto& [category, z_score] : deviations) {
+            if (notified_deviations_.contains(category))
+                continue;
+            notified_deviations_.insert(category);
+
+            NotificationRequest req;
+            req.title   = QString("DEVIATION: %1 news spike").arg(category);
+            req.message = QString("Unusual volume detected (z-score: %1). More %2 articles than normal.")
+                              .arg(z_score, 0, 'f', 1).arg(category);
+            req.level   = z_score >= 5.0 ? NotifLevel::Critical : NotifLevel::Warning;
+            req.trigger = NotifTrigger::NewsAlert;
+            NotificationService::instance().send(req);
+        }
+    }
+
+    // ── Notifications: FLASH / high-impact articles ─────────────────────────
+    if (get_bool("notifications.news_flash", true)) {
+        using namespace fincept::notifications;
+        for (const auto& article : filtered_articles_) {
+            if (article.priority != services::Priority::FLASH)
+                continue;
+            if (article.impact != services::Impact::HIGH)
+                continue;
+            if (notified_flash_.contains(article.id))
+                continue;
+            notified_flash_.insert(article.id);
+
+            NotificationRequest req;
+            req.title   = QString("FLASH: %1").arg(article.headline.left(80));
+            req.message = article.summary.isEmpty() ? article.source : article.summary.left(160);
+            req.level   = NotifLevel::Critical;
+            req.trigger = NotifTrigger::NewsAlert;
+            NotificationService::instance().send(req);
+        }
+    }
 
     // Persist baselines via correlation service (Fix #5)
     services::NewsCorrelationService::instance().update_baseline(

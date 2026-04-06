@@ -1,6 +1,8 @@
 // src/ui/widgets/WorldMapWidget.cpp
 #include "ui/widgets/WorldMapWidget.h"
 
+#include "core/config/AppPaths.h"
+
 #include <QGeoView/QGVCamera.h>
 #include <QGeoView/QGVGlobal.h>
 #include <QGeoView/QGVLayer.h>
@@ -13,7 +15,6 @@
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
 #include <QPainter>
-#include <QStandardPaths>
 #include <QVBoxLayout>
 
 namespace fincept::ui {
@@ -25,7 +26,7 @@ static void ensure_network_manager() {
 
     auto* nam = new QNetworkAccessManager(qApp);
     auto* cache = new QNetworkDiskCache(nam);
-    QString cache_dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/map_tiles";
+    QString cache_dir = fincept::AppPaths::cache() + "/map_tiles";
     cache->setCacheDirectory(cache_dir);
     cache->setMaximumCacheSize(100 * 1024 * 1024); // 100 MB
     nam->setCache(cache);

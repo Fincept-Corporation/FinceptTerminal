@@ -2,6 +2,7 @@
 #include "screens/forum/ForumSidebarPanel.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
@@ -23,6 +24,7 @@ static QString det_color(const QString& s) {
 }
 
 ForumSidebarPanel::ForumSidebarPanel(QWidget* parent) : QWidget(parent) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) { setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY())); });
     build_ui();
 }
 
@@ -494,8 +496,8 @@ void ForumSidebarPanel::rebuild_contributors() {
 
     // Medal icons for top 3
     static const char* medals[] = {"🥇", "🥈", "🥉", " 4", " 5"};
-    static const char* rank_colors[] = {"#d97706", "#94a3b8", "#cd7f32",
-                                        "#525252", "#525252"};
+    const QString rank_colors[] = {ui::colors::AMBER(), ui::colors::TEXT_SECONDARY(), "#cd7f32",
+                                   ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_TERTIARY()};
 
     for (int i = 0; i < std::min(5, (int)contributors_.size()); ++i) {
         const auto& c = contributors_[i];

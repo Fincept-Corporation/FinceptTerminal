@@ -4,6 +4,7 @@
 #include "services/news/NewsService.h"
 
 #include <QHideEvent>
+#include <QSet>
 #include <QShowEvent>
 #include <QWidget>
 
@@ -99,8 +100,18 @@ class NewsScreen : public QWidget {
     };
     QMap<QString, CategoryBaseline> baselines_;
 
+    // Notification dedup — track IDs already fired this session to avoid re-firing on every refresh
+    QSet<QString> notified_breaking_;   // cluster lead article IDs
+    QSet<QString> notified_monitors_;   // monitor_id + ":" + article_id pairs
+    QSet<QString> notified_deviations_; // category keys that triggered deviation alert
+    QSet<QString> notified_flash_;      // article IDs fired as FLASH/high-impact
+
     // Pulse animation timer
     QTimer* pulse_timer_ = nullptr;
+
+    // Debounced DB seen-writes: collect IDs, flush every 1s
+    QTimer* seen_flush_timer_ = nullptr;
+    QSet<QString> pending_seen_ids_;
 
     // Active variant for feed filtering
     QString active_variant_ = "FULL";

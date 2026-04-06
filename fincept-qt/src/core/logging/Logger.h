@@ -2,6 +2,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QFile>
+#include <QHash>
 #include <QMutex>
 #include <QString>
 #include <QTextStream>
@@ -16,6 +17,12 @@ class Logger {
 
     void set_level(LogLevel level);
     void set_file(const QString& path);
+    void set_tag_level(const QString& tag, LogLevel level);
+    void clear_tag_level(const QString& tag);
+    void clear_all_tag_levels();
+
+    LogLevel global_level() const { return min_level_; }
+    QHash<QString, LogLevel> tag_levels() const;
 
     void debug(const QString& tag, const QString& msg);
     void info(const QString& tag, const QString& msg);
@@ -27,6 +34,7 @@ class Logger {
     void write(LogLevel level, const QString& tag, const QString& msg);
 
     LogLevel min_level_ = LogLevel::Info;
+    QHash<QString, LogLevel> tag_levels_;
     QFile log_file_;
     QMutex mutex_;
 };

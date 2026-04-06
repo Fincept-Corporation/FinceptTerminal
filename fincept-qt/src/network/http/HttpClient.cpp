@@ -41,8 +41,11 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback) {
         QJsonDocument doc = QJsonDocument::fromJson(data, &parse_err);
 
         if (reply->error() != QNetworkReply::NoError) {
+            // Strip query string to avoid logging embedded tokens/keys
+            QUrl sanitized = reply->url();
+            sanitized.setQuery(QString{});
             LOG_WARN("HTTP",
-                     QString("HTTP %1: %2 — %3").arg(status).arg(reply->url().toString()).arg(reply->errorString()));
+                     QString("HTTP %1: %2 — %3").arg(status).arg(sanitized.toString()).arg(reply->errorString()));
 
             // 401/403 must always be returned as err() so session expiry detection
             // in AuthApi/SessionGuard works correctly — even when the body is valid JSON.
@@ -103,6 +106,10 @@ void HttpClient::set_auth_header(const QString& api_key) {
 
 void HttpClient::set_session_token(const QString& token) {
     session_token_ = token;
+}
+
+void HttpClient::clear_session_token() {
+    session_token_.clear();
 }
 
 void HttpClient::set_base_url(const QString& base) {

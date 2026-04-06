@@ -24,6 +24,7 @@ class ToolBar : public QWidget {
     void action_triggered(const QString& action);
     void logout_clicked();
     void plan_clicked();
+    void chat_mode_toggled();
 
   protected:
     void resizeEvent(QResizeEvent* e) override;
@@ -37,10 +38,17 @@ class ToolBar : public QWidget {
     QLabel* user_label_ = nullptr;
     QLabel* credits_label_ = nullptr;
     QLabel* subtitle_label_ = nullptr;
+    QLabel* branding_label_ = nullptr;
+    QLabel* live_dot_ = nullptr;
+    QLabel* live_label_ = nullptr;
     QPushButton* plan_btn_ = nullptr;
+    QPushButton* chat_mode_btn_ = nullptr;
     QTimer* clock_timer_ = nullptr;
+    QVector<QLabel*> separators_;
 
     CommandBar* command_bar_ = nullptr;
+
+    void apply_responsive_layout(int width);
 
     QMenu* build_file_menu();
     QMenu* build_navigate_menu();

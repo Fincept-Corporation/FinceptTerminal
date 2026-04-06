@@ -1,13 +1,13 @@
 // src/services/algo_trading/AlgoTradingService.cpp
 #include "services/algo_trading/AlgoTradingService.h"
 
+#include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
 
 #include <QJsonDocument>
 #include <QPointer>
-#include <QStandardPaths>
 #include <QUuid>
 
 namespace fincept::services::algo {
@@ -19,7 +19,7 @@ static constexpr const char* kDeploymentsCacheKey = "algo:deployments";
 
 // ── DB path helper ────────────────────────────────────────────────────────────
 static QString algo_db_path() {
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/fincept.db";
+    return fincept::AppPaths::data() + "/fincept.db";
 }
 
 AlgoTradingService& AlgoTradingService::instance() {

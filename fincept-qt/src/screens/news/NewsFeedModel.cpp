@@ -1,6 +1,9 @@
 #include "screens/news/NewsFeedModel.h"
 
 #include "core/logging/Logger.h"
+#include "services/news/NewsService.h"
+
+#include <QStringList>
 
 namespace fincept::screens {
 
@@ -51,6 +54,19 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
                 return geo_article_ids_.contains(article.id);
             case PulsePhaseRole:
                 return (!seen_ids_.contains(article.id)) ? pulse_phase_ : -1;
+            // Pre-formatted display strings — no allocation in paint()
+            case FormattedSourceRole:
+                return row < formatted_rows_.size() ? formatted_rows_[row].source   : QVariant{};
+            case FormattedLangRole:
+                return row < formatted_rows_.size() ? formatted_rows_[row].lang     : QVariant{};
+            case FormattedThreatRole:
+                return row < formatted_rows_.size() ? formatted_rows_[row].threat   : QVariant{};
+            case FormattedTickersRole:
+                return row < formatted_rows_.size() ? formatted_rows_[row].tickers  : QVariant{};
+            case ThreatColorRole:
+                return row < formatted_rows_.size() ? formatted_rows_[row].threat_color   : QVariant{};
+            case PriorityColorRole:
+                return row < formatted_rows_.size() ? formatted_rows_[row].priority_color : QVariant{};
             default:
                 return {};
         }
@@ -90,12 +106,54 @@ QVariant NewsFeedModel::data(const QModelIndex& index, int role) const {
 void NewsFeedModel::set_wire_articles(const QVector<services::NewsArticle>& articles) {
     beginResetModel();
     articles_ = articles;
+
+    // Rebuild O(1) lookup cache, incremental unseen counter, and pre-formatted rows
+    article_id_to_row_.clear();
+    article_id_to_row_.reserve(articles.size());
+    formatted_rows_.clear();
+    formatted_rows_.reserve(articles.size());
+    unseen_count_ = 0;
+
+    for (int i = 0; i < articles.size(); ++i) {
+        const auto& a = articles[i];
+        article_id_to_row_.insert(a.id, i);
+        if (!seen_ids_.contains(a.id))
+            ++unseen_count_;
+
+        // Pre-format once — avoids allocation in paint() on every frame
+        FormattedRow fr;
+        fr.source  = a.source.left(10).toUpper();
+        fr.lang    = (a.lang.isEmpty() || a.lang == "en") ? QString() : a.lang.toUpper();
+        const bool show_threat = a.threat.level != services::ThreatLevel::INFO &&
+                                 a.threat.level != services::ThreatLevel::LOW;
+        fr.threat       = show_threat ? services::threat_level_string(a.threat.level).left(4) : QString();
+        fr.threat_color = show_threat ? services::threat_level_color(a.threat.level) : QString();
+        fr.priority_color = services::priority_color(a.priority);
+
+        // Pre-join tickers: "$AAPL $MSFT" (up to 2)
+        QStringList ticker_parts;
+        for (int t = 0; t < std::min(2, static_cast<int>(a.tickers.size())); ++t)
+            ticker_parts << ('$' + a.tickers[t]);
+        fr.tickers = ticker_parts.join(' ');
+
+        formatted_rows_.append(std::move(fr));
+    }
+
     endResetModel();
 }
 
 void NewsFeedModel::set_clusters(const QVector<services::NewsCluster>& clusters) {
     beginResetModel();
     clusters_ = clusters;
+    // Rebuild O(1) lookup cache and incremental unseen counter
+    cluster_id_to_row_.clear();
+    cluster_id_to_row_.reserve(clusters.size());
+    unseen_count_ = 0;
+    for (int i = 0; i < clusters.size(); ++i) {
+        cluster_id_to_row_.insert(clusters[i].lead_article.id, i);
+        if (!seen_ids_.contains(clusters[i].lead_article.id))
+            ++unseen_count_;
+    }
     endResetModel();
 }
 
@@ -140,12 +198,13 @@ void NewsFeedModel::set_monitor_matches(const QMap<QString, QVector<services::Ne
 
 void NewsFeedModel::mark_all_seen() {
     if (view_mode_ == "WIRE") {
-        for (const auto& a : articles_)
+        for (const auto& a : std::as_const(articles_))
             seen_ids_.insert(a.id);
     } else {
-        for (const auto& c : clusters_)
+        for (const auto& c : std::as_const(clusters_))
             seen_ids_.insert(c.lead_article.id);
     }
+    unseen_count_ = 0;
     emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {IsNewRole});
 }
 
@@ -153,40 +212,28 @@ void NewsFeedModel::mark_seen(const QString& article_id) {
     if (seen_ids_.contains(article_id))
         return;
     seen_ids_.insert(article_id);
-    auto idx = index_for_article(article_id);
+    if (unseen_count_ > 0)
+        --unseen_count_;
+    const auto idx = index_for_article(article_id);
     if (idx.isValid())
-        emit dataChanged(idx, idx, {IsNewRole});
+        emit dataChanged(idx, idx, {IsNewRole, PulsePhaseRole});
 }
 
 int NewsFeedModel::unseen_count() const {
-    int count = 0;
-    if (view_mode_ == "WIRE") {
-        for (const auto& a : articles_) {
-            if (!seen_ids_.contains(a.id))
-                ++count;
-        }
-    } else {
-        for (const auto& c : clusters_) {
-            if (!seen_ids_.contains(c.lead_article.id))
-                ++count;
-        }
-    }
-    return count;
+    return unseen_count_; // O(1) — maintained incrementally
 }
 
 QModelIndex NewsFeedModel::index_for_article(const QString& article_id) const {
     if (article_id.isEmpty())
         return {};
     if (view_mode_ == "WIRE") {
-        for (int i = 0; i < articles_.size(); ++i) {
-            if (articles_[i].id == article_id)
-                return index(i, 0);
-        }
+        const auto it = article_id_to_row_.find(article_id);
+        if (it != article_id_to_row_.end())
+            return index(it.value(), 0);
     } else {
-        for (int i = 0; i < clusters_.size(); ++i) {
-            if (clusters_[i].lead_article.id == article_id)
-                return index(i, 0);
-        }
+        const auto it = cluster_id_to_row_.find(article_id);
+        if (it != cluster_id_to_row_.end())
+            return index(it.value(), 0);
     }
     return {};
 }

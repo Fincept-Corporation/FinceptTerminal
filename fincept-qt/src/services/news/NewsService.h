@@ -146,6 +146,8 @@ class NewsService : public QObject {
 
     /// Threat level helpers.
     static ThreatClassification classify_threat(const NewsArticle& article);
+    /// Overload that accepts pre-built lowercased text to avoid redundant allocation.
+    static ThreatClassification classify_threat(const NewsArticle& article, const QString& text);
 
   signals:
     void articles_updated(QVector<NewsArticle> articles);
@@ -182,5 +184,10 @@ QString sentiment_color(Sentiment s);
 QString relative_time(int64_t unix_ts);
 QString threat_level_string(ThreatLevel t);
 QString threat_level_color(ThreatLevel t);
+
+// Round-trip helpers (string → enum)
+Priority  priority_from_string(const QString& s);
+Sentiment sentiment_from_string(const QString& s);
+Impact    impact_from_string(const QString& s);
 
 } // namespace fincept::services

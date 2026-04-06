@@ -1,12 +1,19 @@
 #include "screens/news/NewsSidePanel.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
+#include <QPushButton>
 #include <QScrollArea>
 
 namespace fincept::screens {
 
 NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                setStyleSheet(QString("background:%1;color:%2;")
+                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+            });
     setObjectName("newsSidePanel");
     setFixedWidth(240);
 
@@ -57,6 +64,7 @@ NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
     signals_section_ = build_hidden_section("SIGNALS", signals_layout_);
     cii_section_ = build_hidden_section("INSTABILITY", cii_layout_);
     predictions_section_ = build_hidden_section("PREDICTIONS", predictions_layout_);
+    saved_section_ = build_hidden_section("BOOKMARKS", saved_layout_);
 
     layout->addStretch();
     scroll->setWidget(content);
@@ -474,10 +482,10 @@ void NewsSidePanel::update_signals(const QVector<services::CorrelationSignal>& s
 
     for (int i = 0; i < std::min(8, static_cast<int>(sigs.size())); ++i) {
         const auto& sig = sigs[i];
-        QString color = sig.severity == "critical" ? "#dc2626" : (sig.severity == "high" ? "#f97316" : "#eab308");
+        QString color = sig.severity == "critical" ? "" + QString(ui::colors::NEGATIVE()) + "" : (sig.severity == "high" ? "" + QString(ui::colors::WARNING()) + "" : "" + QString(ui::colors::WARNING()) + "");
         auto* lbl = new QLabel(sig.detail.left(35), this);
         lbl->setObjectName("newsDeviationCategory");
-        lbl->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(color));
+        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(color));
         lbl->setToolTip(sig.detail);
         signals_layout_->addWidget(lbl);
     }
@@ -495,11 +503,11 @@ void NewsSidePanel::update_instability(const QString& country, const services::I
             if (lbl) {
                 QString color =
                     score.level == "CRITICAL"
-                        ? "#dc2626"
-                        : (score.level == "HIGH" ? "#f97316" : (score.level == "ELEVATED" ? "#eab308" : "#22c55e"));
+                        ? "" + QString(ui::colors::NEGATIVE()) + ""
+                        : (score.level == "HIGH" ? "" + QString(ui::colors::WARNING()) + "" : (score.level == "ELEVATED" ? "" + QString(ui::colors::WARNING()) + "" : "" + QString(ui::colors::POSITIVE()) + ""));
                 lbl->setText(QString("%1  %2  %3").arg(country, -4).arg(score.cii_score, 3).arg(score.level));
                 lbl->setStyleSheet(
-                    QString("color: %1; font-size: 11px; font-weight: 700; background: transparent;").arg(color));
+                    QString("color: %1; font-weight: 700; background: transparent;").arg(color));
             }
             return;
         }
@@ -507,12 +515,12 @@ void NewsSidePanel::update_instability(const QString& country, const services::I
 
     // New entry
     QString color = score.level == "CRITICAL"
-                        ? "#dc2626"
-                        : (score.level == "HIGH" ? "#f97316" : (score.level == "ELEVATED" ? "#eab308" : "#22c55e"));
+                        ? "" + QString(ui::colors::NEGATIVE()) + ""
+                        : (score.level == "HIGH" ? "" + QString(ui::colors::WARNING()) + "" : (score.level == "ELEVATED" ? "" + QString(ui::colors::WARNING()) + "" : "" + QString(ui::colors::POSITIVE()) + ""));
     auto* lbl = new QLabel(QString("%1  %2  %3").arg(country, -4).arg(score.cii_score, 3).arg(score.level), this);
     lbl->setObjectName("newsDeviationScore");
     lbl->setProperty("country", country);
-    lbl->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700; background: transparent;").arg(color));
+    lbl->setStyleSheet(QString("color: %1; font-weight: 700; background: transparent;").arg(color));
     cii_layout_->addWidget(lbl);
 }
 
@@ -533,12 +541,46 @@ void NewsSidePanel::update_predictions(const QVector<services::PredictionMarket>
     for (int i = 0; i < std::min(6, static_cast<int>(predictions.size())); ++i) {
         const auto& pm = predictions[i];
         int pct = static_cast<int>(pm.yes_price * 100);
-        QString color = pct >= 70 ? "#16a34a" : (pct <= 30 ? "#dc2626" : "#ca8a04");
+        QString color = pct >= 70 ? "" + QString(ui::colors::POSITIVE()) + "" : (pct <= 30 ? "" + QString(ui::colors::NEGATIVE()) + "" : "" + QString(ui::colors::WARNING()) + "");
         auto* lbl = new QLabel(QString("%1%  %2").arg(pct).arg(pm.question.left(28)), this);
         lbl->setObjectName("newsMonitorLabel");
-        lbl->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(color));
+        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(color));
         lbl->setToolTip(pm.question);
         predictions_layout_->addWidget(lbl);
+    }
+}
+
+void NewsSidePanel::build_saved_section(QVBoxLayout* /*parent*/) {
+    // Section is built via build_hidden_section in constructor — nothing extra needed.
+}
+
+void NewsSidePanel::update_saved(const QVector<services::NewsArticle>& saved) {
+    while (saved_layout_->count() > 0) {
+        auto* item = saved_layout_->takeAt(0);
+        if (item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
+
+    if (saved.isEmpty()) {
+        saved_section_->hide();
+        return;
+    }
+    saved_section_->show();
+
+    for (int i = 0; i < std::min(10, static_cast<int>(saved.size())); ++i) {
+        const auto& a = saved[i];
+        QString title = a.headline.left(36) + (a.headline.size() > 36 ? "…" : "");
+        auto* btn = new QPushButton(title, this);
+        btn->setObjectName("newsTopStoryLabel");
+        btn->setToolTip(a.headline + "\n" + a.source);
+        btn->setFlat(true);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setStyleSheet("text-align:left;");
+        connect(btn, &QPushButton::clicked, this, [this, a]() {
+            emit article_clicked(a);
+        });
+        saved_layout_->addWidget(btn);
     }
 }
 

@@ -399,6 +399,9 @@ QJsonObject LlmService::build_fincept_request(const QString& user_message,
     req["prompt"] = prompt;
     req["temperature"] = temperature_;
     req["max_tokens"] = max_tokens_;
+    // Pass selected model if it's a real server model name (not the legacy placeholder)
+    if (!model_.isEmpty() && model_ != "fincept-llm")
+        req["model"] = model_;
 
     if (with_tools) {
         QJsonArray all_tools = mcp::McpService::instance().format_tools_for_openai();
@@ -762,7 +765,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             }
         } else {
             for (const QString& k : {"response", "content", "answer", "text", "result"}) {
-                if (data.contains(k)) {
+                if (data.contains(k) && !data[k].toString().isEmpty()) {
                     resp.content = data[k].toString();
                     break;
                 }
@@ -773,6 +776,12 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     resp.content = ai.toObject()["content"].toString();
                 else if (ai.isString())
                     resp.content = ai.toString();
+            }
+            // API returned success=true but empty response text — treat as soft error
+            if (resp.content.isEmpty()) {
+                resp.error = "Fincept LLM returned an empty response. Please try again.";
+                LOG_WARN(TAG, "Fincept API returned empty response field despite success=true");
+                return resp;
             }
         }
 
@@ -1501,6 +1510,8 @@ QString LlmService::get_models_url(const QString& provider, const QString& api_k
             base.chop(1);
         return base + "/api/tags";
     }
+    if (p == "fincept")
+        return "https://api.fincept.in/research/llm/models";
     // minimax: no public /v1/models endpoint — fallback models used instead
     return {};
 }
@@ -1517,8 +1528,18 @@ QMap<QString, QString> LlmService::get_models_headers(const QString& provider, c
         // Key is in URL query param
         if (!api_key.isEmpty())
             h["x-goog-api-key"] = api_key;
-    } else if (p == "ollama" || p == "fincept") {
+    } else if (p == "ollama") {
         // No auth needed
+    } else if (p == "fincept") {
+        // Resolve API key from session (same logic as ensure_config)
+        QString resolved_key = api_key;
+        if (resolved_key.isEmpty()) {
+            auto stored = SettingsRepository::instance().get("fincept_api_key");
+            if (stored.is_ok() && !stored.value().isEmpty())
+                resolved_key = stored.value();
+        }
+        if (!resolved_key.isEmpty())
+            h["X-API-Key"] = resolved_key;
     } else {
         // OpenAI-compatible: OpenAI, Groq, DeepSeek, OpenRouter
         if (!api_key.isEmpty())
@@ -1567,6 +1588,23 @@ QStringList LlmService::parse_models_response(const QString& provider, const QBy
             if (!name.isEmpty())
                 models.append(name);
         }
+    } else if (p == "fincept") {
+        // {"success":true,"data":{"models":["MiniMax-M2.7",...]}}
+        // or {"success":true,"data":["model1","model2",...]}
+        QJsonValue data_val = root["data"];
+        QJsonArray arr;
+        if (data_val.isObject())
+            arr = data_val.toObject()["models"].toArray();
+        else if (data_val.isArray())
+            arr = data_val.toArray();
+        for (const auto& v : arr) {
+            QString id = v.isString() ? v.toString() : v.toObject()["id"].toString();
+            if (!id.isEmpty())
+                models.append(id);
+        }
+        // If API doesn't expose a models endpoint yet, fall back to known models
+        if (models.isEmpty())
+            models = {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5"};
     } else {
         // OpenAI-compatible: OpenAI, Anthropic, Groq, DeepSeek, OpenRouter
         // {"data": [{"id": "model-id", ...}]}
@@ -1583,6 +1621,12 @@ QStringList LlmService::parse_models_response(const QString& provider, const QBy
 }
 
 void LlmService::fetch_models(const QString& provider, const QString& api_key, const QString& base_url) {
+    // Fincept has no public /models listing endpoint — return known models immediately.
+    if (provider.toLower() == "fincept") {
+        emit models_fetched(provider, {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"}, {});
+        return;
+    }
+
     QString url = get_models_url(provider, api_key, base_url);
     if (url.isEmpty()) {
         emit models_fetched(provider, {}, "Unknown provider: " + provider);

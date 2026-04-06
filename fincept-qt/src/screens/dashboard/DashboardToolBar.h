@@ -25,6 +25,7 @@ class DashboardToolBar : public QWidget {
 
   private:
     void update_clock();
+    void refresh_theme();
 
     QLabel* clock_label_ = nullptr;
     QLabel* status_text_ = nullptr;

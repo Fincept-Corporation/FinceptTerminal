@@ -32,6 +32,7 @@ class NewsSidePanel : public QWidget {
     void update_signals(const QVector<services::CorrelationSignal>& sigs);
     void update_instability(const QString& country, const services::InstabilityScore& score);
     void update_predictions(const QVector<services::PredictionMarket>& predictions);
+    void update_saved(const QVector<services::NewsArticle>& saved);
 
   signals:
     void category_clicked(const QString& category);
@@ -47,6 +48,7 @@ class NewsSidePanel : public QWidget {
     void build_categories_section(QVBoxLayout* parent);
     void build_monitors_section(QVBoxLayout* parent);
     void build_deviations_section(QVBoxLayout* parent);
+    void build_saved_section(QVBoxLayout* parent);
 
     // Stats
     QLabel* feeds_value_ = nullptr;
@@ -93,6 +95,10 @@ class NewsSidePanel : public QWidget {
     // Prediction markets
     QVBoxLayout* predictions_layout_ = nullptr;
     QWidget* predictions_section_ = nullptr;
+
+    // Saved / bookmarked articles
+    QVBoxLayout* saved_layout_ = nullptr;
+    QWidget* saved_section_ = nullptr;
 };
 
 } // namespace fincept::screens

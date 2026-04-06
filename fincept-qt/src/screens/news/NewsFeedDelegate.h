@@ -24,9 +24,9 @@ class NewsFeedDelegate : public QStyledItemDelegate {
     QFont data_font_;
     QFont bold_font_;
     QFont tiny_font_;
-    QFontMetrics data_fm_;
-    QFontMetrics bold_fm_;
-    QFontMetrics tiny_fm_;
+    mutable QFontMetrics data_fm_;
+    mutable QFontMetrics bold_fm_;
+    mutable QFontMetrics tiny_fm_;
 };
 
 } // namespace fincept::screens

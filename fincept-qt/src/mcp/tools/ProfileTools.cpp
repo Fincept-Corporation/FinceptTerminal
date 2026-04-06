@@ -7,6 +7,7 @@
 #include "auth/AuthTypes.h"
 #include "auth/UserApi.h"
 #include "core/logging/Logger.h"
+#include "services/notifications/NotificationService.h"
 
 #include <QEventLoop>
 #include <QJsonArray>
@@ -276,7 +277,7 @@ std::vector<ToolDef> get_profile_tools() {
     {
         ToolDef t;
         t.name        = "profile_get_notifications";
-        t.description = "Get user notifications. Can filter to unread only.";
+        t.description = "Get in-app notification history. Can filter to unread only.";
         t.category    = "profile";
         t.input_schema.properties = QJsonObject{
             {"limit",       QJsonObject{{"type", "integer"}, {"description", "Max notifications (default: 20)"}}},
@@ -284,12 +285,35 @@ std::vector<ToolDef> get_profile_tools() {
             {"unread_only", QJsonObject{{"type", "boolean"}, {"description", "Only return unread notifications (default: false)"}}},
         };
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            int limit       = args["limit"].toInt(20);
-            int offset      = args["offset"].toInt(0);
-            bool unread     = args["unread_only"].toBool(false);
-            return run_user_api([limit, offset, unread](auto cb) {
-                UserApi::instance().get_notifications(limit, offset, unread, cb);
-            });
+            int limit   = args["limit"].toInt(20);
+            int offset  = args["offset"].toInt(0);
+            bool unread = args["unread_only"].toBool(false);
+
+            using namespace fincept::notifications;
+            const auto& history = NotificationService::instance().history();
+
+            QJsonArray arr;
+            int count = 0;
+            int skipped = 0;
+            for (const auto& rec : history) {
+                if (unread && rec.read) continue;
+                if (skipped < offset) { ++skipped; continue; }
+                if (count >= limit) break;
+
+                QJsonObject obj;
+                obj["id"]      = rec.id;
+                obj["title"]   = rec.request.title;
+                obj["message"] = rec.request.message;
+                obj["read"]    = rec.read;
+                obj["time"]    = rec.received_at.toString(Qt::ISODate);
+                arr.append(obj);
+                ++count;
+            }
+
+            QJsonObject result;
+            result["notifications"] = arr;
+            result["total"]         = arr.size();
+            return ToolResult::ok("OK", QJsonValue(result));
         };
         tools.push_back(std::move(t));
     }
@@ -298,8 +322,7 @@ std::vector<ToolDef> get_profile_tools() {
     {
         ToolDef t;
         t.name        = "profile_mark_notification_read";
-        t.description = "Mark a specific notification as read by its ID. "
-                        "Use 'all' in the description field to mark all — see profile_mark_all_notifications_read instead.";
+        t.description = "Mark a specific in-app notification as read by its ID.";
         t.category    = "profile";
         t.input_schema.properties = QJsonObject{
             {"id", QJsonObject{{"type", "integer"}, {"description", "Notification ID to mark as read"}}},
@@ -308,9 +331,11 @@ std::vector<ToolDef> get_profile_tools() {
         t.handler = [](const QJsonObject& args) -> ToolResult {
             int id = args["id"].toInt(-1);
             if (id < 0) return ToolResult::fail("Missing or invalid 'id'");
-            return run_user_api([id](auto cb) {
-                UserApi::instance().mark_notification_read(id, cb);
-            });
+            fincept::notifications::NotificationService::instance().mark_read(id);
+            QJsonObject result;
+            result["success"] = true;
+            result["id"]      = id;
+            return ToolResult::ok("Marked as read", QJsonValue(result));
         };
         tools.push_back(std::move(t));
     }
@@ -319,13 +344,12 @@ std::vector<ToolDef> get_profile_tools() {
     {
         ToolDef t;
         t.name        = "profile_mark_all_notifications_read";
-        t.description = "Mark all notifications as read at once.";
+        t.description = "Mark all in-app notifications as read at once.";
         t.category    = "profile";
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
-            return run_user_api([](auto cb) {
-                UserApi::instance().mark_all_notifications_read(cb);
-            });
+            fincept::notifications::NotificationService::instance().mark_all_read();
+            return ToolResult::ok("All notifications marked as read");
         };
         tools.push_back(std::move(t));
     }

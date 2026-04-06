@@ -28,6 +28,7 @@ class HttpClient : public QObject {
 
     void set_auth_header(const QString& api_key);
     void set_session_token(const QString& token);
+    void clear_session_token();
     void set_base_url(const QString& base);
 
   private:

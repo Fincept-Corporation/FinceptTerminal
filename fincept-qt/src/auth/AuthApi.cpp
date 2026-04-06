@@ -199,10 +199,6 @@ void AuthApi::logout(Callback cb) {
     request("POST", "/user/logout", {}, cb);
 }
 
-void AuthApi::validate_session_server(Callback cb) {
-    request("POST", "/user/validate-session", {}, cb);
-}
-
 void AuthApi::session_pulse(Callback cb) {
     request("GET", "/user/session-pulse", {}, cb);
 }

@@ -79,7 +79,17 @@ class PythonSetupManager : public QObject {
 
     // Helpers
     bool run_command(const QString& program, const QStringList& args, const QStringList& env_vars = {}) const;
+    // Like run_command but captures stderr — used for per-package failure diagnosis.
+    bool run_command_capture(const QString& program, const QStringList& args,
+                             const QStringList& env_vars, QString& stderr_out) const;
     QString download_file(const QString& url, const QString& dest_path) const;
+
+    // Two-pass resilient package install helpers
+    QStringList read_packages_from_file(const QString& req_path) const;
+    QStringList install_packages_individually(const QString& venv_name,
+                                              const QStringList& packages,
+                                              const QStringList& env_vars,
+                                              const QString& step_key);
 
     // Requirements hash tracking — detect when requirements change across app versions
     QString compute_requirements_hash(const QString& filename) const;

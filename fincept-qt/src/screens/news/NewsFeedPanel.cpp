@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QApplication>
 #include <QDateTime>
@@ -15,6 +16,11 @@
 namespace fincept::screens {
 
 NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                setStyleSheet(QString("background:%1;color:%2;")
+                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+            });
     setObjectName("newsFeedPanel");
 
     auto* root = new QVBoxLayout(this);

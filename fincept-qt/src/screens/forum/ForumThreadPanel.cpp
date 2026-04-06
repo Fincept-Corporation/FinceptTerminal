@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
 #include <QFrame>
@@ -43,6 +44,7 @@ static QString det_color(const QString& s) {
 }
 
 ForumThreadPanel::ForumThreadPanel(QWidget* parent) : QWidget(parent) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) { setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY())); });
     build_ui();
 }
 

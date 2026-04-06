@@ -2,6 +2,7 @@
 
 #include "services/file_manager/FileManagerService.h"
 
+#include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
 
 #include <QDateTime>
@@ -10,7 +11,6 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QMimeDatabase>
-#include <QStandardPaths>
 #include <QUuid>
 
 namespace fincept::services {
@@ -33,7 +33,7 @@ FileManagerService::FileManagerService(QObject* parent) : QObject(parent) {
 // ── Paths ────────────────────────────────────────────────────────────────────
 
 QString FileManagerService::storage_dir() const {
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/fincept-files";
+    return fincept::AppPaths::files();
 }
 
 QString FileManagerService::full_path(const QString& stored_name) const {

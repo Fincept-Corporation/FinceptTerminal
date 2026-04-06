@@ -1,12 +1,18 @@
 #include "screens/news/NewsCommandBar.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QStyle>
 
 namespace fincept::screens {
 
 NewsCommandBar::NewsCommandBar(QWidget* parent) : QWidget(parent) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                setStyleSheet(QString("background:%1;color:%2;")
+                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+            });
     setObjectName("newsCommandBar");
     setFixedHeight(32);
 
@@ -49,7 +55,7 @@ NewsCommandBar::NewsCommandBar(QWidget* parent) : QWidget(parent) {
     root->addSpacing(4);
 
     // Time range pills
-    QStringList time_ranges = {"1H", "6H", "24H", "48H", "7D"};
+    QStringList time_ranges = {"1H", "6H", "24H", "48H", "7D", "30D"};
     for (const auto& tr : time_ranges) {
         auto* btn = make_pill(tr, tr, root);
         time_btns_.append(btn);

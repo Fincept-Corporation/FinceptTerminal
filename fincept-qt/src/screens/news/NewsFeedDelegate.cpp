@@ -3,6 +3,7 @@
 #include "screens/news/NewsFeedModel.h"
 #include "services/news/NewsService.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QPainter>
 #include <QStyleOptionViewItem>
@@ -120,27 +121,30 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     }
     x += 12;
 
+    // Pre-formatted strings from model — zero allocation in paint path
+    const QString source       = index.data(FormattedSourceRole).toString();
+    const QString lang_badge   = index.data(FormattedLangRole).toString();
+    const QString threat_label = index.data(FormattedThreatRole).toString();
+    const QString tickers_str  = index.data(FormattedTickersRole).toString();
+    const QString threat_color = index.data(ThreatColorRole).toString();
+
     // Source name
     painter->setFont(bold_font_);
     painter->setPen(QColor(ui::colors::CYAN()));
-    QString source = article.source.left(10).toUpper();
     painter->drawText(QRect(x, rect.top(), 72, rect.height()), Qt::AlignVCenter | Qt::AlignLeft, source);
     x += 76;
 
     // Language badge (if not English)
-    if (!article.lang.isEmpty() && article.lang != "en") {
+    if (!lang_badge.isEmpty()) {
         painter->setFont(tiny_font_);
         painter->setPen(QColor(ui::colors::TEXT_DIM()));
-        QString lang_badge = article.lang.toUpper();
         painter->drawText(QRect(x, rect.top(), 20, rect.height()), Qt::AlignVCenter | Qt::AlignCenter, lang_badge);
         x += 22;
     }
 
     // Threat level left border (for MEDIUM+ threats)
-    if (article.threat.level != services::ThreatLevel::INFO && article.threat.level != services::ThreatLevel::LOW) {
-        QString tcolor = services::threat_level_color(article.threat.level);
-        painter->fillRect(QRect(rect.left(), rect.top(), 2, rect.height()), QColor(tcolor));
-    }
+    if (!threat_color.isEmpty())
+        painter->fillRect(QRect(rect.left(), rect.top(), 2, rect.height()), QColor(threat_color));
 
     // Headline — fills remaining space
     painter->setFont(data_font_);
@@ -155,7 +159,7 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     int right_reserve = 140; // space for credibility + threat + sentiment + tickers
     int headline_width = rect.right() - x - right_reserve;
     if (headline_width > 0) {
-        QFontMetrics& fm = is_hot ? const_cast<QFontMetrics&>(bold_fm_) : const_cast<QFontMetrics&>(data_fm_);
+        QFontMetrics& fm = is_hot ? bold_fm_ : data_fm_;
         QString elided = fm.elidedText(article.headline, Qt::ElideRight, headline_width);
         painter->drawText(QRect(x, rect.top(), headline_width, rect.height()), Qt::AlignVCenter | Qt::AlignLeft,
                           elided);
@@ -177,14 +181,12 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
         }
     }
 
-    // Threat level badge (only for MEDIUM+)
-    if (article.threat.level != services::ThreatLevel::INFO && article.threat.level != services::ThreatLevel::LOW) {
+    // Threat level badge (only for MEDIUM+) — pre-formatted, no allocation
+    if (!threat_label.isEmpty()) {
         painter->setFont(tiny_font_);
-        QString tcolor = services::threat_level_color(article.threat.level);
-        painter->setPen(QColor(tcolor));
-        QString tlabel = services::threat_level_string(article.threat.level).left(4);
-        painter->drawText(QPoint(x, text_y), tlabel);
-        x += tiny_fm_.horizontalAdvance(tlabel) + 4;
+        painter->setPen(QColor(threat_color));
+        painter->drawText(QPoint(x, text_y), threat_label);
+        x += tiny_fm_.horizontalAdvance(threat_label) + 4;
     }
 
     // Sentiment arrow
@@ -201,13 +203,12 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     }
     x += 16;
 
-    // Tickers (up to 2)
-    painter->setFont(tiny_font_);
-    painter->setPen(QColor(ui::colors::WARNING()));
-    for (int i = 0; i < std::min(2, static_cast<int>(article.tickers.size())); ++i) {
-        QString ticker = "$" + article.tickers[i];
-        painter->drawText(QPoint(x, text_y), ticker);
-        x += tiny_fm_.horizontalAdvance(ticker) + 6;
+    // Tickers — pre-joined string "$AAPL $MSFT", no allocation in paint
+    if (!tickers_str.isEmpty()) {
+        painter->setFont(tiny_font_);
+        painter->setPen(QColor(ui::colors::WARNING()));
+        painter->drawText(QPoint(x, text_y), tickers_str);
+        x += tiny_fm_.horizontalAdvance(tickers_str) + 6;
     }
 
     // Bottom border

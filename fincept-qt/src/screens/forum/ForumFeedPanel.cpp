@@ -2,6 +2,7 @@
 #include "screens/forum/ForumFeedPanel.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
 #include <QFrame>
@@ -52,6 +53,7 @@ static QString fmt_n(int n) {
 }
 
 ForumFeedPanel::ForumFeedPanel(QWidget* parent) : QWidget(parent) {
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) { setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY())); });
     build_ui();
 }
 
@@ -487,11 +489,11 @@ void ForumFeedPanel::rebuild_posts() {
             return lbl;
         };
 
-        QString rep_col = p.reply_count > 0 ? ui::colors::CYAN() : "#1e1e1e";
+        QString rep_col = p.reply_count > 0 ? ui::colors::CYAN() : QString(ui::colors::BORDER_DIM());
 
         eng_hl->addWidget(up_btn);
         eng_hl->addWidget(mk_eng("◆", QString("%1 replies").arg(p.reply_count), rep_col));
-        eng_hl->addWidget(mk_eng("◉", fmt_n(p.views) + " views", "#1e1e1e"));
+        eng_hl->addWidget(mk_eng("◉", fmt_n(p.views) + " views", QString(ui::colors::BORDER_DIM())));
         eng_hl->addStretch();
 
         // Badges

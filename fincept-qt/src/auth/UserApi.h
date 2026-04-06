@@ -31,12 +31,6 @@ class UserApi : public QObject {
     // Login history
     void get_login_history(int limit, int offset, Callback cb);
 
-    // Notifications
-    void get_notifications(int limit, int offset, bool unread_only, Callback cb);
-    void mark_notification_read(int notification_id, Callback cb);
-    void mark_all_notifications_read(Callback cb);
-    void delete_notification(int notification_id, Callback cb);
-
     // MFA
     void enable_mfa(Callback cb);
     void disable_mfa(Callback cb);

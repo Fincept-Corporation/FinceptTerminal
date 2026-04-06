@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/theme/ThemeTokens.h"
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -24,6 +25,14 @@ class BaseWidget : public QFrame {
   signals:
     void close_requested();
     void refresh_requested();
+
+  protected:
+    /// Override in subclasses to re-apply styles when theme/font changes.
+    /// Called automatically — no manual connection needed.
+    virtual void on_theme_changed() {}
+
+  private:
+    void refresh_base_theme();
 
   private:
     QWidget* title_bar_ = nullptr;
