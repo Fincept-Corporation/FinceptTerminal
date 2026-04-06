@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
@@ -869,16 +870,27 @@ void DerivativesScreen::on_calculate_secondary() {
 // ── Python integration ──────────────────────────────────────────────────────
 
 void DerivativesScreen::run_pricing(const QString& command, const QStringList& args) {
-    loading_ = true;
-    clear_results();
-
     QStringList full_args;
     full_args << command << args;
+
+    // Pricing is deterministic — cache 10 min
+    const QString cache_key = "deriv:" + full_args.join(":");
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (!doc.isNull() && doc.isObject()) {
+            display_results(doc.object());
+            return;
+        }
+    }
+
+    loading_ = true;
+    clear_results();
 
     QPointer<DerivativesScreen> self = this;
 
     python::PythonRunner::instance().run(
-        "derivatives_pricing.py", full_args, [self](const python::PythonResult& result) {
+        "derivatives_pricing.py", full_args, [self, cache_key](const python::PythonResult& result) {
             if (!self)
                 return;
 
@@ -908,6 +920,11 @@ void DerivativesScreen::run_pricing(const QString& command, const QStringList& a
                 self->display_error(obj["error"].toString());
                 return;
             }
+
+            fincept::CacheManager::instance().put(
+                cache_key,
+                QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                10 * 60, "derivatives");
 
             self->display_results(obj);
         });

@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -27,13 +28,16 @@ void MarketDataService::fetch_quotes(const QStringList& symbols, QuoteCallback c
     }
 
     // Check if ALL requested symbols are cached and fresh
-    auto now = QDateTime::currentSecsSinceEpoch();
     bool all_cached = true;
     QVector<QuoteData> cached_results;
     for (const auto& sym : symbols) {
-        auto it = cache_.find(sym);
-        if (it != cache_.end() && (now - it->timestamp) < cache_ttl_sec_) {
-            cached_results.append(it->data);
+        const QVariant cv = fincept::CacheManager::instance().get("market:" + sym);
+        if (!cv.isNull()) {
+            const QJsonObject o = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
+            cached_results.append({o["symbol"].toString(), o["name"].toString(),
+                                   o["price"].toDouble(), o["change"].toDouble(),
+                                   o["change_pct"].toDouble(), o["high"].toDouble(),
+                                   o["low"].toDouble(), o["volume"].toDouble()});
         } else {
             all_cached = false;
             break;
@@ -85,7 +89,6 @@ void MarketDataService::flush_batch() {
 
             if (result.success) {
                 auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-                auto now = QDateTime::currentSecsSinceEpoch();
 
                 auto parse_quote = [](const QJsonObject& q) -> QuoteData {
                     return {q["symbol"].toString(),
@@ -98,6 +101,23 @@ void MarketDataService::flush_batch() {
                             q["volume"].toDouble()};
                 };
 
+                auto store_quote = [](const QuoteData& q) {
+                    QJsonObject o;
+                    o["symbol"]     = q.symbol;
+                    o["name"]       = q.name;
+                    o["price"]      = q.price;
+                    o["change"]     = q.change;
+                    o["change_pct"] = q.change_pct;
+                    o["high"]       = q.high;
+                    o["low"]        = q.low;
+                    o["volume"]     = q.volume;
+                    fincept::CacheManager::instance().put(
+                        "market:" + q.symbol,
+                        QVariant(QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact))),
+                        kQuoteCacheTtlSec,
+                        "market_data");
+                };
+
                 if (doc.isArray()) {
                     for (const auto& v : doc.array()) {
                         auto q = v.toObject();
@@ -105,14 +125,14 @@ void MarketDataService::flush_batch() {
                             continue;
                         auto quote = parse_quote(q);
                         all_quotes.append(quote);
-                        cache_[quote.symbol] = {quote, now};
+                        store_quote(quote);
                     }
                 } else if (doc.isObject()) {
                     auto obj = doc.object();
                     if (obj.contains("symbol") && !obj.contains("error")) {
                         auto quote = parse_quote(obj);
                         all_quotes.append(quote);
-                        cache_[quote.symbol] = {quote, now};
+                        store_quote(quote);
                     }
                 }
 
@@ -124,12 +144,17 @@ void MarketDataService::flush_batch() {
             // Fan out results to each waiting callback, filtered to their requested symbols
             for (const auto& req : requests) {
                 if (!result.success) {
-                    // On failure, try to serve from stale cache
+                    // On failure, try to serve from stale cache (ignoring TTL)
                     QVector<QuoteData> stale;
                     for (const auto& sym : req.symbols) {
-                        auto it = cache_.find(sym);
-                        if (it != cache_.end())
-                            stale.append(it->data);
+                        const QVariant cv = fincept::CacheManager::instance().get("market:" + sym);
+                        if (!cv.isNull()) {
+                            const QJsonObject o = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
+                            stale.append({o["symbol"].toString(), o["name"].toString(),
+                                          o["price"].toDouble(), o["change"].toDouble(),
+                                          o["change_pct"].toDouble(), o["high"].toDouble(),
+                                          o["low"].toDouble(), o["volume"].toDouble()});
+                        }
                     }
                     req.cb(!stale.isEmpty(), stale);
                     continue;

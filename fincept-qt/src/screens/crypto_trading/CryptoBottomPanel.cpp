@@ -61,6 +61,8 @@ CryptoBottomPanel::CryptoBottomPanel(QWidget* parent) : QWidget(parent) {
     setup_positions_tab();
     setup_orders_tab();
     setup_trades_tab();
+    setup_my_trades_tab();
+    setup_fees_tab();
 
     // Time & Sales
     time_sales_ = new CryptoTimeSales;
@@ -89,6 +91,16 @@ void CryptoBottomPanel::setup_orders_tab() {
 void CryptoBottomPanel::setup_trades_tab() {
     trades_table_ = make_table(7, {"Symbol", "Side", "Price", "Qty", "Fee", "P&L", "Time"});
     tabs_->addTab(trades_table_, "HIST");
+}
+
+void CryptoBottomPanel::setup_my_trades_tab() {
+    my_trades_table_ = make_table(8, {"Symbol", "Side", "Price", "Amount", "Cost", "Fee", "Ccy", "Time"});
+    tabs_->addTab(my_trades_table_, "MY TRADES");
+}
+
+void CryptoBottomPanel::setup_fees_tab() {
+    fees_table_ = make_table(3, {"Symbol", "Maker %", "Taker %"});
+    tabs_->addTab(fees_table_, "FEES");
 }
 
 void CryptoBottomPanel::setup_market_info_tab() {
@@ -394,6 +406,95 @@ void CryptoBottomPanel::set_live_orders(const QJsonArray& orders) {
         }
     }
     orders_table_->setUpdatesEnabled(true);
+}
+
+void CryptoBottomPanel::update_my_trades(const QJsonObject& data) {
+    const QJsonArray trades = data.value("trades").toArray();
+    const int n = trades.size();
+    my_trades_table_->setUpdatesEnabled(false);
+    if (my_trades_table_->rowCount() != n)
+        my_trades_table_->setRowCount(n);
+
+    for (int i = 0; i < n; ++i) {
+        const auto t = trades[i].toObject();
+        const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+
+        auto set = [&](int col, const QString& text, const QColor& fg = QColor(),
+                       int align = Qt::AlignLeft | Qt::AlignVCenter) {
+            auto* it = ensure_item(my_trades_table_, i, col);
+            it->setText(text);
+            if (fg.isValid())
+                it->setForeground(fg);
+            it->setBackground(bg);
+            it->setTextAlignment(align);
+        };
+
+        const QString side = t.value("side").toString();
+        const qint64 ts_ms = t.value("timestamp").toVariant().toLongLong();
+        const QString time_str = ts_ms > 0
+            ? QDateTime::fromMSecsSinceEpoch(ts_ms).toString("MM-dd HH:mm:ss")
+            : "--";
+
+        set(0, t.value("symbol").toString());
+        set(1, side.toUpper(), side == "buy" ? kColorPos : kColorNeg);
+        set(2, QString::number(t.value("price").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(3, QString::number(t.value("amount").toDouble(), 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(4, QString::number(t.value("cost").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(5, QString::number(t.value("fee").toDouble(), 'f', 6), kColorSec, Qt::AlignRight | Qt::AlignVCenter);
+        set(6, t.value("fee_currency").toString(), kColorTert);
+        set(7, time_str, kColorTert);
+    }
+    my_trades_table_->setUpdatesEnabled(true);
+}
+
+void CryptoBottomPanel::update_fees(const QJsonObject& data) {
+    // Single-symbol response
+    if (data.contains("symbol")) {
+        fees_table_->setUpdatesEnabled(false);
+        fees_table_->setRowCount(1);
+        const QColor& bg = kRowEven;
+
+        auto set = [&](int col, const QString& text, const QColor& fg = QColor()) {
+            auto* it = ensure_item(fees_table_, 0, col);
+            it->setText(text);
+            if (fg.isValid())
+                it->setForeground(fg);
+            it->setBackground(bg);
+            it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        };
+
+        set(0, data.value("symbol").toString());
+        set(1, QString::number(data.value("maker").toDouble() * 100.0, 'f', 4) + "%", kColorSec);
+        set(2, QString::number(data.value("taker").toDouble() * 100.0, 'f', 4) + "%", kColorSec);
+        fees_table_->setUpdatesEnabled(true);
+        return;
+    }
+
+    // Multi-symbol response
+    const QJsonArray fees = data.value("fees").toArray();
+    const int n = fees.size();
+    fees_table_->setUpdatesEnabled(false);
+    if (fees_table_->rowCount() != n)
+        fees_table_->setRowCount(n);
+
+    for (int i = 0; i < n; ++i) {
+        const auto f = fees[i].toObject();
+        const QColor& bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+
+        auto set = [&](int col, const QString& text, const QColor& fg = QColor()) {
+            auto* it = ensure_item(fees_table_, i, col);
+            it->setText(text);
+            if (fg.isValid())
+                it->setForeground(fg);
+            it->setBackground(bg);
+            it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        };
+
+        set(0, f.value("symbol").toString());
+        set(1, QString::number(f.value("maker").toDouble() * 100.0, 'f', 4) + "%", kColorSec);
+        set(2, QString::number(f.value("taker").toDouble() * 100.0, 'f', 4) + "%", kColorSec);
+    }
+    fees_table_->setUpdatesEnabled(true);
 }
 
 void CryptoBottomPanel::set_live_balance(double balance, double equity, double used_margin) {

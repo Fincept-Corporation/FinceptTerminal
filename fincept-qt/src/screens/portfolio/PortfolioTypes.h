@@ -86,6 +86,7 @@ struct ComputedMetrics {
     std::optional<double> volatility;         // annualized %
     std::optional<double> max_drawdown;       // %
     std::optional<double> var_95;             // 1-day VaR in currency
+    std::optional<double> cvar_95;            // 1-day CVaR (expected shortfall) in currency
     std::optional<double> risk_score;         // 0-100 composite
     std::optional<double> concentration_top3; // sum of top 3 weights %
 };

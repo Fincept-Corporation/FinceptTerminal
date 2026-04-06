@@ -119,7 +119,6 @@ QString PythonRunner::find_scripts_dir() const {
         exe_dir + "/../../../scripts",
         exe_dir + "/../../../../scripts", // deep dev: build/Release/../../scripts
         exe_dir + "/resources/scripts",
-        "C:/windowsdisk/finceptTerminal/fincept-qt/scripts", // absolute fallback for dev
     };
 
     // Also check project root (for dev: fincept-qt/scripts)

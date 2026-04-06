@@ -2,7 +2,6 @@
 #pragma once
 #include "services/equity/EquityResearchModels.h"
 
-#include <QHash>
 #include <QObject>
 #include <QTimer>
 
@@ -60,33 +59,11 @@ class EquityResearchService : public QObject {
     QVector<PeerData> parse_peers(const QJsonArray& arr) const;
     QVector<NewsArticle> parse_news(const QJsonArray& arr) const;
 
-    // ── Cache structures ──────────────────────────────────────────────────────
-    static constexpr qint64 kQuoteTtlSec = 30;
-    static constexpr qint64 kInfoTtlSec = 300;
-    static constexpr qint64 kHistoricalTtlSec = 120;
-    static constexpr qint64 kNewsTtlSec = 180;
-
-    struct CachedQuote {
-        QuoteData data;
-        qint64 ts = 0;
-    };
-    struct CachedInfo {
-        StockInfo data;
-        qint64 ts = 0;
-    };
-    struct CachedCandles {
-        QVector<Candle> data;
-        qint64 ts = 0;
-    };
-    struct CachedNews {
-        QVector<NewsArticle> data;
-        qint64 ts = 0;
-    };
-
-    QHash<QString, CachedQuote> quote_cache_;
-    QHash<QString, CachedInfo> info_cache_;
-    QHash<QString, CachedCandles> candle_cache_;
-    QHash<QString, CachedNews> news_cache_;
+    // ── Cache TTLs — delegated to CacheManager ───────────────────────────────
+    static constexpr int kQuoteTtlSec      = 30;
+    static constexpr int kInfoTtlSec       = 300;
+    static constexpr int kHistoricalTtlSec = 120;
+    static constexpr int kNewsTtlSec       = 180;
 
     // ── Debounce ──────────────────────────────────────────────────────────────
     static constexpr int kDebounceMs = 350;

@@ -3,8 +3,8 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 
-#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -76,62 +76,66 @@ void EquityResearchService::search_symbols(const QString& query) {
 void EquityResearchService::load_symbol(const QString& symbol, const QString& period) {
     if (symbol.isEmpty())
         return;
-    auto now = QDateTime::currentSecsSinceEpoch();
 
     // ── Quote ────────────────────────────────────────────────────────────────
-    auto qit = quote_cache_.find(symbol);
-    if (qit != quote_cache_.end() && (now - qit->ts) < kQuoteTtlSec) {
-        emit quote_loaded(qit->data);
-    } else {
-        run_python("yfinance_data.py", {"quote", symbol}, [this, symbol](bool ok, const QString& out) {
-            if (!ok) {
-                emit error_occurred("Quote", "Failed to fetch quote for " + symbol);
-                return;
-            }
-            auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
-            if (obj.contains("error"))
-                return;
-            auto q = parse_quote(obj);
-            quote_cache_[symbol] = {q, QDateTime::currentSecsSinceEpoch()};
-            emit quote_loaded(q);
-        });
+    {
+        const QVariant qcv = fincept::CacheManager::instance().get("equity:quote:" + symbol);
+        if (!qcv.isNull()) {
+            emit quote_loaded(parse_quote(QJsonDocument::fromJson(qcv.toString().toUtf8()).object()));
+        } else {
+            run_python("yfinance_data.py", {"quote", symbol}, [this, symbol](bool ok, const QString& out) {
+                if (!ok) { emit error_occurred("Quote", "Failed to fetch quote for " + symbol); return; }
+                auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
+                if (obj.contains("error")) return;
+                fincept::CacheManager::instance().put(
+                    "equity:quote:" + symbol,
+                    QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                    kQuoteTtlSec, "equity");
+                emit quote_loaded(parse_quote(obj));
+            });
+        }
     }
 
     // ── Info ─────────────────────────────────────────────────────────────────
-    auto iit = info_cache_.find(symbol);
-    if (iit != info_cache_.end() && (now - iit->ts) < kInfoTtlSec) {
-        emit info_loaded(iit->data);
-    } else {
-        run_python("yfinance_data.py", {"info", symbol}, [this, symbol](bool ok, const QString& out) {
-            if (!ok) {
-                emit error_occurred("Info", "Failed to fetch info for " + symbol);
-                return;
-            }
-            auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
-            if (obj.contains("error"))
-                return;
-            auto info = parse_info(obj);
-            info_cache_[symbol] = {info, QDateTime::currentSecsSinceEpoch()};
-            emit info_loaded(info);
-        });
+    {
+        const QVariant icv = fincept::CacheManager::instance().get("equity:info:" + symbol);
+        if (!icv.isNull()) {
+            emit info_loaded(parse_info(QJsonDocument::fromJson(icv.toString().toUtf8()).object()));
+        } else {
+            run_python("yfinance_data.py", {"info", symbol}, [this, symbol](bool ok, const QString& out) {
+                if (!ok) { emit error_occurred("Info", "Failed to fetch info for " + symbol); return; }
+                auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
+                if (obj.contains("error")) return;
+                fincept::CacheManager::instance().put(
+                    "equity:info:" + symbol,
+                    QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                    kInfoTtlSec, "equity");
+                emit info_loaded(parse_info(obj));
+            });
+        }
     }
 
     // ── Historical ───────────────────────────────────────────────────────────
-    auto hit = candle_cache_.find(symbol);
-    if (hit != candle_cache_.end() && (now - hit->ts) < kHistoricalTtlSec) {
-        emit historical_loaded(symbol, hit->data);
-    } else {
-        run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
-                   [this, symbol](bool ok, const QString& out) {
-                       if (!ok) {
-                           emit error_occurred("Historical", "Failed to fetch historical for " + symbol);
-                           return;
-                       }
-                       auto arr = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).array();
-                       auto candles = parse_candles(arr);
-                       candle_cache_[symbol] = {candles, QDateTime::currentSecsSinceEpoch()};
-                       emit historical_loaded(symbol, candles);
-                   });
+    {
+        const QVariant hcv = fincept::CacheManager::instance().get("equity:candles:" + symbol);
+        if (!hcv.isNull()) {
+            emit historical_loaded(symbol,
+                parse_candles(QJsonDocument::fromJson(hcv.toString().toUtf8()).array()));
+        } else {
+            run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
+                       [this, symbol](bool ok, const QString& out) {
+                           if (!ok) {
+                               emit error_occurred("Historical", "Failed to fetch historical for " + symbol);
+                               return;
+                           }
+                           auto arr = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).array();
+                           fincept::CacheManager::instance().put(
+                               "equity:candles:" + symbol,
+                               QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                               kHistoricalTtlSec, "equity");
+                           emit historical_loaded(symbol, parse_candles(arr));
+                       });
+        }
     }
 }
 
@@ -153,23 +157,12 @@ void EquityResearchService::fetch_financials(const QString& symbol) {
 
 // ── Technicals ────────────────────────────────────────────────────────────────
 void EquityResearchService::fetch_technicals(const QString& symbol, const QString& period) {
-    // Step 1: fetch historical, then step 2: compute technicals
-    auto hit = candle_cache_.find(symbol);
+    // Step 1: fetch historical (from CacheManager), then step 2: compute technicals
     QString cached_json;
-    if (hit != candle_cache_.end()) {
-        // Build JSON from cache to avoid a second Python call
-        QJsonArray arr;
-        for (const auto& c : hit->data) {
-            QJsonObject o;
-            o["timestamp"] = c.timestamp;
-            o["open"] = c.open;
-            o["high"] = c.high;
-            o["low"] = c.low;
-            o["close"] = c.close;
-            o["volume"] = c.volume;
-            arr.append(o);
-        }
-        cached_json = QJsonDocument(arr).toJson(QJsonDocument::Compact);
+    {
+        const QVariant hcv = fincept::CacheManager::instance().get("equity:candles:" + symbol);
+        if (!hcv.isNull())
+            cached_json = hcv.toString();
     }
 
     auto run_compute = [this, symbol](const QString& hist_json) {
@@ -197,9 +190,9 @@ void EquityResearchService::fetch_technicals(const QString& symbol, const QStrin
                            return;
                        }
                        auto raw = python::extract_json(out);
-                       // Also store in cache
-                       auto arr = QJsonDocument::fromJson(raw.toUtf8()).array();
-                       candle_cache_[symbol] = {parse_candles(arr), QDateTime::currentSecsSinceEpoch()};
+                       fincept::CacheManager::instance().put(
+                           "equity:candles:" + symbol,
+                           QVariant(raw), kHistoricalTtlSec, "equity");
                        run_compute(raw);
                    });
     }
@@ -224,11 +217,13 @@ void EquityResearchService::fetch_peers(const QString& symbol, const QStringList
 
 // ── News ──────────────────────────────────────────────────────────────────────
 void EquityResearchService::fetch_news(const QString& symbol, int count) {
-    auto now = QDateTime::currentSecsSinceEpoch();
-    auto nit = news_cache_.find(symbol);
-    if (nit != news_cache_.end() && (now - nit->ts) < kNewsTtlSec) {
-        emit news_loaded(symbol, nit->data);
-        return;
+    {
+        const QVariant ncv = fincept::CacheManager::instance().get("equity:news:" + symbol);
+        if (!ncv.isNull()) {
+            const QJsonArray arr = QJsonDocument::fromJson(ncv.toString().toUtf8()).array();
+            emit news_loaded(symbol, parse_news(arr));
+            return;
+        }
     }
     run_python("yfinance_data.py", {"news", symbol, QString::number(count)},
                [this, symbol](bool ok, const QString& out) {
@@ -238,9 +233,11 @@ void EquityResearchService::fetch_news(const QString& symbol, int count) {
                    }
                    auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
                    auto arr = obj["articles"].toArray();
-                   auto articles = parse_news(arr);
-                   news_cache_[symbol] = {articles, QDateTime::currentSecsSinceEpoch()};
-                   emit news_loaded(symbol, articles);
+                   fincept::CacheManager::instance().put(
+                       "equity:news:" + symbol,
+                       QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                       kNewsTtlSec, "equity");
+                   emit news_loaded(symbol, parse_news(arr));
                });
 }
 
@@ -271,20 +268,9 @@ void EquityResearchService::compute_talipp(const QString& symbol, const QString&
     };
 
     // Use cached historical if available, else fetch
-    auto hit = candle_cache_.find(symbol);
-    if (hit != candle_cache_.end()) {
-        QJsonArray arr;
-        for (const auto& c : hit->data) {
-            QJsonObject o;
-            o["timestamp"] = c.timestamp;
-            o["open"] = c.open;
-            o["high"] = c.high;
-            o["low"] = c.low;
-            o["close"] = c.close;
-            o["volume"] = c.volume;
-            arr.append(o);
-        }
-        run_talipp(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+    const QVariant cached_candles = fincept::CacheManager::instance().get("equity:candles:" + symbol);
+    if (!cached_candles.isNull()) {
+        run_talipp(cached_candles.toString());
     } else {
         run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
                    [this, symbol, run_talipp](bool ok, const QString& out) {
@@ -293,8 +279,9 @@ void EquityResearchService::compute_talipp(const QString& symbol, const QString&
                            return;
                        }
                        auto raw = python::extract_json(out);
-                       candle_cache_[symbol] = {parse_candles(QJsonDocument::fromJson(raw.toUtf8()).array()),
-                                                QDateTime::currentSecsSinceEpoch()};
+                       fincept::CacheManager::instance().put(
+                           "equity:candles:" + symbol,
+                           QVariant(raw), kHistoricalTtlSec, "equity");
                        run_talipp(raw);
                    });
     }

@@ -1,6 +1,7 @@
 #include "screens/dashboard/canvas/WidgetTile.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QMouseEvent>
 #include <QPainter>
@@ -24,12 +25,14 @@ void ResizeGrip::paintEvent(QPaintEvent*) {
     p.setRenderHint(QPainter::Antialiasing, false);
 
     if (hovered_ || pressed_) {
-        // 3x3 dot grid
+        const auto& t = ui::ThemeManager::instance().tokens();
+        QColor dot_color(t.accent);
+        dot_color.setAlpha(pressed_ ? 255 : 160);
         const int dot = 2, gap = 3;
         const int ox = width() - 14;
         const int oy = height() - 14;
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(217, 119, 6, pressed_ ? 255 : 160));
+        p.setBrush(dot_color);
         for (int r = 0; r < 3; ++r)
             for (int c = 0; c < 3; ++c)
                 p.drawRect(ox + c * (dot + gap), oy + r * (dot + gap), dot, dot);
@@ -73,6 +76,9 @@ void ResizeGrip::leaveEvent(QEvent*) {
 
 WidgetTile::WidgetTile(const QString& instance_id, widgets::BaseWidget* content, QWidget* parent)
     : QWidget(parent), instance_id_(instance_id), content_(content) {
+    tokens_ = ui::ThemeManager::instance().tokens();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens& t) { tokens_ = t; update(); });
 
     setMouseTracking(true); // track mouse for edge-resize cursor updates
 
@@ -159,12 +165,15 @@ void WidgetTile::paintEvent(QPaintEvent* e) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, false);
 
-    // Orange glow border
-    p.setPen(QPen(QColor(217, 119, 6, 255), 1));
+    // Accent glow border using theme accent color
+    QColor ac(tokens_.accent);
+    p.setPen(QPen(ac, 1));
     p.drawRect(rect().adjusted(0, 0, -1, -1));
-    p.setPen(QPen(QColor(217, 119, 6, 100), 2));
+    ac.setAlpha(100);
+    p.setPen(QPen(ac, 2));
     p.drawRect(rect().adjusted(-1, -1, 1, 1));
-    p.setPen(QPen(QColor(217, 119, 6, 40), 3));
+    ac.setAlpha(40);
+    p.setPen(QPen(ac, 3));
     p.drawRect(rect().adjusted(-2, -2, 2, 2));
 }
 

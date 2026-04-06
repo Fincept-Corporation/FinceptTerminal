@@ -3,6 +3,7 @@
 #include "screens/node_editor/canvas/NodeScene.h"
 #include "screens/node_editor/canvas/PortItem.h"
 #include "services/workflow/NodeRegistry.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QAction>
 #include <QContextMenuEvent>
@@ -32,6 +33,13 @@ NodeCanvas::NodeCanvas(NodeScene* scene, QWidget* parent) : QGraphicsView(scene,
     setTransformationAnchor(AnchorUnderMouse);
 
     setStyleSheet("QGraphicsView { background: #0d0d0d; border: none; }");
+
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                resetCachedContent(); // invalidate drawBackground cache
+                if (this->scene())
+                    this->scene()->update();
+            });
 }
 
 // ── Zoom ───────────────────────────────────────────────────────────────
@@ -116,7 +124,8 @@ void NodeCanvas::mouseReleaseEvent(QMouseEvent* event) {
 // ── Background (dot grid) ──────────────────────────────────────────────
 
 void NodeCanvas::drawBackground(QPainter* painter, const QRectF& rect) {
-    painter->fillRect(rect, QColor("#0d0d0d"));
+    const auto& t = ui::ThemeManager::instance().tokens();
+    painter->fillRect(rect, QColor(t.bg_base));
 
     qreal scale = transform().m11();
     qreal grid_size = 20.0;
@@ -130,7 +139,7 @@ void NodeCanvas::drawBackground(QPainter* painter, const QRectF& rect) {
     int bottom = static_cast<int>(std::ceil(rect.bottom() / grid_size) * grid_size);
 
     painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor("#2a2a2a"));
+    painter->setBrush(QColor(t.border_med));
 
     qreal dot_size = 1.5 / scale;
     for (int x = left; x <= right; x += static_cast<int>(grid_size)) {
@@ -190,9 +199,10 @@ void NodeCanvas::drawForeground(QPainter* painter, const QRectF& rect) {
     painter->save();
     painter->resetTransform();
 
+    const auto& t = ui::ThemeManager::instance().tokens();
     QFont font("Consolas", 13);
     painter->setFont(font);
-    painter->setPen(QColor("#333333"));
+    painter->setPen(QColor(t.text_tertiary));
 
     QRect vp = viewport()->rect();
     painter->drawText(vp, Qt::AlignCenter, "Drag nodes from the palette to begin");
@@ -200,7 +210,7 @@ void NodeCanvas::drawForeground(QPainter* painter, const QRectF& rect) {
     // Subtle arrow hint
     QFont small("Consolas", 10);
     painter->setFont(small);
-    painter->setPen(QColor("#303030"));
+    painter->setPen(QColor(t.border_med));
     painter->drawText(QRect(vp.x(), vp.y() + vp.height() / 2 + 24, vp.width(), 20), Qt::AlignCenter,
                       "or right-click for quick add");
     painter->restore();
@@ -216,12 +226,15 @@ void NodeCanvas::contextMenuEvent(QContextMenuEvent* event) {
         return;
     }
 
+    const auto& tm = ui::ThemeManager::instance().tokens();
     QMenu menu;
-    menu.setStyleSheet("QMenu { background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
-                       "  font-family: Consolas; font-size: 12px; }"
-                       "QMenu::item { padding: 4px 16px; }"
-                       "QMenu::item:selected { background: #d97706; color: #0d0d0d; }"
-                       "QMenu::separator { background: #2a2a2a; height: 1px; margin: 2px 6px; }");
+    menu.setStyleSheet(
+        QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
+                "  font-family: Consolas; font-size: 12px; }"
+                "QMenu::item { padding: 4px 16px; }"
+                "QMenu::item:selected { background: %4; color: %5; }"
+                "QMenu::separator { background: %3; height: 1px; margin: 2px 6px; }")
+        .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.accent, tm.bg_base));
 
     auto& registry = NodeRegistry::instance();
     QStringList cats = registry.categories();

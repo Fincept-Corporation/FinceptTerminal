@@ -1,4 +1,4 @@
-// CryptoWatchlist.cpp — Bloomberg-style compact watchlist with volume bars
+// CryptoWatchlist.cpp — compact watchlist, 3-column, no horizontal scroll
 #include "screens/crypto_trading/CryptoWatchlist.h"
 
 #include <QHBoxLayout>
@@ -20,34 +20,9 @@ const QColor kColorNeg("#dc2626");
 const QColor kColorAmber("#d97706");
 const QColor kRowEven("#080808");
 const QColor kRowOdd("#0c0c0c");
-const QColor kRowPosHint(22, 163, 74, 8); // 3% green tint
-const QColor kRowNegHint(220, 38, 38, 8); // 3% red tint
-const QColor kActiveHighlight("#d97706");
+const QColor kRowPosHint(22, 163, 74, 12);
+const QColor kRowNegHint(220, 38, 38, 12);
 } // namespace
-
-// ── Volume delegate ─────────────────────────────────────────────────────────
-void WatchlistVolumeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
-                                    const QModelIndex& index) const {
-    // Paint default background first
-    QStyledItemDelegate::paint(painter, option, index);
-
-    // Draw volume bar behind text for column 3
-    if (index.column() != 3 || max_volume_ <= 0)
-        return;
-
-    const double vol = index.data(Qt::UserRole).toDouble();
-    if (vol <= 0)
-        return;
-
-    const double ratio = std::min(vol / max_volume_, 1.0);
-    const int bar_w = static_cast<int>(option.rect.width() * ratio);
-
-    painter->save();
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor(128, 128, 128, 30)); // subtle gray bar
-    painter->drawRect(option.rect.x(), option.rect.y(), bar_w, option.rect.height());
-    painter->restore();
-}
 
 // ── Constructor ─────────────────────────────────────────────────────────────
 CryptoWatchlist::CryptoWatchlist(QWidget* parent) : QWidget(parent) {
@@ -82,26 +57,24 @@ CryptoWatchlist::CryptoWatchlist(QWidget* parent) : QWidget(parent) {
     connect(filter_edit_, &QLineEdit::textChanged, this, &CryptoWatchlist::on_filter_changed);
     layout->addWidget(filter_edit_);
 
-    // Table — 4 columns: Symbol, Price, Chg%, Vol
+    // Table — 3 columns: Symbol | Price | Chg%
+    // No horizontal scrollbar — all 3 columns fit the watchlist width.
     table_ = new QTableWidget;
     table_->setObjectName("cryptoWatchlistTable");
-    table_->setColumnCount(4);
-    table_->setHorizontalHeaderLabels({"Sym", "Price", "%", "Vol"});
-    table_->horizontalHeader()->setStretchLastSection(true);
+    table_->setColumnCount(3);
+    table_->setHorizontalHeaderLabels({"Symbol", "Price", "%"});
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
+    table_->setColumnWidth(2, 62);
+    table_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->verticalHeader()->hide();
     table_->setShowGrid(false);
     table_->setFocusPolicy(Qt::NoFocus);
-    table_->verticalHeader()->setDefaultSectionSize(22); // compact rows
-
-    // Volume delegate for column 3
-    vol_delegate_ = new WatchlistVolumeDelegate(table_);
-    table_->setItemDelegateForColumn(3, vol_delegate_);
+    table_->verticalHeader()->setDefaultSectionSize(22);
 
     connect(table_, &QTableWidget::cellClicked, this, &CryptoWatchlist::on_cell_clicked);
     layout->addWidget(table_, 1);
@@ -111,15 +84,18 @@ void CryptoWatchlist::set_symbols(const QStringList& symbols) {
     {
         QMutexLocker lock(&mutex_);
         entries_.resize(symbols.size());
-        for (int i = 0; i < symbols.size(); ++i)
+        for (int i = 0; i < symbols.size(); ++i) {
             entries_[i].symbol = symbols[i];
+            entries_[i].price = 0.0;
+            entries_[i].change_pct = 0.0;
+            entries_[i].has_data = false;
+        }
     }
     rebuild_table();
 }
 
 void CryptoWatchlist::set_active_symbol(const QString& symbol) {
     active_symbol_ = symbol;
-    // Force visual update on next rebuild or inline patch
     rebuild_table();
 }
 
@@ -127,88 +103,85 @@ void CryptoWatchlist::update_prices(const QVector<trading::TickerData>& tickers)
     if (showing_search_)
         return;
 
-    // O(1) lookup
     QHash<QString, const trading::TickerData*> ticker_map;
     ticker_map.reserve(tickers.size());
     for (const auto& t : tickers)
         ticker_map.insert(t.symbol, &t);
 
     int loaded = 0;
-    double max_vol = 0;
+    bool any_new = false;
     {
         QMutexLocker lock(&mutex_);
         for (auto& entry : entries_) {
             auto it = ticker_map.find(entry.symbol);
-            if (it != ticker_map.end()) {
-                entry.price = (*it)->last;
-                entry.change_pct = (*it)->percentage;
-                entry.volume = (*it)->base_volume;
-                entry.has_data = true;
-                max_vol = std::max(max_vol, entry.volume);
-                ++loaded;
-            }
+            if (it == ticker_map.end())
+                continue;
+            const auto* t = *it;
+            if (t->last <= 0.0)
+                continue;
+
+            const bool was_loaded = entry.has_data;
+            entry.price = t->last;
+            // Preserve last known non-zero change_pct — OB-derived tickers
+            // have percentage=0 (no 24h stats), so only update when we get a real value.
+            if (t->percentage != 0.0)
+                entry.change_pct = t->percentage;
+            entry.has_data = true;
+            if (!was_loaded)
+                any_new = true;
+            ++loaded;
         }
     }
 
     count_label_->setText(QString("%1/%2").arg(loaded).arg(entries_.size()));
-    vol_delegate_->set_max_volume(max_vol > 0 ? max_vol : 1.0);
 
-    // Fast-path: patch in-place if no filter and row count matches
+    // If new symbols just got their first tick, do a full structural rebuild.
+    // Otherwise fast-patch in-place.
     const QString filter = filter_edit_->text().trimmed().toUpper();
-    if (filter.isEmpty() && table_->rowCount() == static_cast<int>(entries_.size())) {
-        table_->setUpdatesEnabled(false);
-        for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
-            const auto& e = entries_[i];
-            if (!e.has_data)
-                continue;
-
-            auto* price_item = table_->item(i, 1);
-            auto* chg_item = table_->item(i, 2);
-            auto* vol_item = table_->item(i, 3);
-            if (!price_item || !chg_item || !vol_item)
-                continue;
-
-            price_item->setText(QString::number(e.price, 'f', 2));
-            price_item->setForeground(kColorPrimary);
-
-            chg_item->setText(QString("%1%").arg(e.change_pct, 0, 'f', 2));
-            chg_item->setForeground(e.change_pct >= 0 ? kColorPos : kColorNeg);
-
-            // Volume with UserRole for delegate bar
-            QString vol_text;
-            if (e.volume >= 1e9)
-                vol_text = QString("%1B").arg(e.volume / 1e9, 0, 'f', 1);
-            else if (e.volume >= 1e6)
-                vol_text = QString("%1M").arg(e.volume / 1e6, 0, 'f', 1);
-            else
-                vol_text = QString::number(e.volume, 'f', 0);
-            vol_item->setText(vol_text);
-            vol_item->setData(Qt::UserRole, e.volume);
-
-            // Subtle row tint by direction
-            QColor bg = (i % 2 == 0) ? kRowEven : kRowOdd;
-            if (e.change_pct > 0)
-                bg = kRowPosHint;
-            else if (e.change_pct < 0)
-                bg = kRowNegHint;
-
-            // Active symbol amber left indicator via first column
-            auto* sym_item = table_->item(i, 0);
-            if (sym_item) {
-                sym_item->setForeground(e.symbol == active_symbol_ ? kColorAmber : kColorPrimary);
-            }
-
-            for (int c = 0; c < 4; ++c) {
-                auto* it = table_->item(i, c);
-                if (it)
-                    it->setBackground(bg);
-            }
-        }
-        table_->setUpdatesEnabled(true);
+    if (any_new || !filter.isEmpty() || table_->rowCount() != static_cast<int>(entries_.size())) {
+        rebuild_table();
         return;
     }
 
-    rebuild_table();
+    // Fast-path: patch visible items in-place
+    table_->setUpdatesEnabled(false);
+    for (int i = 0; i < static_cast<int>(entries_.size()); ++i) {
+        const auto& e = entries_[i];
+        if (!e.has_data)
+            continue;
+
+        auto* sym_item   = table_->item(i, 0);
+        auto* price_item = table_->item(i, 1);
+        auto* chg_item   = table_->item(i, 2);
+        if (!sym_item || !price_item || !chg_item)
+            continue;
+
+        // Format price — fewer decimals for large prices to save width
+        QString price_str;
+        if (e.price >= 1000.0)
+            price_str = QString::number(e.price, 'f', 2);
+        else if (e.price >= 1.0)
+            price_str = QString::number(e.price, 'f', 4);
+        else
+            price_str = QString::number(e.price, 'f', 6);
+
+        price_item->setText(price_str);
+        price_item->setForeground(kColorPrimary);
+
+        chg_item->setText(QString("%1%").arg(e.change_pct, 0, 'f', 2));
+        chg_item->setForeground(e.change_pct >= 0 ? kColorPos : kColorNeg);
+
+        QColor bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+        if (e.change_pct > 0.0)  bg = kRowPosHint;
+        else if (e.change_pct < 0.0) bg = kRowNegHint;
+
+        sym_item->setForeground(e.symbol == active_symbol_ ? kColorAmber : kColorPrimary);
+        for (int c = 0; c < 3; ++c) {
+            auto* it = table_->item(i, c);
+            if (it) it->setBackground(bg);
+        }
+    }
+    table_->setUpdatesEnabled(true);
 }
 
 void CryptoWatchlist::set_search_results(const QVector<trading::MarketInfo>& markets) {
@@ -234,7 +207,7 @@ void CryptoWatchlist::on_filter_changed(const QString& text) {
     rebuild_table();
 }
 
-// ── rebuild_table: structural rebuild ───────────────────────────────────────
+// ── rebuild_table ────────────────────────────────────────────────────────────
 void CryptoWatchlist::rebuild_table() {
     QMutexLocker lock(&mutex_);
     const QString filter = filter_edit_->text().trimmed().toUpper();
@@ -260,19 +233,15 @@ void CryptoWatchlist::rebuild_table() {
             auto ensure = [&](int col, const QString& text, const QColor& fg,
                               int align = Qt::AlignLeft | Qt::AlignVCenter) {
                 auto* it = table_->item(i, col);
-                if (!it) {
-                    it = new QTableWidgetItem;
-                    table_->setItem(i, col, it);
-                }
+                if (!it) { it = new QTableWidgetItem; table_->setItem(i, col, it); }
                 it->setText(text);
                 it->setForeground(fg);
                 it->setBackground(bg);
                 it->setTextAlignment(align);
             };
             ensure(0, filtered[i].symbol, kColorPrimary);
-            ensure(1, filtered[i].type, kColorSecondary);
+            ensure(1, filtered[i].type,   kColorSecondary);
             ensure(2, "--", kColorDim, Qt::AlignRight | Qt::AlignVCenter);
-            ensure(3, "", kColorDim, Qt::AlignRight | Qt::AlignVCenter);
         }
         table_->setUpdatesEnabled(true);
         return;
@@ -294,54 +263,39 @@ void CryptoWatchlist::rebuild_table() {
     for (int i = 0; i < n; ++i) {
         const auto& e = visible[i];
         QColor bg = (i % 2 == 0) ? kRowEven : kRowOdd;
-        if (e.has_data && e.change_pct > 0)
-            bg = kRowPosHint;
-        else if (e.has_data && e.change_pct < 0)
-            bg = kRowNegHint;
+        if (e.has_data && e.change_pct > 0.0) bg = kRowPosHint;
+        else if (e.has_data && e.change_pct < 0.0) bg = kRowNegHint;
 
         auto ensure = [&](int col, const QString& text, const QColor& fg,
                           int align = Qt::AlignLeft | Qt::AlignVCenter) {
             auto* it = table_->item(i, col);
-            if (!it) {
-                it = new QTableWidgetItem;
-                table_->setItem(i, col, it);
-            }
+            if (!it) { it = new QTableWidgetItem; table_->setItem(i, col, it); }
             it->setText(text);
             it->setForeground(fg);
             it->setBackground(bg);
             it->setTextAlignment(align);
         };
 
-        // Active symbol gets amber text
         QColor sym_color = (e.symbol == active_symbol_) ? kColorAmber : kColorPrimary;
         ensure(0, e.symbol, sym_color);
 
-        ensure(1, e.has_data ? QString::number(e.price, 'f', 2) : QString("--"), e.has_data ? kColorPrimary : kColorDim,
+        // Price — adaptive decimal places
+        QString price_str = "--";
+        if (e.has_data) {
+            if (e.price >= 1000.0)
+                price_str = QString::number(e.price, 'f', 2);
+            else if (e.price >= 1.0)
+                price_str = QString::number(e.price, 'f', 4);
+            else
+                price_str = QString::number(e.price, 'f', 6);
+        }
+        ensure(1, price_str, e.has_data ? kColorPrimary : kColorDim,
                Qt::AlignRight | Qt::AlignVCenter);
 
-        ensure(2, e.has_data ? QString("%1%").arg(e.change_pct, 0, 'f', 2) : QString("--"),
-               (e.change_pct >= 0) ? kColorPos : kColorNeg, Qt::AlignRight | Qt::AlignVCenter);
-
-        // Volume column with UserRole for delegate bar
-        QString vol_text = "--";
-        if (e.has_data) {
-            if (e.volume >= 1e9)
-                vol_text = QString("%1B").arg(e.volume / 1e9, 0, 'f', 1);
-            else if (e.volume >= 1e6)
-                vol_text = QString("%1M").arg(e.volume / 1e6, 0, 'f', 1);
-            else
-                vol_text = QString::number(e.volume, 'f', 0);
-        }
-        auto* vol_it = table_->item(i, 3);
-        if (!vol_it) {
-            vol_it = new QTableWidgetItem;
-            table_->setItem(i, 3, vol_it);
-        }
-        vol_it->setText(vol_text);
-        vol_it->setForeground(kColorSecondary);
-        vol_it->setBackground(bg);
-        vol_it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        vol_it->setData(Qt::UserRole, e.volume);
+        ensure(2,
+               e.has_data ? QString("%1%").arg(e.change_pct, 0, 'f', 2) : QString("--"),
+               e.has_data ? (e.change_pct >= 0.0 ? kColorPos : kColorNeg) : kColorDim,
+               Qt::AlignRight | Qt::AlignVCenter);
     }
     table_->setUpdatesEnabled(true);
 }

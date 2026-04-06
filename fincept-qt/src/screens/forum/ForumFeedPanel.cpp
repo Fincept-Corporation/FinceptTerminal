@@ -56,7 +56,7 @@ ForumFeedPanel::ForumFeedPanel(QWidget* parent) : QWidget(parent) {
 }
 
 void ForumFeedPanel::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
@@ -75,10 +75,10 @@ void ForumFeedPanel::build_ui() {
                 "border-radius:3px;}"
                 "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical"
                 "{height:0;}")
-            .arg(ui::colors::BG_BASE, ui::colors::BORDER_DIM));
+            .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
 
     content_w_ = new QWidget;
-    content_w_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE));
+    content_w_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     content_vl_ = new QVBoxLayout(content_w_);
     content_vl_->setContentsMargins(0, 0, 0, 0);
     content_vl_->setSpacing(0);
@@ -107,7 +107,7 @@ void ForumFeedPanel::build_toolbar() {
     toolbar_ = new QWidget;
     toolbar_->setStyleSheet(
         QString("background:%1;border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* tb_vl = new QVBoxLayout(toolbar_);
     tb_vl->setContentsMargins(0, 0, 0, 0);
@@ -125,18 +125,18 @@ void ForumFeedPanel::build_toolbar() {
     auto* hash = new QLabel("#");
     hash->setStyleSheet(
         QString("color:%1;font-size:22px;font-weight:700;background:transparent;%2")
-            .arg(ui::colors::AMBER, M(22)));
+            .arg(ui::colors::AMBER(), M(22)));
 
     header_lbl_ = new QLabel("DISCUSSIONS");
     header_lbl_->setStyleSheet(
         QString("color:%1;font-size:15px;font-weight:700;letter-spacing:1px;"
                 "background:transparent;%2")
-            .arg(ui::colors::TEXT_PRIMARY, M(15)));
+            .arg(ui::colors::TEXT_PRIMARY(), M(15)));
 
     header_count_lbl_ = new QLabel;
     header_count_lbl_->setStyleSheet(
         QString("color:%1;font-size:11px;background:transparent;%2")
-            .arg(ui::colors::TEXT_TERTIARY, M(11)));
+            .arg(ui::colors::TEXT_TERTIARY(), M(11)));
 
     // New post button
     auto* new_btn = new QPushButton("+ NEW POST");
@@ -148,7 +148,7 @@ void ForumFeedPanel::build_toolbar() {
                 "font-size:11px;font-weight:700;letter-spacing:0.5px;%2}"
                 "QPushButton:hover{background:rgba(217,119,6,0.2);color:%3;"
                 "border-color:rgba(217,119,6,0.5);}")
-            .arg(ui::colors::TEXT_SECONDARY, M(11), ui::colors::AMBER));
+            .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
     connect(new_btn, &QPushButton::clicked, this,
             [this]() { emit new_post_clicked(); });
 
@@ -167,7 +167,7 @@ void ForumFeedPanel::build_toolbar() {
     chips_scroll->setStyleSheet(
         QString("QScrollArea{border:none;background:transparent;"
                 "border-top:1px solid %1;}")
-            .arg(ui::colors::BORDER_DIM));
+            .arg(ui::colors::BORDER_DIM()));
     chips_scroll->setWidgetResizable(false);
 
     chips_container_ = new QWidget;
@@ -251,7 +251,7 @@ void ForumFeedPanel::rebuild_category_chips() {
 
     for (const auto& cat : categories_) {
         const bool active = (cat.id == active_cat_id_);
-        QString cc = cat.color.isEmpty() ? ui::colors::AMBER : cat.color;
+        QString cc = cat.color.isEmpty() ? ui::colors::AMBER() : cat.color;
 
         auto* chip = new QPushButton(cat.name.toUpper());
         chip->setFixedHeight(24);
@@ -262,16 +262,16 @@ void ForumFeedPanel::rebuild_category_chips() {
                           "border:none;padding:0 14px;"
                           "font-size:10px;font-weight:700;letter-spacing:0.5px;"
                           "border-radius:12px;%3}")
-                      .arg(cc, ui::colors::BG_BASE, M(10))
+                      .arg(cc, ui::colors::BG_BASE(), M(10))
                 : QString("QPushButton{background:transparent;color:%1;"
                           "border:1px solid %2;padding:0 14px;"
                           "font-size:10px;letter-spacing:0.3px;"
                           "border-radius:12px;%3}"
                           "QPushButton:hover{color:%4;border-color:%5;"
                           "background:rgba(255,255,255,0.02);}")
-                      .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_DIM,
-                           M(10), ui::colors::TEXT_PRIMARY,
-                           ui::colors::BORDER_MED));
+                      .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                           M(10), ui::colors::TEXT_PRIMARY(),
+                           ui::colors::BORDER_MED()));
         connect(chip, &QPushButton::clicked, this,
                 [this, cat]() {
                     emit category_clicked(cat.id, cat.name, cat.color);
@@ -310,20 +310,20 @@ void ForumFeedPanel::rebuild_posts() {
         icon->setAlignment(Qt::AlignCenter);
         icon->setStyleSheet(
             QString("color:%1;font-size:32px;background:transparent;")
-                .arg(ui::colors::BORDER_DIM));
+                .arg(ui::colors::BORDER_DIM()));
 
         auto* msg = new QLabel("NO DISCUSSIONS YET");
         msg->setAlignment(Qt::AlignCenter);
         msg->setStyleSheet(
             QString("color:%1;font-size:14px;font-weight:700;letter-spacing:1.5px;"
                     "background:transparent;%2")
-                .arg(ui::colors::TEXT_TERTIARY, M(14)));
+                .arg(ui::colors::TEXT_TERTIARY(), M(14)));
 
         auto* sub = new QLabel("Be the first to start a conversation");
         sub->setAlignment(Qt::AlignCenter);
         sub->setStyleSheet(
             QString("color:%1;font-size:11px;background:transparent;%2")
-                .arg(ui::colors::TEXT_DIM, M(11)));
+                .arg(ui::colors::TEXT_DIM(), M(11)));
 
         evl->addWidget(icon);
         evl->addWidget(msg);
@@ -359,7 +359,7 @@ void ForumFeedPanel::rebuild_posts() {
                           "border:1px solid %2;"
                           "border-left:3px solid transparent;"
                           "border-radius:4px;")
-                      .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                      .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
         auto* cl = new QVBoxLayout(card);
         cl->setContentsMargins(16, 12, 16, 10);
@@ -380,7 +380,7 @@ void ForumFeedPanel::rebuild_posts() {
         av->setStyleSheet(
             QString("color:%1;font-size:10px;font-weight:700;background:%2;"
                     "border-radius:14px;%3")
-                .arg(ui::colors::BG_BASE, avc, M(10)));
+                .arg(ui::colors::BG_BASE(), avc, M(10)));
 
         // Author + time column
         auto* author_col = new QVBoxLayout;
@@ -391,12 +391,12 @@ void ForumFeedPanel::rebuild_posts() {
         au->setStyleSheet(
             QString("color:%1;font-size:12px;font-weight:600;"
                     "background:transparent;%2")
-                .arg(ui::colors::TEXT_PRIMARY, M(12)));
+                .arg(ui::colors::TEXT_PRIMARY(), M(12)));
 
         auto* tm = new QLabel(rel_time(p.created_at));
         tm->setStyleSheet(
             QString("color:%1;font-size:10px;background:transparent;%2")
-                .arg(ui::colors::TEXT_DIM, M(10)));
+                .arg(ui::colors::TEXT_DIM(), M(10)));
 
         author_col->addWidget(au);
         author_col->addWidget(tm);
@@ -422,7 +422,7 @@ void ForumFeedPanel::rebuild_posts() {
             active
                 ? QString("color:%1;font-size:15px;font-weight:700;"
                           "background:transparent;line-height:1.3;%2")
-                      .arg(ui::colors::TEXT_PRIMARY, M(15))
+                      .arg(ui::colors::TEXT_PRIMARY(), M(15))
                 : QString("color:#c8c8c8;font-size:15px;font-weight:600;"
                           "background:transparent;line-height:1.3;%1")
                       .arg(M(15)));
@@ -439,7 +439,7 @@ void ForumFeedPanel::rebuild_posts() {
             body->setStyleSheet(
                 QString("color:%1;font-size:12px;background:transparent;"
                         "line-height:1.5;%2")
-                    .arg(ui::colors::TEXT_SECONDARY, M(12)));
+                    .arg(ui::colors::TEXT_SECONDARY(), M(12)));
             cl->addWidget(body);
         }
 
@@ -455,7 +455,7 @@ void ForumFeedPanel::rebuild_posts() {
             QString("▲ %1").arg(fmt_n(p.likes)));
         up_btn->setFixedHeight(22);
         up_btn->setCursor(Qt::PointingHandCursor);
-        QString like_col = voted_up || p.likes > 0 ? ui::colors::AMBER : ui::colors::TEXT_DIM;
+        QString like_col = voted_up || p.likes > 0 ? ui::colors::AMBER() : ui::colors::TEXT_DIM();
         up_btn->setStyleSheet(
             voted_up
                 ? QString("QPushButton{background:rgba(217,119,6,0.12);"
@@ -463,7 +463,7 @@ void ForumFeedPanel::rebuild_posts() {
                           "font-size:10px;font-weight:700;padding:0 8px;"
                           "border-radius:11px;%2}"
                           "QPushButton:hover{background:rgba(217,119,6,0.2);}")
-                      .arg(ui::colors::AMBER, M(10))
+                      .arg(ui::colors::AMBER(), M(10))
                 : QString("QPushButton{background:transparent;"
                           "color:%1;border:1px solid transparent;"
                           "font-size:10px;padding:0 8px;"
@@ -471,7 +471,7 @@ void ForumFeedPanel::rebuild_posts() {
                           "QPushButton:hover{color:%3;"
                           "background:rgba(217,119,6,0.06);"
                           "border-color:rgba(217,119,6,0.2);}")
-                      .arg(like_col, M(10), ui::colors::AMBER));
+                      .arg(like_col, M(10), ui::colors::AMBER()));
         auto post_uuid = p.post_uuid;
         connect(up_btn, &QPushButton::clicked, this,
                 [this, post_uuid]() {
@@ -487,7 +487,7 @@ void ForumFeedPanel::rebuild_posts() {
             return lbl;
         };
 
-        QString rep_col = p.reply_count > 0 ? ui::colors::CYAN : "#1e1e1e";
+        QString rep_col = p.reply_count > 0 ? ui::colors::CYAN() : "#1e1e1e";
 
         eng_hl->addWidget(up_btn);
         eng_hl->addWidget(mk_eng("◆", QString("%1 replies").arg(p.reply_count), rep_col));
@@ -501,7 +501,7 @@ void ForumFeedPanel::rebuild_posts() {
                 QString("color:%1;font-size:9px;font-weight:700;"
                         "background:rgba(217,119,6,0.08);padding:2px 6px;"
                         "border-radius:8px;%2")
-                    .arg(ui::colors::AMBER, M(9)));
+                    .arg(ui::colors::AMBER(), M(9)));
             eng_hl->addWidget(voted);
         }
         if (p.reply_count > 5) {
@@ -510,7 +510,7 @@ void ForumFeedPanel::rebuild_posts() {
                 QString("color:%1;font-size:9px;font-weight:700;"
                         "background:rgba(220,38,38,0.08);padding:2px 6px;"
                         "border-radius:8px;%2")
-                    .arg(ui::colors::NEGATIVE, M(9)));
+                    .arg(ui::colors::NEGATIVE(), M(9)));
             eng_hl->addWidget(hot);
         } else if (p.reply_count > 2) {
             auto* active_badge = new QLabel("● ACTIVE");
@@ -518,7 +518,7 @@ void ForumFeedPanel::rebuild_posts() {
                 QString("color:%1;font-size:9px;font-weight:700;"
                         "background:rgba(16,185,129,0.08);padding:2px 6px;"
                         "border-radius:8px;%2")
-                    .arg(ui::colors::POSITIVE, M(9)));
+                    .arg(ui::colors::POSITIVE(), M(9)));
             eng_hl->addWidget(active_badge);
         }
 
@@ -554,9 +554,9 @@ void ForumFeedPanel::rebuild_posts() {
                     "margin:8px 16px;border-radius:4px;%4}"
                     "QPushButton:hover{color:%5;border-color:%6;"
                     "background:rgba(217,119,6,0.05);}")
-                .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY,
-                     ui::colors::BORDER_DIM, M(12),
-                     ui::colors::AMBER, ui::colors::BORDER_MED));
+                .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_TERTIARY(),
+                     ui::colors::BORDER_DIM(), M(12),
+                     ui::colors::AMBER(), ui::colors::BORDER_MED()));
         int np = page_.page + 1;
         connect(more, &QPushButton::clicked, this,
                 [this, np]() { emit load_more_requested(np); });
@@ -583,7 +583,7 @@ void ForumFeedPanel::show_skeleton() {
         auto* card = new QWidget;
         card->setStyleSheet(
             QString("background:%1;border:1px solid %2;border-radius:4px;")
-                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         auto* cvl = new QVBoxLayout(card);
         cvl->setContentsMargins(16, 14, 16, 12);
         cvl->setSpacing(10);
@@ -598,12 +598,12 @@ void ForumFeedPanel::show_skeleton() {
         av_skel->setFixedSize(28, 28);
         av_skel->setStyleSheet(
             QString("background:%1;border-radius:14px;")
-                .arg(ui::colors::BORDER_DIM));
+                .arg(ui::colors::BORDER_DIM()));
         auto* name_skel = new QWidget;
         name_skel->setFixedSize(100 + i * 15, 10);
         name_skel->setStyleSheet(
             QString("background:%1;border-radius:5px;")
-                .arg(ui::colors::BORDER_DIM));
+                .arg(ui::colors::BORDER_DIM()));
         r1h->addWidget(av_skel);
         r1h->addWidget(name_skel);
         r1h->addStretch();
@@ -616,9 +616,9 @@ void ForumFeedPanel::show_skeleton() {
         title_skel->setStyleSheet(
             QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
                     "stop:0 %1,stop:%2 %3,stop:1 %1);border-radius:6px;")
-                .arg(ui::colors::BORDER_DIM)
+                .arg(ui::colors::BORDER_DIM())
                 .arg(0.3 + (i % 4) * 0.15)
-                .arg(ui::colors::BORDER_MED));
+                .arg(ui::colors::BORDER_MED()));
         cvl->addWidget(title_skel);
 
         // Body bar
@@ -627,7 +627,7 @@ void ForumFeedPanel::show_skeleton() {
         body_skel->setMaximumWidth(200 + i * 20);
         body_skel->setStyleSheet(
             QString("background:%1;border-radius:4px;")
-                .arg(ui::colors::BORDER_DIM));
+                .arg(ui::colors::BORDER_DIM()));
         cvl->addWidget(body_skel);
 
         vl->addWidget(card);
@@ -646,9 +646,9 @@ void ForumFeedPanel::pulse_skeleton() {
 
     QString bg = QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
                          "stop:0 %1,stop:%2 %3,stop:%4 %1);border-radius:6px;")
-                     .arg(ui::colors::BORDER_DIM)
+                     .arg(ui::colors::BORDER_DIM())
                      .arg(s, 0, 'f', 2)
-                     .arg(ui::colors::BORDER_MED)
+                     .arg(ui::colors::BORDER_MED())
                      .arg(e, 0, 'f', 2);
 
     auto* vl = qobject_cast<QVBoxLayout*>(skeleton_w_->layout());

@@ -1,7 +1,9 @@
 // CryptoOrderEntry.cpp — BUY/SELL tab form with toggle type buttons
 #include "screens/crypto_trading/CryptoOrderEntry.h"
 
+#include <QComboBox>
 #include <QHBoxLayout>
+#include <QSpinBox>
 #include <QStyle>
 #include <QVBoxLayout>
 
@@ -180,6 +182,49 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         advanced_toggle_->setText(show ? "- ADVANCED" : "+ ADVANCED");
     });
 
+    // Futures controls (leverage + margin mode) — hidden for spot markets
+    futures_section_ = new QWidget;
+    futures_section_->setVisible(false);
+    auto* futures_layout = new QVBoxLayout(futures_section_);
+    futures_layout->setContentsMargins(0, 0, 0, 0);
+    futures_layout->setSpacing(4);
+
+    auto* lev_row = new QHBoxLayout;
+    lev_row->setSpacing(4);
+    auto* lev_lbl = new QLabel("LEVERAGE");
+    lev_lbl->setObjectName("cryptoOeLabel");
+    leverage_spin_ = new QSpinBox;
+    leverage_spin_->setObjectName("cryptoOeSpinBox");
+    leverage_spin_->setRange(1, 125);
+    leverage_spin_->setValue(1);
+    leverage_spin_->setSuffix("x");
+    leverage_spin_->setFixedHeight(26);
+    lev_row->addWidget(lev_lbl);
+    lev_row->addStretch();
+    lev_row->addWidget(leverage_spin_);
+    futures_layout->addLayout(lev_row);
+
+    auto* margin_row = new QHBoxLayout;
+    margin_row->setSpacing(4);
+    auto* margin_lbl = new QLabel("MARGIN");
+    margin_lbl->setObjectName("cryptoOeLabel");
+    margin_mode_combo_ = new QComboBox;
+    margin_mode_combo_->setObjectName("cryptoOeCombo");
+    margin_mode_combo_->addItem("Cross", "cross");
+    margin_mode_combo_->addItem("Isolated", "isolated");
+    margin_mode_combo_->setFixedHeight(26);
+    margin_row->addWidget(margin_lbl);
+    margin_row->addStretch();
+    margin_row->addWidget(margin_mode_combo_);
+    futures_layout->addLayout(margin_row);
+
+    form->addWidget(futures_section_);
+
+    connect(leverage_spin_, &QSpinBox::valueChanged, this,
+            [this](int val) { emit leverage_changed(val); });
+    connect(margin_mode_combo_, &QComboBox::currentIndexChanged, this,
+            [this](int idx) { emit margin_mode_changed(margin_mode_combo_->itemData(idx).toString()); });
+
     // Cost preview
     cost_label_ = new QLabel("Est: --");
     cost_label_->setObjectName("cryptoOeCost");
@@ -285,6 +330,11 @@ void CryptoOrderEntry::on_pct_clicked(int pct) {
     const double max_qty = balance_ / current_price_;
     const double qty = max_qty * pct / 100.0;
     qty_edit_->setText(QString::number(qty, 'f', 6));
+}
+
+void CryptoOrderEntry::set_futures_mode(bool is_futures) {
+    is_futures_ = is_futures;
+    futures_section_->setVisible(is_futures);
 }
 
 void CryptoOrderEntry::update_cost_preview() {

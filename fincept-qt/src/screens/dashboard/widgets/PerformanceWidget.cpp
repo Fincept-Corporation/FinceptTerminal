@@ -9,7 +9,7 @@
 namespace fincept::screens::widgets {
 
 PerformanceWidget::PerformanceWidget(QWidget* parent)
-    : BaseWidget("PERFORMANCE TRACKER", parent, ui::colors::POSITIVE) {
+    : BaseWidget("PERFORMANCE TRACKER", parent, ui::colors::POSITIVE()) {
     auto* vl = content_layout();
 
     // We'll show metrics derived from real benchmark ETF data
@@ -18,25 +18,25 @@ PerformanceWidget::PerformanceWidget(QWidget* parent)
 
     for (const auto& label : labels) {
         auto* row = new QWidget;
-        row->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM));
+        row->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
         MetricRow mr;
         mr.label = new QLabel(label);
         mr.label->setStyleSheet(
-            QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::TEXT_SECONDARY));
+            QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         rl->addWidget(mr.label);
         rl->addStretch();
 
         mr.period = new QLabel("TODAY");
         mr.period->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
         rl->addWidget(mr.period);
 
         mr.value = new QLabel("--");
         mr.value->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
-                                    .arg(ui::colors::TEXT_PRIMARY));
+                                    .arg(ui::colors::TEXT_PRIMARY()));
         rl->addWidget(mr.value);
 
         rows_.append(mr);
@@ -75,7 +75,7 @@ void PerformanceWidget::populate(const QVector<services::QuoteData>& quotes) {
         if (idx >= rows_.size())
             return;
         rows_[idx].value->setText(fmt_pct(val));
-        QString color = val > 0 ? ui::colors::POSITIVE : val < 0 ? ui::colors::NEGATIVE : ui::colors::TEXT_PRIMARY;
+        QString color = val > 0 ? ui::colors::POSITIVE() : val < 0 ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY();
         rows_[idx].value->setStyleSheet(
             QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;").arg(color));
     };
@@ -104,7 +104,7 @@ void PerformanceWidget::populate(const QVector<services::QuoteData>& quotes) {
         double vix = map["^VIX"]->price;
         if (6 < rows_.size()) {
             rows_[6].value->setText(QString::number(vix, 'f', 2));
-            QString color = vix > 25 ? ui::colors::NEGATIVE : vix > 18 ? ui::colors::WARNING : ui::colors::POSITIVE;
+            QString color = vix > 25 ? ui::colors::NEGATIVE() : vix > 18 ? ui::colors::WARNING() : ui::colors::POSITIVE();
             rows_[6].value->setStyleSheet(
                 QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;").arg(color));
         }

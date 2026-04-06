@@ -177,7 +177,7 @@ OrderPlaceResponse MotilalBroker::place_order(const BrokerCredentials& creds, co
     body["orderduration"]     = "DAY";
     body["price"]             = order.price;
     body["triggerprice"]      = order.stop_price;
-    body["quantityinlot"]     = static_cast<int>(order.quantity);
+    body["quantity"]          = static_cast<int>(order.quantity);
     body["disclosedquantity"] = 0;
     body["amoorder"]          = order.amo ? "Y" : "N";
     body["algoid"]            = "";

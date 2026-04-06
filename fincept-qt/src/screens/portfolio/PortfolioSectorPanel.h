@@ -3,6 +3,7 @@
 #include "screens/portfolio/PortfolioTypes.h"
 
 #include <QChartView>
+#include <QHash>
 #include <QLabel>
 #include <QWidget>
 
@@ -16,11 +17,25 @@ class PortfolioSectorPanel : public QWidget {
 
     void set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings);
     void set_currency(const QString& currency);
+    /// Feed real pairwise Pearson correlation matrix (key = "SYM1|SYM2").
+    void set_correlation(const QHash<QString, double>& matrix);
+
+    // Sector utilities — public so callers can map symbols to sectors
+    static QColor  sector_color(int index);
+    static QString infer_sector(const QString& symbol);
+
+  signals:
+    /// Emitted when the user clicks a pie slice. Empty string = clear filter.
+    void sector_selected(QString sector);
+
+  protected:
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
   private:
     void build_ui();
     void update_donut();
     void update_correlation();
+    void on_sector_legend_clicked(const QString& sector);
 
     // Donut chart
     QChartView* donut_view_ = nullptr;
@@ -31,11 +46,9 @@ class PortfolioSectorPanel : public QWidget {
 
     // Data
     QVector<portfolio::HoldingWithQuote> holdings_;
-    QString currency_ = "USD";
-
-    // Sector color palette
-    static QColor sector_color(int index);
-    static QString infer_sector(const QString& symbol);
+    QString currency_         = "USD";
+    QString selected_sector_;  // empty = no filter active
+    QHash<QString, double> corr_matrix_; // real Pearson matrix, key="SYM1|SYM2"
 };
 
 } // namespace fincept::screens

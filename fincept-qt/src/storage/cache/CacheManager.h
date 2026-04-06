@@ -20,6 +20,7 @@ class CacheManager : public QObject {
     QVariant get(const QString& key) const;
     bool has(const QString& key) const;
     void remove(const QString& key);
+    void remove_prefix(const QString& prefix);
     void clear();
     void clear_category(const QString& category);
 

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.fincept.terminal</id>
+  <name>Fincept Terminal</name>
+  <summary>Professional financial intelligence terminal</summary>
+  <metadata_license>FSFAP</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      Fincept Terminal is a native C++ desktop financial intelligence terminal
+      featuring real-time market data, AI-powered analytics, multi-broker trading,
+      portfolio management, and 1300+ Python analytics scripts.
+    </p>
+    <ul>
+      <li>Real-time crypto and equity trading (Kraken, HyperLiquid, 18+ brokers)</li>
+      <li>AI chat with multiple LLM providers (OpenAI, Anthropic, Groq, Ollama)</li>
+      <li>CFA-level Python analytics (equity, derivatives, fixed income, quant)</li>
+      <li>Voice commands via offline Whisper speech recognition</li>
+      <li>Visual workflow node editor with risk management</li>
+      <li>Geopolitics, prediction markets (Polymarket), maritime tracking</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">fincept-terminal.desktop</launchable>
+  <url type="homepage">https://github.com/Fincept-Corporation/FinceptTerminal</url>
+  <url type="bugtracker">https://github.com/Fincept-Corporation/FinceptTerminal/issues</url>
+  <url type="help">https://discord.gg/ae87a8ygbN</url>
+  <provides>
+    <binary>FinceptTerminal</binary>
+  </provides>
+  <releases>
+    <release version="4.0.0" date="2025-01-01">
+      <description>
+        <p>Version 4.0.0 — Complete rewrite in native C++20 with Qt6.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>Finance</category>
+    <category>Office</category>
+  </categories>
+</component>

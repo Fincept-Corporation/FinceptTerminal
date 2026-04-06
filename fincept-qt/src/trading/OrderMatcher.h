@@ -56,7 +56,7 @@ class OrderMatcher {
     OrderMatcher() = default;
 
     QHash<QString, QVector<PtOrder>> pending_orders_;
-    QSet<QString> triggered_stops_;
+    mutable QSet<QString> triggered_stops_;
     QHash<int, OrderFillCallback> fill_callbacks_;
     int next_callback_id_ = 1;
     mutable QMutex mutex_;
@@ -77,7 +77,7 @@ class OrderMatcher {
     bool should_fill(const PtOrder& order, const PriceData& price) const;
     bool check_limit(const PtOrder& order, const PriceData& price) const;
     bool check_stop(const PtOrder& order, const PriceData& price) const;
-    bool check_stop_limit(const PtOrder& order, const PriceData& price);
+    bool check_stop_limit(const PtOrder& order, const PriceData& price) const;
     double get_fill_price(const PtOrder& order, const PriceData& price) const;
 };
 

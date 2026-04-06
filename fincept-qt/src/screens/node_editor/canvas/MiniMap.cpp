@@ -1,6 +1,7 @@
 #include "screens/node_editor/canvas/MiniMap.h"
 
 #include "screens/node_editor/canvas/NodeScene.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QMouseEvent>
 #include <QPainter>
@@ -19,9 +20,15 @@ MiniMap::MiniMap(NodeScene* scene, QGraphicsView* main_view, QWidget* parent)
     setViewportUpdateMode(FullViewportUpdate);
 
     setObjectName("nodeEditorMiniMap");
-    setStyleSheet("QGraphicsView {"
-                  "  background: #141414; border: 1px solid #2a2a2a;"
-                  "}");
+
+    auto apply_minimap_style = [this]() {
+        const auto& t = ui::ThemeManager::instance().tokens();
+        setStyleSheet(QString("QGraphicsView { background: %1; border: 1px solid %2; }")
+                      .arg(t.bg_surface, t.border_dim));
+    };
+    apply_minimap_style();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [apply_minimap_style](const ui::ThemeTokens&) { apply_minimap_style(); });
 
     // Update the viewport rect periodically (20fps max per P9)
     update_timer_->setInterval(200);
@@ -54,8 +61,11 @@ void MiniMap::paintEvent(QPaintEvent* event) {
     QRect mini_rect = mapFromScene(visible).boundingRect();
 
     // Viewport rectangle
-    painter.setPen(QPen(QColor("#d97706"), 1.0));
-    painter.setBrush(QColor(217, 119, 6, 20)); // amber with low alpha
+    QColor accent(ui::ThemeManager::instance().tokens().accent);
+    QColor accent_fill(accent);
+    accent_fill.setAlpha(20);
+    painter.setPen(QPen(accent, 1.0));
+    painter.setBrush(accent_fill);
     painter.drawRect(mini_rect);
 }
 

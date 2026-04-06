@@ -370,13 +370,13 @@ void GeopoliticsScreen::on_tab_changed(int index) {
 
 void GeopoliticsScreen::on_events_loaded(QVector<services::geo::NewsEvent> events, int total) {
     event_count_label_->setText(QString("%1 EVENTS").arg(total));
-    auto color = total > 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+    const QString color = total > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
     event_count_label_->setStyleSheet(QString("color:%1; font-size:9px; font-family:%2; padding:3px 8px;"
                                               "background:rgba(%3,0.08); border:1px solid rgba(%3,0.25);"
                                               "border-radius:2px; font-weight:700;")
                                           .arg(color)
                                           .arg(ui::fonts::DATA_FAMILY)
-                                          .arg(QString(color).mid(1)));
+                                          .arg(color.mid(1)));
     status_label_->setText("READY");
     status_label_->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
                                      .arg(ui::colors::POSITIVE)

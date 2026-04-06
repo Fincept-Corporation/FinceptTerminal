@@ -161,7 +161,7 @@ bool OrderMatcher::check_stop(const PtOrder& order, const PriceData& price) cons
     return price.last <= stop;
 }
 
-bool OrderMatcher::check_stop_limit(const PtOrder& order, const PriceData& price) {
+bool OrderMatcher::check_stop_limit(const PtOrder& order, const PriceData& price) const {
     if (!order.stop_price || *order.stop_price <= 0.0 || !order.price || *order.price <= 0.0)
         return false;
 
@@ -233,7 +233,7 @@ void OrderMatcher::check_orders(const QString& symbol, const PriceData& price, c
             } else if (order.order_type == "stop") {
                 fill = check_stop(order, price);
             } else if (order.order_type == "stop_limit") {
-                fill = check_stop_limit(const_cast<PtOrder&>(order), price);
+                fill = check_stop_limit(order, price);
             }
 
             if (fill) {
@@ -275,6 +275,7 @@ void OrderMatcher::check_orders(const QString& symbol, const PriceData& price, c
                 try {
                     cb(event);
                 } catch (...) {
+                    LOG_WARN("OrderMatcher", "Order fill callback threw an exception");
                 }
             }
 
@@ -310,6 +311,7 @@ void OrderMatcher::set_sl_tp(const QString& portfolio_id, const QString& symbol,
                 }
             }
         } catch (...) {
+            LOG_WARN("OrderMatcher", "Failed to determine position side for SL/TP trigger on " + symbol);
         }
         sl_tp_triggers_.append({portfolio_id, symbol, order_id, pos_side, sl_price, tp_price, false});
     }
@@ -369,6 +371,7 @@ void OrderMatcher::check_sl_tp_triggers(const QString& portfolio_id, const QStri
                     break;
                 }
             } catch (...) {
+                LOG_WARN("OrderMatcher", "Failed to resolve position for SL/TP close on " + symbol);
             }
         }
 

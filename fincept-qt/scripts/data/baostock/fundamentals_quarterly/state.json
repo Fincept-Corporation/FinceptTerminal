@@ -1,0 +1,119 @@
+{
+  "completed": {
+    "2024Q4": {
+      "profit": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\profit_2024Q4.csv",
+        "rows_saved": 0,
+        "failures": 1,
+        "updated_at": 1775471517
+      },
+      "growth": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\growth_2024Q4.csv",
+        "rows_saved": 0,
+        "failures": 1,
+        "updated_at": 1775471518
+      },
+      "balance": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\balance_2024Q4.csv",
+        "rows_saved": 0,
+        "failures": 1,
+        "updated_at": 1775471519
+      },
+      "cash_flow": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\cash_flow_2024Q4.csv",
+        "rows_saved": 0,
+        "failures": 1,
+        "updated_at": 1775471519
+      },
+      "dupont": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\dupont_2024Q4.csv",
+        "rows_saved": 0,
+        "failures": 1,
+        "updated_at": 1775471520
+      },
+      "operation": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\operation_2024Q4.csv",
+        "rows_saved": 0,
+        "failures": 1,
+        "updated_at": 1775471521
+      }
+    },
+    "2024Q3": {
+      "profit": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\profit_2024Q3.csv",
+        "rows_saved": 1,
+        "failures": 0,
+        "updated_at": 1775471593
+      },
+      "growth": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\growth_2024Q3.csv",
+        "rows_saved": 1,
+        "failures": 0,
+        "updated_at": 1775471594
+      },
+      "balance": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\balance_2024Q3.csv",
+        "rows_saved": 1,
+        "failures": 0,
+        "updated_at": 1775471594
+      },
+      "cash_flow": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\cash_flow_2024Q3.csv",
+        "rows_saved": 1,
+        "failures": 0,
+        "updated_at": 1775471595
+      },
+      "dupont": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\dupont_2024Q3.csv",
+        "rows_saved": 1,
+        "failures": 0,
+        "updated_at": 1775471596
+      },
+      "operation": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\operation_2024Q3.csv",
+        "rows_saved": 1,
+        "failures": 0,
+        "updated_at": 1775471597
+      }
+    },
+    "2026Q1": {
+      "profit": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\profit_2026Q1.csv",
+        "rows_saved": 0,
+        "failures": 0,
+        "updated_at": 1775472405
+      },
+      "growth": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\growth_2026Q1.csv",
+        "rows_saved": 0,
+        "failures": 0,
+        "updated_at": 1775472405
+      },
+      "balance": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\balance_2026Q1.csv",
+        "rows_saved": 0,
+        "failures": 0,
+        "updated_at": 1775472405
+      },
+      "cash_flow": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\cash_flow_2026Q1.csv",
+        "rows_saved": 0,
+        "failures": 0,
+        "updated_at": 1775472405
+      },
+      "dupont": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\dupont_2026Q1.csv",
+        "rows_saved": 0,
+        "failures": 0,
+        "updated_at": 1775472405
+      },
+      "operation": {
+        "file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\baostock\\fundamentals_quarterly\\operation_2026Q1.csv",
+        "rows_saved": 0,
+        "failures": 0,
+        "updated_at": 1775472405
+      }
+    }
+  },
+  "updated_at": 1775472603
+}

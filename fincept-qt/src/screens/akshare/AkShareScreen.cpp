@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
 
 #include <QGridLayout>
@@ -549,6 +550,18 @@ void AkShareScreen::on_refresh() {
 // ── Data loading ────────────────────────────────────────────────────────────
 
 void AkShareScreen::load_endpoints(const AkShareSource& source) {
+    const QString cache_key = "akshare:endpoints:" + source.script;
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (!doc.isNull() && doc.isObject()) {
+            auto obj = doc.object();
+            endpoint_cache_[source.script] = obj;
+            populate_endpoint_list(obj);
+            return;
+        }
+    }
+
     set_loading(true);
     endpoint_list_->clear();
     data_status_->setText("Loading endpoints...");
@@ -556,7 +569,7 @@ void AkShareScreen::load_endpoints(const AkShareSource& source) {
     QPointer<AkShareScreen> self = this;
 
     python::PythonRunner::instance().run(source.script, {"get_all_endpoints"},
-                                         [self, script = source.script](const python::PythonResult& result) {
+                                         [self, script = source.script, cache_key](const python::PythonResult& result) {
                                              if (!self)
                                                  return;
 
@@ -582,6 +595,10 @@ void AkShareScreen::load_endpoints(const AkShareSource& source) {
                                              }
 
                                              auto obj = doc.object();
+                                             fincept::CacheManager::instance().put(
+                                                 cache_key,
+                                                 QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                                                 60 * 60, "akshare");
                                              self->endpoint_cache_[script] = obj;
                                              self->populate_endpoint_list(obj);
                                          });
@@ -607,7 +624,7 @@ void AkShareScreen::populate_endpoint_list(const QJsonObject& result) {
             // Add category header (non-selectable)
             auto* header = new QListWidgetItem(it.key().toUpper());
             header->setFlags(header->flags() & ~Qt::ItemIsSelectable);
-            header->setForeground(QColor(colors::AMBER));
+            header->setForeground(QColor(colors::AMBER()));
             auto f = header->font();
             f.setBold(true);
             f.setPointSize(8);
@@ -641,16 +658,31 @@ void AkShareScreen::populate_endpoint_list(const QJsonObject& result) {
 }
 
 void AkShareScreen::execute_query(const QString& script, const QString& endpoint, const QStringList& args) {
+    QStringList full_args;
+    full_args << endpoint << args;
+
+    const QString cache_key = "akshare:query:" + script + ":" + full_args.join(":");
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (doc.isArray() && !doc.array().isEmpty()) {
+            const QJsonArray data_array = doc.array();
+            record_count_->setText(QString::number(data_array.size()) + " records");
+            record_count_->show();
+            data_status_->setText(endpoint + " (cached)");
+            display_table_data(data_array);
+            display_json_data(data_array);
+            return;
+        }
+    }
+
     set_loading(true);
     data_status_->setText("Querying " + endpoint + "...");
     record_count_->hide();
 
-    QStringList full_args;
-    full_args << endpoint << args;
-
     QPointer<AkShareScreen> self = this;
 
-    python::PythonRunner::instance().run(script, full_args, [self, endpoint](const python::PythonResult& result) {
+    python::PythonRunner::instance().run(script, full_args, [self, endpoint, cache_key](const python::PythonResult& result) {
         if (!self)
             return;
 
@@ -712,6 +744,13 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
         self->record_count_->show();
         self->data_status_->setText(endpoint);
 
+        if (!data_array.isEmpty()) {
+            fincept::CacheManager::instance().put(
+                cache_key,
+                QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
+                2 * 60, "akshare");
+        }
+
         self->display_table_data(data_array);
         self->display_json_data(data_array);
 
@@ -766,9 +805,9 @@ void AkShareScreen::display_table_data(const QJsonArray& data) {
             if (val.isDouble()) {
                 double v = val.toDouble();
                 if (v < 0) {
-                    item->setForeground(QColor(colors::NEGATIVE));
+                    item->setForeground(QColor(colors::NEGATIVE()));
                 } else {
-                    item->setForeground(QColor(colors::CYAN));
+                    item->setForeground(QColor(colors::CYAN()));
                 }
             }
 

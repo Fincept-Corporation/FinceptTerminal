@@ -60,6 +60,33 @@ class AgentCard:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AgentCard":
+        # Use explicit "config" block if present and non-empty.
+        # Many agent JSONs store instructions/role/goal/tools at the top level
+        # instead of nested under "config" — promote those fields so card.config
+        # is always populated and the agent's persona is applied at runtime.
+        config = data.get("config") or {}
+        if not config.get("instructions"):
+            # Promote top-level agent fields into config
+            top_instructions = data.get("instructions", "")
+            role = data.get("role", "")
+            goal = data.get("goal", "")
+            if top_instructions or role or goal:
+                # Build a composite instructions string if not already set
+                parts = []
+                if role:
+                    parts.append(f"Role: {role}")
+                if goal:
+                    parts.append(f"Goal: {goal}")
+                if top_instructions:
+                    parts.append(top_instructions)
+                config = {**config, "instructions": "\n\n".join(parts)}
+            # Also promote tools if not in config
+            if not config.get("tools") and data.get("tools"):
+                config = {**config, "tools": data["tools"]}
+            # Promote llm_config as model if present
+            if not config.get("model") and data.get("llm_config"):
+                config = {**config, "model": data["llm_config"]}
+
         return cls(
             id=data.get("id", data.get("name", "unknown")),
             name=data.get("name", "Unknown Agent"),
@@ -68,7 +95,7 @@ class AgentCard:
             version=data.get("version", "1.0.0"),
             provider=data.get("provider", "local"),
             capabilities=data.get("capabilities", []),
-            config=data.get("config", {}),
+            config=config,
             module_path=data.get("module_path"),
             class_name=data.get("class_name")
         )

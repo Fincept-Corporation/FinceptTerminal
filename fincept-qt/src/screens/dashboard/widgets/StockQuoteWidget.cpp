@@ -20,7 +20,7 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
 
     price_label_ = new QLabel("--");
     price_label_->setStyleSheet(QString("color: %1; font-size: 28px; font-weight: bold; background: transparent;")
-                                    .arg(ui::colors::TEXT_PRIMARY));
+                                    .arg(ui::colors::TEXT_PRIMARY()));
     prl->addWidget(price_label_);
 
     auto* change_col = new QWidget;
@@ -34,7 +34,7 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
 
     change_label_ = new QLabel("--");
     change_label_->setStyleSheet(
-        QString("font-size: 11px; font-weight: bold; background: transparent;").arg(ui::colors::TEXT_SECONDARY));
+        QString("font-size: 11px; font-weight: bold; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
     ccl->addWidget(change_label_);
 
     prl->addWidget(change_col);
@@ -42,7 +42,7 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
 
     auto* ticker_label = new QLabel(symbol_);
     ticker_label->setStyleSheet(
-        QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER));
+        QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;").arg(ui::colors::AMBER()));
     prl->addWidget(ticker_label);
 
     vl->addWidget(price_row);
@@ -50,7 +50,7 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
     // ── Separator ──
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
     // ── Stats grid ──
@@ -61,19 +61,19 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
 
     auto make_stat = [&](int row, int col, const QString& label, QLabel*& val_out) {
         auto* cell = new QWidget;
-        cell->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED));
+        cell->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
         auto* cl = new QVBoxLayout(cell);
         cl->setContentsMargins(8, 6, 8, 6);
         cl->setSpacing(2);
 
         auto* lbl = new QLabel(label);
         lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
         cl->addWidget(lbl);
 
         val_out = new QLabel("--");
         val_out->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
-                                   .arg(ui::colors::TEXT_PRIMARY));
+                                   .arg(ui::colors::TEXT_PRIMARY()));
         cl->addWidget(val_out);
 
         gl->addWidget(cell, row, col);
@@ -118,7 +118,7 @@ void StockQuoteWidget::populate(const services::QuoteData& q) {
     price_label_->setText(QString("$%1").arg(q.price, 0, 'f', 2));
 
     bool positive = q.change_pct >= 0;
-    QString color = positive ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+    QString color = positive ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
 
     arrow_label_->setText(positive ? QString(QChar(0x25B2)) : QString(QChar(0x25BC)));
     arrow_label_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(color));

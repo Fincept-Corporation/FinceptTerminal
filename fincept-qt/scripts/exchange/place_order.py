@@ -66,11 +66,14 @@ def main():
     exchange = make_exchange(exchange_id, credentials)
 
     # Use disk-cached markets (TTL 30min) to skip 3-10s load_markets() network call.
-    # The ws_stream.py process and fetch_markets.py both maintain this cache.
+    # Use set_markets() so ccxt rebuilds all internal indexes correctly.
     cached = load_cached_markets(exchange_id)
     if cached is not None:
-        exchange.markets = cached
-        exchange.markets_by_id = exchange.index_by(cached, "id")
+        try:
+            exchange.set_markets(cached)
+        except Exception:
+            exchange.load_markets()
+            save_markets_cache(exchange_id, exchange.markets)
     else:
         exchange.load_markets()
         save_markets_cache(exchange_id, exchange.markets)

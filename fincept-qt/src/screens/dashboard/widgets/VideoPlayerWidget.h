@@ -29,12 +29,14 @@ class VideoPlayerWidget : public BaseWidget {
     void refresh_data();
     void stop_playback();
     void on_ytdlp_finished(int exit_code, QProcess::ExitStatus status);
+    void on_ytdlp_error(QProcess::ProcessError error);
 
   private:
     void build_channel_list();
     void build_player_view();
     void play_url(const QString& url, const QString& title);
     void resolve_youtube_and_play(const QString& youtube_url, const QString& title);
+    QString resolve_ytdlp_program() const;
     void play_direct(const QString& stream_url);
     void set_loading(bool loading);
 

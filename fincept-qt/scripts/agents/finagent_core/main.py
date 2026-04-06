@@ -13,6 +13,13 @@ import sys
 import json
 import logging
 import signal
+
+# Force UTF-8 on stdout/stderr so emoji and non-ASCII in LLM responses
+# don't crash on Windows where the default encoding is cp1252.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import time
 from pathlib import Path
 from typing import Dict, Any
@@ -35,9 +42,22 @@ if parent_dir not in sys.path:
 DISCOVERY_TIMEOUT = 30.0
 
 
+import re as _re
+_EMOJI_RE = _re.compile(
+    "["
+    "\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF"
+    "\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF"
+    "\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF"
+    "\U00002702-\U000027B0\U000024C2-\U0001F251"
+    "]+", flags=_re.UNICODE
+)
+
+def _strip_emoji(text: str) -> str:
+    return _EMOJI_RE.sub("", text)
+
 def stream_print(chunk_type: str, content: str):
     """Print a streaming chunk with immediate flush for real-time output"""
-    print(f"{chunk_type.upper()}: {content}", flush=True)
+    print(f"{chunk_type.upper()}: {_strip_emoji(content)}", flush=True)
 
 
 def _extract_workflow_response(result: Any) -> str:
@@ -244,6 +264,20 @@ def dispatch_action(
         if not query:
             return {"success": False, "error": "Missing 'query' in params"}
 
+        # Load selected agent's card config (instructions, tools, persona)
+        agent_id = config.get("agent_id", "")
+        if agent_id:
+            try:
+                from finagent_core.agent_loader import get_loader
+                card = get_loader().registry.get(agent_id)
+                if card and card.config.get("instructions"):
+                    agent_card_cfg = {**card.config}
+                    if config.get("model"):
+                        agent_card_cfg["model"] = config["model"]
+                    config = agent_card_cfg
+            except Exception as _e:
+                logger.warning(f"Could not load agent card '{agent_id}': {_e}")
+
         # Create agent with API keys and user context
         agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
 
@@ -258,8 +292,6 @@ def dispatch_action(
             query = guard_result["text"]
 
         # Merge params into config for full agent configuration
-        # Config can contain: model, instructions, tools, memory, knowledge, reasoning,
-        # guardrails, tracing, agentic_memory, compression, hooks, evaluation, storage
         full_config = {**config}
 
         # Allow params to override config
@@ -380,7 +412,7 @@ def dispatch_action(
         query = params.get("query")
         if not query:
             return {"success": False, "error": "Missing 'query'"}
-        return route_query(query, api_keys)
+        return route_query(query, api_keys, config)
 
     if action == "execute_query":
         from finagent_core.super_agent import execute_query
@@ -429,7 +461,7 @@ def dispatch_action(
         query = params.get("query")
         if not query:
             return {"success": False, "error": "Missing 'query'"}
-        return generate_dynamic_plan(query, api_keys)
+        return generate_dynamic_plan(query, api_keys, config)
 
     # =========================================================================
     # Paper Trading Bridge
@@ -605,6 +637,83 @@ def dispatch_action(
         result = agent.run_risk_assessment(portfolio_data, config)
         response_text = _extract_workflow_response(result)
         return {"success": True, "response": response_text, "result": result if isinstance(result, dict) else None}
+
+    if action == "macro_scan":
+        from finagent_core.core_agent import CoreAgent
+        agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
+        _setup_agent_modules(agent, config, params)
+        query = ("Provide a comprehensive macro market brief covering: current CPI and inflation trends, "
+                 "GDP growth trajectory, central bank policy stance and yield curve shape, "
+                 "key upcoming economic releases, and the overall macro risk environment for equities.")
+        result = agent.run(query, config)
+        response_text = _extract_workflow_response(result)
+        return {"success": True, "response": response_text}
+
+    if action == "earnings_brief":
+        from finagent_core.core_agent import CoreAgent
+        agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
+        _setup_agent_modules(agent, config, params)
+        symbol = params.get("symbol")
+        if not symbol:
+            return {"success": False, "error": "Missing 'symbol' in params"}
+        query = (f"Generate a detailed earnings analyst brief for {symbol}. Include: "
+                 f"latest EPS vs consensus estimate, revenue beat/miss, key guidance changes, "
+                 f"margin trends, management commentary highlights, and post-earnings price reaction.")
+        result = agent.run(query, config)
+        response_text = _extract_workflow_response(result)
+        return {"success": True, "symbol": symbol, "response": response_text}
+
+    if action == "sector_rotation":
+        from finagent_core.core_agent import CoreAgent
+        agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
+        _setup_agent_modules(agent, config, params)
+        query = ("Analyse current sector rotation dynamics across the S&P 500. Identify: "
+                 "which sectors are showing relative strength vs weakness over 1-month and 3-month periods, "
+                 "key macro drivers behind the rotation, and specific sector ETF recommendations "
+                 "to overweight and underweight in the current regime.")
+        result = agent.run(query, config)
+        response_text = _extract_workflow_response(result)
+        return {"success": True, "response": response_text}
+
+    if action == "options_scan":
+        from finagent_core.core_agent import CoreAgent
+        agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
+        _setup_agent_modules(agent, config, params)
+        symbol = params.get("symbol", "")
+        ticker_ctx = f" for {symbol}" if symbol else " across the market"
+        query = (f"Scan and analyse unusual options activity{ticker_ctx}. Identify: "
+                 f"significant call/put volume spikes vs open interest, large block trades, "
+                 f"implied volatility skew changes, and what the options flow signals "
+                 f"directionally for the underlying.")
+        result = agent.run(query, config)
+        response_text = _extract_workflow_response(result)
+        return {"success": True, "symbol": symbol, "response": response_text}
+
+    if action == "sentiment_scan":
+        from finagent_core.core_agent import CoreAgent
+        agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
+        _setup_agent_modules(agent, config, params)
+        symbol = params.get("symbol")
+        if not symbol:
+            return {"success": False, "error": "Missing 'symbol' in params"}
+        query = (f"Perform a comprehensive sentiment analysis for {symbol} over the past 48 hours. "
+                 f"Cover: news headline sentiment (positive/negative/neutral breakdown), "
+                 f"social media buzz and trending topics, analyst rating changes, "
+                 f"insider activity, and an overall sentiment score with directional bias.")
+        result = agent.run(query, config)
+        response_text = _extract_workflow_response(result)
+        return {"success": True, "symbol": symbol, "response": response_text}
+
+    if action == "custom_query":
+        from finagent_core.core_agent import CoreAgent
+        agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
+        _setup_agent_modules(agent, config, params)
+        query = params.get("query")
+        if not query:
+            return {"success": False, "error": "Missing 'query' in params"}
+        result = agent.run(query, config)
+        response_text = _extract_workflow_response(result)
+        return {"success": True, "response": response_text}
 
     # =========================================================================
     # Agent Memory (via CoreAgent module)
@@ -816,6 +925,27 @@ def dispatch_action_streaming(
                 return {"success": False, "error": "Input rejected by guardrails", "violations": guard_result["violations"]}
             query = guard_result["text"]
 
+        # If a specific agent_id is selected, load that agent's card config
+        # (instructions, tools, persona, etc.) and merge it as the base,
+        # letting active_llm/model still override the model provider.
+        agent_id = config.get("agent_id", "")
+        if agent_id:
+            try:
+                from finagent_core.agent_loader import get_loader
+                loader = get_loader()
+                card = loader.registry.get(agent_id)
+                if card and card.config.get("instructions"):
+                    # Agent card config is the base; active_llm model takes priority
+                    agent_card_cfg = {**card.config}
+                    # Preserve the resolved model from active_llm — don't let the
+                    # card's provider override what the user configured in Settings
+                    if config.get("model"):
+                        agent_card_cfg["model"] = config["model"]
+                    config = agent_card_cfg
+                    stream_print("thinking", f"Using agent: {card.name}")
+            except Exception as _e:
+                logger.warning(f"Could not load agent card '{agent_id}': {_e}")
+
         # Build config
         full_config = {**config}
         for key in ["model", "instructions", "tools", "knowledge", "storage"]:
@@ -841,30 +971,31 @@ def dispatch_action_streaming(
                     user_id=params.get("user_id"),
                     stream_callback=lambda ct, c, m=None: stream_print(ct, c),
                 )
-                response = streaming_agent.run_streaming(query, full_config, session_id)
+                # run_streaming returns a generator — must be iterated to drive
+                # the stream_callback and emit TOKEN lines to stdout.
+                resp_content = ""
+                for chunk in streaming_agent.run_streaming(query, full_config, session_id):
+                    if isinstance(chunk, dict) and chunk.get("type") == "token":
+                        resp_content += chunk.get("content", "")
             except Exception:
                 # Fallback to regular run with simulated streaming
-                response = core_agent.run(query, full_config, session_id, stream=False)
-                content = core_agent.get_response_content(response)
-                if content:
-                    words = content.split()
-                    chunk_size = 5
-                    for i in range(0, len(words), chunk_size):
-                        chunk = ' '.join(words[i:i+chunk_size])
-                        stream_print("token", chunk)
+                resp_content = ""
+                try:
+                    response = core_agent.run(query, full_config, session_id, stream=False)
+                    resp_content = core_agent.get_response_content(response) or ""
+                    if resp_content:
+                        words = resp_content.split()
+                        chunk_size = 5
+                        for i in range(0, len(words), chunk_size):
+                            chunk = ' '.join(words[i:i+chunk_size])
+                            stream_print("token", chunk)
+                except Exception as fallback_err:
+                    stream_print("error", str(fallback_err))
 
             if core_agent._tracing:
                 core_agent.end_trace()
 
             stream_print("done", "completed")
-            # response may be a generator (streaming) or a RunResponse/str (fallback)
-            resp_content = ""
-            if response is not None:
-                if hasattr(response, 'content'):
-                    resp_content = core_agent.get_response_content(response)
-                elif not hasattr(response, '__iter__') or isinstance(response, str):
-                    resp_content = str(response)
-                # generators are already consumed above — leave resp_content as ""
             return {"success": True, "response": resp_content}
 
         except Exception as e:

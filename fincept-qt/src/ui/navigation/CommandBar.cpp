@@ -243,11 +243,11 @@ CommandBar::CommandBar(QWidget* parent) : QWidget(parent) {
     input_->installEventFilter(this);
     hl->addWidget(input_);
 
-    // Dropdown — parented to top-level window so it floats above everything
-    dropdown_ = new QFrame(window(), Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
-    dropdown_->setStyleSheet(DROP_SS);
-    dropdown_->setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
+    // Dropdown — true top-level floating window so it appears above all widgets
+    dropdown_ = new QFrame(nullptr);
+    dropdown_->setWindowFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
     dropdown_->setAttribute(Qt::WA_ShowWithoutActivating);
+    dropdown_->setStyleSheet(DROP_SS);
 
     auto* vl = new QVBoxLayout(dropdown_);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -469,8 +469,22 @@ void CommandBar::on_text_changed(const QString& text) {
 }
 
 void CommandBar::on_return_pressed() {
-    if (!dropdown_->isVisible() || !list_->currentItem())  {
-        // In screen mode, try direct alias lookup
+    // In asset-search or slash-picker modes, Enter must never fall through to
+    // screen navigation — the user has to explicitly pick an asset from the list.
+    if (mode_ == Mode::AssetSearch) {
+        auto* item = list_->currentItem();
+        if (!item) return;
+        const QString symbol = item->data(Qt::UserRole).toString();
+        const QString type   = item->data(Qt::UserRole + 2).toString();
+        // Only navigate if this item is an actual asset result (has a symbol)
+        if (!symbol.isEmpty())
+            select_asset(symbol, type);
+        // else: hint or "no results" row — do nothing, keep waiting for input
+        return;
+    }
+
+    if (!dropdown_->isVisible() || !list_->currentItem()) {
+        // In screen mode only: allow direct alias lookup without dropdown
         if (mode_ == Mode::Screen) {
             const auto results = search(input_->text());
             if (!results.isEmpty()) {
@@ -499,17 +513,7 @@ void CommandBar::on_return_pressed() {
         return;
     }
 
-    if (mode_ == Mode::AssetSearch) {
-        // User selected an asset result — navigate
-        const QString symbol = item->data(Qt::UserRole).toString();
-        const QString type = item->data(Qt::UserRole + 2).toString();
-        if (!symbol.isEmpty()) {
-            select_asset(symbol, type);
-        }
-        return;
-    }
-
-    // Screen mode
+    // Screen mode — navigate to the selected screen
     execute_index(list_->currentRow());
 }
 
@@ -761,7 +765,9 @@ void CommandBar::update_position() {
     const int rows = list_->count();
     const int h = std::min(rows * 32, 320);
 
-    dropdown_->setGeometry(global_pos.x(), global_pos.y(), w, h);
+    // dropdown_ is a top-level window — move() takes screen-global coordinates
+    dropdown_->move(global_pos);
+    dropdown_->resize(w, h);
 }
 
 } // namespace fincept::ui

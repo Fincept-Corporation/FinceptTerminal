@@ -41,8 +41,8 @@ class AgentConfigScreen : public QWidget {
     void set_view(services::AgentViewMode mode);
     QPushButton* make_nav_btn(const QString& text, services::AgentViewMode mode);
 
-    // Ensure the panel for mode is built; returns its stack index
     void ensure_panel_built(services::AgentViewMode mode);
+    QWidget* panel_widget(services::AgentViewMode mode) const;
     void wire_cross_panel_signals();
 
     QStackedWidget* view_stack_        = nullptr;

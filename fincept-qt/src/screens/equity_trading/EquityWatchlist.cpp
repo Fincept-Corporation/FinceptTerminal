@@ -3,6 +3,7 @@
 
 #include "screens/equity_trading/EquityTypes.h"
 #include "trading/instruments/InstrumentService.h"
+#include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -140,7 +141,7 @@ void EquityWatchlist::update_quotes(const QVector<trading::BrokerQuote>& quotes)
                     ltp_item->setText(QString::number(e.ltp, 'f', 2));
                 if (chg_item) {
                     chg_item->setText(QString("%1%2%").arg(e.change_pct >= 0 ? "+" : "").arg(e.change_pct, 0, 'f', 2));
-                    chg_item->setForeground(e.change_pct >= 0 ? COLOR_BUY : COLOR_SELL);
+                    chg_item->setForeground(e.change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
                 }
                 break;
             }
@@ -158,7 +159,7 @@ void EquityWatchlist::set_active_symbol(const QString& symbol) {
         for (int col = 0; col < 3; ++col) {
             auto* cell = table_->item(row, col);
             if (cell) {
-                cell->setBackground(active ? BG_HOVER : BG_BASE);
+                cell->setBackground(active ? QColor(fincept::ui::colors::BG_HOVER()) : QColor(fincept::ui::colors::BG_BASE()));
             }
         }
     }
@@ -193,18 +194,18 @@ void EquityWatchlist::rebuild_table() {
 
         auto* sym_item = new QTableWidgetItem(e.symbol);
         sym_item->setData(Qt::UserRole, e.symbol);
-        sym_item->setForeground(TEXT_PRIMARY);
+        sym_item->setForeground(QColor(fincept::ui::colors::TEXT_PRIMARY()));
         table_->setItem(i, 0, sym_item);
 
         auto* ltp_item = new QTableWidgetItem(e.has_data ? QString::number(e.ltp, 'f', 2) : "--");
         ltp_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        ltp_item->setForeground(TEXT_PRIMARY);
+        ltp_item->setForeground(QColor(fincept::ui::colors::TEXT_PRIMARY()));
         table_->setItem(i, 1, ltp_item);
 
         auto* chg_item = new QTableWidgetItem(
             e.has_data ? QString("%1%2%").arg(e.change_pct >= 0 ? "+" : "").arg(e.change_pct, 0, 'f', 2) : "--");
         chg_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        chg_item->setForeground(e.change_pct >= 0 ? COLOR_BUY : COLOR_SELL);
+        chg_item->setForeground(e.change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
         table_->setItem(i, 2, chg_item);
     }
 }

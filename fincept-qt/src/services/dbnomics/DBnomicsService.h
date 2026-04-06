@@ -3,7 +3,6 @@
 #include "services/dbnomics/DBnomicsModels.h"
 
 #include <QJsonDocument>
-#include <QMap>
 #include <QObject>
 #include <QTimer>
 
@@ -41,31 +40,11 @@ class DBnomicsService : public QObject {
     explicit DBnomicsService(QObject* parent = nullptr);
     Q_DISABLE_COPY(DBnomicsService)
 
-    static constexpr const char* kBaseUrl = "https://api.db.nomics.world/v22";
-    static constexpr int kProviderCacheMs = 10 * 60 * 1000; // 10 min
-    static constexpr int kDatasetCacheMs = 5 * 60 * 1000;   //  5 min
-    static constexpr int kSeriesCacheMs = 5 * 60 * 1000;    //  5 min
-    static constexpr int kDebounceMs = 400;
-
-    // ── Cache structures ──────────────────────────────────────────────────────
-    struct CachedProviders {
-        QVector<DbnProvider> data;
-        qint64 fetched_at = 0;
-    } providers_cache_;
-
-    struct CachedDatasets {
-        QVector<DbnDataset> data;
-        qint64 fetched_at = 0;
-        int total = 0;
-    };
-    QMap<QString, CachedDatasets> datasets_cache_; // key = provider_code
-
-    struct CachedSeries {
-        QVector<DbnSeriesInfo> data;
-        qint64 fetched_at = 0;
-        int total = 0;
-    };
-    QMap<QString, CachedSeries> series_cache_; // key = "prov/ds"
+    static constexpr const char* kBaseUrl       = "https://api.db.nomics.world/v22";
+    static constexpr int kProviderCacheSec = 10 * 60; // 10 min
+    static constexpr int kDatasetCacheSec  =  5 * 60; //  5 min
+    static constexpr int kSeriesCacheSec   =  5 * 60; //  5 min
+    static constexpr int kDebounceMs       = 400;
 
     // ── Debounce timers ───────────────────────────────────────────────────────
     QTimer* series_debounce_ = nullptr;
@@ -75,7 +54,6 @@ class DBnomicsService : public QObject {
     QString pending_series_q_;
     QString pending_search_q_;
 
-    bool is_cache_fresh(qint64 fetched_at, int ttl_ms) const;
     QString build_url(const QString& path) const;
 };
 

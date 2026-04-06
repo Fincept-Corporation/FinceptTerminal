@@ -47,7 +47,7 @@ void LlmService::reload_config() {
     emit config_changed();
 }
 
-void LlmService::ensure_config() {
+void LlmService::ensure_config() const {
     // Called with mutex_ held
     if (config_loaded_)
         return;
@@ -125,43 +125,43 @@ void LlmService::ensure_config() {
 
 QString LlmService::active_provider() const {
     QMutexLocker lock(&mutex_);
-    const_cast<LlmService*>(this)->ensure_config();
+    ensure_config();
     return provider_;
 }
 
 QString LlmService::active_model() const {
     QMutexLocker lock(&mutex_);
-    const_cast<LlmService*>(this)->ensure_config();
+    ensure_config();
     return model_;
 }
 
 QString LlmService::active_api_key() const {
     QMutexLocker lock(&mutex_);
-    const_cast<LlmService*>(this)->ensure_config();
+    ensure_config();
     return api_key_;
 }
 
 QString LlmService::active_base_url() const {
     QMutexLocker lock(&mutex_);
-    const_cast<LlmService*>(this)->ensure_config();
+    ensure_config();
     return base_url_;
 }
 
 double LlmService::active_temperature() const {
     QMutexLocker lock(&mutex_);
-    const_cast<LlmService*>(this)->ensure_config();
+    ensure_config();
     return temperature_;
 }
 
 int LlmService::active_max_tokens() const {
     QMutexLocker lock(&mutex_);
-    const_cast<LlmService*>(this)->ensure_config();
+    ensure_config();
     return max_tokens_;
 }
 
 bool LlmService::is_configured() const {
     QMutexLocker lock(&mutex_);
-    const_cast<LlmService*>(this)->ensure_config();
+    ensure_config();
     if (provider_.isEmpty())
         return false;
     if (provider_requires_api_key(provider_))
@@ -428,7 +428,10 @@ LlmService::HttpResult LlmService::blocking_post(const QString& url, const QJson
                                                  const QMap<QString, QString>& headers, int timeout_ms) {
     HttpResult result;
 
-    // Each background thread call needs its own QNetworkAccessManager
+    // Each background thread call needs its own QNetworkAccessManager.
+    // IMPORTANT: Do NOT use QEventLoop here — this runs on a QtConcurrent bg
+    // thread, and QEventLoop on a non-GUI thread causes undefined behaviour.
+    // Instead use waitForReadyRead() which is safe on any thread.
     QNetworkAccessManager nam;
     QNetworkRequest req{QUrl(url)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -438,23 +441,21 @@ LlmService::HttpResult LlmService::blocking_post(const QString& url, const QJson
     QByteArray json_data = QJsonDocument(body).toJson(QJsonDocument::Compact);
     QNetworkReply* reply = nam.post(req, json_data);
 
-    // Block with QEventLoop until reply finishes or times out
-    QEventLoop loop;
-    QTimer timer;
-    timer.setSingleShot(true);
-    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timer.start(timeout_ms);
-    loop.exec();
-
-    if (timer.isActive()) {
-        timer.stop();
-    } else {
-        // Timeout
-        reply->abort();
-        result.error = "Request timed out";
-        reply->deleteLater();
-        return result;
+    // Block on background thread using waitForReadyRead loop (thread-safe).
+    qint64 elapsed = 0;
+    const int poll_ms = 50;
+    while (!reply->isFinished()) {
+        if (!reply->waitForReadyRead(poll_ms)) {
+            elapsed += poll_ms;
+            if (elapsed >= timeout_ms) {
+                reply->abort();
+                // delete directly — nam and reply are stack-owned on this bg
+                // thread which has no event loop, so deleteLater() would leak.
+                delete reply;
+                result.error = "Request timed out";
+                return result;
+            }
+        }
     }
 
     result.status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -490,7 +491,8 @@ LlmService::HttpResult LlmService::blocking_post(const QString& url, const QJson
                                             : QString("HTTP %1: %2").arg(result.status).arg(server_msg);
     }
 
-    reply->deleteLater();
+    // delete directly — same reason as timeout path above (no event loop on bg thread).
+    delete reply;
     return result;
 }
 
@@ -1700,20 +1702,31 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
     std::vector<ConversationMessage> history_copy = history;
 
     QPointer<LlmService> self = this;
-    QtConcurrent::run([self, p, k, b, m, sp, t, mx, user_message, history_copy, on_chunk]() {
+    // Guard on_chunk: if LlmService is destroyed before a chunk arrives,
+    // skip the callback entirely rather than invoking into a dead context.
+    StreamCallback guarded_chunk = [self, on_chunk](const QString& chunk, bool done) {
+        if (!self) return;
+        on_chunk(chunk, done);
+    };
+    QtConcurrent::run([self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk]() {
         if (!self)
             return;
 
-        // Set config snapshot on this thread
-        self->provider_ = p;
-        self->api_key_ = k;
-        self->base_url_ = b;
-        self->model_ = m;
-        self->system_prompt_ = sp;
-        self->temperature_ = t;
-        self->max_tokens_ = mx;
+        // Apply the config snapshot under the mutex so do_request /
+        // do_streaming_request see a consistent state and don't race with
+        // reload_config() on the UI thread.
+        {
+            QMutexLocker lock(&self->mutex_);
+            self->provider_      = p;
+            self->api_key_       = k;
+            self->base_url_      = b;
+            self->model_         = m;
+            self->system_prompt_ = sp;
+            self->temperature_   = t;
+            self->max_tokens_    = mx;
+        }
 
-        auto resp = self->do_streaming_request(user_message, history_copy, on_chunk);
+        auto resp = self->do_streaming_request(user_message, history_copy, guarded_chunk);
 
         if (self) {
             QMetaObject::invokeMethod(

@@ -58,7 +58,7 @@ void EquityResearchScreen::hideEvent(QHideEvent* e) {
 
 // ── UI construction ───────────────────────────────────────────────────────────
 void EquityResearchScreen::build_ui() {
-    setStyleSheet(QString("background:%1; color:%2;").arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY));
+    setStyleSheet(QString("background:%1; color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -80,8 +80,8 @@ void EquityResearchScreen::build_ui() {
         QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }
         QTabBar::tab:hover { color:%5; }
     )")
-                                   .arg(ui::colors::BG_BASE, ui::colors::BG_SURFACE, ui::colors::TEXT_SECONDARY,
-                                        ui::colors::AMBER, ui::colors::TEXT_PRIMARY));
+                                   .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
+                                        ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
 
     overview_tab_ = new EquityOverviewTab;
     financials_tab_ = new EquityFinancialsTab;
@@ -108,7 +108,7 @@ QWidget* EquityResearchScreen::build_title_bar() {
     auto* container = new QWidget;
     container->setFixedHeight(48);
     container->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(container);
     hl->setContentsMargins(16, 8, 16, 8);
@@ -116,19 +116,19 @@ QWidget* EquityResearchScreen::build_title_bar() {
 
     auto* title = new QLabel("EQUITY RESEARCH");
     title->setStyleSheet(
-        QString("color:%1; font-size:14px; font-weight:700; letter-spacing:2px;").arg(ui::colors::AMBER));
+        QString("color:%1; font-size:14px; font-weight:700; letter-spacing:2px;").arg(ui::colors::AMBER()));
     hl->addWidget(title);
 
     symbol_label_ = new QLabel;
     symbol_label_->setStyleSheet(
-        QString("color:%1; font-size:14px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
+        QString("color:%1; font-size:14px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
     hl->addWidget(symbol_label_);
 
     hl->addStretch();
 
     auto* hint = new QLabel("Use /stock, /fund, /index... in command bar to search");
     hint->setStyleSheet(
-        QString("color:%1; font-size:12px;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color:%1; font-size:12px;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(hint);
 
     return container;
@@ -138,7 +138,7 @@ QWidget* EquityResearchScreen::build_quote_bar() {
     auto* bar = new QFrame;
     bar->setFixedHeight(44);
     bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(16, 0, 16, 0);
@@ -150,14 +150,14 @@ QWidget* EquityResearchScreen::build_quote_bar() {
         if (!color.isEmpty())
             style += "color:" + color + ";";
         else
-            style += "color:" + QString(ui::colors::TEXT_SECONDARY) + ";";
+            style += "color:" + QString(ui::colors::TEXT_SECONDARY()) + ";";
         l->setStyleSheet(style);
         hl->addWidget(l);
         return l;
     };
 
-    sym_label_ = make_label("—", ui::colors::AMBER);
-    price_label_ = make_label("—", ui::colors::TEXT_PRIMARY);
+    sym_label_ = make_label("—", ui::colors::AMBER());
+    price_label_ = make_label("—", ui::colors::TEXT_PRIMARY());
     change_label_ = make_label("—");
     vol_label_ = make_label("VOL: —");
     hl_label_ = make_label("H/L: —");
@@ -246,7 +246,7 @@ void EquityResearchScreen::update_quote_bar(const services::equity::QuoteData& q
 
     bool up = q.change_pct >= 0;
     QString arrow = up ? "\xe2\x96\xb2" : "\xe2\x96\xbc";
-    QString chg_color = up ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+    QString chg_color = up ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
     change_label_->setText(QString("%1%2  %3%4%")
                                .arg(up ? "+" : "")
                                .arg(q.change, 0, 'f', 2)

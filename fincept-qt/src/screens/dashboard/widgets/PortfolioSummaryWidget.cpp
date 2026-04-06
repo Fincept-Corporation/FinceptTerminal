@@ -161,7 +161,7 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVec
 
         // Row
         auto* row = new QWidget;
-        row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED : "transparent"));
+        row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 

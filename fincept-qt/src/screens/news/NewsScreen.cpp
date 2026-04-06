@@ -554,7 +554,7 @@ void NewsScreen::apply_filters_async() {
             [self, gen, filtered, clusters, category_counts, bullish, bearish, neutral]() {
                 if (!self)
                     return;
-                if (gen != self->filter_generation_.load(std::memory_order_relaxed)) {
+                if (gen < self->filter_generation_.load(std::memory_order_relaxed)) {
                     LOG_DEBUG("NewsScreen", QString("Rejected stale filter gen %1").arg(gen));
                     return;
                 }

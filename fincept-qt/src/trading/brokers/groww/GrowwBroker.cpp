@@ -67,8 +67,8 @@ QString GrowwBroker::groww_order_type(OrderType t) {
     switch (t) {
         case OrderType::Market:        return "MARKET";
         case OrderType::Limit:         return "LIMIT";
-        case OrderType::StopLoss:      return "STOP_LOSS_LIMIT";
-        case OrderType::StopLossLimit: return "STOP_LOSS_MARKET";
+        case OrderType::StopLoss:      return "STOP_LOSS_MARKET";   // SL-M: trigger only, market fill
+        case OrderType::StopLossLimit: return "STOP_LOSS_LIMIT";    // SL:   trigger + limit price
         default:                       return "MARKET";
     }
 }
@@ -238,18 +238,20 @@ ApiResponse<QVector<BrokerOrderInfo>> GrowwBroker::get_orders(const BrokerCreden
     QVector<BrokerOrderInfo> orders;
 
     auto parse_status = [](const QString& s) -> QString {
-        if (s == "COMPLETE")           return "filled";
-        if (s == "OPEN")               return "open";
-        if (s == "CANCELLED")          return "cancelled";
-        if (s == "REJECTED")           return "rejected";
-        if (s == "TRIGGER PENDING")    return "pending";
-        if (s == "AFTER MARKET ORDER") return "pending";
+        if (s == "COMPLETED" || s == "EXECUTED" || s == "DELIVERY_AWAITED") return "filled";
+        if (s == "OPEN" || s == "NEW" || s == "ACKED" || s == "APPROVED")   return "open";
+        if (s == "CANCELLED" || s == "CANCELLATION_REQUESTED")              return "cancelled";
+        if (s == "REJECTED" || s == "FAILED")                               return "rejected";
+        if (s == "TRIGGER_PENDING" || s == "MODIFICATION_REQUESTED")        return "pending";
         return "open";
     };
 
     auto fetch_segment = [&](const QString& segment) -> bool {
-        QString url = QString("https://api.groww.in/v1/order/list?segment=%1&page=0&page_size=100")
-                          .arg(segment);
+        constexpr int PAGE_SIZE = 25; // Groww API max per page
+        int page = 0;
+        while (true) {
+        QString url = QString("https://api.groww.in/v1/order/list?segment=%1&page=%2&page_size=%3")
+                          .arg(segment).arg(page).arg(PAGE_SIZE);
         auto resp = BrokerHttp::instance().get(url, hdrs);
         if (!resp.success) return false;
         if (is_token_expired(resp)) return false;
@@ -273,6 +275,9 @@ ApiResponse<QVector<BrokerOrderInfo>> GrowwBroker::get_orders(const BrokerCreden
             info.timestamp      = o["order_time"].toString();
             orders.append(info);
         }
+        if (list.size() < PAGE_SIZE) break; // last page
+        ++page;
+        } // while
         return true;
     };
 

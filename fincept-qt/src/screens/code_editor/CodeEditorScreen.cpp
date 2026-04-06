@@ -470,14 +470,14 @@ void CellWidget::set_selected(bool selected) {
 
     // Selected: amber left accent, brighter surface. Unselected: dim border, standard surface.
     QString border = selected ? colors::AMBER : colors::BORDER_MED;
-    QString bg = selected ? "#0e0e0e" : colors::BG_SURFACE;
+    QString bg = selected ? "#0e0e0e" : colors::BG_SURFACE();
     editor_container_->setStyleSheet(
         QString("background:%1; border-left:3px solid %2; border-top:1px solid %3;"
                 " border-bottom:1px solid %3; border-right:1px solid %3;")
             .arg(bg, border, colors::BORDER_DIM));
 
     // Gutter matches cell background
-    QString gutter_bg = selected ? "#0e0e0e" : colors::BG_RAISED;
+    QString gutter_bg = selected ? "#0e0e0e" : colors::BG_RAISED();
     gutter_->setStyleSheet(QString("background:%1;").arg(gutter_bg));
 
     QString num_color = selected ? colors::AMBER : colors::TEXT_TERTIARY;

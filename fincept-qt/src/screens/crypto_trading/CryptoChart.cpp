@@ -96,15 +96,16 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
 }
 
 void CryptoChart::set_active_tf(int idx) {
-    active_tf_ = idx;
+    // Optimistically update the button highlight so the user gets immediate feedback.
     for (int i = 0; i < 6; ++i) {
         tf_buttons_[i]->setProperty("active", i == idx);
-        // setProperty + style()->polish is expensive (12 CSS recalcs for 6 buttons).
-        // Since the global stylesheet already selects on [active=true], we only need
-        // to trigger a repaint after the property change. Qt's dynamic property change
-        // already triggers a style recalc when the next paint occurs.
         tf_buttons_[i]->update();
     }
+    // Store as pending — if candles_fetching_ is true in the screen, the fetch will
+    // be dropped. set_candles() re-emits timeframe_changed with pending_tf_ so the
+    // screen retries after the in-flight fetch completes.
+    pending_tf_ = TF_LABELS[idx];
+    active_tf_ = idx;
     emit timeframe_changed(TF_LABELS[idx]);
 }
 
@@ -115,9 +116,24 @@ QString CryptoChart::current_timeframe() const {
 void CryptoChart::set_candles(const QVector<trading::Candle>& candles) {
     candles_ = candles;
     rebuild_chart();
+
+    // If the user changed the timeframe while the previous fetch was in-flight,
+    // the screen's candles_fetching_ guard would have dropped that request.
+    // Re-emit now that we're idle so the screen retries for the correct timeframe.
+    if (!pending_tf_.isEmpty()) {
+        const QString tf = pending_tf_;
+        pending_tf_.clear();
+        emit timeframe_changed(tf);
+    }
 }
 
 void CryptoChart::append_candle(const trading::Candle& candle) {
+    // Reject malformed candles — zero/negative prices corrupt the axis range
+    if (candle.open <= 0.0 || candle.high <= 0.0 || candle.low <= 0.0 || candle.close <= 0.0 || candle.timestamp <= 0)
+        return;
+    if (candle.low > candle.high)
+        return;
+
     const auto sets = series_->sets();
     const bool is_update = !candles_.isEmpty() && candles_.last().timestamp == candle.timestamp;
 
@@ -178,10 +194,29 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
         last_min_price_ = p_min;
         last_max_price_ = p_max;
     }
-    if (min_time != last_min_time_ || max_time != last_max_time_) {
-        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time), QDateTime::fromMSecsSinceEpoch(max_time));
+
+    // QCandlestickSeries computes bar width as bodyWidth * (axis_span / bar_count).
+    // If min_time == max_time (single candle or all same timestamp), bar width → 0
+    // and all candles render as hairlines. Add a one-interval padding on the right
+    // so the axis always spans at least 2 × the per-candle slot.
+    qint64 effective_max = max_time;
+    if (min_time >= max_time) {
+        // Fallback: extend by one slot using the TF label
+        const QString tf = TF_LABELS[active_tf_];
+        qint64 slot_ms = 60000; // 1m default
+        if (tf == "5m")       slot_ms = 300000;
+        else if (tf == "15m") slot_ms = 900000;
+        else if (tf == "1h")  slot_ms = 3600000;
+        else if (tf == "4h")  slot_ms = 14400000;
+        else if (tf == "1d")  slot_ms = 86400000;
+        effective_max = min_time + slot_ms;
+    }
+
+    if (min_time != last_min_time_ || effective_max != last_max_time_) {
+        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time),
+                             QDateTime::fromMSecsSinceEpoch(effective_max));
         last_min_time_ = min_time;
-        last_max_time_ = max_time;
+        last_max_time_ = effective_max;
     }
 }
 
@@ -199,6 +234,11 @@ void CryptoChart::rebuild_chart() {
 
     for (int i = start; i < candles_.size(); ++i) {
         const auto& c = candles_[i];
+        // Skip malformed candles — any zero/negative OHLC corrupts the axis range
+        if (c.open <= 0.0 || c.high <= 0.0 || c.low <= 0.0 || c.close <= 0.0 || c.timestamp <= 0)
+            continue;
+        if (c.low > c.high || c.open > c.high || c.close > c.high)
+            continue;
         series_->append(new QCandlestickSet(c.open, c.high, c.low, c.close, c.timestamp));
         min_price = std::min(min_price, c.low);
         max_price = std::max(max_price, c.high);

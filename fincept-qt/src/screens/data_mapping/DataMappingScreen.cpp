@@ -2,7 +2,12 @@
 
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
+#include "services/data_normalization/DataNormalizationService.h"
+#include "storage/repositories/DataMappingRepository.h"
 #include "ui/theme/Theme.h"
+
+#include <QShowEvent>
+#include <QUuid>
 
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -794,7 +799,7 @@ QWidget* DataMappingScreen::create_left_panel() {
         btn->setObjectName("dmSecondaryBtn");
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet("text-align: left; padding: 6px 10px; border: none; border-bottom: 1px solid " +
-                           QString(colors::BORDER_DIM) + ";");
+                           QLatin1String(colors::BORDER_DIM()) + ";");
         connect(btn, &QPushButton::clicked, this, [this, i]() {
             on_view_changed(2); // switch to create view
             on_step_changed(i);
@@ -1274,6 +1279,18 @@ QWidget* DataMappingScreen::create_list_view() {
     tbl->addWidget(list_title);
     tbl->addStretch(1);
 
+    auto* run_btn = new QPushButton("▶ RUN");
+    run_btn->setObjectName("dmCalcBtn");
+    run_btn->setCursor(Qt::PointingHandCursor);
+    connect(run_btn, &QPushButton::clicked, this, &DataMappingScreen::on_run_mapping);
+    tbl->addWidget(run_btn);
+
+    auto* del_btn = new QPushButton("DELETE");
+    del_btn->setObjectName("dmDestructiveBtn");
+    del_btn->setCursor(Qt::PointingHandCursor);
+    connect(del_btn, &QPushButton::clicked, this, &DataMappingScreen::on_delete_mapping);
+    tbl->addWidget(del_btn);
+
     auto* new_btn = new QPushButton("+ NEW MAPPING");
     new_btn->setObjectName("dmCalcBtn");
     new_btn->setCursor(Qt::PointingHandCursor);
@@ -1505,15 +1522,15 @@ void DataMappingScreen::populate_json_tree(const QJsonValue& val, QTreeWidgetIte
     } else if (val.isDouble()) {
         item->setText(1, QString::number(val.toDouble(), 'g', 10));
         item->setText(2, "number");
-        item->setForeground(1, QColor(colors::CYAN));
+        item->setForeground(1, QColor(colors::CYAN()));
     } else if (val.isBool()) {
         item->setText(1, val.toBool() ? "true" : "false");
         item->setText(2, "boolean");
-        item->setForeground(1, QColor(colors::WARNING));
+        item->setForeground(1, QColor(colors::WARNING()));
     } else if (val.isNull()) {
         item->setText(1, "null");
         item->setText(2, "null");
-        item->setForeground(1, QColor(colors::TEXT_DIM));
+        item->setForeground(1, QColor(colors::TEXT_DIM()));
     } else {
         item->setText(1, val.toString());
         item->setText(2, "string");
@@ -1715,7 +1732,7 @@ void DataMappingScreen::on_test_mapping() {
 }
 
 void DataMappingScreen::on_save_mapping() {
-    QString name = api_name_->text().trimmed();
+    const QString name = api_name_->text().trimmed();
     if (name.isEmpty()) {
         test_status_->setText("Enter a mapping name first");
         return;
@@ -1723,15 +1740,60 @@ void DataMappingScreen::on_save_mapping() {
 
     QJsonObject config;
     build_mapping_config(config);
-    saved_mappings_.append(config);
 
-    // Add to list view
-    mapping_list_->addItem(name + " — " + schema_select_->currentText());
+    DataMapping dm;
+    dm.id                  = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    dm.name                = name;
+    dm.schema_name         = schema_select_->currentText();
+    dm.base_url            = api_base_url_->text().trimmed();
+    dm.endpoint            = api_endpoint_->text().trimmed();
+    dm.method              = api_method_->currentText();
+    dm.auth_type           = api_auth_type_->currentText();
+    dm.auth_token          = api_auth_value_->text().trimmed();
+    dm.headers             = api_headers_->toPlainText().trimmed();
+    dm.body                = api_body_->toPlainText().trimmed();
+    dm.parser              = parser_engine_->currentText();
+    dm.cache_enabled       = cache_enabled_->currentIndex() == 0;
+    dm.cache_ttl           = cache_ttl_->value();
+    dm.field_mappings_json =
+        QJsonDocument(config["field_mappings"].toArray()).toJson(QJsonDocument::Compact);
 
-    status_mappings_->setText("Saved: " + QString::number(saved_mappings_.size()));
-    on_view_changed(0); // back to list
+    auto r = DataMappingRepository::instance().save(dm);
+    if (r.is_err()) {
+        LOG_ERROR("DataMapping", "Failed to save: " + QString::fromStdString(r.error()));
+        test_status_->setText("Save failed — database error");
+        return;
+    }
 
+    load_mappings_from_db();
+    on_view_changed(0);
     LOG_INFO("DataMapping", "Mapping saved: " + name);
+}
+
+void DataMappingScreen::on_run_mapping() {
+    const int row = mapping_list_->currentRow();
+    if (row < 0 || row >= saved_mappings_.size()) return;
+
+    const DataMapping& dm = saved_mappings_[row];
+    LOG_INFO("DataMapping", "Running mapping: " + dm.name);
+
+    QPointer<DataMappingScreen> self = this;
+    fincept::services::DataNormalizationService::instance().fetch_and_normalize(
+        dm, [self, dm](bool ok, fincept::services::NormalizedRecord rec) {
+            if (!self) return;
+            if (ok) {
+                const QString out =
+                    QJsonDocument(rec.normalized).toJson(QJsonDocument::Indented);
+                self->test_output_->setPlainText(out);
+                self->test_status_->setText(
+                    QString("RUN OK — %1 fields extracted").arg(rec.normalized.size()));
+                LOG_INFO("DataMapping", "Run complete: " + dm.name);
+            } else {
+                const QString errs = rec.errors.join(", ");
+                self->test_status_->setText("RUN FAILED — " + errs);
+                LOG_WARN("DataMapping", "Run failed: " + errs);
+            }
+        });
 }
 
 void DataMappingScreen::on_template_selected(int index) {
@@ -1782,15 +1844,43 @@ void DataMappingScreen::on_new_mapping() {
 }
 
 void DataMappingScreen::on_delete_mapping() {
-    int row = mapping_list_->currentRow();
-    if (row < 0 || row >= saved_mappings_.size())
+    const int row = mapping_list_->currentRow();
+    if (row < 0 || row >= saved_mappings_.size()) return;
+
+    const QString id = saved_mappings_[row].id;
+    auto r = DataMappingRepository::instance().remove(id);
+    if (r.is_err()) {
+        LOG_ERROR("DataMapping", "Failed to delete: " + QString::fromStdString(r.error()));
         return;
+    }
 
-    saved_mappings_.removeAt(row);
-    delete mapping_list_->takeItem(row);
-    status_mappings_->setText("Saved: " + QString::number(saved_mappings_.size()));
-
+    load_mappings_from_db();
     LOG_INFO("DataMapping", "Mapping deleted");
+}
+
+void DataMappingScreen::load_mappings_from_db() {
+    saved_mappings_.clear();
+    mapping_list_->clear();
+
+    auto r = DataMappingRepository::instance().list_all();
+    if (r.is_err()) {
+        LOG_WARN("DataMapping", "Could not load mappings: " + QString::fromStdString(r.error()));
+        return;
+    }
+
+    saved_mappings_ = r.value();
+    for (const auto& dm : saved_mappings_) {
+        mapping_list_->addItem(dm.name + " — " + dm.schema_name);
+    }
+
+    if (status_mappings_) {
+        status_mappings_->setText("Saved: " + QString::number(saved_mappings_.size()));
+    }
+}
+
+void DataMappingScreen::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    load_mappings_from_db();
 }
 
 void DataMappingScreen::build_mapping_config(QJsonObject& config) {

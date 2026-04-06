@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
+#include "storage/cache/CacheManager.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -12,6 +13,8 @@
 namespace fincept::services::maritime {
 
 static constexpr const char* kMarineBase = "https://api.fincept.in/marine";
+static constexpr int kVesselTtlSec  = 60;       // position data: 1 min
+static constexpr int kHistoryTtlSec = 5 * 60;   // history: 5 min
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 MaritimeService& MaritimeService::instance() {
@@ -74,11 +77,19 @@ void MaritimeService::get_vessel_position(const QString& imo) {
     if (imo.trimmed().isEmpty())
         return;
 
+    const QString cache_key = "maritime:vessel:" + imo.trimmed();
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto vessel = parse_vessel(QJsonDocument::fromJson(cached.toString().toUtf8()).object());
+        emit vessel_found(vessel);
+        return;
+    }
+
     QJsonObject body;
     body["imo"] = imo.trimmed();
 
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().post(QString(kMarineBase) + "/vessel/position", body, [self](Result<QJsonDocument> result) {
+    HttpClient::instance().post(QString(kMarineBase) + "/vessel/position", body, [self, cache_key](Result<QJsonDocument> result) {
         if (!self)
             return;
         if (!result.is_ok()) {
@@ -87,7 +98,12 @@ void MaritimeService::get_vessel_position(const QString& imo) {
             return;
         }
         auto data = unwrap(result.value().object());
-        auto vessel = self->parse_vessel(data["vessel"].toObject());
+        auto vessel_obj = data["vessel"].toObject();
+        fincept::CacheManager::instance().put(
+            cache_key,
+            QVariant(QString::fromUtf8(QJsonDocument(vessel_obj).toJson(QJsonDocument::Compact))),
+            kVesselTtlSec, "maritime");
+        auto vessel = self->parse_vessel(vessel_obj);
         LOG_INFO("Maritime", QString("Found vessel: %1 [%2]").arg(vessel.name, vessel.imo));
         emit self->vessel_found(vessel);
     });
@@ -95,6 +111,20 @@ void MaritimeService::get_vessel_position(const QString& imo) {
 
 // ── Multi vessel positions ───────────────────────────────────────────────────
 void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
+    QStringList sorted = imos;
+    std::sort(sorted.begin(), sorted.end());
+    const QString cache_key = "maritime:multi:" + sorted.join(",");
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        QJsonArray vessels_arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+        QVector<VesselData> vessels;
+        vessels.reserve(vessels_arr.size());
+        for (const auto& v : vessels_arr)
+            vessels.append(parse_vessel(v.toObject()));
+        emit vessels_loaded(vessels, vessels.size());
+        return;
+    }
+
     QJsonObject body;
     QJsonArray arr;
     for (const auto& imo : imos)
@@ -102,7 +132,7 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
     body["imos"] = arr;
 
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().post(QString(kMarineBase) + "/vessel/multi", body, [self](Result<QJsonDocument> result) {
+    HttpClient::instance().post(QString(kMarineBase) + "/vessel/multi", body, [self, cache_key](Result<QJsonDocument> result) {
         if (!self)
             return;
         if (!result.is_ok()) {
@@ -111,10 +141,14 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
             return;
         }
         auto data = unwrap(result.value().object());
-        auto arr = data["vessels"].toArray();
+        auto vessels_arr = data["vessels"].toArray();
+        fincept::CacheManager::instance().put(
+            cache_key,
+            QVariant(QString::fromUtf8(QJsonDocument(vessels_arr).toJson(QJsonDocument::Compact))),
+            kVesselTtlSec, "maritime");
         QVector<VesselData> vessels;
-        vessels.reserve(arr.size());
-        for (const auto& v : arr)
+        vessels.reserve(vessels_arr.size());
+        for (const auto& v : vessels_arr)
             vessels.append(self->parse_vessel(v.toObject()));
         int total = data["found_count"].toInt(vessels.size());
         LOG_INFO("Maritime", QString("Multi vessel: %1 found").arg(vessels.size()));
@@ -124,11 +158,23 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
 
 // ── Vessel history ───────────────────────────────────────────────────────────
 void MaritimeService::get_vessel_history(const QString& imo) {
+    const QString cache_key = "maritime:history:" + imo.trimmed();
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        QJsonArray history_arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+        QVector<VesselData> history;
+        history.reserve(history_arr.size());
+        for (const auto& v : history_arr)
+            history.append(parse_vessel(v.toObject()));
+        emit vessel_history_loaded(history);
+        return;
+    }
+
     QJsonObject body;
     body["imo"] = imo.trimmed();
 
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().post(QString(kMarineBase) + "/vessel/history", body, [self](Result<QJsonDocument> result) {
+    HttpClient::instance().post(QString(kMarineBase) + "/vessel/history", body, [self, cache_key](Result<QJsonDocument> result) {
         if (!self)
             return;
         if (!result.is_ok()) {
@@ -139,6 +185,10 @@ void MaritimeService::get_vessel_history(const QString& imo) {
         auto arr = data["positions"].toArray();
         if (arr.isEmpty())
             arr = data["history"].toArray();
+        fincept::CacheManager::instance().put(
+            cache_key,
+            QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+            kHistoryTtlSec, "maritime");
         QVector<VesselData> history;
         history.reserve(arr.size());
         for (const auto& v : arr)

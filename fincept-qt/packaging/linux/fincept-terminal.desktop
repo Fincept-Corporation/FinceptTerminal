@@ -1,0 +1,15 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Fincept Terminal
+GenericName=Financial Intelligence Terminal
+Comment=Professional financial data terminal with AI analytics, trading, and market data
+Exec=FinceptTerminal %U
+Icon=fincept-terminal
+Terminal=false
+StartupWMClass=FinceptTerminal
+StartupNotify=true
+Categories=Finance;Office;Science;
+MimeType=application/x-fincept;
+Keywords=finance;trading;stocks;crypto;portfolio;AI;analytics;markets;
+X-GNOME-FullName=Fincept Terminal

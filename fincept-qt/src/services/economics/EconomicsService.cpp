@@ -3,8 +3,8 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 
-#include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonParseError>
 
@@ -22,16 +22,11 @@ EconomicsService::EconomicsService(QObject* parent) : QObject(parent) {}
 QString EconomicsService::cache_key(const QString& script,
                                     const QString& command,
                                     const QStringList& args) const {
-    return script + ":" + command + ":" + args.join(",");
-}
-
-bool EconomicsService::is_cache_fresh(const QString& key) const {
-    if (!cache_.contains(key)) return false;
-    return (QDateTime::currentMSecsSinceEpoch() - cache_[key].fetched_at) < kCacheTtlMs;
+    return "economics:" + script + ":" + command + ":" + args.join(",");
 }
 
 void EconomicsService::invalidate(const QString& request_id) {
-    cache_.remove(request_id);
+    fincept::CacheManager::instance().remove(request_id);
 }
 
 // ── Execute ───────────────────────────────────────────────────────────────────
@@ -43,14 +38,17 @@ void EconomicsService::execute(const QString& source_id,
                                 const QString& request_id) {
     const QString key = cache_key(script, command, args);
 
-    if (is_cache_fresh(key)) {
-        LOG_DEBUG("EconomicsService", "Cache hit: " + key);
-        EconomicsResult res;
-        res.success   = true;
-        res.data      = cache_[key].data;
-        res.source_id = source_id;
-        emit result_ready(request_id, res);
-        return;
+    {
+        const QVariant cached = fincept::CacheManager::instance().get(key);
+        if (!cached.isNull()) {
+            LOG_DEBUG("EconomicsService", "Cache hit: " + key);
+            EconomicsResult res;
+            res.success   = true;
+            res.data      = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
+            res.source_id = source_id;
+            emit result_ready(request_id, res);
+            return;
+        }
     }
 
     QStringList full_args;
@@ -114,7 +112,11 @@ void EconomicsService::execute(const QString& source_id,
             }
 
             res.success = true;
-            self->cache_[key] = {res.data, QDateTime::currentMSecsSinceEpoch()};
+            fincept::CacheManager::instance().put(
+                key,
+                QVariant(QString::fromUtf8(QJsonDocument(res.data).toJson(QJsonDocument::Compact))),
+                kCacheTtlSec,
+                "economics");
             LOG_INFO("EconomicsService", "Result ready: " + request_id);
             emit self->result_ready(request_id, res);
         });

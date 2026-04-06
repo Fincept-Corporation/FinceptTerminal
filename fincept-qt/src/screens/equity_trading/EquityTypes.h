@@ -2,6 +2,8 @@
 // Equity Trading types — UI state, enums, constants
 // Kept separate from trading engine types to avoid coupling.
 
+#include "ui/theme/ThemeManager.h"
+
 #include <QColor>
 #include <QString>
 #include <QStringList>
@@ -36,29 +38,30 @@ inline constexpr int PORTFOLIO_POLL_MS = 3000;
 inline constexpr int WATCHLIST_POLL_MS = 10000;
 inline constexpr int CLOCK_UPDATE_MS = 1000;
 
-// ── Obsidian Design System Colors (same as crypto) ─────────────────────────
+// ── Design System Colors — live from ThemeManager ──────────────────────────
+// These are inline functions so they reflect the active theme at call time.
 
-inline const QColor COLOR_BUY = QColor("#16a34a");
-inline const QColor COLOR_SELL = QColor("#dc2626");
-inline const QColor COLOR_DIM = QColor("#808080");
-inline const QColor COLOR_ACCENT = QColor("#d97706");
+inline QColor COLOR_BUY()     { return QColor(fincept::ui::ThemeManager::instance().tokens().positive); }
+inline QColor COLOR_SELL()    { return QColor(fincept::ui::ThemeManager::instance().tokens().negative); }
+inline QColor COLOR_DIM()     { return QColor(fincept::ui::ThemeManager::instance().tokens().text_secondary); }
+inline QColor COLOR_ACCENT()  { return QColor(fincept::ui::ThemeManager::instance().tokens().accent); }
 
-inline const QColor BG_BASE = QColor("#080808");
-inline const QColor BG_SURFACE = QColor("#0a0a0a");
-inline const QColor BG_RAISED = QColor("#111111");
-inline const QColor BG_HOVER = QColor("#161616");
+inline QColor BG_BASE()       { return QColor(fincept::ui::ThemeManager::instance().tokens().bg_base); }
+inline QColor BG_SURFACE()    { return QColor(fincept::ui::ThemeManager::instance().tokens().bg_surface); }
+inline QColor BG_RAISED()     { return QColor(fincept::ui::ThemeManager::instance().tokens().bg_raised); }
+inline QColor BG_HOVER()      { return QColor(fincept::ui::ThemeManager::instance().tokens().bg_hover); }
 
-inline const QColor BORDER_DIM = QColor("#1a1a1a");
-inline const QColor BORDER_MED = QColor("#222222");
-inline const QColor BORDER_BRIGHT = QColor("#333333");
+inline QColor BORDER_DIM()    { return QColor(fincept::ui::ThemeManager::instance().tokens().border_dim); }
+inline QColor BORDER_MED()    { return QColor(fincept::ui::ThemeManager::instance().tokens().border_med); }
+inline QColor BORDER_BRIGHT() { return QColor(fincept::ui::ThemeManager::instance().tokens().border_bright); }
 
-inline const QColor TEXT_PRIMARY = QColor("#e5e5e5");
-inline const QColor TEXT_SECONDARY = QColor("#808080");
-inline const QColor TEXT_TERTIARY = QColor("#525252");
+inline QColor TEXT_PRIMARY()   { return QColor(fincept::ui::ThemeManager::instance().tokens().text_primary); }
+inline QColor TEXT_SECONDARY() { return QColor(fincept::ui::ThemeManager::instance().tokens().text_secondary); }
+inline QColor TEXT_TERTIARY()  { return QColor(fincept::ui::ThemeManager::instance().tokens().text_tertiary); }
 
-inline const QColor COLOR_WARNING = QColor("#ca8a04");
-inline const QColor COLOR_INFO = QColor("#2563eb");
-inline const QColor ROW_ALT = QColor("#0c0c0c");
+inline QColor COLOR_WARNING() { return QColor(fincept::ui::ThemeManager::instance().tokens().warning); }
+inline QColor COLOR_INFO()    { return QColor(fincept::ui::ThemeManager::instance().tokens().info); }
+inline QColor ROW_ALT()       { return QColor(fincept::ui::ThemeManager::instance().tokens().row_alt); }
 
 // ── Exchange → Currency mapping ────────────────────────────────────────────
 

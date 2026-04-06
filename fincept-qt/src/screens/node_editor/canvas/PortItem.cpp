@@ -1,6 +1,7 @@
 #include "screens/node_editor/canvas/PortItem.h"
 
 #include "screens/node_editor/canvas/NodeItem.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QCursor>
 #include <QGraphicsSceneMouseEvent>
@@ -61,18 +62,19 @@ void PortItem::set_connect_highlight(int state) {
 void PortItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) {
     painter->setRenderHint(QPainter::Antialiasing);
 
+    const auto& t = ui::ThemeManager::instance().tokens();
     const bool connected = !edges_.isEmpty();
     QColor fill;
     if (connect_highlight_ == 1)
-        fill = QColor("#16a34a"); // compatible green
+        fill = QColor(t.positive);
     else if (connect_highlight_ == -1)
-        fill = QColor("#dc2626"); // incompatible red
+        fill = QColor(t.negative);
     else if (hovered_ || connected)
-        fill = QColor("#d97706"); // amber
+        fill = QColor(t.accent);
     else
-        fill = QColor("#4a4a4a"); // idle
+        fill = QColor(t.border_med);
 
-    QColor border_color("#2a2a2a");
+    QColor border_color(t.border_dim);
     qreal radius = kVisualRadius;
     if (hovered_ || connect_highlight_ != 0)
         radius = kVisualRadius + 1.0; // slightly larger on hover/highlight

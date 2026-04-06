@@ -5,10 +5,12 @@
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
 
+#include <QAction>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMenu>
 #include <QMetaObject>
 #include <QVBoxLayout>
 
@@ -63,6 +65,9 @@ void PortfolioBlotter::build_ui() {
     connect(hdr, &QHeaderView::sectionClicked, this, &PortfolioBlotter::on_header_clicked);
     connect(table_, &QTableWidget::cellClicked, this, &PortfolioBlotter::on_row_clicked);
 
+    table_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(table_, &QTableWidget::customContextMenuRequested, this, &PortfolioBlotter::on_context_menu);
+
     layout->addWidget(table_);
 }
 
@@ -76,6 +81,10 @@ void PortfolioBlotter::fetch_sparklines() {
     if (holdings_.isEmpty())
         return;
 
+    // Mark all symbols as pending before the async call
+    for (const auto& h : holdings_)
+        sparkline_state_[h.symbol] = SparklineState::Pending;
+
     QStringList symbols;
     for (const auto& h : holdings_)
         symbols.append(h.symbol);
@@ -84,28 +93,40 @@ void PortfolioBlotter::fetch_sparklines() {
     services::MarketDataService::instance().fetch_sparklines(
         symbols,
         [self](bool ok, QHash<QString, QVector<double>> data) {
-            if (!self || !ok || data.isEmpty())
-                return;
-            QMetaObject::invokeMethod(self, [self, data]() {
+            QMetaObject::invokeMethod(self, [self, ok, data]() {
                 if (!self)
                     return;
-                self->sparkline_cache_ = data;
-                // Repaint only the TREND column cells without full table rebuild
+
+                // Mark loaded/failed per symbol
+                for (auto it = self->sparkline_state_.begin(); it != self->sparkline_state_.end(); ++it) {
+                    if (ok && data.contains(it.key()))
+                        it.value() = SparklineState::Loaded;
+                    else
+                        it.value() = SparklineState::Failed;
+                }
+                if (ok && !data.isEmpty())
+                    self->sparkline_cache_.insert(data);
+
+                // Repaint only TREND column without full table rebuild
                 for (int r = 0; r < self->table_->rowCount(); ++r) {
                     auto* item = self->table_->item(r, 0);
-                    if (!item)
-                        continue;
-                    QString sym = item->text();
-                    if (!self->sparkline_cache_.contains(sym))
-                        continue;
+                    if (!item) continue;
+                    const QString sym = item->text();
                     auto* w = qobject_cast<PortfolioSparkline*>(self->table_->cellWidget(r, 9));
-                    if (!w)
-                        continue;
-                    const auto& prices = self->sparkline_cache_[sym];
-                    w->set_data(prices);
-                    // Colour based on first vs last price
-                    bool up = prices.size() >= 2 ? prices.last() >= prices.first() : true;
-                    w->set_color(QColor(up ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+                    if (!w) continue;
+
+                    const auto state = self->sparkline_state_.value(sym, SparklineState::Failed);
+                    if (state == SparklineState::Loaded && self->sparkline_cache_.contains(sym)) {
+                        const auto& prices = self->sparkline_cache_[sym];
+                        w->set_data(prices);
+                        bool up = prices.size() >= 2 ? prices.last() >= prices.first() : true;
+                        w->set_color(QColor(up ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+                    } else {
+                        // Failed or still pending — show flat dash line in muted color
+                        QVector<double> dash(6, 0.0);
+                        w->set_data(dash);
+                        w->set_color(QColor(ui::colors::BORDER_MED()));
+                    }
                 }
             }, Qt::QueuedConnection);
         });
@@ -267,19 +288,25 @@ void PortfolioBlotter::populate_table() {
         set_cell(8, QString("%1%2%").arg(h.day_change_percent >= 0 ? "+" : "").arg(format_value(h.day_change_percent)),
                  chg_color);
 
-        // TREND — use real 5d/1h prices from cache if available, else placeholder
+        // TREND — show loaded data, a pending shimmer, or a failure dash
         auto* sparkline = new PortfolioSparkline(0, 0);
         sparkline->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        if (sparkline_cache_.contains(h.symbol)) {
+        const auto state = sparkline_state_.value(h.symbol, SparklineState::Pending);
+        if (state == SparklineState::Loaded && sparkline_cache_.contains(h.symbol)) {
             const auto& prices = sparkline_cache_[h.symbol];
             sparkline->set_data(prices);
             bool up = prices.size() >= 2 ? prices.last() >= prices.first() : h.day_change >= 0;
-            sparkline->set_color(QColor(up ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+            sparkline->set_color(QColor(up ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+        } else if (state == SparklineState::Failed) {
+            // Show flat dash line in muted color to indicate unavailable data
+            QVector<double> dash(6, 0.0);
+            sparkline->set_data(dash);
+            sparkline->set_color(QColor(ui::colors::BORDER_MED()));
         } else {
-            // Placeholder: flat line at current price until real data arrives
-            QVector<double> flat(8, h.current_price);
-            sparkline->set_data(flat);
-            sparkline->set_color(QColor(ui::colors::TEXT_TERTIARY));
+            // Pending: subtle animated-looking flat line in dim color
+            QVector<double> pending(8, h.current_price > 0 ? h.current_price : 1.0);
+            sparkline->set_data(pending);
+            sparkline->set_color(QColor(ui::colors::TEXT_TERTIARY()));
         }
         table_->setCellWidget(r, 9, sparkline);
 
@@ -295,6 +322,77 @@ void PortfolioBlotter::populate_table() {
 
 QString PortfolioBlotter::format_value(double v, int dp) const {
     return QString::number(v, 'f', dp);
+}
+
+void PortfolioBlotter::set_filter(const QString& text) {
+    filter_text_ = text.trimmed().toLower();
+    apply_filter();
+}
+
+void PortfolioBlotter::set_sector_filter(const QStringList& symbols) {
+    sector_symbols_ = symbols;
+    apply_filter();
+}
+
+void PortfolioBlotter::apply_filter() {
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        auto* item = table_->item(r, 0); // symbol column
+        if (!item) continue;
+        const QString sym = item->text().toLower();
+
+        const bool text_ok = filter_text_.isEmpty() || sym.contains(filter_text_);
+
+        bool sector_ok = sector_symbols_.isEmpty();
+        if (!sector_ok) {
+            for (const auto& s : sector_symbols_) {
+                if (sym == s.toLower()) { sector_ok = true; break; }
+            }
+        }
+
+        table_->setRowHidden(r, !(text_ok && sector_ok));
+    }
+}
+
+void PortfolioBlotter::on_context_menu(const QPoint& pos) {
+    const int row = table_->rowAt(pos.y());
+    if (row < 0 || row >= sorted_.size())
+        return;
+
+    const QString symbol = sorted_[row].symbol;
+
+    QMenu menu(this);
+    menu.setStyleSheet(
+        QString("QMenu { background:%1; color:%2; border:1px solid %3; padding:4px; }"
+                "QMenu::item { padding:6px 20px 6px 12px; font-size:11px; }"
+                "QMenu::item:selected { background:%4; color:%5; }"
+                "QMenu::separator { height:1px; background:%3; margin:3px 0; }")
+            .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED,
+                 ui::colors::AMBER_DIM, ui::colors::AMBER));
+
+    auto* sym_label = menu.addAction(symbol);
+    sym_label->setEnabled(false);
+    sym_label->setFont([&]{ QFont f; f.setBold(true); f.setPointSize(10); return f; }());
+    menu.addSeparator();
+
+    auto* edit_act   = menu.addAction("Edit Transaction");
+    auto* delete_act = menu.addAction("Close / Delete Position");
+
+    edit_act->setIcon(QIcon());
+    delete_act->setIcon(QIcon());
+
+    // Style delete action in red
+    delete_act->setData("danger");
+    menu.setStyleSheet(menu.styleSheet() +
+        "QMenu::item[data='danger'] { color:#ef4444; }");
+
+    connect(edit_act,   &QAction::triggered, this, [this, symbol]() {
+        emit edit_transaction_requested(symbol);
+    });
+    connect(delete_act, &QAction::triggered, this, [this, symbol]() {
+        emit delete_position_requested(symbol);
+    });
+
+    menu.exec(table_->viewport()->mapToGlobal(pos));
 }
 
 } // namespace fincept::screens

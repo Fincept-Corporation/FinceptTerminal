@@ -47,6 +47,14 @@ def save_markets_cache(exchange_id: str, markets: dict) -> None:
         pass
 
 
+def get_default_type(exchange_id: str) -> str:
+    """Return the appropriate defaultType for an exchange.
+    Hyperliquid is a perps DEX — its primary market type is swap.
+    All others default to spot.
+    """
+    return "swap" if exchange_id in ("hyperliquid",) else "spot"
+
+
 def make_exchange(exchange_id: str, credentials: dict = None,
                   sandbox: bool = False, timeout_ms: int = 10000) -> ccxt.Exchange:
     """Create and configure a ccxt exchange instance.
@@ -60,6 +68,7 @@ def make_exchange(exchange_id: str, credentials: dict = None,
     config = {
         "enableRateLimit": True,
         "timeout": timeout_ms,
+        "options": {"defaultType": get_default_type(exchange_id)},
     }
 
     if credentials:

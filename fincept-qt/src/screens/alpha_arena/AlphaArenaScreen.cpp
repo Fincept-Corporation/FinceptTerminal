@@ -933,19 +933,19 @@ void AlphaArenaScreen::update_leaderboard(const QJsonArray& entries) {
         // Portfolio value
         auto* port_item = new QTableWidgetItem(QString("$%1").arg(portfolio, 0, 'f', 2));
         port_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        port_item->setForeground(QColor(colors::CYAN));
+        port_item->setForeground(QColor(colors::CYAN()));
         leaderboard_table_->setItem(i, 2, port_item);
 
         // PnL
         auto* pnl_item = new QTableWidgetItem(QString("%1$%2").arg(pnl >= 0 ? "+" : "").arg(pnl, 0, 'f', 2));
         pnl_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        pnl_item->setForeground(QColor(pnl >= 0 ? colors::POSITIVE : colors::NEGATIVE));
+        pnl_item->setForeground(QColor(pnl >= 0 ? colors::POSITIVE() : colors::NEGATIVE()));
         leaderboard_table_->setItem(i, 3, pnl_item);
 
         // Return %
         auto* ret_item = new QTableWidgetItem(QString("%1%2%").arg(ret >= 0 ? "+" : "").arg(ret, 0, 'f', 2));
         ret_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        ret_item->setForeground(QColor(ret >= 0 ? colors::POSITIVE : colors::NEGATIVE));
+        ret_item->setForeground(QColor(ret >= 0 ? colors::POSITIVE() : colors::NEGATIVE()));
         leaderboard_table_->setItem(i, 4, ret_item);
 
         // Trades
@@ -1066,7 +1066,7 @@ void AlphaArenaScreen::populate_model_list() {
     if (model_entries_.isEmpty()) {
         auto* placeholder = new QListWidgetItem("No LLM providers configured — go to Settings → LLM Config");
         placeholder->setFlags(Qt::NoItemFlags); // not selectable
-        placeholder->setForeground(QColor(colors::TEXT_DIM));
+        placeholder->setForeground(QColor(colors::TEXT_DIM()));
         model_list_->addItem(placeholder);
         LOG_WARN("AlphaArena", "No LLM providers or profiles configured");
         return;

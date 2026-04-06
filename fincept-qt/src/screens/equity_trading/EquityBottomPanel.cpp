@@ -1,5 +1,6 @@
 // EquityBottomPanel.cpp — tabbed portfolio display
 #include "screens/equity_trading/EquityBottomPanel.h"
+#include "ui/theme/Theme.h"
 
 #include <QDate>
 #include <QDateTime>
@@ -39,7 +40,7 @@ QTableWidgetItem* EquityBottomPanel::ensure_item(QTableWidget* table, int row, i
     auto* item = table->item(row, col);
     if (!item) {
         item = new QTableWidgetItem;
-        item->setForeground(TEXT_PRIMARY);
+        item->setForeground(QColor(fincept::ui::colors::TEXT_PRIMARY()));
         table->setItem(row, col, item);
     }
     return item;
@@ -169,7 +170,7 @@ void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& 
 
         auto* pnl_item = ensure_item(positions_table_, i, 6);
         pnl_item->setText(QString::number(p.unrealized_pnl, 'f', 2));
-        pnl_item->setForeground(p.unrealized_pnl >= 0 ? COLOR_BUY : COLOR_SELL);
+        pnl_item->setForeground(p.unrealized_pnl >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
     }
 }
 
@@ -200,7 +201,7 @@ void EquityBottomPanel::set_paper_trades(const QVector<trading::PtTrade>& trades
     orders_table_->setRowCount(base + 1 + trades.size());
     auto* sep_item = ensure_item(orders_table_, base, 0);
     sep_item->setText("--- RECENT TRADES ---");
-    sep_item->setForeground(COLOR_ACCENT);
+    sep_item->setForeground(QColor(fincept::ui::colors::AMBER()));
     for (int c = 1; c < 8; ++c)
         ensure_item(orders_table_, base, c)->setText("");
 
@@ -216,7 +217,7 @@ void EquityBottomPanel::set_paper_trades(const QVector<trading::PtTrade>& trades
 
         auto* pnl_item = ensure_item(orders_table_, row, 6);
         pnl_item->setText(QString::number(t.pnl, 'f', 2));
-        pnl_item->setForeground(t.pnl >= 0 ? COLOR_BUY : COLOR_SELL);
+        pnl_item->setForeground(t.pnl >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
 
         ensure_item(orders_table_, row, 7)->setText(t.timestamp);
     }
@@ -246,11 +247,11 @@ void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& po
 
         auto* pnl_item = ensure_item(positions_table_, i, 6);
         pnl_item->setText(QString::number(p.pnl, 'f', 2));
-        pnl_item->setForeground(p.pnl >= 0 ? COLOR_BUY : COLOR_SELL);
+        pnl_item->setForeground(p.pnl >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
 
         auto* pct_item = ensure_item(positions_table_, i, 7);
         pct_item->setText(QString("%1%").arg(p.pnl_pct, 0, 'f', 2));
-        pct_item->setForeground(p.pnl_pct >= 0 ? COLOR_BUY : COLOR_SELL);
+        pct_item->setForeground(p.pnl_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
     }
 }
 
@@ -267,7 +268,7 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
 
         auto* pnl_item = ensure_item(holdings_table_, i, 6);
         pnl_item->setText(QString("%1%").arg(h.pnl_pct, 0, 'f', 2));
-        pnl_item->setForeground(h.pnl_pct >= 0 ? COLOR_BUY : COLOR_SELL);
+        pnl_item->setForeground(h.pnl_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE()) : QColor(fincept::ui::colors::NEGATIVE()));
     }
 }
 

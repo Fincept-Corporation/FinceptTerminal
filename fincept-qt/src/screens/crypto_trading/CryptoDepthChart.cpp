@@ -1,5 +1,6 @@
 // CryptoDepthChart.cpp — custom-painted cumulative bid/ask depth area chart
 #include "screens/crypto_trading/CryptoDepthChart.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QMutexLocker>
 #include <QPainter>
@@ -12,18 +13,21 @@
 namespace fincept::screens::crypto {
 
 namespace {
-const QColor kBgBase("#080808");
-const QColor kBorderDim("#1a1a1a");
-const QColor kTextDim("#404040");
-const QColor kBidLine("#16a34a");
-const QColor kAskLine("#dc2626");
-const QColor kBidFill(22, 163, 74, 40);
-const QColor kAskFill(220, 38, 38, 40);
-const QColor kAmber("#d97706");
+inline QColor kBgBase()    { return QColor(ui::ThemeManager::instance().tokens().bg_base); }
+inline QColor kBorderDim() { return QColor(ui::ThemeManager::instance().tokens().border_dim); }
+inline QColor kTextDim()   { return QColor(ui::ThemeManager::instance().tokens().text_dim); }
+inline QColor kBidLine()   { return QColor(ui::ThemeManager::instance().tokens().positive); }
+inline QColor kAskLine()   { return QColor(ui::ThemeManager::instance().tokens().negative); }
+inline QColor kBidFill()   { auto c = kBidLine(); c.setAlpha(40); return c; }
+inline QColor kAskFill()   { auto c = kAskLine(); c.setAlpha(40); return c; }
+inline QColor kAmber()     { return QColor(ui::ThemeManager::instance().tokens().accent); }
 } // namespace
 
 CryptoDepthChart::CryptoDepthChart(QWidget* parent) : QWidget(parent) {
     setObjectName("cryptoDepthChart");
+
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { cache_dirty_ = true; update(); });
 
     repaint_timer_ = new QTimer(this);
     repaint_timer_->setSingleShot(true);
@@ -76,7 +80,7 @@ void CryptoDepthChart::rebuild_cache() {
         return;
 
     cache_ = QPixmap(w, h);
-    cache_.fill(kBgBase);
+    cache_.fill(kBgBase());
 
     QVector<QPair<double, double>> bids, asks;
     {
@@ -87,7 +91,7 @@ void CryptoDepthChart::rebuild_cache() {
 
     if (bids.isEmpty() && asks.isEmpty()) {
         QPainter p(&cache_);
-        p.setPen(kTextDim);
+        p.setPen(kTextDim());
         p.setFont(QFont("Consolas", 10));
         p.drawText(QRect(0, 0, w, h), Qt::AlignCenter, "Waiting for order book data...");
         cache_dirty_ = false;
@@ -151,7 +155,7 @@ void CryptoDepthChart::rebuild_cache() {
     auto map_y = [&](double vol) -> int { return margin_t + plot_h - static_cast<int>(vol / max_vol * plot_h); };
 
     // Grid lines
-    p.setPen(QPen(kBorderDim, 1));
+    p.setPen(QPen(kBorderDim(), 1));
     for (int i = 0; i <= 4; ++i) {
         const int y = margin_t + plot_h * i / 4;
         p.drawLine(margin_l, y, w - margin_r, y);
@@ -166,8 +170,8 @@ void CryptoDepthChart::rebuild_cache() {
         bid_path.lineTo(map_x(bid_cum.last().first), map_y(0));
         bid_path.closeSubpath();
 
-        p.fillPath(bid_path, kBidFill);
-        p.setPen(QPen(kBidLine, 1.5));
+        p.fillPath(bid_path, kBidFill());
+        p.setPen(QPen(kBidLine(), 1.5));
         // Draw just the top edge
         for (int i = 0; i + 1 < bid_cum.size(); ++i)
             p.drawLine(map_x(bid_cum[i].first), map_y(bid_cum[i].second), map_x(bid_cum[i + 1].first),
@@ -183,8 +187,8 @@ void CryptoDepthChart::rebuild_cache() {
         ask_path.lineTo(map_x(ask_cum.last().first), map_y(0));
         ask_path.closeSubpath();
 
-        p.fillPath(ask_path, kAskFill);
-        p.setPen(QPen(kAskLine, 1.5));
+        p.fillPath(ask_path, kAskFill());
+        p.setPen(QPen(kAskLine(), 1.5));
         for (int i = 0; i + 1 < ask_cum.size(); ++i)
             p.drawLine(map_x(ask_cum[i].first), map_y(ask_cum[i].second), map_x(ask_cum[i + 1].first),
                        map_y(ask_cum[i + 1].second));
@@ -194,12 +198,12 @@ void CryptoDepthChart::rebuild_cache() {
     if (!bid_cum.isEmpty() && !ask_cum.isEmpty()) {
         const double mid = (bid_cum.first().first + ask_cum.first().first) / 2.0;
         const int x_mid = map_x(mid);
-        p.setPen(QPen(kAmber, 1, Qt::DashLine));
+        p.setPen(QPen(kAmber(), 1, Qt::DashLine));
         p.drawLine(x_mid, margin_t, x_mid, margin_t + plot_h);
     }
 
     // Volume axis labels
-    p.setPen(kTextDim);
+    p.setPen(kTextDim());
     for (int i = 0; i <= 4; ++i) {
         const double vol = max_vol * (4 - i) / 4;
         const int y = margin_t + plot_h * i / 4;

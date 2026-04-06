@@ -1,6 +1,7 @@
 #include "screens/polymarket/PolymarketOrderBook.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QMouseEvent>
 #include <QPainter>
@@ -15,6 +16,9 @@ using namespace fincept::services::polymarket;
 
 PolymarketOrderBook::PolymarketOrderBook(QWidget* parent) : QWidget(parent) {
     setMinimumHeight(200);
+
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { cache_dirty_ = true; update(); });
 
     repaint_timer_ = new QTimer(this);
     repaint_timer_->setInterval(50); // 20fps max
@@ -100,7 +104,7 @@ void PolymarketOrderBook::rebuild_cache() {
         return;
 
     cache_ = QPixmap(w, h);
-    cache_.fill(QColor(colors::BG_BASE));
+    cache_.fill(QColor(colors::BG_BASE()));
     QPainter p(&cache_);
     p.setRenderHint(QPainter::Antialiasing, false);
 
@@ -109,16 +113,16 @@ void PolymarketOrderBook::rebuild_cache() {
     QFont data_font(fonts::DATA_FAMILY, 10);
 
     // Header
-    p.fillRect(0, 0, w, HEADER_HEIGHT, QColor(colors::BG_RAISED));
+    p.fillRect(0, 0, w, HEADER_HEIGHT, QColor(colors::BG_RAISED()));
     p.setFont(header_font);
-    p.setPen(QColor(colors::TEXT_SECONDARY));
+    p.setPen(QColor(colors::TEXT_SECONDARY()));
     int col_w = w / 3;
     p.drawText(4, 0, col_w, HEADER_HEIGHT, Qt::AlignLeft | Qt::AlignVCenter, "PRICE");
     p.drawText(col_w, 0, col_w, HEADER_HEIGHT, Qt::AlignRight | Qt::AlignVCenter, "SIZE");
     p.drawText(2 * col_w, 0, col_w - 4, HEADER_HEIGHT, Qt::AlignRight | Qt::AlignVCenter, "DEPTH");
 
     // Separator
-    p.setPen(QColor(colors::BORDER_DIM));
+    p.setPen(QColor(colors::BORDER_DIM()));
     p.drawLine(0, HEADER_HEIGHT - 1, w, HEADER_HEIGHT - 1);
 
     int max_rows = (h - HEADER_HEIGHT) / ROW_HEIGHT;
@@ -152,22 +156,22 @@ void PolymarketOrderBook::rebuild_cache() {
 
         p.fillRect(w - bar_w, y, bar_w, ROW_HEIGHT, QColor(220, 38, 38, 25));
 
-        p.setPen(QColor(colors::NEGATIVE));
+        p.setPen(QColor(colors::NEGATIVE()));
         p.drawText(4, y, col_w, ROW_HEIGHT, Qt::AlignLeft | Qt::AlignVCenter, QString::number(asks_[i].price, 'f', 2));
-        p.setPen(QColor(colors::TEXT_SECONDARY));
+        p.setPen(QColor(colors::TEXT_SECONDARY()));
         p.drawText(col_w, y, col_w, ROW_HEIGHT, Qt::AlignRight | Qt::AlignVCenter,
                    QString::number(asks_[i].size, 'f', 1));
         p.drawText(2 * col_w, y, col_w - 4, ROW_HEIGHT, Qt::AlignRight | Qt::AlignVCenter,
                    QString::number(cum, 'f', 1));
 
-        p.setPen(QColor(colors::BORDER_DIM));
+        p.setPen(QColor(colors::BORDER_DIM()));
         p.drawLine(0, y + ROW_HEIGHT - 1, w, y + ROW_HEIGHT - 1);
         y += ROW_HEIGHT;
     }
 
     // Spread row
-    p.fillRect(0, y, w, ROW_HEIGHT, QColor(colors::BG_RAISED));
-    p.setPen(QColor(colors::AMBER));
+    p.fillRect(0, y, w, ROW_HEIGHT, QColor(colors::BG_RAISED()));
+    p.setPen(QColor(colors::AMBER()));
     p.setFont(header_font);
     p.drawText(4, y, w - 8, ROW_HEIGHT, Qt::AlignCenter, QString("SPREAD %1").arg(QString::number(spread_, 'f', 4)));
     y += ROW_HEIGHT;
@@ -182,21 +186,21 @@ void PolymarketOrderBook::rebuild_cache() {
 
         p.fillRect(w - bar_w, y, bar_w, ROW_HEIGHT, QColor(22, 163, 74, 25));
 
-        p.setPen(QColor(colors::POSITIVE));
+        p.setPen(QColor(colors::POSITIVE()));
         p.drawText(4, y, col_w, ROW_HEIGHT, Qt::AlignLeft | Qt::AlignVCenter, QString::number(bids_[i].price, 'f', 2));
-        p.setPen(QColor(colors::TEXT_SECONDARY));
+        p.setPen(QColor(colors::TEXT_SECONDARY()));
         p.drawText(col_w, y, col_w, ROW_HEIGHT, Qt::AlignRight | Qt::AlignVCenter,
                    QString::number(bids_[i].size, 'f', 1));
         p.drawText(2 * col_w, y, col_w - 4, ROW_HEIGHT, Qt::AlignRight | Qt::AlignVCenter,
                    QString::number(cum, 'f', 1));
 
-        p.setPen(QColor(colors::BORDER_DIM));
+        p.setPen(QColor(colors::BORDER_DIM()));
         p.drawLine(0, y + ROW_HEIGHT - 1, w, y + ROW_HEIGHT - 1);
         y += ROW_HEIGHT;
     }
 
     if (bids_.isEmpty() && asks_.isEmpty()) {
-        p.setPen(QColor(colors::TEXT_DIM));
+        p.setPen(QColor(colors::TEXT_DIM()));
         p.drawText(rect(), Qt::AlignCenter, "No order book data");
     }
 }

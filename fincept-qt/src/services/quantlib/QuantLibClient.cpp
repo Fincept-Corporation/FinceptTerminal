@@ -4,6 +4,7 @@
 
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "storage/cache/CacheManager.h"
 
 #include <QEventLoop>
 #include <QJsonDocument>
@@ -13,6 +14,8 @@
 #include <QNetworkRequest>
 #include <QPointer>
 #include <QUrl>
+
+static constexpr int kRefDataTtlSec = 60 * 60; // 1 hour — static reference data
 
 namespace fincept::services {
 
@@ -135,21 +138,67 @@ mcp::ToolResult QuantLibClient::parse_response(int http_status, const QByteArray
 // ── Async call ───────────────────────────────────────────────────────────────
 
 void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, QuantLibCallback callback) {
-    auto* nam = new QNetworkAccessManager(this);
+    // Cache GET endpoints (static reference data) and query-param endpoints
+    const bool cacheable = is_get_endpoint(endpoint) || is_query_param_endpoint(endpoint);
+    if (cacheable) {
+        QString cache_key = "quantlib:" + endpoint;
+        if (!body.isEmpty())
+            cache_key += ":" + QString::fromUtf8(QJsonDocument(body).toJson(QJsonDocument::Compact));
 
-    QNetworkReply* reply = nullptr;
-    if (is_get_endpoint(endpoint)) {
-        auto req = build_request(endpoint);
-        reply = nam->get(req);
-    } else if (is_query_param_endpoint(endpoint)) {
-        // Body fields become URL query params; POST with empty body
-        auto req = build_request(endpoint, body);
-        reply = nam->post(req, QByteArray("{}"));
-    } else {
-        auto req = build_request(endpoint);
-        QByteArray data = QJsonDocument(body).toJson(QJsonDocument::Compact);
-        reply = nam->post(req, data);
+        const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+        if (!cached.isNull()) {
+            auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+            mcp::ToolResult result = doc.isObject()
+                ? mcp::ToolResult::ok_data(doc.object())
+                : mcp::ToolResult::ok_data(doc.array());
+            callback(result);
+            return;
+        }
+
+        auto* nam = new QNetworkAccessManager(this);
+        QNetworkReply* reply = nullptr;
+        if (is_get_endpoint(endpoint)) {
+            reply = nam->get(build_request(endpoint));
+        } else {
+            reply = nam->post(build_request(endpoint, body), QByteArray("{}"));
+        }
+
+        QPointer<QuantLibClient> self = this;
+        connect(reply, &QNetworkReply::finished, this, [self, reply, nam, endpoint, cache_key, callback]() {
+            reply->deleteLater();
+            nam->deleteLater();
+            if (!self) return;
+            if (reply->error() != QNetworkReply::NoError) {
+                LOG_ERROR(kQuantLibClientTag, "Network error on " + endpoint + ": " + reply->errorString());
+                callback(mcp::ToolResult::fail(reply->errorString()));
+                return;
+            }
+            int http_status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            auto raw = reply->readAll();
+            auto result = parse_response(http_status, raw);
+            if (result.success) {
+                // Serialize the data payload for caching
+                QString to_cache;
+                if (result.data.isObject())
+                    to_cache = QString::fromUtf8(QJsonDocument(result.data.toObject()).toJson(QJsonDocument::Compact));
+                else if (result.data.isArray())
+                    to_cache = QString::fromUtf8(QJsonDocument(result.data.toArray()).toJson(QJsonDocument::Compact));
+                if (!to_cache.isEmpty())
+                    fincept::CacheManager::instance().put(cache_key, QVariant(to_cache), kRefDataTtlSec, "quantlib");
+            }
+            LOG_DEBUG(kQuantLibClientTag, QString("HTTP %1 — %2 — %3")
+                               .arg(http_status).arg(endpoint)
+                               .arg(result.success ? "OK" : result.error));
+            callback(result);
+        });
+        return;
     }
+
+    // Non-cacheable POST endpoints
+    auto* nam = new QNetworkAccessManager(this);
+    auto req = build_request(endpoint);
+    QByteArray data = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    auto* reply = nam->post(req, data);
 
     QPointer<QuantLibClient> self = this;
     connect(reply, &QNetworkReply::finished, this, [self, reply, nam, endpoint, callback]() {

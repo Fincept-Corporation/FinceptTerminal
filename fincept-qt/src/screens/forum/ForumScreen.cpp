@@ -196,7 +196,7 @@ void ForumScreen::build_ui() {
                         // Profile header with gradient accent
                         auto* hdr = new QWidget;
                         hdr->setFixedHeight(4);
-                        QString avc = profile.avatar_color.isEmpty() ? ui::colors::AMBER : profile.avatar_color;
+                        QString avc = profile.avatar_color.isEmpty() ? ui::colors::AMBER() : profile.avatar_color;
                         hdr->setStyleSheet(
                             QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
                                     "stop:0 %1,stop:0.5 %2,stop:1 transparent);")
@@ -433,7 +433,7 @@ void ForumScreen::on_search(const QString& query) {
     if (query.isEmpty())
         return;
     active_category_id_ = 0;
-    active_category_color_ = ui::colors::CYAN;
+    active_category_color_ = ui::colors::CYAN();
     feed_->set_header("SEARCH: " + query);
     feed_->set_loading(true);
     feed_->clear_active();
@@ -450,7 +450,7 @@ void ForumScreen::on_search(const QString& query) {
 
 void ForumScreen::on_trending() {
     active_category_id_ = 0;
-    active_category_color_ = ui::colors::AMBER;
+    active_category_color_ = ui::colors::AMBER();
     feed_->set_header("TRENDING");
     feed_->set_loading(true);
     feed_->clear_active();

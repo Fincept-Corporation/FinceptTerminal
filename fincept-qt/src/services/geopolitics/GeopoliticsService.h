@@ -53,17 +53,9 @@ class GeopoliticsService : public QObject {
     void run_python(const QString& script, const QStringList& args, const QString& context,
                     std::function<void(bool, const QString&)> cb);
 
-    // Cache
-    static constexpr qint64 kEventsTtlSec = 120;
-    static constexpr qint64 kRefDataTtlSec = 600;
-    struct CachedEvents {
-        QVector<NewsEvent> data;
-        int total = 0;
-        qint64 ts = 0;
-    };
-    CachedEvents events_cache_;
-    qint64 countries_ts_ = 0;
-    qint64 categories_ts_ = 0;
+    // Cache TTLs (used as CacheManager ttl_seconds)
+    static constexpr int kEventsTtlSec  = 120;
+    static constexpr int kRefDataTtlSec = 600;
 };
 
 } // namespace fincept::services::geo

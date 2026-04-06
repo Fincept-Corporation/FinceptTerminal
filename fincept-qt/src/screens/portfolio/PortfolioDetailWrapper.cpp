@@ -119,6 +119,7 @@ void PortfolioDetailWrapper::update_data(const portfolio::PortfolioSummary& summ
         v->set_snapshots(current_snapshots_);
     } else if (auto* v = qobject_cast<RiskManagementView*>(current)) {
         v->set_data(summary, currency);
+        v->set_metrics(current_metrics_);
     } else if (auto* v = qobject_cast<PortfolioOptimizationView*>(current)) {
         v->set_data(summary, currency);
     } else if (auto* v = qobject_cast<QuantStatsView*>(current)) {
@@ -132,6 +133,15 @@ void PortfolioDetailWrapper::update_data(const portfolio::PortfolioSummary& summ
     } else if (auto* v = qobject_cast<EconomicsView*>(current)) {
         v->set_data(summary, currency);
     }
+}
+
+void PortfolioDetailWrapper::update_metrics(const portfolio::ComputedMetrics& metrics) {
+    current_metrics_ = metrics;
+    auto* current = view_stack_->currentWidget();
+    if (!current)
+        return;
+    if (auto* v = qobject_cast<RiskManagementView*>(current))
+        v->set_metrics(metrics);
 }
 
 QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) {
@@ -152,9 +162,12 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
             widget = prv;
             break;
         }
-        case portfolio::DetailView::RiskMgmt:
-            widget = new RiskManagementView;
+        case portfolio::DetailView::RiskMgmt: {
+            auto* rmv = new RiskManagementView;
+            rmv->set_metrics(current_metrics_);
+            widget = rmv;
             break;
+        }
         case portfolio::DetailView::Optimization:
             widget = new PortfolioOptimizationView;
             break;

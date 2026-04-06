@@ -40,6 +40,12 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
             this, &SetupScreen::on_whisper_ready);
     connect(&ws, &services::WhisperService::error_occurred,
             this, &SetupScreen::on_whisper_error);
+
+    // 15-minute overall timeout — shows skip button if setup is stuck
+    timeout_timer_ = new QTimer(this);
+    timeout_timer_->setSingleShot(true);
+    timeout_timer_->setInterval(15 * 60 * 1000);
+    connect(timeout_timer_, &QTimer::timeout, this, &SetupScreen::on_setup_timeout);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,6 +120,32 @@ void SetupScreen::build_ui() {
                                     .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
     cl->addWidget(summary_lbl_);
 
+    // Skip button — hidden until timeout fires or Whisper fails
+    skip_btn_ = new QPushButton("SKIP & CONTINUE", center);
+    skip_btn_->setFixedHeight(36);
+    skip_btn_->setCursor(Qt::PointingHandCursor);
+    skip_btn_->setVisible(false);
+    skip_btn_->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
+                " font-family:%2; font-size:12px; font-weight:600; letter-spacing:1px; }"
+                "QPushButton:hover { background:%3; }")
+            .arg(colors::TEXT_SECONDARY, fonts::DATA_FAMILY, colors::BG_RAISED));
+    connect(skip_btn_, &QPushButton::clicked, this, &SetupScreen::on_skip_clicked);
+    cl->addWidget(skip_btn_);
+
+    // Retry voice model button — hidden until Whisper fails
+    retry_whisper_btn_ = new QPushButton("RETRY VOICE MODEL", center);
+    retry_whisper_btn_->setFixedHeight(36);
+    retry_whisper_btn_->setCursor(Qt::PointingHandCursor);
+    retry_whisper_btn_->setVisible(false);
+    retry_whisper_btn_->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
+                " font-family:%2; font-size:12px; font-weight:600; letter-spacing:1px; }"
+                "QPushButton:hover { background:%3; }")
+            .arg(kAccent, fonts::DATA_FAMILY, colors::BG_RAISED));
+    connect(retry_whisper_btn_, &QPushButton::clicked, this, &SetupScreen::on_retry_whisper);
+    cl->addWidget(retry_whisper_btn_);
+
     // Install dir info
     auto* dir_label = new QLabel("Install directory: " + python::PythonSetupManager::instance().install_dir(), center);
     dir_label->setAlignment(Qt::AlignCenter);
@@ -179,6 +211,9 @@ void SetupScreen::on_begin_setup() {
     status_label_->setText("Setup in progress — please don't close the application");
     status_label_->setStyleSheet(
         QString("color:%1; font-family:%2; font-size:10px; margin-top:8px;").arg(kAccent, fonts::DATA_FAMILY));
+
+    // Start overall timeout — shows skip button if setup is stuck after 15 min
+    if (timeout_timer_) timeout_timer_->start();
 
     python::PythonSetupManager::instance().run_setup();
 }
@@ -257,6 +292,7 @@ void SetupScreen::on_whisper_ready() {
     begin_btn_->setText("SETUP COMPLETE");
 
     LOG_INFO("SetupScreen", "Whisper model ready — setup fully complete");
+    if (timeout_timer_) timeout_timer_->stop();
     QTimer::singleShot(1500, this, [this]() { emit setup_complete(); });
 }
 
@@ -269,11 +305,51 @@ void SetupScreen::on_whisper_error(const QString& message) {
     }
     // Non-fatal — voice commands won't work but app can still launch.
     LOG_WARN("SetupScreen", "Whisper model download failed: " + message);
-    status_label_->setText("Voice model download failed — voice commands unavailable. Continuing...");
+    whisper_failed_ = true;
+    status_label_->setText("Voice model download failed — voice commands unavailable.");
     status_label_->setStyleSheet(
         QString("color:%1; font-family:%2; font-size:10px; margin-top:8px;").arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
     begin_btn_->setText("SETUP COMPLETE");
-    QTimer::singleShot(2500, this, [this]() { emit setup_complete(); });
+
+    // Show retry and skip buttons so user has explicit choices
+    if (retry_whisper_btn_) retry_whisper_btn_->setVisible(true);
+    if (skip_btn_) {
+        skip_btn_->setVisible(true);
+        skip_btn_->setText("SKIP & CONTINUE WITHOUT VOICE");
+    }
+}
+
+void SetupScreen::on_skip_clicked() {
+    LOG_INFO("SetupScreen", "User skipped setup — launching app");
+    if (timeout_timer_) timeout_timer_->stop();
+    emit setup_complete();
+}
+
+void SetupScreen::on_setup_timeout() {
+    LOG_WARN("SetupScreen", "Setup timed out after 15 minutes — showing skip option");
+    status_label_->setText("Setup is taking longer than expected. You can skip and continue.");
+    status_label_->setStyleSheet(
+        QString("color:%1; font-family:%2; font-size:10px; margin-top:8px;")
+            .arg(colors::TEXT_TERTIARY, fonts::DATA_FAMILY));
+    if (skip_btn_) skip_btn_->setVisible(true);
+}
+
+void SetupScreen::on_retry_whisper() {
+    whisper_failed_ = false;
+    if (retry_whisper_btn_) retry_whisper_btn_->setVisible(false);
+    if (skip_btn_)          skip_btn_->setVisible(false);
+    if (steps_.contains("whisper")) {
+        auto& ui = steps_["whisper"];
+        ui.bar->setValue(0);
+        ui.status->setText("Retrying...");
+        ui.status->setStyleSheet(
+            QString("color:%1; font-family:%2; font-size:9px;").arg(kAccent, fonts::DATA_FAMILY));
+    }
+    status_label_->setText("Retrying Whisper voice model download...");
+    status_label_->setStyleSheet(
+        QString("color:%1; font-family:%2; font-size:10px; margin-top:8px;").arg(kAccent, fonts::DATA_FAMILY));
+    LOG_INFO("SetupScreen", "User requested Whisper retry");
+    services::WhisperService::instance().download_for_setup();
 }
 
 void SetupScreen::mark_step_done(const QString& key) {

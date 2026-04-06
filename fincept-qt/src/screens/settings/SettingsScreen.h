@@ -4,7 +4,9 @@
 #include <QHash>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QStackedWidget>
+#include <QTimer>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -41,11 +43,16 @@ class SettingsScreen : public QWidget {
     QHash<QString, QLabel*> cred_status_;    // key → status label
 
     // ── Appearance state ──────────────────────────────────────────────────────
-    QComboBox* app_font_size_ = nullptr;
-    QComboBox* app_font_family_ = nullptr;
-    QComboBox* app_theme_ = nullptr;
-    QComboBox* app_density_ = nullptr;
-    QCheckBox* chat_bubble_toggle_ = nullptr;
+    QComboBox*   app_font_size_       = nullptr;
+    QComboBox*   app_font_family_     = nullptr;
+    QComboBox*   app_theme_           = nullptr;
+    QComboBox*   app_density_         = nullptr;
+    QCheckBox*   chat_bubble_toggle_  = nullptr;
+    QCheckBox*   ticker_bar_toggle_   = nullptr;
+    QCheckBox*   animations_toggle_   = nullptr;
+    QPushButton* accent_color_btn_    = nullptr;
+    QString      custom_accent_color_;
+    QTimer*      appearance_debounce_ = nullptr; // coalesces rapid font/density changes
 
     // ── Notifications state ───────────────────────────────────────────────────
     QCheckBox* notif_email_ = nullptr;

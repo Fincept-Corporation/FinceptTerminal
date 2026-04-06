@@ -2,6 +2,8 @@
 #pragma once
 #include "services/agents/AgentTypes.h"
 
+#include "ui/widgets/LoadingOverlay.h"
+
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -44,13 +46,14 @@ class PlannerViewPanel : public QWidget {
     void copy_result();
 
     // Left
-    QComboBox*   llm_profile_combo_ = nullptr;
-    QListWidget* template_list_     = nullptr;
-    QPlainTextEdit* custom_query_ = nullptr;
-    QPushButton* generate_btn_ = nullptr;
-    QListWidget* history_list_ = nullptr;
-    QLineEdit* history_search_ = nullptr;
-    QLabel* history_header_ = nullptr;
+    QComboBox*      llm_profile_combo_  = nullptr;
+    QComboBox*      portfolio_combo_    = nullptr;
+    QListWidget*    template_list_      = nullptr;
+    QPlainTextEdit* custom_query_       = nullptr;
+    QPushButton*    generate_btn_       = nullptr;
+    QListWidget*    history_list_       = nullptr;
+    QLineEdit*      history_search_     = nullptr;
+    QLabel*         history_header_     = nullptr;
 
     // Center
     QTableWidget* steps_table_ = nullptr;
@@ -67,6 +70,9 @@ class PlannerViewPanel : public QWidget {
     QTextEdit* result_display_ = nullptr;
     QLabel* result_header_ = nullptr;
     QPushButton* copy_btn_ = nullptr;
+
+    // Loading overlay
+    ui::LoadingOverlay* loading_overlay_ = nullptr;
 
     // State
     services::ExecutionPlan current_plan_;

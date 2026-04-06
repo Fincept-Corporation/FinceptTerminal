@@ -7,6 +7,7 @@
 #include <QStackedWidget>
 #include <QTimer>
 #include <QWidget>
+#include <optional>
 
 namespace fincept::screens {
 
@@ -17,6 +18,7 @@ class PortfolioHeatmap;
 class PortfolioPerfChart;
 class PortfolioSectorPanel;
 class PortfolioBlotter;
+class PortfolioTxnPanel;
 class PortfolioOrderPanel;
 class PortfolioDetailWrapper;
 class PortfolioFFNView;
@@ -78,6 +80,7 @@ class PortfolioScreen : public QWidget {
     PortfolioPerfChart* perf_chart_ = nullptr;
     PortfolioSectorPanel* sector_panel_ = nullptr;
     PortfolioBlotter* blotter_ = nullptr;
+    PortfolioTxnPanel* txn_panel_ = nullptr;
     PortfolioOrderPanel* order_panel_ = nullptr;
     PortfolioDetailWrapper* detail_wrapper_ = nullptr;
     PortfolioFFNView* ffn_view_ = nullptr;

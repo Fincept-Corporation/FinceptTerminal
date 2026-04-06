@@ -7,7 +7,7 @@ namespace fincept::ui {
 class StatusBadge : public QLabel {
     Q_OBJECT
   public:
-    enum Status { Connected, Disconnected, Loading, Idle };
+    enum class Status { Connected, Disconnected, Loading, Idle };
 
     explicit StatusBadge(QWidget* parent = nullptr);
     void set_status(Status s);

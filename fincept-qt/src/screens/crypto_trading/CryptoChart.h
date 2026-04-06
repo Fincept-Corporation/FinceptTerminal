@@ -53,6 +53,10 @@ class CryptoChart : public QWidget {
     double last_max_price_ = -1;
     qint64 last_min_time_ = -1;
     qint64 last_max_time_ = -1;
+
+    // Pending timeframe request while a fetch is already in-flight
+    // set_candles() will emit timeframe_changed again if this is set
+    QString pending_tf_;
 };
 
 } // namespace fincept::screens::crypto

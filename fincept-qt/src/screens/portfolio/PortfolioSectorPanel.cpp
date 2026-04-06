@@ -4,14 +4,17 @@
 #include "ui/theme/Theme.h"
 
 #include <QChart>
+#include <QEvent>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QMouseEvent>
 #include <QPieSeries>
 #include <QVBoxLayout>
 
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <optional>
 
 namespace fincept::screens {
 
@@ -306,8 +309,24 @@ void PortfolioSectorPanel::build_ui() {
 
 void PortfolioSectorPanel::set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings) {
     holdings_ = holdings;
+    selected_sector_.clear(); // reset filter on fresh data
+    corr_matrix_.clear();     // invalidate stale correlation data
     update_donut();
     update_correlation();
+}
+
+void PortfolioSectorPanel::set_correlation(const QHash<QString, double>& matrix) {
+    corr_matrix_ = matrix;
+    update_correlation();
+}
+
+void PortfolioSectorPanel::on_sector_legend_clicked(const QString& sector) {
+    if (selected_sector_ == sector)
+        selected_sector_.clear(); // toggle off
+    else
+        selected_sector_ = sector;
+    emit sector_selected(selected_sector_);
+    update_donut(); // refresh to show highlight
 }
 
 void PortfolioSectorPanel::set_currency(const QString& currency) {
@@ -343,11 +362,19 @@ void PortfolioSectorPanel::update_donut() {
               [](const auto& a, const auto& b) { return a.second > b.second; });
 
     for (int i = 0; i < sorted.size(); ++i) {
-        auto* slice = series->append(sorted[i].first, sorted[i].second);
+        const QString& sec = sorted[i].first;
+        auto* slice = series->append(sec, sorted[i].second);
         slice->setColor(sector_color(i));
-        slice->setBorderColor(QColor(ui::colors::BG_BASE));
-        slice->setBorderWidth(1);
+        const bool active = (sec == selected_sector_);
+        slice->setBorderColor(active ? QColor(ui::colors::AMBER()) : QColor(ui::colors::BG_BASE()));
+        slice->setBorderWidth(active ? 2 : 1);
+        if (active) slice->setExploded(true);
     }
+
+    // Wire slice clicks
+    connect(series, &QPieSeries::clicked, this, [this](QPieSlice* slice) {
+        on_sector_legend_clicked(slice->label());
+    });
 
     chart->addSeries(series);
 
@@ -367,41 +394,53 @@ void PortfolioSectorPanel::update_donut() {
 
     for (int i = 0; i < sorted.size(); ++i) {
         const QString& sec = sorted[i].first;
-        auto* row = new QHBoxLayout;
+        const bool active = (sec == selected_sector_);
+
+        // Wrap the row in a clickable QWidget for hit-testing
+        auto* row_widget = new QWidget;
+        row_widget->setCursor(Qt::PointingHandCursor);
+        row_widget->setStyleSheet(
+            active
+                ? QString("background:%1; border-radius:2px;").arg(ui::colors::BG_HOVER)
+                : "background:transparent;");
+
+        auto* row = new QHBoxLayout(row_widget);
+        row->setContentsMargins(2, 1, 2, 1);
         row->setSpacing(4);
 
         auto* swatch = new QWidget;
         swatch->setFixedSize(8, 8);
         swatch->setStyleSheet(
-            QString("background:%1;").arg(sector_color(i).name()));
+            QString("background:%1; border-radius:1px;").arg(sector_color(i).name()));
         row->addWidget(swatch);
 
         auto* name = new QLabel(
             QString("%1 (%2)").arg(sec).arg(sector_counts[sec]));
         name->setStyleSheet(
-            QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_PRIMARY));
+            active
+                ? QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::AMBER)
+                : QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_PRIMARY));
         row->addWidget(name);
         row->addStretch();
 
-        // Show sector P&L alongside weight
         double pnl = sector_pnl[sec];
         auto* pnl_lbl = new QLabel(
-            QString("%1%2")
-                .arg(pnl >= 0 ? "+" : "")
-                .arg(QString::number(pnl, 'f', 0)));
+            QString("%1%2").arg(pnl >= 0 ? "+" : "").arg(QString::number(pnl, 'f', 0)));
         const char* pc = pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        pnl_lbl->setStyleSheet(
-            QString("color:%1; font-size:8px;").arg(pc));
+        pnl_lbl->setStyleSheet(QString("color:%1; font-size:8px;").arg(pc));
         row->addWidget(pnl_lbl);
 
         auto* weight = new QLabel(
             QString(" %1%").arg(QString::number(sorted[i].second, 'f', 1)));
         weight->setStyleSheet(
-            QString("color:%1; font-size:9px; font-weight:600;")
-                .arg(ui::colors::TEXT_SECONDARY));
+            QString("color:%1; font-size:9px; font-weight:600;").arg(ui::colors::TEXT_SECONDARY));
         row->addWidget(weight);
 
-        legend_layout->addLayout(row);
+        // Install click via event filter on row_widget
+        row_widget->installEventFilter(this);
+        row_widget->setProperty("sector_name", sec);
+
+        legend_layout->addWidget(row_widget);
     }
     legend_layout->addStretch();
 }
@@ -432,36 +471,20 @@ void PortfolioSectorPanel::update_correlation() {
               [](const auto& a, const auto& b) { return a.weight > b.weight; });
     int n = static_cast<int>(std::min(qsizetype{6}, sorted.size()));
 
-    // Build a 2-element return vector per holding: [pnl_pct, day_chg_pct]
-    // Pearson correlation on these two dimensions gives a more meaningful proxy
-    // than sign-matching.  For each pair (i,j) compute cross-correlation of
-    // their normalised return vectors.
-    auto corr_pair = [&](int i, int j) -> double {
-        // Use pnl% as one data point and day_change% as another — 2-sample Pearson
-        const double xi[2] = { sorted[i].unrealized_pnl_percent,
-                                sorted[i].day_change_percent };
-        const double xj[2] = { sorted[j].unrealized_pnl_percent,
-                                sorted[j].day_change_percent };
-        const int k = 2;
-        double mean_i = (xi[0] + xi[1]) / k;
-        double mean_j = (xj[0] + xj[1]) / k;
-        double num = 0, denom_i = 0, denom_j = 0;
-        for (int p = 0; p < k; ++p) {
-            double di = xi[p] - mean_i;
-            double dj = xj[p] - mean_j;
-            num     += di * dj;
-            denom_i += di * di;
-            denom_j += dj * dj;
+    // Use real Pearson matrix if available; otherwise show "--" pending fetch.
+    const bool has_real_corr = !corr_matrix_.isEmpty();
+
+    auto corr_pair = [&](int i, int j) -> std::optional<double> {
+        if (i == j) return 1.0;
+        if (has_real_corr) {
+            const QString key_ab = sorted[i].symbol + "|" + sorted[j].symbol;
+            const QString key_ba = sorted[j].symbol + "|" + sorted[i].symbol;
+            if (corr_matrix_.contains(key_ab)) return corr_matrix_[key_ab];
+            if (corr_matrix_.contains(key_ba)) return corr_matrix_[key_ba];
+            return std::nullopt; // symbol not in matrix (fetch may be partial)
         }
-        double denom = std::sqrt(denom_i * denom_j);
-        if (denom < 1e-10) {
-            // Same sector = likely correlated; different = neutral
-            bool same_sec = (infer_sector(sorted[i].symbol) ==
-                             infer_sector(sorted[j].symbol));
-            return same_sec ? 0.75 : 0.20;
-        }
-        // Clamp to [-1, 1]
-        return std::max(-1.0, std::min(1.0, num / denom));
+        // No real data yet — return nullopt so cell shows "…"
+        return std::nullopt;
     };
 
     auto* grid = new QGridLayout(corr_widget_);
@@ -488,25 +511,29 @@ void PortfolioSectorPanel::update_correlation() {
         grid->addWidget(row_label, r + 1, 0);
 
         for (int c = 0; c < n; ++c) {
-            double corr = (r == c) ? 1.0 : corr_pair(r, c);
+            const auto opt_corr = corr_pair(r, c);
+            const bool is_diag  = (r == c);
+            const double corr   = opt_corr.value_or(0.0);
+            const QString label = is_diag    ? "1.00"
+                                : opt_corr   ? QString::number(corr, 'f', 2)
+                                             : "\u2026"; // "…" pending
 
-            auto* cell = new QLabel(QString::number(corr, 'f', 2));
+            auto* cell = new QLabel(label);
             cell->setAlignment(Qt::AlignCenter);
             cell->setFixedSize(32, 18);
 
             QColor bg;
-            if (r == c) {
-                bg = QColor(ui::colors::TEXT_PRIMARY);
+            if (is_diag) {
+                bg = QColor(ui::colors::TEXT_PRIMARY());
+            } else if (!opt_corr) {
+                bg = QColor(ui::colors::BG_RAISED());
             } else if (corr > 0) {
-                bg = QColor(22, 163, 74,
-                            static_cast<int>(std::abs(corr) * 140 + 20));
+                bg = QColor(22, 163, 74, static_cast<int>(std::abs(corr) * 140 + 20));
             } else {
-                bg = QColor(220, 38, 38,
-                            static_cast<int>(std::abs(corr) * 140 + 20));
+                bg = QColor(220, 38, 38, static_cast<int>(std::abs(corr) * 140 + 20));
             }
 
-            const char* text_color =
-                (r == c) ? "#000000" : ui::colors::TEXT_PRIMARY;
+            const char* text_color = is_diag ? "#000000" : ui::colors::TEXT_PRIMARY;
             cell->setStyleSheet(
                 QString("background:rgba(%1,%2,%3,%4); color:%5;"
                         "font-size:7px; font-weight:600;")
@@ -516,6 +543,17 @@ void PortfolioSectorPanel::update_correlation() {
             grid->addWidget(cell, r + 1, c + 1);
         }
     }
+}
+
+bool PortfolioSectorPanel::eventFilter(QObject* obj, QEvent* event) {
+    if (event->type() == QEvent::MouseButtonRelease) {
+        const QString sec = obj->property("sector_name").toString();
+        if (!sec.isEmpty()) {
+            on_sector_legend_clicked(sec);
+            return true;
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 } // namespace fincept::screens

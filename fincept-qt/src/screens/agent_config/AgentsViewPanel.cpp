@@ -4,12 +4,15 @@
 #include "ai_chat/LlmService.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
+#include "storage/repositories/AgentConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QStackedWidget>
 #include <QVBoxLayout>
 
@@ -30,6 +33,22 @@ AgentsViewPanel::AgentsViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("AgentsViewPanel");
     build_ui();
     setup_connections();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { update(); });
+
+    // Seed from cache immediately — handles case where agents_discovered was
+    // already emitted before this panel was lazily constructed.
+    auto& svc = services::AgentService::instance();
+    auto cached = svc.cached_agents();
+    if (!cached.isEmpty()) {
+        all_agents_ = cached;
+        on_category_changed(0);
+    }
+}
+
+void AgentsViewPanel::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    services::AgentService::instance().discover_agents();
 }
 
 // ── Left: agent list ──────────────────────────────────────────────────────────
@@ -807,11 +826,25 @@ void AgentsViewPanel::toggle_json_editor() {
     json_toggle_btn_->setChecked(!json_toggle_btn_->isChecked());
 }
 
-void AgentsViewPanel::apply_tools_selection(const QStringList& tools) {
-    for (int i = 0; i < tools_list_->count(); ++i) {
-        auto* item = tools_list_->item(i);
-        item->setCheckState(tools.contains(item->text()) ? Qt::Checked : Qt::Unchecked);
-    }
+void AgentsViewPanel::apply_tools_selection(const QStringList& /*tools*/) {
+    // Reload the currently-selected agent's tools directly from the repository
+    // so we always show the persisted state, not stale in-memory AgentInfo.config.
+    if (selected_agent_idx_ < 0 || selected_agent_idx_ >= filtered_agents_.size())
+        return;
+
+    const QString agent_id = filtered_agents_[selected_agent_idx_].id;
+    auto result = AgentConfigRepository::instance().get(agent_id);
+    if (!result.is_ok())
+        return;
+
+    QJsonDocument doc = QJsonDocument::fromJson(result.value().config_json.toUtf8());
+    if (doc.isNull())
+        return;
+
+    tools_list_->clear();
+    const QJsonArray tools_arr = doc.object()["tools"].toArray();
+    for (const auto& t : tools_arr)
+        tools_list_->addItem(new QListWidgetItem(t.toString()));
 }
 
 } // namespace fincept::screens

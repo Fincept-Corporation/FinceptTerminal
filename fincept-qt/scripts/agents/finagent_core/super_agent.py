@@ -248,11 +248,13 @@ class LLMRouter:
         """Ask the LLM to classify the query. Returns (QueryIntent, confidence, reasoning)."""
         from finagent_core.registries import ModelsRegistry
 
+        base_url = self.api_keys.get(f"{provider}_base_url") or self.api_keys.get(f"{provider.upper()}_BASE_URL")
         model = ModelsRegistry.create_model(
             provider=provider,
             model_id=model_id,
             api_keys=self.api_keys,
             temperature=0.0,  # Deterministic — routing must be consistent
+            base_url=base_url or None,
         )
 
         from agno.agent import Agent
@@ -403,16 +405,26 @@ class SuperAgent:
             self.classifier.keywords.setdefault(route.intent, []).extend(route.keywords)
 
     def _resolve_model_config_from_keys(self, api_keys: Dict[str, Any]) -> Dict[str, Any]:
-        """Derive provider from available api_keys instead of hardcoding openai."""
+        """Derive provider + base_url from available api_keys instead of hardcoding openai."""
         keys = api_keys or {}
         preferred = ["fincept", "ollama", "anthropic", "google", "groq",
                      "deepseek", "openai", "openrouter"]
         for provider in preferred:
             if keys.get(provider) or keys.get(f"{provider.upper()}_API_KEY"):
-                return {"provider": provider}
+                config = {"provider": provider}
+                # Pick up custom base_url if shipped (e.g. MiniMax behind anthropic provider)
+                base_url = keys.get(f"{provider}_base_url") or keys.get(f"{provider.upper()}_BASE_URL")
+                if base_url:
+                    config["base_url"] = base_url
+                return config
         for k, v in keys.items():
             if k.endswith("_API_KEY") and v:
-                return {"provider": k[:-8].lower()}
+                provider = k[:-8].lower()
+                config = {"provider": provider}
+                base_url = keys.get(f"{provider}_base_url") or keys.get(f"{provider.upper()}_BASE_URL")
+                if base_url:
+                    config["base_url"] = base_url
+                return config
         return {"provider": "openai"}
 
     def route(self, query: str) -> RoutingResult:
@@ -704,9 +716,10 @@ class SuperAgent:
 
 
 # Entry point for C++ commands
-def route_query(query: str, api_keys: Dict[str, str] = None) -> Dict[str, Any]:
+def route_query(query: str, api_keys: Dict[str, str] = None, config: Dict[str, Any] = None) -> Dict[str, Any]:
     """Route a query and return routing info"""
-    agent = SuperAgent(api_keys=api_keys)
+    model_config = (config or {}).get("model")
+    agent = SuperAgent(api_keys=api_keys, model_config=model_config)
     routing = agent.route(query)
     return {
         "success": True,

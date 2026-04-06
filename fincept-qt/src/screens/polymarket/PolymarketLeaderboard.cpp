@@ -63,7 +63,7 @@ void PolymarketLeaderboard::set_entries(const QVector<LeaderboardEntry>& entries
 
         auto* pnl_item = new QTableWidgetItem(fmt_pnl(e.pnl));
         pnl_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        pnl_item->setForeground(QColor(e.pnl >= 0 ? colors::POSITIVE : colors::NEGATIVE));
+        pnl_item->setForeground(QColor(e.pnl >= 0 ? colors::POSITIVE() : colors::NEGATIVE()));
         table_->setItem(i, 2, pnl_item);
 
         auto* vol_item = new QTableWidgetItem(fmt_pnl(e.volume).replace("+", ""));

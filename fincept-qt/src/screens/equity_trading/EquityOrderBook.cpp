@@ -1,11 +1,22 @@
 // EquityOrderBook.cpp — custom-painted order book with depth bars
 #include "screens/equity_trading/EquityOrderBook.h"
 
+#include "ui/theme/Theme.h"
+
 #include <QHBoxLayout>
 #include <QMouseEvent>
 #include <QMutexLocker>
 #include <QPainter>
 #include <QVBoxLayout>
+
+namespace {
+using namespace fincept::ui;
+static QColor bg_surface()     { return colors::BG_SURFACE; }
+static QColor color_sell()     { return colors::NEGATIVE; }
+static QColor color_buy()      { return colors::POSITIVE; }
+static QColor text_secondary() { return colors::TEXT_SECONDARY; }
+static QColor border_med()     { return colors::BORDER_MED; }
+} // namespace
 
 #include <algorithm>
 #include <cmath>
@@ -108,7 +119,7 @@ void EquityOrderBook::rebuild_cache() {
         return;
 
     cache_ = QPixmap(w, h);
-    cache_.fill(BG_SURFACE);
+    cache_.fill(bg_surface());
 
     QPainter p(&cache_);
     p.setFont(QFont("Consolas", 10));
@@ -137,9 +148,9 @@ void EquityOrderBook::rebuild_cache() {
         const int bar_w = static_cast<int>(w * ratio * 0.4);
         p.fillRect(w - bar_w, y, bar_w, ROW_H, QColor(220, 38, 38, 25));
 
-        p.setPen(COLOR_SELL);
+        p.setPen(color_sell());
         p.drawText(col_price, y, w / 2 - 8, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, QString::number(price, 'f', 2));
-        p.setPen(TEXT_SECONDARY);
+        p.setPen(text_secondary());
         p.drawText(col_qty, y, w / 4 - 4, ROW_H, Qt::AlignRight | Qt::AlignVCenter, QString::number(qty, 'f', 0));
     }
 
@@ -154,14 +165,14 @@ void EquityOrderBook::rebuild_cache() {
         const int bar_w = static_cast<int>(w * ratio * 0.4);
         p.fillRect(w - bar_w, y, bar_w, ROW_H, QColor(22, 163, 74, 25));
 
-        p.setPen(COLOR_BUY);
+        p.setPen(color_buy());
         p.drawText(col_price, y, w / 2 - 8, ROW_H, Qt::AlignLeft | Qt::AlignVCenter, QString::number(price, 'f', 2));
-        p.setPen(TEXT_SECONDARY);
+        p.setPen(text_secondary());
         p.drawText(col_qty, y, w / 4 - 4, ROW_H, Qt::AlignRight | Qt::AlignVCenter, QString::number(qty, 'f', 0));
     }
 
     // Center line
-    p.setPen(BORDER_MED);
+    p.setPen(border_med());
     p.drawLine(0, half, w, half);
 
     cache_dirty_ = false;

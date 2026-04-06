@@ -2,16 +2,19 @@
 #pragma once
 #include "services/agents/AgentTypes.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QTextEdit>
 #include <QWidget>
 
 namespace fincept::screens {
 
-/// WORKFLOWS view — predefined financial workflows with execution and results.
+/// WORKFLOWS view — 3-column: catalog | params | execution log + result.
 class WorkflowsViewPanel : public QWidget {
     Q_OBJECT
   public:
@@ -22,26 +25,45 @@ class WorkflowsViewPanel : public QWidget {
 
   private:
     void build_ui();
-    QWidget* build_workflow_cards();
-    QWidget* build_results_panel();
+    QWidget* build_catalog_panel();
+    QWidget* build_params_panel();
+    QWidget* build_output_panel();
     void setup_connections();
-    void run_workflow(const QString& type, const QJsonObject& params = {});
 
-    QPushButton* make_workflow_card(const QString& title, const QString& desc, const char* color,
-                                    const QString& action_text, QVBoxLayout* parent_layout);
+    void on_workflow_selected(int row);
+    void run_current_workflow();
 
-    // Workflow inputs
-    QLineEdit*  symbol_input_      = nullptr;
+    // ── Left: catalog ────────────────────────────────────────────────────────
+    QListWidget* catalog_list_   = nullptr;
+    QLabel*      wf_desc_label_  = nullptr;
+
+    // ── Center: params ───────────────────────────────────────────────────────
+    QLabel*     params_title_    = nullptr;
     QComboBox*  llm_profile_combo_ = nullptr;
+    QLabel*     llm_resolved_lbl_  = nullptr;
 
-    // Results
-    QTextEdit* result_display_ = nullptr;
-    QLabel* result_status_ = nullptr;
-    QLabel* workflow_title_ = nullptr;
+    // Symbol input (stock analysis)
+    QWidget*   symbol_row_   = nullptr;
+    QLineEdit* symbol_input_ = nullptr;
 
+    // Custom query input (multi-query / custom)
+    QWidget*    query_row_   = nullptr;
+    QTextEdit*  query_input_ = nullptr;
+
+    QPushButton* run_btn_        = nullptr;
+    QLabel*      params_status_  = nullptr;
+
+    // ── Right: output ────────────────────────────────────────────────────────
+    QLabel*    output_title_  = nullptr;
+    QLabel*    output_status_ = nullptr;
+    QTextEdit* log_display_   = nullptr;
+    QTextEdit* result_display_= nullptr;
+
+    // ── State ────────────────────────────────────────────────────────────────
     bool    executing_          = false;
     bool    data_loaded_        = false;
     QString pending_request_id_;
+    QString current_workflow_type_;
 };
 
 } // namespace fincept::screens

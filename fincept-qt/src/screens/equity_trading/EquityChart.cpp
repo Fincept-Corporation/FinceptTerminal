@@ -2,6 +2,7 @@
 // QPainter-based: no QCandlestickSeries, no QDateTimeAxis gaps.
 #include "screens/equity_trading/EquityChart.h"
 #include "screens/equity_trading/EquityTypes.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QHBoxLayout>
 #include <QPainter>
@@ -20,6 +21,13 @@ CandleCanvas::CandleCanvas(QWidget* parent) : QWidget(parent) {
     setObjectName("eqCandleCanvas");
     setMinimumHeight(120);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) {
+                dirty_ = true;
+                cache_ = QPixmap(); // invalidate cache
+                update();
+            });
 }
 
 void CandleCanvas::set_candles(const QVector<trading::BrokerCandle>& candles) {
@@ -54,7 +62,7 @@ void CandleCanvas::rebuild_cache() {
     if (W <= 0 || H <= 0) return;
 
     cache_ = QPixmap(W, H);
-    cache_.fill(BG_SURFACE);
+    cache_.fill(BG_SURFACE());
 
     QPainter p(&cache_);
     p.setRenderHint(QPainter::Antialiasing, false);
@@ -63,7 +71,7 @@ void CandleCanvas::rebuild_cache() {
     const int total = candles_.size();
     if (total == 0) {
         // Empty state
-        p.setPen(TEXT_TERTIARY);
+        p.setPen(TEXT_TERTIARY());
         p.setFont(QFont("monospace", 10));
         p.drawText(cache_.rect(), Qt::AlignCenter, "No data");
         return;
@@ -95,7 +103,7 @@ void CandleCanvas::rebuild_cache() {
     };
 
     // ── Grid lines ───────────────────────────────────────────────────────────
-    p.setPen(QPen(BORDER_DIM, 1));
+    p.setPen(QPen(BORDER_DIM(), 1));
     for (int g = 1; g < 5; ++g) {
         int gy = plot_h * g / 5;
         p.drawLine(0, gy, plot_w, gy);
@@ -111,7 +119,7 @@ void CandleCanvas::rebuild_cache() {
         const int   cx  = static_cast<int>((i + 0.5) * slot_w); // centre x
         const bool  bull = c.close >= c.open;
 
-        const QColor col = bull ? COLOR_BUY : COLOR_SELL;
+        const QColor col = bull ? COLOR_BUY() : COLOR_SELL();
 
         const int open_y  = py(c.open);
         const int close_y = py(c.close);
@@ -131,10 +139,10 @@ void CandleCanvas::rebuild_cache() {
     }
 
     // ── Price axis (right) ────────────────────────────────────────────────────
-    p.setPen(BORDER_MED);
+    p.setPen(BORDER_MED());
     p.drawLine(plot_w, 0, plot_w, plot_h);
 
-    p.setPen(TEXT_SECONDARY);
+    p.setPen(TEXT_SECONDARY());
     QFont lbl_font("monospace", 8);
     p.setFont(lbl_font);
     QFontMetrics fm(lbl_font);
@@ -147,10 +155,10 @@ void CandleCanvas::rebuild_cache() {
     }
 
     // ── Time axis (bottom) ────────────────────────────────────────────────────
-    p.setPen(BORDER_MED);
+    p.setPen(BORDER_MED());
     p.drawLine(0, plot_h, plot_w, plot_h);
 
-    p.setPen(TEXT_SECONDARY);
+    p.setPen(TEXT_SECONDARY());
     for (int i = 0; i < count; i += LABEL_STEP) {
         const auto& c  = candles_[start + i];
         QDateTime   dt = QDateTime::fromMSecsSinceEpoch(c.timestamp);

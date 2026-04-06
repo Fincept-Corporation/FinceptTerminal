@@ -815,10 +815,10 @@ void EquityFinancialsTab::populate_cashflow_view(const services::equity::Financi
 // ── Chart builders ────────────────────────────────────────────────────────────
 
 static void style_chart(QChart* chart) {
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_SURFACE)));
-    chart->setPlotAreaBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
+    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_SURFACE())));
+    chart->setPlotAreaBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
     chart->setPlotAreaBackgroundVisible(true);
-    chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY));
+    chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY()));
     chart->legend()->setAlignment(Qt::AlignBottom);
     chart->setMargins(QMargins(4, 4, 4, 8));
 }
@@ -826,17 +826,17 @@ static void style_chart(QChart* chart) {
 static QBarCategoryAxis* make_x_axis(const QStringList& cats) {
     auto* ax = new QBarCategoryAxis;
     ax->append(cats);
-    ax->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
+    ax->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
     ax->setLabelsFont(QFont("monospace", 8));
-    ax->setGridLineColor(QColor(ui::colors::BORDER_DIM));
+    ax->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
     return ax;
 }
 
 static QValueAxis* make_y_axis(const QString& fmt = "%.1fB") {
     auto* ay = new QValueAxis;
-    ay->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
+    ay->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
     ay->setLabelsFont(QFont("monospace", 8));
-    ay->setGridLineColor(QColor(ui::colors::BORDER_DIM));
+    ay->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
     ay->setLabelFormat(fmt);
     return ay;
 }
@@ -1121,7 +1121,7 @@ void EquityFinancialsTab::populate_table(QTableWidget* table, const QVector<QPai
 
     for (int r = 0; r < metrics.size(); ++r) {
         auto* mk = new QTableWidgetItem(metrics[r]);
-        mk->setForeground(QColor(ui::colors::TEXT_SECONDARY));
+        mk->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         table->setItem(r, 0, mk);
 
         for (int c = 0; c < stmt.size(); ++c) {

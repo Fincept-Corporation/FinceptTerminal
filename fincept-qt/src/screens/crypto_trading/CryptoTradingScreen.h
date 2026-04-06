@@ -70,6 +70,11 @@ class CryptoTradingScreen : public QWidget {
     void async_fetch_live_positions();
     void async_fetch_live_orders();
     void async_fetch_live_balance();
+    void async_fetch_my_trades();
+    void async_fetch_trading_fees();
+    void async_fetch_mark_price();
+    void async_set_leverage(int leverage);
+    void async_set_margin_mode(const QString& mode);
 
     // ── Command bar widgets ──
     QPushButton* exchange_btn_ = nullptr;
@@ -116,8 +121,15 @@ class CryptoTradingScreen : public QWidget {
     std::atomic<bool> candles_fetching_{false};
     std::atomic<bool> live_fetching_{false};
 
-    QStringList watchlist_symbols_ = {"BTC/USDT", "ETH/USDT", "SOL/USDT",  "BNB/USDT",
-                                      "XRP/USDT", "ADA/USDT", "DOGE/USDT", "AVAX/USDT"};
+    QStringList watchlist_symbols_ = {
+        "BTC/USDT",  "ETH/USDT",  "SOL/USDT",  "BNB/USDT",
+        "XRP/USDT",  "DOGE/USDT", "ADA/USDT",  "AVAX/USDT",
+        "TON/USDT",  "LINK/USDT", "DOT/USDT",  "MATIC/USDT",
+        "UNI/USDT",  "ATOM/USDT", "LTC/USDT",  "BCH/USDT",
+        "APT/USDT",  "ARB/USDT",  "OP/USDT",   "SUI/USDT",
+        "TRX/USDT",  "INJ/USDT",  "NEAR/USDT", "WIF/USDT",
+        "PEPE/USDT",
+    };
 
     QMutex data_mutex_;
     bool initialized_ = false;

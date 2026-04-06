@@ -1,22 +1,13 @@
 #pragma once
 
 #include <QJsonValue>
-#include <QMap>
-#include <QMutex>
 #include <QObject>
 #include <QString>
-#include <QTimer>
 
 namespace fincept::workflow {
 
-/// LRU cache entry with TTL.
-struct CacheEntry {
-    QJsonValue data;
-    qint64 timestamp_ms = 0;
-    int ttl_ms = 300000; // 5 minutes default
-};
-
-/// In-memory LRU cache for workflow execution results and node outputs.
+/// Thin wrapper over CacheManager for workflow execution results and node outputs.
+/// Preserves the original public API; all persistence/TTL handled by CacheManager.
 class WorkflowCache : public QObject {
     Q_OBJECT
   public:
@@ -25,7 +16,7 @@ class WorkflowCache : public QObject {
     /// Get a cached value. Returns null QJsonValue if miss.
     QJsonValue get(const QString& key) const;
 
-    /// Store a value with optional TTL.
+    /// Store a value with optional TTL (milliseconds, converted to seconds).
     void put(const QString& key, const QJsonValue& value, int ttl_ms = 300000);
 
     /// Check if key exists and is not expired.
@@ -34,10 +25,10 @@ class WorkflowCache : public QObject {
     /// Remove a specific key.
     void remove(const QString& key);
 
-    /// Remove all entries matching a prefix (e.g., "workflow:abc:" invalidates all for that workflow).
+    /// Remove all entries matching a prefix.
     void invalidate_prefix(const QString& prefix);
 
-    /// Clear all cache.
+    /// Clear all workflow cache entries.
     void clear();
 
     /// Cache statistics.
@@ -51,18 +42,12 @@ class WorkflowCache : public QObject {
     void set_enabled(bool on) { enabled_ = on; }
 
   private:
-    WorkflowCache();
-    void cleanup_expired();
+    explicit WorkflowCache(QObject* parent = nullptr);
 
-    mutable QMutex mutex_;
-    QMap<QString, CacheEntry> entries_;
-    int max_entries_ = 500;
+    static constexpr int kDefaultTtlSec = 300;
     bool enabled_ = true;
-
-    mutable int hits_ = 0;
+    mutable int hits_   = 0;
     mutable int misses_ = 0;
-
-    QTimer* cleanup_timer_ = nullptr;
 };
 
 } // namespace fincept::workflow

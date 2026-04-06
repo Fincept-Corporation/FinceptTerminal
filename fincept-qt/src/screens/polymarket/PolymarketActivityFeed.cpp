@@ -46,7 +46,7 @@ void PolymarketActivityFeed::set_activities(const QVector<Activity>& activities)
 
         auto* price_item = new QTableWidgetItem(QString::number(a.price, 'f', 4));
         price_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        price_item->setForeground(QColor(colors::CYAN));
+        price_item->setForeground(QColor(colors::CYAN()));
         table_->setItem(i, 3, price_item);
 
         auto* size_item = new QTableWidgetItem(QString::number(a.amount, 'f', 2));
@@ -68,12 +68,12 @@ void PolymarketActivityFeed::set_trades(const QVector<Trade>& trades) {
         table_->setItem(i, 1, new QTableWidgetItem("TRADE"));
 
         auto* side_item = new QTableWidgetItem(t.side);
-        side_item->setForeground(QColor(t.side == "BUY" ? colors::POSITIVE : colors::NEGATIVE));
+        side_item->setForeground(QColor(t.side == "BUY" ? colors::POSITIVE() : colors::NEGATIVE()));
         table_->setItem(i, 2, side_item);
 
         auto* price_item = new QTableWidgetItem(QString::number(t.price, 'f', 4));
         price_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        price_item->setForeground(QColor(colors::CYAN));
+        price_item->setForeground(QColor(colors::CYAN()));
         table_->setItem(i, 3, price_item);
 
         auto* size_item = new QTableWidgetItem(QString::number(t.size, 'f', 2));

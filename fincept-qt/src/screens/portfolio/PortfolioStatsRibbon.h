@@ -17,6 +17,7 @@ class PortfolioStatsRibbon : public QWidget {
 
   private:
     struct MetricCell {
+        QWidget* container = nullptr;
         QLabel* label = nullptr;
         QLabel* value = nullptr;
         QLabel* sub = nullptr;

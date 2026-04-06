@@ -306,6 +306,15 @@ class ModelsRegistry:
         """
         provider_lower = provider.lower()
 
+        # Normalise provider aliases so users can configure "gemini" in Settings
+        # (which is the UI label) and still get the correct Agno Gemini class.
+        _PROVIDER_ALIASES = {
+            "gemini": "google",
+            "claude": "anthropic",
+            "gpt": "openai",
+        }
+        provider_lower = _PROVIDER_ALIASES.get(provider_lower, provider_lower)
+
         if provider_lower not in cls.MODEL_CATALOG:
             # Unknown provider - treat as OpenAI-compatible with custom base_url
             # This supports custom endpoints like "fincept", "local-llm", etc.
@@ -386,6 +395,20 @@ class ModelsRegistry:
             # the OpenAI-compatible protocol, not the native SDK protocol.
             if effective_base_url and provider_lower in NO_BASE_URL_PROVIDERS:
                 from agno.models.openai import OpenAIChat as _OAI
+                import re as _re
+                # Strip trailing provider-name path segments that were added by the
+                # user's LLM settings UI (e.g. https://api.minimax.io/anthropic →
+                # https://api.minimax.io/v1).  OpenAI SDK appends /chat/completions
+                # itself, so any extra path suffix causes a 404.
+                # Also ensure /v1 is present — custom endpoints need it and the
+                # OpenAI SDK does NOT add it automatically.
+                _cleaned_base_url = _re.sub(
+                    r'/(anthropic|openai|google|gemini|mistral|cohere|claude|groq|meta)/?$',
+                    '', effective_base_url.rstrip('/')
+                )
+                # Ensure /v1 suffix (add if missing, don't double-add)
+                if not _cleaned_base_url.rstrip('/').endswith('/v1'):
+                    _cleaned_base_url = _cleaned_base_url.rstrip('/') + '/v1'
                 # Use standard role map — Agno's default maps "system"→"developer"
                 # which is only valid for OpenAI o1/o3. Custom endpoints (MiniMax,
                 # OpenRouter, etc.) expect the standard "system" role.
@@ -396,7 +419,7 @@ class ModelsRegistry:
                     "tool": "tool",
                     "model": "assistant",
                 }
-                oai_kwargs = {"id": final_model_id, "base_url": effective_base_url,
+                oai_kwargs = {"id": final_model_id, "base_url": _cleaned_base_url,
                               "role_map": _STANDARD_ROLE_MAP}
                 if final_api_key:
                     oai_kwargs["api_key"] = final_api_key
@@ -406,7 +429,7 @@ class ModelsRegistry:
                     oai_kwargs["max_tokens"] = kwargs.pop("max_tokens")
                 logger.info(
                     f"Provider '{provider}' has custom base_url → redirecting to "
-                    f"OpenAIChat(base_url={effective_base_url}, id={final_model_id})"
+                    f"OpenAIChat(base_url={_cleaned_base_url}, id={final_model_id})"
                 )
                 return _OAI(**{k: v for k, v in oai_kwargs.items() if v is not None})
 

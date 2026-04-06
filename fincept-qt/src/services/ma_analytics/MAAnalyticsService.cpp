@@ -3,8 +3,8 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 
-#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
@@ -45,18 +45,20 @@ void MAAnalyticsService::run_python(const QString& script, const QStringList& ar
 
 void MAAnalyticsService::run_python_json(const QString& script, const QString& command, const QJsonObject& params,
                                          const QString& context) {
-    // Check cache
-    auto cache_key = context + "_" + command;
-    auto now = QDateTime::currentSecsSinceEpoch();
-    auto it = result_cache_.find(cache_key);
-    if (it != result_cache_.end() && (now - it->ts) < kResultTtlSec) {
-        LOG_DEBUG("MAAnalytics", QString("Cache hit [%1]").arg(context));
-        emit result_ready(context, it->data);
-        return;
+    auto params_json = QJsonDocument(params).toJson(QJsonDocument::Compact);
+    const QString cache_key = "ma:" + context + "_" + command + ":" + QString::fromUtf8(params_json);
+
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (!doc.isNull()) {
+            LOG_DEBUG("MAAnalytics", QString("Cache hit [%1]").arg(context));
+            emit result_ready(context, doc.object());
+            return;
+        }
     }
 
-    auto json_str = QJsonDocument(params).toJson(QJsonDocument::Compact);
-    QStringList args = {command, json_str};
+    QStringList args = {command, QString::fromUtf8(params_json)};
 
     QPointer<MAAnalyticsService> self = this;
     python::PythonRunner::instance().run(script, args, [self, context, cache_key](python::PythonResult result) {
@@ -75,8 +77,10 @@ void MAAnalyticsService::run_python_json(const QString& script, const QString& c
             return;
         }
         auto obj = doc.object();
-        // Cache result
-        self->result_cache_[cache_key] = {obj, QDateTime::currentSecsSinceEpoch()};
+        fincept::CacheManager::instance().put(
+            cache_key,
+            QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+            kResultTtlSec, "ma_analytics");
         LOG_INFO("MAAnalytics", QString("Result ready [%1]").arg(context));
         emit self->result_ready(context, obj);
     });

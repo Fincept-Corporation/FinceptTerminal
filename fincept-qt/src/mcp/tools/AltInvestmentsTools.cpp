@@ -4,6 +4,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 
 #include <QEventLoop>
 #include <QJsonDocument>
@@ -12,7 +13,8 @@
 
 namespace fincept::mcp::tools {
 
-static constexpr int kTimeoutMs = 30000;
+static constexpr int kTimeoutMs  = 30000;
+static constexpr int kAltTtlSec  = 10 * 60; // 10 min — deterministic given same inputs
 
 // ── Shared async helper ──────────────────────────────────────────────────────
 // Calls cli.py synchronously (blocks calling thread via QEventLoop).
@@ -21,6 +23,15 @@ static constexpr int kTimeoutMs = 30000;
 
 static ToolResult run_alt_sync(const QString& command, const QJsonObject& params) {
     QString data_json = QString::fromUtf8(QJsonDocument(params).toJson(QJsonDocument::Compact));
+
+    // Cache: key = command + serialized params
+    const QString cache_key = "alt:" + command + ":" + data_json;
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (!doc.isNull() && doc.isObject())
+            return ToolResult::ok_data(doc.object());
+    }
 
     ToolResult tool_result = ToolResult::fail("timeout");
     bool done = false;
@@ -65,6 +76,10 @@ static ToolResult run_alt_sync(const QString& command, const QJsonObject& params
             }
 
             auto metrics = obj.contains("metrics") ? obj["metrics"].toObject() : obj;
+            fincept::CacheManager::instance().put(
+                cache_key,
+                QVariant(QString::fromUtf8(QJsonDocument(metrics).toJson(QJsonDocument::Compact))),
+                kAltTtlSec, "alt_investments");
             tool_result  = ToolResult::ok_data(metrics);
             loop.quit();
         });

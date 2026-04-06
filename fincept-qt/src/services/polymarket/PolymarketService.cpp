@@ -1,6 +1,7 @@
 #include "services/polymarket/PolymarketService.h"
 
 #include "core/logging/Logger.h"
+#include "storage/cache/CacheManager.h"
 
 #include <QJsonDocument>
 #include <QJsonParseError>
@@ -286,9 +287,6 @@ PolymarketService::PolymarketService() : QObject(nullptr) {
     data_nam_ = new QNetworkAccessManager(this);
 }
 
-bool PolymarketService::is_cache_fresh(int64_t ts) const {
-    return (QDateTime::currentMSecsSinceEpoch() - ts) < CACHE_TTL_MS;
-}
 
 // ── Generic HTTP helpers ─────────────────────────────────────────────────────
 
@@ -342,6 +340,22 @@ void PolymarketService::get_data(const QString& path, JsonCallback on_success, c
 // ── Gamma API ────────────────────────────────────────────────────────────────
 
 void PolymarketService::fetch_markets(const QString& sort_by, int limit, int offset, bool closed) {
+    const QString cache_key = QString("polymarket:markets:%1:%2:%3:%4")
+                                  .arg(sort_by)
+                                  .arg(limit)
+                                  .arg(offset)
+                                  .arg(closed ? 1 : 0);
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+        QVector<Market> result;
+        result.reserve(arr.size());
+        for (const auto& v : arr)
+            result.append(Market::from_json(v.toObject()));
+        emit markets_ready(result);
+        return;
+    }
+
     QString path = QString("/markets?closed=%1&limit=%2&offset=%3&order=%4&ascending=false")
                        .arg(closed ? "true" : "false")
                        .arg(limit)
@@ -350,9 +364,13 @@ void PolymarketService::fetch_markets(const QString& sort_by, int limit, int off
 
     get_gamma(
         path,
-        [this](const QJsonDocument& doc) {
-            QVector<Market> result;
+        [this, cache_key](const QJsonDocument& doc) {
             QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
+            fincept::CacheManager::instance().put(
+                cache_key,
+                QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                kMarketsTtlSec, "polymarket");
+            QVector<Market> result;
             result.reserve(arr.size());
             for (const auto& v : arr)
                 result.append(Market::from_json(v.toObject()));
@@ -440,6 +458,22 @@ void PolymarketService::unified_search(const QString& query) {
 }
 
 void PolymarketService::fetch_events(const QString& sort_by, int limit, int offset, bool closed) {
+    const QString cache_key = QString("polymarket:events:%1:%2:%3:%4")
+                                  .arg(sort_by)
+                                  .arg(limit)
+                                  .arg(offset)
+                                  .arg(closed ? 1 : 0);
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+        QVector<Event> result;
+        result.reserve(arr.size());
+        for (const auto& v : arr)
+            result.append(Event::from_json(v.toObject()));
+        emit events_ready(result);
+        return;
+    }
+
     QString path = QString("/events?closed=%1&limit=%2&offset=%3&order=%4&ascending=false")
                        .arg(closed ? "true" : "false")
                        .arg(limit)
@@ -448,9 +482,13 @@ void PolymarketService::fetch_events(const QString& sort_by, int limit, int offs
 
     get_gamma(
         path,
-        [this](const QJsonDocument& doc) {
-            QVector<Event> result;
+        [this, cache_key](const QJsonDocument& doc) {
             QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
+            fincept::CacheManager::instance().put(
+                cache_key,
+                QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                kEventsTtlSec, "polymarket");
+            QVector<Event> result;
             result.reserve(arr.size());
             for (const auto& v : arr)
                 result.append(Event::from_json(v.toObject()));
@@ -489,26 +527,39 @@ void PolymarketService::fetch_related_markets(int event_id) {
 }
 
 void PolymarketService::fetch_tags() {
-    if (is_cache_fresh(tags_cache_ts_) && !tags_cache_.isEmpty()) {
-        emit tags_ready(tags_cache_);
+    const QVariant cached = fincept::CacheManager::instance().get("polymarket:tags");
+    if (!cached.isNull()) {
+        QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+        QVector<Tag> result;
+        for (const auto& v : arr) {
+            auto obj = v.toObject();
+            Tag tag;
+            tag.label = obj["label"].toString();
+            tag.slug  = obj["slug"].toString();
+            if (!tag.label.isEmpty())
+                result.append(tag);
+        }
+        emit tags_ready(result);
         return;
     }
 
     get_gamma(
         "/tags?limit=50",
         [this](const QJsonDocument& doc) {
-            QVector<Tag> result;
             QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
+            fincept::CacheManager::instance().put(
+                "polymarket:tags",
+                QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                kTagsTtlSec, "polymarket");
+            QVector<Tag> result;
             for (const auto& v : arr) {
                 auto obj = v.toObject();
                 Tag tag;
                 tag.label = obj["label"].toString();
-                tag.slug = obj["slug"].toString();
+                tag.slug  = obj["slug"].toString();
                 if (!tag.label.isEmpty())
                     result.append(tag);
             }
-            tags_cache_ = result;
-            tags_cache_ts_ = QDateTime::currentMSecsSinceEpoch();
             LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " tags");
             emit tags_ready(result);
         },
@@ -661,8 +712,19 @@ void PolymarketService::fetch_top_holders(const QString& condition_id, int limit
 }
 
 void PolymarketService::fetch_leaderboard(int limit) {
-    if (is_cache_fresh(leaderboard_cache_ts_) && !leaderboard_cache_.isEmpty()) {
-        emit leaderboard_ready(leaderboard_cache_);
+    const QString cache_key = QString("polymarket:leaderboard:%1").arg(limit);
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+        QVector<LeaderboardEntry> result;
+        int rank = 1;
+        for (const auto& v : arr) {
+            auto e = LeaderboardEntry::from_json(v.toObject());
+            if (e.rank == 0)
+                e.rank = rank++;
+            result.append(e);
+        }
+        emit leaderboard_ready(result);
         return;
     }
 
@@ -670,11 +732,15 @@ void PolymarketService::fetch_leaderboard(int limit) {
 
     get_data(
         path,
-        [this](const QJsonDocument& doc) {
-            QVector<LeaderboardEntry> result;
+        [this, cache_key](const QJsonDocument& doc) {
             QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
             if (arr.isEmpty() && doc.isObject() && doc.object().contains("data"))
                 arr = doc.object()["data"].toArray();
+            fincept::CacheManager::instance().put(
+                cache_key,
+                QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                kLeaderboardTtlSec, "polymarket");
+            QVector<LeaderboardEntry> result;
             int rank = 1;
             for (const auto& v : arr) {
                 auto e = LeaderboardEntry::from_json(v.toObject());
@@ -682,8 +748,6 @@ void PolymarketService::fetch_leaderboard(int limit) {
                     e.rank = rank++;
                 result.append(e);
             }
-            leaderboard_cache_ = result;
-            leaderboard_cache_ts_ = QDateTime::currentMSecsSinceEpoch();
             LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " leaderboard entries");
             emit leaderboard_ready(result);
         },

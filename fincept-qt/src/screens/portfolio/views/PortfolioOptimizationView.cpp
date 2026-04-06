@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
 
 using fincept::python::PythonResult;
@@ -186,10 +187,10 @@ QWidget* PortfolioOptimizationView::build_frontier_tab() {
     chart_layout->setContentsMargins(0, 0, 0, 0);
 
     auto* chart = new QChart;
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
+    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
     chart->setMargins(QMargins(8, 8, 8, 8));
     chart->legend()->setVisible(true);
-    chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY));
+    chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY()));
     chart->setAnimationOptions(QChart::NoAnimation);
 
     frontier_chart_ = make_chart_view(chart);
@@ -385,12 +386,72 @@ void PortfolioOptimizationView::run_optimization() {
 
     const QString args_str = QJsonDocument(args).toJson(QJsonDocument::Compact);
 
+    // Cache optimization results — same inputs always produce same output
+    const QString cache_key = "portopt:" + args_str;
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto cached_doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (!cached_doc.isNull() && cached_doc.isObject()) {
+            // Replay display logic with cached JSON as if it came from Python
+            PythonResult fake_result;
+            fake_result.success = true;
+            fake_result.output  = QString::fromUtf8(cached_doc.toJson(QJsonDocument::Compact));
+            QPointer<PortfolioOptimizationView> self = this;
+            QMetaObject::invokeMethod(this, [self, fake_result, cache_key]() {
+                if (!self) return;
+                self->running_ = false;
+                self->run_btn_->setEnabled(true);
+                const auto doc = QJsonDocument::fromJson(fake_result.output.trimmed().toUtf8());
+                if (!doc.isObject()) return;
+                const auto root        = doc.object();
+                const auto opt_weights = root["weights"].toObject();
+                const double ret    = root["expected_annual_return"].toDouble();
+                const double vol    = root["annual_volatility"].toDouble();
+                const double sharpe = root["sharpe_ratio"].toDouble();
+                self->status_label_->setText(
+                    QString("Done — %1 | Exp. Return: %2%  Vol: %3%  Sharpe: %4 (cached)")
+                        .arg(self->method_cb_->currentText())
+                        .arg(ret * 100.0, 0, 'f', 1)
+                        .arg(vol * 100.0, 0, 'f', 1)
+                        .arg(sharpe, 0, 'f', 2));
+                self->status_label_->setStyleSheet(
+                    QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE));
+                self->result_table_->setRowCount(static_cast<int>(self->summary_.holdings.size()));
+                for (int r = 0; r < static_cast<int>(self->summary_.holdings.size()); ++r) {
+                    const auto& h   = self->summary_.holdings[r];
+                    const double cw = h.weight;
+                    const double ow = opt_weights.value(h.symbol).toDouble(cw / 100.0) * 100.0;
+                    const double ch = ow - cw;
+                    self->result_table_->setRowHeight(r, 28);
+                    auto set = [&](int col, const QString& text, const char* color = nullptr) {
+                        auto* item = new QTableWidgetItem(text);
+                        item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
+                        if (color) item->setForeground(QColor(color));
+                        self->result_table_->setItem(r, col, item);
+                    };
+                    set(0, h.symbol, ui::colors::CYAN);
+                    set(1, QString("%1%").arg(cw, 0, 'f', 1));
+                    set(2, QString("%1%").arg(ow, 0, 'f', 1), ui::colors::AMBER);
+                    set(3, QString("%1%2%").arg(ch >= 0.0 ? "+" : "").arg(ch, 0, 'f', 1),
+                        ch >= 0.0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+                    const QString action = std::abs(ch) < 0.5 ? "HOLD" : ch > 0.0 ? "INCREASE" : "DECREASE";
+                    const char* ac = action == "HOLD" ? ui::colors::TEXT_TERTIARY : action == "INCREASE" ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+                    set(4, action, ac);
+                }
+                self->update_frontier(root["frontier"].toArray());
+                self->update_strategies(root["comparison"].toObject());
+                self->update_compare(root["comparison"].toObject());
+            }, Qt::QueuedConnection);
+            return;
+        }
+    }
+
     QPointer<PortfolioOptimizationView> self = this;
 
     PythonRunner::instance().run("optimize_portfolio_weights", {args_str},
-        [self](PythonResult result) {
+        [self, cache_key](PythonResult result) {
             if (!self) return;
-            QMetaObject::invokeMethod(self, [self, result]() {
+            QMetaObject::invokeMethod(self, [self, result, cache_key]() {
                 if (!self) return;
                 self->running_ = false;
                 self->run_btn_->setEnabled(true);
@@ -471,6 +532,11 @@ void PortfolioOptimizationView::run_optimization() {
                 self->update_strategies(root["comparison"].toObject());
                 self->update_compare(root["comparison"].toObject());
 
+                fincept::CacheManager::instance().put(
+                    cache_key,
+                    QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))),
+                    10 * 60, "portfolio_opt");
+
             }, Qt::QueuedConnection);
         });
 }
@@ -498,7 +564,7 @@ void PortfolioOptimizationView::update_allocation() {
     for (int i = 0; i < static_cast<int>(sorted.size()); ++i) {
         auto* slice = series->append(sorted[i].symbol, sorted[i].weight);
         slice->setColor(kPalette[i % 8]);
-        slice->setBorderColor(QColor(ui::colors::BG_BASE));
+        slice->setBorderColor(QColor(ui::colors::BG_BASE()));
         slice->setBorderWidth(1);
     }
     chart->addSeries(series);
@@ -541,15 +607,15 @@ void PortfolioOptimizationView::update_frontier(const QJsonArray& pts) {
     // Frontier line
     auto* frontier_series = new QLineSeries;
     frontier_series->setName("Efficient Frontier");
-    frontier_series->setColor(QColor(QString(ui::colors::AMBER)));
-    QPen fp{QColor(QString(ui::colors::AMBER))};
+    frontier_series->setColor(QColor(QString(ui::colors::AMBER())));
+    QPen fp{QColor(QString(ui::colors::AMBER()))};
     fp.setWidth(2);
     frontier_series->setPen(fp);
 
     // Sharpe-optimal point (max sharpe on frontier)
     auto* opt_series = new QScatterSeries;
     opt_series->setName("Optimal");
-    opt_series->setColor(QColor(ui::colors::POSITIVE));
+    opt_series->setColor(QColor(ui::colors::POSITIVE()));
     opt_series->setMarkerSize(10);
 
     double max_sharpe = -1e9;
@@ -575,10 +641,10 @@ void PortfolioOptimizationView::update_frontier(const QJsonArray& pts) {
 
     auto* x_axis = new QValueAxis;
     x_axis->setTitleText("Volatility (%)");
-    x_axis->setTitleBrush(QColor(ui::colors::TEXT_TERTIARY));
-    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    x_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM)));
+    x_axis->setTitleBrush(QColor(ui::colors::TEXT_TERTIARY()));
+    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    x_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM())));
     x_axis->setRange(std::max(0.0, min_x - 2.0), max_x + 2.0);
     x_axis->setTickCount(6);
     x_axis->setLabelFormat("%.0f%%");
@@ -588,10 +654,10 @@ void PortfolioOptimizationView::update_frontier(const QJsonArray& pts) {
 
     auto* y_axis = new QValueAxis;
     y_axis->setTitleText("Expected Return (%)");
-    y_axis->setTitleBrush(QColor(ui::colors::TEXT_TERTIARY));
-    y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    y_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM)));
+    y_axis->setTitleBrush(QColor(ui::colors::TEXT_TERTIARY()));
+    y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    y_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM())));
     y_axis->setRange(min_y - 2.0, max_y + 2.0);
     y_axis->setTickCount(6);
     y_axis->setLabelFormat("%.0f%%");
@@ -679,7 +745,7 @@ void PortfolioOptimizationView::update_compare(const QJsonObject& comparison) {
 
         auto* sym_item = new QTableWidgetItem(sym);
         sym_item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        sym_item->setForeground(QColor(ui::colors::CYAN));
+        sym_item->setForeground(QColor(ui::colors::CYAN()));
         compare_table_->setItem(r, 0, sym_item);
 
         for (int c = 0; c < n_methods; ++c) {
@@ -691,7 +757,7 @@ void PortfolioOptimizationView::update_compare(const QJsonObject& comparison) {
             auto* item = new QTableWidgetItem(
                 obj.isEmpty() ? "--" : QString("%1%").arg(w, 0, 'f', 1));
             item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            if (!obj.isEmpty()) item->setForeground(QColor(ui::colors::AMBER));
+            if (!obj.isEmpty()) item->setForeground(QColor(ui::colors::AMBER()));
             compare_table_->setItem(r, 1 + c, item);
         }
     }

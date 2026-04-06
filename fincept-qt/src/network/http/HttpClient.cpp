@@ -44,9 +44,15 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback) {
             LOG_WARN("HTTP",
                      QString("HTTP %1: %2 — %3").arg(status).arg(reply->url().toString()).arg(reply->errorString()));
 
-            // For any HTTP error that has a parseable JSON body, pass it through
-            // so callers (AuthApi) can extract server-side error messages
-            // (e.g. "Incorrect password. 2 attempts remaining.", "Account locked.", etc.)
+            // 401/403 must always be returned as err() so session expiry detection
+            // in AuthApi/SessionGuard works correctly — even when the body is valid JSON.
+            if (status == 401 || status == 403) {
+                cb(Result<QJsonDocument>::err(QString("HTTP_%1").arg(status).toStdString()));
+                return;
+            }
+
+            // For other HTTP errors with a parseable JSON body, pass it through
+            // so callers (AuthApi) can extract server-side error messages.
             if (!data.isEmpty() && parse_err.error == QJsonParseError::NoError && doc.isObject()) {
                 cb(Result<QJsonDocument>::ok(doc));
                 return;

@@ -1,7 +1,10 @@
 #pragma once
 
+#include "storage/repositories/DataMappingRepository.h"
+
 #include <QComboBox>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
@@ -34,6 +37,7 @@ class DataMappingScreen : public QWidget {
     void on_test_api();
     void on_test_mapping();
     void on_save_mapping();
+    void on_run_mapping();
     void on_template_selected(int index);
     void on_new_mapping();
     void on_delete_mapping();
@@ -71,15 +75,19 @@ class DataMappingScreen : public QWidget {
     void populate_json_tree(const QJsonValue& val, QTreeWidgetItem* parent, const QString& key);
     void populate_mapping_list();
     void refresh_saved_mappings();
+    void load_mappings_from_db();
     void build_mapping_config(QJsonObject& config);
+
+  protected:
+    void showEvent(QShowEvent* e) override;
 
     // State
     int current_view_ = 0; // 0=list, 1=create, 2=templates
     int current_step_ = 0; // 0..4
     bool loading_ = false;
 
-    // Saved mappings (in-memory for now)
-    QJsonArray saved_mappings_;
+    // Saved mappings (persisted via DataMappingRepository)
+    QVector<DataMapping> saved_mappings_;
 
     // View & step buttons
     QList<QPushButton*> view_btns_;

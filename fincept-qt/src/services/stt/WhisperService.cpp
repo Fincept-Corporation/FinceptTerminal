@@ -52,6 +52,10 @@ WhisperService::WhisperService(QObject* parent) : QObject(parent) {
     drain_timer_->setInterval(kDrainIntervalMs);
     connect(drain_timer_, &QTimer::timeout, this, &WhisperService::drain_and_infer);
 
+    retry_timer_ = new QTimer(this);
+    retry_timer_->setSingleShot(true);
+    connect(retry_timer_, &QTimer::timeout, this, &WhisperService::download_model);
+
     LOG_INFO(TAG, "WhisperService initialised");
 }
 
@@ -109,6 +113,7 @@ void WhisperService::download_for_setup() {
         emit model_ready();
         return;
     }
+    download_attempt_ = 0;
     download_model();
 }
 
@@ -160,7 +165,35 @@ void WhisperService::on_download_finished(QNetworkReply* reply) {
     download_active_.store(false, std::memory_order_release);
 
     if (reply->error() != QNetworkReply::NoError) {
-        const QString msg = QStringLiteral("Model download failed: ") + reply->errorString();
+        const QString net_err = reply->errorString();
+        ++download_attempt_;
+        if (download_attempt_ <= kMaxDownloadRetries) {
+            // Exponential backoff: 2s, 4s, 8s
+            const int delay_ms = kRetryBaseMs * (1 << (download_attempt_ - 1));
+            LOG_WARN(TAG, QString("Model download failed (attempt %1/%2): %3 — retrying in %4 ms")
+                             .arg(download_attempt_).arg(kMaxDownloadRetries).arg(net_err).arg(delay_ms));
+            emit model_download_progress(0); // reset progress bar
+            retry_timer_->start(delay_ms);
+        } else {
+            const QString msg = QString("Model download failed after %1 attempts: %2")
+                                    .arg(kMaxDownloadRetries).arg(net_err);
+            LOG_ERROR(TAG, msg);
+            download_attempt_ = 0;
+            download_active_.store(false, std::memory_order_release);
+            emit error_occurred(msg);
+        }
+        return;
+    }
+
+    // Validate download size before writing — ggml-base.en-q5_0.bin is ~57 MB.
+    // A truncated response (e.g. from a proxy cut-off) would load but produce
+    // garbage transcripts or crash whisper_init_from_file_with_params().
+    static constexpr qint64 kMinModelBytes = 50LL * 1024 * 1024; // 50 MB floor
+    const QByteArray model_data = reply->readAll();
+    if (model_data.size() < kMinModelBytes) {
+        const QString msg = QString("Model download incomplete: received %1 bytes (expected ≥ %2 MB)")
+                                .arg(model_data.size())
+                                .arg(kMinModelBytes / (1024 * 1024));
         LOG_ERROR(TAG, msg);
         emit error_occurred(msg);
         return;
@@ -174,14 +207,15 @@ void WhisperService::on_download_finished(QNetworkReply* reply) {
         emit error_occurred(msg);
         return;
     }
-    f.write(reply->readAll());
+    f.write(model_data);
     if (!f.commit()) {
         LOG_ERROR(TAG, "QSaveFile::commit() failed for model");
         emit error_occurred(QStringLiteral("Failed to save model file"));
         return;
     }
 
-    LOG_INFO(TAG, "Model downloaded successfully");
+    download_attempt_ = 0; // reset for any future re-download
+    LOG_INFO(TAG, QString("Model downloaded and saved (%1 MB)").arg(model_data.size() / (1024 * 1024)));
     emit model_download_progress(100);
 
     if (load_model()) {

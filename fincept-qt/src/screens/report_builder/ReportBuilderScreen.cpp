@@ -454,14 +454,6 @@ QWidget* ReportBuilderScreen::build_toolbar() {
     hl->setContentsMargins(8, 0, 8, 0);
     hl->setSpacing(6);
 
-    auto* back_btn = new QPushButton("< BACK");
-    back_btn->setStyleSheet(
-        QString("QPushButton { color: %1; background: transparent; border: none; font-size: 13px; }"
-                "QPushButton:hover { color: %2; }")
-            .arg(ui::colors::GRAY, ui::colors::WHITE));
-    connect(back_btn, &QPushButton::clicked, this, &ReportBuilderScreen::back_to_dashboard);
-    hl->addWidget(back_btn);
-
     auto* title = new QLabel("REPORT BUILDER");
     title->setStyleSheet(
         QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;")
@@ -832,12 +824,12 @@ void ReportBuilderScreen::show_template_dialog() {
     for (const auto& cat : categories) {
         auto* cat_item = new QListWidgetItem("  " + cat.label.toUpper());
         cat_item->setFlags(Qt::NoItemFlags); // not selectable
-        cat_item->setForeground(QColor(ui::colors::AMBER));
+        cat_item->setForeground(QColor(ui::colors::AMBER()));
         QFont f = cat_item->font();
         f.setBold(true);
         f.setPointSize(10);
         cat_item->setFont(f);
-        cat_item->setBackground(QColor(ui::colors::BG_RAISED));
+        cat_item->setBackground(QColor(ui::colors::BG_RAISED()));
         list->addItem(cat_item);
 
         for (const auto& tmpl : cat.entries) {

@@ -4,6 +4,7 @@
 #include "screens/portfolio/PortfolioAgentPanel.h"
 #include "screens/portfolio/PortfolioAiPanel.h"
 #include "screens/portfolio/PortfolioBlotter.h"
+#include "screens/portfolio/PortfolioTxnPanel.h"
 #include "screens/portfolio/PortfolioCommandBar.h"
 #include "screens/portfolio/PortfolioDetailWrapper.h"
 #include "screens/portfolio/PortfolioDialogs.h"
@@ -16,15 +17,19 @@
 #include "screens/portfolio/PortfolioStatusBar.h"
 #include "services/file_manager/FileManagerService.h"
 #include "services/portfolio/PortfolioService.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QSplitter>
 #include <QVBoxLayout>
+
+#include <memory>
 
 namespace fincept::screens {
 
@@ -42,11 +47,47 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::PortfolioService::asset_added, this, &PortfolioScreen::on_asset_changed);
     connect(&svc, &services::PortfolioService::asset_sold, this, &PortfolioScreen::on_asset_changed);
     connect(&svc, &services::PortfolioService::snapshots_loaded, this, &PortfolioScreen::on_snapshots_loaded);
+    connect(&svc, &services::PortfolioService::transactions_loaded, this,
+            [this](QVector<portfolio::Transaction> txns) {
+                if (txn_panel_)
+                    txn_panel_->set_transactions(txns);
+            });
+    connect(&svc, &services::PortfolioService::correlation_computed, this,
+            [this](QHash<QString, double> matrix) {
+                if (sector_panel_)
+                    sector_panel_->set_correlation(matrix);
+            });
+    connect(&svc, &services::PortfolioService::spy_history_loaded, this,
+            [this](QStringList dates, QVector<double> closes) {
+                if (perf_chart_)
+                    perf_chart_->set_spy_history(dates, closes);
+                // Recompute metrics now that SPY data is available for OLS beta
+                if (summary_loaded_)
+                    services::PortfolioService::instance().compute_metrics(current_summary_);
+            });
+    connect(&svc, &services::PortfolioService::risk_free_rate_loaded, this,
+            [this](double /*rate*/) {
+                // Recompute metrics with updated risk-free rate for Sharpe
+                if (summary_loaded_)
+                    services::PortfolioService::instance().compute_metrics(current_summary_);
+            });
+
+    // Restore persisted refresh interval (P17)
+    {
+        auto r = SettingsRepository::instance().get("portfolio.refresh_interval_ms");
+        if (r.is_ok() && !r.value().isEmpty()) {
+            bool ok = false;
+            const int saved = r.value().toInt(&ok);
+            if (ok && saved >= 10000) // sanity: minimum 10 s
+                refresh_interval_ms_ = saved;
+        }
+    }
 
     // Refresh timer (P3: only set interval, don't start)
     refresh_timer_ = new QTimer(this);
     refresh_timer_->setInterval(refresh_interval_ms_);
     connect(refresh_timer_, &QTimer::timeout, this, &PortfolioScreen::request_refresh);
+    command_bar_->set_refresh_interval(refresh_interval_ms_);
 
     // Load portfolios
     svc.load_portfolios();
@@ -73,6 +114,24 @@ void PortfolioScreen::build_ui() {
     connect(command_bar_, &PortfolioCommandBar::detail_view_selected, this, &PortfolioScreen::on_detail_view_selected);
     connect(command_bar_, &PortfolioCommandBar::buy_requested, this, &PortfolioScreen::on_buy_requested);
     connect(command_bar_, &PortfolioCommandBar::sell_requested, this, &PortfolioScreen::on_sell_requested);
+    connect(command_bar_, &PortfolioCommandBar::dividend_requested, this, [this]() {
+        if (selected_id_.isEmpty() || current_summary_.holdings.isEmpty())
+            return;
+        QStringList syms;
+        for (const auto& h : current_summary_.holdings)
+            syms.append(h.symbol);
+        AddDividendDialog dlg(syms, this);
+        if (dlg.exec() == QDialog::Accepted) {
+            const double qty   = [&]() -> double {
+                for (const auto& h : current_summary_.holdings)
+                    if (h.symbol == dlg.symbol()) return h.quantity;
+                return 0.0;
+            }();
+            const double total = qty * dlg.amount_per_share();
+            services::PortfolioService::instance().record_dividend(
+                selected_id_, dlg.symbol(), qty, dlg.amount_per_share(), total, dlg.date(), dlg.notes());
+        }
+    });
     connect(command_bar_, &PortfolioCommandBar::ffn_toggled, this, [this]() {
         show_ffn_ = !show_ffn_;
         if (show_ffn_) {
@@ -343,6 +402,10 @@ void PortfolioScreen::on_portfolio_selected(const QString& id) {
     summary_loaded_ = false;
     active_detail_ = std::nullopt;
     command_bar_->set_detail_view(std::nullopt);
+    if (txn_panel_)
+        txn_panel_->clear();
+    if (blotter_)
+        blotter_->set_sector_filter({});
 
     // Find portfolio and update UI
     for (const auto& p : portfolios_) {
@@ -390,6 +453,24 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
 
     // Load performance history for the chart
     services::PortfolioService::instance().load_snapshots(summary.portfolio.id);
+
+    // Load recent transactions for the history panel
+    if (txn_panel_)
+        services::PortfolioService::instance().load_transactions(summary.portfolio.id, 50);
+
+    // Fetch real 30-day correlation for the sector panel
+    if (!summary.holdings.isEmpty()) {
+        QStringList syms;
+        for (const auto& h : summary.holdings)
+            syms.append(h.symbol);
+        services::PortfolioService::instance().fetch_correlation(syms);
+    }
+
+    // Fetch SPY benchmark history for perf chart overlay
+    services::PortfolioService::instance().fetch_spy_history("1y");
+
+    // Fetch live risk-free rate (DGS10) for Sharpe computation — cached 24h
+    services::PortfolioService::instance().fetch_risk_free_rate();
 }
 
 void PortfolioScreen::on_summary_error(QString portfolio_id, QString error) {
@@ -405,6 +486,8 @@ void PortfolioScreen::on_metrics_computed(portfolio::ComputedMetrics metrics) {
     stats_ribbon_->set_metrics(metrics);
     if (heatmap_)
         heatmap_->set_metrics(metrics);
+    if (detail_wrapper_)
+        detail_wrapper_->update_metrics(metrics);
 }
 
 void PortfolioScreen::on_snapshots_loaded(QString portfolio_id,
@@ -418,7 +501,20 @@ void PortfolioScreen::on_snapshots_loaded(QString portfolio_id,
 }
 
 void PortfolioScreen::on_portfolio_created(portfolio::Portfolio portfolio) {
-    // Auto-select the newly created portfolio
+    // portfolios_loaded fires asynchronously after creation, so the new portfolio
+    // may not be in portfolios_ yet when on_portfolio_selected looks it up.
+    // Append it immediately so the selector label and status bar show the correct
+    // name without waiting for the reload round-trip.
+    bool already_present = false;
+    for (const auto& p : portfolios_) {
+        if (p.id == portfolio.id) {
+            already_present = true;
+            break;
+        }
+    }
+    if (!already_present)
+        portfolios_.append(portfolio);
+
     on_portfolio_selected(portfolio.id);
 }
 
@@ -474,6 +570,8 @@ void PortfolioScreen::on_detail_view_selected(portfolio::DetailView view) {
 void PortfolioScreen::on_refresh_interval_changed(int ms) {
     refresh_interval_ms_ = ms;
     refresh_timer_->setInterval(ms);
+    SettingsRepository::instance().set("portfolio.refresh_interval_ms",
+                                       QString::number(ms), "portfolio");
 }
 
 void PortfolioScreen::request_refresh() {
@@ -511,6 +609,18 @@ QWidget* PortfolioScreen::build_main_view() {
 
     perf_chart_ = new PortfolioPerfChart;
     sector_panel_ = new PortfolioSectorPanel;
+    connect(sector_panel_, &PortfolioSectorPanel::sector_selected, this, [this](const QString& sector) {
+        if (sector.isEmpty()) {
+            blotter_->set_sector_filter({});
+            return;
+        }
+        QStringList matching;
+        for (const auto& h : current_summary_.holdings) {
+            if (PortfolioSectorPanel::infer_sector(h.symbol) == sector)
+                matching.append(h.symbol);
+        }
+        blotter_->set_sector_filter(matching);
+    });
 
     top_split->addWidget(perf_chart_);
     top_split->addWidget(sector_panel_);
@@ -525,10 +635,81 @@ QWidget* PortfolioScreen::build_main_view() {
     sep->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM));
     center_layout->addWidget(sep);
 
+    // Filter bar above blotter
+    auto* blotter_section = new QWidget;
+    auto* blotter_layout  = new QVBoxLayout(blotter_section);
+    blotter_layout->setContentsMargins(0, 0, 0, 0);
+    blotter_layout->setSpacing(0);
+
+    auto* filter_row = new QWidget;
+    filter_row->setFixedHeight(28);
+    filter_row->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
+                                  .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+    auto* filter_hl = new QHBoxLayout(filter_row);
+    filter_hl->setContentsMargins(8, 2, 8, 2);
+    filter_hl->setSpacing(6);
+
+    auto* filter_icon = new QLabel("⌕");
+    filter_icon->setStyleSheet(QString("color:%1; font-size:13px; background:transparent;")
+                                   .arg(ui::colors::TEXT_TERTIARY));
+    filter_hl->addWidget(filter_icon);
+
+    auto* filter_edit = new QLineEdit;
+    filter_edit->setPlaceholderText("Filter positions…");
+    filter_edit->setStyleSheet(
+        QString("QLineEdit { background:transparent; color:%1; border:none;"
+                "  font-size:11px; font-family:%2; }"
+                "QLineEdit:focus { color:%3; }")
+            .arg(ui::colors::TEXT_SECONDARY, ui::fonts::DATA_FAMILY, ui::colors::TEXT_PRIMARY));
+    filter_hl->addWidget(filter_edit, 1);
+
+    blotter_layout->addWidget(filter_row);
+
     // Bottom: positions blotter
     blotter_ = new PortfolioBlotter;
     connect(blotter_, &PortfolioBlotter::symbol_selected, this, &PortfolioScreen::on_symbol_selected);
-    center_layout->addWidget(blotter_, 58); // 58% of vertical space
+    connect(blotter_, &PortfolioBlotter::edit_transaction_requested, this, [this](const QString& symbol) {
+        // Load transactions for this symbol, show edit dialog for the most recent one
+        services::PortfolioService::instance().load_transactions(selected_id_, 100);
+        QPointer<PortfolioScreen> self = this;
+        auto conn = std::make_shared<QMetaObject::Connection>();
+        *conn = connect(&services::PortfolioService::instance(),
+                        &services::PortfolioService::transactions_loaded,
+                        this, [this, self, symbol, conn](QVector<portfolio::Transaction> txns) {
+            disconnect(*conn);
+            if (!self) return;
+            // Find most recent transaction for this symbol
+            portfolio::Transaction* match = nullptr;
+            for (auto& t : txns) {
+                if (t.symbol == symbol) { match = &t; break; }
+            }
+            if (!match) return;
+            EditTransactionDialog dlg(*match, this);
+            if (dlg.exec() == QDialog::Accepted) {
+                services::PortfolioService::instance().update_transaction(
+                    match->id, dlg.quantity(), dlg.price(), dlg.date(), dlg.notes());
+            }
+        }, Qt::SingleShotConnection);
+    });
+    connect(blotter_, &PortfolioBlotter::delete_position_requested, this, [this](const QString& symbol) {
+        auto* h = find_holding(symbol);
+        if (!h) return;
+        ConfirmDeleteDialog dlg(QString("%1 (%2 shares)").arg(symbol).arg(h->quantity, 0, 'f', 2), this);
+        if (dlg.exec() == QDialog::Accepted) {
+            services::PortfolioService::instance().sell_asset(
+                selected_id_, symbol, h->quantity, h->current_price);
+        }
+    });
+    connect(filter_edit, &QLineEdit::textChanged, blotter_, &PortfolioBlotter::set_filter);
+
+    blotter_layout->addWidget(blotter_, 1);
+
+    // Transaction history panel below blotter
+    txn_panel_ = new PortfolioTxnPanel;
+    blotter_layout->addWidget(txn_panel_);
+    txn_panel_->setFixedHeight(130);
+
+    center_layout->addWidget(blotter_section, 58); // 58% of vertical space
 
     h_layout->addWidget(center, 1); // center takes remaining space
 

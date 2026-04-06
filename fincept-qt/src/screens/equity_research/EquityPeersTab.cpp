@@ -187,7 +187,7 @@ void EquityPeersTab::populate_table(const QVector<services::equity::PeerData>& p
         // Symbol — highlight current symbol in amber
         auto* sym_item = new QTableWidgetItem(p.symbol);
         sym_item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        sym_item->setForeground(p.symbol == current_symbol_ ? QColor(ui::colors::AMBER) : QColor("#22d3ee"));
+        sym_item->setForeground(p.symbol == current_symbol_ ? QColor(ui::colors::AMBER()) : QColor("#22d3ee"));
         sym_item->setFont([&] {
             QFont f;
             f.setBold(true);

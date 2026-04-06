@@ -3,8 +3,8 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 
-#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -18,6 +18,8 @@ RelationshipMapService& RelationshipMapService::instance() {
     return s;
 }
 
+static constexpr int kRelMapTtlSec = 10 * 60; // 10 min
+
 void RelationshipMapService::fetch(const QString& ticker) {
     if (loading_)
         return;
@@ -25,12 +27,23 @@ void RelationshipMapService::fetch(const QString& ticker) {
         return;
 
     current_ticker_ = ticker.toUpper();
+
+    // Check cache first
+    const QString cache_key = "relmap:" + current_ticker_;
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        LOG_DEBUG("RelMapService", "Cache hit for " + current_ticker_);
+        emit progress_changed(100, "Loaded from cache");
+        parse_result(cached.toString());
+        return;
+    }
+
     loading_ = true;
     data_ = {};
 
     emit progress_changed(5, "Starting data fetch for " + current_ticker_ + "...");
 
-    python::PythonRunner::instance().run("relationship_map.py", {current_ticker_}, [this](python::PythonResult result) {
+    python::PythonRunner::instance().run("relationship_map.py", {current_ticker_}, [this, cache_key](python::PythonResult result) {
         loading_ = false;
 
         if (!result.success || result.output.trimmed().isEmpty()) {
@@ -38,6 +51,12 @@ void RelationshipMapService::fetch(const QString& ticker) {
             emit fetch_failed("Failed to fetch data for " + current_ticker_);
             return;
         }
+
+        // Cache raw JSON output
+        fincept::CacheManager::instance().put(
+            cache_key,
+            QVariant(result.output),
+            kRelMapTtlSec, "relmap");
 
         emit progress_changed(70, "Parsing results...");
         parse_result(result.output);

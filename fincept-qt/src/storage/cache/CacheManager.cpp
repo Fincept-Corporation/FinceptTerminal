@@ -50,6 +50,22 @@ void CacheManager::remove(const QString& key) {
     remove_persisted(key);
 }
 
+void CacheManager::remove_prefix(const QString& prefix) {
+    QMutexLocker lock(&mutex_);
+    QStringList to_remove;
+    for (auto it = cache_.begin(); it != cache_.end(); ++it) {
+        if (it.key().startsWith(prefix))
+            to_remove.append(it.key());
+    }
+    for (const auto& k : to_remove)
+        cache_.remove(k);
+    auto& cdb = CacheDatabase::instance();
+    if (cdb.is_open()) {
+        cdb.execute("DELETE FROM unified_cache WHERE key LIKE ?",
+                    {prefix + "%"});
+    }
+}
+
 void CacheManager::clear() {
     QMutexLocker lock(&mutex_);
     cache_.clear();

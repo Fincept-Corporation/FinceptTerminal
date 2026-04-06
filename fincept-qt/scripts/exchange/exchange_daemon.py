@@ -37,7 +37,7 @@ import traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import ccxt
-from exchange_client import load_cached_markets, save_markets_cache
+from exchange_client import load_cached_markets, save_markets_cache, get_default_type
 
 # Try orjson for faster serialization
 try:
@@ -91,6 +91,7 @@ def _get_exchange(exchange_id, need_auth=False):
     config = {
         "enableRateLimit": True,
         "timeout": 15000,
+        "options": {"defaultType": get_default_type(exchange_id)},
     }
 
     if need_auth and exchange_id in _credentials:
@@ -105,12 +106,15 @@ def _get_exchange(exchange_id, need_auth=False):
     exchange_class = getattr(ccxt, exchange_id)
     exchange = exchange_class(config)
 
-    # Try to load markets from disk cache (avoids 3-10s network call)
+    # Try to load markets from disk cache (avoids 3-10s network call).
+    # Use load_markets(reload=False) with a pre-populated cache file — this lets
+    # ccxt rebuild all internal indexes (markets_by_id, currencies, ids) correctly
+    # rather than assigning exchange.markets directly which leaves indexes incomplete.
     cached = load_cached_markets(exchange_id)
     if cached is not None:
         try:
             exchange.markets = cached
-            exchange.markets_by_id = exchange.index_by(cached, "id")
+            exchange.set_markets(cached)
         except Exception:
             pass  # Fall through — will load on demand if needed
 
@@ -222,22 +226,30 @@ def _handle_fetch_markets(req_id, exchange_id, args):
     ex = _get_exchange(exchange_id)
     _ensure_markets(ex, exchange_id)
     market_type = args.get("type")
+    query       = args.get("query", "").upper().strip()  # server-side filter
+    limit       = int(args.get("limit", 0))              # 0 = no limit
     markets = []
     for sym, m in ex.markets.items():
         if market_type and m.get("type") != market_type:
             continue
         if not m.get("active", True):
             continue
+        if query:
+            sym_upper  = m.get("symbol", "").upper()
+            base_upper = m.get("base", "").upper()
+            if query not in sym_upper and query not in base_upper:
+                continue
         limits = m.get("limits", {})
-        precision = m.get("precision", {})
         markets.append({
             "symbol": m["symbol"],
             "base": m.get("base"), "quote": m.get("quote"),
             "type": m.get("type"), "active": m.get("active"),
             "maker": m.get("maker"), "taker": m.get("taker"),
             "minAmount": limits.get("amount", {}).get("min"),
-            "minCost": limits.get("cost", {}).get("min"),
+            "minCost":   limits.get("cost", {}).get("min"),
         })
+        if limit and len(markets) >= limit:
+            break
     _respond(req_id, True, {"markets": markets, "count": len(markets)})
 
 
@@ -355,6 +367,88 @@ def _handle_fetch_open_orders(req_id, exchange_id, args):
     _respond(req_id, True, {"orders": orders})
 
 
+def _handle_fetch_mark_price(req_id, exchange_id, args):
+    ex = _get_exchange(exchange_id)
+    symbol = args["symbol"]
+    try:
+        params = {"defaultType": "swap"}
+        rate = ex.fetch_funding_rate(symbol, params=params)
+        _respond(req_id, True, {
+            "symbol": symbol,
+            "mark_price": rate.get("markPrice"),
+            "index_price": rate.get("indexPrice"),
+            "timestamp": rate.get("timestamp"),
+        })
+    except Exception as e:
+        _respond(req_id, False, error=f"Mark price not available: {e}", code="NOT_SUPPORTED")
+
+
+def _handle_fetch_my_trades(req_id, exchange_id, args):
+    ex = _get_exchange(exchange_id, need_auth=True)
+    symbol = args.get("symbol")
+    limit = int(args.get("limit", 50))
+    trades = ex.fetch_my_trades(symbol, limit=limit)
+    _respond(req_id, True, {
+        "trades": [
+            {
+                "id": t.get("id"),
+                "order": t.get("order"),
+                "symbol": t.get("symbol"),
+                "side": t.get("side"),
+                "price": t.get("price"),
+                "amount": t.get("amount"),
+                "cost": t.get("cost"),
+                "fee": t.get("fee", {}).get("cost", 0),
+                "fee_currency": t.get("fee", {}).get("currency", ""),
+                "timestamp": t.get("timestamp"),
+            }
+            for t in trades
+        ],
+        "count": len(trades),
+    })
+
+
+def _handle_fetch_trading_fees(req_id, exchange_id, args):
+    ex = _get_exchange(exchange_id)
+    symbol = args.get("symbol")
+    if symbol:
+        fee = ex.fetch_trading_fee(symbol)
+        _respond(req_id, True, {
+            "symbol": symbol,
+            "maker": fee.get("maker"),
+            "taker": fee.get("taker"),
+            "percentage": fee.get("percentage", True),
+        })
+    else:
+        fees = ex.fetch_trading_fees()
+        result = []
+        for sym, fee in list(fees.items())[:50]:
+            if isinstance(fee, dict) and "maker" in fee:
+                result.append({
+                    "symbol": sym,
+                    "maker": fee.get("maker"),
+                    "taker": fee.get("taker"),
+                })
+        _respond(req_id, True, {"fees": result, "count": len(result)})
+
+
+def _handle_set_leverage(req_id, exchange_id, args):
+    ex = _get_exchange(exchange_id, need_auth=True)
+    symbol = args["symbol"]
+    leverage = int(args["leverage"])
+    # Pass defaultType via params so we don't mutate the shared pooled instance
+    result = ex.set_leverage(leverage, symbol, params={"defaultType": "swap"})
+    _respond(req_id, True, {"symbol": symbol, "leverage": leverage, "result": result})
+
+
+def _handle_set_margin_mode(req_id, exchange_id, args):
+    ex = _get_exchange(exchange_id, need_auth=True)
+    symbol = args["symbol"]
+    mode = args["mode"]  # "cross" or "isolated"
+    result = ex.set_margin_mode(mode, symbol, params={"defaultType": "swap"})
+    _respond(req_id, True, {"symbol": symbol, "margin_mode": mode, "result": result})
+
+
 # ── Method dispatch table ───────────────────────────────────────────────────
 
 _METHODS = {
@@ -374,6 +468,11 @@ _METHODS = {
     "cancel_order": _handle_cancel_order,
     "fetch_positions": _handle_fetch_positions,
     "fetch_open_orders": _handle_fetch_open_orders,
+    "fetch_mark_price": _handle_fetch_mark_price,
+    "fetch_my_trades": _handle_fetch_my_trades,
+    "fetch_trading_fees": _handle_fetch_trading_fees,
+    "set_leverage": _handle_set_leverage,
+    "set_margin_mode": _handle_set_margin_mode,
 }
 
 

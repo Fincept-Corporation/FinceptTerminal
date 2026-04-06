@@ -277,10 +277,10 @@ QWidget* CustomIndexView::build_performance_panel() {
     chart_layout->setContentsMargins(0, 0, 0, 0);
 
     auto* chart = new QChart;
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
+    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
     chart->setMargins(QMargins(8, 8, 8, 8));
     chart->legend()->setVisible(true);
-    chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY));
+    chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY()));
     chart->setAnimationOptions(QChart::NoAnimation);
 
     perf_chart_view_ = new QChartView(chart);
@@ -313,7 +313,7 @@ void CustomIndexView::update_constituents() {
         // Check box (text-based, ticked by default)
         auto* check = new QTableWidgetItem("\u2611");
         check->setTextAlignment(Qt::AlignCenter);
-        check->setForeground(QColor(ui::colors::POSITIVE));
+        check->setForeground(QColor(ui::colors::POSITIVE()));
         check->setFlags(check->flags() | Qt::ItemIsUserCheckable);
         check->setCheckState(Qt::Checked);
         const_table_->setItem(r, 0, check);
@@ -503,8 +503,8 @@ void CustomIndexView::show_index_performance(const QString& index_id, const QStr
 
     auto* series = new QLineSeries;
     series->setName(name);
-    series->setColor(QColor(QString(ui::colors::CYAN)));
-    QPen pen{QColor(QString(ui::colors::CYAN))};
+    series->setColor(QColor(QString(ui::colors::CYAN())));
+    QPen pen{QColor(QString(ui::colors::CYAN()))};
     pen.setWidth(2);
     series->setPen(pen);
 
@@ -524,16 +524,16 @@ void CustomIndexView::show_index_performance(const QString& index_id, const QStr
     auto* x_axis = new QDateTimeAxis;
     x_axis->setTickCount(6);
     x_axis->setFormat("MMM yy");
-    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    x_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM)));
+    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    x_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM())));
     chart->addAxis(x_axis, Qt::AlignBottom);
     series->attachAxis(x_axis);
 
     auto* y_axis = new QValueAxis;
-    y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    y_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM)));
+    y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    y_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM())));
     y_axis->setLabelFormat("%.0f");
     chart->addAxis(y_axis, Qt::AlignLeft);
     series->attachAxis(y_axis);

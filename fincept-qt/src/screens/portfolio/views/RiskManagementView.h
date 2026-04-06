@@ -17,6 +17,7 @@ class RiskManagementView : public QWidget {
     explicit RiskManagementView(QWidget* parent = nullptr);
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
+    void set_metrics(const portfolio::ComputedMetrics& metrics);
 
   private:
     void build_ui();
@@ -36,6 +37,7 @@ class RiskManagementView : public QWidget {
     QTableWidget* contrib_table_ = nullptr;
 
     portfolio::PortfolioSummary summary_;
+    portfolio::ComputedMetrics  metrics_;
     QString currency_;
 };
 

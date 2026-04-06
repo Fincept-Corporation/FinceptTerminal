@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
+#include "storage/cache/CacheManager.h"
 
 #include <QAtomicInt>
 #include <QDateTime>
@@ -32,7 +33,7 @@ NewsService& NewsService::instance() {
 NewsService::NewsService() {
     nam_ = new QNetworkAccessManager(this);
     refresh_timer_ = new QTimer(this);
-    refresh_timer_->setInterval(cache_ttl_sec_ * 1000);
+    refresh_timer_->setInterval(kArticleCacheTtlSec * 1000);
     connect(refresh_timer_, &QTimer::timeout, this,
             [this]() { fetch_all_news(true, [](bool, QVector<NewsArticle>) {}); });
 }
@@ -40,10 +41,30 @@ NewsService::NewsService() {
 // ── Fetch all RSS feeds in parallel ─────────────────────────────────────────
 
 void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
-    auto now = QDateTime::currentSecsSinceEpoch();
-    if (!force && !cache_.isEmpty() && (now - cache_ts_) < cache_ttl_sec_) {
-        cb(true, cache_);
-        return;
+    if (!force) {
+        const QVariant cached = fincept::CacheManager::instance().get("news:articles");
+        if (!cached.isNull()) {
+            const QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+            QVector<NewsArticle> articles;
+            articles.reserve(arr.size());
+            for (const auto& v : arr) {
+                const QJsonObject o = v.toObject();
+                NewsArticle a;
+                a.id        = o["id"].toString();
+                a.time      = o["time"].toString();
+                a.headline  = o["headline"].toString();
+                a.summary   = o["summary"].toString();
+                a.source    = o["source"].toString();
+                a.region    = o["region"].toString();
+                a.category  = o["category"].toString();
+                a.link      = o["link"].toString();
+                a.sort_ts   = o["sort_ts"].toVariant().toLongLong();
+                a.tier      = o["tier"].toInt(4);
+                articles.append(a);
+            }
+            cb(true, articles);
+            return;
+        }
     }
 
     auto feeds = default_feeds();
@@ -92,13 +113,32 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
                 std::sort(all.begin(), all.end(),
                           [](const NewsArticle& a, const NewsArticle& b) { return a.sort_ts > b.sort_ts; });
 
-                // Update service cache
                 QSet<QString> sources;
                 for (const auto& a : all)
                     sources.insert(a.source);
                 state->service->active_sources_ = sources.values();
-                state->service->cache_ = all;
-                state->service->cache_ts_ = QDateTime::currentSecsSinceEpoch();
+
+                // Serialize to CacheManager
+                QJsonArray arr;
+                for (const auto& a : all) {
+                    QJsonObject o;
+                    o["id"]       = a.id;
+                    o["time"]     = a.time;
+                    o["headline"] = a.headline;
+                    o["summary"]  = a.summary;
+                    o["source"]   = a.source;
+                    o["region"]   = a.region;
+                    o["category"] = a.category;
+                    o["link"]     = a.link;
+                    o["sort_ts"]  = static_cast<qint64>(a.sort_ts);
+                    o["tier"]     = a.tier;
+                    arr.append(o);
+                }
+                fincept::CacheManager::instance().put(
+                    "news:articles",
+                    QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                    kArticleCacheTtlSec,
+                    "news");
 
                 LOG_INFO("NewsService",
                          QString("Fetched %1 articles from %2 sources").arg(all.size()).arg(sources.size()));
@@ -115,11 +155,31 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
 // screen something to render immediately while slower feeds trickle in.
 
 void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_cb) {
-    auto now = QDateTime::currentSecsSinceEpoch();
-    if (!force && !cache_.isEmpty() && (now - cache_ts_) < cache_ttl_sec_) {
-        final_cb(true, cache_);
-        emit articles_partial(cache_, feed_count_, feed_count_);
-        return;
+    if (!force) {
+        const QVariant cached = fincept::CacheManager::instance().get("news:articles");
+        if (!cached.isNull()) {
+            const QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+            QVector<NewsArticle> articles;
+            articles.reserve(arr.size());
+            for (const auto& v : arr) {
+                const QJsonObject o = v.toObject();
+                NewsArticle a;
+                a.id       = o["id"].toString();
+                a.time     = o["time"].toString();
+                a.headline = o["headline"].toString();
+                a.summary  = o["summary"].toString();
+                a.source   = o["source"].toString();
+                a.region   = o["region"].toString();
+                a.category = o["category"].toString();
+                a.link     = o["link"].toString();
+                a.sort_ts  = o["sort_ts"].toVariant().toLongLong();
+                a.tier     = o["tier"].toInt(4);
+                articles.append(a);
+            }
+            final_cb(true, articles);
+            emit articles_partial(articles, feed_count_, feed_count_);
+            return;
+        }
     }
 
     auto feeds = default_feeds();
@@ -180,8 +240,27 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
                 for (const auto& a : all)
                     sources.insert(a.source);
                 state->service->active_sources_ = sources.values();
-                state->service->cache_ = all;
-                state->service->cache_ts_ = QDateTime::currentSecsSinceEpoch();
+
+                QJsonArray parr;
+                for (const auto& a : all) {
+                    QJsonObject o;
+                    o["id"]       = a.id;
+                    o["time"]     = a.time;
+                    o["headline"] = a.headline;
+                    o["summary"]  = a.summary;
+                    o["source"]   = a.source;
+                    o["region"]   = a.region;
+                    o["category"] = a.category;
+                    o["link"]     = a.link;
+                    o["sort_ts"]  = static_cast<qint64>(a.sort_ts);
+                    o["tier"]     = a.tier;
+                    parr.append(o);
+                }
+                fincept::CacheManager::instance().put(
+                    "news:articles",
+                    QVariant(QString::fromUtf8(QJsonDocument(parr).toJson(QJsonDocument::Compact))),
+                    kArticleCacheTtlSec,
+                    "news");
 
                 LOG_INFO(
                     "NewsService",
@@ -258,11 +337,13 @@ void NewsService::summarize_headlines(const QVector<NewsArticle>& articles, int 
     std::sort(headlines.begin(), headlines.end());
     QString sig = headlines.join("|").left(500);
 
-    auto now = QDateTime::currentSecsSinceEpoch();
-    if (!summary_cache_.summary.isEmpty() && summary_cache_.headline_signature == sig &&
-        (now - summary_cache_.cached_at) < SUMMARY_CACHE_TTL_SEC) {
-        cb(true, summary_cache_.summary);
-        return;
+    {
+        const QString sum_key = "news:summary:" + sig.left(200);
+        const QVariant cached = fincept::CacheManager::instance().get(sum_key);
+        if (!cached.isNull()) {
+            cb(true, cached.toString());
+            return;
+        }
     }
 
     // Build request body
@@ -287,9 +368,11 @@ void NewsService::summarize_headlines(const QVector<NewsArticle>& articles, int 
             summary = obj["data"].toObject()["summary"].toString();
 
         if (!summary.isEmpty()) {
-            summary_cache_.summary = summary;
-            summary_cache_.cached_at = QDateTime::currentSecsSinceEpoch();
-            summary_cache_.headline_signature = sig;
+            fincept::CacheManager::instance().put(
+                "news:summary:" + sig.left(200),
+                QVariant(summary),
+                kSummaryCacheTtlSec,
+                "news");
         }
 
         cb(!summary.isEmpty(), summary);
@@ -343,9 +426,52 @@ void NewsService::connect_live_feed(const QString& ws_url) {
 
         enrich_article(article);
 
-        // Prepend to cache
-        cache_.prepend(article);
-        emit articles_partial(cache_, 1, 1);
+        // Prepend to cached articles
+        QVector<NewsArticle> updated;
+        {
+            const QVariant cv = fincept::CacheManager::instance().get("news:articles");
+            if (!cv.isNull()) {
+                const QJsonArray existing = QJsonDocument::fromJson(cv.toString().toUtf8()).array();
+                updated.reserve(existing.size() + 1);
+                for (const auto& v : existing) {
+                    const QJsonObject o = v.toObject();
+                    NewsArticle a;
+                    a.id       = o["id"].toString();
+                    a.time     = o["time"].toString();
+                    a.headline = o["headline"].toString();
+                    a.summary  = o["summary"].toString();
+                    a.source   = o["source"].toString();
+                    a.region   = o["region"].toString();
+                    a.category = o["category"].toString();
+                    a.link     = o["link"].toString();
+                    a.sort_ts  = o["sort_ts"].toVariant().toLongLong();
+                    a.tier     = o["tier"].toInt(4);
+                    updated.append(a);
+                }
+            }
+        }
+        updated.prepend(article);
+        QJsonArray narr;
+        for (const auto& a : updated) {
+            QJsonObject o;
+            o["id"]       = a.id;
+            o["time"]     = a.time;
+            o["headline"] = a.headline;
+            o["summary"]  = a.summary;
+            o["source"]   = a.source;
+            o["region"]   = a.region;
+            o["category"] = a.category;
+            o["link"]     = a.link;
+            o["sort_ts"]  = static_cast<qint64>(a.sort_ts);
+            o["tier"]     = a.tier;
+            narr.append(o);
+        }
+        fincept::CacheManager::instance().put(
+            "news:articles",
+            QVariant(QString::fromUtf8(QJsonDocument(narr).toJson(QJsonDocument::Compact))),
+            kArticleCacheTtlSec,
+            "news");
+        emit articles_partial(updated, 1, 1);
         LOG_INFO("NewsService", "Live article: " + article.headline.left(50));
     });
 
@@ -377,8 +503,7 @@ bool NewsService::is_live_connected() const {
 // ── Auto-refresh ────────────────────────────────────────────────────────────
 
 void NewsService::set_refresh_interval(int minutes) {
-    cache_ttl_sec_ = minutes * 60;
-    refresh_timer_->setInterval(cache_ttl_sec_ * 1000);
+    refresh_timer_->setInterval(minutes * 60 * 1000);
 }
 
 void NewsService::start_auto_refresh() {

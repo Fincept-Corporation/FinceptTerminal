@@ -20,7 +20,7 @@ class ConfettiOverlay : public QWidget {
     void paintEvent(QPaintEvent* event) override;
 
   private:
-    enum Shape { Rect, Circle, Star, Streamer };
+    enum class Shape { Rect, Circle, Star, Streamer };
 
     struct Particle {
         float x, y;

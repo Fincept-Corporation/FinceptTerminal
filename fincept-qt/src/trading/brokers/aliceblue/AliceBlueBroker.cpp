@@ -61,8 +61,8 @@ QString AliceBlueBroker::ab_order_type(OrderType t) {
     switch (t) {
         case OrderType::Market:        return "MARKET";
         case OrderType::Limit:         return "LIMIT";
-        case OrderType::StopLoss:      return "SL";
-        case OrderType::StopLossLimit: return "SLM";
+        case OrderType::StopLoss:      return "SLM";  // SL-M: trigger only, market fill
+        case OrderType::StopLossLimit: return "SL";   // SL:   trigger + limit price
         default:                       return "MARKET";
     }
 }

@@ -16,12 +16,35 @@ sys.path.insert(0, str(analytics_path))
 # Use absolute imports instead of relative imports
 from corporateFinance.config import DEAL_TYPES, PAYMENT_METHODS, INDUSTRIES
 from corporateFinance.deal_database.database_schema import MADatabase
-from corporateFinance.deal_database.edgar_fetcher import EdgarFetcher
+from mcp.edgar import base as edgar_base, financials as edgar_financials
+
+
+class _EdgarAdapter:
+    """Thin adapter so deal_parser can call the same methods as before,
+    now backed by mcp.edgar (System 1 / edgartools)."""
+
+    def resolve_cik(self, name: str):
+        result = edgar_base.resolve_cik(name)
+        return result.get("cik") if result.get("success") else None
+
+    def get_filing_text(self, accession_number: str, cik: str) -> str:
+        # System 1 fetches by ticker/CIK + form; use CIK with default 10-K
+        result = edgar_base.get_filing_text(cik, "10-K")
+        return result.get("text", "") if result.get("success") else ""
+
+    def get_company_financials(self, cik: str) -> dict:
+        result = edgar_financials.get_financials(cik)
+        return result if result.get("success") else {}
+
+    def calculate_deal_multiples(self, deal_value: float, cik: str) -> dict:
+        result = edgar_base.calc_multiples(cik, deal_value)
+        return result if result.get("success") else {}
+
 
 class MADealParser:
     def __init__(self, db: Optional[MADatabase] = None, fetcher=None):
         self.db = db or MADatabase()
-        self.fetcher = fetcher or EdgarFetcher()
+        self.fetcher = fetcher or _EdgarAdapter()
 
         self.value_patterns = [
             r'\$\s*(\d+(?:\.\d+)?)\s*(?:billion|bn)',

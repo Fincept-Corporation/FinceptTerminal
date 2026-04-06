@@ -88,17 +88,17 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
 
     // Background
     if (selected) {
-        painter->fillRect(r, QColor(colors::AMBER).darker(400));
-        painter->setPen(QPen(QColor(colors::AMBER), 2));
+        painter->fillRect(r, QColor(colors::AMBER()).darker(400));
+        painter->setPen(QPen(QColor(colors::AMBER()), 2));
         painter->drawLine(r.left(), r.top(), r.left(), r.bottom());
     } else if (hovered) {
-        painter->fillRect(r, QColor(colors::BG_HOVER));
+        painter->fillRect(r, QColor(colors::BG_HOVER()));
     } else {
-        painter->fillRect(r, QColor(colors::BG_BASE));
+        painter->fillRect(r, QColor(colors::BG_BASE()));
     }
 
     // Bottom border
-    painter->setPen(QColor(colors::BORDER_DIM));
+    painter->setPen(QColor(colors::BORDER_DIM()));
     painter->drawLine(r.left(), r.bottom(), r.right(), r.bottom());
 
     auto* model = qobject_cast<const PolymarketMarketCardModel*>(index.model());
@@ -137,7 +137,7 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
     QFont font(fonts::DATA_FAMILY, 11);
     font.setWeight(QFont::Bold);
     painter->setFont(font);
-    painter->setPen(QColor(selected ? colors::AMBER : colors::TEXT_PRIMARY));
+    painter->setPen(QColor(selected ? colors::AMBER() : colors::TEXT_PRIMARY()));
     QRect title_rect(x, y, w, 30);
     painter->drawText(title_rect, Qt::AlignLeft | Qt::TextWordWrap, title.left(80));
     y += 32;
@@ -152,12 +152,12 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
         // YES bar
         int yes_w = static_cast<int>(bar_w * yes_pct);
         painter->fillRect(x, y, yes_w, bar_h, QColor("#00D66F"));
-        painter->fillRect(x + yes_w, y, bar_w - yes_w, bar_h, QColor(colors::BG_RAISED));
+        painter->fillRect(x + yes_w, y, bar_w - yes_w, bar_h, QColor(colors::BG_RAISED()));
 
         QFont small_font(fonts::DATA_FAMILY, 9);
         small_font.setWeight(QFont::Bold);
         painter->setFont(small_font);
-        painter->setPen(QColor(colors::TEXT_PRIMARY));
+        painter->setPen(QColor(colors::TEXT_PRIMARY()));
         painter->drawText(x + bar_w + 4, y, 52, bar_h, Qt::AlignLeft | Qt::AlignVCenter,
                           QString("Y %1c").arg(qRound(yes_pct * 100)));
         y += bar_h + 2;
@@ -165,14 +165,14 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
         // NO bar
         int no_w = static_cast<int>(bar_w * no_pct);
         painter->fillRect(x, y, no_w, bar_h, QColor("#FF3B3B"));
-        painter->fillRect(x + no_w, y, bar_w - no_w, bar_h, QColor(colors::BG_RAISED));
+        painter->fillRect(x + no_w, y, bar_w - no_w, bar_h, QColor(colors::BG_RAISED()));
         painter->drawText(x + bar_w + 4, y, 52, bar_h, Qt::AlignLeft | Qt::AlignVCenter,
                           QString("N %1c").arg(qRound(no_pct * 100)));
     } else {
         // Volume line for events without outcomes
         QFont small_font(fonts::DATA_FAMILY, 10);
         painter->setFont(small_font);
-        painter->setPen(QColor(colors::TEXT_SECONDARY));
+        painter->setPen(QColor(colors::TEXT_SECONDARY()));
         painter->drawText(x, y, w, 16, Qt::AlignLeft | Qt::AlignVCenter, fmt_vol(vol));
 
         if (evt) {

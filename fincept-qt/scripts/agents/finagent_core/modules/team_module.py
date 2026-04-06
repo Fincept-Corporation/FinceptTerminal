@@ -143,9 +143,8 @@ class TeamModule:
             if self.model:
                 team_kwargs["model"] = self.model
 
-            # Show individual member responses
-            if self.show_members_responses:
-                team_kwargs["show_members_responses"] = True
+            # Always propagate show_members_responses — False must also be explicit
+            team_kwargs["show_members_responses"] = self.show_members_responses
 
             # Add mode-specific configuration
             if self.mode == "coordinate":

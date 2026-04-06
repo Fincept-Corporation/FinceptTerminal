@@ -13,7 +13,9 @@
 #include "storage/sqlite/Database.h"
 #include "storage/sqlite/migrations/MigrationRunner.h"
 #include "trading/instruments/InstrumentService.h"
+#include "ai_chat/LlmService.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QApplication>
 #include <QDir>
@@ -52,7 +54,7 @@ int main(int argc, char* argv[]) {
     fincept::Logger::instance().set_file(log_dir + "/fincept.log");
     LOG_INFO("App", "Fincept Terminal v4.0.0 starting...");
 
-    // Apply Bloomberg theme
+    // Apply default theme immediately so the window is styled before anything shows
     fincept::ui::apply_global_stylesheet();
 
     // Initialize config
@@ -75,6 +77,7 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v009();
     fincept::register_migration_v010();
     fincept::register_migration_v011();
+    fincept::register_migration_v012();
 
     // Open main database
     QString db_path = log_dir + "/fincept.db";
@@ -89,6 +92,23 @@ int main(int argc, char* argv[]) {
         LOG_INFO("App", "Zerodha instruments loaded");
         fincept::trading::InstrumentService::instance().load_from_db("angelone");
         LOG_INFO("App", "AngelOne instruments loaded");
+    }
+
+    // Load persisted appearance settings and re-apply theme/font
+    {
+        auto& repo    = fincept::SettingsRepository::instance();
+        auto& tm      = fincept::ui::ThemeManager::instance();
+        auto r_theme  = repo.get("appearance.theme");
+        auto r_family = repo.get("appearance.font_family");
+        auto r_size   = repo.get("appearance.font_size");
+        QString theme  = r_theme.is_ok()  ? r_theme.value()  : "Obsidian";
+        QString family = r_family.is_ok() ? r_family.value() : "Consolas";
+        QString size_s = r_size.is_ok()   ? r_size.value()   : "14px";
+        int size_px    = QString(size_s).replace("px", "").toInt();
+        if (size_px <= 0) size_px = 14;
+        tm.apply_font(family, size_px);
+        tm.apply_theme(theme);
+        LOG_INFO("App", "Theme applied: " + theme + ", font: " + family + " " + size_s);
     }
 
     // Open cache database (non-fatal if fails)
@@ -169,6 +189,8 @@ int main(int argc, char* argv[]) {
 
             auto* window = new fincept::MainWindow;
             window->show();
+            if (!fincept::ai_chat::LlmService::instance().is_configured())
+                LOG_WARN("App", "LLM provider not configured — AI chat will prompt user to configure Settings → LLM Config");
             LOG_INFO("App", "Application ready (after setup)");
         });
 
@@ -186,6 +208,8 @@ int main(int argc, char* argv[]) {
         fincept::python::PythonSetupManager::instance().run_setup();
     }
 
+    if (!fincept::ai_chat::LlmService::instance().is_configured())
+        LOG_WARN("App", "LLM provider not configured — AI chat will prompt user to configure Settings → LLM Config");
     LOG_INFO("App", "Application ready");
     return app.exec();
 }

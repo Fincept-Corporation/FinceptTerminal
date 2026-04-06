@@ -30,6 +30,9 @@ class AgentsViewPanel : public QWidget {
   signals:
     void add_agent_to_team(services::AgentInfo agent);
 
+  protected:
+    void showEvent(QShowEvent* event) override;
+
   private:
     void build_ui();
     QWidget* build_agent_list_panel();

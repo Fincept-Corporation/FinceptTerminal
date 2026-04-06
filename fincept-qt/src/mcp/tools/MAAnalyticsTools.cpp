@@ -603,23 +603,6 @@ std::vector<ToolDef> get_ma_analytics_tools() {
         tools.push_back(std::move(t));
     }
 
-    // ── ma_scan_filings ─────────────────────────────────────────────────
-    {
-        ToolDef t;
-        t.name = "ma_scan_filings";
-        t.description = "Scan SEC EDGAR filings for M&A activity in the last N days.";
-        t.category = "ma-analytics";
-        t.input_schema.properties =
-            QJsonObject{{"days_back", QJsonObject{{"type", "integer"}, {"description", "Days to look back (default: 30)"}}}};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
-            int days = args["days_back"].toInt(30);
-            return run_ma_sync("scan_filings", [days]() {
-                fincept::services::ma::MAAnalyticsService::instance().scan_filings(days);
-            });
-        };
-        tools.push_back(std::move(t));
-    }
-
     // ── ma_create_deal ──────────────────────────────────────────────────
     {
         ToolDef t;
@@ -660,28 +643,6 @@ std::vector<ToolDef> get_ma_analytics_tools() {
             QJsonObject updates = args["updates"].toObject();
             return run_ma_sync("update_deal", [&]() {
                 fincept::services::ma::MAAnalyticsService::instance().update_deal(deal_id, updates);
-            });
-        };
-        tools.push_back(std::move(t));
-    }
-
-    // ── ma_parse_filing ─────────────────────────────────────────────────
-    {
-        ToolDef t;
-        t.name = "ma_parse_filing";
-        t.description = "Parse an SEC filing URL to extract M&A deal indicators and key terms.";
-        t.category = "ma-analytics";
-        t.input_schema.properties = QJsonObject{
-            {"filing_url", QJsonObject{{"type", "string"}, {"description", "SEC EDGAR filing URL"}}},
-            {"filing_type", QJsonObject{{"type", "string"}, {"description", "Filing type: SC13D, 8-K, S-4, DEFM14A"}}}};
-        t.input_schema.required = {"filing_url", "filing_type"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
-            QString url = args["filing_url"].toString().trimmed();
-            QString type = args["filing_type"].toString().trimmed();
-            if (url.isEmpty() || type.isEmpty())
-                return ToolResult::fail("Missing 'filing_url' or 'filing_type'");
-            return run_ma_sync("parse_filing", [&]() {
-                fincept::services::ma::MAAnalyticsService::instance().parse_filing(url, type);
             });
         };
         tools.push_back(std::move(t));

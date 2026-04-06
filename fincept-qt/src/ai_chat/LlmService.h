@@ -107,17 +107,17 @@ class LlmService : public QObject {
 
     mutable QMutex mutex_;
 
-    // Active config (reloaded lazily)
-    QString provider_;
-    QString api_key_;
-    QString base_url_;
-    QString model_;
-    double temperature_ = 0.7;
-    int max_tokens_ = 4096;
-    QString system_prompt_;
-    bool config_loaded_ = false;
+    // Active config (reloaded lazily — all mutable so ensure_config() can be called from const accessors)
+    mutable QString provider_;
+    mutable QString api_key_;
+    mutable QString base_url_;
+    mutable QString model_;
+    mutable double temperature_ = 0.7;
+    mutable int max_tokens_ = 4096;
+    mutable QString system_prompt_;
+    mutable bool config_loaded_ = false;
 
-    void ensure_config();
+    void ensure_config() const;
 
     // Request builders → QJsonObject
     QJsonObject build_openai_request(const QString& user_message, const std::vector<ConversationMessage>& history,

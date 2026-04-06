@@ -105,7 +105,7 @@ static QWidget* hsep() {
 // ── Constructor ───────────────────────────────────────────────────────────────
 
 SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -116,7 +116,7 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
         auto* bar = new QWidget;
         bar->setFixedHeight(34);
         bar->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
-                               .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
+                               .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         auto* bl = new QHBoxLayout(bar);
         bl->setContentsMargins(14, 0, 14, 0);
         bl->setSpacing(8);
@@ -142,25 +142,25 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
 
         bl->addStretch();
 
-        bl->addWidget(mono_label("TICKETS:", ui::colors::TEXT_TERTIARY, 11));
-        stat_total_ = mono_label("0", ui::colors::CYAN, 11, true);
+        bl->addWidget(mono_label("TICKETS:", ui::colors::TEXT_TERTIARY(), 11));
+        stat_total_ = mono_label("0", ui::colors::CYAN(), 11, true);
         bl->addWidget(stat_total_);
-        bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
-        bl->addWidget(mono_label("OPEN:", ui::colors::TEXT_TERTIARY, 11));
+        bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY(), 11));
+        bl->addWidget(mono_label("OPEN:", ui::colors::TEXT_TERTIARY(), 11));
         stat_open_ = mono_label("0", "#ca8a04", 11, true);
         bl->addWidget(stat_open_);
-        bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
-        bl->addWidget(mono_label("RESOLVED:", ui::colors::TEXT_TERTIARY, 11));
-        stat_resolved_ = mono_label("0", ui::colors::POSITIVE, 11, true);
+        bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY(), 11));
+        bl->addWidget(mono_label("RESOLVED:", ui::colors::TEXT_TERTIARY(), 11));
+        stat_resolved_ = mono_label("0", ui::colors::POSITIVE(), 11, true);
         bl->addWidget(stat_resolved_);
-        bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY, 11));
+        bl->addWidget(mono_label("|", ui::colors::TEXT_TERTIARY(), 11));
 
         status_dot_ = new QLabel("●");
         status_dot_->setStyleSheet(
-            QString("color: %1; font-size: 14px; background: transparent;").arg(ui::colors::POSITIVE));
+            QString("color: %1; font-size: 14px; background: transparent;").arg(ui::colors::POSITIVE()));
         bl->addWidget(status_dot_);
 
-        status_lbl_ = mono_label("READY", ui::colors::POSITIVE, 11, true);
+        status_lbl_ = mono_label("READY", ui::colors::POSITIVE(), 11, true);
         bl->addWidget(status_lbl_);
 
         root->addWidget(bar);
@@ -180,12 +180,12 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
 
 QWidget* SupportScreen::build_list_page() {
     auto* outer = new QWidget;
-    outer->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    outer->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(outer);
     vl->setContentsMargins(14, 14, 14, 14);
     vl->setSpacing(8);
 
-    auto* sec = mono_label("SUPPORT TICKETS", ui::colors::AMBER, 13, true);
+    auto* sec = mono_label("SUPPORT TICKETS", ui::colors::AMBER(), 13, true);
     vl->addWidget(sec);
     vl->addWidget(hsep());
 
@@ -214,12 +214,12 @@ QWidget* SupportScreen::build_create_page() {
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
     auto* page = new QWidget;
-    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(14, 14, 14, 14);
     vl->setSpacing(8);
 
-    vl->addWidget(mono_label("CREATE NEW TICKET", ui::colors::AMBER, 13, true));
+    vl->addWidget(mono_label("CREATE NEW TICKET", ui::colors::AMBER(), 13, true));
     vl->addWidget(hsep());
 
     // Form card
@@ -229,7 +229,7 @@ QWidget* SupportScreen::build_create_page() {
     cl->setContentsMargins(18, 14, 18, 16);
     cl->setSpacing(10);
 
-    auto add_label = [&](const QString& t) { cl->addWidget(mono_label(t, ui::colors::TEXT_SECONDARY, 11, true)); };
+    auto add_label = [&](const QString& t) { cl->addWidget(mono_label(t, ui::colors::TEXT_SECONDARY(), 11, true)); };
 
     add_label("SUBJECT *");
     subject_input_ = new QLineEdit;
@@ -247,7 +247,7 @@ QWidget* SupportScreen::build_create_page() {
 
     auto* cat_vl = new QVBoxLayout;
     cat_vl->setSpacing(4);
-    cat_vl->addWidget(mono_label("CATEGORY *", ui::colors::TEXT_SECONDARY, 11, true));
+    cat_vl->addWidget(mono_label("CATEGORY *", ui::colors::TEXT_SECONDARY(), 11, true));
     category_combo_ = new QComboBox;
     category_combo_->addItems({"technical", "billing", "feature", "bug", "account", "other"});
     category_combo_->setFixedHeight(32);
@@ -257,7 +257,7 @@ QWidget* SupportScreen::build_create_page() {
 
     auto* pri_vl = new QVBoxLayout;
     pri_vl->setSpacing(4);
-    pri_vl->addWidget(mono_label("PRIORITY", ui::colors::TEXT_SECONDARY, 11, true));
+    pri_vl->addWidget(mono_label("PRIORITY", ui::colors::TEXT_SECONDARY(), 11, true));
     priority_combo_ = new QComboBox;
     priority_combo_->addItems({"low", "medium", "high"});
     priority_combo_->setCurrentIndex(1);
@@ -295,13 +295,13 @@ QWidget* SupportScreen::build_detail_page() {
     detail_scroll_->setStyleSheet("QScrollArea { border: none; background: transparent; }");
 
     auto* page = new QWidget;
-    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    page->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(14, 14, 14, 14);
     vl->setSpacing(8);
 
     // Section title: "TICKET DETAILS - #N"
-    detail_header_lbl_ = mono_label("TICKET DETAILS", ui::colors::AMBER, 13, true);
+    detail_header_lbl_ = mono_label("TICKET DETAILS", ui::colors::AMBER(), 13, true);
     vl->addWidget(detail_header_lbl_);
     vl->addWidget(hsep());
 
@@ -328,7 +328,7 @@ QWidget* SupportScreen::build_detail_page() {
     srl->setContentsMargins(0, 0, 0, 0);
     srl->setSpacing(8);
 
-    detail_subject_lbl_ = mono_label("", ui::colors::TEXT_PRIMARY, 14, true);
+    detail_subject_lbl_ = mono_label("", ui::colors::TEXT_PRIMARY(), 14, true);
     detail_subject_lbl_->setWordWrap(true);
     srl->addWidget(detail_subject_lbl_, 1);
 
@@ -349,7 +349,7 @@ QWidget* SupportScreen::build_detail_page() {
     icl->addWidget(subj_row);
 
     // Meta: status | priority | category | created
-    detail_meta_lbl_ = mono_label("", ui::colors::TEXT_SECONDARY, 11);
+    detail_meta_lbl_ = mono_label("", ui::colors::TEXT_SECONDARY(), 11);
     icl->addWidget(detail_meta_lbl_);
 
     // Description body
@@ -364,7 +364,7 @@ QWidget* SupportScreen::build_detail_page() {
     vl->addWidget(info_card);
 
     // Conversation
-    vl->addWidget(mono_label("CONVERSATION", ui::colors::AMBER, 12, true));
+    vl->addWidget(mono_label("CONVERSATION", ui::colors::AMBER(), 12, true));
     vl->addWidget(hsep());
 
     auto* msg_scroll = new QScrollArea;
@@ -388,7 +388,7 @@ QWidget* SupportScreen::build_detail_page() {
     auto* rbl = new QVBoxLayout(reply_box_);
     rbl->setContentsMargins(14, 10, 14, 12);
     rbl->setSpacing(8);
-    rbl->addWidget(mono_label("ADD MESSAGE", ui::colors::POSITIVE, 11, true));
+    rbl->addWidget(mono_label("ADD MESSAGE", ui::colors::POSITIVE(), 11, true));
 
     msg_input_ = new QTextEdit;
     msg_input_->setPlaceholderText("Type your message here...");
@@ -413,7 +413,7 @@ QWidget* SupportScreen::build_detail_page() {
     dbl->addWidget(mono_label("DEMO TICKET — READ ONLY", "#2563eb", 11, true));
     dbl->addWidget(mono_label("This is a demonstration ticket. You cannot add messages here.\n"
                               "Click BACK TO LIST → + NEW TICKET to create a real support request.",
-                              ui::colors::TEXT_TERTIARY, 11));
+                              ui::colors::TEXT_TERTIARY(), 11));
     demo_box_->hide();
     vl->addWidget(demo_box_);
 
@@ -440,7 +440,7 @@ void SupportScreen::switch_to(int idx) {
 // ── set_busy ──────────────────────────────────────────────────────────────────
 
 void SupportScreen::set_busy(bool busy) {
-    QString col = busy ? ui::colors::AMBER : ui::colors::POSITIVE;
+    QString col = busy ? ui::colors::AMBER() : ui::colors::POSITIVE();
     status_dot_->setStyleSheet(QString("color: %1; font-size: 14px; background: transparent;").arg(col));
     status_lbl_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;"
                                        " font-family: 'Consolas','Courier New',monospace;")
@@ -535,10 +535,10 @@ void SupportScreen::load_tickets() {
             rl->setVerticalSpacing(2);
 
             // Col 0: ID
-            rl->addWidget(mono_label("#" + id, ui::colors::TEXT_TERTIARY, 11), 0, 0);
+            rl->addWidget(mono_label("#" + id, ui::colors::TEXT_TERTIARY(), 11), 0, 0);
 
             // Col 1: Subject (stretchy)
-            auto* subj = mono_label(subject, ui::colors::TEXT_PRIMARY, 12, true);
+            auto* subj = mono_label(subject, ui::colors::TEXT_PRIMARY(), 12, true);
             subj->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
             rl->addWidget(subj, 0, 1);
 
@@ -555,10 +555,10 @@ void SupportScreen::load_tickets() {
             rl->addWidget(pr_lbl, 0, 3);
 
             // Col 4: Category
-            rl->addWidget(mono_label(category.toUpper(), ui::colors::CYAN, 10), 0, 4);
+            rl->addWidget(mono_label(category.toUpper(), ui::colors::CYAN(), 10), 0, 4);
 
             // Col 5: Date
-            rl->addWidget(mono_label(date_str, ui::colors::TEXT_TERTIARY, 10), 0, 5);
+            rl->addWidget(mono_label(date_str, ui::colors::TEXT_TERTIARY(), 10), 0, 5);
 
             rl->setColumnStretch(1, 1);
 
@@ -623,11 +623,11 @@ void SupportScreen::load_tickets() {
                     auto* mh = new QHBoxLayout;
                     mh->addWidget(mono_label("SUPPORT TEAM", "#9333ea", 11, true));
                     mh->addStretch();
-                    mh->addWidget(mono_label("Jan 1, 2026 00:01", ui::colors::TEXT_TERTIARY, 10));
+                    mh->addWidget(mono_label("Jan 1, 2026 00:01", ui::colors::TEXT_TERTIARY(), 10));
                     ml->addLayout(mh);
                     ml->addWidget(mono_label("Welcome! This demo ticket shows how our support system works.\n"
                                              "Create a real ticket and our team will respond within 24 hours.",
-                                             ui::colors::TEXT_PRIMARY, 11));
+                                             ui::colors::TEXT_PRIMARY(), 11));
                     mcl2->insertWidget(mcl2->count() - 1, m);
                 } else {
                     // Load real messages from API
@@ -649,7 +649,7 @@ void SupportScreen::load_tickets() {
                             auto mo = mv.toObject();
                             bool is_user = mo["sender_type"].toString() == "user";
                             QString sender = is_user ? "YOU" : "SUPPORT TEAM";
-                            QString msg_color = is_user ? ui::colors::CYAN : "#9333ea";
+                            QString msg_color = is_user ? ui::colors::CYAN() : "#9333ea";
                             QString border_color = msg_color;
 
                             QString ts;
@@ -667,9 +667,9 @@ void SupportScreen::load_tickets() {
                             auto* mh = new QHBoxLayout;
                             mh->addWidget(mono_label(sender, msg_color, 11, true));
                             mh->addStretch();
-                            mh->addWidget(mono_label(ts, ui::colors::TEXT_TERTIARY, 10));
+                            mh->addWidget(mono_label(ts, ui::colors::TEXT_TERTIARY(), 10));
                             ml->addLayout(mh);
-                            ml->addWidget(mono_label(mo["message"].toString(), ui::colors::TEXT_PRIMARY, 11));
+                            ml->addWidget(mono_label(mo["message"].toString(), ui::colors::TEXT_PRIMARY(), 11));
                             mcl3->insertWidget(mcl3->count() - 1, m);
                         }
                     });
@@ -682,7 +682,7 @@ void SupportScreen::load_tickets() {
         }
 
         if (all.isEmpty()) {
-            lay->insertWidget(0, mono_label("No tickets found.", ui::colors::TEXT_TERTIARY, 12));
+            lay->insertWidget(0, mono_label("No tickets found.", ui::colors::TEXT_TERTIARY(), 12));
         }
     });
 }
@@ -738,12 +738,12 @@ void SupportScreen::on_send_message() {
             ml->setContentsMargins(12, 8, 12, 10);
             ml->setSpacing(4);
             auto* mh = new QHBoxLayout;
-            mh->addWidget(mono_label("YOU", ui::colors::CYAN, 11, true));
+            mh->addWidget(mono_label("YOU", ui::colors::CYAN(), 11, true));
             mh->addStretch();
             mh->addWidget(
-                mono_label(QDateTime::currentDateTime().toString("MMM d, yyyy hh:mm"), ui::colors::TEXT_TERTIARY, 10));
+                mono_label(QDateTime::currentDateTime().toString("MMM d, yyyy hh:mm"), ui::colors::TEXT_TERTIARY(), 10));
             ml->addLayout(mh);
-            ml->addWidget(mono_label(msg, ui::colors::TEXT_PRIMARY, 11));
+            ml->addWidget(mono_label(msg, ui::colors::TEXT_PRIMARY(), 11));
             mcl->insertWidget(mcl->count() - 1, m);
         }
     });

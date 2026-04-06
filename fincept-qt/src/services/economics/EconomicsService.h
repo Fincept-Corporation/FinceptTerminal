@@ -4,7 +4,6 @@
 #pragma once
 
 #include <QJsonObject>
-#include <QMap>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -45,17 +44,11 @@ class EconomicsService : public QObject {
     explicit EconomicsService(QObject* parent = nullptr);
     Q_DISABLE_COPY(EconomicsService)
 
-    struct CacheEntry {
-        QJsonObject data;
-        qint64      fetched_at = 0;
-    };
-    QMap<QString, CacheEntry> cache_;
-    static constexpr int kCacheTtlMs = 10 * 60 * 1000; // 10 min
+    static constexpr int kCacheTtlSec = 10 * 60; // 10 min — passed to CacheManager
 
     QString cache_key(const QString& script,
                       const QString& command,
                       const QStringList& args) const;
-    bool    is_cache_fresh(const QString& key) const;
 };
 
 } // namespace fincept::services

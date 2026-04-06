@@ -49,6 +49,7 @@ class DataSourcesScreen : public QWidget {
     void on_bulk_delete_selected();
     void on_export_connections();
     void on_import_connections();
+    void on_download_template();
     void on_stat_box_clicked(int stat_index);
     void on_connections_search_changed(const QString& text);
     void on_view_mode_toggle();

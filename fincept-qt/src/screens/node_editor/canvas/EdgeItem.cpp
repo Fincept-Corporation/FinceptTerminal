@@ -1,6 +1,7 @@
 #include "screens/node_editor/canvas/EdgeItem.h"
 
 #include "screens/node_editor/canvas/PortItem.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QAction>
 #include <QGraphicsSceneContextMenuEvent>
@@ -18,7 +19,7 @@ EdgeItem::EdgeItem(const QString& id, PortItem* source, PortItem* target, QGraph
     setFlag(ItemIsFocusable);
     setAcceptHoverEvents(true);
     setZValue(0); // edges behind nodes
-    setPen(QPen(QColor("#4a4a4a"), 2.0, Qt::SolidLine, Qt::RoundCap));
+    setPen(QPen(QColor(ui::ThemeManager::instance().tokens().border_med), 2.0, Qt::SolidLine, Qt::RoundCap));
 
     source_->add_edge(this);
     target_->add_edge(this);
@@ -81,13 +82,14 @@ void EdgeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
 
     painter->setRenderHint(QPainter::Antialiasing);
 
+    const auto& t = ui::ThemeManager::instance().tokens();
     QColor color;
     if (animated_)
-        color = QColor("#d97706");
+        color = QColor(t.accent);
     else if (isSelected())
-        color = QColor("#d97706");
+        color = QColor(t.accent);
     else
-        color = QColor("#4a4a4a");
+        color = QColor(t.border_med);
 
     QPen pen(color, 2.0, Qt::SolidLine, Qt::RoundCap);
     if (animated_) {
@@ -116,11 +118,14 @@ void EdgeItem::keyPressEvent(QKeyEvent* event) {
 }
 
 void EdgeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
+    const auto& tm = ui::ThemeManager::instance().tokens();
     QMenu menu;
-    menu.setStyleSheet("QMenu { background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
-                       "  font-family: Consolas; font-size: 12px; }"
-                       "QMenu::item { padding: 4px 20px; }"
-                       "QMenu::item:selected { background: #dc2626; color: #ffffff; }");
+    menu.setStyleSheet(
+        QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
+                "  font-family: Consolas; font-size: 12px; }"
+                "QMenu::item { padding: 4px 20px; }"
+                "QMenu::item:selected { background: %4; color: %5; }")
+        .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.negative, tm.text_primary));
     auto* del = menu.addAction("Delete Connection");
     if (menu.exec(event->screenPos()) == del)
         emit delete_requested(id_);

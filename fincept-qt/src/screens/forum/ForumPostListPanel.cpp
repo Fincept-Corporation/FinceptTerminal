@@ -390,8 +390,8 @@ void ForumPostListPanel::rebuild_feed() {
             return lbl;
         };
 
-        QString like_color = post.likes > 0 ? ui::colors::AMBER : "#1e1e1e";
-        QString rep_color = post.reply_count > 0 ? ui::colors::CYAN : "#1e1e1e";
+        QString like_color = post.likes > 0 ? ui::colors::AMBER() : "#1e1e1e";
+        QString rep_color = post.reply_count > 0 ? ui::colors::CYAN() : "#1e1e1e";
 
         eng_hl->addWidget(mk_eng("▲", fmt_num(post.likes), like_color));
         eng_hl->addWidget(mk_eng("◆", fmt_num(post.reply_count), rep_color));

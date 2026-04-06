@@ -1,6 +1,7 @@
 #include "screens/news/NewsTickerStrip.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QMouseEvent>
 #include <QPaintEvent>
@@ -21,6 +22,9 @@ NewsTickerStrip::NewsTickerStrip(QWidget* parent)
     });
     // Timer interval set but NOT started — parent manages via pause/resume (P3)
     scroll_timer_.setInterval(50); // 20fps
+
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { update(); });
 }
 
 void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& breaking_articles) {
@@ -84,12 +88,12 @@ void NewsTickerStrip::paintEvent(QPaintEvent*) {
             x += entry.tag_width + SEGMENT_GAP;
 
             // Source in cyan
-            p.setPen(QColor(ui::colors::CYAN));
+            p.setPen(QColor(ui::colors::CYAN()));
             p.drawText(QPointF(x, text_y), entry.source_text);
             x += entry.source_width + SEGMENT_GAP;
 
             // Headline in secondary text
-            p.setPen(QColor(ui::colors::TEXT_SECONDARY));
+            p.setPen(QColor(ui::colors::TEXT_SECONDARY()));
             p.drawText(QPointF(x, text_y), entry.headline_text);
             x += entry.headline_width + ITEM_SPACING;
         }

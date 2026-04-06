@@ -4,6 +4,7 @@
 #include "screens/dashboard/canvas/DashboardTemplates.h"
 #include "screens/dashboard/canvas/WidgetRegistry.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QPaintEvent>
 #include <QPainter>
@@ -19,8 +20,16 @@
 namespace fincept::screens {
 
 DashboardCanvas::DashboardCanvas(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE));
+    tokens_ = ui::ThemeManager::instance().tokens();
+    setStyleSheet(QString("background: %1;").arg(QString(tokens_.bg_base)));
     setMinimumHeight(200);
+
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens& t) {
+                tokens_ = t;
+                setStyleSheet(QString("background: %1;").arg(QString(tokens_.bg_base)));
+                update();
+            });
 
     placeholder_ = new PlaceholderOverlay(this);
 
@@ -401,12 +410,15 @@ void DashboardCanvas::paintEvent(QPaintEvent* event) {
     QPainter p(this);
     // Fill only the exposed region (clip rect) instead of blitting a full-height pixmap
     QRect clip = event->rect();
-    p.fillRect(clip, QColor(ui::colors::BG_BASE));
+    p.fillRect(clip, QColor(tokens_.bg_base));
 
     if (layout_.cols <= 0 || width() <= 0)
         return;
 
-    p.setPen(QPen(QColor(255, 255, 255, 8), 1));
+    // Use border_dim at low opacity for grid lines
+    QColor grid_line(tokens_.border_dim);
+    grid_line.setAlpha(40);
+    p.setPen(QPen(grid_line, 1));
 
     const int total_margin = layout_.margin * (layout_.cols + 1);
     const int col_w = (width() - total_margin) / layout_.cols;

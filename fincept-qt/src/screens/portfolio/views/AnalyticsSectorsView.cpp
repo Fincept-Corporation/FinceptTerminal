@@ -165,7 +165,7 @@ void AnalyticsSectorsView::update_overview() {
     for (int i = 0; i < sectors.size(); ++i) {
         auto* slice = series->append(sectors[i].name, sectors[i].weight);
         slice->setColor(sector_color(i));
-        slice->setBorderColor(QColor(ui::colors::BG_BASE));
+        slice->setBorderColor(QColor(ui::colors::BG_BASE()));
         slice->setBorderWidth(1);
     }
     chart->addSeries(series);
@@ -335,7 +335,7 @@ void AnalyticsSectorsView::update_correlation() {
 
             QColor bg;
             if (r == c)
-                bg = QColor(ui::colors::TEXT_PRIMARY);
+                bg = QColor(ui::colors::TEXT_PRIMARY());
             else if (corr > 0)
                 bg = QColor(22, 163, 74, static_cast<int>(std::abs(corr) * 140));
             else

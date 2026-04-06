@@ -1,6 +1,6 @@
 #include "ui/charts/ChartFactory.h"
 
-#include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QValueAxis>
@@ -8,22 +8,25 @@
 namespace fincept::ui {
 
 void ChartFactory::apply_theme(QChart* chart) {
-    chart->setBackgroundBrush(QBrush(QColor(colors::DARK)));
-    chart->setPlotAreaBackgroundBrush(QBrush(QColor(colors::DARK)));
+    const auto& t = ThemeManager::instance().tokens();
+    chart->setBackgroundBrush(QBrush(QColor(t.bg_surface)));
+    chart->setPlotAreaBackgroundBrush(QBrush(QColor(t.bg_surface)));
     chart->setPlotAreaBackgroundVisible(true);
     chart->legend()->setVisible(false);
     chart->setMargins(QMargins(0, 0, 0, 0));
 
     for (auto* axis : chart->axes()) {
-        axis->setLabelsColor(QColor(colors::MUTED));
-        axis->setGridLineColor(QColor(colors::BORDER));
-        axis->setLinePenColor(QColor(colors::BORDER));
+        axis->setLabelsColor(QColor(t.text_secondary));
+        axis->setGridLineColor(QColor(t.border_dim));
+        axis->setLinePenColor(QColor(t.border_med));
     }
 }
 
 QChartView* ChartFactory::line_chart(const QString& title, const QVector<DataPoint>& data, const QString& color) {
+    const auto& t = ThemeManager::instance().tokens();
+    const QString line_color = color.isEmpty() ? QString(t.accent) : color;
     auto* series = new QLineSeries;
-    series->setPen(QPen(QColor(color), 1.5));
+    series->setPen(QPen(QColor(line_color), 1.5));
     for (const auto& p : data) {
         series->append(p.x, p.y);
     }
@@ -31,7 +34,7 @@ QChartView* ChartFactory::line_chart(const QString& title, const QVector<DataPoi
     auto* chart = new QChart;
     chart->addSeries(series);
     chart->setTitle(title);
-    chart->setTitleBrush(QBrush(QColor(colors::GRAY)));
+    chart->setTitleBrush(QBrush(QColor(t.text_secondary)));
     chart->createDefaultAxes();
     apply_theme(chart);
 
@@ -43,8 +46,10 @@ QChartView* ChartFactory::line_chart(const QString& title, const QVector<DataPoi
 
 QChartView* ChartFactory::bar_chart(const QString& title, const QStringList& categories, const QVector<double>& values,
                                     const QString& color) {
+    const auto& t = ThemeManager::instance().tokens();
+    const QString bar_color = color.isEmpty() ? QString(t.accent) : color;
     auto* set = new QBarSet("");
-    set->setColor(QColor(color));
+    set->setColor(QColor(bar_color));
     for (double v : values) {
         *set << v;
     }
@@ -55,7 +60,7 @@ QChartView* ChartFactory::bar_chart(const QString& title, const QStringList& cat
     auto* chart = new QChart;
     chart->addSeries(series);
     chart->setTitle(title);
-    chart->setTitleBrush(QBrush(QColor(colors::GRAY)));
+    chart->setTitleBrush(QBrush(QColor(t.text_secondary)));
 
     auto* axisX = new QBarCategoryAxis;
     axisX->append(categories);
@@ -75,8 +80,10 @@ QChartView* ChartFactory::bar_chart(const QString& title, const QStringList& cat
 }
 
 QChartView* ChartFactory::sparkline(const QVector<double>& data, const QString& color, int width, int height) {
+    const auto& t = ThemeManager::instance().tokens();
+    const QString spark_color = color.isEmpty() ? QString(t.text_secondary) : color;
     auto* series = new QLineSeries;
-    series->setPen(QPen(QColor(color), 1.0));
+    series->setPen(QPen(QColor(spark_color), 1.0));
     for (int i = 0; i < data.size(); ++i) {
         series->append(i, data[i]);
     }

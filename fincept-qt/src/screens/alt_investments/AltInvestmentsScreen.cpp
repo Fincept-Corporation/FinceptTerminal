@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -563,18 +564,28 @@ void AltInvestmentsScreen::on_analyze() {
 // ── Python integration ──────────────────────────────────────────────────────
 
 void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObject& data) {
+    QString data_json = QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact));
+
+    const QString cache_key = "alt_screen:" + command + ":" + data_json;
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (!doc.isNull() && doc.isObject()) {
+            display_verdict(doc.object());
+            return;
+        }
+    }
+
     set_loading(true);
     verdict_badge_->setText("ANALYZING...");
     verdict_badge_->setStyleSheet(QString("color: %1; background: rgba(217,119,6,0.15); "
                                           "font-size: 12px; font-weight: 700; padding: 4px 12px;")
                                       .arg(colors::AMBER));
 
-    QString data_json = QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact));
-
     QPointer<AltInvestmentsScreen> self = this;
 
     python::PythonRunner::instance().run("Analytics/alternateInvestment/cli.py", {command, "--data", data_json},
-                                         [self, command](const python::PythonResult& result) {
+                                         [self, command, cache_key](const python::PythonResult& result) {
                                              if (!self)
                                                  return;
                                              self->set_loading(false);
@@ -604,6 +615,10 @@ void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObjec
                                                  return;
                                              }
 
+                                             fincept::CacheManager::instance().put(
+                                                 cache_key,
+                                                 QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                                                 10 * 60, "alt_investments");
                                              self->display_verdict(obj);
                                              LOG_INFO("AltInvestments", "Analysis complete: " + command);
                                          });
@@ -620,16 +635,16 @@ void AltInvestmentsScreen::display_verdict(const QJsonObject& result) {
     QString badge_bg;
 
     if (category.contains("GOOD", Qt::CaseInsensitive)) {
-        badge_color = colors::POSITIVE;
+        badge_color = colors::POSITIVE();
         badge_bg = "rgba(22,163,74,0.15)";
     } else if (category.contains("BAD", Qt::CaseInsensitive) || category.contains("UGLY", Qt::CaseInsensitive)) {
-        badge_color = colors::NEGATIVE;
+        badge_color = colors::NEGATIVE();
         badge_bg = "rgba(220,38,38,0.15)";
     } else if (category.contains("FLAWED", Qt::CaseInsensitive)) {
         badge_color = "#FFD700";
         badge_bg = "rgba(255,215,0,0.15)";
     } else {
-        badge_color = colors::CYAN;
+        badge_color = colors::CYAN();
         badge_bg = "rgba(8,145,178,0.15)";
     }
 

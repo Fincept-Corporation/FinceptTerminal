@@ -334,7 +334,7 @@ void EquityTalippTab::on_category_clicked(const QString& cat_id) {
         it.value()->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:1px solid %3; "
                                           "padding:5px 14px; font-size:10px; font-weight:700; }"
                                           "QPushButton:hover { border-color:%3; }")
-                                      .arg(active ? color : "transparent", active ? ui::colors::BG_BASE : "#6b7280",
+                                      .arg(active ? color : "transparent", active ? ui::colors::BG_BASE() : "#6b7280",
                                            active ? color : ui::colors::BORDER_DIM));
     }
 
@@ -477,8 +477,8 @@ void EquityTalippTab::rebuild_chart(const QString& /*indicator_id*/, const QVect
 
     auto* chart = new QChart;
     chart->addSeries(series);
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_SURFACE)));
-    chart->setPlotAreaBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
+    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_SURFACE())));
+    chart->setPlotAreaBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
     chart->setPlotAreaBackgroundVisible(true);
     chart->legend()->hide();
     chart->setMargins(QMargins(4, 4, 4, 4));
@@ -490,14 +490,14 @@ void EquityTalippTab::rebuild_chart(const QString& /*indicator_id*/, const QVect
     auto* axisX = new QDateTimeAxis;
     axisX->setFormat("MMM yy");
     axisX->setLabelsColor(QColor("#6b7280"));
-    axisX->setGridLineColor(QColor(ui::colors::BORDER_DIM));
+    axisX->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
     axisX->setLabelsFont(QFont("", 8));
     chart->addAxis(axisX, Qt::AlignBottom);
     series->attachAxis(axisX);
 
     auto* axisY = new QValueAxis;
     axisY->setLabelsColor(QColor("#6b7280"));
-    axisY->setGridLineColor(QColor(ui::colors::BORDER_DIM));
+    axisY->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
     axisY->setLabelsFont(QFont("", 8));
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);

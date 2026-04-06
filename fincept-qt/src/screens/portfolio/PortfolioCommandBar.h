@@ -24,6 +24,7 @@ class PortfolioCommandBar : public QWidget {
     void set_detail_view(std::optional<portfolio::DetailView> view);
     void set_has_selection(bool has_selection);
     void set_has_portfolios(bool has_portfolios);
+    void set_refresh_interval(int ms);
 
   signals:
     void portfolio_selected(QString id);
@@ -31,6 +32,7 @@ class PortfolioCommandBar : public QWidget {
     void delete_requested(QString id);
     void buy_requested();
     void sell_requested();
+    void dividend_requested();
     void refresh_requested();
     void export_csv_requested();
     void export_json_requested();

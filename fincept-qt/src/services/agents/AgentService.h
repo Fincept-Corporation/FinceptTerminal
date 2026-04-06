@@ -3,9 +3,7 @@
 #include "services/agents/AgentTypes.h"
 #include "storage/repositories/AgentConfigRepository.h"
 
-#include <QHash>
 #include <QJsonObject>
-#include <QMutex>
 #include <QObject>
 
 namespace fincept::services {
@@ -78,7 +76,6 @@ class AgentService : public QObject {
     void get_trade_decisions(const QString& competition_id = {}, const QString& model_name = {});
 
     // ── Config CRUD (delegates to AgentConfigRepository) ─────────────────────
-    void load_configs(const QString& category = {});
     void save_config(const AgentConfig& config);
     void delete_config(const QString& id);
     void set_active_config(const QString& id);
@@ -102,7 +99,6 @@ class AgentService : public QObject {
     void system_info_loaded(AgentSystemInfo info);
     void plan_created(ExecutionPlan plan);
     void plan_executed(ExecutionPlan plan);
-    void configs_loaded(QVector<AgentConfig> configs);
     void config_saved();
     void config_deleted();
     void memory_stored(bool success, QString message);
@@ -128,49 +124,16 @@ class AgentService : public QObject {
     QJsonObject build_payload(const QString& action, const QJsonObject& params = {},
                               const QJsonObject& config = {}) const;
 
-    // ── Data cache (agent/tools/models/sysinfo) ──────────────────────────────
-    static constexpr int kAgentCacheTtlMs = 5 * 60 * 1000;
-    static constexpr int kToolsCacheTtlMs = 10 * 60 * 1000;
-    static constexpr int kModelsCacheTtlMs = 10 * 60 * 1000;
-    static constexpr int kSysInfoCacheTtlMs = 10 * 60 * 1000;
-
-    struct CachedAgents {
-        QVector<AgentInfo> data;
-        QVector<AgentCategory> categories;
-        qint64 fetched_at = 0;
-    } agents_cache_;
-
-    struct CachedTools {
-        AgentToolsInfo data;
-        qint64 fetched_at = 0;
-    } tools_cache_;
-
-    struct CachedModels {
-        AgentModelsInfo data;
-        qint64 fetched_at = 0;
-    } models_cache_;
-
-    struct CachedSysInfo {
-        AgentSystemInfo data;
-        qint64 fetched_at = 0;
-    } sysinfo_cache_;
-
-    // ── LRU response cache ───────────────────────────────────────────────────
-    static constexpr int kResponseCacheMaxSize = 100;
-    static constexpr int kResponseCacheTtlMs = 2 * 60 * 1000; // 2 min
-
-    struct CachedResponse {
-        QJsonObject data;
-        qint64 fetched_at = 0;
-    };
-    QHash<QString, CachedResponse> response_cache_;
+    // ── Cache TTLs — delegated to CacheManager ───────────────────────────────
+    static constexpr int kAgentCacheTtlSec   = 5 * 60;
+    static constexpr int kToolsCacheTtlSec   = 10 * 60;
+    static constexpr int kModelsCacheTtlSec  = 10 * 60;
+    static constexpr int kSysInfoCacheTtlSec = 10 * 60;
+    static constexpr int kResponseCacheTtlSec = 2 * 60;
 
     QString make_cache_key(const QString& action, const QJsonObject& params) const;
     bool get_cached_response(const QString& key, QJsonObject& out) const;
     void set_cached_response(const QString& key, const QJsonObject& data);
-
-    mutable QMutex cache_mutex_;
-    bool is_cache_fresh(qint64 fetched_at, int ttl_ms) const;
 };
 
 } // namespace fincept::services

@@ -9,14 +9,14 @@
 namespace fincept::screens::widgets {
 
 static QString input_style(const QString& border_color = "") {
-    QString bc = border_color.isEmpty() ? ui::colors::BORDER_MED : border_color;
+    QString bc = border_color.isEmpty() ? ui::colors::BORDER_MED() : border_color;
     return QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
                    "font-size: 11px; padding: 4px 6px; }"
                    "QLineEdit:focus { border-color: %4; }")
-        .arg(ui::colors::BG_BASE)
-        .arg(ui::colors::TEXT_PRIMARY)
+        .arg(ui::colors::BG_BASE())
+        .arg(ui::colors::TEXT_PRIMARY())
         .arg(bc)
-        .arg(ui::colors::AMBER);
+        .arg(ui::colors::AMBER());
 }
 
 static QString combo_style() {
@@ -24,12 +24,12 @@ static QString combo_style() {
                    "font-size: 11px; padding: 4px 6px; }"
                    "QComboBox::drop-down { border: none; width: 16px; }"
                    "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3; }")
-        .arg(ui::colors::BG_BASE)
-        .arg(ui::colors::TEXT_PRIMARY)
-        .arg(ui::colors::BORDER_MED);
+        .arg(ui::colors::BG_BASE())
+        .arg(ui::colors::TEXT_PRIMARY())
+        .arg(ui::colors::BORDER_MED());
 }
 
-QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", parent, ui::colors::AMBER) {
+QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", parent, ui::colors::AMBER()) {
     auto* vl = content_layout();
     vl->setContentsMargins(10, 10, 10, 10);
     vl->setSpacing(8);
@@ -50,16 +50,16 @@ QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", 
     lookup_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
                                        "font-size: 10px; font-weight: bold; padding: 4px 10px; }"
                                        "QPushButton:hover { background: %4; }")
-                                   .arg(ui::colors::BG_RAISED)
-                                   .arg(ui::colors::AMBER)
-                                   .arg(ui::colors::AMBER)
-                                   .arg(ui::colors::BG_HOVER));
+                                   .arg(ui::colors::BG_RAISED())
+                                   .arg(ui::colors::AMBER())
+                                   .arg(ui::colors::AMBER())
+                                   .arg(ui::colors::BG_HOVER()));
     srl->addWidget(lookup_btn_);
     vl->addWidget(search_row);
 
     // ── Quote display ──
     auto* quote_card = new QWidget;
-    quote_card->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED));
+    quote_card->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
     auto* qcl = new QHBoxLayout(quote_card);
     qcl->setContentsMargins(10, 8, 10, 8);
     qcl->setSpacing(12);
@@ -67,11 +67,11 @@ QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", 
     auto* sym_col = new QVBoxLayout;
     sym_label_ = new QLabel("--");
     sym_label_->setStyleSheet(QString("color: %1; font-size: 14px; font-weight: bold; background: transparent;")
-                                  .arg(ui::colors::TEXT_PRIMARY));
+                                  .arg(ui::colors::TEXT_PRIMARY()));
     sym_col->addWidget(sym_label_);
     change_label_ = new QLabel("--");
     change_label_->setStyleSheet(
-        QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
     sym_col->addWidget(change_label_);
     qcl->addLayout(sym_col);
 
@@ -82,16 +82,16 @@ QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", 
     price_label_ = new QLabel("--");
     price_label_->setAlignment(Qt::AlignRight);
     price_label_->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: bold; background: transparent;")
-                                    .arg(ui::colors::TEXT_PRIMARY));
+                                    .arg(ui::colors::TEXT_PRIMARY()));
     price_col->addWidget(price_label_);
 
     auto* bid_ask_row = new QHBoxLayout;
     bid_label_ = new QLabel("BID --");
-    bid_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::POSITIVE));
+    bid_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::POSITIVE()));
     bid_ask_row->addWidget(bid_label_);
     bid_ask_row->addSpacing(8);
     ask_label_ = new QLabel("ASK --");
-    ask_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::NEGATIVE));
+    ask_label_->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::NEGATIVE()));
     bid_ask_row->addWidget(ask_label_);
     price_col->addLayout(bid_ask_row);
     qcl->addLayout(price_col);
@@ -101,7 +101,7 @@ QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", 
     // ── Separator ──
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
     // ── Order form ──
@@ -126,7 +126,7 @@ QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", 
 
     auto* qty_lbl = new QLabel("QTY");
     qty_lbl->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
     qp_row->addWidget(qty_lbl);
 
     qty_input_ = new QLineEdit("10");
@@ -136,19 +136,19 @@ QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", 
 
     auto* price_lbl = new QLabel("PRICE");
     price_lbl->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
     qp_row->addWidget(price_lbl);
 
     price_input_ = new QLineEdit;
     price_input_->setPlaceholderText("market");
-    price_input_->setStyleSheet(input_style(ui::colors::BORDER_DIM));
+    price_input_->setStyleSheet(input_style(ui::colors::BORDER_DIM()));
     qp_row->addWidget(price_input_, 1);
     vl->addLayout(qp_row);
 
     // Estimated total
     est_total_ = new QLabel("EST. TOTAL  --");
     est_total_->setStyleSheet(
-        QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_SECONDARY));
+        QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(est_total_);
 
     // Submit button
@@ -158,10 +158,10 @@ QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", 
                                        "font-size: 11px; font-weight: bold; }"
                                        "QPushButton:hover { background: %2; }"
                                        "QPushButton:disabled { background: %3; color: %4; }")
-                                   .arg(ui::colors::POSITIVE)
+                                   .arg(ui::colors::POSITIVE())
                                    .arg("#15803d")
-                                   .arg(ui::colors::BG_RAISED)
-                                   .arg(ui::colors::TEXT_TERTIARY));
+                                   .arg(ui::colors::BG_RAISED())
+                                   .arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(submit_btn_);
 
     // ── Connections ──
@@ -213,7 +213,7 @@ void QuickTradeWidget::lookup_symbol() {
 
         double chg = q.change_pct;
         QString chg_str = QString("%1%2%").arg(chg >= 0 ? "▲ +" : "▼ ").arg(chg, 0, 'f', 2);
-        QString chg_col = chg > 0 ? ui::colors::POSITIVE : chg < 0 ? ui::colors::NEGATIVE : ui::colors::TEXT_SECONDARY;
+        QString chg_col = chg > 0 ? ui::colors::POSITIVE() : chg < 0 ? ui::colors::NEGATIVE() : ui::colors::TEXT_SECONDARY();
         change_label_->setText(chg_str);
         change_label_->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(chg_col));
 
@@ -231,7 +231,7 @@ void QuickTradeWidget::lookup_symbol() {
 
 void QuickTradeWidget::on_side_changed(int idx) {
     // BUY = green, SELL/SHORT = red
-    QString color = (idx == 0) ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+    QString color = (idx == 0) ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
     submit_btn_->setText(idx == 0 ? "PLACE BUY ORDER" : idx == 1 ? "PLACE SELL ORDER" : "PLACE SHORT ORDER");
     submit_btn_->setStyleSheet(QString("QPushButton { background: %1; color: #ffffff; border: none; "
                                        "font-size: 11px; font-weight: bold; }"

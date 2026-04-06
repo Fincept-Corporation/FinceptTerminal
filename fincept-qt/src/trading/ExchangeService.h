@@ -62,7 +62,7 @@ class ExchangeService : public QObject {
     QVector<TickerData> fetch_tickers(const QStringList& symbols);
     OrderBookData fetch_orderbook(const QString& symbol, int limit = 20);
     QVector<Candle> fetch_ohlcv(const QString& symbol, const QString& timeframe = "1h", int limit = 100);
-    QVector<MarketInfo> fetch_markets(const QString& type = "");
+    QVector<MarketInfo> fetch_markets(const QString& type = "", const QString& query = "");
     QStringList list_exchange_ids();
     QVector<TradeData> fetch_trades(const QString& symbol, int limit = 50);
     FundingRateData fetch_funding_rate(const QString& symbol);
@@ -75,6 +75,13 @@ class ExchangeService : public QObject {
     QJsonObject cancel_exchange_order(const QString& order_id, const QString& symbol);
     QJsonObject fetch_positions_live(const QString& symbol = "");
     QJsonObject fetch_open_orders_live(const QString& symbol = "");
+    QJsonObject fetch_my_trades(const QString& symbol, int limit = 50);
+    QJsonObject fetch_trading_fees(const QString& symbol = "");
+    QJsonObject set_leverage(const QString& symbol, int leverage);
+    QJsonObject set_margin_mode(const QString& symbol, const QString& mode);
+
+    // Derivatives data (synchronous — call from background thread only)
+    MarkPriceData fetch_mark_price(const QString& symbol);
 
     // Cache
     const QHash<QString, TickerData>& get_price_cache() const;
@@ -135,6 +142,9 @@ class ExchangeService : public QObject {
     std::atomic<bool> ws_connected_{false};
     QString ws_primary_symbol_;
     QStringList ws_all_symbols_;
+    // Symbol remap: exchange_symbol → requested_symbol (e.g. "BTC/USDC:USDC" → "BTC/USDT")
+    // Populated from the "symbol_map" message emitted by ws_stream.py after resolution.
+    QHash<QString, QString> ws_symbol_map_;
     void handle_ws_line(const QString& line);
     void drain_ws_buffer();
 

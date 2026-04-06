@@ -130,6 +130,17 @@ QWidget* PlanningView::build_retirement_tab() {
     l6->setStyleSheet(label_style);
     form->addRow(l6, inflation_);
 
+    withdrawal_rate_ = new QDoubleSpinBox;
+    withdrawal_rate_->setRange(2, 8);
+    withdrawal_rate_->setValue(4);
+    withdrawal_rate_->setSuffix(" %");
+    withdrawal_rate_->setDecimals(1);
+    withdrawal_rate_->setSingleStep(0.5);
+    style_spin(withdrawal_rate_);
+    auto* l7 = new QLabel("Withdrawal Rate:");
+    l7->setStyleSheet(label_style);
+    form->addRow(l7, withdrawal_rate_);
+
     input_layout->addLayout(form);
 
     auto* calc_btn = new QPushButton("CALCULATE");
@@ -258,8 +269,9 @@ void PlanningView::recalculate() {
     double inf = inflation_->value() / 100.0;
     double real_ret = ret - inf;
 
-    // 4% rule target
-    double target = annual_exp * 25.0;
+    // Withdrawal rule target: corpus = annual_expense / withdrawal_rate
+    double wr = withdrawal_rate_->value() / 100.0;
+    double target = (wr > 1e-6) ? (annual_exp / wr) : annual_exp * 25.0;
 
     // Future value: current portfolio + monthly contributions
     // FV = PV * (1+r)^n + PMT * [((1+r)^n - 1) / r]

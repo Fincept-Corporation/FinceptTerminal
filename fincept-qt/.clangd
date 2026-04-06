@@ -1,0 +1,13 @@
+CompileFlags:
+  CompilationDatabase: .
+
+Diagnostics:
+  UnusedIncludes: None
+  ClangTidy:
+    Remove:
+      - readability-identifier-naming
+      - misc-use-anonymous-namespace
+      - readability-braces-around-statements
+
+Index:
+  Background: Build

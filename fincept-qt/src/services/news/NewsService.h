@@ -162,15 +162,10 @@ class NewsService : public QObject {
 
     QNetworkAccessManager* nam_ = nullptr;
     QTimer* refresh_timer_ = nullptr;
-    QVector<NewsArticle> cache_;
-    int64_t cache_ts_ = 0;
-    int cache_ttl_sec_ = 600; // 10 min
+    static constexpr int kArticleCacheTtlSec = 600; // 10 min
+    static constexpr int kSummaryCacheTtlSec = 600;
     int feed_count_ = 0;
     QStringList active_sources_;
-
-    // Summary cache
-    HeadlineSummary summary_cache_;
-    static constexpr int SUMMARY_CACHE_TTL_SEC = 600;
 
     // WebSocket live feed
     QWebSocket* live_ws_ = nullptr;

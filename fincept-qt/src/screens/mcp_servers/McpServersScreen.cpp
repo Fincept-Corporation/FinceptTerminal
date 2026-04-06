@@ -1069,7 +1069,7 @@ void McpServersScreen::refresh_tools() {
         tools_table_->setItem(row, 1, new QTableWidgetItem(t.name));
         auto* si = new QTableWidgetItem("Fincept Terminal");
         si->setData(Qt::UserRole, QString(INTERNAL_SERVER_ID));
-        si->setForeground(QColor(colors::AMBER));
+        si->setForeground(QColor(colors::AMBER()));
         tools_table_->setItem(row, 2, si);
         tools_table_->setItem(row, 3, new QTableWidgetItem("internal"));
         tools_table_->setItem(row, 4, new QTableWidgetItem(t.description));
@@ -1084,7 +1084,7 @@ void McpServersScreen::refresh_tools() {
         tools_table_->setItem(row, 1, new QTableWidgetItem(t.name));
         auto* si = new QTableWidgetItem(t.server_name);
         si->setData(Qt::UserRole, t.server_id);
-        si->setForeground(QColor(colors::CYAN));
+        si->setForeground(QColor(colors::CYAN()));
         tools_table_->setItem(row, 2, si);
         tools_table_->setItem(row, 3, new QTableWidgetItem("external"));
         tools_table_->setItem(row, 4, new QTableWidgetItem(t.description));

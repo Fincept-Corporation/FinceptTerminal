@@ -640,8 +640,25 @@ QString PythonSetupManager::download_file(const QString& url, const QString& des
         return "Download failed: " + QString::fromUtf8(proc.readAllStandardError()).left(200);
     }
 #else
+    // Verify curl is available before launching — gives a clear error
+    // instead of a cryptic "failed to start" message.
+    {
+        QProcess which;
+        which.start("which", {"curl"});
+        which.waitForFinished(3000);
+        if (which.exitCode() != 0) {
+            return "curl not found. Install it first:\n"
+                   "  Ubuntu/Debian: sudo apt install curl\n"
+                   "  Fedora/RHEL:   sudo dnf install curl\n"
+                   "  macOS:         brew install curl  (or use system curl)";
+        }
+    }
     QProcess proc;
-    proc.start("curl", {"-L", "--fail", "-o", dest_path, url});
+    // --retry 3: automatic retry on transient network errors
+    // --connect-timeout 30: fail fast if server unreachable
+    proc.start("curl", {"-L", "--fail", "--retry", "3",
+                        "--connect-timeout", "30",
+                        "-o", dest_path, url});
     if (!proc.waitForFinished(15 * 60 * 1000)) {
         proc.kill();
         return "Download timed out";

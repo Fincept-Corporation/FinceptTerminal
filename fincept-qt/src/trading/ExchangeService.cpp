@@ -237,6 +237,7 @@ void ExchangeService::poll_prices() {
                         try {
                             cb(r.ticker.symbol, r.ticker);
                         } catch (...) {
+                            LOG_WARN("ExchangeService", "Price update callback threw an exception");
                         }
                     }
                 }
@@ -642,6 +643,24 @@ void ExchangeService::handle_ws_line(const QString& line) {
 
     if (type == "status") {
         ws_connected_ = msg.value("connected").toBool(false);
+        if (!msg.value("connected").toBool(false)) {
+            // Clear symbol map on disconnect so stale remaps don't persist
+            QMutexLocker lock(&mutex_);
+            ws_symbol_map_.clear();
+        }
+        return;
+    }
+
+    if (type == "symbol_map") {
+        // ws_stream.py emits this after resolving symbols — e.g. BTC/USDT → BTC/USDC:USDC
+        // on Hyperliquid. Store the reverse map so incoming tickers get remapped to the
+        // originally requested symbol before going into price_cache_.
+        QMutexLocker lock(&mutex_);
+        ws_symbol_map_.clear();
+        const auto map_obj = msg.value("map").toObject();
+        for (auto it = map_obj.constBegin(); it != map_obj.constEnd(); ++it)
+            ws_symbol_map_[it.key()] = it.value().toString();
+        LOG_INFO(TAG, QString("Symbol map updated: %1 remaps").arg(ws_symbol_map_.size()));
         return;
     }
 
@@ -672,6 +691,16 @@ void ExchangeService::handle_ws_line(const QString& line) {
         if (ticker.symbol.isEmpty() || ticker.last <= 0.0)
             return;
 
+        // Remap exchange symbol → originally requested symbol.
+        // e.g. on Hyperliquid: "BTC/USDC:USDC" → "BTC/USDT"
+        // ws_stream.py emits a "symbol_map" message after resolution that populates ws_symbol_map_.
+        {
+            QMutexLocker lock(&mutex_);
+            auto it = ws_symbol_map_.constFind(ticker.symbol);
+            if (it != ws_symbol_map_.constEnd())
+                ticker.symbol = it.value();
+        }
+
         // Copy callbacks out, then release mutex BEFORE firing
         QVector<PriceUpdateCallback> cbs;
         {
@@ -685,6 +714,7 @@ void ExchangeService::handle_ws_line(const QString& line) {
             try {
                 cb(ticker.symbol, ticker);
             } catch (...) {
+                LOG_WARN("ExchangeService", "Price callback threw an exception for " + ticker.symbol);
             }
         }
         return;
@@ -703,6 +733,7 @@ void ExchangeService::handle_ws_line(const QString& line) {
             try {
                 cb(ob.symbol, ob);
             } catch (...) {
+                LOG_WARN("ExchangeService", "Orderbook callback threw an exception for " + ob.symbol);
             }
         }
         return;
@@ -725,6 +756,7 @@ void ExchangeService::handle_ws_line(const QString& line) {
             try {
                 cb(sym, c);
             } catch (...) {
+                LOG_WARN("ExchangeService", "Candle callback threw an exception for " + sym);
             }
         }
         return;
@@ -732,22 +764,51 @@ void ExchangeService::handle_ws_line(const QString& line) {
 
     if (type == "trade") {
         TradeData td;
-        td.symbol = msg.value("symbol").toString();
-        td.side = msg.value("side").toString();
-        td.price = msg.value("price").toDouble();
-        td.amount = msg.value("amount").toDouble();
+        td.symbol    = msg.value("symbol").toString();
+        td.side      = msg.value("side").toString();
+        td.price     = msg.value("price").toDouble();
+        td.amount    = msg.value("amount").toDouble();
         td.timestamp = msg.value("timestamp").toVariant().toLongLong();
-        QVector<TradeCallback> cbs;
+
+        QVector<TradeCallback>  trade_cbs;
+        QVector<PriceUpdateCallback> price_cbs;
+        TickerData fast_ticker;
+        bool emit_price = false;
+
         {
             QMutexLocker lock(&mutex_);
-            cbs.reserve(trade_callbacks_.size());
+            // Use trade price to keep price_cache_ current — this is the fast path
+            // for exchanges where watch_ticker is slow (e.g. Kraken spot ~2/15s).
+            if (!td.symbol.isEmpty() && td.price > 0.0) {
+                auto& cached = price_cache_[td.symbol];
+                cached.symbol = td.symbol;
+                cached.last   = td.price;
+                if (cached.bid <= 0.0) cached.bid = td.price;
+                if (cached.ask <= 0.0) cached.ask = td.price;
+                fast_ticker = cached;
+                emit_price  = true;
+            }
+            trade_cbs.reserve(trade_callbacks_.size());
             for (auto it = trade_callbacks_.constBegin(); it != trade_callbacks_.constEnd(); ++it)
-                cbs.append(it.value());
+                trade_cbs.append(it.value());
+            if (emit_price) {
+                price_cbs.reserve(price_callbacks_.size());
+                for (auto it = price_callbacks_.constBegin(); it != price_callbacks_.constEnd(); ++it)
+                    price_cbs.append(it.value());
+            }
         }
-        for (const auto& cb : cbs) {
-            try {
-                cb(td.symbol, td);
-            } catch (...) {
+
+        for (const auto& cb : trade_cbs) {
+            try { cb(td.symbol, td); } catch (...) {
+                LOG_WARN("ExchangeService", "Trade callback threw an exception for " + td.symbol);
+            }
+        }
+        // Fire price callbacks so the ticker bar and order entry update on every trade
+        if (emit_price) {
+            for (const auto& cb : price_cbs) {
+                try { cb(fast_ticker.symbol, fast_ticker); } catch (...) {
+                    LOG_WARN("ExchangeService", "Price callback (from trade) threw an exception for " + fast_ticker.symbol);
+                }
             }
         }
     }
@@ -1044,11 +1105,15 @@ QVector<Candle> ExchangeService::fetch_ohlcv(const QString& symbol, const QStrin
     return result;
 }
 
-QVector<MarketInfo> ExchangeService::fetch_markets(const QString& type) {
+QVector<MarketInfo> ExchangeService::fetch_markets(const QString& type, const QString& query) {
     if (is_daemon_running()) {
         QJsonObject args;
         if (!type.isEmpty())
             args["type"] = type;
+        if (!query.isEmpty()) {
+            args["query"] = query;
+            args["limit"] = 100; // server-side cap when filtering
+        }
         auto j = daemon_call("fetch_markets", args);
         if (!j.contains("error") && j.contains("markets")) {
             QVector<MarketInfo> result;
@@ -1251,6 +1316,73 @@ QJsonObject ExchangeService::fetch_open_orders_live(const QString& symbol) {
     if (!symbol.isEmpty())
         args << symbol;
     return call_script_with_credentials("exchange/fetch_open_orders.py", args);
+}
+
+MarkPriceData ExchangeService::fetch_mark_price(const QString& symbol) {
+    MarkPriceData mp;
+    mp.symbol = symbol;
+    QJsonObject j;
+    if (is_daemon_running()) {
+        j = daemon_call("fetch_mark_price", {{"symbol", symbol}});
+        if (j.contains("error"))
+            j = {};
+    }
+    if (j.isEmpty())
+        j = call_script("exchange/fetch_mark_price.py", {symbol});
+    if (!j.isEmpty()) {
+        mp.mark_price  = j.value("mark_price").toDouble();
+        mp.index_price = j.value("index_price").toDouble();
+        mp.timestamp   = j.value("timestamp").toVariant().toLongLong();
+    }
+    return mp;
+}
+
+QJsonObject ExchangeService::fetch_my_trades(const QString& symbol, int limit) {
+    if (is_daemon_running()) {
+        auto j = daemon_call("fetch_my_trades", {{"symbol", symbol}, {"limit", limit}});
+        if (!j.contains("error"))
+            return j;
+        LOG_WARN(TAG, "Daemon fetch_my_trades failed, falling back to script");
+    }
+    return call_script_with_credentials("exchange/fetch_my_trades.py",
+                                        {symbol, QString::number(limit)});
+}
+
+QJsonObject ExchangeService::fetch_trading_fees(const QString& symbol) {
+    if (is_daemon_running()) {
+        QJsonObject args;
+        if (!symbol.isEmpty())
+            args["symbol"] = symbol;
+        auto j = daemon_call("fetch_trading_fees", args);
+        if (!j.contains("error"))
+            return j;
+        LOG_WARN(TAG, "Daemon fetch_trading_fees failed, falling back to script");
+    }
+    QStringList args;
+    if (!symbol.isEmpty())
+        args << symbol;
+    return call_script("exchange/fetch_trading_fees.py", args);
+}
+
+QJsonObject ExchangeService::set_leverage(const QString& symbol, int leverage) {
+    if (is_daemon_running()) {
+        auto j = daemon_call("set_leverage", {{"symbol", symbol}, {"leverage", leverage}});
+        if (!j.contains("error"))
+            return j;
+        LOG_WARN(TAG, "Daemon set_leverage failed, falling back to script");
+    }
+    return call_script_with_credentials("exchange/set_leverage.py",
+                                        {symbol, QString::number(leverage)});
+}
+
+QJsonObject ExchangeService::set_margin_mode(const QString& symbol, const QString& mode) {
+    if (is_daemon_running()) {
+        auto j = daemon_call("set_margin_mode", {{"symbol", symbol}, {"mode", mode}});
+        if (!j.contains("error"))
+            return j;
+        LOG_WARN(TAG, "Daemon set_margin_mode failed, falling back to script");
+    }
+    return call_script_with_credentials("exchange/set_margin_mode.py", {symbol, mode});
 }
 
 const QHash<QString, TickerData>& ExchangeService::get_price_cache() const {

@@ -151,6 +151,10 @@ class AIQuantLabService : public QObject {
     Q_DISABLE_COPY(AIQuantLabService)
 
     void run_python(const QString& script, const QStringList& args, const QString& module_id, const QString& command);
+    void run_python_cached(const QString& script, const QStringList& args, const QString& module_id,
+                           const QString& command, int ttl_sec);
+
+    static constexpr int kListTtlSec = 5 * 60;
 
     // Module ID → script mapping
     QHash<QString, QString> script_map_;

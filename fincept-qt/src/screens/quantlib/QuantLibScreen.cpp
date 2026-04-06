@@ -16,8 +16,8 @@
 namespace {
 using namespace fincept::ui;
 
-static const QString kStyle =
-    QStringLiteral("#qlScreen { background: %1; }"
+inline QString kStyle() {
+    return QStringLiteral("#qlScreen { background: %1; }"
 
                    "#qlHeader { background: %2; border-bottom: 2px solid %3; }"
                    "#qlHeaderTitle { color: %4; font-size: 12px; font-weight: 700; background: transparent; }"
@@ -86,7 +86,8 @@ static const QString kStyle =
         .arg(colors::TEXT_DIM)       // %11
         .arg(colors::BG_HOVER)       // %12
         .arg(colors::CYAN)           // %13
-    ;
+        ;
+}
 } // namespace
 
 namespace fincept::screens {
@@ -133,7 +134,7 @@ static QList<QuantModule> build_modules() {
 
 QuantLibScreen::QuantLibScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("qlScreen");
-    setStyleSheet(kStyle);
+    setStyleSheet(kStyle());
     modules_ = build_modules();
     setup_ui();
     LOG_INFO("QuantLib", "Screen constructed — 18 modules, 590+ endpoints");
@@ -1227,7 +1228,7 @@ void QuantLibScreen::display_result_array(const QJsonArray& arr) {
                 auto* item = new QTableWidgetItem(text);
                 item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 if (val.isDouble())
-                    item->setForeground(QColor(val.toDouble() < 0 ? colors::NEGATIVE : colors::CYAN));
+                    item->setForeground(QColor(val.toDouble() < 0 ? colors::NEGATIVE() : colors::CYAN()));
                 result_table_->setItem(r, c, item);
             }
         }
@@ -1273,7 +1274,7 @@ void QuantLibScreen::display_result(const QJsonObject& result) {
             int r = 0;
             for (auto it = obj.begin(); it != obj.end(); ++it, ++r) {
                 auto* key_item = new QTableWidgetItem(it.key());
-                key_item->setForeground(QColor(colors::TEXT_SECONDARY));
+                key_item->setForeground(QColor(colors::TEXT_SECONDARY()));
                 result_table_->setItem(r, 0, key_item);
 
                 QString text;
@@ -1294,7 +1295,7 @@ void QuantLibScreen::display_result(const QJsonObject& result) {
                 auto* val_item = new QTableWidgetItem(text);
                 val_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 if (val.isDouble())
-                    val_item->setForeground(QColor(val.toDouble() < 0 ? colors::NEGATIVE : colors::CYAN));
+                    val_item->setForeground(QColor(val.toDouble() < 0 ? colors::NEGATIVE() : colors::CYAN()));
                 result_table_->setItem(r, 1, val_item);
             }
             result_table_->resizeColumnsToContents();

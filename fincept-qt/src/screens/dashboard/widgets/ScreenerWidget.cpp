@@ -15,21 +15,21 @@ static const QStringList kScreenerSymbols = {
     "MS",   "BRK-B", "V",     "MA",   "WMT",  "COST", "TGT",  "HD",   "AMGN", "PFE",  "JNJ",  "MRK",  "XOM",  "CVX",
     "SLB",  "NEE",   "DUK",   "SO",   "CAT",  "GE",   "HON",  "RTX",  "PLTR", "COIN", "SOFI", "PYPL", "SNAP", "UBER"};
 
-ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", parent, ui::colors::INFO) {
+ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", parent, ui::colors::INFO()) {
     auto* vl = content_layout();
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     // Filter bar
     auto* filter_bar = new QWidget;
-    filter_bar->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED));
+    filter_bar->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
     auto* fl = new QHBoxLayout(filter_bar);
     fl->setContentsMargins(8, 6, 8, 6);
     fl->setSpacing(8);
 
     auto* filter_lbl = new QLabel("SORT BY");
     filter_lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                  .arg(ui::colors::TEXT_TERTIARY));
+                                  .arg(ui::colors::TEXT_TERTIARY()));
     fl->addWidget(filter_lbl);
 
     filter_combo_ = new QComboBox;
@@ -38,15 +38,15 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", p
         QString("QComboBox { background: %1; color: %2; border: 1px solid %3; font-size: 10px; padding: 2px 6px; }"
                 "QComboBox::drop-down { border: none; }"
                 "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3; }")
-            .arg(ui::colors::BG_BASE)
-            .arg(ui::colors::TEXT_PRIMARY)
-            .arg(ui::colors::BORDER_MED));
+            .arg(ui::colors::BG_BASE())
+            .arg(ui::colors::TEXT_PRIMARY())
+            .arg(ui::colors::BORDER_MED()));
     fl->addWidget(filter_combo_);
     fl->addStretch();
 
     auto* count_lbl = new QLabel(QString("%1 symbols").arg(kScreenerSymbols.size()));
     count_lbl->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
     fl->addWidget(count_lbl);
 
     vl->addWidget(filter_bar);
@@ -54,14 +54,14 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget("STOCK SCREENER", p
     // Column headers
     auto* header = new QWidget;
     header->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED).arg(ui::colors::BORDER_DIM));
+        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_RAISED()).arg(ui::colors::BORDER_DIM()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(8, 3, 8, 3);
 
     auto make_hdr = [&](const QString& t, int s, Qt::Alignment a = Qt::AlignLeft) {
         auto* l = new QLabel(t);
         l->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                             .arg(ui::colors::TEXT_TERTIARY));
+                             .arg(ui::colors::TEXT_TERTIARY()));
         l->setAlignment(a);
         hl->addWidget(l, s);
     };
@@ -152,25 +152,25 @@ void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
     bool alt = false;
     for (const auto& q : rows) {
         auto* row = new QWidget;
-        row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED : "transparent"));
+        row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
         auto* sym = new QLabel(q.symbol);
         sym->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(ui::colors::INFO));
+            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(ui::colors::INFO()));
         rl->addWidget(sym, 2);
 
         auto* price = new QLabel(QString("$%1").arg(q.price, 0, 'f', 2));
         price->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         price->setStyleSheet(
-            QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_PRIMARY));
+            QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_PRIMARY()));
         rl->addWidget(price, 2);
 
         QString chg_str = QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2);
-        QString chg_col = q.change_pct > 0   ? ui::colors::POSITIVE
-                          : q.change_pct < 0 ? ui::colors::NEGATIVE
-                                             : ui::colors::TEXT_PRIMARY;
+        QString chg_col = q.change_pct > 0   ? ui::colors::POSITIVE()
+                          : q.change_pct < 0 ? ui::colors::NEGATIVE()
+                                             : ui::colors::TEXT_PRIMARY();
         auto* chg = new QLabel(chg_str);
         chg->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         chg->setStyleSheet(
@@ -191,7 +191,7 @@ void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
         auto* vol = new QLabel(vol_str);
         vol->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         vol->setStyleSheet(
-            QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_SECONDARY));
+            QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         rl->addWidget(vol, 2);
 
         list_layout_->addWidget(row);

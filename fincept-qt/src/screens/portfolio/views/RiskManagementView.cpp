@@ -134,6 +134,11 @@ void RiskManagementView::set_data(const portfolio::PortfolioSummary& summary, co
     update_contribution();
 }
 
+void RiskManagementView::set_metrics(const portfolio::ComputedMetrics& metrics) {
+    metrics_ = metrics;
+    update_stress_test(); // rescale with real beta
+}
+
 void RiskManagementView::update_overview() {
     if (overview_panel_->layout())
         delete overview_panel_->layout();
@@ -149,17 +154,26 @@ void RiskManagementView::update_overview() {
 
     // Compute basic risk metrics
     double total_mv = summary_.total_market_value;
-    double avg_vol = 0;
-    int vol_count = 0;
-    for (const auto& h : summary_.holdings) {
-        if (std::abs(h.day_change_percent) > 0.001) {
-            avg_vol += std::abs(h.day_change_percent);
-            ++vol_count;
+
+    // Use 30-day realized volatility from ComputedMetrics when available;
+    // fall back to single-day cross-sectional proxy otherwise.
+    double ann_vol = 0;
+    if (metrics_.volatility.has_value()) {
+        ann_vol = *metrics_.volatility; // already annualised %
+    } else {
+        double avg_vol = 0;
+        int vol_count = 0;
+        for (const auto& h : summary_.holdings) {
+            if (std::abs(h.day_change_percent) > 0.001) {
+                avg_vol += std::abs(h.day_change_percent);
+                ++vol_count;
+            }
         }
+        if (vol_count > 0)
+            avg_vol /= vol_count;
+        ann_vol = avg_vol * std::sqrt(252.0);
     }
-    if (vol_count > 0)
-        avg_vol /= vol_count;
-    double ann_vol = avg_vol * std::sqrt(252.0);
+    const double avg_vol = ann_vol / std::sqrt(252.0); // daily % for VaR formula
 
     // Concentration
     auto sorted = summary_.holdings;
@@ -172,9 +186,9 @@ void RiskManagementView::update_overview() {
     for (qsizetype i = 0; i < std::min(qsizetype{5}, sorted.size()); ++i)
         conc_top5 += sorted[i].weight;
 
-    // VaR/CVaR
+    // VaR/CVaR — parametric normal: CVaR/VaR = phi(1.645)/0.05 ≈ 1.546
     double var95 = total_mv * avg_vol * 1.645 / 100.0;
-    double cvar95 = var95 * 1.2;
+    double cvar95 = var95 * 1.546;
 
     // Metric cards grid
     auto* grid = new QGridLayout;
@@ -279,6 +293,20 @@ void RiskManagementView::update_stress_test() {
                           + s.bond_shock      * bond_wt
                           + s.commodity_shock * commodity_wt
                           + s.equity_shock * 1.5 * crypto_wt; // crypto amplified
+
+        // Scale by portfolio beta vs SPY (if available from OLS).
+        // Beta > 1 means portfolio amplifies market moves; beta < 1 dampens.
+        // SPY equity_shock is the base market scenario, so multiply equity
+        // component by beta. Bond/commodity/crypto retain their own sensitivities.
+        if (metrics_.beta.has_value()) {
+            const double beta = std::max(0.0, *metrics_.beta); // clamp negative beta to 0
+            const double equity_impact = s.equity_shock * equity_wt * beta;
+            const double other_impact  = s.bond_shock      * bond_wt
+                                       + s.commodity_shock * commodity_wt
+                                       + s.equity_shock * 1.5 * crypto_wt;
+            impact_pct = equity_impact + other_impact;
+        }
+
         double loss = total_mv * std::abs(impact_pct) / 100.0;
 
         set_cell(0, s.name, ui::colors::TEXT_PRIMARY);

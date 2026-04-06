@@ -41,6 +41,7 @@ class McpClient : public QObject {
     ~McpClient() override;
 
     // Lifecycle
+    // NOTE: start() must only be called from a background thread, never the UI thread.
     Result<void> start();
     void stop();
     bool is_running() const;
@@ -77,6 +78,7 @@ class McpClient : public QObject {
     Result<QJsonObject> send_request(const QString& method, const QJsonObject& params, int timeout_ms = 30000);
     void handle_line(const QByteArray& line);
     void append_log(const QString& line);
+    void cleanup_process(); // deletes process_ safely (call only after thread is stopped/not started)
 
     static constexpr int MAX_LOG_LINES = 500;
     mutable QMutex log_mutex_;

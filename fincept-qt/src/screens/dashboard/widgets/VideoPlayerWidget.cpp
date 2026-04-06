@@ -1,11 +1,16 @@
 #include "screens/dashboard/widgets/VideoPlayerWidget.h"
 
+#include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QDesktopServices>
+#include <QDir>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QScrollArea>
+#include <QStandardPaths>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -277,19 +282,58 @@ void VideoPlayerWidget::refresh_data() {
     play_url(current_url_, current_title_.isEmpty() ? "Custom Stream" : current_title_);
 }
 
+QString VideoPlayerWidget::resolve_ytdlp_program() const {
+#ifdef _WIN32
+    const QString exe_name = "yt-dlp.exe";
+#else
+    const QString exe_name = "yt-dlp";
+#endif
+    const QString exe_dir = QCoreApplication::applicationDirPath();
+    const QStringList local_candidates = {
+        QDir(exe_dir).filePath(exe_name),
+        QDir(exe_dir).filePath("tools/" + exe_name),
+        QDir(exe_dir).filePath("bin/" + exe_name),
+        QDir(exe_dir).filePath("../tools/" + exe_name),
+    };
+
+    for (const auto& candidate : local_candidates) {
+        if (QFileInfo::exists(candidate)) {
+            return QDir::cleanPath(candidate);
+        }
+    }
+
+    const QString from_path = QStandardPaths::findExecutable("yt-dlp");
+    if (!from_path.isEmpty()) {
+        return from_path;
+    }
+
+    return {};
+}
+
 void VideoPlayerWidget::resolve_youtube_and_play(const QString& youtube_url, const QString& title) {
+    Q_UNUSED(title)
     set_loading(true);
     stack_->setCurrentIndex(1);
+
+    const QString ytdlp_program = resolve_ytdlp_program();
+    if (ytdlp_program.isEmpty()) {
+        set_loading(false);
+        status_label_->setText("yt-dlp not found. Bundle yt-dlp.exe next to FinceptTerminal.exe.");
+        status_label_->show();
+        LOG_ERROR("VideoPlayer", "yt-dlp not found in app directory or PATH");
+        return;
+    }
 
     // Use yt-dlp to get the best direct stream URL (no downloading, just URL extraction)
     auto* proc = new QProcess(this);
     connect(proc, &QProcess::finished, this, &VideoPlayerWidget::on_ytdlp_finished);
     connect(proc, &QProcess::finished, proc, &QProcess::deleteLater);
+    connect(proc, &QProcess::errorOccurred, this, &VideoPlayerWidget::on_ytdlp_error);
 
     // -f bestvideo+bestaudio/best: best quality with audio
     // --no-playlist: single video only
     // -g: print URL only, don't download
-    proc->start("yt-dlp",
+    proc->start(ytdlp_program,
                 {"-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best", "--no-playlist", "-g", youtube_url});
 }
 
@@ -301,8 +345,9 @@ void VideoPlayerWidget::on_ytdlp_finished(int exit_code, QProcess::ExitStatus /*
     if (exit_code != 0) {
         const QString err = proc->readAllStandardError().trimmed();
         set_loading(false);
-        status_label_->setText("yt-dlp error: " + err.left(120));
+        status_label_->setText("yt-dlp error: " + (err.isEmpty() ? QString("Unknown error") : err.left(120)));
         status_label_->show();
+        LOG_ERROR("VideoPlayer", "yt-dlp failed: " + err.left(250));
         return;
     }
 
@@ -319,6 +364,19 @@ void VideoPlayerWidget::on_ytdlp_finished(int exit_code, QProcess::ExitStatus /*
     }
 
     play_direct(stream_url);
+}
+
+void VideoPlayerWidget::on_ytdlp_error(QProcess::ProcessError /*error*/) {
+    auto* proc = qobject_cast<QProcess*>(sender());
+    if (!proc)
+        return;
+
+    const QString err = proc->errorString();
+    set_loading(false);
+    status_label_->setText("Failed to start yt-dlp: " + (err.isEmpty() ? QString("Unknown error") : err.left(90)));
+    status_label_->show();
+    LOG_ERROR("VideoPlayer", "yt-dlp process error: " + err);
+    proc->deleteLater();
 }
 
 void VideoPlayerWidget::play_direct(const QString& stream_url) {

@@ -1,8 +1,6 @@
 #pragma once
 #include "core/result/Result.h"
 
-#include <QDateTime>
-#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
@@ -103,8 +101,6 @@ class MarketDataService : public QObject {
     using SparklineCallback = std::function<void(bool, QHash<QString, QVector<double>>)>;
     void fetch_sparklines(const QStringList& symbols, SparklineCallback cb);
 
-    /// Cache TTL in seconds (default 30s)
-    void set_cache_ttl(int seconds) { cache_ttl_sec_ = seconds; }
 
     static QVector<MarketCategory> default_global_markets();
     static QVector<RegionalMarket> default_regional_markets();
@@ -129,13 +125,8 @@ class MarketDataService : public QObject {
     QVector<PendingRequest> pending_;
     bool batch_scheduled_ = false;
 
-    // ── Caching ──
-    struct CachedQuote {
-        QuoteData data;
-        qint64 timestamp = 0; // seconds since epoch
-    };
-    QHash<QString, CachedQuote> cache_;
-    int cache_ttl_sec_ = 30;
+    // ── Caching — delegated to CacheManager ──
+    static constexpr int kQuoteCacheTtlSec = 30;
 };
 
 } // namespace fincept::services

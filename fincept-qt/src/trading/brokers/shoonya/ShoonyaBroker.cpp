@@ -39,8 +39,8 @@ QString ShoonyaBroker::sh_order_type(OrderType t) {
     switch (t) {
         case OrderType::Market:        return "MKT";
         case OrderType::Limit:         return "LMT";
-        case OrderType::StopLoss:      return "SL-LMT";
-        case OrderType::StopLossLimit: return "SL-MKT";
+        case OrderType::StopLoss:      return "SL-MKT";   // SL-M: trigger only, market fill
+        case OrderType::StopLossLimit: return "SL-LMT";   // SL:   trigger + limit price
         default:                       return "MKT";
     }
 }
@@ -278,9 +278,13 @@ ApiResponse<QVector<BrokerOrderInfo>> ShoonyaBroker::get_orders(const BrokerCred
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
 
-    // On error/empty: returns {"stat":"Not_Ok","emsg":"..."} object, not array
-    if (doc.isObject())
+    // On empty orders: returns {"stat":"Not_Ok","emsg":"No Data"} object, not array
+    if (doc.isObject()) {
+        QString emsg = doc.object().value("emsg").toString().toLower();
+        if (emsg.contains("no data") || emsg.contains("no order") || emsg.contains("empty"))
+            return {true, QVector<BrokerOrderInfo>{}, "", ts};
         return {false, std::nullopt, checked_error(resp, doc.object().value("emsg").toString("get_orders failed")), ts};
+    }
 
     if (!doc.isArray())
         return {false, std::nullopt, "get_orders: invalid response", ts};
@@ -362,8 +366,12 @@ ApiResponse<QVector<BrokerPosition>> ShoonyaBroker::get_positions(const BrokerCr
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
 
-    if (doc.isObject())
+    if (doc.isObject()) {
+        QString emsg = doc.object().value("emsg").toString().toLower();
+        if (emsg.contains("no data") || emsg.contains("no position") || emsg.contains("empty"))
+            return {true, QVector<BrokerPosition>{}, "", ts};
         return {false, std::nullopt, checked_error(resp, doc.object().value("emsg").toString("get_positions failed")), ts};
+    }
 
     if (!doc.isArray())
         return {false, std::nullopt, "get_positions: invalid response", ts};
@@ -413,8 +421,12 @@ ApiResponse<QVector<BrokerHolding>> ShoonyaBroker::get_holdings(const BrokerCred
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
 
-    if (doc.isObject())
+    if (doc.isObject()) {
+        QString emsg = doc.object().value("emsg").toString().toLower();
+        if (emsg.contains("no data") || emsg.contains("no holding") || emsg.contains("empty"))
+            return {true, QVector<BrokerHolding>{}, "", ts};
         return {false, std::nullopt, checked_error(resp, doc.object().value("emsg").toString("get_holdings failed")), ts};
+    }
 
     if (!doc.isArray())
         return {false, std::nullopt, "get_holdings: invalid response", ts};

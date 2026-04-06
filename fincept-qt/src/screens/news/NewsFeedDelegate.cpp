@@ -57,13 +57,13 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
 
     // Background
     if (selected)
-        painter->fillRect(rect, QColor(ui::colors::BG_HOVER));
+        painter->fillRect(rect, QColor(ui::colors::BG_HOVER()));
     else if (hovered)
-        painter->fillRect(rect, QColor(ui::colors::BG_RAISED));
+        painter->fillRect(rect, QColor(ui::colors::BG_RAISED()));
     else if (index.row() % 2 == 1)
-        painter->fillRect(rect, QColor(ui::colors::ROW_ALT));
+        painter->fillRect(rect, QColor(ui::colors::ROW_ALT()));
     else
-        painter->fillRect(rect, QColor(ui::colors::BG_BASE));
+        painter->fillRect(rect, QColor(ui::colors::BG_BASE()));
 
     int x = rect.left() + 2;
     int cy = rect.top() + rect.height() / 2;
@@ -79,7 +79,7 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     // New indicator — 3px amber dot
     if (is_new) {
         painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(ui::colors::AMBER));
+        painter->setBrush(QColor(ui::colors::AMBER()));
         painter->drawEllipse(QPoint(x + 1, cy), 2, 2);
     }
     x += 6;
@@ -92,7 +92,7 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
 
     // Time
     painter->setFont(tiny_font_);
-    painter->setPen(QColor(ui::colors::TEXT_DIM));
+    painter->setPen(QColor(ui::colors::TEXT_DIM()));
     QString time_str = services::relative_time(article.sort_ts);
     painter->drawText(QRect(x, rect.top(), 36, rect.height()), Qt::AlignVCenter | Qt::AlignRight, time_str);
     x += 40;
@@ -109,20 +109,20 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     // Source tier badge
     painter->setFont(tiny_font_);
     if (tier == 1) {
-        painter->setPen(QColor(ui::colors::AMBER));
+        painter->setPen(QColor(ui::colors::AMBER()));
         painter->drawText(QPoint(x, text_y), QString::fromUtf8("\xe2\x98\x85")); // ★
     } else if (tier == 2) {
-        painter->setPen(QColor(ui::colors::TEXT_SECONDARY));
+        painter->setPen(QColor(ui::colors::TEXT_SECONDARY()));
         painter->drawText(QPoint(x, text_y), QString::fromUtf8("\xe2\x97\x8f")); // ●
     } else if (tier == 3) {
-        painter->setPen(QColor(ui::colors::TEXT_TERTIARY));
+        painter->setPen(QColor(ui::colors::TEXT_TERTIARY()));
         painter->drawText(QPoint(x, text_y), QString::fromUtf8("\xc2\xb7")); // ·
     }
     x += 12;
 
     // Source name
     painter->setFont(bold_font_);
-    painter->setPen(QColor(ui::colors::CYAN));
+    painter->setPen(QColor(ui::colors::CYAN()));
     QString source = article.source.left(10).toUpper();
     painter->drawText(QRect(x, rect.top(), 72, rect.height()), Qt::AlignVCenter | Qt::AlignLeft, source);
     x += 76;
@@ -130,7 +130,7 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     // Language badge (if not English)
     if (!article.lang.isEmpty() && article.lang != "en") {
         painter->setFont(tiny_font_);
-        painter->setPen(QColor(ui::colors::TEXT_DIM));
+        painter->setPen(QColor(ui::colors::TEXT_DIM()));
         QString lang_badge = article.lang.toUpper();
         painter->drawText(QRect(x, rect.top(), 20, rect.height()), Qt::AlignVCenter | Qt::AlignCenter, lang_badge);
         x += 22;
@@ -147,9 +147,9 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     bool is_hot = article.priority == services::Priority::FLASH || article.priority == services::Priority::URGENT;
     if (is_hot) {
         painter->setFont(bold_font_);
-        painter->setPen(QColor(ui::colors::TEXT_PRIMARY));
+        painter->setPen(QColor(ui::colors::TEXT_PRIMARY()));
     } else {
-        painter->setPen(QColor(ui::colors::TEXT_SECONDARY));
+        painter->setPen(QColor(ui::colors::TEXT_SECONDARY()));
     }
 
     int right_reserve = 140; // space for credibility + threat + sentiment + tickers
@@ -171,7 +171,7 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
             painter->drawText(QPoint(x, text_y), QString::fromUtf8("\xe2\x9a\xa0")); // ⚠
             x += 12;
         } else {
-            painter->setPen(QColor(ui::colors::WARNING));
+            painter->setPen(QColor(ui::colors::WARNING()));
             painter->drawText(QPoint(x, text_y), "!");
             x += 8;
         }
@@ -190,20 +190,20 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     // Sentiment arrow
     painter->setFont(data_font_);
     if (article.sentiment == services::Sentiment::BULLISH) {
-        painter->setPen(QColor(ui::colors::POSITIVE));
+        painter->setPen(QColor(ui::colors::POSITIVE()));
         painter->drawText(QPoint(x, text_y), QString::fromUtf8("\xe2\x96\xb2")); // ▲
     } else if (article.sentiment == services::Sentiment::BEARISH) {
-        painter->setPen(QColor(ui::colors::NEGATIVE));
+        painter->setPen(QColor(ui::colors::NEGATIVE()));
         painter->drawText(QPoint(x, text_y), QString::fromUtf8("\xe2\x96\xbc")); // ▼
     } else {
-        painter->setPen(QColor(ui::colors::TEXT_DIM));
+        painter->setPen(QColor(ui::colors::TEXT_DIM()));
         painter->drawText(QPoint(x, text_y), "-");
     }
     x += 16;
 
     // Tickers (up to 2)
     painter->setFont(tiny_font_);
-    painter->setPen(QColor(ui::colors::WARNING));
+    painter->setPen(QColor(ui::colors::WARNING()));
     for (int i = 0; i < std::min(2, static_cast<int>(article.tickers.size())); ++i) {
         QString ticker = "$" + article.tickers[i];
         painter->drawText(QPoint(x, text_y), ticker);
@@ -211,7 +211,7 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     }
 
     // Bottom border
-    painter->setPen(QColor(ui::colors::BORDER_DIM));
+    painter->setPen(QColor(ui::colors::BORDER_DIM()));
     painter->drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom());
 }
 
@@ -223,12 +223,12 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
     auto velocity_text = index.data(VelocityTextRole).toString();
 
     // Card background
-    QColor bg = selected ? QColor(ui::colors::BG_HOVER)
-                         : (hovered ? QColor(ui::colors::BG_RAISED) : QColor(ui::colors::BG_SURFACE));
+    QColor bg = selected ? QColor(ui::colors::BG_HOVER())
+                         : (hovered ? QColor(ui::colors::BG_RAISED()) : QColor(ui::colors::BG_SURFACE()));
     painter->fillRect(rect, bg);
 
     // Card border
-    painter->setPen(QColor(ui::colors::BORDER_DIM));
+    painter->setPen(QColor(ui::colors::BORDER_DIM()));
     painter->drawRect(rect.adjusted(0, 0, -1, -1));
 
     int x = rect.left() + 8;
@@ -241,18 +241,18 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
     // New indicator
     if (is_new) {
         painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(ui::colors::AMBER));
+        painter->setBrush(QColor(ui::colors::AMBER()));
         painter->drawEllipse(QPoint(rect.left() + 5, rect.top() + 8), 2, 2);
     }
 
     // Row 1: [BREAKING badge] [tier] [headline] [velocity]
     if (cluster.is_breaking) {
         painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(ui::colors::NEGATIVE));
+        painter->setBrush(QColor(ui::colors::NEGATIVE()));
         QRect badge_rect(x, y, 62, 16);
         painter->drawRect(badge_rect);
         painter->setFont(tiny_font_);
-        painter->setPen(QColor(ui::colors::TEXT_PRIMARY));
+        painter->setPen(QColor(ui::colors::TEXT_PRIMARY()));
         painter->drawText(badge_rect, Qt::AlignCenter, "BREAKING");
         x += 66;
     }
@@ -260,17 +260,17 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
     // Tier badge
     painter->setFont(tiny_font_);
     if (cluster.tier == 1) {
-        painter->setPen(QColor(ui::colors::AMBER));
+        painter->setPen(QColor(ui::colors::AMBER()));
         painter->drawText(QPoint(x, y + 12), QString::fromUtf8("\xe2\x98\x85"));
     } else if (cluster.tier == 2) {
-        painter->setPen(QColor(ui::colors::TEXT_SECONDARY));
+        painter->setPen(QColor(ui::colors::TEXT_SECONDARY()));
         painter->drawText(QPoint(x, y + 12), QString::fromUtf8("\xe2\x97\x8f"));
     }
     x += 14;
 
     // Headline
     painter->setFont(bold_font_);
-    painter->setPen(QColor(ui::colors::TEXT_PRIMARY));
+    painter->setPen(QColor(ui::colors::TEXT_PRIMARY()));
     int headline_w = rect.right() - x - 80;
     QString elided = bold_fm_.elidedText(cluster.lead_article.headline, Qt::ElideRight, headline_w);
     painter->drawText(QRect(x, y, headline_w, 18), Qt::AlignVCenter | Qt::AlignLeft, elided);
@@ -279,8 +279,8 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
     if (!velocity_text.isEmpty()) {
         int vx = rect.right() - 70;
         painter->setFont(tiny_font_);
-        painter->setPen(cluster.velocity == "rising" ? QColor(ui::colors::POSITIVE)
-                                                     : QColor(ui::colors::TEXT_TERTIARY));
+        painter->setPen(cluster.velocity == "rising" ? QColor(ui::colors::POSITIVE())
+                                                     : QColor(ui::colors::TEXT_TERTIARY()));
         painter->drawText(QPoint(vx, y + 12), velocity_text);
     }
 
@@ -290,20 +290,20 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
     painter->setFont(data_font_);
 
     // Source
-    painter->setPen(QColor(ui::colors::CYAN));
+    painter->setPen(QColor(ui::colors::CYAN()));
     QString source = cluster.lead_article.source.left(12).toUpper();
     painter->drawText(QPoint(x, y + 12), source);
     x += data_fm_.horizontalAdvance(source) + 10;
 
     // Time
-    painter->setPen(QColor(ui::colors::TEXT_DIM));
+    painter->setPen(QColor(ui::colors::TEXT_DIM()));
     QString time_str = services::relative_time(cluster.latest_sort_ts);
     painter->drawText(QPoint(x, y + 12), time_str);
     x += data_fm_.horizontalAdvance(time_str) + 10;
 
     // Source count
     if (cluster.source_count > 1) {
-        painter->setPen(QColor(ui::colors::WARNING));
+        painter->setPen(QColor(ui::colors::WARNING()));
         QString src_text = QString("%1 sources").arg(cluster.source_count);
         painter->drawText(QPoint(x, y + 12), src_text);
         x += data_fm_.horizontalAdvance(src_text) + 10;
@@ -311,10 +311,10 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
 
     // Sentiment
     if (cluster.sentiment == services::Sentiment::BULLISH) {
-        painter->setPen(QColor(ui::colors::POSITIVE));
+        painter->setPen(QColor(ui::colors::POSITIVE()));
         painter->drawText(QPoint(x, y + 12), QString::fromUtf8("\xe2\x96\xb2 BULL"));
     } else if (cluster.sentiment == services::Sentiment::BEARISH) {
-        painter->setPen(QColor(ui::colors::NEGATIVE));
+        painter->setPen(QColor(ui::colors::NEGATIVE()));
         painter->drawText(QPoint(x, y + 12), QString::fromUtf8("\xe2\x96\xbc BEAR"));
     }
 
@@ -323,7 +323,7 @@ void NewsFeedDelegate::paint_cluster_card(QPainter* painter, const QRect& rect, 
     x = rect.left() + 8;
     if (cluster.articles.size() > 1) {
         painter->setFont(tiny_font_);
-        painter->setPen(QColor(ui::colors::TEXT_TERTIARY));
+        painter->setPen(QColor(ui::colors::TEXT_TERTIARY()));
 
         QStringList also_sources;
         QSet<QString> seen;

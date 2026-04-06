@@ -3,6 +3,7 @@
 
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "storage/cache/CacheManager.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -11,6 +12,10 @@
 #include <QNetworkRequest>
 #include <QUrl>
 #include <QUrlQuery>
+
+static constexpr int kCategoriesTtlSec = 5 * 60;
+static constexpr int kStatsTtlSec      = 2 * 60;
+static constexpr int kTrendingTtlSec   = 2 * 60;
 
 namespace fincept::services {
 
@@ -188,11 +193,30 @@ ForumProfile ForumService::parse_profile(const QJsonObject& o) {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 void ForumService::fetch_categories(CategoriesCallback cb) {
+    const QVariant cached = fincept::CacheManager::instance().get("forum:categories");
+    if (!cached.isNull()) {
+        auto root = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
+        QVector<ForumCategory> cats;
+        for (const auto& v : root["categories"].toArray())
+            cats.append(parse_category(v.toObject()));
+        ForumPermissions perms;
+        auto po = root["permissions"].toObject();
+        perms.can_create_posts = po["can_create_posts"].toBool();
+        perms.can_vote         = po["can_vote"].toBool();
+        perms.can_comment      = po["can_comment"].toBool();
+        cb(true, cats, perms);
+        return;
+    }
+
     get("/forum/categories", [cb](bool ok, QJsonObject data) {
         if (!ok) {
             cb(false, {}, {});
             return;
         }
+        fincept::CacheManager::instance().put(
+            "forum:categories",
+            QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+            kCategoriesTtlSec, "forum");
         QVector<ForumCategory> cats;
         for (const auto& v : data.value("categories").toArray())
             cats.append(parse_category(v.toObject()));
@@ -251,21 +275,47 @@ void ForumService::fetch_post(const QString& post_uuid, PostDetailCallback cb) {
 }
 
 void ForumService::fetch_stats(StatsCallback cb) {
+    const QVariant cached = fincept::CacheManager::instance().get("forum:stats");
+    if (!cached.isNull()) {
+        auto data = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
+        cb(true, parse_stats(data));
+        return;
+    }
+
     get("/forum/stats", [cb](bool ok, QJsonObject data) {
         if (!ok) {
             cb(false, {});
             return;
         }
+        fincept::CacheManager::instance().put(
+            "forum:stats",
+            QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+            kStatsTtlSec, "forum");
         cb(true, parse_stats(data));
     });
 }
 
 void ForumService::fetch_trending(PostsCallback cb) {
+    const QVariant cached = fincept::CacheManager::instance().get("forum:trending");
+    if (!cached.isNull()) {
+        auto data = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
+        ForumPostsPage result;
+        for (const auto& v : data.value("trending_posts").toArray())
+            result.posts.append(parse_post(v.toObject()));
+        result.total = data.value("total").toInt();
+        cb(true, result);
+        return;
+    }
+
     get("/forum/posts/trending", [cb](bool ok, QJsonObject data) {
         if (!ok) {
             cb(false, {});
             return;
         }
+        fincept::CacheManager::instance().put(
+            "forum:trending",
+            QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+            kTrendingTtlSec, "forum");
         ForumPostsPage result;
         for (const auto& v : data.value("trending_posts").toArray())
             result.posts.append(parse_post(v.toObject()));

@@ -10,21 +10,21 @@
 namespace fincept::screens::widgets {
 
 EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
-    : BaseWidget("ECONOMIC CALENDAR", parent, ui::colors::CYAN) {
+    : BaseWidget("ECONOMIC CALENDAR", parent, ui::colors::CYAN()) {
     auto* vl = content_layout();
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     // Column headers
     auto* header = new QWidget;
-    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED));
+    header->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(8, 4, 8, 4);
 
     auto make_hdr = [&](const QString& text, int stretch, Qt::Alignment align = Qt::AlignLeft) {
         auto* lbl = new QLabel(text);
         lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                               .arg(ui::colors::TEXT_TERTIARY));
+                               .arg(ui::colors::TEXT_TERTIARY()));
         lbl->setAlignment(align);
         hl->addWidget(lbl, stretch);
     };
@@ -38,7 +38,7 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
 
     auto* sep = new QFrame;
     sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM));
+    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
     // Scrollable list
@@ -58,7 +58,7 @@ EconomicCalendarWidget::EconomicCalendarWidget(QWidget* parent)
     status_label_ = new QLabel("Loading...");
     status_label_->setAlignment(Qt::AlignCenter);
     status_label_->setStyleSheet(
-        QString("color: %1; font-size: 10px; padding: 16px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color: %1; font-size: 10px; padding: 16px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
     list_layout_->addWidget(status_label_);
     list_layout_->addStretch();
 
@@ -161,13 +161,13 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
             date_display += " " + time_str.left(5);
 
         // Importance color: 0=dim, 1=low/dim, 2=medium/amber, 3=high/red
-        QString imp_color = imp_int >= 3   ? ui::colors::NEGATIVE
-                            : imp_int == 2 ? ui::colors::WARNING
-                                           : ui::colors::TEXT_TERTIARY;
+        QString imp_color = imp_int >= 3   ? ui::colors::NEGATIVE()
+                            : imp_int == 2 ? ui::colors::WARNING()
+                                           : ui::colors::TEXT_TERTIARY();
         QString imp_text = imp_int >= 3 ? "HIGH" : imp_int == 2 ? "MED" : imp_int == 1 ? "LOW" : "--";
 
         auto* row = new QWidget;
-        row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED : "transparent"));
+        row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
@@ -178,28 +178,28 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
         auto* ev_lbl = new QLabel(display_name);
         ev_lbl->setToolTip(event_name); // full name on hover
         ev_lbl->setStyleSheet(
-            QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_PRIMARY));
+            QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_PRIMARY()));
         rl->addWidget(ev_lbl, 4);
 
         auto* cty_lbl = new QLabel(country);
-        cty_lbl->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::CYAN));
+        cty_lbl->setStyleSheet(QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::CYAN()));
         rl->addWidget(cty_lbl, 1);
 
         auto* date_lbl = new QLabel(date_display);
         date_lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY));
+            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         rl->addWidget(date_lbl, 2);
 
         auto* act_lbl = new QLabel(actual.isEmpty() ? "--" : actual);
         act_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         act_lbl->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                   .arg(actual.isEmpty() ? ui::colors::TEXT_TERTIARY : ui::colors::TEXT_PRIMARY));
+                                   .arg(actual.isEmpty() ? ui::colors::TEXT_TERTIARY() : ui::colors::TEXT_PRIMARY()));
         rl->addWidget(act_lbl, 1);
 
         auto* fcst_lbl = new QLabel(forecast.isEmpty() ? "--" : forecast);
         fcst_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         fcst_lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY));
+            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         rl->addWidget(fcst_lbl, 1);
 
         auto* imp_lbl = new QLabel(imp_text);

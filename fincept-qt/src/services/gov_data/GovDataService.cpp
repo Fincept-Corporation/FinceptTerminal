@@ -3,8 +3,8 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 
-#include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonParseError>
 
@@ -69,14 +69,7 @@ GovDataService::GovDataService(QObject* parent) : QObject(parent) {}
 // ── Cache ────────────────────────────────────────────────────────────────────
 
 QString GovDataService::cache_key(const QString& script, const QString& command, const QStringList& args) const {
-    return script + ":" + command + ":" + args.join(",");
-}
-
-bool GovDataService::is_cache_fresh(const QString& key) const {
-    if (!cache_.contains(key))
-        return false;
-    auto elapsed = QDateTime::currentMSecsSinceEpoch() - cache_[key].fetched_at;
-    return elapsed < kCacheTtlMs;
+    return "govdata:" + script + ":" + command + ":" + args.join(",");
 }
 
 // ── Execute ──────────────────────────────────────────────────────────────────
@@ -86,11 +79,12 @@ void GovDataService::execute(const QString& script, const QString& command, cons
     const QString key = cache_key(script, command, args);
 
     // Serve from cache if fresh
-    if (is_cache_fresh(key)) {
+    const QVariant cached = fincept::CacheManager::instance().get(key);
+    if (!cached.isNull()) {
         LOG_DEBUG("GovDataService", QString("Cache hit: %1").arg(key));
         GovDataResult result;
         result.success = true;
-        result.data = cache_[key].data;
+        result.data = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
         emit result_ready(request_id, result);
         return;
     }
@@ -142,7 +136,10 @@ void GovDataService::execute(const QString& script, const QString& command, cons
         result.data = doc.object();
 
         // Cache the result
-        self->cache_[key] = {result.data, QDateTime::currentMSecsSinceEpoch()};
+        fincept::CacheManager::instance().put(
+            key,
+            QVariant(QString::fromUtf8(QJsonDocument(result.data).toJson(QJsonDocument::Compact))),
+            kCacheTtlSec, "govdata");
 
         LOG_INFO("GovDataService", QString("Result ready: %1").arg(request_id));
         emit self->result_ready(request_id, result);

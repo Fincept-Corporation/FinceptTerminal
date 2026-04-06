@@ -1,6 +1,7 @@
 #include "screens/dashboard/TickerBar.h"
 
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QPaintEvent>
 #include <QPainter>
@@ -9,7 +10,14 @@ namespace fincept::screens {
 
 TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(24);
-    setStyleSheet(QString("background-color: %1;").arg(ui::colors::DARK));
+
+    auto apply_bg = [this]() {
+        setStyleSheet(QString("background-color: %1;")
+                      .arg(ui::ThemeManager::instance().tokens().bg_base));
+    };
+    apply_bg();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this, apply_bg](const ui::ThemeTokens&) { apply_bg(); update(); });
 
     // Dummy data until service provides real data
     entries_ = {
@@ -64,13 +72,13 @@ void TickerBar::paintEvent(QPaintEvent*) {
     for (int pass = 0; pass < passes; ++pass) {
         for (const auto& e : entries_) {
             // Symbol in white
-            p.setPen(QColor(ui::colors::WHITE));
+            p.setPen(QColor(ui::colors::WHITE()));
             p.drawText(QPointF(x, 17), e.symbol);
             x += fm.horizontalAdvance(e.symbol) + 8;
 
             // Price in grey
             QString price_str = QString::number(e.price, 'f', 2);
-            p.setPen(QColor(ui::colors::GRAY));
+            p.setPen(QColor(ui::colors::GRAY()));
             p.drawText(QPointF(x, 17), price_str);
             x += fm.horizontalAdvance(price_str) + 8;
 

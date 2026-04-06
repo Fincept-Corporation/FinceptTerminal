@@ -2,6 +2,7 @@
 
 #include "screens/node_editor/canvas/EdgeItem.h"
 #include "screens/node_editor/canvas/PortItem.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QAction>
 #include <QFont>
@@ -103,21 +104,22 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
         QPainter cp(&cache_);
         cp.setRenderHint(QPainter::Antialiasing, false);
 
+        const auto& t = ui::ThemeManager::instance().tokens();
         QFont mono("Consolas", 10);
         mono.setStyleHint(QFont::Monospace);
 
         // ── Node body ──────────────────────────────────────────────
         cp.setPen(Qt::NoPen);
-        cp.setBrush(QColor("#181818"));
+        cp.setBrush(QColor(t.bg_surface));
         cp.drawRect(rect);
 
         // ── Header ─────────────────────────────────────────────────
         QRectF header(0, 0, kWidth, kHeaderHeight);
-        cp.setBrush(QColor("#1e1e1e"));
+        cp.setBrush(QColor(t.bg_raised));
         cp.drawRect(header);
 
         // Accent bar (left edge of header)
-        QColor accent(type_def_.accent_color.isEmpty() ? "#d97706" : type_def_.accent_color);
+        QColor accent(type_def_.accent_color.isEmpty() ? t.accent : type_def_.accent_color.toUtf8().constData());
         cp.setPen(Qt::NoPen);
         cp.setBrush(accent);
         cp.drawRect(QRectF(0, 0, 3, kHeaderHeight));
@@ -133,7 +135,7 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
         mono.setPointSize(9);
         mono.setBold(true);
         cp.setFont(mono);
-        cp.setPen(QColor("#e5e5e5"));
+        cp.setPen(QColor(t.text_primary));
         QRectF name_rect(34, 0, kWidth - 44, kHeaderHeight);
         QString elided = QFontMetrics(mono).elidedText(def_.name, Qt::ElideRight, (int)name_rect.width());
         cp.drawText(name_rect, Qt::AlignVCenter, elided);
@@ -142,7 +144,7 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
         mono.setPointSize(8);
         mono.setBold(false);
         cp.setFont(mono);
-        cp.setPen(QColor("#808080"));
+        cp.setPen(QColor(t.text_secondary));
 
         for (int i = 0; i < type_def_.inputs.size(); ++i) {
             qreal y = kHeaderHeight + kPortPadding + i * kPortSpacing;
@@ -160,11 +162,11 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
         if (execution_state_ != "idle") {
             QColor state_color;
             if (execution_state_ == "running")
-                state_color = QColor("#d97706");
+                state_color = QColor(t.accent);
             else if (execution_state_ == "completed")
-                state_color = QColor("#16a34a");
+                state_color = QColor(t.positive);
             else if (execution_state_ == "error")
-                state_color = QColor("#dc2626");
+                state_color = QColor(t.negative);
 
             cp.setPen(Qt::NoPen);
             cp.setBrush(state_color);
@@ -179,17 +181,18 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
     painter->drawPixmap(0, 0, cache_);
 
     // ── Border (not cached — changes with selection/hover) ─────────
+    const auto& t2 = ui::ThemeManager::instance().tokens();
     QColor border_color;
     if (def_.disabled)
-        border_color = QColor("#4a4a4a");
+        border_color = QColor(t2.border_med);
     else if (isSelected())
-        border_color = QColor("#d97706");
+        border_color = QColor(t2.accent);
     else if (execution_state_ == "error")
-        border_color = QColor("#dc2626");
+        border_color = QColor(t2.negative);
     else if (hovered_)
-        border_color = QColor("#4a4a4a");
+        border_color = QColor(t2.border_bright);
     else
-        border_color = QColor("#2a2a2a");
+        border_color = QColor(t2.border_dim);
 
     painter->setPen(QPen(border_color, 1.0));
     painter->setBrush(Qt::NoBrush);
@@ -246,12 +249,15 @@ void NodeItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void NodeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
+    const auto& tm = ui::ThemeManager::instance().tokens();
     QMenu menu;
-    menu.setStyleSheet("QMenu { background: #1e1e1e; color: #e5e5e5; border: 1px solid #2a2a2a;"
-                       "  font-family: Consolas; font-size: 12px; }"
-                       "QMenu::item { padding: 4px 20px; }"
-                       "QMenu::item:selected { background: #d97706; color: #080808; }"
-                       "QMenu::separator { background: #2a2a2a; height: 1px; margin: 2px 6px; }");
+    menu.setStyleSheet(
+        QString("QMenu { background: %1; color: %2; border: 1px solid %3;"
+                "  font-family: Consolas; font-size: 12px; }"
+                "QMenu::item { padding: 4px 20px; }"
+                "QMenu::item:selected { background: %4; color: %5; }"
+                "QMenu::separator { background: %3; height: 1px; margin: 2px 6px; }")
+        .arg(tm.bg_raised, tm.text_primary, tm.border_dim, tm.accent, tm.bg_base));
 
     auto* duplicate_action = menu.addAction("Duplicate");
     auto* disable_action = menu.addAction(def_.disabled ? "Enable" : "Disable");

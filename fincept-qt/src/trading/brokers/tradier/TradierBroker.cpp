@@ -420,9 +420,7 @@ ApiResponse<BrokerFunds> TradierBroker::get_funds(const BrokerCredentials& creds
     BrokerFunds funds;
     funds.available_balance = cash_available;
     funds.total_balance     = bal.value("total_equity").toDouble();
-    funds.used_margin       = bal.value("total_equity").toDouble()
-                            - bal.value("total_cash").toDouble()
-                            + bal.value("market_value").toDouble();
+    funds.used_margin       = bal.value("market_value").toDouble(); // cost basis of open positions
     funds.collateral        = margin_obj.value("stock_buying_power").toDouble();
 
     return {true, funds, "", ts};

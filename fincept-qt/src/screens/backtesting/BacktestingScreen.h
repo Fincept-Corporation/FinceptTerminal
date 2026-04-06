@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QShowEvent>
 #include <QSpinBox>
+#include <QSplitter>
 #include <QStackedWidget>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -49,6 +50,7 @@ class BacktestingScreen : public QWidget {
     QWidget* build_right_panel();
     QWidget* build_status_bar();
     void connect_service();
+    void set_status_state(const QString& text, const QString& color, const QString& bg_rgba);
     void update_provider_buttons();
     void update_command_buttons();
     void populate_strategies();

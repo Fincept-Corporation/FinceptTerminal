@@ -605,42 +605,49 @@ Rules:
 - Return ONLY valid JSON, no markdown fences, no extra text"""
 
 
-def generate_dynamic_plan(query: str, api_keys: Dict[str, str] = None) -> Dict[str, Any]:
+def generate_dynamic_plan(query: str, api_keys: Dict[str, str] = None, caller_config: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Use an LLM to dynamically generate an execution plan from a natural language query.
     Returns an ExecutionPlan dict ready for display and execution.
     """
-    import time
+    import time, re as _re
     api_keys = api_keys or {}
+    caller_config = caller_config or {}
 
     try:
         from finagent_core.core_agent import CoreAgent
 
         agent = CoreAgent(api_keys=api_keys)
 
-        # Build a minimal model config preferring fast/cheap models
-        config = {
+        # Use active_llm model from caller if available (user's configured LLM)
+        config: Dict[str, Any] = {
             "instructions": _PLAN_GENERATION_SYSTEM_PROMPT,
             "markdown": False,
             "reasoning": False,
         }
+        if caller_config.get("model"):
+            config["model"] = caller_config["model"]
 
         prompt = (
             f"Create an execution plan for the following financial analysis request:\n\n"
             f"{query}\n\n"
-            f"Return ONLY the JSON plan object, no extra text."
+            f"Return ONLY the JSON plan object, no markdown fences, no extra text."
         )
 
         response = agent.run(prompt, config)
-        raw = agent.get_response_content(response)
+        raw = agent.get_response_content(response) or ""
 
-        # Strip any accidental markdown fences
+        # Strip markdown fences (```json ... ``` or ``` ... ```)
         raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```", 2)[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.rsplit("```", 1)[0].strip()
+        raw = _re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = _re.sub(r"\s*```$", "", raw.strip())
+        raw = raw.strip()
+
+        # If still not starting with {, try to extract JSON object
+        if not raw.startswith("{"):
+            m = _re.search(r"\{.*\}", raw, _re.DOTALL)
+            if m:
+                raw = m.group(0)
 
         plan_spec = json.loads(raw)
 
@@ -686,10 +693,10 @@ def generate_dynamic_plan(query: str, api_keys: Dict[str, str] = None) -> Dict[s
         return {"success": True, "plan": plan.to_dict(), "generated_by": "llm"}
 
     except json.JSONDecodeError as e:
-        logger.warning(f"LLM returned invalid JSON for plan generation: {e}. Falling back to template.")
+        logger.error(f"LLM returned invalid JSON for plan generation: {e}\nRaw output was: {raw[:300]}")
         return _fallback_plan_from_query(query)
     except Exception as e:
-        logger.warning(f"Dynamic plan generation failed: {e}. Falling back to template.")
+        logger.error(f"Dynamic plan generation failed: {type(e).__name__}: {e}")
         return _fallback_plan_from_query(query)
 
 

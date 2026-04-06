@@ -67,7 +67,7 @@ void PerformanceRiskView::build_ui() {
 
     // ── Chart ─────────────────────────────────────────────────────────────────
     auto* chart = new QChart;
-    chart->setBackgroundBrush(QColor(ui::colors::BG_BASE));
+    chart->setBackgroundBrush(QColor(ui::colors::BG_BASE()));
     chart->setMargins(QMargins(4, 4, 4, 4));
     chart->legend()->setVisible(false);
     chart->setAnimationOptions(QChart::NoAnimation);
@@ -258,7 +258,7 @@ void PerformanceRiskView::update_chart() {
     }
 
     bool up = last_val >= first_val;
-    QColor lc = up ? QColor(ui::colors::POSITIVE) : QColor(ui::colors::NEGATIVE);
+    QColor lc = up ? QColor(ui::colors::POSITIVE()) : QColor(ui::colors::NEGATIVE());
     line->setPen(QPen(lc, 2));
 
     auto* area = new QAreaSeries(upper, lower);
@@ -274,9 +274,9 @@ void PerformanceRiskView::update_chart() {
     x_axis->setFormat(current_period_ == "ALL" || current_period_ == "1Y"
                           ? "MMM yy" : "dd MMM");
     x_axis->setTickCount(5);
-    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    x_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM)));
+    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    x_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM())));
     x_axis->setLabelsFont(QFont("monospace", 7));
 
     double pad = std::max((max_val - min_val) * 0.08, max_val * 0.01);
@@ -284,9 +284,9 @@ void PerformanceRiskView::update_chart() {
     y_axis->setRange(min_val - pad, max_val + pad);
     y_axis->setLabelFormat("%.0f");
     y_axis->setTickCount(4);
-    y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    y_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM)));
+    y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    y_axis->setLinePen(QPen(QColor(ui::colors::BORDER_DIM())));
     y_axis->setLabelsFont(QFont("monospace", 7));
 
     chart->addAxis(x_axis, Qt::AlignBottom);

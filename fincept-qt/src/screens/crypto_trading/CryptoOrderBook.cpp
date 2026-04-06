@@ -1,5 +1,6 @@
 // CryptoOrderBook.cpp — custom-painted dual-column order book with depth bars
 #include "screens/crypto_trading/CryptoOrderBook.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
 #include <QHBoxLayout>
@@ -16,27 +17,30 @@
 namespace fincept::screens::crypto {
 
 namespace {
-const QColor kBgBase("#080808");
-const QColor kBgSurface("#0a0a0a");
-const QColor kBgRaised("#111111");
-const QColor kBorderDim("#1a1a1a");
-const QColor kTextPrimary("#e5e5e5");
-const QColor kTextSecondary("#808080");
-const QColor kTextTertiary("#525252");
-const QColor kTextDim("#404040");
-const QColor kColorBid("#16a34a");
-const QColor kColorAsk("#dc2626");
-const QColor kColorAmber("#d97706");
-const QColor kBidBar(22, 163, 74, 35);
-const QColor kAskBar(220, 38, 38, 35);
-const QColor kBidBarHot(22, 163, 74, 65);
-const QColor kAskBarHot(220, 38, 38, 65);
-const QColor kRowEven("#080808");
-const QColor kRowOdd("#0c0c0c");
+// Live color accessors — reflect active theme at call time
+inline QColor kBgBase()       { return QColor(ui::ThemeManager::instance().tokens().bg_base); }
+inline QColor kBgSurface()    { return QColor(ui::ThemeManager::instance().tokens().bg_surface); }
+inline QColor kBgRaised()     { return QColor(ui::ThemeManager::instance().tokens().bg_raised); }
+inline QColor kBorderDim()    { return QColor(ui::ThemeManager::instance().tokens().border_dim); }
+inline QColor kTextPrimary()  { return QColor(ui::ThemeManager::instance().tokens().text_primary); }
+inline QColor kTextSecondary(){ return QColor(ui::ThemeManager::instance().tokens().text_secondary); }
+inline QColor kTextTertiary() { return QColor(ui::ThemeManager::instance().tokens().text_tertiary); }
+inline QColor kTextDim()      { return QColor(ui::ThemeManager::instance().tokens().text_dim); }
+inline QColor kColorBid()     { return QColor(ui::ThemeManager::instance().tokens().positive); }
+inline QColor kColorAsk()     { return QColor(ui::ThemeManager::instance().tokens().negative); }
+inline QColor kColorAmber()   { return QColor(ui::ThemeManager::instance().tokens().accent); }
+inline QColor kBidBar()       { auto c = kColorBid();   c.setAlpha(35); return c; }
+inline QColor kAskBar()       { auto c = kColorAsk();   c.setAlpha(35); return c; }
+inline QColor kBidBarHot()    { auto c = kColorBid();   c.setAlpha(65); return c; }
+inline QColor kAskBarHot()    { auto c = kColorAsk();   c.setAlpha(65); return c; }
+inline QColor kRowEven()      { return QColor(ui::ThemeManager::instance().tokens().bg_base); }
+inline QColor kRowOdd()       { return QColor(ui::ThemeManager::instance().tokens().row_alt); }
 } // namespace
 
 CryptoOrderBook::CryptoOrderBook(QWidget* parent) : QWidget(parent) {
     setObjectName("cryptoOrderBook");
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { cache_dirty_ = true; update(); });
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -185,7 +189,7 @@ void CryptoOrderBook::rebuild_cache() {
         return;
 
     cache_ = QPixmap(w, h);
-    cache_.fill(kBgBase);
+    cache_.fill(kBgBase());
 
     QPainter p(&cache_);
     p.setFont(QFont("Consolas", 9));
@@ -239,7 +243,7 @@ void CryptoOrderBook::rebuild_cache() {
         const double p75 = all_vols.isEmpty() ? 0 : all_vols[all_vols.size() * 3 / 4];
 
         // Column headers
-        p.setPen(kTextDim);
+        p.setPen(kTextDim());
         p.drawText(QRect(4, 0, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "BID");
         p.drawText(QRect(4, 0, half_w - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "QTY");
         p.drawText(QRect(half_w + 4, 0, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "ASK");
@@ -249,22 +253,22 @@ void CryptoOrderBook::rebuild_cache() {
         const int rows_start_y = ROW_H;
         for (int i = 0; i < bid_count && rows_start_y + i * ROW_H < h; ++i) {
             const int y = rows_start_y + i * ROW_H;
-            const QColor& row_bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+            const QColor row_bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
             p.fillRect(0, y, half_w - 1, ROW_H, row_bg);
 
             // Depth bar (grows from right to left)
             const double ratio = bid_cum[i] / max_cum;
             const int bar_w = static_cast<int>((half_w - 4) * ratio);
             const bool hot = bids[i].second >= p75 && p75 > 0;
-            p.fillRect(half_w - 1 - bar_w, y, bar_w, ROW_H, hot ? kBidBarHot : kBidBar);
+            p.fillRect(half_w - 1 - bar_w, y, bar_w, ROW_H, hot ? kBidBarHot() : kBidBar());
 
             // Price text
-            p.setPen(kColorBid);
+            p.setPen(kColorBid());
             p.drawText(QRect(4, y, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter,
                        QString::number(bids[i].first, 'f', 2));
 
             // Amount text
-            p.setPen(kTextSecondary);
+            p.setPen(kTextSecondary());
             p.drawText(QRect(4, y, half_w - 8, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
                        QString::number(bids[i].second, 'f', 4));
         }
@@ -272,28 +276,28 @@ void CryptoOrderBook::rebuild_cache() {
         // Draw ask side (right) — prices ascending from center
         for (int i = 0; i < ask_count && rows_start_y + i * ROW_H < h; ++i) {
             const int y = rows_start_y + i * ROW_H;
-            const QColor& row_bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+            const QColor row_bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
             p.fillRect(half_w + 1, y, half_w - 1, ROW_H, row_bg);
 
             // Depth bar (grows from left to right)
             const double ratio = ask_cum[i] / max_cum;
             const int bar_w = static_cast<int>((half_w - 4) * ratio);
             const bool hot = asks[i].second >= p75 && p75 > 0;
-            p.fillRect(half_w + 1, y, bar_w, ROW_H, hot ? kAskBarHot : kAskBar);
+            p.fillRect(half_w + 1, y, bar_w, ROW_H, hot ? kAskBarHot() : kAskBar());
 
             // Price text
-            p.setPen(kColorAsk);
+            p.setPen(kColorAsk());
             p.drawText(QRect(half_w + 4, y, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter,
                        QString::number(asks[i].first, 'f', 2));
 
             // Amount text
-            p.setPen(kTextSecondary);
+            p.setPen(kTextSecondary());
             p.drawText(QRect(half_w + 4, y, half_w - 8, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
                        QString::number(asks[i].second, 'f', 4));
         }
 
         // Center divider line
-        p.setPen(kBorderDim);
+        p.setPen(kBorderDim());
         p.drawLine(half_w, 0, half_w, h);
 
     } else {
@@ -302,7 +306,7 @@ void CryptoOrderBook::rebuild_cache() {
         const bool is_signals = (view_mode_ == ObViewMode::Signals);
 
         // Header
-        p.setPen(kTextDim);
+        p.setPen(kTextDim());
         if (is_signals) {
             p.drawText(QRect(4, 0, w / 3, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "TIME");
             p.drawText(QRect(w / 3, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "RISE%");
@@ -317,53 +321,53 @@ void CryptoOrderBook::rebuild_cache() {
             const int idx = history.size() - 1 - i;
             const auto& snap = history[idx];
             const int y = (i + 1) * ROW_H;
-            const QColor& row_bg = (i % 2 == 0) ? kRowEven : kRowOdd;
+            const QColor row_bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
             p.fillRect(0, y, w, ROW_H, row_bg);
 
             // Time
-            p.setPen(kTextDim);
+            p.setPen(kTextDim());
             p.drawText(QRect(4, y, w / 3, ROW_H), Qt::AlignLeft | Qt::AlignVCenter,
                        QDateTime::fromMSecsSinceEpoch(snap.timestamp).toString("HH:mm:ss"));
 
             if (is_signals) {
                 // Rise %
-                p.setPen(snap.rise_ratio_60 >= 0 ? kColorBid : kColorAsk);
+                p.setPen(snap.rise_ratio_60 >= 0 ? kColorBid() : kColorAsk());
                 p.drawText(QRect(w / 3, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
                            QString("%1%").arg(snap.rise_ratio_60 * 100.0, 0, 'f', 2));
 
                 // Action
                 QString action = "HOLD";
-                QColor c = kTextTertiary;
+                QColor c = kTextTertiary();
                 if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD && snap.rise_ratio_60 > 0.001) {
                     action = "STRONG BUY";
-                    c = kColorBid;
+                    c = kColorBid();
                 } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD && snap.rise_ratio_60 < -0.001) {
                     action = "STRONG SELL";
-                    c = kColorAsk;
+                    c = kColorAsk();
                 } else if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD) {
                     action = "BUY";
-                    c = kColorBid;
+                    c = kColorBid();
                 } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD) {
                     action = "SELL";
-                    c = kColorAsk;
+                    c = kColorAsk();
                 }
                 p.setPen(c);
                 p.drawText(QRect(2 * w / 3, y, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, action);
             } else {
                 // Imbalance
-                p.setPen(snap.imbalance > 0 ? kColorBid : kColorAsk);
+                p.setPen(snap.imbalance > 0 ? kColorBid() : kColorAsk());
                 p.drawText(QRect(w / 3, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
                            QString("%1").arg(snap.imbalance, 0, 'f', 3));
 
                 // Signal
                 QString signal = "NEUTRAL";
-                QColor c = kTextTertiary;
+                QColor c = kTextTertiary();
                 if (snap.imbalance > OB_IMBALANCE_BUY_THRESHOLD) {
                     signal = "BUY PRESSURE";
-                    c = kColorBid;
+                    c = kColorBid();
                 } else if (snap.imbalance < OB_IMBALANCE_SELL_THRESHOLD) {
                     signal = "SELL PRESSURE";
-                    c = kColorAsk;
+                    c = kColorAsk();
                 }
                 p.setPen(c);
                 p.drawText(QRect(2 * w / 3, y, w / 3 - 4, ROW_H), Qt::AlignRight | Qt::AlignVCenter, signal);

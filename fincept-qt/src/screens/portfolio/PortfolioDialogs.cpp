@@ -1,9 +1,13 @@
 // src/screens/portfolio/PortfolioDialogs.cpp
 #include "screens/portfolio/PortfolioDialogs.h"
 
+#include "network/http/HttpClient.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
+#include <QDate>
+#include <QDateEdit>
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
@@ -11,8 +15,11 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeyEvent>
 #include <QLabel>
+#include <QListWidgetItem>
 #include <QMessageBox>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -168,9 +175,12 @@ ConfirmDeleteDialog::ConfirmDeleteDialog(const QString& portfolio_name, QWidget*
 
 // ── AddAssetDialog ───────────────────────────────────────────────────────────
 
+static constexpr int kAssetSearchDebounceMs = 300;
+static constexpr int kAssetSearchLimit      = 10;
+
 AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle("Add Asset");
-    setFixedSize(340, 240);
+    setFixedSize(400, 260);
     setStyleSheet(QString("QDialog { background:%1; color:%2; }"
                           "QLabel { color:%3; font-size:11px; }"
                           "QLineEdit { background:%4; color:%2; border:1px solid %5;"
@@ -188,11 +198,17 @@ AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
         QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::POSITIVE));
     layout->addWidget(title);
 
+    // Hint label under title
+    auto* hint = new QLabel("Type a ticker or company name to search");
+    hint->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY));
+    layout->addWidget(hint);
+
     auto* form = new QFormLayout;
     form->setSpacing(8);
 
     symbol_edit_ = new QLineEdit;
-    symbol_edit_->setPlaceholderText("e.g. AAPL, MSFT");
+    symbol_edit_->setPlaceholderText("e.g. AAPL, Apple, Reliance…");
+    symbol_edit_->installEventFilter(this);
     form->addRow("Symbol:", symbol_edit_);
 
     quantity_edit_ = new QLineEdit;
@@ -233,7 +249,224 @@ AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
     btn_layout->addWidget(add_btn);
 
     layout->addLayout(btn_layout);
+
+    // ── Search dropdown (floats over the dialog, parented to this) ────────────
+    search_frame_ = new QFrame(this);
+    search_frame_->setObjectName("assetSearchFrame");
+    search_frame_->setStyleSheet(
+        "QFrame#assetSearchFrame { background:#0e0e0e; border:1px solid #2a2a2a; border-top:none; }");
+    search_frame_->hide();
+
+    auto* frame_layout = new QVBoxLayout(search_frame_);
+    frame_layout->setContentsMargins(0, 0, 0, 0);
+    frame_layout->setSpacing(0);
+
+    search_list_ = new QListWidget(search_frame_);
+    search_list_->setStyleSheet(
+        "QListWidget { background:transparent; border:none; outline:none; }"
+        "QListWidget::item { padding:0; border:none; background:transparent; }"
+        "QListWidget::item:selected { background:#1a1a1a; border-left:3px solid #d97706; }");
+    search_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    search_list_->setCursor(Qt::PointingHandCursor);
+    frame_layout->addWidget(search_list_);
+
+    connect(search_list_, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
+        select_result(item->data(Qt::UserRole).toString());
+    });
+
+    // ── Debounce timer ────────────────────────────────────────────────────────
+    search_debounce_ = new QTimer(this);
+    search_debounce_->setSingleShot(true);
+    search_debounce_->setInterval(kAssetSearchDebounceMs);
+    connect(search_debounce_, &QTimer::timeout, this, [this]() {
+        if (!pending_query_.isEmpty())
+            fire_search(pending_query_);
+    });
+
+    connect(symbol_edit_, &QLineEdit::textChanged, this, [this](const QString& text) {
+        if (selecting_)
+            return;
+        const QString q = text.trimmed();
+        if (q.length() < 2) {
+            search_debounce_->stop();
+            search_frame_->hide();
+            return;
+        }
+        schedule_search(q);
+    });
+
     symbol_edit_->setFocus();
+}
+
+void AddAssetDialog::schedule_search(const QString& query) {
+    pending_query_ = query;
+    search_debounce_->start(); // restarts the 300ms window
+}
+
+void AddAssetDialog::fire_search(const QString& query) {
+    const QString url = QString("/market/search?q=%1&type=stock&limit=%2")
+                            .arg(query)
+                            .arg(kAssetSearchLimit);
+
+    QPointer<AddAssetDialog> self = this;
+    fincept::HttpClient::instance().get(url, [self, query](fincept::Result<QJsonDocument> result) {
+        if (!self || self->pending_query_ != query) return;
+        if (!result.is_ok()) return;
+
+        const auto doc = result.value();
+        QJsonArray arr;
+        if (doc.isArray()) {
+            arr = doc.array();
+        } else if (doc.isObject()) {
+            const auto obj = doc.object();
+            if (obj.contains("results"))
+                arr = obj["results"].toArray();
+            else if (obj.contains("data"))
+                arr = obj["data"].toArray();
+        }
+        QMetaObject::invokeMethod(self, [self, arr]() {
+            if (self)
+                self->show_results(arr);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void AddAssetDialog::show_results(const QJsonArray& results) {
+    search_list_->clear();
+
+    if (results.isEmpty()) {
+        auto* item = new QListWidgetItem(search_list_);
+        item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
+        auto* row = new QWidget;
+        row->setStyleSheet("background:transparent;");
+        auto* rl = new QHBoxLayout(row);
+        rl->setContentsMargins(10, 6, 10, 6);
+        auto* lbl = new QLabel("No results found");
+        lbl->setStyleSheet("color:#525252; font-size:11px; font-family:'Consolas',monospace; background:transparent;");
+        rl->addWidget(lbl);
+        item->setSizeHint(QSize(0, 28));
+        search_list_->setItemWidget(item, row);
+        position_dropdown();
+        search_frame_->show();
+        return;
+    }
+
+    for (const auto& val : results) {
+        const auto obj      = val.toObject();
+        const QString sym   = obj["symbol"].toString();
+        const QString name  = obj["name"].toString();
+        const QString exch  = obj["exchange"].toString();
+        const QString type  = obj["type"].toString("stock");
+        if (sym.isEmpty())
+            continue;
+
+        // Resolve yfinance-compatible ticker (same logic as CommandBar)
+        QString yf_sym = sym;
+        static const QHash<QString, QString> suffix_map = {
+            {"NSE",".NS"},{"BSE",".BO"},{"HKEX",".HK"},{"TSE",".T"},{"KRX",".KS"},
+            {"SGX",".SI"},{"ASX",".AX"},{"IDX",".JK"},{"MYX",".KL"},{"SET",".BK"},
+            {"PSE",".PS"},{"XETR",".DE"},{"FWB",".F"},{"LSE",".L"},{"BME",".MC"},
+            {"MIL",".MI"},{"SIX",".SW"},{"TSX",".TO"},{"TSXV",".V"},{"BMFBOVESPA",".SA"},
+            {"BIST",".IS"},{"EGX",".CA"},
+        };
+        const auto it = suffix_map.find(exch.toUpper());
+        if (it != suffix_map.end())
+            yf_sym = sym + it.value();
+
+        auto* item = new QListWidgetItem(search_list_);
+        item->setData(Qt::UserRole, yf_sym);
+
+        auto* row = new QWidget;
+        row->setStyleSheet("background:transparent;");
+        auto* hl = new QHBoxLayout(row);
+        hl->setContentsMargins(10, 4, 10, 4);
+        hl->setSpacing(8);
+
+        auto* sym_lbl = new QLabel(yf_sym);
+        sym_lbl->setStyleSheet("color:#e5e5e5; font-size:12px; font-weight:700;"
+                               "font-family:'Consolas',monospace; background:transparent;");
+        sym_lbl->setFixedWidth(100);
+
+        auto* name_lbl = new QLabel(name);
+        name_lbl->setStyleSheet("color:#a3a3a3; font-size:11px; background:transparent;"
+                                "font-family:'Consolas',monospace;");
+        name_lbl->setMaximumWidth(180);
+
+        hl->addWidget(sym_lbl);
+        hl->addWidget(name_lbl, 1);
+
+        if (!exch.isEmpty()) {
+            auto* exch_lbl = new QLabel(exch);
+            exch_lbl->setStyleSheet("color:#525252; font-size:10px; font-family:'Consolas',monospace;"
+                                    "background:transparent;");
+            hl->addWidget(exch_lbl);
+        }
+
+        auto* type_lbl = new QLabel(type.toUpper());
+        type_lbl->setStyleSheet("color:#d97706; font-size:9px; font-weight:700;"
+                                "font-family:'Consolas',monospace; background:#1a1a1a;"
+                                "padding:1px 4px; border-radius:2px;");
+        hl->addWidget(type_lbl);
+
+        item->setSizeHint(QSize(0, 30));
+        search_list_->setItemWidget(item, row);
+    }
+
+    if (search_list_->count() > 0)
+        search_list_->setCurrentRow(0);
+
+    position_dropdown();
+    search_frame_->show();
+    search_frame_->raise();
+}
+
+void AddAssetDialog::select_result(const QString& sym) {
+    selecting_ = true;
+    symbol_edit_->setText(sym);
+    selecting_ = false;
+    search_frame_->hide();
+    search_debounce_->stop();
+    quantity_edit_->setFocus();
+    quantity_edit_->selectAll();
+}
+
+void AddAssetDialog::position_dropdown() {
+    // Place the dropdown directly below the symbol_edit_ row
+    const QPoint origin = symbol_edit_->mapTo(this, QPoint(0, symbol_edit_->height()));
+    const int w = symbol_edit_->width() + 60; // a bit wider to show exchange column
+    const int rows = std::min(search_list_->count(), kAssetSearchLimit);
+    const int h = rows * 30 + 2;
+    search_frame_->setGeometry(origin.x(), origin.y(), w, h);
+}
+
+bool AddAssetDialog::eventFilter(QObject* obj, QEvent* event) {
+    if (obj == symbol_edit_ && event->type() == QEvent::KeyPress) {
+        auto* ke = static_cast<QKeyEvent*>(event);
+        if (search_frame_->isVisible()) {
+            if (ke->key() == Qt::Key_Down) {
+                const int next = (search_list_->currentRow() + 1) % search_list_->count();
+                search_list_->setCurrentRow(next);
+                return true;
+            }
+            if (ke->key() == Qt::Key_Up) {
+                const int prev = (search_list_->currentRow() - 1 + search_list_->count()) % search_list_->count();
+                search_list_->setCurrentRow(prev);
+                return true;
+            }
+            if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) {
+                auto* cur = search_list_->currentItem();
+                if (cur) {
+                    select_result(cur->data(Qt::UserRole).toString());
+                    return true;
+                }
+            }
+            if (ke->key() == Qt::Key_Escape) {
+                search_frame_->hide();
+                return true;
+            }
+        }
+    }
+    return QDialog::eventFilter(obj, event);
 }
 
 QString AddAssetDialog::symbol() const {
@@ -544,7 +777,21 @@ EditTransactionDialog::EditTransactionDialog(const portfolio::Transaction& txn, 
     price_edit_ = new QLineEdit(QString::number(txn.price, 'f', 2));
     form->addRow("Price:", price_edit_);
 
-    date_edit_ = new QLineEdit(txn.transaction_date);
+    date_edit_ = new QDateEdit;
+    date_edit_->setCalendarPopup(true);
+    date_edit_->setDisplayFormat("yyyy-MM-dd");
+    {
+        QDate d = QDate::fromString(txn.transaction_date, "yyyy-MM-dd");
+        date_edit_->setDate(d.isValid() ? d : QDate::currentDate());
+    }
+    date_edit_->setStyleSheet(
+        QString("QDateEdit { background:%1; color:%2; border:1px solid %3;"
+                "  padding:6px 10px; font-size:12px; }"
+                "QDateEdit:focus { border-color:%4; }"
+                "QDateEdit::drop-down { border:none; width:18px; }"
+                "QCalendarWidget { background:%1; color:%2; }")
+            .arg(ui::colors::BG_BASE, ui::colors::TEXT_PRIMARY,
+                 ui::colors::BORDER_MED, ui::colors::AMBER));
     form->addRow("Date:", date_edit_);
 
     notes_edit_ = new QLineEdit(txn.notes);
@@ -591,7 +838,7 @@ double EditTransactionDialog::price() const {
     return price_edit_->text().toDouble();
 }
 QString EditTransactionDialog::date() const {
-    return date_edit_->text().trimmed();
+    return date_edit_->date().toString("yyyy-MM-dd");
 }
 QString EditTransactionDialog::notes() const {
     return notes_edit_->text().trimmed();
@@ -688,6 +935,112 @@ QHash<QString, QString> SectorMappingDialog::sector_map() const {
     for (auto it = combos_.begin(); it != combos_.end(); ++it)
         result[it.key()] = it.value()->currentText();
     return result;
+}
+
+// ── AddDividendDialog ─────────────────────────────────────────────────────────
+
+static QString kDividendStyle(const QString& accent) {
+    return QString("QDialog { background:%1; color:%2; }"
+                   "QLabel { color:%3; font-size:11px; }"
+                   "QLineEdit, QDateEdit, QComboBox {"
+                   "  background:%4; color:%2; border:1px solid %5;"
+                   "  padding:5px 8px; font-size:12px; }"
+                   "QLineEdit:focus, QDateEdit:focus { border-color:%6; }"
+                   "QComboBox::drop-down { border:none; }"
+                   "QComboBox QAbstractItemView { background:%4; color:%2;"
+                   "  selection-background-color:%6; }")
+        .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_PRIMARY, ui::colors::TEXT_SECONDARY,
+             ui::colors::BG_BASE, ui::colors::BORDER_MED, accent);
+}
+
+AddDividendDialog::AddDividendDialog(const QStringList& symbols, QWidget* parent)
+    : QDialog(parent) {
+    setWindowTitle("Record Dividend");
+    setFixedSize(360, 300);
+    setStyleSheet(kDividendStyle(ui::colors::CYAN));
+
+    auto* layout = new QVBoxLayout(this);
+    layout->setSpacing(12);
+    layout->setContentsMargins(20, 16, 20, 16);
+
+    auto* title = new QLabel("RECORD DIVIDEND");
+    title->setStyleSheet(
+        QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;")
+            .arg(ui::colors::CYAN));
+    layout->addWidget(title);
+
+    auto* form = new QFormLayout;
+    form->setSpacing(8);
+    form->setLabelAlignment(Qt::AlignRight);
+
+    symbol_cb_ = new QComboBox;
+    for (const auto& s : symbols)
+        symbol_cb_->addItem(s);
+    form->addRow("Symbol:", symbol_cb_);
+
+    amount_edit_ = new QLineEdit;
+    amount_edit_->setPlaceholderText("e.g. 0.88");
+    form->addRow("Amount/share:", amount_edit_);
+
+    date_edit_ = new QDateEdit;
+    date_edit_->setCalendarPopup(true);
+    date_edit_->setDisplayFormat("yyyy-MM-dd");
+    date_edit_->setDate(QDate::currentDate());
+    form->addRow("Ex-div date:", date_edit_);
+
+    notes_edit_ = new QLineEdit;
+    notes_edit_->setPlaceholderText("Optional note");
+    form->addRow("Notes:", notes_edit_);
+
+    layout->addLayout(form);
+    layout->addStretch();
+
+    auto* btn_row = new QHBoxLayout;
+    btn_row->addStretch();
+
+    auto* cancel = new QPushButton("CANCEL");
+    cancel->setFixedHeight(32);
+    cancel->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                "  font-size:10px; font-weight:700; padding:0 16px; }"
+                "QPushButton:hover { background:%3; }")
+            .arg(ui::colors::TEXT_SECONDARY, ui::colors::BORDER_MED, ui::colors::BG_HOVER));
+    connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
+    btn_row->addWidget(cancel);
+
+    auto* ok = new QPushButton("RECORD");
+    ok->setFixedHeight(32);
+    ok->setStyleSheet(
+        QString("QPushButton { background:%1; color:#000; border:none;"
+                "  font-size:10px; font-weight:700; padding:0 16px; }"
+                "QPushButton:hover { background:%2; }")
+            .arg(ui::colors::CYAN, ui::colors::TEXT_PRIMARY));
+    connect(ok, &QPushButton::clicked, this, [this]() {
+        if (amount_edit_->text().trimmed().isEmpty()) {
+            amount_edit_->setPlaceholderText("Required!");
+            return;
+        }
+        accept();
+    });
+    btn_row->addWidget(ok);
+
+    layout->addLayout(btn_row);
+}
+
+QString AddDividendDialog::symbol() const {
+    return symbol_cb_->currentText();
+}
+
+double AddDividendDialog::amount_per_share() const {
+    return amount_edit_->text().trimmed().toDouble();
+}
+
+QString AddDividendDialog::date() const {
+    return date_edit_->date().toString("yyyy-MM-dd");
+}
+
+QString AddDividendDialog::notes() const {
+    return notes_edit_->text().trimmed();
 }
 
 } // namespace fincept::screens

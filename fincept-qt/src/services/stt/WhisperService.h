@@ -128,7 +128,9 @@ class WhisperService : public QObject {
     std::vector<float> drain_samples();
 
     // ── Constants ─────────────────────────────────────────────────────────────
-    static constexpr int    kSampleRate      = 16'000;   // Hz — whisper requirement
+    static constexpr int    kMaxDownloadRetries = 3;
+    static constexpr int    kRetryBaseMs        = 2'000; // 2s, 4s, 8s backoff
+    static constexpr int    kSampleRate         = 16'000;   // Hz — whisper requirement
     static constexpr int    kDrainIntervalMs = 1'200;    // how often to kick inference
     static constexpr int    kWindowSeconds   = 6;        // sliding audio window
     static constexpr int    kMaxWindowSamples = kSampleRate * kWindowSeconds;
@@ -146,6 +148,9 @@ class WhisperService : public QObject {
     QAudioSource*          audio_source_ = nullptr;
     QNetworkAccessManager* nam_          = nullptr;
     QTimer*                drain_timer_  = nullptr;
+    QTimer*                retry_timer_  = nullptr;  // one-shot retry delay
+
+    int  download_attempt_ = 0;   // current attempt count (reset on success)
 
     std::atomic<bool> listening_      {false};
     std::atomic<bool> model_loaded_   {false};

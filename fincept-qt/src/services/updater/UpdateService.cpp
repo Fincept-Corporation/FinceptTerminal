@@ -42,10 +42,23 @@ UpdateService::UpdateService(QObject* parent)
     connect(updater_, &QSimpleUpdater::checkingFinished,
             this, [this](const QString& checked_url) {
         if (checked_url != url_) return;
+
+        // If the manifest is unreachable or returns a non-200 response,
+        // QSimpleUpdater sets latestVersion to empty — treat as "no update"
+        // rather than surfacing an error dialog to the user.
+        const QString latest = updater_->getLatestVersion(url_);
+        if (latest.isEmpty()) {
+            LOG_WARN("UpdateService",
+                     "Update manifest returned empty version — server may be unreachable "
+                     "or updates.json not yet published. Skipping silently.");
+            emit check_finished(false);
+            return;
+        }
+
         bool found = updater_->getUpdateAvailable(url_);
         LOG_INFO("UpdateService", QString("Check finished — update available: %1, latest: %2")
                      .arg(found ? "yes" : "no")
-                     .arg(updater_->getLatestVersion(url_)));
+                     .arg(latest));
 
 #ifdef Q_OS_LINUX
         if (found) {
@@ -57,7 +70,7 @@ UpdateService::UpdateService(QObject* parent)
                         "The update will be applied in the background.\n"
                         "Restart when prompted to complete installation.\n\n"
                         "Update now?")
-                    .arg(updater_->getLatestVersion(url_)),
+                    .arg(latest),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::Yes
             );

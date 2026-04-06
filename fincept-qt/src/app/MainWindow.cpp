@@ -71,6 +71,7 @@
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QScreen>
@@ -83,7 +84,26 @@ namespace fincept {
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("Fincept Terminal");
-    setWindowIcon(QIcon("C:/windowsdisk/finceptTerminal/fincept_icon.ico"));
+    // Load icon from the embedded Windows resource (IDI_ICON1 in app.rc).
+    // Falls back to the .ico beside the executable on other platforms.
+    QIcon app_icon;
+#if defined(Q_OS_WIN)
+    app_icon = QApplication::windowIcon(); // set by app.rc at link time
+    if (app_icon.isNull()) {
+        // Fallback: look next to the executable (works after windeployqt)
+        const QString ico = QCoreApplication::applicationDirPath() + "/fincept.ico";
+        if (QFile::exists(ico))
+            app_icon = QIcon(ico);
+    }
+#else
+    {
+        const QString ico = QCoreApplication::applicationDirPath() + "/fincept.ico";
+        if (QFile::exists(ico))
+            app_icon = QIcon(ico);
+    }
+#endif
+    if (!app_icon.isNull())
+        setWindowIcon(app_icon);
     setMinimumSize(1280, 720);
 
     QScreen* screen = QApplication::primaryScreen();

@@ -30,8 +30,8 @@ Result<void> McpClient::start() {
         return Result<void>::ok();
 
     // Create a dedicated worker thread with its own event loop so that
-    // QProcess signals are delivered there. This means start_server() can be
-    // called from ANY thread without freezing the UI.
+    // QProcess signals are delivered there. start() is always called from a
+    // background thread (never the UI thread), so blocking here is safe.
     worker_thread_ = new QThread;
     worker_thread_->setObjectName("mcp-" + config_.id);
 
@@ -78,7 +78,8 @@ Result<void> McpClient::start() {
     process_->moveToThread(worker_thread_);
     worker_thread_->start();
 
-    // Use invokeMethod to call start() on the worker thread (where QProcess now lives)
+    // BlockingQueuedConnection is safe here — start() is always called from a
+    // background thread (McpService auto-start thread), never from the UI thread.
     bool started_ok = false;
     QMetaObject::invokeMethod(process_, [this, command, args, &started_ok]() {
         process_->start(command, args);
@@ -90,8 +91,7 @@ Result<void> McpClient::start() {
         LOG_ERROR(TAG, "Failed to start MCP server: " + config_.name + " — " + err);
         worker_thread_->quit();
         worker_thread_->wait(3000);
-        delete process_;
-        process_ = nullptr;
+        cleanup_process();
         delete worker_thread_;
         worker_thread_ = nullptr;
         return Result<void>::err("Failed to start: " + config_.name.toStdString() + " — " + err.toStdString());
@@ -100,6 +100,13 @@ Result<void> McpClient::start() {
     running_ = true;
     LOG_INFO(TAG, "Started MCP server process: " + config_.name);
     return Result<void>::ok();
+}
+
+void McpClient::cleanup_process() {
+    if (process_) {
+        delete process_;
+        process_ = nullptr;
+    }
 }
 
 void McpClient::stop() {
@@ -118,23 +125,28 @@ void McpClient::stop() {
     }
 
     if (process_) {
-        // Terminate on the worker thread where QProcess lives
+        // Ask the worker thread to terminate the process, then quit its event loop.
+        // We use QueuedConnection so the worker thread handles terminate() in its
+        // own event loop — no BlockingQueuedConnection deadlock risk.
+        // After quit(), wait() drains the thread and the process dies with it.
         QMetaObject::invokeMethod(process_, [this]() {
             process_->terminate();
-            if (!process_->waitForFinished(3000))
-                process_->kill();
-        }, Qt::BlockingQueuedConnection);
-        delete process_;
-        process_ = nullptr;
+        }, Qt::QueuedConnection);
     }
 
     if (worker_thread_) {
         worker_thread_->quit();
-        worker_thread_->wait(3000);
+        // Wait up to 4s for the worker to drain terminate() and exit cleanly.
+        // If it hangs, kill the process directly before giving up.
+        if (!worker_thread_->wait(4000) && process_) {
+            process_->kill();
+            worker_thread_->wait(1000);
+        }
         delete worker_thread_;
         worker_thread_ = nullptr;
     }
 
+    cleanup_process();
     LOG_INFO(TAG, "Stopped MCP server: " + config_.name);
 }
 

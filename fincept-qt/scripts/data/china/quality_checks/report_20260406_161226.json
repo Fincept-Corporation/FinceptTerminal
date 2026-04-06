@@ -1,0 +1,84 @@
+{
+  "generated_at": 1775472146,
+  "db_file": "C:\\windowsdisk\\finceptTerminal\\fincept-qt\\scripts\\data\\china\\unified_store\\china_data.db",
+  "table_counts": {
+    "market_daily": 1,
+    "fundamentals_quarterly": 6,
+    "corporate_actions_adjust": 1,
+    "corporate_actions_dividend": 1,
+    "announcements": 51,
+    "entities": 0,
+    "pdf_index": 1,
+    "pdf_texts": 0
+  },
+  "checks": {
+    "market_nulls": {
+      "total": 1,
+      "null_close": 0,
+      "null_volume": 0
+    },
+    "announcement_fields": {
+      "total": 51,
+      "missing_pdf_url": 0,
+      "missing_title": 0
+    },
+    "entity_market": {
+      "total_entities": 0,
+      "market_mismatches": 0,
+      "examples": []
+    },
+    "pdf_files": {
+      "checked": 1,
+      "missing_files": 0,
+      "sha256_mismatch": 0,
+      "examples": []
+    },
+    "pdf_text_coverage": {
+      "pdf_index_count": 1,
+      "pdf_text_count": 0,
+      "coverage_pct": 0.0
+    },
+    "fundamentals_coverage": {
+      "group_count": 6,
+      "latest_groups": [
+        {
+          "dataset": "balance",
+          "fiscal_year": 2024,
+          "fiscal_quarter": 3,
+          "rows": 1
+        },
+        {
+          "dataset": "cash_flow",
+          "fiscal_year": 2024,
+          "fiscal_quarter": 3,
+          "rows": 1
+        },
+        {
+          "dataset": "dupont",
+          "fiscal_year": 2024,
+          "fiscal_quarter": 3,
+          "rows": 1
+        },
+        {
+          "dataset": "growth",
+          "fiscal_year": 2024,
+          "fiscal_quarter": 3,
+          "rows": 1
+        },
+        {
+          "dataset": "operation",
+          "fiscal_year": 2024,
+          "fiscal_quarter": 3,
+          "rows": 1
+        },
+        {
+          "dataset": "profit",
+          "fiscal_year": 2024,
+          "fiscal_quarter": 3,
+          "rows": 1
+        }
+      ]
+    }
+  },
+  "quality_score": 100.0
+}

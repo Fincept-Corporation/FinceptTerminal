@@ -3,6 +3,14 @@
 #include "screens/report_builder/ReportBuilderScreen.h"
 #include "ui/theme/Theme.h"
 
+namespace { // forward-declare default theme for constructor use
+static fincept::screens::ReportTheme default_canvas_theme() {
+    return {"Light Professional", "#1a1a1a", "#d97706", "#ffffff",
+            "#333333", "#f0f0f0", "#1a1a1a", "#f5f5f5",
+            "#f9f9f9", "#666666", "#cccccc"};
+}
+} // namespace
+
 #include <QBarCategoryAxis>
 #include <QBarSeries>
 #include <QBarSet>
@@ -219,23 +227,70 @@ static QString render_sparkline_to_file(const QString& data_str,
 }
 
 DocumentCanvas::DocumentCanvas(QWidget* parent) : QWidget(parent) {
-    setStyleSheet("background: #111111;");
-    setAcceptDrops(true); // enable drag-and-drop on the canvas widget
+    setAcceptDrops(true);
 
-    auto* vl = new QVBoxLayout(this);
-    vl->setContentsMargins(20, 20, 20, 20);
-    vl->setAlignment(Qt::AlignHCenter);
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
 
-    editor_ = new QTextEdit;
-    editor_->setReadOnly(true);
-    editor_->setFixedWidth(794); // A4 at 96 dpi
-    editor_->setMinimumHeight(1123);
-    editor_->setStyleSheet(
-        QString("QTextEdit { background: white; color: #1a1a1a; border: 1px solid %1; "
-                "padding: 60px; font-family: 'Segoe UI'; font-size: 12pt; }")
-            .arg(ui::colors::BORDER));
+    scroll_ = new QScrollArea(this);
+    scroll_->setWidgetResizable(true);
+    scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll_->setStyleSheet(
+        "QScrollArea { background: #1a1a1a; border: none; }"
+        "QScrollBar:vertical { background: #111111; width: 10px; }"
+        "QScrollBar::handle:vertical { background: #333333; border-radius: 5px; min-height: 20px; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }"
+        "QScrollBar:horizontal { background: #111111; height: 10px; }"
+        "QScrollBar::handle:horizontal { background: #333333; border-radius: 5px; min-width: 20px; }"
+        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }");
 
-    vl->addWidget(editor_);
+    container_ = new QWidget;
+    container_->setStyleSheet("background: #1a1a1a;");
+    pages_layout_ = new QVBoxLayout(container_);
+    pages_layout_->setContentsMargins(40, 40, 40, 40);
+    pages_layout_->setSpacing(24); // gap between pages
+    pages_layout_->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+
+    scroll_->setWidget(container_);
+    root->addWidget(scroll_);
+
+    // Always have at least one page so text_edit() never returns nullptr
+    new_page(default_canvas_theme());
+}
+
+void DocumentCanvas::clear_pages() {
+    for (auto* p : pages_) {
+        pages_layout_->removeWidget(p);
+        delete p;
+    }
+    pages_.clear();
+}
+
+QTextEdit* DocumentCanvas::new_page(const ReportTheme& theme) {
+    auto* page = new QTextEdit(container_);
+    page->setReadOnly(true);
+    page->setFixedWidth(794);   // A4 at 96 dpi
+    page->setMinimumHeight(1123); // A4 height
+    page->setStyleSheet(
+        QString("QTextEdit {"
+                "  background: %1;"
+                "  color: %2;"
+                "  border: none;"
+                "  padding: 72px 80px 72px 80px;"
+                "  font-family: 'Segoe UI', 'Arial', sans-serif;"
+                "  font-size: 12pt;"
+                "}"
+                "QScrollBar:vertical { width: 0px; }"
+                "QScrollBar:horizontal { height: 0px; }")
+            .arg(theme.page_bg, theme.text_color));
+    // Drop shadow effect via container styling — wrap in a frame
+    page->setFrameShape(QFrame::NoFrame);
+
+    pages_layout_->addWidget(page, 0, Qt::AlignHCenter);
+    pages_.append(page);
+    return page;
 }
 
 // ── Drag-and-drop ─────────────────────────────────────────────────────────────
@@ -274,14 +329,9 @@ void DocumentCanvas::dropEvent(QDropEvent* e) {
 
 void DocumentCanvas::render(const QVector<ReportComponent>& components, const ReportMetadata& metadata,
                             const ReportTheme& theme, int selected_index) {
-    // Apply page background via stylesheet
-    editor_->setStyleSheet(
-        QString("QTextEdit { background: %1; color: %2; border: 1px solid %3; "
-                "padding: 60px; font-family: 'Segoe UI'; font-size: 12pt; }")
-            .arg(theme.page_bg, theme.text_color, ui::colors::BORDER));
-
-    editor_->clear();
-    QTextCursor cursor = editor_->textCursor();
+    clear_pages();
+    QTextEdit* current_page = new_page(theme);
+    QTextCursor cursor = current_page->textCursor();
 
     // ── Metadata header ───────────────────────────────────────────────────────
     QTextCharFormat title_fmt;
@@ -620,17 +670,9 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             cursor.insertText("\n");
 
         } else if (comp.type == "page_break") {
-            // Visual page break indicator
-            QTextBlockFormat bf;
-            bf.setTopMargin(16);
-            bf.setBottomMargin(16);
-            cursor.setBlockFormat(bf);
-            QTextCharFormat fmt;
-            fmt.setForeground(QColor(theme.meta_color));
-            fmt.setFontPointSize(9);
-            fmt.setFontItalic(true);
-            cursor.insertText("─── Page Break ───", fmt);
-            cursor.insertText("\n");
+            // Start a new physical page
+            current_page = new_page(theme);
+            cursor = current_page->textCursor();
 
         } else if (comp.type == "toc") {
             QTextCharFormat hdr_fmt;
@@ -839,7 +881,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
         }
     }
 
-    editor_->setTextCursor(cursor);
+    current_page->setTextCursor(cursor);
 }
 
 } // namespace fincept::screens

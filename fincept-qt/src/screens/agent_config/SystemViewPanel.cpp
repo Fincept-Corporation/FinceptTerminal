@@ -5,6 +5,7 @@
 #include "services/agents/AgentService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QFrame>
 #include <QGridLayout>
@@ -84,6 +85,8 @@ SystemViewPanel::SystemViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("SystemViewPanel");
     build_ui();
     setup_connections();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { update(); });
 }
 
 // ── UI construction ──────────────────────────────────────────────────────────
@@ -235,62 +238,153 @@ QWidget* SystemViewPanel::build_sysinfo_section() {
     return card;
 }
 
+// ── Helper: clear all items from a layout ────────────────────────────────────
+
+static void clear_layout(QLayout* layout) {
+    while (layout->count() > 0) {
+        auto* item = layout->takeAt(0);
+        if (auto* w = item->widget())
+            w->deleteLater();
+        delete item;
+    }
+}
+
+// ── LLM list population ───────────────────────────────────────────────────────
+
+void SystemViewPanel::populate_llm_list() {
+    clear_layout(llm_list_layout_);
+
+    auto providers = LlmConfigRepository::instance().list_providers();
+    if (!providers.is_ok()) {
+        auto* err = new QLabel("Failed to load LLM providers.");
+        err->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::NEGATIVE));
+        llm_list_layout_->addWidget(err);
+        return;
+    }
+
+    const auto& list = providers.value();
+    llms_count_->setText(QString::number(list.size()));
+
+    if (list.isEmpty()) {
+        auto* empty = new QLabel("No LLM providers configured. Go to Settings → LLM to add one.");
+        empty->setWordWrap(true);
+        empty->setStyleSheet(
+            QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY));
+        llm_list_layout_->addWidget(empty);
+        return;
+    }
+
+    for (const auto& p : list) {
+        auto* row = new QWidget;
+        auto* hl  = new QHBoxLayout(row);
+        hl->setContentsMargins(0, 2, 0, 2);
+        hl->setSpacing(8);
+
+        if (p.is_active) {
+            auto* badge = new QLabel("ACTIVE");
+            badge->setStyleSheet(
+                QString("color:%1;font-size:8px;font-weight:700;background:%2;padding:1px 5px;")
+                    .arg(ui::colors::POSITIVE, ui::colors::BG_RAISED));
+            hl->addWidget(badge);
+        }
+
+        auto* name = new QLabel(p.provider.toUpper());
+        name->setStyleSheet(
+            QString("color:%1;font-size:12px;font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
+        hl->addWidget(name);
+
+        auto* model = new QLabel(p.model);
+        model->setStyleSheet(
+            QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY));
+        hl->addWidget(model);
+
+        hl->addStretch();
+
+        const bool has_key = !p.api_key.isEmpty();
+        auto* key_status = new QLabel(has_key ? "KEY SET" : "NO KEY");
+        key_status->setStyleSheet(
+            QString("color:%1;font-size:9px;font-weight:600;")
+                .arg(has_key ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+        hl->addWidget(key_status);
+
+        llm_list_layout_->addWidget(row);
+    }
+}
+
+// ── Tools list population ─────────────────────────────────────────────────────
+
+void SystemViewPanel::populate_tools_list(const services::AgentToolsInfo& info) {
+    clear_layout(tools_list_layout_);
+    tools_count_->setText(QString::number(info.total_count));
+
+    if (info.categories.isEmpty()) {
+        auto* empty = new QLabel("No tools loaded.");
+        empty->setStyleSheet(
+            QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY));
+        tools_list_layout_->addWidget(empty);
+        return;
+    }
+
+    for (const auto& cat : info.categories) {
+        QJsonArray tools = info.tools[cat].toArray();
+
+        auto* cat_lbl = new QLabel(QString("%1  (%2)").arg(cat.toUpper()).arg(tools.size()));
+        cat_lbl->setStyleSheet(
+            QString("color:%1;font-size:10px;font-weight:600;letter-spacing:1px;padding-top:4px;")
+                .arg(ui::colors::AMBER));
+        tools_list_layout_->addWidget(cat_lbl);
+
+        QStringList names;
+        for (const auto& t : tools)
+            names << t.toString();
+
+        auto* tools_lbl = new QLabel(names.join(", "));
+        tools_lbl->setWordWrap(true);
+        tools_lbl->setStyleSheet(
+            QString("color:%1;font-size:11px;padding-left:8px;").arg(ui::colors::TEXT_PRIMARY));
+        tools_list_layout_->addWidget(tools_lbl);
+    }
+}
+
 // ── Connections ──────────────────────────────────────────────────────────────
 
 void SystemViewPanel::setup_connections() {
-    // Agents count
-    connect(&services::AgentService::instance(), &services::AgentService::agents_discovered, this,
+    auto& svc = services::AgentService::instance();
+
+    // Agents count → update stat badge + cache
+    connect(&svc, &services::AgentService::agents_discovered, this,
             [this](QVector<services::AgentInfo> agents, QVector<services::AgentCategory>) {
                 agents_count_->setText(QString::number(agents.size()));
-                cache_count_->setText(QString::number(services::AgentService::instance().cached_agent_count()));
+                const QJsonObject stats = services::AgentService::instance().get_cache_stats();
+                const int total = services::AgentService::instance().cached_agent_count()
+                                + stats["response_cache_size"].toInt(0);
+                cache_count_->setText(QString::number(total));
             });
 
-    // Tools
-    connect(&services::AgentService::instance(), &services::AgentService::tools_loaded, this,
+    // Tools loaded → repopulate tools section
+    connect(&svc, &services::AgentService::tools_loaded, this,
             [this](services::AgentToolsInfo info) {
-                tools_count_->setText(QString::number(info.total_count));
-
-                // Clear and populate tools list
-                while (tools_list_layout_->count() > 0) {
-                    auto* item = tools_list_layout_->takeAt(0);
-                    if (auto* w = item->widget())
-                        w->deleteLater();
-                    delete item;
-                }
-
-                for (const auto& cat : info.categories) {
-                    QJsonArray tools = info.tools[cat].toArray();
-                    auto* cat_lbl = new QLabel(QString("%1 (%2)").arg(cat.toUpper()).arg(tools.size()));
-                    cat_lbl->setStyleSheet(
-                        QString("color:%1;font-size:10px;font-weight:600;letter-spacing:1px;padding-top:4px;")
-                            .arg(ui::colors::AMBER));
-                    tools_list_layout_->addWidget(cat_lbl);
-
-                    QString tool_names;
-                    for (const auto& t : tools) {
-                        if (!tool_names.isEmpty())
-                            tool_names += ", ";
-                        tool_names += t.toString();
-                    }
-                    auto* tools_lbl = new QLabel(tool_names);
-                    tools_lbl->setWordWrap(true);
-                    tools_lbl->setStyleSheet(
-                        QString("color:%1;font-size:11px;padding-left:8px;").arg(ui::colors::TEXT_PRIMARY));
-                    tools_list_layout_->addWidget(tools_lbl);
-                }
+                populate_tools_list(info);
             });
 
-    // System info
-    connect(&services::AgentService::instance(), &services::AgentService::system_info_loaded, this,
+    // System info → fill version/framework/features
+    connect(&svc, &services::AgentService::system_info_loaded, this,
             [this](services::AgentSystemInfo info) {
                 version_label_->setText(info.version.isEmpty() ? "N/A" : info.version);
                 framework_label_->setText(info.framework.isEmpty() ? "N/A" : info.framework);
 
-                // Features
+                // Remove stale feature badges (keep the info_grid at index 0)
+                while (features_layout_->count() > 1) {
+                    auto* item = features_layout_->takeAt(1);
+                    if (auto* w = item->widget()) w->deleteLater();
+                    delete item;
+                }
+
                 if (!info.features.isEmpty()) {
                     auto* feat_header = new QLabel("FEATURES");
                     feat_header->setStyleSheet(
-                        QString("color:%1;font-size:9px;font-weight:600;letter-spacing:1px;padding-top:8px;")
+                        QString("color:%1;font-size:9px;font-weight:600;"
+                                "letter-spacing:1px;padding-top:8px;")
                             .arg(ui::colors::TEXT_TERTIARY));
                     features_layout_->addWidget(feat_header);
 
@@ -302,7 +396,7 @@ void SystemViewPanel::setup_connections() {
                     for (const auto& feat : info.features) {
                         auto* badge = new QLabel(feat.toUpper().replace('_', ' '));
                         badge->setStyleSheet(
-                            QString("color:%1;font-size:9px;background:%2;padding:2px 6px;border-radius:2px;")
+                            QString("color:%1;font-size:9px;background:%2;padding:2px 6px;")
                                 .arg(ui::colors::TEXT_PRIMARY, ui::colors::BG_RAISED));
                         flow_layout->addWidget(badge);
                     }
@@ -312,76 +406,48 @@ void SystemViewPanel::setup_connections() {
             });
 }
 
+// ── Cross-panel public slots ──────────────────────────────────────────────────
+
+void SystemViewPanel::on_agents_changed() {
+    auto& svc = services::AgentService::instance();
+    agents_count_->setText(QString::number(svc.cached_agent_count()));
+    const QJsonObject stats = svc.get_cache_stats();
+    cache_count_->setText(
+        QString::number(svc.cached_agent_count() + stats["response_cache_size"].toInt(0)));
+}
+
+void SystemViewPanel::on_llm_config_changed() {
+    populate_llm_list();
+}
+
+void SystemViewPanel::on_tools_changed(const services::AgentToolsInfo& info) {
+    populate_tools_list(info);
+}
+
 // ── Data refresh ─────────────────────────────────────────────────────────────
 
 void SystemViewPanel::refresh_data() {
     auto& svc = services::AgentService::instance();
 
-    // Load LLM providers from repository
-    auto providers = LlmConfigRepository::instance().list_providers();
-    if (providers.is_ok()) {
-        while (llm_list_layout_->count() > 0) {
-            auto* item = llm_list_layout_->takeAt(0);
-            if (auto* w = item->widget())
-                w->deleteLater();
-            delete item;
-        }
+    // LLM providers (sync from DB)
+    populate_llm_list();
 
-        llms_count_->setText(QString::number(providers.value().size()));
+    // Agent count (from cache)
+    agents_count_->setText(QString::number(svc.cached_agent_count()));
 
-        for (const auto& p : providers.value()) {
-            auto* row = new QWidget;
-            auto* hl = new QHBoxLayout(row);
-            hl->setContentsMargins(0, 2, 0, 2);
-            hl->setSpacing(8);
-
-            if (p.is_active) {
-                auto* badge = new QLabel("ACTIVE");
-                badge->setStyleSheet(QString("color:%1;font-size:8px;font-weight:700;background:%2;"
-                                             "padding:1px 4px;border-radius:2px;")
-                                         .arg(ui::colors::POSITIVE, QString("%1").arg(ui::colors::BG_RAISED)));
-                hl->addWidget(badge);
-            }
-
-            auto* name = new QLabel(p.provider.toUpper());
-            name->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;").arg(ui::colors::TEXT_PRIMARY));
-            hl->addWidget(name);
-
-            auto* model = new QLabel(p.model);
-            model->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY));
-            hl->addWidget(model);
-
-            hl->addStretch();
-
-            auto* key_status = new QLabel(p.api_key.isEmpty() ? "NO KEY" : "KEY SET");
-            key_status->setStyleSheet(QString("color:%1;font-size:9px;font-weight:600;")
-                                          .arg(p.api_key.isEmpty() ? ui::colors::NEGATIVE : ui::colors::POSITIVE));
-            hl->addWidget(key_status);
-
-            llm_list_layout_->addWidget(row);
-        }
-
-        if (providers.value().isEmpty()) {
-            auto* empty = new QLabel("No LLM providers configured. Go to Settings to add one.");
-            empty->setStyleSheet(QString("color:%1;font-size:11px;font-style:italic;").arg(ui::colors::TEXT_TERTIARY));
-            llm_list_layout_->addWidget(empty);
-        }
-    }
-
-    // Update cache stats immediately from in-process cache
+    // Cache stats
     {
         const QJsonObject stats = svc.get_cache_stats();
         const int agent_cached  = svc.cached_agent_count();
         const int resp_cached   = stats["response_cache_size"].toInt(0);
-        const int total         = agent_cached + resp_cached;
-        cache_count_->setText(QString::number(total));
+        cache_count_->setText(QString::number(agent_cached + resp_cached));
         cache_count_->setToolTip(
             QString("Agents: %1  |  Responses: %2").arg(agent_cached).arg(resp_cached));
     }
 
-    // Trigger async loads
-    svc.get_system_info();
+    // Async: tools list + system info (results arrive via signals)
     svc.list_tools();
+    svc.get_system_info();
 }
 
 // ── Visibility ───────────────────────────────────────────────────────────────

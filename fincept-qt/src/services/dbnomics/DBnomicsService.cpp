@@ -3,8 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
-
-#include <QDateTime>
+#include "storage/cache/CacheManager.h"
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QUrl>
@@ -29,19 +28,25 @@ DBnomicsService::DBnomicsService(QObject* parent) : QObject(parent) {
     connect(search_debounce_, &QTimer::timeout, this, [this]() { global_search(pending_search_q_, 0); });
 }
 
-bool DBnomicsService::is_cache_fresh(qint64 fetched_at, int ttl_ms) const {
-    return fetched_at > 0 && (QDateTime::currentMSecsSinceEpoch() - fetched_at) < ttl_ms;
-}
-
 QString DBnomicsService::build_url(const QString& path) const {
     return QString("%1%2").arg(kBaseUrl).arg(path);
 }
 
 void DBnomicsService::fetch_providers() {
-    if (is_cache_fresh(providers_cache_.fetched_at, kProviderCacheMs)) {
-        LOG_DEBUG("DBnomicsService", "providers: serving from cache");
-        emit providers_loaded(providers_cache_.data);
-        return;
+    {
+        const QVariant cached = fincept::CacheManager::instance().get("dbnomics:providers");
+        if (!cached.isNull()) {
+            LOG_DEBUG("DBnomicsService", "providers: serving from cache");
+            const QJsonArray docs = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+            QVector<DbnProvider> out;
+            out.reserve(docs.size());
+            for (const auto& v : docs) {
+                const QJsonObject o = v.toObject();
+                out.push_back({o["code"].toString(), o["name"].toString()});
+            }
+            emit providers_loaded(out);
+            return;
+        }
     }
     LOG_INFO("DBnomicsService", "Fetching providers from API");
     const QString url = build_url("/providers");
@@ -60,8 +65,18 @@ void DBnomicsService::fetch_providers() {
             QJsonObject o = v.toObject();
             out.push_back({o["code"].toString(), o["name"].toString()});
         }
-        providers_cache_.data = out;
-        providers_cache_.fetched_at = QDateTime::currentMSecsSinceEpoch();
+        QJsonArray arr;
+        for (const auto& p : out) {
+            QJsonObject o;
+            o["code"] = p.code;
+            o["name"] = p.name;
+            arr.append(o);
+        }
+        fincept::CacheManager::instance().put(
+            "dbnomics:providers",
+            QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+            kProviderCacheSec,
+            "dbnomics");
         LOG_INFO("DBnomicsService", QString("Loaded %1 providers").arg(out.size()));
         emit providers_loaded(out);
     });
@@ -69,12 +84,22 @@ void DBnomicsService::fetch_providers() {
 
 void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
     const bool first_page = (offset == 0);
-    if (first_page && datasets_cache_.contains(provider_code)) {
-        auto& cached = datasets_cache_[provider_code];
-        if (is_cache_fresh(cached.fetched_at, kDatasetCacheMs)) {
+    if (first_page) {
+        const QString ds_key = "dbnomics:datasets:" + provider_code;
+        const QVariant cached = fincept::CacheManager::instance().get(ds_key);
+        if (!cached.isNull()) {
             LOG_DEBUG("DBnomicsService", "datasets: serving from cache");
-            DbnPagination page{0, 50, cached.total};
-            emit datasets_loaded(cached.data, page, false);
+            const QJsonObject root = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
+            const QJsonArray docs  = root["docs"].toArray();
+            const int total        = root["total"].toInt();
+            QVector<DbnDataset> out;
+            out.reserve(docs.size());
+            for (const auto& v : docs) {
+                const QJsonObject o = v.toObject();
+                out.push_back({o["code"].toString(), o["name"].toString()});
+            }
+            DbnPagination page{0, 50, total};
+            emit datasets_loaded(out, page, false);
             return;
         }
     }
@@ -102,10 +127,21 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
         const bool append = (offset > 0);
 
         if (!append) {
-            CachedDatasets& cache = datasets_cache_[provider_code];
-            cache.data = out;
-            cache.total = total;
-            cache.fetched_at = QDateTime::currentMSecsSinceEpoch();
+            QJsonArray arr;
+            for (const auto& d : out) {
+                QJsonObject o;
+                o["code"] = d.code;
+                o["name"] = d.name;
+                arr.append(o);
+            }
+            QJsonObject root;
+            root["docs"]  = arr;
+            root["total"] = total;
+            fincept::CacheManager::instance().put(
+                "dbnomics:datasets:" + provider_code,
+                QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))),
+                kDatasetCacheSec,
+                "dbnomics");
         }
         LOG_INFO("DBnomicsService", QString("Loaded %1 datasets (total=%2)").arg(out.size()).arg(total));
         emit datasets_loaded(out, page, append);
@@ -118,12 +154,22 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
     const bool first_page = (offset == 0);
     const bool no_query = query.isEmpty();
 
-    if (first_page && no_query && series_cache_.contains(cache_key)) {
-        auto& cached = series_cache_[cache_key];
-        if (is_cache_fresh(cached.fetched_at, kSeriesCacheMs)) {
+    if (first_page && no_query) {
+        const QString series_ckey = "dbnomics:series:" + cache_key;
+        const QVariant cv = fincept::CacheManager::instance().get(series_ckey);
+        if (!cv.isNull()) {
             LOG_DEBUG("DBnomicsService", "series: serving from cache");
-            DbnPagination page{0, 50, cached.total};
-            emit series_loaded(cached.data, page, false);
+            const QJsonObject root = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
+            const QJsonArray docs  = root["docs"].toArray();
+            const int total        = root["total"].toInt();
+            QVector<DbnSeriesInfo> out;
+            out.reserve(docs.size());
+            for (const auto& v : docs) {
+                const QJsonObject o = v.toObject();
+                out.push_back({o["code"].toString(), o["name"].toString()});
+            }
+            DbnPagination page{0, 50, total};
+            emit series_loaded(out, page, false);
             return;
         }
     }
@@ -157,10 +203,21 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
             const bool append = (offset > 0);
 
             if (first_page && no_query) {
-                CachedSeries& cache = series_cache_[cache_key];
-                cache.data = out;
-                cache.total = total;
-                cache.fetched_at = QDateTime::currentMSecsSinceEpoch();
+                QJsonArray arr;
+                for (const auto& s : out) {
+                    QJsonObject o;
+                    o["code"] = s.code;
+                    o["name"] = s.name;
+                    arr.append(o);
+                }
+                QJsonObject root;
+                root["docs"]  = arr;
+                root["total"] = total;
+                fincept::CacheManager::instance().put(
+                    "dbnomics:series:" + cache_key,
+                    QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))),
+                    kSeriesCacheSec,
+                    "dbnomics");
             }
             LOG_INFO("DBnomicsService", QString("Loaded %1 series (total=%2)").arg(out.size()).arg(total));
             emit series_loaded(out, page, append);

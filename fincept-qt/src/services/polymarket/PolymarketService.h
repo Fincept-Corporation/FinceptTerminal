@@ -2,8 +2,6 @@
 
 #include "services/polymarket/PolymarketTypes.h"
 
-#include <QDateTime>
-#include <QHash>
 #include <QNetworkAccessManager>
 #include <QObject>
 
@@ -88,19 +86,14 @@ class PolymarketService : public QObject {
     void get_data(const QString& path, JsonCallback on_success, const QString& error_ctx = "Data");
     void get_json(QNetworkAccessManager* nam, const QString& url, JsonCallback on_success, const QString& error_ctx);
 
-    bool is_cache_fresh(int64_t ts) const;
-
     QNetworkAccessManager* gamma_nam_ = nullptr;
     QNetworkAccessManager* clob_nam_ = nullptr;
     QNetworkAccessManager* data_nam_ = nullptr;
 
-    // Caches
-    QVector<LeaderboardEntry> leaderboard_cache_;
-    int64_t leaderboard_cache_ts_ = 0;
-    QVector<Tag> tags_cache_;
-    int64_t tags_cache_ts_ = 0;
-
-    static constexpr int64_t CACHE_TTL_MS = 300000; // 5 min
+    static constexpr int kTagsTtlSec       = 5 * 60;
+    static constexpr int kLeaderboardTtlSec = 5 * 60;
+    static constexpr int kMarketsTtlSec     = 2 * 60;
+    static constexpr int kEventsTtlSec      = 2 * 60;
 };
 
 } // namespace fincept::services::polymarket

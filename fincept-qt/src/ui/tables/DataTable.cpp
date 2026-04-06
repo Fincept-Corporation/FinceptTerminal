@@ -39,7 +39,7 @@ void DataTable::add_row(const QStringList& row) {
     insertRow(r);
     for (int c = 0; c < row.size() && c < columnCount(); ++c) {
         auto* item = new QTableWidgetItem(row[c]);
-        item->setForeground(QColor(colors::WHITE));
+        item->setForeground(QColor(colors::WHITE()));
         setItem(r, c, item);
     }
     setRowHeight(r, 26);

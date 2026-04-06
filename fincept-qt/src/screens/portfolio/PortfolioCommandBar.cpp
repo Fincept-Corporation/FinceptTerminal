@@ -233,9 +233,11 @@ void PortfolioCommandBar::build_action_buttons(QHBoxLayout* layout) {
 
     buy_btn_ = make_btn("BUY", ui::colors::POSITIVE, "#000000");
     sell_btn_ = make_btn("SELL", ui::colors::NEGATIVE, "#ffffff");
+    auto* div_btn = make_btn("DIV", ui::colors::CYAN, "#000000");
 
-    connect(buy_btn_, &QPushButton::clicked, this, &PortfolioCommandBar::buy_requested);
+    connect(buy_btn_,  &QPushButton::clicked, this, &PortfolioCommandBar::buy_requested);
     connect(sell_btn_, &QPushButton::clicked, this, &PortfolioCommandBar::sell_requested);
+    connect(div_btn,   &QPushButton::clicked, this, &PortfolioCommandBar::dividend_requested);
 
     // Refresh
     refresh_btn_ = new QPushButton("\u21BB");
@@ -402,6 +404,17 @@ void PortfolioCommandBar::set_has_portfolios(bool has) {
     details_container_->setVisible(false);
     if (!has) {
         selector_btn_->setText("NO PORTFOLIOS — CREATE ONE \u25BE");
+    }
+}
+
+void PortfolioCommandBar::set_refresh_interval(int ms) {
+    // Sync the combo box to show the restored value without emitting a signal
+    for (int i = 0; i < interval_cb_->count(); ++i) {
+        if (interval_cb_->itemData(i).toInt() == ms) {
+            QSignalBlocker blocker(interval_cb_);
+            interval_cb_->setCurrentIndex(i);
+            break;
+        }
     }
 }
 

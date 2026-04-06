@@ -188,8 +188,8 @@ class ResearchAgent(BaseAgent):
     async def initialize(self) -> bool:
         """Initialize the research agent"""
         try:
-            # Check if edgar_tools is available
-            import edgar_tools
+            from mcp.edgar import base as edgar_base
+            edgar_base.initialize_edgar()
             self._edgar_available = True
             logger.info("Edgar tools available for research")
         except ImportError:
@@ -215,12 +215,8 @@ class ResearchAgent(BaseAgent):
             return None
 
         try:
-            import edgar_tools
-            import json
-
-            # Call edgar_tools
-            result = edgar_tools.main(["company_info", ticker])
-            data = json.loads(result)
+            from mcp.edgar import base as edgar_base
+            data = edgar_base.get_company_info(ticker)
 
             if data.get("success"):
                 info = data.get("data", {})
@@ -249,26 +245,19 @@ class ResearchAgent(BaseAgent):
             return []
 
         try:
-            import edgar_tools
-            import json
-
-            # Call edgar_tools
-            args = ["get_filings", ticker, "--limit", str(limit)]
-            if form_types:
-                args.extend(["--form-type", ",".join(form_types)])
-
-            result = edgar_tools.main(args)
-            data = json.loads(result)
+            from mcp.edgar import base as edgar_base
+            form = form_types[0] if form_types else "8-K"
+            data = edgar_base.search_filings(ticker, form, months_back=12)
 
             if data.get("success"):
                 filings = []
-                for f in data.get("data", {}).get("filings", []):
+                for f in data.get("filings", []):
                     filings.append(FilingSummary(
                         accession_number=f.get("accession_number", ""),
-                        form_type=f.get("form_type", ""),
-                        filing_date=f.get("filing_date", ""),
+                        form_type=f.get("form", ""),
+                        filing_date=f.get("filed", ""),
                         description=f.get("description"),
-                        primary_document=f.get("primary_document"),
+                        primary_document=None,
                     ))
                 return filings
         except Exception as e:
@@ -282,25 +271,28 @@ class ResearchAgent(BaseAgent):
             return []
 
         try:
-            import edgar_tools
-            import json
-
-            # Get income statement
-            result = edgar_tools.main(["income_statement", ticker])
-            data = json.loads(result)
+            from mcp.edgar import financials as edgar_financials
+            data = edgar_financials.get_financials(ticker)
 
             financials = []
             if data.get("success"):
-                for period, values in data.get("data", {}).items():
-                    if isinstance(values, dict):
+                # System 1 returns income_statement as a dataframe-like dict
+                inc = data.get("data", {}).get("income_statement", {})
+                if isinstance(inc, dict):
+                    # columns are period labels, rows are line items
+                    periods = list(inc.get("columns", {}).values()) if "columns" in inc else []
+                    rows = inc.get("data", [])
+                    rev_row = next((r for r in rows if "revenue" in str(r.get("label", "")).lower()), None)
+                    ni_row  = next((r for r in rows if "net income" in str(r.get("label", "")).lower()), None)
+                    for i, period in enumerate(periods[:4]):
                         financials.append(FinancialData(
-                            period=period,
-                            revenue=values.get("revenue") or values.get("total_revenue"),
-                            net_income=values.get("net_income"),
-                            eps=values.get("eps") or values.get("basic_eps"),
+                            period=str(period),
+                            revenue=rev_row.get("values", [None] * 4)[i] if rev_row else None,
+                            net_income=ni_row.get("values", [None] * 4)[i] if ni_row else None,
+                            eps=None,
                         ))
 
-            return financials[:4]  # Return last 4 periods
+            return financials[:4]
         except Exception as e:
             logger.error(f"Error getting financials: {e}")
 
@@ -312,11 +304,8 @@ class ResearchAgent(BaseAgent):
             return []
 
         try:
-            import edgar_tools
-            import json
-
-            result = edgar_tools.main(["insider_transactions", ticker, "--limit", str(limit)])
-            data = json.loads(result)
+            from mcp.edgar import forms_insider as edgar_insider
+            data = edgar_insider.get_insider_transactions(ticker, limit)
 
             if data.get("success"):
                 return data.get("data", {}).get("transactions", [])

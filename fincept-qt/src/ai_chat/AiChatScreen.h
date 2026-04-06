@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMutex>
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QPushButton>
@@ -81,6 +82,7 @@ class AiChatScreen : public QWidget {
     // ── State ────────────────────────────────────────────────────────────
     QString active_session_id_;
     QString active_session_title_;
+    mutable QMutex history_mutex_;
     std::vector<ai_chat::ConversationMessage> history_;
     bool streaming_ = false;
     QPointer<QTextEdit> streaming_bubble_;
@@ -95,6 +97,7 @@ class AiChatScreen : public QWidget {
     QWidget* build_welcome();
     QWidget* build_input_area();
     QWidget* build_typing_indicator();
+    void refresh_theme();
 
     // ── Data ─────────────────────────────────────────────────────────────
     void load_sessions();

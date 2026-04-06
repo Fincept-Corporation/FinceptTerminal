@@ -4,7 +4,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QMap>
 #include <QObject>
 #include <QString>
 #include <QVector>
@@ -60,15 +59,8 @@ class GovDataService : public QObject {
     explicit GovDataService(QObject* parent = nullptr);
     Q_DISABLE_COPY(GovDataService)
 
-    // Simple TTL cache: key = "script:command:args_hash"
-    struct CacheEntry {
-        QJsonObject data;
-        qint64 fetched_at = 0;
-    };
-    QMap<QString, CacheEntry> cache_;
-    static constexpr int kCacheTtlMs = 5 * 60 * 1000; // 5 min
+    static constexpr int kCacheTtlSec = 5 * 60;
 
-    bool is_cache_fresh(const QString& key) const;
     QString cache_key(const QString& script, const QString& command, const QStringList& args) const;
 };
 

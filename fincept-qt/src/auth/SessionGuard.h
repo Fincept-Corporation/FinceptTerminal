@@ -25,7 +25,7 @@ class SessionGuard : public QObject {
     QTimer timer_;
     bool is_checking_ = false;
 
-    static constexpr int PULSE_INTERVAL_MS = 30000;
+    static constexpr int PULSE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 };
 
 } // namespace fincept::auth

@@ -148,9 +148,6 @@ class ReportBuilderScreen : public QWidget {
     void refresh_canvas();
     void refresh_structure();
 
-  signals:
-    void back_to_dashboard();
-
   private:
     QWidget* build_toolbar();
     void apply_template(const QString& name);

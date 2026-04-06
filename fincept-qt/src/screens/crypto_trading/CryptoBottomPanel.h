@@ -1,5 +1,5 @@
 #pragma once
-// Crypto Bottom Panel — tabbed: Positions, Orders, Trades, Market Info, Stats, Time&Sales, Depth
+// Crypto Bottom Panel — tabbed: Positions, Orders, Trades, My Trades, Fees, Market Info, Stats, Time&Sales, Depth
 
 #include "screens/crypto_trading/CryptoTypes.h"
 #include "trading/TradingTypes.h"
@@ -34,6 +34,10 @@ class CryptoBottomPanel : public QWidget {
     void set_live_balance(double balance, double equity, double used_margin);
     void set_mode(bool is_paper);
 
+    // New live tabs
+    void update_my_trades(const QJsonObject& data);
+    void update_fees(const QJsonObject& data);
+
     // New widget forwarding
     void add_trade_entry(const TradeEntry& trade);
     void set_depth_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
@@ -47,6 +51,8 @@ class CryptoBottomPanel : public QWidget {
     void setup_positions_tab();
     void setup_orders_tab();
     void setup_trades_tab();
+    void setup_my_trades_tab();
+    void setup_fees_tab();
     void setup_market_info_tab();
     void setup_stats_tab();
 
@@ -57,6 +63,8 @@ class CryptoBottomPanel : public QWidget {
     QTableWidget* positions_table_ = nullptr;
     QTableWidget* orders_table_ = nullptr;
     QTableWidget* trades_table_ = nullptr;
+    QTableWidget* my_trades_table_ = nullptr;
+    QTableWidget* fees_table_ = nullptr;
 
     // Market Info
     QLabel* funding_label_ = nullptr;

@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
 
 #include <QGridLayout>
@@ -482,15 +483,29 @@ void AsiaMarketsScreen::on_view_toggle() {
 // ── Data loading ────────────────────────────────────────────────────────────
 
 void AsiaMarketsScreen::load_endpoints(int cat_index) {
+    const QString script = categories_[cat_index].script;
+
+    // Check CacheManager first — endpoint lists are static, cache 1 hour
+    const QString cache_key = "asia:endpoints:" + script;
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (!doc.isNull() && doc.isObject()) {
+            auto obj = doc.object();
+            endpoint_cache_[script] = obj;
+            populate_endpoint_list(obj);
+            return;
+        }
+    }
+
     set_loading(true);
     endpoint_list_->clear();
     data_status_->setText("Loading endpoints...");
 
-    const QString script = categories_[cat_index].script;
     QPointer<AsiaMarketsScreen> self = this;
 
     python::PythonRunner::instance().run(script, {"get_all_endpoints"},
-                                         [self, script](const python::PythonResult& result) {
+                                         [self, script, cache_key](const python::PythonResult& result) {
                                              if (!self)
                                                  return;
                                              self->set_loading(false);
@@ -515,6 +530,10 @@ void AsiaMarketsScreen::load_endpoints(int cat_index) {
                                              }
 
                                              auto obj = doc.object();
+                                             fincept::CacheManager::instance().put(
+                                                 cache_key,
+                                                 QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                                                 60 * 60, "asia_markets");
                                              self->endpoint_cache_[script] = obj;
                                              self->populate_endpoint_list(obj);
                                          });
@@ -538,7 +557,7 @@ void AsiaMarketsScreen::populate_endpoint_list(const QJsonObject& result) {
             // Category header
             auto* header = new QListWidgetItem(it.key().toUpper());
             header->setFlags(header->flags() & ~Qt::ItemIsSelectable);
-            header->setForeground(QColor(colors::AMBER));
+            header->setForeground(QColor(colors::AMBER()));
             auto f = header->font();
             f.setBold(true);
             f.setPointSize(8);
@@ -590,17 +609,36 @@ void AsiaMarketsScreen::populate_endpoint_list(const QJsonObject& result) {
 }
 
 void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList& extra_args) {
-    set_loading(true);
-    data_status_->setText("Querying " + endpoint + "...");
-    record_count_->hide();
-
     const QString script = categories_[active_category_].script;
     QStringList args;
     args << endpoint << extra_args;
 
+    // Cache market data for 2 minutes
+    const QString cache_key = "asia:query:" + script + ":" + args.join(":");
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (doc.isArray() && !doc.array().isEmpty()) {
+            const QJsonArray data_array = doc.array();
+            record_count_->setText(QString::number(data_array.size()) + " records");
+            record_count_->show();
+            data_status_->setText(endpoint + " (cached)");
+            last_data_ = data_array;
+            json_view_->clear();
+            display_table(data_array);
+            if (!is_table_view_)
+                display_json(data_array);
+            return;
+        }
+    }
+
+    set_loading(true);
+    data_status_->setText("Querying " + endpoint + "...");
+    record_count_->hide();
+
     QPointer<AsiaMarketsScreen> self = this;
 
-    python::PythonRunner::instance().run(script, args, [self, endpoint](const python::PythonResult& result) {
+    python::PythonRunner::instance().run(script, args, [self, endpoint, cache_key](const python::PythonResult& result) {
         if (!self)
             return;
         self->set_loading(false);
@@ -657,6 +695,13 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
         self->record_count_->show();
         self->data_status_->setText(endpoint);
 
+        if (!data_array.isEmpty()) {
+            fincept::CacheManager::instance().put(
+                cache_key,
+                QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
+                2 * 60, "asia_markets");
+        }
+
         self->last_data_ = data_array;
         self->json_view_->clear();
         self->display_table(data_array);
@@ -692,8 +737,8 @@ void AsiaMarketsScreen::display_table(const QJsonArray& data) {
     data_table_->setHorizontalHeaderLabels(columns);
 
     // Pre-build color lookup to avoid repeated QColor construction
-    const QColor col_pos(colors::CYAN);
-    const QColor col_neg(colors::NEGATIVE);
+    const QColor col_pos(colors::CYAN());
+    const QColor col_neg(colors::NEGATIVE());
 
     for (int row = 0; row < max_rows; ++row) {
         auto obj = data[row].toObject();

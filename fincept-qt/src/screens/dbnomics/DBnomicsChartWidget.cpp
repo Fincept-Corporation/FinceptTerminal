@@ -32,9 +32,9 @@ static QValueAxis* make_y_axis(double y_min, double y_max, int tick_count) {
     auto* ax = new QValueAxis();
     ax->setRange(y_min, y_max);
     ax->setTickCount(tick_count);
-    ax->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
-    ax->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    ax->setLinePen(QPen(QColor(ui::colors::BORDER_MED)));
+    ax->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    ax->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    ax->setLinePen(QPen(QColor(ui::colors::BORDER_MED())));
     ax->setLabelFormat("%.4g"); // compact notation — avoids long decimals in small charts
     ax->setMinorTickCount(0);
     return ax;
@@ -44,17 +44,17 @@ static QValueAxis* make_x_axis(int count) {
     auto* ax = new QValueAxis();
     ax->setRange(0, std::max(1, count - 1));
     ax->setTickCount(std::min(8, std::max(2, count)));
-    ax->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
-    ax->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    ax->setLinePen(QPen(QColor(ui::colors::BORDER_MED)));
+    ax->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    ax->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    ax->setLinePen(QPen(QColor(ui::colors::BORDER_MED())));
     ax->setLabelFormat("%d");
     ax->setMinorTickCount(0);
     return ax;
 }
 
 static void style_chart(QChart* chart, bool compact) {
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
-    chart->setPlotAreaBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
+    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
+    chart->setPlotAreaBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
     chart->setPlotAreaBackgroundVisible(true);
     // Explicit margins so axis labels are never clipped.
     // Left margin is wider to accommodate Y-axis label text.
@@ -62,10 +62,10 @@ static void style_chart(QChart* chart, bool compact) {
     chart->legend()->setVisible(!compact);
     if (!compact) {
         chart->legend()->setAlignment(Qt::AlignBottom);
-        chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY));
+        chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY()));
     }
     chart->setTitleFont(QFont("Consolas", compact ? 9 : 11, QFont::Bold));
-    chart->setTitleBrush(QBrush(QColor(ui::colors::AMBER)));
+    chart->setTitleBrush(QBrush(QColor(ui::colors::AMBER())));
 }
 
 // ── DBnomicsChartWidget ───────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ void DBnomicsChartWidget::build_ui() {
     style_chart(chart, false);
     chart->setTitle("NO DATA — SELECT A SERIES FROM THE LEFT PANEL");
     chart_view_->setChart(chart);
-    chart_view_->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
+    chart_view_->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
     stack_->addWidget(chart_view_); // index 1
 
     stack_->setCurrentIndex(1);
@@ -322,8 +322,8 @@ void DBnomicsChartWidget::render_bar(const QVector<services::DbnDataPoint>& seri
 
     auto* x_axis = new QBarCategoryAxis();
     x_axis->append(QList<QString>(periods.begin(), periods.end()));
-    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
+    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
     // Rotate labels if many periods to avoid overlap
     if (periods.size() > 10)
         x_axis->setLabelsAngle(-45);
@@ -331,8 +331,8 @@ void DBnomicsChartWidget::render_bar(const QVector<services::DbnDataPoint>& seri
     bar_series->attachAxis(x_axis);
 
     auto* y_axis = new QValueAxis();
-    y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
+    y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
     y_axis->setLabelFormat("%.4g");
     y_axis->setTickCount(y_tick_count());
     y_axis->setMinorTickCount(0);

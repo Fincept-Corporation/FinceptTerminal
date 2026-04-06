@@ -70,8 +70,8 @@ QString IIFLBroker::iifl_order_type(OrderType t) {
     switch (t) {
         case OrderType::Market:        return "MARKET";
         case OrderType::Limit:         return "LIMIT";
-        case OrderType::StopLoss:      return "STOPLIMIT";
-        case OrderType::StopLossLimit: return "STOPMARKET";
+        case OrderType::StopLoss:      return "STOPMARKET";  // SL-M: trigger only, market fill
+        case OrderType::StopLossLimit: return "STOPLIMIT";   // SL:   trigger + limit price
         default:                       return "MARKET";
     }
 }

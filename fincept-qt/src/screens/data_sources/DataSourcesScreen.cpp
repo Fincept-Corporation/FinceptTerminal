@@ -49,7 +49,8 @@ namespace {
 static const QString TAG = "DataSources";
 static const QStringList kCategoryLabels = {
     "All Connectors", "Databases", "APIs", "Files", "Streaming",
-    "Cloud", "Time Series", "Market Data", "Search", "Warehouses"
+    "Cloud", "Time Series", "Market Data", "Search", "Warehouses",
+    "Alternative Data", "Open Banking"
 };
 
 const ConnectorConfig* find_connector_config(const QString& key) {
@@ -96,6 +97,8 @@ QString connector_transport(const ConnectorConfig& cfg) {
         case Category::MarketData:      return "MARKET";
         case Category::SearchAnalytics: return "SEARCH";
         case Category::DataWarehouse:   return "WAREHOUSE";
+        case Category::AlternativeData: return "ALT-DATA";
+        case Category::OpenBanking:     return "OPEN-BANK";
     }
     return "API";
 }
@@ -234,110 +237,194 @@ bool DataSourcesScreen::eventFilter(QObject* obj, QEvent* event) {
 
 void DataSourcesScreen::apply_screen_styles() {
     setObjectName("dsScreen");
+    // Obsidian Design System — sharp monospace terminal aesthetic, no border-radius
     setStyleSheet(QString(R"(
+        * { font-family: 'Consolas','Courier New',monospace; }
+
         #dsScreen { background: %1; }
-        #dsHeaderBar { background: %3; border-bottom: 1px solid %4; }
-        #dsHeaderTitle { color: %5; font-size: 15px; font-weight: 700; background: transparent; }
-        #dsHeaderSub { color: %6; font-size: 12px; background: transparent; }
-        #dsHeaderMeta { color: %8; font-size: 12px; background: transparent; }
-        #dsSearch { background: %1; border: 1px solid %4; color: %10; padding: 4px 12px;
-                    font-size: 13px; border-radius: 4px; }
-        #dsSearch:focus { border-color: %5; }
-        #dsClearBtn { background: transparent; color: %6; border: 1px solid %4;
-                      padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 3px; }
+
+        /* ── Top bar ─────────────────────────────────────────────────────── */
+        #dsHeaderBar { background: %1; border-bottom: 1px solid %4; }
+        #dsTermTag  { color: %5; font-size: 11px; font-weight: 700;
+                      letter-spacing: 1px; background: transparent; }
+        #dsHeaderTitle { color: %10; font-size: 13px; font-weight: 700;
+                         letter-spacing: 0.5px; background: transparent; }
+        #dsHeaderMeta { color: %8; font-size: 11px; background: transparent; }
+        #dsClockLabel { color: %5; font-size: 11px; font-weight: 700;
+                        background: transparent; letter-spacing: 0.5px; }
+
+        /* ── Search input ─────────────────────────────────────────────────── */
+        #dsSearch { background: %2; border: 1px solid %4; color: %10;
+                    padding: 0 10px; font-size: 12px; height: 26px; }
+        #dsSearch:focus { border-color: %7; }
+        #dsSearch::selection { background: %5; color: %1; }
+        #dsClearBtn { background: transparent; color: %8; border: 1px solid %4;
+                      padding: 0 8px; height: 26px; font-size: 11px; font-weight: 700; }
         #dsClearBtn:hover { color: %10; background: %9; }
+
+        /* ── Stat strip ───────────────────────────────────────────────────── */
         #dsStatStrip { background: %1; border-bottom: 1px solid %4; }
-        #dsStatBox { background: %3; border: 1px solid %4; border-radius: 6px; }
-        #dsStatValue { color: %10; font-size: 22px; font-weight: 700; background: transparent; }
-        #dsStatLabel { color: %6; font-size: 11px; background: transparent; }
+        #dsStatBox   { background: %2; border: 1px solid %4; border-right: none; }
+        #dsStatBox:last-child { border-right: 1px solid %4; }
+        #dsStatValue { color: %10; font-size: 20px; font-weight: 700; background: transparent; }
+        #dsStatLabel { color: %8; font-size: 10px; font-weight: 700;
+                       letter-spacing: 0.5px; background: transparent; }
+        #dsStatTag   { color: %5; font-size: 10px; font-weight: 700;
+                       background: transparent; letter-spacing: 0.5px; }
+
+        /* ── Sidebar ──────────────────────────────────────────────────────── */
         #dsSidebarPanel { background: %2; border-right: 1px solid %4; }
-        #dsSidebarTitle { color: %5; font-size: 13px; font-weight: 700; background: transparent; }
-        #dsSidebarSectionLabel { color: %6; font-size: 11px; font-weight: 600;
-                                  letter-spacing: 0.5px; background: transparent; }
+        #dsSidebarTitle { color: %5; font-size: 10px; font-weight: 700;
+                          letter-spacing: 1px; background: transparent; }
+        #dsSidebarSectionLabel { color: %8; font-size: 10px; font-weight: 700;
+                                  letter-spacing: 1px; background: transparent; }
+
+        /* ── Category list ────────────────────────────────────────────────── */
         #dsCategoryList { background: transparent; border: none; outline: none; }
-        #dsCategoryList::item { padding: 9px 16px; color: %6; font-size: 13px;
-                                 border-radius: 4px; margin: 1px 6px; }
-        #dsCategoryList::item:selected { background: rgba(217,119,6,0.12);
-                                          color: %5; border-left: 3px solid %5; }
+        #dsCategoryList::item { padding: 0 14px; height: 28px; color: %6;
+                                 font-size: 12px; border-bottom: 1px solid %4; }
+        #dsCategoryList::item:selected { background: rgba(217,119,6,0.08);
+                                          color: %5; border-left: 2px solid %5; }
         #dsCategoryList::item:hover:!selected { background: %9; color: %10; }
+
+        /* ── Provider ladder ──────────────────────────────────────────────── */
         #dsProviderLadder { background: transparent; border: none; outline: none; }
-        #dsProviderLadder::item { padding: 7px 16px; color: %6; font-size: 13px;
-                                   border-radius: 3px; margin: 1px 6px; }
+        #dsProviderLadder::item { padding: 0 14px; height: 26px; color: %6;
+                                   font-size: 11px; border-bottom: 1px solid %4; }
         #dsProviderLadder::item:selected { background: %9; color: %10; }
         #dsProviderLadder::item:hover:!selected { background: %9; }
+
+        /* ── Panel shells ─────────────────────────────────────────────────── */
         #dsPanel { background: %1; border: none; }
-        #dsPanelHeader { background: %3; border-bottom: 1px solid %4; }
-        #dsPanelTitle { color: %10; font-size: 13px; font-weight: 700; background: transparent; }
-        #dsPanelMeta { color: %6; font-size: 12px; background: transparent; }
-        #dsConnectorTable { background: %1; border: none; color: %10; font-size: 13px; gridline-color: %4; }
-        #dsConnectorTable::item { padding: 0 8px; border-bottom: 1px solid %4; }
-        #dsConnectorTable::item:selected { background: rgba(217,119,6,0.10); color: %10; }
-        #dsConnectorTable QHeaderView::section { background: %3; color: %6; font-size: 11px;
-            font-weight: 700; border: none; border-bottom: 1px solid %4; padding: 0 8px; }
-        #dsConnectionsTable { background: %1; border: none; color: %10; font-size: 13px; gridline-color: %4; }
-        #dsConnectionsTable::item { padding: 0 8px; border-bottom: 1px solid %4; }
-        #dsConnectionsTable::item:selected { background: rgba(217,119,6,0.10); color: %10; }
-        #dsConnectionsTable QHeaderView::section { background: %3; color: %6; font-size: 11px;
-            font-weight: 700; border: none; border-bottom: 1px solid %4; padding: 0 8px; }
-        #dsFieldTable { background: %2; border: none; color: %10; font-size: 12px; gridline-color: %4; }
-        #dsFieldTable::item { padding: 0 6px; border-bottom: 1px solid %4; }
-        #dsFieldTable QHeaderView::section { background: %3; color: %6; font-size: 11px;
-            font-weight: 600; border: none; border-bottom: 1px solid %4; padding: 0 6px; }
+        #dsPanelHeader { background: %2; border-bottom: 1px solid %4; }
+        #dsPanelTitle { color: %5; font-size: 10px; font-weight: 700;
+                        letter-spacing: 1px; background: transparent; }
+        #dsPanelMeta  { color: %8; font-size: 10px; background: transparent; }
+
+        /* ── Connector table ──────────────────────────────────────────────── */
+        #dsConnectorTable { background: %1; border: none; color: %10;
+                            font-size: 12px; gridline-color: transparent; }
+        #dsConnectorTable::item { padding: 0 8px; border-bottom: 1px solid %4;
+                                   height: 26px; }
+        #dsConnectorTable::item:selected { background: rgba(217,119,6,0.08); color: %10; }
+        #dsConnectorTable::item:hover:!selected { background: %9; }
+        #dsConnectorTable QHeaderView::section {
+            background: %2; color: %8; font-size: 10px; font-weight: 700;
+            letter-spacing: 0.5px; border: none; border-bottom: 1px solid %4;
+            border-right: 1px solid %4; padding: 0 8px; height: 26px; }
+        #dsConnectorTable QHeaderView::section:last { border-right: none; }
+
+        /* ── Connections table ────────────────────────────────────────────── */
+        #dsConnectionsTable { background: %1; border: none; color: %10;
+                              font-size: 12px; gridline-color: transparent; }
+        #dsConnectionsTable::item { padding: 0 8px; border-bottom: 1px solid %4;
+                                     height: 26px; }
+        #dsConnectionsTable::item:selected { background: rgba(217,119,6,0.08); color: %10; }
+        #dsConnectionsTable::item:hover:!selected { background: %9; }
+        #dsConnectionsTable QHeaderView::section {
+            background: %2; color: %8; font-size: 10px; font-weight: 700;
+            letter-spacing: 0.5px; border: none; border-bottom: 1px solid %4;
+            border-right: 1px solid %4; padding: 0 8px; height: 26px; }
+
+        /* ── Field table ──────────────────────────────────────────────────── */
+        #dsFieldTable { background: %2; border: none; color: %10;
+                        font-size: 11px; gridline-color: transparent; }
+        #dsFieldTable::item { padding: 0 6px; border-bottom: 1px solid %4; height: 24px; }
+        #dsFieldTable QHeaderView::section {
+            background: %2; color: %8; font-size: 10px; font-weight: 700;
+            border: none; border-bottom: 1px solid %4;
+            border-right: 1px solid %4; padding: 0 6px; height: 24px; }
+
+        /* ── Detail connection list ───────────────────────────────────────── */
         #dsDetailConnList { background: transparent; border: none; outline: none; }
-        #dsDetailConnList::item { padding: 8px 10px; color: %6; font-size: 13px;
-                                   border-radius: 3px; margin: 1px 4px; }
+        #dsDetailConnList::item { padding: 0 10px; height: 26px; color: %6;
+                                   font-size: 11px; border-bottom: 1px solid %4; }
         #dsDetailConnList::item:selected { background: %9; color: %10; }
         #dsDetailConnList::item:hover:!selected { background: %9; }
-        #dsInspectorSymbol { min-width: 44px; max-width: 44px; min-height: 44px; max-height: 44px;
-            font-size: 16px; font-weight: 700; color: %10; background: %3;
-            border: 1px solid %4; border-radius: 6px; }
-        #dsInspectorTitle { color: %10; font-size: 14px; font-weight: 700; background: transparent; }
-        #dsInspectorKey { color: %6; font-size: 11px; font-weight: 600; background: transparent; }
-        #dsInspectorDesc { color: %6; font-size: 13px; background: transparent; line-height: 1.4; }
-        #dsInfoRow { background: transparent; border-bottom: 1px solid %4; }
-        #dsMetricLabel { color: %6; font-size: 12px; background: transparent; }
-        #dsMetricValue { color: %10; font-size: 12px; font-weight: 600; background: transparent; }
-        #dsSectionLabel { color: %6; font-size: 11px; font-weight: 700;
-                           letter-spacing: 0.5px; background: transparent; }
-        #dsActionBtn { background: %9; color: %6; border: 1px solid %4; padding: 6px 14px;
-                        font-size: 12px; font-weight: 600; border-radius: 4px; }
-        #dsActionBtn:hover:enabled { background: %11; color: %10; }
-        #dsActionBtn[accent="true"] { background: rgba(217,119,6,0.10); color: %5;
+
+        /* ── Inspector ────────────────────────────────────────────────────── */
+        #dsInspectorSymbol { min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px;
+            font-size: 14px; font-weight: 700; color: %5; background: %2;
+            border: 1px solid %5; }
+        #dsInspectorTitle { color: %10; font-size: 12px; font-weight: 700;
+                            background: transparent; }
+        #dsInspectorKey   { color: %8; font-size: 10px; font-weight: 700;
+                            letter-spacing: 0.5px; background: transparent; }
+        #dsInspectorDesc  { color: %6; font-size: 11px; background: transparent; }
+        #dsInfoRow  { background: transparent; border-bottom: 1px solid %4; }
+        #dsMetricLabel { color: %8; font-size: 11px; background: transparent; }
+        #dsMetricValue { color: %10; font-size: 11px; font-weight: 700;
+                         background: transparent; }
+        #dsSectionLabel { color: %5; font-size: 10px; font-weight: 700;
+                           letter-spacing: 1px; background: transparent; }
+
+        /* ── Buttons ──────────────────────────────────────────────────────── */
+        #dsActionBtn { background: %2; color: %6; border: 1px solid %4;
+                        padding: 0 10px; height: 24px; font-size: 10px; font-weight: 700;
+                        font-family: 'Consolas','Courier New',monospace; letter-spacing: 0.5px; }
+        #dsActionBtn:hover:enabled { background: %9; color: %10; border-color: %7; }
+        #dsActionBtn[accent="true"] { background: rgba(217,119,6,0.08); color: %5;
                                        border: 1px solid %12; }
         #dsActionBtn[accent="true"]:hover:enabled { background: %5; color: %1; }
-        #dsActionBtn:disabled { background: %3; color: %8; }
-        #dsInlineAction { background: transparent; color: %6; border: 1px solid %4;
-                           padding: 3px 8px; font-size: 11px; font-weight: 600; border-radius: 3px; }
-        #dsInlineAction:hover { color: %10; background: %9; }
-        #dsInlineAction[accent="true"] { color: %5; border-color: %12; background: rgba(217,119,6,0.08); }
-        #dsInlineAction[test="true"] { color: %13; border-color: #14532d; background: rgba(22,163,74,0.08); }
-        #dsInlineAction[danger="true"] { color: %14; border-color: #7f1d1d; background: rgba(220,38,38,0.08); }
-        #dsConnSearch { background: %1; border: 1px solid %4; color: %10; padding: 3px 10px;
-                        font-size: 12px; border-radius: 3px; }
-        #dsConnSearch:focus { border-color: %5; }
-        #dsConnToolbar { background: %3; border-bottom: 1px solid %4; }
-        #dsViewModeBtn { background: transparent; color: %6; border: 1px solid %4;
-                         padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: 3px; }
+        #dsActionBtn:disabled { background: %2; color: %8; border-color: %4; }
+
+        #dsInlineAction { background: transparent; color: %8; border: 1px solid %4;
+                           padding: 0 6px; height: 22px; font-size: 10px; font-weight: 700; }
+        #dsInlineAction:hover { color: %10; background: %9; border-color: %7; }
+        #dsInlineAction[accent="true"] { color: %5; border-color: %12;
+                                          background: rgba(217,119,6,0.08); }
+        #dsInlineAction[test="true"]   { color: %13; border-color: #14532d;
+                                          background: rgba(22,163,74,0.08); }
+        #dsInlineAction[danger="true"] { color: %14; border-color: #7f1d1d;
+                                          background: rgba(220,38,38,0.08); }
+
+        #dsViewModeBtn { background: transparent; color: %8; border: 1px solid %4;
+                         padding: 0 10px; height: 26px; font-size: 11px; font-weight: 700; }
         #dsViewModeBtn:hover { color: %10; background: %9; }
-        #dsViewModeBtn[active="true"] { color: %5; border-color: %12; background: rgba(217,119,6,0.10); }
-        #dsImportExportBtn { background: transparent; color: %6; border: 1px solid %4;
-                             padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: 3px; }
+        #dsViewModeBtn[active="true"] { color: %5; border-color: %12;
+                                         background: rgba(217,119,6,0.08); }
+
+        #dsImportExportBtn { background: transparent; color: %8; border: 1px solid %4;
+                             padding: 0 10px; height: 26px; font-size: 11px; font-weight: 700; }
         #dsImportExportBtn:hover { color: %10; background: %9; }
-        #dsBulkBtn { background: transparent; color: %6; border: 1px solid %4;
-                     padding: 3px 10px; font-size: 11px; font-weight: 600; border-radius: 3px; }
-        #dsBulkBtn:hover:enabled { color: %10; background: %9; }
-        #dsBulkBtn:disabled { color: %8; }
-        #dsBulkBtn[danger="true"]:hover:enabled { color: %14; background: rgba(220,38,38,0.08); }
-        #dsSelectAll { color: %6; font-size: 12px; }
-        #dsStatusDot { font-size: 11px; font-weight: 700; background: transparent; }
+
+        #dsBulkBtn { background: transparent; color: %8; border: 1px solid %4;
+                     padding: 0 8px; height: 22px; font-size: 10px; font-weight: 700;
+                     font-family: 'Consolas','Courier New',monospace; letter-spacing: 0.5px; }
+        #dsBulkBtn:hover:enabled { color: %10; background: %9; border-color: %7; }
+        #dsBulkBtn:disabled { color: %8; opacity: 0.4; }
+        #dsBulkBtn[danger="true"] { color: %14; border-color: #7f1d1d;
+                                     background: rgba(220,38,38,0.06); }
+        #dsBulkBtn[danger="true"]:hover:enabled { background: rgba(220,38,38,0.15);
+                                                   border-color: #dc2626; }
+
+        /* ── Misc ─────────────────────────────────────────────────────────── */
+        #dsConnSearch { background: %2; border: 1px solid %4; color: %10;
+                        padding: 0 8px; height: 22px; font-size: 10px;
+                        font-family: 'Consolas','Courier New',monospace; }
+        #dsConnSearch:focus { border-color: %7; }
+        #dsConnSearch::placeholder { color: %8; }
+        #dsConnToolbar { background: %2; border-bottom: 1px solid %4; }
+        #dsSelectAll { color: %6; font-size: 10px;
+                       font-family: 'Consolas','Courier New',monospace; }
+        #dsStatusDot { font-size: 10px; font-weight: 700; background: transparent; }
         #dsEnableToggle { color: %10; background: transparent; }
-        #dsEnableToggle::indicator { width: 14px; height: 14px; border: 1px solid %7; background: %3; border-radius: 2px; }
+        #dsEnableToggle::indicator { width: 13px; height: 13px;
+            border: 1px solid %7; background: %2; }
         #dsEnableToggle::indicator:checked { background: %13; border-color: %13; }
-        #dsWorkspaceSplitter::handle, #dsMainSplitter::handle { background: %4; width: 1px; height: 1px; }
-        QScrollBar:vertical { background: transparent; width: 4px; margin: 2px; }
-        QScrollBar::handle:vertical { background: %7; border-radius: 2px; min-height: 24px; }
+
+        /* ── Splitters ────────────────────────────────────────────────────── */
+        #dsWorkspaceSplitter::handle, #dsMainSplitter::handle {
+            background: %4; width: 1px; height: 1px; }
+
+        /* ── Scrollbars ───────────────────────────────────────────────────── */
+        QScrollBar:vertical { background: transparent; width: 5px; margin: 0; }
+        QScrollBar::handle:vertical { background: %7; min-height: 20px; }
         QScrollBar::handle:vertical:hover { background: %11; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+        QScrollBar:horizontal { background: transparent; height: 5px; margin: 0; }
+        QScrollBar::handle:horizontal { background: %7; min-width: 20px; }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
     )")
         .arg(col::BG_BASE)           // %1
         .arg(col::BG_SURFACE)        // %2
@@ -360,87 +447,104 @@ void DataSourcesScreen::apply_screen_styles() {
 QWidget* DataSourcesScreen::build_header_bar() {
     auto* bar = new QWidget;
     bar->setObjectName("dsHeaderBar");
-    bar->setFixedHeight(56);
+    bar->setFixedHeight(36);
 
     auto* hl = new QHBoxLayout(bar);
-    hl->setContentsMargins(20, 0, 16, 0);
-    hl->setSpacing(10);
+    hl->setContentsMargins(12, 0, 12, 0);
+    hl->setSpacing(0);
 
-    // Icon + title block
-    auto* icon = new QLabel("DS");
-    icon->setStyleSheet(QString("color:%1;font-size:20px;background:transparent;").arg(col::AMBER));
-    hl->addWidget(icon);
+    // Terminal tag prefix
+    auto* tag = new QLabel("DS");
+    tag->setObjectName("dsTermTag");
+    tag->setFixedWidth(28);
+    hl->addWidget(tag);
 
-    auto* title_col = new QVBoxLayout;
-    title_col->setContentsMargins(0, 0, 0, 0);
-    title_col->setSpacing(1);
+    // Separator
+    auto* sep1 = new QFrame;
+    sep1->setFrameShape(QFrame::VLine);
+    sep1->setStyleSheet(QString("background:%1;").arg(col::BORDER_DIM));
+    sep1->setFixedWidth(1);
+    hl->addWidget(sep1);
+    hl->addSpacing(12);
 
-    auto* title = new QLabel("Data Sources");
+    // Title
+    auto* title = new QLabel("DATA SOURCES");
     title->setObjectName("dsHeaderTitle");
-    title_col->addWidget(title);
+    hl->addWidget(title);
 
-    auto* sub = new QLabel("Connect and manage data connectors");
-    sub->setObjectName("dsHeaderSub");
-    title_col->addWidget(sub);
+    hl->addSpacing(20);
 
-    hl->addLayout(title_col);
-    hl->addSpacing(24);
-
-    // Search (centered)
+    // Search
     search_edit_ = new QLineEdit;
     search_edit_->setObjectName("dsSearch");
-    search_edit_->setPlaceholderText("Search connectors, categories, providers…");
-    search_edit_->setFixedHeight(34);
-    search_edit_->setFixedWidth(300);
+    search_edit_->setPlaceholderText("search connectors...");
+    search_edit_->setFixedWidth(260);
     connect(search_edit_, &QLineEdit::textChanged, this, &DataSourcesScreen::on_search_changed);
     hl->addWidget(search_edit_);
 
-    clear_search_btn_ = new QPushButton("X");
+    hl->addSpacing(4);
+
+    clear_search_btn_ = new QPushButton("CLR");
     clear_search_btn_->setObjectName("dsClearBtn");
-    clear_search_btn_->setFixedSize(28, 28);
+    clear_search_btn_->setFixedWidth(36);
     clear_search_btn_->setCursor(Qt::PointingHandCursor);
-    clear_search_btn_->setToolTip("Clear search");
     connect(clear_search_btn_, &QPushButton::clicked, search_edit_, &QLineEdit::clear);
     hl->addWidget(clear_search_btn_);
 
     hl->addStretch();
 
-    // View mode toggle
-    view_mode_btn_ = new QPushButton("Gallery");
-    view_mode_btn_->setObjectName("dsViewModeBtn");
-    view_mode_btn_->setProperty("active", true);
-    view_mode_btn_->setCursor(Qt::PointingHandCursor);
-    view_mode_btn_->setToolTip("Switch between Gallery and Connections view");
-    connect(view_mode_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_view_mode_toggle);
-    hl->addWidget(view_mode_btn_);
-
-    // Import / Export
-    import_btn_ = new QPushButton("Import");
-    import_btn_->setObjectName("dsImportExportBtn");
-    import_btn_->setCursor(Qt::PointingHandCursor);
-    import_btn_->setToolTip("Import connections from JSON file");
-    connect(import_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_import_connections);
-    hl->addWidget(import_btn_);
-
-    export_btn_ = new QPushButton("Export");
-    export_btn_->setObjectName("dsImportExportBtn");
-    export_btn_->setCursor(Qt::PointingHandCursor);
-    export_btn_->setToolTip("Export all connections to JSON file");
-    connect(export_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_export_connections);
-    hl->addWidget(export_btn_);
-
-    hl->addSpacing(8);
-
-    // Count + clock
+    // Count label
     count_label_ = new QLabel;
     count_label_->setObjectName("dsHeaderMeta");
-    count_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     hl->addWidget(count_label_);
 
     hl->addSpacing(16);
 
+    // View mode toggle
+    view_mode_btn_ = new QPushButton("GALLERY");
+    view_mode_btn_->setObjectName("dsViewModeBtn");
+    view_mode_btn_->setProperty("active", true);
+    view_mode_btn_->setCursor(Qt::PointingHandCursor);
+    connect(view_mode_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_view_mode_toggle);
+    hl->addWidget(view_mode_btn_);
+
+    hl->addSpacing(4);
+
+    import_btn_ = new QPushButton("IMPORT");
+    import_btn_->setObjectName("dsImportExportBtn");
+    import_btn_->setCursor(Qt::PointingHandCursor);
+    connect(import_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_import_connections);
+    hl->addWidget(import_btn_);
+
+    hl->addSpacing(4);
+
+    export_btn_ = new QPushButton("EXPORT");
+    export_btn_->setObjectName("dsImportExportBtn");
+    export_btn_->setCursor(Qt::PointingHandCursor);
+    connect(export_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_export_connections);
+    hl->addWidget(export_btn_);
+
+    hl->addSpacing(4);
+
+    auto* template_btn = new QPushButton("TEMPLATE");
+    template_btn->setObjectName("dsImportExportBtn");
+    template_btn->setCursor(Qt::PointingHandCursor);
+    connect(template_btn, &QPushButton::clicked, this, &DataSourcesScreen::on_download_template);
+    hl->addWidget(template_btn);
+
+    hl->addSpacing(16);
+
+    // Separator
+    auto* sep2 = new QFrame;
+    sep2->setFrameShape(QFrame::VLine);
+    sep2->setStyleSheet(QString("background:%1;").arg(col::BORDER_DIM));
+    sep2->setFixedWidth(1);
+    hl->addWidget(sep2);
+    hl->addSpacing(12);
+
     clock_label_ = new QLabel("--:--:--");
-    clock_label_->setObjectName("dsHeaderMeta");
+    clock_label_->setObjectName("dsClockLabel");
+    clock_label_->setFixedWidth(64);
     hl->addWidget(clock_label_);
 
     return bar;
@@ -462,29 +566,46 @@ QWidget* DataSourcesScreen::build_command_bar() {
 QWidget* DataSourcesScreen::build_stats_strip() {
     auto* strip = new QWidget;
     strip->setObjectName("dsStatStrip");
-    strip->setFixedHeight(76);
+    strip->setFixedHeight(56);
 
     auto* hl = new QHBoxLayout(strip);
-    hl->setContentsMargins(16, 8, 16, 8);
-    hl->setSpacing(10);
+    hl->setContentsMargins(0, 0, 0, 0);
+    hl->setSpacing(0);
 
-    // Create clickable stat boxes — index maps to on_stat_box_clicked(i)
-    const QStringList labels = {"Total Connectors", "Configured", "Active", "Auth Required"};
-    QLabel** value_ptrs[] = {&universe_stat_value_, &configured_stat_value_,
-                              &active_stat_value_,   &auth_stat_value_};
+    struct StatDef { const char* tag; const char* label; QLabel** ptr; const char* tip; };
+    const StatDef defs[4] = {
+        { "UNIVERSE",   "TOTAL CONNECTORS", &universe_stat_value_,
+          "Total available connectors — click to clear filter" },
+        { "CONFIGURED", "CONFIGURED",        &configured_stat_value_,
+          "Connectors with saved connections" },
+        { "ACTIVE",     "ACTIVE",            &active_stat_value_,
+          "Connections currently enabled" },
+        { "AUTH",       "AUTH REQUIRED",     &auth_stat_value_,
+          "Connectors that require API key or credentials" },
+    };
+
     for (int i = 0; i < 4; ++i) {
-        auto* box = create_stat_box(labels[i], value_ptrs[i]);
+        auto* box = new QFrame;
+        box->setObjectName("dsStatBox");
         box->setCursor(Qt::PointingHandCursor);
-        box->setToolTip(i == 0 ? "Click to clear filter"
-                      : i == 1 ? "Click to show only configured connectors"
-                      : i == 2 ? "Click to show only active connections"
-                               : "Click to show only auth-required connectors");
-        // Install event filter via lambda — use a child QLabel to detect click
-        const int idx = i;
-        // Wrap in a QPushButton-like response via MousePressEvent on the frame
+        box->setToolTip(defs[i].tip);
         box->installEventFilter(this);
-        box->setProperty("statIndex", idx);
-        hl->addWidget(box);
+        box->setProperty("statIndex", i);
+
+        auto* vl = new QVBoxLayout(box);
+        vl->setContentsMargins(16, 8, 16, 8);
+        vl->setSpacing(2);
+
+        auto* val = new QLabel("--");
+        val->setObjectName("dsStatValue");
+        vl->addWidget(val);
+        *defs[i].ptr = val;
+
+        auto* lbl = new QLabel(defs[i].label);
+        lbl->setObjectName("dsStatLabel");
+        vl->addWidget(lbl);
+
+        hl->addWidget(box, 1);
     }
 
     return strip;
@@ -495,23 +616,22 @@ QWidget* DataSourcesScreen::build_stats_strip() {
 QWidget* DataSourcesScreen::build_category_panel() {
     auto* panel = new QWidget;
     panel->setObjectName("dsSidebarPanel");
-    panel->setFixedWidth(260);
+    panel->setFixedWidth(200);
 
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    // Categories header
+    // CATEGORY header row
     auto* cat_hdr = new QWidget;
-    cat_hdr->setFixedHeight(44);
+    cat_hdr->setFixedHeight(28);
     cat_hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                               .arg(col::BG_RAISED, col::BORDER_DIM));
+                               .arg(col::BG_SURFACE, col::BORDER_DIM));
     auto* cat_hdr_l = new QHBoxLayout(cat_hdr);
-    cat_hdr_l->setContentsMargins(16, 0, 14, 0);
-
-    auto* cat_title = new QLabel("Categories");
+    cat_hdr_l->setContentsMargins(12, 0, 12, 0);
+    auto* cat_title = new QLabel("CATEGORY");
     cat_title->setObjectName("dsSidebarTitle");
-    cat_hdr_l->addWidget(cat_title, 1);
+    cat_hdr_l->addWidget(cat_title);
     vl->addWidget(cat_hdr);
 
     // Category list
@@ -519,7 +639,7 @@ QWidget* DataSourcesScreen::build_category_panel() {
     category_list_->setObjectName("dsCategoryList");
     category_list_->setFrameShape(QFrame::NoFrame);
     category_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    category_list_->setSpacing(1);
+    category_list_->setSpacing(0);
     connect(category_list_, &QListWidget::currentRowChanged,
             this, &DataSourcesScreen::on_category_selection_changed);
     vl->addWidget(category_list_);
@@ -531,16 +651,16 @@ QWidget* DataSourcesScreen::build_category_panel() {
     div->setFixedHeight(1);
     vl->addWidget(div);
 
-    // Connected providers header
+    // ACTIVE CONNECTIONS header row
     auto* prov_hdr = new QWidget;
-    prov_hdr->setFixedHeight(36);
-    prov_hdr->setStyleSheet(QString("background:%1;").arg(col::BG_RAISED));
+    prov_hdr->setFixedHeight(28);
+    prov_hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                                .arg(col::BG_SURFACE, col::BORDER_DIM));
     auto* prov_hdr_l = new QHBoxLayout(prov_hdr);
-    prov_hdr_l->setContentsMargins(16, 0, 14, 0);
-
-    auto* prov_title = new QLabel("Connected Providers");
-    prov_title->setObjectName("dsSidebarSectionLabel");
-    prov_hdr_l->addWidget(prov_title, 1);
+    prov_hdr_l->setContentsMargins(12, 0, 12, 0);
+    auto* prov_title = new QLabel("ACTIVE");
+    prov_title->setObjectName("dsSidebarTitle");
+    prov_hdr_l->addWidget(prov_title);
     vl->addWidget(prov_hdr);
 
     // Provider ladder
@@ -565,20 +685,22 @@ QWidget* DataSourcesScreen::build_connector_panel() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    // Panel header
+    // Panel header — 28px, uppercase terminal style
     auto* hdr = new QWidget;
     hdr->setObjectName("dsPanelHeader");
-    hdr->setFixedHeight(44);
+    hdr->setFixedHeight(28);
     auto* hdr_l = new QHBoxLayout(hdr);
-    hdr_l->setContentsMargins(16, 0, 16, 0);
+    hdr_l->setContentsMargins(10, 0, 10, 0);
     hdr_l->setSpacing(8);
 
-    auto* hdr_title = new QLabel("Connectors");
-    hdr_title->setObjectName("dsPanelTitle");
-    hdr_l->addWidget(hdr_title, 1);
+    auto* hdr_tag = new QLabel("CONNECTORS");
+    hdr_tag->setStyleSheet("color:#d97706;font-family:'Consolas','Courier New',monospace;"
+                           "font-size:10px;font-weight:700;letter-spacing:1.5px;");
+    hdr_l->addWidget(hdr_tag, 1);
 
-    auto* hint = new QLabel("Double-click to configure");
-    hint->setObjectName("dsPanelMeta");
+    auto* hint = new QLabel("DBL-CLICK TO CONFIGURE");
+    hint->setStyleSheet("color:#555;font-family:'Consolas','Courier New',monospace;"
+                        "font-size:9px;letter-spacing:1px;");
     hdr_l->addWidget(hint);
 
     vl->addWidget(hdr);
@@ -621,26 +743,29 @@ QWidget* DataSourcesScreen::build_connector_panel() {
 QWidget* DataSourcesScreen::build_detail_panel() {
     auto* panel = new QWidget;
     panel->setObjectName("dsPanel");
-    panel->setMinimumWidth(280);
-    panel->setMaximumWidth(340);
+    panel->setMinimumWidth(260);
+    panel->setMaximumWidth(300);
 
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    // Panel header
+    // Panel header — 28px, uppercase terminal style
     auto* hdr = new QWidget;
     hdr->setObjectName("dsPanelHeader");
-    hdr->setFixedHeight(44);
+    hdr->setFixedHeight(28);
     auto* hdr_l = new QHBoxLayout(hdr);
-    hdr_l->setContentsMargins(16, 0, 16, 0);
+    hdr_l->setContentsMargins(10, 0, 10, 0);
+    hdr_l->setSpacing(8);
 
-    auto* hdr_title = new QLabel("Inspector");
-    hdr_title->setObjectName("dsPanelTitle");
-    hdr_l->addWidget(hdr_title, 1);
+    auto* hdr_tag = new QLabel("INSPECTOR");
+    hdr_tag->setStyleSheet("color:#d97706;font-family:'Consolas','Courier New',monospace;"
+                           "font-size:10px;font-weight:700;letter-spacing:1.5px;");
+    hdr_l->addWidget(hdr_tag, 1);
 
-    auto* hdr_meta = new QLabel("Config & Status");
-    hdr_meta->setObjectName("dsPanelMeta");
+    auto* hdr_meta = new QLabel("CONFIG & STATUS");
+    hdr_meta->setStyleSheet("color:#555;font-family:'Consolas','Courier New',monospace;"
+                            "font-size:9px;letter-spacing:1px;");
     hdr_l->addWidget(hdr_meta);
     vl->addWidget(hdr);
 
@@ -648,36 +773,46 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scroll->setStyleSheet("QScrollArea { background: transparent; border: none; }");
 
     auto* body = new QWidget;
+    body->setMaximumWidth(340);
     auto* body_vl = new QVBoxLayout(body);
-    body_vl->setContentsMargins(14, 14, 14, 14);
+    body_vl->setContentsMargins(12, 12, 12, 12);
     body_vl->setSpacing(10);
 
-    // Hero (icon + title)
+    // Hero — symbol tag + title block
     auto* hero = new QWidget;
+    hero->setFixedHeight(44);
     auto* hero_hl = new QHBoxLayout(hero);
     hero_hl->setContentsMargins(0, 0, 0, 0);
-    hero_hl->setSpacing(12);
+    hero_hl->setSpacing(10);
 
     detail_symbol_ = new QLabel("--");
     detail_symbol_->setAlignment(Qt::AlignCenter);
-    detail_symbol_->setObjectName("dsInspectorSymbol");
+    detail_symbol_->setFixedSize(36, 36);
+    detail_symbol_->setStyleSheet(
+        "color:#d97706;background:#1a1200;border:1px solid #d97706;"
+        "font-family:'Consolas','Courier New',monospace;font-size:11px;font-weight:700;");
     hero_hl->addWidget(detail_symbol_);
 
     auto* hero_text_vl = new QVBoxLayout;
     hero_text_vl->setContentsMargins(0, 0, 0, 0);
-    hero_text_vl->setSpacing(3);
+    hero_text_vl->setSpacing(2);
 
-    detail_title_ = new QLabel("Select a connector");
-    detail_title_->setObjectName("dsInspectorTitle");
+    detail_title_ = new QLabel("SELECT A CONNECTOR");
+    detail_title_->setStyleSheet(
+        "color:#e8e8e8;font-family:'Consolas','Courier New',monospace;"
+        "font-size:11px;font-weight:700;letter-spacing:0.5px;");
     hero_text_vl->addWidget(detail_title_);
 
-    auto* detail_key = new QLabel("Connector Profile");
-    detail_key->setObjectName("dsInspectorKey");
+    auto* detail_key = new QLabel("CONNECTOR PROFILE");
+    detail_key->setStyleSheet(
+        "color:#555;font-family:'Consolas','Courier New',monospace;"
+        "font-size:9px;letter-spacing:1.5px;");
     hero_text_vl->addWidget(detail_key);
-    hero_text_vl->addStretch();
 
     hero_hl->addLayout(hero_text_vl, 1);
     body_vl->addWidget(hero);
@@ -685,100 +820,111 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     // Description
     detail_description_ = new QLabel("Select a connector to inspect its fields and manage saved connections.");
     detail_description_->setWordWrap(true);
-    detail_description_->setObjectName("dsInspectorDesc");
+    detail_description_->setStyleSheet(
+        "color:#666;font-family:'Consolas','Courier New',monospace;font-size:10px;line-height:1.4;");
     body_vl->addWidget(detail_description_);
 
     // Divider
     auto* info_div = new QFrame;
     info_div->setFrameShape(QFrame::HLine);
-    info_div->setStyleSheet(QString("background:%1;").arg(col::BORDER_DIM));
+    info_div->setStyleSheet(QString("background:%1;border:none;").arg(col::BORDER_DIM));
     info_div->setFixedHeight(1);
     body_vl->addWidget(info_div);
 
     // Metric rows
-    body_vl->addWidget(create_metric_row("Category",    &detail_category_value_));
-    body_vl->addWidget(create_metric_row("Transport",   &detail_transport_value_));
-    body_vl->addWidget(create_metric_row("Auth",        &detail_auth_value_));
-    body_vl->addWidget(create_metric_row("Testable",    &detail_test_value_));
-    body_vl->addWidget(create_metric_row("Fields",      &detail_fields_value_));
-    body_vl->addWidget(create_metric_row("Configured",  &detail_configured_value_));
-    body_vl->addWidget(create_metric_row("Active",      &detail_enabled_value_));
-    body_vl->addWidget(create_metric_row("Last Tested", &detail_last_tested_value_));
-    body_vl->addWidget(create_metric_row("Last Status", &detail_last_status_value_));
+    body_vl->addWidget(create_metric_row("CATEGORY",    &detail_category_value_));
+    body_vl->addWidget(create_metric_row("TRANSPORT",   &detail_transport_value_));
+    body_vl->addWidget(create_metric_row("AUTH",        &detail_auth_value_));
+    body_vl->addWidget(create_metric_row("TESTABLE",    &detail_test_value_));
+    body_vl->addWidget(create_metric_row("FIELDS",      &detail_fields_value_));
+    body_vl->addWidget(create_metric_row("CONFIGURED",  &detail_configured_value_));
+    body_vl->addWidget(create_metric_row("ACTIVE",      &detail_enabled_value_));
+    body_vl->addWidget(create_metric_row("LAST TESTED", &detail_last_tested_value_));
+    body_vl->addWidget(create_metric_row("LAST STATUS", &detail_last_status_value_));
 
     // Action buttons
     auto* actions = new QWidget;
-    auto* act_hl = new QHBoxLayout(actions);
-    act_hl->setContentsMargins(0, 4, 0, 4);
-    act_hl->setSpacing(6);
+    auto* act_vl = new QVBoxLayout(actions);
+    act_vl->setContentsMargins(0, 4, 0, 4);
+    act_vl->setSpacing(4);
 
-    new_connection_btn_ = new QPushButton("+ New Connection");
+    new_connection_btn_ = new QPushButton("+ NEW CONNECTION");
     new_connection_btn_->setObjectName("dsActionBtn");
     new_connection_btn_->setProperty("accent", true);
     new_connection_btn_->setCursor(Qt::PointingHandCursor);
+    new_connection_btn_->setFixedHeight(26);
     connect(new_connection_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_connection_add);
-    act_hl->addWidget(new_connection_btn_);
+    act_vl->addWidget(new_connection_btn_);
 
-    edit_connection_btn_ = new QPushButton("Edit");
+    auto* act_row2 = new QHBoxLayout;
+    act_row2->setSpacing(4);
+
+    edit_connection_btn_ = new QPushButton("EDIT");
     edit_connection_btn_->setObjectName("dsActionBtn");
     edit_connection_btn_->setCursor(Qt::PointingHandCursor);
+    edit_connection_btn_->setFixedHeight(24);
     connect(edit_connection_btn_, &QPushButton::clicked, this, [this]() {
         const QString conn_id = effective_detail_connection_id();
         if (!conn_id.isEmpty()) on_connection_edit(conn_id);
     });
-    act_hl->addWidget(edit_connection_btn_);
+    act_row2->addWidget(edit_connection_btn_);
 
-    test_connection_btn_ = new QPushButton("Test");
+    test_connection_btn_ = new QPushButton("TEST");
     test_connection_btn_->setObjectName("dsActionBtn");
     test_connection_btn_->setCursor(Qt::PointingHandCursor);
+    test_connection_btn_->setFixedHeight(24);
     connect(test_connection_btn_, &QPushButton::clicked, this, [this]() {
         const QString conn_id = effective_detail_connection_id();
         if (!conn_id.isEmpty()) on_connection_test(conn_id);
     });
-    act_hl->addWidget(test_connection_btn_);
+    act_row2->addWidget(test_connection_btn_);
 
-    auto* dup_btn = new QPushButton("Duplicate");
+    auto* dup_btn = new QPushButton("DUP");
     dup_btn->setObjectName("dsActionBtn");
     dup_btn->setCursor(Qt::PointingHandCursor);
+    dup_btn->setFixedHeight(24);
     dup_btn->setToolTip("Clone this connection with a new name");
     connect(dup_btn, &QPushButton::clicked, this, [this]() {
         const QString conn_id = effective_detail_connection_id();
         if (!conn_id.isEmpty()) on_connection_duplicate(conn_id);
     });
-    act_hl->addWidget(dup_btn);
+    act_row2->addWidget(dup_btn);
 
+    act_vl->addLayout(act_row2);
     body_vl->addWidget(actions);
 
     // Fields section
-    auto* fields_lbl = new QLabel("Field Map");
-    fields_lbl->setObjectName("dsSectionLabel");
+    auto* fields_lbl = new QLabel("FIELD MAP");
+    fields_lbl->setStyleSheet(
+        "color:#888;font-family:'Consolas','Courier New',monospace;"
+        "font-size:9px;font-weight:700;letter-spacing:1.5px;padding:4px 0 2px 0;");
     body_vl->addWidget(fields_lbl);
 
     field_table_ = new QTableWidget;
     field_table_->setObjectName("dsFieldTable");
     field_table_->setColumnCount(4);
-    field_table_->setHorizontalHeaderLabels({"Field", "Type", "Req", "Default"});
+    field_table_->setHorizontalHeaderLabels({"FIELD", "TYPE", "REQ", "DEFAULT"});
     field_table_->verticalHeader()->setVisible(false);
     field_table_->setSelectionMode(QAbstractItemView::NoSelection);
     field_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     field_table_->setShowGrid(false);
     field_table_->setFrameShape(QFrame::NoFrame);
-    field_table_->horizontalHeader()->setStretchLastSection(true);
-    field_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    field_table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    field_table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    field_table_->setFixedHeight(160);
+    field_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    field_table_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    field_table_->setFixedHeight(156);
     body_vl->addWidget(field_table_);
 
-    // Connections section
-    auto* saved_lbl = new QLabel("Saved Connections");
-    saved_lbl->setObjectName("dsSectionLabel");
+    // Saved connections section
+    auto* saved_lbl = new QLabel("SAVED CONNECTIONS");
+    saved_lbl->setStyleSheet(
+        "color:#888;font-family:'Consolas','Courier New',monospace;"
+        "font-size:9px;font-weight:700;letter-spacing:1.5px;padding:4px 0 2px 0;");
     body_vl->addWidget(saved_lbl);
 
     detail_connections_list_ = new QListWidget;
     detail_connections_list_->setObjectName("dsDetailConnList");
     detail_connections_list_->setFrameShape(QFrame::NoFrame);
-    detail_connections_list_->setMinimumHeight(80);
+    detail_connections_list_->setMinimumHeight(60);
     connect(detail_connections_list_, &QListWidget::itemClicked,
             this, &DataSourcesScreen::on_detail_connection_activated);
     body_vl->addWidget(detail_connections_list_, 1);
@@ -799,29 +945,31 @@ QWidget* DataSourcesScreen::build_connections_panel() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    // Panel header
+    // Panel header — 28px, uppercase terminal style
     auto* hdr = new QWidget;
     hdr->setObjectName("dsPanelHeader");
-    hdr->setFixedHeight(44);
+    hdr->setFixedHeight(28);
     auto* hdr_l = new QHBoxLayout(hdr);
-    hdr_l->setContentsMargins(16, 0, 16, 0);
+    hdr_l->setContentsMargins(10, 0, 10, 0);
     hdr_l->setSpacing(8);
 
-    auto* hdr_title = new QLabel("Saved Connections");
-    hdr_title->setObjectName("dsPanelTitle");
-    hdr_l->addWidget(hdr_title, 1);
+    auto* hdr_tag = new QLabel("SAVED CONNECTIONS");
+    hdr_tag->setStyleSheet("color:#d97706;font-family:'Consolas','Courier New',monospace;"
+                           "font-size:10px;font-weight:700;letter-spacing:1.5px;");
+    hdr_l->addWidget(hdr_tag, 1);
 
-    auto* hdr_meta = new QLabel("Enable | Edit | Test | Duplicate | Delete");
-    hdr_meta->setObjectName("dsPanelMeta");
+    auto* hdr_meta = new QLabel("ENABLE · EDIT · TEST · DUP · DEL");
+    hdr_meta->setStyleSheet("color:#555;font-family:'Consolas','Courier New',monospace;"
+                            "font-size:9px;letter-spacing:1px;");
     hdr_l->addWidget(hdr_meta);
     vl->addWidget(hdr);
 
-    // Connections toolbar: search + bulk actions
+    // Toolbar — search + bulk actions, 30px height
     auto* toolbar = new QWidget;
     toolbar->setObjectName("dsConnToolbar");
-    toolbar->setFixedHeight(38);
+    toolbar->setFixedHeight(30);
     auto* tb_hl = new QHBoxLayout(toolbar);
-    tb_hl->setContentsMargins(10, 4, 10, 4);
+    tb_hl->setContentsMargins(8, 0, 8, 0);
     tb_hl->setSpacing(6);
 
     // Select-all checkbox
@@ -837,36 +985,45 @@ QWidget* DataSourcesScreen::build_connections_panel() {
     });
     tb_hl->addWidget(select_all_check_);
 
+    // Separator
+    auto* sep = new QFrame;
+    sep->setFrameShape(QFrame::VLine);
+    sep->setStyleSheet("color:#222;");
+    sep->setFixedWidth(1);
+    tb_hl->addWidget(sep);
+
     // Connection search
     conn_search_edit_ = new QLineEdit;
     conn_search_edit_->setObjectName("dsConnSearch");
-    conn_search_edit_->setPlaceholderText("Filter connections…");
-    conn_search_edit_->setFixedHeight(28);
-    conn_search_edit_->setFixedWidth(200);
+    conn_search_edit_->setPlaceholderText("FILTER CONNECTIONS...");
+    conn_search_edit_->setFixedHeight(22);
+    conn_search_edit_->setFixedWidth(220);
     connect(conn_search_edit_, &QLineEdit::textChanged,
             this, &DataSourcesScreen::on_connections_search_changed);
     tb_hl->addWidget(conn_search_edit_);
 
     tb_hl->addStretch();
 
-    // Bulk buttons
-    bulk_enable_btn_ = new QPushButton("Enable All");
-    bulk_enable_btn_->setObjectName("dsBulkBtn");
-    bulk_enable_btn_->setCursor(Qt::PointingHandCursor);
-    connect(bulk_enable_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_bulk_enable_all);
-    tb_hl->addWidget(bulk_enable_btn_);
+    // Bulk action buttons — 22px height, monospace uppercase
+    const auto make_bulk_btn = [](const QString& label, bool danger = false) {
+        auto* btn = new QPushButton(label);
+        btn->setObjectName("dsBulkBtn");
+        if (danger) btn->setProperty("danger", true);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setFixedHeight(22);
+        return btn;
+    };
 
-    bulk_disable_btn_ = new QPushButton("Disable All");
-    bulk_disable_btn_->setObjectName("dsBulkBtn");
-    bulk_disable_btn_->setCursor(Qt::PointingHandCursor);
+    bulk_enable_btn_  = make_bulk_btn("ENABLE ALL");
+    bulk_disable_btn_ = make_bulk_btn("DISABLE ALL");
+    bulk_delete_btn_  = make_bulk_btn("DEL SELECTED", true);
+
+    connect(bulk_enable_btn_,  &QPushButton::clicked, this, &DataSourcesScreen::on_bulk_enable_all);
     connect(bulk_disable_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_bulk_disable_all);
-    tb_hl->addWidget(bulk_disable_btn_);
+    connect(bulk_delete_btn_,  &QPushButton::clicked, this, &DataSourcesScreen::on_bulk_delete_selected);
 
-    bulk_delete_btn_ = new QPushButton("Delete Selected");
-    bulk_delete_btn_->setObjectName("dsBulkBtn");
-    bulk_delete_btn_->setProperty("danger", true);
-    bulk_delete_btn_->setCursor(Qt::PointingHandCursor);
-    connect(bulk_delete_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_bulk_delete_selected);
+    tb_hl->addWidget(bulk_enable_btn_);
+    tb_hl->addWidget(bulk_disable_btn_);
     tb_hl->addWidget(bulk_delete_btn_);
 
     vl->addWidget(toolbar);
@@ -939,13 +1096,13 @@ void DataSourcesScreen::setup_ui() {
     workspace_splitter->setStretchFactor(0, 0);
     workspace_splitter->setStretchFactor(1, 1);
     workspace_splitter->setStretchFactor(2, 0);
-    workspace_splitter->setSizes({260, 560, 300});
+    workspace_splitter->setSizes({200, 600, 280});
 
     main_splitter->addWidget(workspace_splitter);
     main_splitter->addWidget(build_connections_panel());
     main_splitter->setStretchFactor(0, 3);
     main_splitter->setStretchFactor(1, 2);
-    main_splitter->setSizes({520, 280});
+    main_splitter->setSizes({540, 220});
     main_splitter->setCollapsible(0, true);
     main_splitter->setCollapsible(1, true);
 
@@ -1286,7 +1443,7 @@ QVector<ConnectorConfig> DataSourcesScreen::filtered_connectors() const {
 void DataSourcesScreen::build_category_ladder() {
     if (!category_list_) return;
 
-    QVector<int> counts(10, 0);
+    QVector<int> counts(12, 0);
     const QString filter = search_edit_ ? search_edit_->text().trimmed().toLower() : "";
 
     for (const auto& cfg : ConnectorRegistry::instance().all()) {
@@ -1302,7 +1459,7 @@ void DataSourcesScreen::build_category_ladder() {
         const QString text = QString("%1  (%2)").arg(kCategoryLabels[i]).arg(counts[i]);
         auto* item = new QListWidgetItem(text);
         item->setData(Qt::UserRole, i);
-        item->setForeground(i == 0 ? QColor(col::TEXT_PRIMARY) : QColor(col::TEXT_SECONDARY));
+        item->setForeground(i == 0 ? QColor(col::TEXT_PRIMARY()) : QColor(col::TEXT_SECONDARY()));
         category_list_->addItem(item);
     }
 
@@ -1492,7 +1649,7 @@ void DataSourcesScreen::update_provider_ladder() {
         if (const auto* cfg = find_connector_config(connector_id)) {
             s.name = cfg->name; s.color = cfg->color;
         } else {
-            s.name = connector_id; s.color = col::TEXT_PRIMARY;
+            s.name = connector_id; s.color = col::TEXT_PRIMARY();
         }
         ++s.total;
         if (ds.enabled) ++s.live;
@@ -1510,7 +1667,7 @@ void DataSourcesScreen::update_provider_ladder() {
     if (summaries.isEmpty()) {
         auto* empty = new QListWidgetItem("No configured providers");
         empty->setFlags(Qt::NoItemFlags);
-        empty->setForeground(QColor(col::TEXT_TERTIARY));
+        empty->setForeground(QColor(col::TEXT_TERTIARY()));
         provider_ladder_->addItem(empty);
         return;
     }
@@ -1520,7 +1677,7 @@ void DataSourcesScreen::update_provider_ladder() {
         auto* item = new QListWidgetItem(text);
         item->setData(Qt::UserRole, s.id);
         item->setToolTip(QString("%1 live / %2 configured").arg(s.live).arg(s.total));
-        item->setForeground(s.live > 0 ? QColor(s.color) : QColor(col::TEXT_SECONDARY));
+        item->setForeground(s.live > 0 ? QColor(s.color) : QColor(col::TEXT_SECONDARY()));
         provider_ladder_->addItem(item);
     }
 }
@@ -1606,7 +1763,7 @@ void DataSourcesScreen::update_detail_panel() {
         detail_connections_list_->clear();
         auto* empty = new QListWidgetItem("No connector selected");
         empty->setFlags(Qt::NoItemFlags);
-        empty->setForeground(QColor(col::TEXT_TERTIARY));
+        empty->setForeground(QColor(col::TEXT_TERTIARY()));
         detail_connections_list_->addItem(empty);
         update_action_states();
         return;
@@ -1682,7 +1839,7 @@ void DataSourcesScreen::update_detail_panel() {
     if (connector_connections.isEmpty()) {
         auto* empty = new QListWidgetItem("No saved connections");
         empty->setFlags(Qt::NoItemFlags);
-        empty->setForeground(QColor(col::TEXT_TERTIARY));
+        empty->setForeground(QColor(col::TEXT_TERTIARY()));
         detail_connections_list_->addItem(empty);
     } else {
         bool current_set = false;
@@ -1692,7 +1849,7 @@ void DataSourcesScreen::update_detail_panel() {
             auto* item = new QListWidgetItem(text);
             item->setData(Qt::UserRole, ds.id);
             item->setToolTip(ds.description);
-            item->setForeground(ds.enabled ? QColor(col::POSITIVE) : QColor(col::TEXT_SECONDARY));
+            item->setForeground(ds.enabled ? QColor(col::POSITIVE()) : QColor(col::TEXT_SECONDARY()));
             detail_connections_list_->addItem(item);
             if (ds.id == selected_connection_id_) {
                 detail_connections_list_->setCurrentItem(item);
@@ -2550,6 +2707,78 @@ void DataSourcesScreen::on_import_connections() {
 
     // Register the imported file so it appears in the File Manager
     services::FileManagerService::instance().import_file(path, "data_sources");
+}
+
+// ── on_download_template ──────────────────────────────────────────────────────
+
+void DataSourcesScreen::on_download_template() {
+    const QString path = QFileDialog::getSaveFileName(
+        this, "Save Connector Template", "fincept_connections_template.json",
+        "JSON Files (*.json);;All Files (*)");
+    if (path.isEmpty()) return;
+
+    // Build one entry per connector using its placeholder/default field values.
+    // Grouped by category in the output for readability.
+    const auto& all = ConnectorRegistry::instance().all();
+
+    // Collect by category label
+    QMap<QString, QJsonArray> by_category;
+    for (const auto& cfg : all) {
+        QJsonObject config_obj;
+        for (const auto& field : cfg.fields) {
+            // Use default_value if set, otherwise placeholder, otherwise empty string
+            QString val = !field.default_value.isEmpty()
+                              ? field.default_value
+                              : (!field.placeholder.isEmpty() ? field.placeholder : "");
+            config_obj[field.name] = val;
+        }
+
+        QJsonObject entry;
+        entry["provider"]     = cfg.id;
+        entry["display_name"] = cfg.name;
+        entry["alias"]        = cfg.id + "_1";
+        entry["description"]  = cfg.description;
+        entry["type"]         = cfg.type;
+        entry["category"]     = category_str(cfg.category);
+        entry["enabled"]      = false;
+        entry["tags"]         = "";
+        entry["config"]       = config_obj;
+        entry["_help"]        = QString("Fill in the 'config' fields and set 'enabled' to true. "
+                                        "Remove this '_help' key before importing.");
+
+        by_category[category_label(cfg.category)].append(entry);
+    }
+
+    // Flatten to a single array, category order
+    QStringList cat_order = {
+        "Databases", "APIs", "Streaming", "File Sources",
+        "Cloud Storage", "Time Series", "Market Data",
+        "Search & Analytics", "Data Warehouses"
+    };
+    QJsonArray out;
+    for (const auto& cat : cat_order) {
+        if (by_category.contains(cat)) {
+            for (const auto& entry : by_category[cat])
+                out.append(entry);
+        }
+    }
+    // Any category not in the fixed order
+    for (auto it = by_category.begin(); it != by_category.end(); ++it) {
+        if (!cat_order.contains(it.key())) {
+            for (const auto& entry : it.value())
+                out.append(entry);
+        }
+    }
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        LOG_ERROR(TAG, QString("Template write failed: %1").arg(path));
+        return;
+    }
+    file.write(QJsonDocument(out).toJson(QJsonDocument::Indented));
+    file.close();
+
+    LOG_INFO(TAG, QString("Template written: %1 connectors to %2").arg(out.size()).arg(path));
 }
 
 // ── on_poll_timer — background status poll for enabled connections ─────────────

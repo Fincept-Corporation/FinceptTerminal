@@ -12,9 +12,12 @@
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/secure/SecureStorage.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QCheckBox>
+#include <QColorDialog>
 #include <QComboBox>
+#include <QFontDatabase>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -28,48 +31,99 @@
 
 namespace fincept::screens {
 
-// ── File-scope style constants ────────────────────────────────────────────────
+// ── Token-based style builders (live — reflect active theme) ─────────────────
 
-static const char* SECTION_TITLE = "color: #FF6600; font-size: 13px; font-weight: bold; letter-spacing: 0.5px; "
-                                   "background: transparent;";
+static QString section_title_ss() {
+    const auto& t = fincept::ui::ThemeManager::instance().tokens();
+    return QString("color: %1; font-size: 13px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
+        .arg(QString(t.accent));
+}
 
-static const char* SUB_TITLE = "color: #808080; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; "
-                               "background: transparent;";
+static QString sub_title_ss() {
+    const auto& t = fincept::ui::ThemeManager::instance().tokens();
+    return QString("color: %1; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; background: transparent;")
+        .arg(QString(t.text_secondary));
+}
 
-static const char* LABEL = "color: #888888; font-size: 13px; background: transparent;";
+static QString label_ss() {
+    const auto& t = fincept::ui::ThemeManager::instance().tokens();
+    return QString("color: %1; font-size: 13px; background: transparent;")
+        .arg(QString(t.text_secondary));
+}
 
-static const char* NAV_BTN = "QPushButton { background: transparent; color: #888; border: none; "
-                             "text-align: left; padding: 0 12px; font-size: 13px; }"
-                             "QPushButton:hover { background: #111; color: #e0e0e0; }"
-                             "QPushButton:checked { color: #FF6600; background: #111; }";
+static QString nav_btn_ss() {
+    const auto& t = fincept::ui::ThemeManager::instance().tokens();
+    return QString(
+        "QPushButton { background: transparent; color: %1; border: none; "
+        "text-align: left; padding: 0 12px; font-size: 13px; }"
+        "QPushButton:hover { background: %2; color: %3; }"
+        "QPushButton:checked { color: %4; background: %2; }")
+        .arg(QString(t.text_secondary), QString(t.bg_raised),
+             QString(t.text_primary),   QString(t.accent));
+}
 
-static const char* INPUT_SS = "QLineEdit { background: #111; color: #e0e0e0; border: 1px solid #2a2a2a; "
-                              "border-radius: 3px; padding: 6px; font-size: 12px; }"
-                              "QLineEdit:focus { border: 1px solid #FF6600; }";
+static QString input_ss() {
+    const auto& t = fincept::ui::ThemeManager::instance().tokens();
+    return QString(
+        "QLineEdit { background: %1; color: %2; border: 1px solid %3; "
+        "padding: 6px; font-size: 12px; }"
+        "QLineEdit:focus { border: 1px solid %4; }")
+        .arg(QString(t.bg_raised), QString(t.text_primary),
+             QString(t.border_med), QString(t.accent));
+}
 
-static const char* BTN_PRIMARY = "QPushButton { background: #FF6600; color: #000; border: none; border-radius: 4px; "
-                                 "font-size: 12px; font-weight: 700; padding: 0 16px; height: 32px; }"
-                                 "QPushButton:hover { background: #FF8800; }";
+static QString btn_primary_ss() {
+    const auto& t = fincept::ui::ThemeManager::instance().tokens();
+    return QString(
+        "QPushButton { background: %1; color: %2; border: none; "
+        "font-size: 12px; font-weight: 700; padding: 0 16px; height: 32px; }"
+        "QPushButton:hover { background: %3; }")
+        .arg(QString(t.accent), QString(t.bg_base), QString(t.accent_dim));
+}
 
-static const char* BTN_SECONDARY = "QPushButton { background: #1a1a1a; color: #e0e0e0; border: 1px solid #333; "
-                                   "border-radius: 4px; font-size: 12px; padding: 0 12px; height: 32px; }"
-                                   "QPushButton:hover { background: #222; }";
+static QString btn_secondary_ss() {
+    const auto& t = fincept::ui::ThemeManager::instance().tokens();
+    return QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3; "
+        "font-size: 12px; padding: 0 12px; height: 32px; }"
+        "QPushButton:hover { background: %4; }")
+        .arg(QString(t.bg_raised),    QString(t.text_primary),
+             QString(t.border_bright), QString(t.bg_hover));
+}
 
-static const char* BTN_DANGER = "QPushButton { background: #1a0a0a; color: #cc3300; border: 1px solid #330000; "
-                                "border-radius: 3px; font-size: 12px; padding: 4px 12px; }"
-                                "QPushButton:hover { background: #2a1010; }";
+static QString btn_danger_ss() {
+    const auto& t = fincept::ui::ThemeManager::instance().tokens();
+    return QString(
+        "QPushButton { background: %1; color: %2; border: 1px solid %3; "
+        "font-size: 12px; padding: 4px 12px; }"
+        "QPushButton:hover { background: %4; }")
+        .arg(QString(t.bg_raised), QString(t.negative),
+             QString(t.border_dim), QString(t.bg_hover));
+}
 
-static const char* COMBO_SS = "QComboBox { background: #111; color: #e0e0e0; border: 1px solid #2a2a2a; "
-                              "border-radius: 3px; padding: 5px 8px; font-size: 12px; min-width: 160px; }"
-                              "QComboBox:focus { border: 1px solid #FF6600; }"
-                              "QComboBox::drop-down { border: none; width: 20px; }"
-                              "QComboBox QAbstractItemView { background: #111; color: #e0e0e0; "
-                              "selection-background-color: #1a1a1a; border: 1px solid #333; }";
+static QString combo_ss() {
+    const auto& t = fincept::ui::ThemeManager::instance().tokens();
+    return QString(
+        "QComboBox { background: %1; color: %2; border: 1px solid %3; "
+        "padding: 5px 8px; font-size: 12px; min-width: 160px; }"
+        "QComboBox:focus { border: 1px solid %4; }"
+        "QComboBox::drop-down { border: none; width: 20px; }"
+        "QComboBox QAbstractItemView { background: %1; color: %2; "
+        "selection-background-color: %5; border: 1px solid %3; }")
+        .arg(QString(t.bg_raised),  QString(t.text_primary),
+             QString(t.border_med), QString(t.accent), QString(t.bg_hover));
+}
 
-static const char* CHECK_SS = "QCheckBox { color: #888; font-size: 13px; background: transparent; }"
-                              "QCheckBox::indicator { width: 14px; height: 14px; }"
-                              "QCheckBox::indicator:unchecked { border: 1px solid #333; background: #111; }"
-                              "QCheckBox::indicator:checked   { border: 1px solid #FF6600; background: #FF6600; }";
+static QString check_ss() {
+    const auto& t = fincept::ui::ThemeManager::instance().tokens();
+    return QString(
+        "QCheckBox { color: %1; font-size: 13px; background: transparent; }"
+        "QCheckBox::indicator { width: 14px; height: 14px; }"
+        "QCheckBox::indicator:unchecked { border: 1px solid %2; background: %3; }"
+        "QCheckBox::indicator:checked   { border: 1px solid %4; background: %4; }")
+        .arg(QString(t.text_secondary), QString(t.border_bright),
+             QString(t.bg_raised),      QString(t.accent));
+}
 
 // ── Credential key definitions ────────────────────────────────────────────────
 
@@ -113,7 +167,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     nvl->setSpacing(2);
 
     auto* title = new QLabel("SETTINGS");
-    title->setStyleSheet(SECTION_TITLE);
+    title->setStyleSheet(section_title_ss());
     nvl->addWidget(title);
     nvl->addSpacing(12);
 
@@ -132,7 +186,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
         auto* btn = new QPushButton(text);
         btn->setFixedHeight(32);
         btn->setCheckable(true);
-        btn->setStyleSheet(NAV_BTN);
+        btn->setStyleSheet(nav_btn_ss());
         connect(btn, &QPushButton::clicked, this, [this, btn, idx]() {
             // Uncheck all sibling buttons in the parent layout
             if (auto* parent = btn->parentWidget()) {
@@ -191,7 +245,7 @@ QWidget* SettingsScreen::make_row(const QString& label, QWidget* control, const 
     auto* hl = new QHBoxLayout;
     hl->setContentsMargins(0, 4, 0, 4);
     auto* lbl = new QLabel(label);
-    lbl->setStyleSheet(LABEL);
+    lbl->setStyleSheet(label_ss());
     hl->addWidget(lbl);
     hl->addStretch();
     hl->addWidget(control);
@@ -230,7 +284,7 @@ QWidget* SettingsScreen::build_credentials() {
 
     // Title
     auto* t = new QLabel("API CREDENTIALS");
-    t->setStyleSheet(SECTION_TITLE);
+    t->setStyleSheet(section_title_ss());
     vl->addWidget(t);
     vl->addSpacing(4);
 
@@ -284,14 +338,14 @@ QWidget* SettingsScreen::build_credentials() {
         auto* field = new QLineEdit;
         field->setEchoMode(QLineEdit::Password);
         field->setPlaceholderText("Not configured");
-        field->setStyleSheet(INPUT_SS);
+        field->setStyleSheet(input_ss());
         cred_fields_[key] = field;
         bhl->addWidget(field, 1);
 
         auto* save_btn = new QPushButton("Save");
         save_btn->setFixedHeight(30);
         save_btn->setFixedWidth(70);
-        save_btn->setStyleSheet(BTN_PRIMARY);
+        save_btn->setStyleSheet(btn_primary_ss());
         bhl->addWidget(save_btn);
 
         connect(save_btn, &QPushButton::clicked, this, [this, key, field, status_lbl]() {
@@ -353,90 +407,177 @@ void SettingsScreen::load_credentials() {
 
 // ── Appearance ────────────────────────────────────────────────────────────────
 
+// Single source of truth for appearance defaults
+namespace {
+constexpr const char* kDefaultFontSize   = "14px";
+constexpr const char* kDefaultFontFamily = "Consolas";
+constexpr const char* kDefaultTheme      = "Obsidian";
+constexpr const char* kDefaultDensity    = "Default";
+} // namespace
+
 QWidget* SettingsScreen::build_appearance() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }"
-                          "QScrollBar:vertical { background: #0a0a0a; width: 6px; }"
-                          "QScrollBar::handle:vertical { background: #2a2a2a; border-radius: 3px; }"
-                          "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+    scroll->setStyleSheet(
+        QString("QScrollArea { border: none; background: transparent; }"
+                "QScrollBar:vertical { background: %1; width: 6px; }"
+                "QScrollBar::handle:vertical { background: %2; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+        .arg(fincept::ui::colors::BG_SURFACE, fincept::ui::colors::BORDER_MED));
 
     auto* page = new QWidget;
     auto* vl = new QVBoxLayout(page);
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(8);
 
-    auto* t = new QLabel("TERMINAL APPEARANCE");
-    t->setStyleSheet(SECTION_TITLE);
+    // ── TYPOGRAPHY ────────────────────────────────────────────────────────────
+    auto* t = new QLabel("TYPOGRAPHY");
+    t->setStyleSheet(section_title_ss());
     vl->addWidget(t);
     vl->addWidget(make_sep());
     vl->addSpacing(8);
 
-    // Font size
     app_font_size_ = new QComboBox;
-    app_font_size_->addItems({"12px", "13px", "14px", "15px", "16px", "17px", "18px"});
-    app_font_size_->setCurrentText("14px");
-    app_font_size_->setStyleSheet(COMBO_SS);
+    for (int px = 8; px <= 24; ++px)
+        app_font_size_->addItem(QString("%1px").arg(px));
+    app_font_size_->setCurrentText(kDefaultFontSize);
+    app_font_size_->setStyleSheet(combo_ss());
     vl->addWidget(make_row("Font Size", app_font_size_));
 
-    // Font family
     app_font_family_ = new QComboBox;
-    app_font_family_->addItems({"Consolas", "Courier New", "JetBrains Mono", "Fira Code", "Cascadia Code"});
-    app_font_family_->setStyleSheet(COMBO_SS);
-    vl->addWidget(make_row("Font Family", app_font_family_, "Requires restart to take full effect."));
+    app_font_family_->addItems(QFontDatabase::families());
+    app_font_family_->setCurrentText(kDefaultFontFamily);
+    app_font_family_->setStyleSheet(combo_ss());
+    vl->addWidget(make_row("Font Family", app_font_family_));
+
+    // Debounced live preview — coalesce rapid changes into one apply after 300ms idle
+    appearance_debounce_ = new QTimer(this);
+    appearance_debounce_->setSingleShot(true);
+    appearance_debounce_->setInterval(300);
+    connect(appearance_debounce_, &QTimer::timeout, this, [this]() {
+        auto& tm = fincept::ui::ThemeManager::instance();
+        int px = QString(app_font_size_->currentText()).replace("px", "").toInt();
+        if (px > 0) tm.apply_font(app_font_family_->currentText(), px);
+        tm.apply_density(app_density_->currentText());
+    });
+
+    auto restart_debounce = [this]() { appearance_debounce_->start(); };
+    connect(app_font_size_,   &QComboBox::currentTextChanged, this, restart_debounce);
+    connect(app_font_family_, &QComboBox::currentTextChanged, this, restart_debounce);
 
     vl->addSpacing(8);
     vl->addWidget(make_sep());
     vl->addSpacing(8);
 
+    // ── THEME ─────────────────────────────────────────────────────────────────
     auto* t2 = new QLabel("THEME");
-    t2->setStyleSheet(SUB_TITLE);
+    t2->setStyleSheet(sub_title_ss());
     vl->addWidget(t2);
     vl->addSpacing(4);
 
-    // Color theme
     app_theme_ = new QComboBox;
-    app_theme_->addItems({"Bloomberg Dark", "Dark Terminal", "Matrix Green", "Obsidian"});
-    app_theme_->setStyleSheet(COMBO_SS);
-    vl->addWidget(make_row("Color Theme", app_theme_));
+    app_theme_->addItems(fincept::ui::ThemeManager::available_themes());
+    app_theme_->setStyleSheet(combo_ss());
+    vl->addWidget(make_row("Color Theme", app_theme_, "Applied immediately as a live preview."));
 
-    // Content density
+    // Live preview: apply theme immediately on change
+    connect(app_theme_, &QComboBox::currentTextChanged, this, [](const QString& name) {
+        fincept::ui::ThemeManager::instance().apply_theme(name);
+    });
+
+    // Accent color override
+    accent_color_btn_ = new QPushButton("Pick Color");
+    accent_color_btn_->setFixedWidth(120);
+    accent_color_btn_->setStyleSheet(btn_secondary_ss());
+    connect(accent_color_btn_, &QPushButton::clicked, this, [this]() {
+        QColor initial = custom_accent_color_.isEmpty()
+            ? QColor(fincept::ui::ThemeManager::instance().tokens().accent)
+            : QColor(custom_accent_color_);
+        QColor chosen = QColorDialog::getColor(initial, this, "Choose Accent Color");
+        if (chosen.isValid()) {
+            custom_accent_color_ = chosen.name();
+            accent_color_btn_->setStyleSheet(
+                QString("QPushButton { background: %1; color: %2; border: none; "
+                        "font-size: 12px; padding: 0 12px; height: 32px; }")
+                .arg(custom_accent_color_,
+                     QString(fincept::ui::ThemeManager::instance().tokens().bg_base)));
+            fincept::ui::ThemeManager::instance().apply_accent(custom_accent_color_);
+        }
+    });
+    vl->addWidget(make_row("Accent Color", accent_color_btn_, "Overrides the theme's default accent color."));
+
     app_density_ = new QComboBox;
-    app_density_->addItems({"Compact", "Default", "Comfortable"});
+    app_density_->addItems(fincept::ui::ThemeManager::available_densities());
     app_density_->setCurrentText("Default");
-    app_density_->setStyleSheet(COMBO_SS);
+    app_density_->setStyleSheet(combo_ss());
     vl->addWidget(make_row("Content Density", app_density_, "Controls padding and spacing throughout the UI."));
+
+    connect(app_density_, &QComboBox::currentTextChanged, this, restart_debounce);
 
     vl->addSpacing(8);
     vl->addWidget(make_sep());
     vl->addSpacing(8);
 
+    // ── INTERFACE ─────────────────────────────────────────────────────────────
     auto* t3 = new QLabel("INTERFACE");
-    t3->setStyleSheet(SUB_TITLE);
+    t3->setStyleSheet(sub_title_ss());
     vl->addWidget(t3);
     vl->addSpacing(4);
 
     chat_bubble_toggle_ = new QCheckBox("Show AI Chat Bubble");
     chat_bubble_toggle_->setChecked(true);
-    chat_bubble_toggle_->setStyleSheet(CHECK_SS);
+    chat_bubble_toggle_->setStyleSheet(check_ss());
     vl->addWidget(make_row("AI Chat Bubble", chat_bubble_toggle_,
                             "Floating chat assistant in the bottom-right corner."));
 
+    ticker_bar_toggle_ = new QCheckBox("Show Ticker Bar");
+    ticker_bar_toggle_->setChecked(true);
+    ticker_bar_toggle_->setStyleSheet(check_ss());
+    vl->addWidget(make_row("Ticker Bar", ticker_bar_toggle_,
+                            "Live price ticker at the bottom of the screen."));
+
+    animations_toggle_ = new QCheckBox("Enable Animations");
+    animations_toggle_->setChecked(true);
+    animations_toggle_->setStyleSheet(check_ss());
+    vl->addWidget(make_row("Animations", animations_toggle_,
+                            "Fade and transition effects throughout the UI."));
+
     vl->addSpacing(16);
 
-    // Apply button
-    auto* apply_btn = new QPushButton("Apply & Save");
+    // ── SAVE ──────────────────────────────────────────────────────────────────
+    auto* apply_btn = new QPushButton("Save Settings");
     apply_btn->setFixedWidth(160);
-    apply_btn->setStyleSheet(BTN_PRIMARY);
+    apply_btn->setStyleSheet(btn_primary_ss());
     connect(apply_btn, &QPushButton::clicked, this, [this]() {
         auto& repo = SettingsRepository::instance();
-        repo.set("appearance.font_size", app_font_size_->currentText(), "appearance");
-        repo.set("appearance.font_family", app_font_family_->currentText(), "appearance");
-        repo.set("appearance.theme", app_theme_->currentText(), "appearance");
-        repo.set("appearance.density", app_density_->currentText(), "appearance");
+        auto& tm   = fincept::ui::ThemeManager::instance();
+
+        // Persist all values
+        repo.set("appearance.font_size",       app_font_size_->currentText(),   "appearance");
+        repo.set("appearance.font_family",     app_font_family_->currentText(), "appearance");
+        repo.set("appearance.theme",           app_theme_->currentText(),       "appearance");
+        repo.set("appearance.density",         app_density_->currentText(),     "appearance");
         repo.set("appearance.show_chat_bubble",
                  chat_bubble_toggle_->isChecked() ? "true" : "false", "appearance");
-        LOG_INFO("Settings", "Appearance saved");
+        repo.set("appearance.show_ticker_bar",
+                 ticker_bar_toggle_->isChecked() ? "true" : "false", "appearance");
+        repo.set("appearance.animations",
+                 animations_toggle_->isChecked() ? "true" : "false", "appearance");
+        if (!custom_accent_color_.isEmpty())
+            repo.set("appearance.accent_color", custom_accent_color_, "appearance");
+
+        // Flush any pending debounce immediately on save
+        if (appearance_debounce_->isActive()) {
+            appearance_debounce_->stop();
+            int px = QString(app_font_size_->currentText()).replace("px", "").toInt();
+            if (px <= 0) px = 14;
+            tm.apply_font(app_font_family_->currentText(), px);
+            tm.apply_density(app_density_->currentText());
+        }
+        if (!custom_accent_color_.isEmpty())
+            tm.apply_accent(custom_accent_color_);
+
+        LOG_INFO("Settings", "Appearance saved and applied");
     });
     vl->addWidget(apply_btn);
     vl->addStretch();
@@ -449,6 +590,15 @@ void SettingsScreen::load_appearance() {
     if (!app_font_size_)
         return;
     auto& repo = SettingsRepository::instance();
+
+    // Block signals during load so live-preview slots don't fire for every
+    // setCurrentIndex() call — prevents 4+ ThemeManager apply_* calls and
+    // the associated theme_changed signal re-rendering every widget on screen.
+    const QSignalBlocker b1(app_font_size_);
+    const QSignalBlocker b2(app_font_family_);
+    const QSignalBlocker b3(app_theme_);
+    const QSignalBlocker b4(app_density_);
+
     auto load_combo = [&](QComboBox* cb, const QString& key, const QString& def) {
         auto r = repo.get(key);
         QString val = r.is_ok() ? r.value() : def;
@@ -456,15 +606,33 @@ void SettingsScreen::load_appearance() {
         if (idx >= 0)
             cb->setCurrentIndex(idx);
     };
-    load_combo(app_font_size_, "appearance.font_size", "14px");
-    load_combo(app_font_family_, "appearance.font_family", "Consolas");
-    load_combo(app_theme_, "appearance.theme", "Bloomberg Dark");
-    load_combo(app_density_, "appearance.density", "Default");
 
-    if (chat_bubble_toggle_) {
-        auto r = repo.get("appearance.show_chat_bubble");
-        bool show = !r.is_ok() || r.value() != "false";
-        chat_bubble_toggle_->setChecked(show);
+    auto load_check = [&](QCheckBox* cb, const QString& key, bool def) {
+        if (!cb) return;
+        auto r = repo.get(key);
+        cb->setChecked(!r.is_ok() ? def : r.value() != "false");
+    };
+
+    load_combo(app_font_size_,   "appearance.font_size",   kDefaultFontSize);
+    load_combo(app_font_family_, "appearance.font_family", kDefaultFontFamily);
+    load_combo(app_theme_,       "appearance.theme",       kDefaultTheme);
+    load_combo(app_density_,     "appearance.density",     kDefaultDensity);
+
+    load_check(chat_bubble_toggle_, "appearance.show_chat_bubble", true);
+    load_check(ticker_bar_toggle_,  "appearance.show_ticker_bar",  true);
+    load_check(animations_toggle_,  "appearance.animations",       true);
+
+    // Restore custom accent color if set
+    auto r_accent = repo.get("appearance.accent_color");
+    if (r_accent.is_ok() && !r_accent.value().isEmpty()) {
+        custom_accent_color_ = r_accent.value();
+        if (accent_color_btn_) {
+            accent_color_btn_->setStyleSheet(
+                QString("QPushButton { background: %1; color: %2; border: none; "
+                        "font-size: 12px; padding: 0 12px; height: 32px; }")
+                .arg(custom_accent_color_,
+                     QString(fincept::ui::ThemeManager::instance().tokens().bg_base)));
+        }
     }
 }
 
@@ -484,22 +652,22 @@ QWidget* SettingsScreen::build_notifications() {
     vl->setSpacing(8);
 
     auto* t = new QLabel("NOTIFICATIONS");
-    t->setStyleSheet(SECTION_TITLE);
+    t->setStyleSheet(section_title_ss());
     vl->addWidget(t);
     vl->addWidget(make_sep());
     vl->addSpacing(8);
 
     // ── Email ─────────────────────────────────────────────────────────────────
     auto* email_hdr = new QLabel("EMAIL");
-    email_hdr->setStyleSheet(SUB_TITLE);
+    email_hdr->setStyleSheet(sub_title_ss());
     vl->addWidget(email_hdr);
 
     notif_email_ = new QCheckBox;
-    notif_email_->setStyleSheet(CHECK_SS);
+    notif_email_->setStyleSheet(check_ss());
 
     notif_email_addr_ = new QLineEdit;
     notif_email_addr_->setPlaceholderText("you@example.com");
-    notif_email_addr_->setStyleSheet(INPUT_SS);
+    notif_email_addr_->setStyleSheet(input_ss());
     notif_email_addr_->setFixedWidth(240);
 
     auto* email_row = make_row("Email Address", notif_email_addr_);
@@ -517,17 +685,17 @@ QWidget* SettingsScreen::build_notifications() {
 
     // ── In-App ────────────────────────────────────────────────────────────────
     auto* inapp_hdr = new QLabel("IN-APP ALERTS");
-    inapp_hdr->setStyleSheet(SUB_TITLE);
+    inapp_hdr->setStyleSheet(sub_title_ss());
     vl->addWidget(inapp_hdr);
 
     notif_inapp_ = new QCheckBox;
-    notif_inapp_->setStyleSheet(CHECK_SS);
+    notif_inapp_->setStyleSheet(check_ss());
     notif_price_ = new QCheckBox;
-    notif_price_->setStyleSheet(CHECK_SS);
+    notif_price_->setStyleSheet(check_ss());
     notif_news_ = new QCheckBox;
-    notif_news_->setStyleSheet(CHECK_SS);
+    notif_news_->setStyleSheet(check_ss());
     notif_orders_ = new QCheckBox;
-    notif_orders_->setStyleSheet(CHECK_SS);
+    notif_orders_->setStyleSheet(check_ss());
 
     vl->addWidget(make_row("In-App Notifications", notif_inapp_));
     vl->addWidget(make_row("Price Alerts", notif_price_));
@@ -540,18 +708,18 @@ QWidget* SettingsScreen::build_notifications() {
 
     // ── Sound ────────────────────────────────────────────────────────────────
     auto* sound_hdr = new QLabel("SOUND");
-    sound_hdr->setStyleSheet(SUB_TITLE);
+    sound_hdr->setStyleSheet(sub_title_ss());
     vl->addWidget(sound_hdr);
 
     notif_sound_ = new QCheckBox;
-    notif_sound_->setStyleSheet(CHECK_SS);
+    notif_sound_->setStyleSheet(check_ss());
     vl->addWidget(make_row("Sound Alerts", notif_sound_, "Plays a chime on price alerts and order fills."));
 
     vl->addSpacing(16);
 
     auto* save_btn = new QPushButton("Save Preferences");
     save_btn->setFixedWidth(180);
-    save_btn->setStyleSheet(BTN_PRIMARY);
+    save_btn->setStyleSheet(btn_primary_ss());
     connect(save_btn, &QPushButton::clicked, this, [this]() {
         auto& repo = SettingsRepository::instance();
         auto b = [](bool v) { return v ? "1" : "0"; };
@@ -610,14 +778,14 @@ QWidget* SettingsScreen::build_storage() {
     vl->setSpacing(10);
 
     auto* t = new QLabel("STORAGE & CACHE");
-    t->setStyleSheet(SECTION_TITLE);
+    t->setStyleSheet(section_title_ss());
     vl->addWidget(t);
     vl->addWidget(make_sep());
     vl->addSpacing(8);
 
     // ── Cache overview card ───────────────────────────────────────────────────
     auto* t2 = new QLabel("CACHE OVERVIEW");
-    t2->setStyleSheet(SUB_TITLE);
+    t2->setStyleSheet(sub_title_ss());
     vl->addWidget(t2);
     vl->addSpacing(4);
 
@@ -633,7 +801,7 @@ QWidget* SettingsScreen::build_storage() {
 
     auto* refresh_btn = new QPushButton("Refresh");
     refresh_btn->setFixedWidth(90);
-    refresh_btn->setStyleSheet(BTN_SECONDARY);
+    refresh_btn->setStyleSheet(btn_secondary_ss());
     connect(refresh_btn, &QPushButton::clicked, this, [this]() { refresh_storage_stats(); });
     cvl->addWidget(refresh_btn);
     vl->addWidget(card);
@@ -644,12 +812,12 @@ QWidget* SettingsScreen::build_storage() {
 
     // ── Clear all ─────────────────────────────────────────────────────────────
     auto* t3 = new QLabel("CLEAR CACHE");
-    t3->setStyleSheet(SUB_TITLE);
+    t3->setStyleSheet(sub_title_ss());
     vl->addWidget(t3);
     vl->addSpacing(4);
 
     auto* clear_all = new QPushButton("Clear All Cache");
-    clear_all->setStyleSheet(BTN_DANGER);
+    clear_all->setStyleSheet(btn_danger_ss());
     connect(clear_all, &QPushButton::clicked, this, [this]() {
         CacheManager::instance().clear();
         refresh_storage_stats();
@@ -669,14 +837,14 @@ QWidget* SettingsScreen::build_storage() {
 
     // ── Clear by category ─────────────────────────────────────────────────────
     auto* t4 = new QLabel("CLEAR BY CATEGORY");
-    t4->setStyleSheet(SUB_TITLE);
+    t4->setStyleSheet(sub_title_ss());
     vl->addWidget(t4);
     vl->addSpacing(4);
 
     static const QStringList CACHE_CATS = {"market_data", "news", "quotes", "charts", "general"};
     for (const QString& cat : CACHE_CATS) {
         auto* btn = new QPushButton("Clear  " + cat);
-        btn->setStyleSheet(BTN_SECONDARY);
+        btn->setStyleSheet(btn_secondary_ss());
         btn->setFixedWidth(200);
         connect(btn, &QPushButton::clicked, this, [this, cat]() {
             CacheManager::instance().clear_category(cat);
@@ -712,7 +880,7 @@ QWidget* SettingsScreen::build_data_sources() {
     vl->setSpacing(0);
 
     auto* t = new QLabel("DATA SOURCES");
-    t->setStyleSheet(SECTION_TITLE);
+    t->setStyleSheet(section_title_ss());
     vl->addWidget(t);
     vl->addSpacing(4);
 
@@ -746,7 +914,7 @@ QWidget* SettingsScreen::build_data_sources() {
     for (auto it = grouped.constBegin(); it != grouped.constEnd(); ++it) {
         // Category header
         auto* cat_lbl = new QLabel(it.key().toUpper());
-        cat_lbl->setStyleSheet(SUB_TITLE);
+        cat_lbl->setStyleSheet(sub_title_ss());
         vl->addWidget(cat_lbl);
         vl->addSpacing(6);
 
@@ -780,7 +948,7 @@ QWidget* SettingsScreen::build_data_sources() {
             // Enable toggle
             auto* toggle = new QCheckBox;
             toggle->setChecked(ds.enabled);
-            toggle->setStyleSheet(CHECK_SS);
+            toggle->setStyleSheet(check_ss());
             hhl->addWidget(toggle);
 
             // Wire toggle → repo

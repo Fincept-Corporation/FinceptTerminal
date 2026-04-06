@@ -106,6 +106,7 @@ class AiChatBubble : public QWidget {
     QWidget* build_voice_status_bar();
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+    void refresh_theme();
     void open_panel();
     void close_panel();
     void ensure_session();

@@ -2,18 +2,24 @@
   "updates": {
     "windows": {
       "latest-version": "4.0.0",
-      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/FinceptTerminal-Windows-x64.zip",
-      "changelog": "See https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest for full changelog."
+      "mandatory-update": false,
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/FinceptTerminal-4.0.0-windows-x64-setup.exe",
+      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest",
+      "changelog": "Fincept Terminal v4.0.0 — Full rewrite in C++20 + Qt6. Native performance, embedded Python analytics, 50+ screens, MCP AI integration, and multi-broker trading.\n\nSee https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest for full release notes."
     },
     "osx": {
       "latest-version": "4.0.0",
-      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/FinceptTerminal-macOS-universal.tar.gz",
-      "changelog": "See https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest for full changelog."
+      "mandatory-update": false,
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/FinceptTerminal-4.0.0-macOS.dmg",
+      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest",
+      "changelog": "Fincept Terminal v4.0.0 — Full rewrite in C++20 + Qt6. Native performance, embedded Python analytics, 50+ screens, MCP AI integration, and multi-broker trading.\n\nSee https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest for full release notes."
     },
     "linux": {
       "latest-version": "4.0.0",
-      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/FinceptTerminal-Linux-x86_64.AppImage",
-      "changelog": "See https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest for full changelog."
+      "mandatory-update": false,
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/FinceptTerminal-4.0.0-x86_64.AppImage",
+      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest",
+      "changelog": "Fincept Terminal v4.0.0 — Full rewrite in C++20 + Qt6. Native performance, embedded Python analytics, 50+ screens, MCP AI integration, and multi-broker trading.\n\nSee https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest for full release notes."
     }
   }
 }

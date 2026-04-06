@@ -4,7 +4,10 @@
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
 #include "storage/repositories/LlmProfileRepository.h"
+#include "storage/repositories/PortfolioRepository.h"
+#include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -15,6 +18,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSplitter>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
@@ -29,12 +33,17 @@ PlannerViewPanel::PlannerViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("PlannerViewPanel");
     build_ui();
     setup_connections();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { update(); });
 }
 
 void PlannerViewPanel::build_ui() {
     auto* root = new QHBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
+
+    loading_overlay_ = new ui::LoadingOverlay(this);
+
     auto* sp = new QSplitter(Qt::Horizontal);
     sp->setHandleWidth(1);
     sp->setStyleSheet(QString("QSplitter::handle{background:%1;}").arg(ui::colors::BORDER_DIM));
@@ -84,6 +93,28 @@ QWidget* PlannerViewPanel::build_templates_panel() {
             llm_profile_combo_->addItem(p.is_default ? p.name + " [default]" : p.name, p.id);
     }
     vl->addWidget(llm_profile_combo_);
+
+    auto* pf_lbl = new QLabel("PORTFOLIO:");
+    pf_lbl->setStyleSheet(
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;").arg(ui::colors::TEXT_SECONDARY));
+    vl->addWidget(pf_lbl);
+
+    portfolio_combo_ = new QComboBox;
+    portfolio_combo_->setToolTip("Portfolio to use as context for rebalance / analysis plans");
+    portfolio_combo_->setStyleSheet(
+        QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:11px;}"
+                "QComboBox::drop-down{border:none;}")
+            .arg(ui::colors::BG_RAISED, ui::colors::TEXT_PRIMARY, ui::colors::BORDER_MED));
+    portfolio_combo_->addItem("None", QString{});
+    {
+        auto& repo = fincept::PortfolioRepository::instance();
+        const auto res = repo.list_portfolios();
+        if (res.is_ok()) {
+            for (const auto& pf : res.value())
+                portfolio_combo_->addItem(pf.name, pf.id);
+        }
+    }
+    vl->addWidget(portfolio_combo_);
 
     template_list_ = new QListWidget;
     template_list_->addItems({"Stock Analysis Plan", "Portfolio Rebalance Plan", "Market Overview Plan",
@@ -287,6 +318,7 @@ void PlannerViewPanel::setup_connections() {
         if (plan.request_id != pending_request_id_) return;
         generating_ = false;
         pending_request_id_.clear();
+        loading_overlay_->hide_loading();
         generate_btn_->setEnabled(true);
         generate_btn_->setText("GENERATE PLAN");
         current_plan_ = plan;
@@ -302,6 +334,7 @@ void PlannerViewPanel::setup_connections() {
         if (plan.request_id != pending_request_id_) return;
         executing_ = false;
         pending_request_id_.clear();
+        loading_overlay_->hide_loading();
         execute_btn_->setEnabled(true);
         execute_btn_->setText("EXECUTE PLAN");
         current_plan_ = plan;
@@ -316,8 +349,9 @@ void PlannerViewPanel::setup_connections() {
             if (plan.steps[i].status == "completed")
                 ++completed;
             if (!plan.steps[i].result.isEmpty() || !plan.steps[i].error.isEmpty()) {
-                result_display_->setPlainText(plan.steps[i].result.isEmpty() ? plan.steps[i].error
-                                                                             : plan.steps[i].result);
+                const QString txt = plan.steps[i].result.isEmpty() ? plan.steps[i].error
+                                                                    : plan.steps[i].result;
+                result_display_->setHtml(ui::MarkdownRenderer::render(txt));
                 result_header_->setText(QString("STEP %1: %2").arg(i + 1).arg(plan.steps[i].name.toUpper()));
             }
         }
@@ -330,6 +364,7 @@ void PlannerViewPanel::setup_connections() {
             generating_ = false;
             executing_ = false;
             pending_request_id_.clear();
+            loading_overlay_->hide_loading();
             generate_btn_->setEnabled(true);
             generate_btn_->setText("GENERATE PLAN");
             execute_btn_->setEnabled(!current_plan_.steps.isEmpty());
@@ -347,9 +382,10 @@ void PlannerViewPanel::setup_connections() {
         if (row >= 0 && row < current_plan_.steps.size()) {
             const auto& s = current_plan_.steps[row];
             result_header_->setText(QString("STEP %1: %2").arg(row + 1).arg(s.name.toUpper()));
-            result_display_->setPlainText(!s.result.isEmpty()  ? s.result
-                                          : !s.error.isEmpty() ? "Error: " + s.error
-                                                               : "(not yet executed)");
+            const QString txt = !s.result.isEmpty()  ? s.result
+                                : !s.error.isEmpty() ? "**Error:** " + s.error
+                                                     : "*(not yet executed)*";
+            result_display_->setHtml(ui::MarkdownRenderer::render(txt));
         }
     });
 
@@ -380,6 +416,14 @@ void PlannerViewPanel::generate_plan() {
         auto* item = template_list_->currentItem();
         q = item ? item->text() : "Create a comprehensive stock analysis plan";
     }
+    // Append portfolio context to query if selected
+    if (portfolio_combo_ && portfolio_combo_->currentData().isValid()
+            && !portfolio_combo_->currentData().toString().isEmpty()) {
+        const QString pf_name = portfolio_combo_->currentText();
+        const QString pf_id   = portfolio_combo_->currentData().toString();
+        q = QString("[Portfolio: %1 (id: %2)]\n\n%3").arg(pf_name, pf_id, q);
+    }
+
     generating_ = true;
     generate_btn_->setEnabled(false);
     generate_btn_->setText("GENERATING...");
@@ -388,6 +432,7 @@ void PlannerViewPanel::generate_plan() {
     result_display_->clear();
     progress_bar_->setValue(0);
     plan_status_->setText("GENERATING");
+    loading_overlay_->show_loading("GENERATING PLAN…");
     plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
                                     .arg(ui::colors::AMBER, ui::colors::BG_RAISED));
     QJsonObject cfg;
@@ -395,6 +440,11 @@ void PlannerViewPanel::generate_plan() {
         const QString pid = llm_profile_combo_->currentData().toString();
         if (!pid.isEmpty())
             cfg["llm_profile_id"] = pid;
+    }
+    if (portfolio_combo_) {
+        const QString pf_id = portfolio_combo_->currentData().toString();
+        if (!pf_id.isEmpty())
+            cfg["portfolio_id"] = pf_id;
     }
     pending_request_id_ = services::AgentService::instance().create_plan(q, cfg);
 }
@@ -408,6 +458,7 @@ void PlannerViewPanel::execute_plan() {
     result_display_->clear();
     progress_bar_->setValue(0);
     plan_status_->setText("EXECUTING");
+    loading_overlay_->show_loading("EXECUTING PLAN…");
     plan_status_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;border-radius:2px;")
                                     .arg(ui::colors::AMBER, ui::colors::BG_RAISED));
 
@@ -464,13 +515,13 @@ void PlannerViewPanel::update_step_status(int row, const QString& status) {
     item->setText(status.toUpper());
     QColor c;
     if (status == "completed")
-        c = QColor(ui::colors::POSITIVE);
+        c = QColor(ui::colors::POSITIVE());
     else if (status == "failed")
-        c = QColor(ui::colors::NEGATIVE);
+        c = QColor(ui::colors::NEGATIVE());
     else if (status == "running")
-        c = QColor(ui::colors::AMBER);
+        c = QColor(ui::colors::AMBER());
     else
-        c = QColor(ui::colors::TEXT_TERTIARY);
+        c = QColor(ui::colors::TEXT_TERTIARY());
     item->setForeground(c);
 }
 
@@ -492,7 +543,7 @@ void PlannerViewPanel::add_step() {
     auto* st = new QTableWidgetItem("PENDING");
     st->setTextAlignment(Qt::AlignCenter);
     st->setFlags(st->flags() & ~Qt::ItemIsEditable);
-    st->setForeground(QColor(ui::colors::TEXT_TERTIARY));
+    st->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
     steps_table_->setItem(row, 3, st);
 }
 
@@ -538,6 +589,7 @@ void PlannerViewPanel::save_plan_to_history() {
 }
 
 void PlannerViewPanel::copy_result() {
+    // toPlainText() strips HTML tags — gives clean copyable text
     QString text = result_display_->toPlainText();
     if (!text.isEmpty()) {
         QApplication::clipboard()->setText(text);

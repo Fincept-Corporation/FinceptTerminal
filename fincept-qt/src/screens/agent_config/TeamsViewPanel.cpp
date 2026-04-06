@@ -4,11 +4,14 @@
 #include "ai_chat/LlmService.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
+#include "storage/repositories/AgentConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QHBoxLayout>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QShowEvent>
 #include <QSplitter>
@@ -32,6 +35,16 @@ TeamsViewPanel::TeamsViewPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("TeamsViewPanel");
     build_ui();
     setup_connections();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { update(); });
+
+    // Seed from cache immediately — handles case where agents_discovered was
+    // already emitted before this panel was lazily constructed (same as AgentsViewPanel).
+    auto cached = services::AgentService::instance().cached_agents();
+    if (!cached.isEmpty()) {
+        all_agents_ = cached;
+        populate_available_agents(all_agents_);
+    }
 }
 
 void TeamsViewPanel::build_ui() {
@@ -292,6 +305,7 @@ void TeamsViewPanel::setup_connections() {
     connect(&svc, &services::AgentService::agent_stream_thinking, this, [this](const QString& request_id, const QString& status) {
         if (request_id != pending_request_id_) return;
         exec_status_->setText(status);
+        log_display_->append("[THINK] " + status);
     });
 
     connect(&svc, &services::AgentService::agent_stream_token, this, [this](const QString& request_id, const QString& token) {
@@ -505,30 +519,39 @@ void TeamsViewPanel::run_team() {
         member["name"] = m.name;
         member["role"] = m.description;
 
-        // Resolve per-member profile via assignment chain
+        // Always reload from DB — in-memory AgentInfo.config is stale if the user
+        // just saved tools/LLM assignments without triggering a full agent rediscovery.
+        QJsonObject fresh_config = m.config; // fallback to in-memory
+        auto db_result = AgentConfigRepository::instance().get(m.id);
+        if (db_result.is_ok()) {
+            QJsonDocument doc = QJsonDocument::fromJson(db_result.value().config_json.toUtf8());
+            if (!doc.isNull())
+                fresh_config = doc.object();
+        }
+
+        // Resolve per-member LLM profile via assignment chain, then override with
+        // any explicit api_key stored in the agent's saved config (takes priority).
         const ResolvedLlmProfile member_profile =
             ai_chat::LlmService::instance().resolve_profile("agent", m.id);
         QJsonObject mc = ai_chat::LlmService::profile_to_json(member_profile);
 
-        // If the member has a saved model config with api_key, honour it;
-        // otherwise the resolved profile above is authoritative.
-        if (m.config.contains("model")) {
-            QJsonObject saved = m.config["model"].toObject();
+        if (fresh_config.contains("model")) {
+            QJsonObject saved = fresh_config["model"].toObject();
             if (!saved["api_key"].toString().isEmpty())
                 mc = saved;
         }
         member["model"] = mc;
 
         // Use agent's own tools if set; otherwise fall back to TOOLS-tab selection
-        if (m.config.contains("tools") && !m.config["tools"].toArray().isEmpty()) {
-            member["tools"] = m.config["tools"];
+        if (fresh_config.contains("tools") && !fresh_config["tools"].toArray().isEmpty()) {
+            member["tools"] = fresh_config["tools"];
         } else if (!selected_tools_.isEmpty()) {
             QJsonArray ta;
             for (const auto& t : selected_tools_) ta.append(t);
             member["tools"] = ta;
         }
-        if (m.config.contains("instructions"))
-            member["instructions"] = m.config["instructions"];
+        if (fresh_config.contains("instructions"))
+            member["instructions"] = fresh_config["instructions"];
         members.append(member);
         log_display_->append(QString("  [MEMBER] %1").arg(m.name));
     }
@@ -543,14 +566,9 @@ void TeamsViewPanel::apply_tools_selection(const QStringList& tools) {
 
 void TeamsViewPanel::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    if (!data_loaded_) {
-        data_loaded_ = true;
-        // AgentConfigScreen fires discover_agents() on first show and on every
-        // config_saved/deleted — TeamsViewPanel just listens to agents_discovered.
-        // Do NOT call discover_agents() here to avoid a duplicate Python spawn.
-        if (!all_agents_.isEmpty())
-            populate_available_agents(all_agents_);
-    }
+    // Trigger a fresh discover so the list stays current.
+    // AgentService caches results with TTL — no Python spawn if cache is warm.
+    services::AgentService::instance().discover_agents();
 }
 
 } // namespace fincept::screens

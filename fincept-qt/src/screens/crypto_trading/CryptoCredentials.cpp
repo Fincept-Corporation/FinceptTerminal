@@ -1,8 +1,13 @@
 #include "screens/crypto_trading/CryptoCredentials.h"
 
+#include "python/PythonRunner.h"
+
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPushButton>
+#include <QTimer>
 #include <QVBoxLayout>
 
 // Obsidian Design System input style
@@ -76,6 +81,50 @@ CryptoCredentials::CryptoCredentials(const QString& exchange_id, QWidget* parent
     password_edit_->setFixedHeight(28);
     layout->addWidget(password_edit_);
 
+    // TOTP section
+    layout->addSpacing(4);
+    auto* totp_lbl = new QLabel("TOTP SECRET (2FA)");
+    totp_lbl->setStyleSheet("color: #808080; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; "
+                            "font-family: 'Consolas', 'Courier New', monospace;");
+    layout->addWidget(totp_lbl);
+
+    totp_secret_edit_ = new QLineEdit;
+    totp_secret_edit_->setPlaceholderText("Base32 secret (optional)");
+    totp_secret_edit_->setEchoMode(QLineEdit::Password);
+    totp_secret_edit_->setStyleSheet(kInputStyle);
+    totp_secret_edit_->setFixedHeight(28);
+    layout->addWidget(totp_secret_edit_);
+
+    auto* totp_row = new QHBoxLayout;
+    totp_row->setSpacing(8);
+
+    totp_code_label_ = new QLabel("CODE: --");
+    totp_code_label_->setStyleSheet(
+        "color: #d97706; font-size: 18px; font-weight: 700; letter-spacing: 2px; "
+        "font-family: 'Consolas', 'Courier New', monospace;");
+    totp_row->addWidget(totp_code_label_);
+
+    totp_countdown_label_ = new QLabel("");
+    totp_countdown_label_->setStyleSheet(
+        "color: #525252; font-size: 11px; font-family: 'Consolas', 'Courier New', monospace;");
+    totp_row->addWidget(totp_countdown_label_);
+    totp_row->addStretch();
+    layout->addLayout(totp_row);
+
+    totp_timer_ = new QTimer(this);
+    totp_timer_->setInterval(1000);
+    connect(totp_timer_, &QTimer::timeout, this, &CryptoCredentials::on_totp_tick);
+    connect(totp_secret_edit_, &QLineEdit::textChanged, this, [this](const QString& text) {
+        if (text.trimmed().isEmpty()) {
+            totp_timer_->stop();
+            totp_code_label_->setText("CODE: --");
+            totp_countdown_label_->setText("");
+        } else {
+            refresh_totp();
+            totp_timer_->start();
+        }
+    });
+
     // Status
     status_label_ = new QLabel("");
     status_label_->setStyleSheet("font-size: 12px; font-family: 'Consolas', 'Courier New', monospace;");
@@ -143,6 +192,38 @@ void CryptoCredentials::on_clear() {
     status_label_->setText("Credentials cleared");
     status_label_->setStyleSheet("color: #ca8a04; font-size: 12px; "
                                  "font-family: 'Consolas', 'Courier New', monospace;");
+}
+
+void CryptoCredentials::on_totp_tick() {
+    refresh_totp();
+}
+
+void CryptoCredentials::refresh_totp() {
+    const QString secret = totp_secret_edit_->text().trimmed();
+    if (secret.isEmpty())
+        return;
+
+    const QString script = python::PythonRunner::instance().scripts_dir()
+                           + "/exchange/totp_gen.py";
+
+    QPointer<CryptoCredentials> self = this;
+    python::PythonRunner::instance().run(script, {secret},
+        [self](const python::PythonResult& result) {
+            if (!self)
+                return;
+            if (!result.success) {
+                self->totp_code_label_->setText("CODE: ERR");
+                self->totp_countdown_label_->setText("");
+                return;
+            }
+            const auto doc = QJsonDocument::fromJson(result.output.toUtf8());
+            const auto obj = doc.object();
+            if (obj.contains("code")) {
+                self->totp_code_label_->setText(QString("CODE: %1").arg(obj.value("code").toString()));
+                const int valid_for = obj.value("valid_for").toInt();
+                self->totp_countdown_label_->setText(QString("(%1s)").arg(valid_for));
+            }
+        });
 }
 
 } // namespace fincept::screens::crypto

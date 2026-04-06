@@ -560,6 +560,13 @@ struct OpenInterestData {
     int64_t timestamp = 0;
 };
 
+struct MarkPriceData {
+    QString symbol;
+    double mark_price = 0.0;
+    double index_price = 0.0;
+    int64_t timestamp = 0;
+};
+
 struct ExchangeCredentials {
     QString api_key;
     QString secret;

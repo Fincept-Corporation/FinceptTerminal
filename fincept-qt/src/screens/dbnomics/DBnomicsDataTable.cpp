@@ -116,7 +116,7 @@ void DBnomicsDataTable::clear() {
     table_->setColumnCount(1);
     table_->setHorizontalHeaderLabels({"STATUS"});
     auto* item = new QTableWidgetItem("No data — select a series");
-    item->setForeground(QColor(ui::colors::TEXT_TERTIARY));
+    item->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
     item->setTextAlignment(Qt::AlignCenter);
     table_->setItem(0, 0, item);
     table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
@@ -175,7 +175,7 @@ void DBnomicsDataTable::set_data(const QVector<services::DbnDataPoint>& series) 
         const QString& period = periods[row];
 
         auto* period_item = new QTableWidgetItem(period);
-        period_item->setForeground(QColor(ui::colors::TEXT_SECONDARY));
+        period_item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         period_item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         table_->setItem(row, 0, period_item);
 
@@ -186,7 +186,7 @@ void DBnomicsDataTable::set_data(const QVector<services::DbnDataPoint>& series) 
                 cell->setForeground(QColor("#00E5FF")); // cyan for valid data
             } else {
                 cell = new QTableWidgetItem("—");
-                cell->setForeground(QColor(ui::colors::TEXT_TERTIARY));
+                cell->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
             }
             cell->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             table_->setItem(row, s + 1, cell);

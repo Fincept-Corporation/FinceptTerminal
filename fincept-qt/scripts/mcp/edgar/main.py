@@ -229,6 +229,35 @@ def execute_command(command: str, args: list) -> Dict[str, Any]:
         ticker = args[0] if len(args) > 0 else None
         return forms_13f.get_13f_summary(ticker)
 
+    # =========================================================================
+    # DIRECT SEC ACCESS — CIK resolution, filing text, multiples
+    # =========================================================================
+
+    elif command == "resolve_cik":
+        query = args[0] if args else None
+        return base.resolve_cik(query)
+
+    elif command == "get_filing_text":
+        ticker_or_cik = args[0] if args else None
+        form = args[1] if len(args) > 1 else "10-K"
+        return base.get_filing_text(ticker_or_cik, form)
+
+    elif command == "search_filings":
+        ticker_or_cik = args[0] if args else None
+        form = args[1] if len(args) > 1 else "8-K"
+        months_back = int(args[2]) if len(args) > 2 else 12
+        return base.search_filings(ticker_or_cik, form, months_back)
+
+    elif command == "get_filing_documents":
+        ticker_or_cik = args[0] if args else None
+        form = args[1] if len(args) > 1 else "10-K"
+        return base.get_filing_documents(ticker_or_cik, form)
+
+    elif command == "calc_multiples":
+        ticker_or_cik = args[0] if args else None
+        deal_value = float(args[1]) if len(args) > 1 else 0.0
+        return base.calc_multiples(ticker_or_cik, deal_value)
+
     # Unknown command
     else:
         return {

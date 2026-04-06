@@ -361,7 +361,7 @@ QWidget* MAAnalyticsScreen::build_status_bar() {
         hl->addWidget(lbl);
         auto* val = new QLabel(value, bar);
         val->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; font-family:%2;")
-                               .arg(color.isEmpty() ? QString(ui::colors::TEXT_PRIMARY) : color)
+                               .arg(color.isEmpty() ? QLatin1String(ui::colors::TEXT_PRIMARY()) : color)
                                .arg(ui::fonts::DATA_FAMILY));
         hl->addWidget(val);
     };

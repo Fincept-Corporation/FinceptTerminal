@@ -34,7 +34,7 @@ static const QStringList kSnapshotSymbols = services::MarketDataService::global_
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
-    setStyleSheet(QString("background: %1;").arg(ui::colors::PANEL));
+    setStyleSheet(QString("background: %1;").arg(ui::colors::PANEL()));
     setMinimumWidth(260);
 
     auto* vl = new QVBoxLayout(this);
@@ -96,25 +96,25 @@ QWidget* MarketPulsePanel::build_header() {
     auto* bar = new QWidget;
     bar->setFixedHeight(30);
     bar->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid rgba(217,119,6,0.25);").arg(ui::colors::BG_RAISED));
+        QString("background: %1; border-bottom: 1px solid rgba(217,119,6,0.25);").arg(ui::colors::BG_RAISED()));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
 
     auto* icon = new QLabel(QChar(0x25C8));
-    icon->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER));
+    icon->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
     hl->addWidget(icon);
 
     auto* title = new QLabel("MARKET PULSE");
     title->setStyleSheet(
         QString("color: %1; font-size: 10px; font-weight: bold; letter-spacing: 1px; background: transparent;")
-            .arg(ui::colors::AMBER));
+            .arg(ui::colors::AMBER()));
     hl->addWidget(title);
     hl->addStretch();
 
     auto* live_dot = new QLabel;
     live_dot->setFixedSize(6, 6);
-    live_dot->setStyleSheet(QString("background: %1; border-radius: 3px;").arg(ui::colors::POSITIVE));
+    live_dot->setStyleSheet(QString("background: %1; border-radius: 3px;").arg(ui::colors::POSITIVE()));
     hl->addWidget(live_dot);
 
     return bar;
@@ -125,7 +125,7 @@ QWidget* MarketPulsePanel::build_section_header(const QString& title, const QStr
     auto* w = new QWidget;
     w->setFixedHeight(26);
     w->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2; border-top: 1px solid %2;")
-                         .arg(ui::colors::BG_RAISED, ui::colors::BORDER_DIM));
+                         .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(w);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -137,7 +137,7 @@ QWidget* MarketPulsePanel::build_section_header(const QString& title, const QStr
     auto* lbl = new QLabel(title);
     lbl->setStyleSheet(
         QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
-            .arg(ui::colors::TEXT_SECONDARY));
+            .arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(lbl);
     hl->addStretch();
 
@@ -160,12 +160,12 @@ QWidget* MarketPulsePanel::build_fear_greed_section() {
     auto* label = new QLabel("FEAR & GREED INDEX");
     label->setStyleSheet(
         QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
-            .arg(ui::colors::TEXT_SECONDARY));
+            .arg(ui::colors::TEXT_SECONDARY()));
     hrl->addWidget(label);
     hrl->addStretch();
 
     auto* gauge_icon = new QLabel(QChar(0x25CE));
-    gauge_icon->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER));
+    gauge_icon->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
     hrl->addWidget(gauge_icon);
 
     vl->addWidget(header_row);
@@ -187,12 +187,12 @@ QWidget* MarketPulsePanel::build_fear_greed_section() {
     fg_score_val_ = new QLabel("--");
     fg_score_val_->setStyleSheet(
         QString("color: %1; font-size: 18px; font-weight: bold; background: transparent;")
-            .arg(ui::colors::TEXT_TERTIARY));
+            .arg(ui::colors::TEXT_TERTIARY()));
     srl->addWidget(fg_score_val_);
 
     fg_score_max_ = new QLabel("/100");
     fg_score_max_->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+        QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
     srl->addWidget(fg_score_max_);
 
     srl->addStretch();
@@ -200,7 +200,7 @@ QWidget* MarketPulsePanel::build_fear_greed_section() {
     fg_sentiment_ = new QLabel("LOADING...");
     fg_sentiment_->setStyleSheet(
         QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
-            .arg(ui::colors::TEXT_TERTIARY));
+            .arg(ui::colors::TEXT_TERTIARY()));
     srl->addWidget(fg_sentiment_);
 
     vl->addWidget(score_row);
@@ -215,7 +215,7 @@ QWidget* MarketPulsePanel::build_breadth_section() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    vl->addWidget(build_section_header("MARKET BREADTH", QChar(0x2593), ui::colors::CYAN));
+    vl->addWidget(build_section_header("MARKET BREADTH", QChar(0x2593), ui::colors::CYAN()));
 
     auto* bars = new QWidget;
     auto* bl = new QVBoxLayout(bars);
@@ -234,23 +234,23 @@ QWidget* MarketPulsePanel::build_breadth_section() {
 
         auto* nm = new QLabel(name);
         nm->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                              .arg(ui::colors::TEXT_SECONDARY));
+                              .arg(ui::colors::TEXT_SECONDARY()));
         tl->addWidget(nm);
         tl->addStretch();
 
         row.adv = new QLabel("--");
         row.adv->setStyleSheet(
-            QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::POSITIVE));
+            QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::POSITIVE()));
         tl->addWidget(row.adv);
 
         auto* slash = new QLabel("/");
         slash->setStyleSheet(
-            QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
         tl->addWidget(slash);
 
         row.dec = new QLabel("--");
         row.dec->setStyleSheet(
-            QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::NEGATIVE));
+            QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::NEGATIVE()));
         tl->addWidget(row.dec);
 
         rl->addWidget(top);
@@ -262,12 +262,12 @@ QWidget* MarketPulsePanel::build_breadth_section() {
         bar_layout->setSpacing(0);
 
         auto* green = new QFrame;
-        green->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::POSITIVE));
+        green->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::POSITIVE()));
         bar_layout->addWidget(green, 1);
         row.green = green;
 
         auto* red = new QFrame;
-        red->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::NEGATIVE));
+        red->setStyleSheet(QString("background: %1; border-radius: 0;").arg(ui::colors::NEGATIVE()));
         bar_layout->addWidget(red, 1);
         row.red = red;
 
@@ -287,7 +287,7 @@ QWidget* MarketPulsePanel::build_breadth_section() {
 
 QWidget* MarketPulsePanel::build_mover_row(const QString& symbol, double change, const QString& volume) {
     auto* w = new QWidget;
-    w->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM));
+    w->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(w);
     hl->setContentsMargins(12, 5, 12, 5);
@@ -295,25 +295,25 @@ QWidget* MarketPulsePanel::build_mover_row(const QString& symbol, double change,
 
     auto* sym = new QLabel(symbol);
     sym->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                           .arg(ui::colors::TEXT_PRIMARY));
+                           .arg(ui::colors::TEXT_PRIMARY()));
     hl->addWidget(sym);
     hl->addStretch();
 
     bool positive = change >= 0;
     auto* arrow = new QLabel(positive ? QChar(0x25B2) : QChar(0x25BC));
     arrow->setStyleSheet(QString("color: %1; font-size: 8px; background: transparent;")
-                             .arg(positive ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+                             .arg(positive ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
     hl->addWidget(arrow);
 
     auto* chg = new QLabel(QString("%1%2%").arg(positive ? "+" : "").arg(change, 0, 'f', 2));
     chg->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                           .arg(positive ? ui::colors::POSITIVE : ui::colors::NEGATIVE));
+                           .arg(positive ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
     hl->addWidget(chg);
 
     if (!volume.isEmpty()) {
         auto* vol = new QLabel(QString("VOL: %1").arg(volume));
         vol->setStyleSheet(
-            QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY));
+            QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
         hl->addWidget(vol);
     }
 
@@ -336,7 +336,7 @@ QWidget* MarketPulsePanel::build_gainers_section() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    vl->addWidget(build_section_header("TOP GAINERS", QChar(0x2191), ui::colors::POSITIVE));
+    vl->addWidget(build_section_header("TOP GAINERS", QChar(0x2191), ui::colors::POSITIVE()));
 
     auto* rows_w = new QWidget;
     gainers_layout_ = new QVBoxLayout(rows_w);
@@ -357,7 +357,7 @@ QWidget* MarketPulsePanel::build_losers_section() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    vl->addWidget(build_section_header("TOP LOSERS", QChar(0x2193), ui::colors::NEGATIVE));
+    vl->addWidget(build_section_header("TOP LOSERS", QChar(0x2193), ui::colors::NEGATIVE()));
 
     auto* rows_w = new QWidget;
     losers_layout_ = new QVBoxLayout(rows_w);
@@ -376,7 +376,7 @@ QWidget* MarketPulsePanel::build_losers_section() {
 QWidget* MarketPulsePanel::build_stat_row(const QString& label, const QString& value, const QString& change,
                                            const QString& color) {
     auto* w = new QWidget;
-    w->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM));
+    w->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(w);
     hl->setContentsMargins(12, 4, 12, 4);
@@ -384,7 +384,7 @@ QWidget* MarketPulsePanel::build_stat_row(const QString& label, const QString& v
     auto* lbl = new QLabel(label);
     lbl->setStyleSheet(
         QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.3px; background: transparent;")
-            .arg(ui::colors::TEXT_SECONDARY));
+            .arg(ui::colors::TEXT_SECONDARY()));
     hl->addWidget(lbl);
     hl->addStretch();
 
@@ -398,9 +398,9 @@ QWidget* MarketPulsePanel::build_stat_row(const QString& label, const QString& v
         auto* chg = new QLabel(change);
         chg->setStyleSheet(
             QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;")
-                .arg(positive                 ? ui::colors::POSITIVE
-                     : change.startsWith('-') ? ui::colors::NEGATIVE
-                                              : ui::colors::TEXT_TERTIARY));
+                .arg(positive                 ? ui::colors::POSITIVE()
+                     : change.startsWith('-') ? ui::colors::NEGATIVE()
+                                              : ui::colors::TEXT_TERTIARY()));
         hl->addWidget(chg);
     }
 
@@ -413,33 +413,33 @@ QWidget* MarketPulsePanel::build_global_snapshot_section() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    vl->addWidget(build_section_header("GLOBAL SNAPSHOT", QChar(0x25CB), ui::colors::INFO));
+    vl->addWidget(build_section_header("GLOBAL SNAPSHOT", QChar(0x25CB), ui::colors::INFO()));
 
     // Helper to add a live stat row and store the label pointers
     struct RowDef {
         const char* label;
         StatRow&    row;
-        const char* color;
+        QString     color;
     };
     RowDef defs[] = {
-        {"VIX",     vix_row_,  ui::colors::WARNING},
-        {"US 10Y",  us10y_row_,ui::colors::CYAN},
-        {"DXY",     dxy_row_,  ui::colors::CYAN},
-        {"GOLD",    gold_row_,  ui::colors::WARNING},
-        {"OIL WTI", oil_row_,  ui::colors::CYAN},
-        {"BTC",     btc_row_,  ui::colors::AMBER},
+        {"VIX",     vix_row_,  ui::colors::WARNING()},
+        {"US 10Y",  us10y_row_,ui::colors::CYAN()},
+        {"DXY",     dxy_row_,  ui::colors::CYAN()},
+        {"GOLD",    gold_row_,  ui::colors::WARNING()},
+        {"OIL WTI", oil_row_,  ui::colors::CYAN()},
+        {"BTC",     btc_row_,  ui::colors::AMBER()},
     };
 
     for (auto& d : defs) {
         auto* rw = new QWidget;
-        rw->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM));
+        rw->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
         auto* hl = new QHBoxLayout(rw);
         hl->setContentsMargins(12, 4, 12, 4);
 
         auto* lbl = new QLabel(d.label);
         lbl->setStyleSheet(
             QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.3px; background: transparent;")
-                .arg(ui::colors::TEXT_SECONDARY));
+                .arg(ui::colors::TEXT_SECONDARY()));
         hl->addWidget(lbl);
         hl->addStretch();
 
@@ -451,7 +451,7 @@ QWidget* MarketPulsePanel::build_global_snapshot_section() {
         d.row.chg = new QLabel("");
         d.row.chg->setStyleSheet(
             QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;")
-                .arg(ui::colors::TEXT_TERTIARY));
+                .arg(ui::colors::TEXT_TERTIARY()));
         hl->addWidget(d.row.chg);
 
         vl->addWidget(rw);
@@ -468,7 +468,7 @@ QWidget* MarketPulsePanel::build_market_hours_section() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    vl->addWidget(build_section_header("MARKET HOURS", QChar(0x26A1), ui::colors::WARNING));
+    vl->addWidget(build_section_header("MARKET HOURS", QChar(0x26A1), ui::colors::WARNING()));
 
     auto* content = new QWidget;
     auto* cl = new QVBoxLayout(content);
@@ -486,13 +486,13 @@ QWidget* MarketPulsePanel::build_market_hours_section() {
 
     for (auto& ex : exchanges) {
         auto* row = new QWidget;
-        row->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM));
+        row->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(0, 3, 0, 3);
 
         auto* name = new QLabel(ex.name);
         name->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                .arg(ui::colors::TEXT_SECONDARY));
+                                .arg(ui::colors::TEXT_SECONDARY()));
         rl->addWidget(name);
         rl->addStretch();
 
@@ -506,7 +506,7 @@ QWidget* MarketPulsePanel::build_market_hours_section() {
         hr.status = new QLabel;
         hr.status->setStyleSheet(
             QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;")
-                .arg(ui::colors::TEXT_TERTIARY));
+                .arg(ui::colors::TEXT_TERTIARY()));
         rl->addWidget(hr.status);
 
         hours_rows_.append(hr);
@@ -548,9 +548,9 @@ QString MarketPulsePanel::market_status(const QString& region) {
 void MarketPulsePanel::refresh_market_hours() {
     for (auto& hr : hours_rows_) {
         QString status = market_status(hr.region);
-        QString color  = (status == "OPEN")  ? ui::colors::POSITIVE
-                       : (status == "PRE")   ? ui::colors::WARNING
-                                             : ui::colors::NEGATIVE;
+        QString color  = (status == "OPEN")  ? ui::colors::POSITIVE()
+                       : (status == "PRE")   ? ui::colors::WARNING()
+                                             : ui::colors::NEGATIVE();
         hr.dot->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(color));
         hr.status->setText(status);
         hr.status->setStyleSheet(
@@ -647,19 +647,19 @@ void MarketPulsePanel::refresh_data() {
             QString sentiment_text, sentiment_color;
             if (score <= 20) {
                 sentiment_text  = "EXTREME FEAR";
-                sentiment_color = ui::colors::NEGATIVE;
+                sentiment_color = ui::colors::NEGATIVE();
             } else if (score <= 40) {
                 sentiment_text  = "FEAR";
                 sentiment_color = "#FF6644";
             } else if (score <= 60) {
                 sentiment_text  = "NEUTRAL";
-                sentiment_color = ui::colors::WARNING;
+                sentiment_color = ui::colors::WARNING();
             } else if (score <= 80) {
                 sentiment_text  = "GREED";
-                sentiment_color = ui::colors::POSITIVE;
+                sentiment_color = ui::colors::POSITIVE();
             } else {
                 sentiment_text  = "EXTREME GREED";
-                sentiment_color = ui::colors::POSITIVE;
+                sentiment_color = ui::colors::POSITIVE();
             }
 
             if (self->fg_score_val_) {
@@ -750,7 +750,7 @@ void MarketPulsePanel::refresh_data() {
                 row.val->setText(fmt_price(q));
                 QString chg_text = fmt_chg(q);
                 row.chg->setText(chg_text);
-                QString chg_color = q.change_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+                QString chg_color = q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
                 row.chg->setStyleSheet(
                     QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;")
                         .arg(chg_color));

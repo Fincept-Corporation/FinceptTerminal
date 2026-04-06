@@ -181,7 +181,7 @@ void HDXDataPanel::on_view_changed(int index) {
         view_buttons_[i]->setStyleSheet(QString("QPushButton { color:%1; font-size:9px; font-family:%2;"
                                                 "padding:4px 8px; border:none; background:%3; font-weight:%4; }"
                                                 "QPushButton:hover { color:#00E5FF; }")
-                                            .arg(active ? "#00E5FF" : ui::colors::TEXT_TERTIARY)
+                                            .arg(active ? "#00E5FF" : ui::colors::TEXT_TERTIARY())
                                             .arg(ui::fonts::DATA_FAMILY)
                                             .arg(active ? "rgba(0,229,255,0.1)" : "transparent")
                                             .arg(active ? "700" : "400"));

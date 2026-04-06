@@ -284,7 +284,11 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
         }
 
         // 7. Update balance
-        double balance_change = pnl - fee;
+        // Fee model: deduct fee only on closing fills (when realized PnL is produced).
+        // Entry fees are NOT deducted from balance at open — they are included in the
+        // exit fee when the position is closed. This matches how most exchanges present
+        // unrealized P&L (gross of entry fee) and only settle fees on close.
+        double balance_change = had_opposite ? (pnl - fee) : pnl;
         repo().update_balance(order.portfolio_id, portfolio.balance + balance_change);
 
         // 8. Update order

@@ -2,10 +2,7 @@
 #pragma once
 #include "services/ma_analytics/MAAnalyticsTypes.h"
 
-#include <QHash>
 #include <QObject>
-
-#include <functional>
 
 namespace fincept::services::ma {
 
@@ -100,13 +97,7 @@ class MAAnalyticsService : public QObject {
     void run_python_json(const QString& script, const QString& command, const QJsonObject& params,
                          const QString& context);
 
-    // ── Cache ───────────────────────────────────────────────────────────────
-    static constexpr qint64 kResultTtlSec = 120;
-    struct CachedResult {
-        QJsonObject data;
-        qint64 ts = 0;
-    };
-    QHash<QString, CachedResult> result_cache_;
+    static constexpr int kResultTtlSec = 120;
 };
 
 } // namespace fincept::services::ma

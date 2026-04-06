@@ -265,7 +265,7 @@ class PortfolioRebalancingWorkflow:
                 Step(name="analyze_portfolio", executor=analyze_step),
                 Condition(
                     needs_rebal,
-                    steps=[Step(name="rebalance_plan", executor=rebalance_step)],
+                    [Step(name="rebalance_plan", executor=rebalance_step)],
                     name="check_drift",
                 ),
                 Step(name="generate_orders", executor=orders_step),
@@ -358,7 +358,7 @@ class RiskAssessmentWorkflow:
             name="Risk Assessment",
             steps=[
                 Step(name="identify_risk_type", executor=identify_step),
-                Router(selector, choices=choices, name="risk_router"),
+                Router(selector, choices, name="risk_router"),
                 Step(name="generate_risk_report", executor=report_step),
             ]
         )
@@ -504,18 +504,18 @@ class WorkflowModule:
                 def _ev(si, _fn=fn):
                     ctx = _extract_content(si)
                     return bool(_fn(ctx if isinstance(ctx, dict) else {}))
-                out.append(Condition(_ev, steps=branches, name=cfg["name"]))
+                out.append(Condition(_ev, branches, name=cfg["name"]))
             elif t == "loop":
                 inner = self._convert(cfg.get("steps", []))
-                kw: Dict = {"name": cfg["name"], "steps": inner,
-                            "max_iterations": cfg.get("max_iterations", 10)}
                 raw = cfg.get("condition")
+                _ec = None
                 if raw:
                     def _ec(outputs, _r=raw):
                         ctx = {"last_result": getattr(outputs[-1], "content", None)} if outputs else {}
                         return not bool(_r(ctx))
-                    kw["end_condition"] = _ec
-                out.append(Loop(**kw))
+                out.append(Loop(inner, name=cfg["name"],
+                                max_iterations=cfg.get("max_iterations", 10),
+                                end_condition=_ec))
             elif t == "router":
                 routes = cfg.get("routes", {})
                 rfn   = cfg["router_function"]
@@ -526,7 +526,7 @@ class WorkflowModule:
                     key = _rfn(ctx if isinstance(ctx, dict) else {})
                     idx = _keys.index(key) if key in _keys else 0
                     return [_choices[idx]]
-                out.append(Router(_sel, choices=choices, name=cfg["name"]))
+                out.append(Router(_sel, choices, name=cfg["name"]))
         return out
 
     def _make_step(self, cfg):

@@ -3,8 +3,8 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 
-#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
@@ -47,6 +47,43 @@ void AIQuantLabService::run_python(const QString& script, const QStringList& arg
     });
 }
 
+void AIQuantLabService::run_python_cached(const QString& script, const QStringList& args, const QString& module_id,
+                                          const QString& command, int ttl_sec) {
+    const QString cache_key = "aiquant:" + module_id + ":" + command;
+    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    if (!cached.isNull()) {
+        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
+        if (!doc.isNull()) {
+            LOG_DEBUG("AIQuantLab", QString("[%1/%2] Cache hit").arg(module_id, command));
+            emit result_ready(module_id, command, doc.object());
+            return;
+        }
+    }
+
+    QPointer<AIQuantLabService> self = this;
+    python::PythonRunner::instance().run(script, args, [self, module_id, command, cache_key, ttl_sec](python::PythonResult result) {
+        if (!self) return;
+        if (!result.success) {
+            LOG_ERROR("AIQuantLab", QString("[%1/%2] Failed: %3").arg(module_id, command, result.error));
+            emit self->error_occurred(module_id, result.error);
+            return;
+        }
+        auto json_str = python::extract_json(result.output);
+        auto doc = QJsonDocument::fromJson(json_str.toUtf8());
+        if (doc.isNull()) {
+            LOG_ERROR("AIQuantLab", QString("[%1/%2] Invalid JSON").arg(module_id, command));
+            emit self->error_occurred(module_id, "Invalid JSON response");
+            return;
+        }
+        fincept::CacheManager::instance().put(
+            cache_key,
+            QVariant(QString::fromUtf8(QJsonDocument(doc.object()).toJson(QJsonDocument::Compact))),
+            ttl_sec, "ai_quant_lab");
+        LOG_INFO("AIQuantLab", QString("[%1/%2] Result ready").arg(module_id, command));
+        emit self->result_ready(module_id, command, doc.object());
+    });
+}
+
 // ── Generic module execution ─────────────────────────────────────────────────
 void AIQuantLabService::run_module(const QString& module_id, const QString& command, const QJsonObject& params) {
     auto it = script_map_.find(module_id);
@@ -60,11 +97,11 @@ void AIQuantLabService::run_module(const QString& module_id, const QString& comm
 
 // ── Qlib core ────────────────────────────────────────────────────────────────
 void AIQuantLabService::list_models() {
-    run_python("ai_quant_lab/qlib_service.py", {"list_models"}, "model_library", "list_models");
+    run_python_cached("ai_quant_lab/qlib_service.py", {"list_models"}, "model_library", "list_models", kListTtlSec);
 }
 
 void AIQuantLabService::get_factor_library() {
-    run_python("ai_quant_lab/qlib_service.py", {"get_factor_library"}, "factor_discovery", "get_factor_library");
+    run_python_cached("ai_quant_lab/qlib_service.py", {"get_factor_library"}, "factor_discovery", "get_factor_library", kListTtlSec);
 }
 
 void AIQuantLabService::train_model(const QJsonObject& params) {
@@ -156,7 +193,7 @@ void AIQuantLabService::cfa_data_quality(const QJsonObject& params) {
 
 // ── Advanced Models ──────────────────────────────────────────────────────────
 void AIQuantLabService::list_advanced_models() {
-    run_python("ai_quant_lab/qlib_advanced_models.py", {"list_models"}, "advanced_models", "list_models");
+    run_python_cached("ai_quant_lab/qlib_advanced_models.py", {"list_models"}, "advanced_models", "list_models", kListTtlSec);
 }
 
 void AIQuantLabService::create_advanced_model(const QJsonObject& params) {
@@ -169,7 +206,7 @@ void AIQuantLabService::train_advanced_model(const QJsonObject& params) {
 
 // ── Factor Discovery ─────────────────────────────────────────────────────────
 void AIQuantLabService::factor_get_library() {
-    run_python("ai_quant_lab/qlib_service.py", {"get_factor_library"}, "factor_discovery", "get_factor_library");
+    run_python_cached("ai_quant_lab/qlib_service.py", {"get_factor_library"}, "factor_discovery", "get_factor_library", kListTtlSec);
 }
 void AIQuantLabService::factor_get_data(const QJsonObject& params) {
     run_module("factor_discovery", "get_data", params);
@@ -178,12 +215,12 @@ void AIQuantLabService::factor_get_calendar(const QJsonObject& params) {
     run_module("factor_discovery", "get_calendar", params);
 }
 void AIQuantLabService::factor_get_instruments() {
-    run_python("ai_quant_lab/qlib_service.py", {"get_instruments"}, "factor_discovery", "get_instruments");
+    run_python_cached("ai_quant_lab/qlib_service.py", {"get_instruments"}, "factor_discovery", "get_instruments", kListTtlSec);
 }
 
 // ── Model Library ─────────────────────────────────────────────────────────────
 void AIQuantLabService::model_list() {
-    run_python("ai_quant_lab/qlib_service.py", {"list_models"}, "model_library", "list_models");
+    run_python_cached("ai_quant_lab/qlib_service.py", {"list_models"}, "model_library", "list_models", kListTtlSec);
 }
 void AIQuantLabService::model_train(const QJsonObject& params) {
     run_module("model_library", "train_model", params);
@@ -192,7 +229,7 @@ void AIQuantLabService::model_backtest(const QJsonObject& params) {
     run_module("model_library", "run_backtest", params);
 }
 void AIQuantLabService::model_check_status() {
-    run_python("ai_quant_lab/qlib_service.py", {"check_status"}, "model_library", "check_status");
+    run_python_cached("ai_quant_lab/qlib_service.py", {"check_status"}, "model_library", "check_status", kListTtlSec);
 }
 
 // ── Live Signals ──────────────────────────────────────────────────────────────
@@ -225,7 +262,7 @@ void AIQuantLabService::hft_execute_order(const QJsonObject& params) {
 
 // ── Meta Learning ────────────────────────────────────────────────────────────
 void AIQuantLabService::meta_list_models() {
-    run_python("ai_quant_lab/qlib_meta_learning.py", {"list_models"}, "meta_learning", "list_models");
+    run_python_cached("ai_quant_lab/qlib_meta_learning.py", {"list_models"}, "meta_learning", "list_models", kListTtlSec);
 }
 void AIQuantLabService::meta_run_selection(const QJsonObject& params) {
     run_module("meta_learning", "run_selection", params);
@@ -237,12 +274,12 @@ void AIQuantLabService::meta_tune_hyperparameters(const QJsonObject& params) {
     run_module("meta_learning", "tune_hyperparameters", params);
 }
 void AIQuantLabService::meta_get_results() {
-    run_python("ai_quant_lab/qlib_meta_learning.py", {"get_results"}, "meta_learning", "get_results");
+    run_python_cached("ai_quant_lab/qlib_meta_learning.py", {"get_results"}, "meta_learning", "get_results", kListTtlSec);
 }
 
 // ── Online Learning ──────────────────────────────────────────────────────────
 void AIQuantLabService::online_list_models() {
-    run_python("ai_quant_lab/qlib_online_learning.py", {"list_models"}, "online_learning", "list_models");
+    run_python_cached("ai_quant_lab/qlib_online_learning.py", {"list_models"}, "online_learning", "list_models", kListTtlSec);
 }
 void AIQuantLabService::online_create_model(const QJsonObject& params) {
     run_module("online_learning", "create_model", params);
@@ -265,7 +302,7 @@ void AIQuantLabService::rolling_execute_retrain(const QJsonObject& params) {
     run_module("rolling_retraining", "retrain", params);
 }
 void AIQuantLabService::rolling_list_schedules() {
-    run_python("ai_quant_lab/qlib_rolling_retraining.py", {"list"}, "rolling_retraining", "list");
+    run_python_cached("ai_quant_lab/qlib_rolling_retraining.py", {"list"}, "rolling_retraining", "list", kListTtlSec);
 }
 
 // ── Deep Agent (LangGraph multi-agent) ───────────────────────────────────────
@@ -392,12 +429,16 @@ void AIQuantLabService::strategy_portfolio_metrics(const QJsonObject& params) {
 }
 
 void AIQuantLabService::strategy_list() {
-    run_module("strategy_builder", "list_strategies", {});
+    auto it = script_map_.find("strategy_builder");
+    if (it == script_map_.end()) { emit error_occurred("strategy_builder", "Unknown module"); return; }
+    run_python_cached(*it, {"list_strategies", "{}"}, "strategy_builder", "list_strategies", kListTtlSec);
 }
 
 // ── Data Processors ───────────────────────────────────────────────────────────
 void AIQuantLabService::dataproc_list_processors() {
-    run_module("data_processors", "list_processors", {});
+    auto it = script_map_.find("data_processors");
+    if (it == script_map_.end()) { emit error_occurred("data_processors", "Unknown module"); return; }
+    run_python_cached(*it, {"list_processors", "{}"}, "data_processors", "list_processors", kListTtlSec);
 }
 
 void AIQuantLabService::dataproc_create_pipeline(const QJsonObject& params) {

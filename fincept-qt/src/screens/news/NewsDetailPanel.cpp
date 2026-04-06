@@ -388,7 +388,7 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     // Source with credibility flag
     if (article.source_flag != services::SourceFlag::NONE) {
         QString flag_text = services::NewsService::source_flag_label(article.source_flag);
-        QString flag_color = article.source_flag == services::SourceFlag::STATE_MEDIA ? "#f97316" : ui::colors::WARNING;
+        QString flag_color = article.source_flag == services::SourceFlag::STATE_MEDIA ? "#f97316" : ui::colors::WARNING();
         source_label_->setText(article.source.toUpper() + "  [" + flag_text + "]");
         source_label_->setStyleSheet(
             QString("color: %1; font-size: 12px; font-weight: 700; background: transparent;").arg(flag_color));

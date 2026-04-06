@@ -5,16 +5,18 @@
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 #include "storage/repositories/LlmConfigRepository.h"
 
 #include <QCoreApplication>
-#include <QDateTime>
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
 #include <QProcess>
 #include <QUuid>
+
+#include <memory>
 
 namespace fincept::services {
 
@@ -29,27 +31,33 @@ AgentService::AgentService(QObject* parent) : QObject(parent) {}
 
 // ── Cache helpers ────────────────────────────────────────────────────────────
 
-bool AgentService::is_cache_fresh(qint64 fetched_at, int ttl_ms) const {
-    return fetched_at > 0 && (QDateTime::currentMSecsSinceEpoch() - fetched_at) < ttl_ms;
-}
-
 void AgentService::clear_cache() {
-    QMutexLocker lock(&cache_mutex_);
-    agents_cache_ = {};
-    tools_cache_ = {};
-    models_cache_ = {};
-    sysinfo_cache_ = {};
+    fincept::CacheManager::instance().clear_category("agents");
     LOG_INFO("AgentService", "Cache cleared");
 }
 
 QVector<AgentInfo> AgentService::cached_agents() const {
-    QMutexLocker lock(&cache_mutex_);
-    return agents_cache_.data;
+    const QVariant cv = fincept::CacheManager::instance().get("agents:list");
+    if (cv.isNull()) return {};
+    const QJsonObject root = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
+    QVector<AgentInfo> agents;
+    for (const auto& v : root["agents"].toArray()) {
+        const QJsonObject o = v.toObject();
+        AgentInfo info;
+        info.id = o["id"].toString(); info.name = o["name"].toString();
+        info.description = o["description"].toString(); info.category = o["category"].toString();
+        info.provider = o["provider"].toString(); info.version = o["version"].toString();
+        info.config = o["config"].toObject();
+        for (const auto& c : o["capabilities"].toArray()) info.capabilities.append(c.toString());
+        agents.append(info);
+    }
+    return agents;
 }
 
 int AgentService::cached_agent_count() const {
-    QMutexLocker lock(&cache_mutex_);
-    return agents_cache_.data.size();
+    const QVariant cv = fincept::CacheManager::instance().get("agents:list");
+    if (cv.isNull()) return 0;
+    return QJsonDocument::fromJson(cv.toString().toUtf8()).object()["agents"].toArray().size();
 }
 
 // ── API key builder ──────────────────────────────────────────────────────────
@@ -82,6 +90,21 @@ QJsonObject AgentService::build_api_keys() const {
             const QString env_name = kEnvVarNames.value(lower);
             if (!env_name.isEmpty())
                 keys[env_name] = p.api_key;                   // env-var form Python expects
+            // Provider aliases: send canonical form so Python ModelsRegistry resolves correctly
+            // e.g. "gemini" -> also set "google" so key lookup works after alias normalisation
+            static const QMap<QString, QString> kProviderAliases = {
+                {"gemini", "google"},
+                {"claude", "anthropic"},
+            };
+            const QString alias = kProviderAliases.value(lower);
+            if (!alias.isEmpty())
+                keys[alias] = p.api_key;
+            // Also ship base_url so super_agent/_llm_classify can use the right
+            // endpoint (e.g. MiniMax OpenAI-compat behind "anthropic" provider).
+            if (!p.base_url.isEmpty()) {
+                keys[lower + "_base_url"]                    = p.base_url;
+                keys[lower.toUpper() + "_BASE_URL"]          = p.base_url;
+            }
         }
     }
 
@@ -183,13 +206,12 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
     // Spawn QProcess directly for stdin writing (P4 exception like ExchangeService)
     auto* proc = new QProcess(this);
     QPointer<AgentService> self = this;
-    QElapsedTimer* timer = new QElapsedTimer;
+    auto timer = std::make_shared<QElapsedTimer>();
     timer->start();
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
             [self, proc, action, on_result, timer](int exit_code, QProcess::ExitStatus) {
                 int elapsed = timer->elapsed();
-                delete timer;
 
                 QString stdout_str = QString::fromUtf8(proc->readAllStandardOutput());
                 QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
@@ -223,7 +245,6 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
             });
 
     connect(proc, &QProcess::errorOccurred, this, [self, proc, action, on_result, timer](QProcess::ProcessError) {
-        delete timer;
         QString err = proc->errorString();
         proc->deleteLater();
         if (!self)
@@ -242,10 +263,31 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
 
 void AgentService::discover_agents() {
     {
-        QMutexLocker lock(&cache_mutex_);
-        if (is_cache_fresh(agents_cache_.fetched_at, kAgentCacheTtlMs)) {
+        const QVariant cv = fincept::CacheManager::instance().get("agents:list");
+        if (!cv.isNull()) {
             LOG_DEBUG("AgentService", "agents: serving from cache");
-            emit agents_discovered(agents_cache_.data, agents_cache_.categories);
+            const QJsonObject root = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
+            QVector<AgentInfo> agents;
+            for (const auto& v : root["agents"].toArray()) {
+                const QJsonObject o = v.toObject();
+                AgentInfo info;
+                info.id = o["id"].toString();
+                info.name = o["name"].toString();
+                info.description = o["description"].toString();
+                info.category = o["category"].toString();
+                info.provider = o["provider"].toString();
+                info.version = o["version"].toString();
+                info.config = o["config"].toObject();
+                for (const auto& c : o["capabilities"].toArray())
+                    info.capabilities.append(c.toString());
+                agents.append(info);
+            }
+            QVector<AgentCategory> categories;
+            for (const auto& v : root["categories"].toArray()) {
+                const QJsonObject o = v.toObject();
+                categories.append({o["name"].toString(), o["count"].toInt()});
+            }
+            emit agents_discovered(agents, categories);
             return;
         }
     }
@@ -326,12 +368,35 @@ void AgentService::discover_agents() {
             categories.append({it.key(), it.value()});
         }
 
-        {
-            QMutexLocker lock(&self->cache_mutex_);
-            self->agents_cache_.data = agents;
-            self->agents_cache_.categories = categories;
-            self->agents_cache_.fetched_at = QDateTime::currentMSecsSinceEpoch();
+        QJsonArray agents_arr;
+        for (const auto& a : agents) {
+            QJsonObject o;
+            o["id"]          = a.id;
+            o["name"]        = a.name;
+            o["description"] = a.description;
+            o["category"]    = a.category;
+            o["provider"]    = a.provider;
+            o["version"]     = a.version;
+            o["config"]      = a.config;
+            QJsonArray caps;
+            for (const auto& c : a.capabilities) caps.append(c);
+            o["capabilities"] = caps;
+            agents_arr.append(o);
         }
+        QJsonArray cats_arr;
+        for (const auto& c : categories) {
+            QJsonObject o;
+            o["name"]  = c.name;
+            o["count"] = c.count;
+            cats_arr.append(o);
+        }
+        QJsonObject root;
+        root["agents"]     = agents_arr;
+        root["categories"] = cats_arr;
+        fincept::CacheManager::instance().put(
+            "agents:list",
+            QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))),
+            kAgentCacheTtlSec, "agents");
 
         LOG_INFO("AgentService",
                  QString("Discovered %1 agents in %2 categories").arg(agents.size()).arg(categories.size()));
@@ -402,62 +467,84 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
 
     auto* proc = new QProcess(this);
     QPointer<AgentService> self = this;
-    QElapsedTimer* timer = new QElapsedTimer;
+    auto timer       = std::make_shared<QElapsedTimer>();
+    auto accumulated = std::make_shared<QString>();
+    auto final_json_line = std::make_shared<QString>();
+    auto done_emitted    = std::make_shared<bool>(false);
     timer->start();
 
-    // Accumulate full response from TOKEN chunks
-    QString* accumulated = new QString;
-
     // Read stdout line by line as process writes
-    connect(proc, &QProcess::readyReadStandardOutput, this, [self, proc, accumulated, req_id]() {
+    connect(proc, &QProcess::readyReadStandardOutput, this, [self, proc, accumulated, final_json_line, done_emitted, req_id]() {
         if (!self) return;
         while (proc->canReadLine()) {
             QString line = QString::fromUtf8(proc->readLine()).trimmed();
             if (line.isEmpty()) continue;
 
-            if (line.startsWith("TOKEN: ")) {
-                QString token = line.mid(7);
-                *accumulated += token + " ";
+            // Python emits "TOKEN: {content}" (stream_print adds a space after colon)
+            auto extract = [](const QString& s, const QString& prefix) -> QString {
+                QString rest = s.mid(prefix.length());
+                // Strip one leading space if present
+                if (rest.startsWith(' ')) rest = rest.mid(1);
+                // Unescape \n -> newline
+                rest.replace("\\n", "\n").replace("\\\\", "\\");
+                return rest;
+            };
+
+            if (line.startsWith('{')) {
+                // Final JSON result line — capture it for the finished handler
+                *final_json_line = line;
+            } else if (line.startsWith("TOKEN:")) {
+                QString token = extract(line, "TOKEN:");
+                *accumulated += token;
                 emit self->agent_stream_token(req_id, token);
-            } else if (line.startsWith("THINKING: ")) {
-                emit self->agent_stream_thinking(req_id, line.mid(10));
-            } else if (line.startsWith("TOOL: ")) {
-                emit self->agent_stream_thinking(req_id, "Tool: " + line.mid(6));
-            } else if (line.startsWith("ERROR: ")) {
-                AgentExecutionResult r;
-                r.request_id = req_id;
-                r.success = false;
-                r.error = line.mid(7);
-                emit self->agent_stream_done(r);
+            } else if (line.startsWith("THINKING:")) {
+                emit self->agent_stream_thinking(req_id, extract(line, "THINKING:"));
+            } else if (line.startsWith("TOOL:")) {
+                emit self->agent_stream_thinking(req_id, "Tool: " + extract(line, "TOOL:"));
+            } else if (line.startsWith("TOOL_RESULT:")) {
+                emit self->agent_stream_thinking(req_id, "Result: " + extract(line, "TOOL_RESULT:"));
+            } else if (line.startsWith("DONE:")) {
+                // DONE carries the full cleaned response — use it if accumulated is empty
+                QString done_content = extract(line, "DONE:");
+                if (accumulated->trimmed().isEmpty() && !done_content.isEmpty())
+                    *accumulated = done_content;
+            } else if (line.startsWith("ERROR:")) {
+                if (!*done_emitted) {
+                    *done_emitted = true;
+                    AgentExecutionResult r;
+                    r.request_id = req_id;
+                    r.success = false;
+                    r.error = extract(line, "ERROR:");
+                    emit self->agent_stream_done(r);
+                }
             }
-            // DONE line and final JSON are handled in finished signal
         }
     });
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [self, proc, accumulated, timer, req_id](int exit_code, QProcess::ExitStatus) {
+            [self, proc, accumulated, final_json_line, done_emitted, timer, req_id](int exit_code, QProcess::ExitStatus) {
                 int elapsed = timer->elapsed();
-                delete timer;
 
-                // Drain any remaining stdout (final JSON result line)
+                // Drain any remaining stdout
                 QString remaining = QString::fromUtf8(proc->readAllStandardOutput());
                 QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
                 proc->deleteLater();
 
-                if (!self) { delete accumulated; return; }
+                if (!self || *done_emitted)
+                    return;
+                *done_emitted = true;
 
-                // Find the final JSON line (last non-empty line)
-                QString final_json;
+                // Scan remaining stdout for final JSON line (may not have been read yet)
                 for (const QString& line : remaining.split('\n')) {
                     QString t = line.trimmed();
-                    if (t.startsWith('{')) final_json = t;
+                    if (t.startsWith('{')) *final_json_line = t;
                 }
 
                 AgentExecutionResult r;
                 r.request_id = req_id;
                 r.execution_time_ms = elapsed;
 
-                QJsonDocument doc = QJsonDocument::fromJson(final_json.toUtf8());
+                QJsonDocument doc = QJsonDocument::fromJson(final_json_line->toUtf8());
                 if (!doc.isNull() && doc.object()["success"].toBool()) {
                     QString json_response = doc.object()["response"].toString();
                     r.success = true;
@@ -470,17 +557,15 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
                     r.error = exit_code != 0 ? stderr_str.left(500) : "No response received";
                 }
 
-                delete accumulated;
                 LOG_INFO("AgentService", QString("Streaming completed in %1ms").arg(elapsed));
                 emit self->agent_stream_done(r);
             });
 
-    connect(proc, &QProcess::errorOccurred, this, [self, proc, accumulated, timer, req_id](QProcess::ProcessError) {
-        delete timer;
+    connect(proc, &QProcess::errorOccurred, this, [self, proc, accumulated, final_json_line, done_emitted, timer, req_id](QProcess::ProcessError) {
         QString err = proc->errorString();
         proc->deleteLater();
-        delete accumulated;
-        if (!self) return;
+        if (!self || *done_emitted) return;
+        *done_emitted = true;
         AgentExecutionResult r;
         r.request_id = req_id;
         r.success = false;
@@ -528,32 +613,138 @@ QString AgentService::route_query(const QString& query) {
 // ── Team execution ───────────────────────────────────────────────────────────
 
 QString AgentService::run_team(const QString& query, const QJsonObject& team_config) {
-    LOG_INFO("AgentService", QString("Running team query: %1").arg(query.left(80)));
+    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    LOG_INFO("AgentService", QString("Running team query [%1]: %2").arg(req_id.left(8), query.left(80)));
+
+    auto& py = python::PythonRunner::instance();
+    if (!py.is_available()) {
+        AgentExecutionResult r;
+        r.request_id = req_id;
+        r.success = false;
+        r.error = "Python not available";
+        emit agent_stream_done(r);
+        return req_id;
+    }
 
     QJsonObject params;
     params["query"] = query;
     params["team_config"] = team_config;
 
-    // Pass coordinator model as config so build_payload promotes it to active_llm.
-    // This ensures Python receives the resolved coordinator profile credentials.
-    QJsonObject coord_as_config;
+    // Promote coordinator model to active_llm so Python resolves it correctly
+    QJsonObject coord_config;
     if (team_config.contains("model"))
-        coord_as_config["model"] = team_config["model"];
+        coord_config["model"] = team_config["model"];
 
-    const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QJsonObject payload = build_payload("run_team", params, coord_config);
+    QByteArray payload_bytes = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+
+    QString python_path = py.python_path();
+    QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
+
+    auto* proc = new QProcess(this);
     QPointer<AgentService> self = this;
-    run_python_stdin("run_team", params, coord_as_config, [self, req_id](bool ok, QJsonObject result) {
-        if (!self)
-            return;
+    auto timer        = std::make_shared<QElapsedTimer>();
+    auto accumulated  = std::make_shared<QString>();
+    auto final_json   = std::make_shared<QString>();
+    auto done_emitted = std::make_shared<bool>(false);
+    timer->start();
+
+    connect(proc, &QProcess::readyReadStandardOutput, this,
+            [self, proc, accumulated, final_json, done_emitted, req_id]() {
+        if (!self) return;
+        while (proc->canReadLine()) {
+            QString line = QString::fromUtf8(proc->readLine()).trimmed();
+            if (line.isEmpty()) continue;
+
+            auto extract = [](const QString& s, const QString& prefix) -> QString {
+                QString rest = s.mid(prefix.length());
+                if (rest.startsWith(' ')) rest = rest.mid(1);
+                rest.replace("\\n", "\n").replace("\\\\", "\\");
+                return rest;
+            };
+
+            if (line.startsWith('{')) {
+                *final_json = line;
+            } else if (line.startsWith("TOKEN:")) {
+                QString token = extract(line, "TOKEN:");
+                *accumulated += token;
+                emit self->agent_stream_token(req_id, token);
+            } else if (line.startsWith("THINKING:")) {
+                emit self->agent_stream_thinking(req_id, extract(line, "THINKING:"));
+            } else if (line.startsWith("TOOL:")) {
+                emit self->agent_stream_thinking(req_id, "Tool: " + extract(line, "TOOL:"));
+            } else if (line.startsWith("DONE:")) {
+                QString done_content = extract(line, "DONE:");
+                if (accumulated->trimmed().isEmpty() && !done_content.isEmpty())
+                    *accumulated = done_content;
+            } else if (line.startsWith("ERROR:")) {
+                if (!*done_emitted) {
+                    *done_emitted = true;
+                    AgentExecutionResult r;
+                    r.request_id = req_id;
+                    r.success = false;
+                    r.error = extract(line, "ERROR:");
+                    emit self->agent_stream_done(r);
+                }
+            }
+        }
+    });
+
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+            [self, proc, accumulated, final_json, done_emitted, timer, req_id](int exit_code, QProcess::ExitStatus) {
+        int elapsed = timer->elapsed();
+        QString remaining = QString::fromUtf8(proc->readAllStandardOutput());
+        QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
+        proc->deleteLater();
+
+        if (!self || *done_emitted) return;
+        *done_emitted = true;
+
+        for (const QString& line : remaining.split('\n')) {
+            QString t = line.trimmed();
+            if (t.startsWith('{')) *final_json = t;
+        }
+
         AgentExecutionResult r;
         r.request_id = req_id;
-        r.success = ok && result["success"].toBool(ok);
-        r.execution_time_ms = result["execution_time_ms"].toInt();
-        r.response = result.contains("response") ? result["response"].toString()
-                                                 : QJsonDocument(result).toJson(QJsonDocument::Indented);
-        r.error = result["error"].toString();
-        emit self->agent_result(r);
+        r.execution_time_ms = elapsed;
+
+        QJsonDocument doc = QJsonDocument::fromJson(final_json->toUtf8());
+        if (!doc.isNull() && doc.object()["success"].toBool()) {
+            QString json_response = doc.object()["response"].toString();
+            r.success = true;
+            r.response = json_response.isEmpty() ? accumulated->trimmed() : json_response;
+        } else if (!accumulated->trimmed().isEmpty()) {
+            r.success = true;
+            r.response = accumulated->trimmed();
+        } else {
+            r.success = false;
+            r.error = exit_code != 0 ? stderr_str.left(500) : "No response from team";
+        }
+
+        LOG_INFO("AgentService", QString("Team completed in %1ms").arg(elapsed));
+        emit self->agent_stream_done(r);
     });
+
+    connect(proc, &QProcess::errorOccurred, this,
+            [self, proc, done_emitted, timer, req_id](QProcess::ProcessError) {
+        QString err = proc->errorString();
+        proc->deleteLater();
+        if (!self || *done_emitted) return;
+        *done_emitted = true;
+        AgentExecutionResult r;
+        r.request_id = req_id;
+        r.success = false;
+        r.error = "Process error: " + err;
+        emit self->agent_stream_done(r);
+    });
+
+    LOG_INFO("AgentService", QString("Starting team stream (%1 bytes payload, %2 members)")
+                 .arg(payload_bytes.size())
+                 .arg(team_config["members"].toArray().size()));
+    proc->start(python_path, {script_path, "--stdin", "--stream"});
+    proc->write(payload_bytes);
+    proc->closeWriteChannel();
     return req_id;
 }
 
@@ -603,15 +794,18 @@ QString AgentService::create_plan(const QString& query, const QJsonObject& confi
             return;
         }
 
+        // Python returns {"success": true, "plan": {...}} — unwrap the nested plan object
+        const QJsonObject planObj = result.contains("plan") ? result["plan"].toObject() : result;
+
         ExecutionPlan plan;
         plan.request_id = req_id;
-        plan.id = result["id"].toString();
-        plan.name = result["name"].toString();
-        plan.description = result["description"].toString();
-        plan.status = result["status"].toString("pending");
-        plan.is_complete = result["is_complete"].toBool();
+        plan.id = planObj["id"].toString();
+        plan.name = planObj["name"].toString();
+        plan.description = planObj["description"].toString();
+        plan.status = planObj["status"].toString("pending");
+        plan.is_complete = planObj["is_complete"].toBool();
 
-        QJsonArray steps = result["steps"].toArray();
+        QJsonArray steps = planObj["steps"].toArray();
         for (const auto& sv : steps) {
             QJsonObject so = sv.toObject();
             PlanStep step;
@@ -678,36 +872,36 @@ QString AgentService::execute_plan(const QJsonObject& plan, const QJsonObject& c
 
 void AgentService::get_system_info() {
     {
-        QMutexLocker lock(&cache_mutex_);
-        if (is_cache_fresh(sysinfo_cache_.fetched_at, kSysInfoCacheTtlMs)) {
-            emit system_info_loaded(sysinfo_cache_.data);
+        const QVariant cv = fincept::CacheManager::instance().get("agents:sysinfo");
+        if (!cv.isNull()) {
+            const QJsonObject r = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
+            AgentSystemInfo info;
+            info.version      = r["version"].toString();
+            info.framework    = r["framework"].toString();
+            info.capabilities = r["capabilities"].toObject();
+            for (const auto& f : r["features"].toArray())
+                info.features.append(f.toString());
+            emit system_info_loaded(info);
             return;
         }
     }
 
     QPointer<AgentService> self = this;
     run_python_light("system_info", {}, [self](bool ok, QJsonObject result) {
-        if (!self)
-            return;
-        if (!ok) {
-            emit self->error_occurred("system_info", result["error"].toString());
-            return;
-        }
+        if (!self) return;
+        if (!ok) { emit self->error_occurred("system_info", result["error"].toString()); return; }
 
         AgentSystemInfo info;
-        info.version = result["version"].toString();
-        info.framework = result["framework"].toString();
+        info.version      = result["version"].toString();
+        info.framework    = result["framework"].toString();
         info.capabilities = result["capabilities"].toObject();
-
-        QJsonArray feats = result["features"].toArray();
-        for (const auto& f : feats)
+        for (const auto& f : result["features"].toArray())
             info.features.append(f.toString());
 
-        {
-            QMutexLocker lock(&self->cache_mutex_);
-            self->sysinfo_cache_.data = info;
-            self->sysinfo_cache_.fetched_at = QDateTime::currentMSecsSinceEpoch();
-        }
+        fincept::CacheManager::instance().put(
+            "agents:sysinfo",
+            QVariant(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))),
+            kSysInfoCacheTtlSec, "agents");
 
         emit self->system_info_loaded(info);
     });
@@ -715,34 +909,34 @@ void AgentService::get_system_info() {
 
 void AgentService::list_tools() {
     {
-        QMutexLocker lock(&cache_mutex_);
-        if (is_cache_fresh(tools_cache_.fetched_at, kToolsCacheTtlMs)) {
-            emit tools_loaded(tools_cache_.data);
+        const QVariant cv = fincept::CacheManager::instance().get("agents:tools");
+        if (!cv.isNull()) {
+            const QJsonObject r = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
+            AgentToolsInfo info;
+            info.tools       = r["tools"].toObject();
+            info.total_count = r["total_count"].toInt();
+            for (const auto& c : r["categories"].toArray())
+                info.categories.append(c.toString());
+            emit tools_loaded(info);
             return;
         }
     }
 
     QPointer<AgentService> self = this;
     run_python_light("list_tools", {}, [self](bool ok, QJsonObject result) {
-        if (!self)
-            return;
-        if (!ok) {
-            emit self->error_occurred("list_tools", result["error"].toString());
-            return;
-        }
+        if (!self) return;
+        if (!ok) { emit self->error_occurred("list_tools", result["error"].toString()); return; }
 
         AgentToolsInfo info;
-        info.tools = result["tools"].toObject();
-        QJsonArray cats = result["categories"].toArray();
-        for (const auto& c : cats)
-            info.categories.append(c.toString());
+        info.tools       = result["tools"].toObject();
         info.total_count = result["total_count"].toInt();
+        for (const auto& c : result["categories"].toArray())
+            info.categories.append(c.toString());
 
-        {
-            QMutexLocker lock(&self->cache_mutex_);
-            self->tools_cache_.data = info;
-            self->tools_cache_.fetched_at = QDateTime::currentMSecsSinceEpoch();
-        }
+        fincept::CacheManager::instance().put(
+            "agents:tools",
+            QVariant(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))),
+            kToolsCacheTtlSec, "agents");
 
         emit self->tools_loaded(info);
     });
@@ -750,50 +944,38 @@ void AgentService::list_tools() {
 
 void AgentService::list_models() {
     {
-        QMutexLocker lock(&cache_mutex_);
-        if (is_cache_fresh(models_cache_.fetched_at, kModelsCacheTtlMs)) {
-            emit models_loaded(models_cache_.data);
+        const QVariant cv = fincept::CacheManager::instance().get("agents:models");
+        if (!cv.isNull()) {
+            const QJsonObject r = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
+            AgentModelsInfo info;
+            info.count = r["count"].toInt();
+            for (const auto& p : r["providers"].toArray())
+                info.providers.append(p.toString());
+            emit models_loaded(info);
             return;
         }
     }
 
     QPointer<AgentService> self = this;
     run_python_light("list_models", {}, [self](bool ok, QJsonObject result) {
-        if (!self)
-            return;
-        if (!ok) {
-            emit self->error_occurred("list_models", result["error"].toString());
-            return;
-        }
+        if (!self) return;
+        if (!ok) { emit self->error_occurred("list_models", result["error"].toString()); return; }
 
         AgentModelsInfo info;
-        QJsonArray provs = result["providers"].toArray();
-        for (const auto& p : provs)
-            info.providers.append(p.toString());
         info.count = result["count"].toInt();
+        for (const auto& p : result["providers"].toArray())
+            info.providers.append(p.toString());
 
-        {
-            QMutexLocker lock(&self->cache_mutex_);
-            self->models_cache_.data = info;
-            self->models_cache_.fetched_at = QDateTime::currentMSecsSinceEpoch();
-        }
+        fincept::CacheManager::instance().put(
+            "agents:models",
+            QVariant(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))),
+            kModelsCacheTtlSec, "agents");
 
         emit self->models_loaded(info);
     });
 }
 
 // ── Config CRUD ──────────────────────────────────────────────────────────────
-
-void AgentService::load_configs(const QString& category) {
-    auto& repo = AgentConfigRepository::instance();
-    auto result = category.isEmpty() ? repo.list_all() : repo.list_by_category(category);
-
-    if (result.is_ok()) {
-        emit configs_loaded(result.value());
-    } else {
-        emit error_occurred("load_configs", QString::fromStdString(result.error()));
-    }
-}
 
 void AgentService::save_config(const AgentConfig& config) {
     auto result = AgentConfigRepository::instance().save(config);
@@ -1262,48 +1444,29 @@ QString AgentService::make_cache_key(const QString& action, const QJsonObject& p
 }
 
 bool AgentService::get_cached_response(const QString& key, QJsonObject& out) const {
-    QMutexLocker lock(&cache_mutex_);
-    auto it = response_cache_.find(key);
-    if (it == response_cache_.end())
+    const QVariant cv = fincept::CacheManager::instance().get("agents:resp:" + key);
+    if (cv.isNull())
         return false;
-    if (!is_cache_fresh(it->fetched_at, kResponseCacheTtlMs))
-        return false;
-    out = it->data;
+    out = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
     return true;
 }
 
 void AgentService::set_cached_response(const QString& key, const QJsonObject& data) {
-    QMutexLocker lock(&cache_mutex_);
-    // Evict oldest if at capacity
-    if (response_cache_.size() >= kResponseCacheMaxSize) {
-        qint64 oldest_time = std::numeric_limits<qint64>::max();
-        QString oldest_key;
-        for (auto it = response_cache_.begin(); it != response_cache_.end(); ++it) {
-            if (it->fetched_at < oldest_time) {
-                oldest_time = it->fetched_at;
-                oldest_key = it.key();
-            }
-        }
-        if (!oldest_key.isEmpty())
-            response_cache_.remove(oldest_key);
-    }
-    response_cache_[key] = {data, QDateTime::currentMSecsSinceEpoch()};
+    fincept::CacheManager::instance().put(
+        "agents:resp:" + key,
+        QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+        kResponseCacheTtlSec, "agents");
 }
 
 void AgentService::clear_response_cache() {
-    QMutexLocker lock(&cache_mutex_);
-    response_cache_.clear();
+    fincept::CacheManager::instance().remove_prefix("agents:resp:");
     LOG_INFO("AgentService", "Response cache cleared");
 }
 
 QJsonObject AgentService::get_cache_stats() const {
-    QMutexLocker lock(&cache_mutex_);
     QJsonObject stats;
-    stats["agents_cached"] = agents_cache_.data.size();
-    stats["tools_cached"] = tools_cache_.data.total_count;
-    stats["models_cached"] = models_cache_.data.count;
-    stats["response_cache_size"] = response_cache_.size();
-    stats["response_cache_max"] = kResponseCacheMaxSize;
+    stats["agents_cached"]    = cached_agent_count();
+    stats["total_entries"]    = fincept::CacheManager::instance().entry_count();
     return stats;
 }
 

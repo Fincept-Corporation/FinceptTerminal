@@ -2,6 +2,7 @@
 #include "screens/dashboard/canvas/GridLayout.h"
 #include "screens/dashboard/canvas/PlaceholderOverlay.h"
 #include "screens/dashboard/canvas/WidgetTile.h"
+#include "ui/theme/ThemeTokens.h"
 
 #include <QTimer>
 #include <QWidget>
@@ -71,6 +72,8 @@ class DashboardCanvas : public QWidget {
     // Auto-scroll during drag
     QTimer* scroll_timer_ = nullptr;
     QPoint last_drag_canvas_pos_;
+
+    fincept::ui::ThemeTokens tokens_{};
 };
 
 } // namespace fincept::screens

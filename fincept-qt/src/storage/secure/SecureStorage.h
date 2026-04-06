@@ -5,8 +5,11 @@
 
 namespace fincept {
 
-/// Secure credential storage using OS keychain (Windows Credential Manager).
-/// Falls back to encrypted QSettings if keychain unavailable.
+/// Secure credential storage using OS-native backends:
+///   Windows : Windows Credential Manager (DPAPI-encrypted)
+///   macOS   : Security.framework Keychain
+///   Linux   : XOR-obfuscated QSettings (NOT cryptographically secure —
+///             prevents casual inspection; libsecret backend planned)
 class SecureStorage {
   public:
     static SecureStorage& instance();

@@ -12,6 +12,7 @@
 #include "screens/agent_config/WorkflowsViewPanel.h"
 #include "services/agents/AgentService.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QHBoxLayout>
 #include <QShowEvent>
@@ -43,6 +44,8 @@ AgentConfigScreen::AgentConfigScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("AgentConfigScreen");
     build_ui();
     setup_service_connections();
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
+            this, [this](const ui::ThemeTokens&) { update(); });
 }
 
 // ── UI construction ──────────────────────────────────────────────────────────
@@ -58,10 +61,8 @@ void AgentConfigScreen::build_ui() {
     view_stack_->setObjectName("AgentViewStack");
     root->addWidget(view_stack_, 1);
 
-    // Pre-populate stack with 8 empty placeholder widgets so indices are stable.
-    // Real panels are swapped in by ensure_panel_built() on first navigation.
-    for (int i = 0; i < 8; ++i)
-        view_stack_->addWidget(new QWidget);
+    // No placeholders — panels are added to the stack on first navigation.
+    // ensure_panel_built() appends them and sets currentWidget directly.
 
     build_status_bar(root);
 }
@@ -126,7 +127,9 @@ void AgentConfigScreen::build_status_bar(QVBoxLayout* root) {
 
     root->addWidget(bar);
 
-    connect(view_stack_, &QStackedWidget::currentChanged, this, [view_label](int idx) {
+    connect(view_stack_, &QStackedWidget::currentChanged, this, [this, view_label](int) {
+        // Find the label for the current mode
+        const int idx = static_cast<int>(current_view_);
         if (idx >= 0 && idx < static_cast<int>(std::size(kViews)))
             view_label->setText(kViews[idx].label);
     });
@@ -192,16 +195,27 @@ void AgentConfigScreen::ensure_panel_built(services::AgentViewMode mode) {
         break;
     }
 
-    // Replace the placeholder widget at this stack index
-    QWidget* placeholder = view_stack_->widget(idx);
-    view_stack_->insertWidget(idx, panel);
-    view_stack_->removeWidget(placeholder);
-    placeholder->deleteLater();
+    // Add panel to stack — no placeholder removal needed, index tracked via pointer
+    view_stack_->addWidget(panel);
 
     // Wire cross-panel signals now that relevant panels may be available
     wire_cross_panel_signals();
 
     LOG_INFO("AgentConfigScreen", QString("Built panel: %1").arg(kViews[idx].label));
+}
+
+QWidget* AgentConfigScreen::panel_widget(services::AgentViewMode mode) const {
+    switch (mode) {
+    case services::AgentViewMode::Agents:    return agents_panel_;
+    case services::AgentViewMode::Create:    return create_panel_;
+    case services::AgentViewMode::Teams:     return teams_panel_;
+    case services::AgentViewMode::Workflows: return workflows_panel_;
+    case services::AgentViewMode::Planner:   return planner_panel_;
+    case services::AgentViewMode::Tools:     return tools_panel_;
+    case services::AgentViewMode::Chat:      return chat_panel_;
+    case services::AgentViewMode::System:    return system_panel_;
+    }
+    return nullptr;
 }
 
 void AgentConfigScreen::wire_cross_panel_signals() {
@@ -211,11 +225,18 @@ void AgentConfigScreen::wire_cross_panel_signals() {
                 teams_panel_,  &TeamsViewPanel::add_agent_from_panel,
                 Qt::UniqueConnection);
 
-    // TOOLS → AGENTS: selection propagation
+    // TOOLS → AGENTS: live selection propagation
     if (tools_panel_ && agents_panel_)
         connect(tools_panel_, &ToolsViewPanel::tools_selection_changed,
                 agents_panel_, &AgentsViewPanel::apply_tools_selection,
                 Qt::UniqueConnection);
+
+    // TOOLS → AGENTS: reload agent tools from DB immediately after assign
+    if (tools_panel_ && agents_panel_)
+        connect(tools_panel_, &ToolsViewPanel::tool_assigned,
+                agents_panel_, [this](const QString& /*id*/, const QStringList& tools) {
+                    agents_panel_->apply_tools_selection(tools);
+                }, Qt::UniqueConnection);
 
     // TOOLS → CREATE: selection propagation
     if (tools_panel_ && create_panel_)
@@ -223,11 +244,35 @@ void AgentConfigScreen::wire_cross_panel_signals() {
                 create_panel_, &CreateAgentPanel::apply_tools_selection,
                 Qt::UniqueConnection);
 
-    // TOOLS → TEAMS: selection propagation (Task 5)
+    // TOOLS → TEAMS: selection propagation
     if (tools_panel_ && teams_panel_)
         connect(tools_panel_, &ToolsViewPanel::tools_selection_changed,
                 teams_panel_,  &TeamsViewPanel::apply_tools_selection,
                 Qt::UniqueConnection);
+
+    // SERVICE → SYSTEM: refresh when agents/tools change
+    if (system_panel_) {
+        connect(&services::AgentService::instance(), &services::AgentService::agents_discovered,
+                system_panel_, [this](QVector<services::AgentInfo>, QVector<services::AgentCategory>) {
+                    system_panel_->on_agents_changed();
+                }, Qt::UniqueConnection);
+
+        connect(&services::AgentService::instance(), &services::AgentService::tools_loaded,
+                system_panel_, [this](services::AgentToolsInfo info) {
+                    system_panel_->on_tools_changed(info);
+                }, Qt::UniqueConnection);
+
+        // LLM config saved/deleted → refresh LLM list in System tab
+        connect(&services::AgentService::instance(), &services::AgentService::config_saved,
+                system_panel_, [this]() {
+                    system_panel_->on_llm_config_changed();
+                }, Qt::UniqueConnection);
+
+        connect(&services::AgentService::instance(), &services::AgentService::config_deleted,
+                system_panel_, [this]() {
+                    system_panel_->on_llm_config_changed();
+                }, Qt::UniqueConnection);
+    }
 }
 
 // ── View switching ───────────────────────────────────────────────────────────
@@ -238,7 +283,10 @@ void AgentConfigScreen::set_view(services::AgentViewMode mode) {
     // Build the panel on first visit (P2: lazy construction)
     ensure_panel_built(mode);
 
-    view_stack_->setCurrentIndex(idx);
+    // Use setCurrentWidget — safe regardless of insertion order in stack
+    QWidget* panel = panel_widget(mode);
+    if (panel)
+        view_stack_->setCurrentWidget(panel);
     current_view_ = mode;
 
     for (int i = 0; i < nav_buttons_.size(); ++i)

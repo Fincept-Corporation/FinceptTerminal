@@ -12,6 +12,7 @@
 #include "mcp/tools/DataSourcesTools.h"
 #include "mcp/tools/ForumTools.h"
 #include "mcp/tools/ProfileTools.h"
+#include "mcp/tools/EdgarTools.h"
 #include "mcp/tools/MAAnalyticsTools.h"
 #include "mcp/tools/MarketsTools.h"
 #include "mcp/tools/NavigationTools.h"
@@ -57,6 +58,9 @@ void initialize_all_tools() {
 
     // paper trading tab
     provider.register_tools(tools::get_paper_trading_tools());
+
+    // sec edgar (CIK resolution, XBRL financials, filing search)
+    provider.register_tools(tools::get_edgar_tools());
 
     // m&a analytics tab
     provider.register_tools(tools::get_ma_analytics_tools());

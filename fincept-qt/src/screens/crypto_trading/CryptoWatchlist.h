@@ -1,36 +1,21 @@
 #pragma once
-// Crypto Watchlist — compact Bloomberg-style with volume bars and active symbol highlight
+// Crypto Watchlist — compact 3-column watchlist (Symbol | Price | Chg%)
 
 #include "trading/TradingTypes.h"
 
 #include <QLabel>
 #include <QLineEdit>
 #include <QMutex>
-#include <QPainter>
-#include <QStyledItemDelegate>
 #include <QTableWidget>
 #include <QVector>
 #include <QWidget>
 
 namespace fincept::screens::crypto {
 
-// Custom delegate: paints a proportional volume bar behind text in column 3
-class WatchlistVolumeDelegate : public QStyledItemDelegate {
-    Q_OBJECT
-  public:
-    using QStyledItemDelegate::QStyledItemDelegate;
-    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
-    void set_max_volume(double v) { max_volume_ = v; }
-
-  private:
-    double max_volume_ = 1.0;
-};
-
 struct WatchlistEntry {
     QString symbol;
     double price = 0.0;
     double change_pct = 0.0;
-    double volume = 0.0;
     bool has_data = false;
 };
 
@@ -58,7 +43,6 @@ class CryptoWatchlist : public QWidget {
     QLineEdit* filter_edit_ = nullptr;
     QLabel* count_label_ = nullptr;
     QTableWidget* table_ = nullptr;
-    WatchlistVolumeDelegate* vol_delegate_ = nullptr;
 
     QVector<WatchlistEntry> entries_;
     QVector<trading::MarketInfo> search_results_;

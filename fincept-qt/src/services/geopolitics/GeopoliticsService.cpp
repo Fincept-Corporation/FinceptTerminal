@@ -4,8 +4,8 @@
 #include "core/logging/Logger.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonRunner.h"
+#include "storage/cache/CacheManager.h"
 
-#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
@@ -52,7 +52,7 @@ void GeopoliticsService::fetch_events(const QString& country, const QString& cit
     url.setQuery(q);
 
     QPointer<GeopoliticsService> self = this;
-    HttpClient::instance().get(url.toString(), [self](Result<QJsonDocument> result) {
+    HttpClient::instance().get(url.toString(), [self, country, city, category, limit](Result<QJsonDocument> result) {
         if (!self)
             return;
         if (!result.is_ok()) {
@@ -85,15 +85,40 @@ void GeopoliticsService::fetch_events(const QString& country, const QString& cit
             events.append(ev);
         }
         int total = obj.contains("total") ? obj["total"].toInt() : events.size();
-        self->events_cache_ = {events, total, QDateTime::currentSecsSinceEpoch()};
+        // Serialize events to JSON for CacheManager persistence
+        QJsonArray cached_arr;
+        for (const auto& ev : events) {
+            QJsonObject o;
+            o["url"]              = ev.url;
+            o["domain"]           = ev.domain;
+            o["event_category"]   = ev.event_category;
+            o["matched_keywords"] = ev.matched_keywords;
+            o["city"]             = ev.city;
+            o["country"]          = ev.country;
+            o["latitude"]         = ev.latitude;
+            o["longitude"]        = ev.longitude;
+            o["extracted_date"]   = ev.extracted_date;
+            o["created_at"]       = ev.created_at;
+            cached_arr.append(o);
+        }
+        QJsonObject cached_root;
+        cached_root["events"] = cached_arr;
+        cached_root["total"]  = total;
+        const QString cache_key = QString("geo:events:%1:%2:%3:%4")
+                                      .arg(country, city, category)
+                                      .arg(limit);
+        fincept::CacheManager::instance().put(
+            cache_key,
+            QVariant(QJsonDocument(cached_root).toJson(QJsonDocument::Compact)),
+            kEventsTtlSec,
+            "geopolitics");
         LOG_INFO("Geopolitics", QString("Loaded %1 events").arg(events.size()));
         emit self->events_loaded(events, total);
     });
 }
 
 void GeopoliticsService::fetch_unique_countries() {
-    auto now = QDateTime::currentSecsSinceEpoch();
-    if ((now - countries_ts_) < kRefDataTtlSec && countries_ts_ > 0)
+    if (fincept::CacheManager::instance().has("geo:countries"))
         return;
 
     QPointer<GeopoliticsService> self = this;
@@ -114,14 +139,14 @@ void GeopoliticsService::fetch_unique_countries() {
                                        auto o = v.toObject();
                                        countries.append({o["country"].toString(), o["event_count"].toInt()});
                                    }
-                                   self->countries_ts_ = QDateTime::currentSecsSinceEpoch();
+                                   fincept::CacheManager::instance().put(
+                                       "geo:countries", QVariant(true), kRefDataTtlSec, "geopolitics");
                                    emit self->countries_loaded(countries);
                                });
 }
 
 void GeopoliticsService::fetch_unique_categories() {
-    auto now = QDateTime::currentSecsSinceEpoch();
-    if ((now - categories_ts_) < kRefDataTtlSec && categories_ts_ > 0)
+    if (fincept::CacheManager::instance().has("geo:categories"))
         return;
 
     QPointer<GeopoliticsService> self = this;
@@ -141,7 +166,8 @@ void GeopoliticsService::fetch_unique_categories() {
             auto o = v.toObject();
             cats.append({o["event_category"].toString(), o["event_count"].toInt()});
         }
-        self->categories_ts_ = QDateTime::currentSecsSinceEpoch();
+        fincept::CacheManager::instance().put(
+            "geo:categories", QVariant(true), kRefDataTtlSec, "geopolitics");
         emit self->categories_loaded(cats);
     });
 }

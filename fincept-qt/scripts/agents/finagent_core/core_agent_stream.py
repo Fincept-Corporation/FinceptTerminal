@@ -13,6 +13,29 @@ import logging
 import json
 import sys
 import os
+import re as _re
+
+# Strip all emoji and non-BMP characters from text before emitting.
+# This avoids cp1252 encoding errors on Windows and keeps terminal output clean.
+_EMOJI_RE = _re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U0001F300-\U0001F5FF"  # symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # transport & map
+    "\U0001F700-\U0001F77F"  # alchemical
+    "\U0001F780-\U0001F7FF"  # geometric extended
+    "\U0001F800-\U0001F8FF"  # supplemental arrows
+    "\U0001F900-\U0001F9FF"  # supplemental symbols
+    "\U0001FA00-\U0001FA6F"  # chess symbols
+    "\U0001FA70-\U0001FAFF"  # symbols extended-A
+    "\U00002702-\U000027B0"  # dingbats
+    "\U000024C2-\U0001F251"  # enclosed characters
+    "]+",
+    flags=_re.UNICODE
+)
+
+def _strip_emoji(text: str) -> str:
+    return _EMOJI_RE.sub("", text)
 
 # Add parent directory to path for imports
 from pathlib import Path
@@ -74,7 +97,10 @@ class StreamingCoreAgent:
         session_id: Optional[str] = None
     ) -> Generator[Dict[str, Any], None, None]:
         """Execute agent with streaming output."""
-        from core_agent import CoreAgent
+        try:
+            from finagent_core.core_agent import CoreAgent
+        except ImportError:
+            from core_agent import CoreAgent
 
         # Emit thinking indicator
         self.emit("thinking", "Analyzing your request...")
@@ -134,6 +160,9 @@ class StreamingCoreAgent:
 
             # Handle streaming response
             full_content = ""
+            # Think-block filter state: skip tokens inside <think>...</think>
+            in_think = False
+            think_buf = ""
 
             if hasattr(response, '__iter__') and not isinstance(response, str):
                 # Iterable response (true streaming)
@@ -146,21 +175,54 @@ class StreamingCoreAgent:
                         content = str(chunk)
 
                     full_content += content
-                    self.emit("token", content)
-                    yield {"type": "token", "content": content}
+
+                    # Filter <think>...</think> blocks from streamed tokens
+                    think_buf += content
+                    visible = ""
+                    while think_buf:
+                        if in_think:
+                            end = think_buf.find("</think>")
+                            if end == -1:
+                                think_buf = ""  # still inside think block, discard
+                                break
+                            else:
+                                in_think = False
+                                think_buf = think_buf[end + len("</think>"):]
+                        else:
+                            start = think_buf.find("<think>")
+                            if start == -1:
+                                visible += think_buf
+                                think_buf = ""
+                                break
+                            else:
+                                visible += think_buf[:start]
+                                in_think = True
+                                think_buf = think_buf[start + len("<think>"):]
+
+                    if visible:
+                        visible = _strip_emoji(visible)
+                        self.emit("token", visible)
+                        yield {"type": "token", "content": visible}
             else:
-                # Non-streaming response - emit all at once
+                # Non-streaming response - strip think blocks then chunk-emit
                 content = core.get_response_content(response)
                 full_content = content
-                # Chunk for smoother UI
-                for i in range(0, len(content), 50):
-                    chunk = content[i:i+50]
+                visible_content = _strip_emoji(
+                    _re.sub(r'<think>.*?</think>', '', content, flags=_re.DOTALL).strip()
+                )
+                for i in range(0, len(visible_content), 50):
+                    chunk = visible_content[i:i+50]
                     self.emit("token", chunk)
                     yield {"type": "token", "content": chunk}
 
+            # Strip think blocks and emojis from final content
+            clean_content = _strip_emoji(
+                _re.sub(r'<think>.*?</think>', '', full_content, flags=_re.DOTALL).strip()
+            )
+
             # Emit completion
-            self.emit("done", full_content, {"total_tokens": len(full_content)})
-            yield {"type": "done", "content": full_content}
+            self.emit("done", clean_content, {"total_tokens": len(clean_content)})
+            yield {"type": "done", "content": clean_content}
 
         except Exception as e:
             self.emit("error", str(e))
@@ -203,7 +265,10 @@ class StreamingCoreAgent:
     ) -> Generator[Dict[str, Any], None, None]:
         """Stream team execution using CoreAgent.run_team (Agno Team orchestration)."""
         try:
-            from core_agent import CoreAgent
+            try:
+                from finagent_core.core_agent import CoreAgent
+            except ImportError:
+                from core_agent import CoreAgent
 
             members = team_config.get("agents", team_config.get("members", []))
             mode = team_config.get("mode", "coordinate")
@@ -317,7 +382,10 @@ def main(args=None):
 
         else:
             # Fallback to non-streaming core_agent
-            from core_agent import main as core_main
+            try:
+                from finagent_core.core_agent import main as core_main
+            except ImportError:
+                from core_agent import main as core_main
             return core_main(args)
 
         return json.dumps({

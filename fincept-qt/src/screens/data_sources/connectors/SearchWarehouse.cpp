@@ -127,6 +127,23 @@ static QVector<ConnectorConfig> search_warehouse_configs() {
           {"database", "Database", FieldType::Text, "my_db", true, "", {}},
           {"username", "Username", FieldType::Text, "sqladmin", true, "", {}},
           {"password", "Password", FieldType::Password, "", true, "", {}}}},
+
+        {"snowflake",
+         "Snowflake",
+         "snowflake",
+         Category::DataWarehouse,
+         "S",
+         "#29B5E8",
+         "Cloud data platform used by 57% of Fortune 500 finance firms. Supports Marketplace data sharing for ICE, FactSet, and Refinitiv datasets.",
+         true,
+         true,
+         {{"account", "Account Identifier", FieldType::Text, "orgname-accountname", true, "", {}},
+          {"username", "Username", FieldType::Text, "my_user", true, "", {}},
+          {"password", "Password", FieldType::Password, "", true, "", {}},
+          {"database", "Database", FieldType::Text, "MY_DB", false, "", {}},
+          {"schema", "Schema", FieldType::Text, "PUBLIC", false, "PUBLIC", {}},
+          {"warehouse", "Virtual Warehouse", FieldType::Text, "COMPUTE_WH", false, "", {}},
+          {"role", "Role", FieldType::Text, "SYSADMIN", false, "", {}}}},
     };
 }
 

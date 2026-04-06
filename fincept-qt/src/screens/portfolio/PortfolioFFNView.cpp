@@ -366,14 +366,14 @@ void PortfolioFFNView::build_ui() {
 QChartView* PortfolioFFNView::make_chart_view(const QString& title) {
     auto* chart = new QChart;
     chart->setTitle(title);
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
-    chart->setTitleBrush(QBrush(QColor(ui::colors::AMBER)));
+    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
+    chart->setTitleBrush(QBrush(QColor(ui::colors::AMBER())));
     chart->setTitleFont(QFont("monospace", 9, QFont::Bold));
     chart->legend()->setVisible(true);
     chart->legend()->setAlignment(Qt::AlignBottom);
-    chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY));
+    chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY()));
     chart->legend()->setBackgroundVisible(false);
-    chart->setPlotAreaBackgroundBrush(QBrush(QColor(ui::colors::BG_SURFACE)));
+    chart->setPlotAreaBackgroundBrush(QBrush(QColor(ui::colors::BG_SURFACE())));
     chart->setPlotAreaBackgroundVisible(true);
 
     auto* cv = new QChartView(chart);
@@ -546,13 +546,13 @@ void PortfolioFFNView::update_overview() {
         overview_table_->setRowHeight(r, 28);
         overview_table_->setItem(
             r, 0, make_item(row.name,      Qt::AlignLeft  | Qt::AlignVCenter,
-                            QColor(ui::colors::TEXT_SECONDARY)));
+                            QColor(ui::colors::TEXT_SECONDARY())));
         overview_table_->setItem(
             r, 1, make_item(row.value,     Qt::AlignRight | Qt::AlignVCenter,
                             QColor(row.color)));
         overview_table_->setItem(
             r, 2, make_item(row.benchmark, Qt::AlignRight | Qt::AlignVCenter,
-                            QColor(ui::colors::TEXT_TERTIARY)));
+                            QColor(ui::colors::TEXT_TERTIARY())));
     }
 }
 
@@ -598,13 +598,13 @@ void PortfolioFFNView::update_benchmark() {
         benchmark_table_->setRowHeight(r, 28);
         benchmark_table_->setItem(
             r, 0, make_item(row.metric, Qt::AlignLeft | Qt::AlignVCenter,
-                            QColor(ui::colors::TEXT_SECONDARY)));
+                            QColor(ui::colors::TEXT_SECONDARY())));
         benchmark_table_->setItem(
             r, 1, make_item(row.portfolio, Qt::AlignRight | Qt::AlignVCenter,
-                            QColor(ui::colors::TEXT_PRIMARY)));
+                            QColor(ui::colors::TEXT_PRIMARY())));
         benchmark_table_->setItem(
             r, 2, make_item("--", Qt::AlignRight | Qt::AlignVCenter,
-                            QColor(ui::colors::TEXT_TERTIARY)));
+                            QColor(ui::colors::TEXT_TERTIARY())));
     }
 }
 
@@ -637,19 +637,19 @@ void PortfolioFFNView::update_optimization() {
 
         opt_weights_table_->setItem(
             r, 0, make_item(sym, Qt::AlignLeft | Qt::AlignVCenter,
-                            QColor(ui::colors::AMBER)));
+                            QColor(ui::colors::AMBER())));
         opt_weights_table_->setItem(
             r, 1, make_item(pct(current_obj[sym].toDouble()),
-                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::CYAN)));
+                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::CYAN())));
         opt_weights_table_->setItem(
             r, 2, make_item(pct(erc_obj[sym].toDouble()),
-                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::TEXT_PRIMARY)));
+                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::TEXT_PRIMARY())));
         opt_weights_table_->setItem(
             r, 3, make_item(pct(inv_obj[sym].toDouble()),
-                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::TEXT_PRIMARY)));
+                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::TEXT_PRIMARY())));
         opt_weights_table_->setItem(
             r, 4, make_item(pct(equal_obj[sym].toDouble()),
-                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::TEXT_PRIMARY)));
+                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::TEXT_PRIMARY())));
     }
 
     // ── Stats table ───────────────────────────────────────────────────────────
@@ -670,21 +670,21 @@ void PortfolioFFNView::update_optimization() {
 
         opt_stats_table_->setItem(
             r, 0, make_item(name, Qt::AlignLeft | Qt::AlignVCenter,
-                            QColor(ui::colors::AMBER)));
+                            QColor(ui::colors::AMBER())));
         opt_stats_table_->setItem(
             r, 1, make_item(pct_str(tr),
                             Qt::AlignRight | Qt::AlignVCenter,
-                            QColor(tr >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE)));
+                            QColor(tr >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE())));
         opt_stats_table_->setItem(
             r, 2, make_item(pct_str(vol),
-                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::CYAN)));
+                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::CYAN())));
         opt_stats_table_->setItem(
             r, 3, make_item(fmt(sh),
                             Qt::AlignRight | Qt::AlignVCenter,
-                            QColor(sh >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE)));
+                            QColor(sh >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE())));
         opt_stats_table_->setItem(
             r, 4, make_item(pct_str(dd),
-                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::NEGATIVE)));
+                            Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::NEGATIVE())));
     }
 
     opt_stack_->setCurrentIndex(1);
@@ -709,17 +709,17 @@ void PortfolioFFNView::update_rebased() {
     auto* x_axis = new QDateTimeAxis;
     x_axis->setFormat("MMM yy");
     x_axis->setTitleText("Date");
-    x_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY));
-    x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY)));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED));
+    x_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY()));
+    x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
+    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
 
     auto* y_axis = new QValueAxis;
     y_axis->setTitleText("Value (Base = 100)");
-    y_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY));
-    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY)));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    y_axis->setLinePenColor(QColor(ui::colors::BORDER_MED));
+    y_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY()));
+    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
+    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    y_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
 
     chart->addAxis(x_axis, Qt::AlignBottom);
     chart->addAxis(y_axis, Qt::AlignLeft);
@@ -792,17 +792,17 @@ void PortfolioFFNView::update_drawdowns() {
 
     auto* x_axis = new QDateTimeAxis;
     x_axis->setFormat("MMM yy");
-    x_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY));
-    x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY)));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED));
+    x_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY()));
+    x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
+    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
 
     auto* y_axis = new QValueAxis;
     y_axis->setTitleText("Drawdown");
-    y_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY));
-    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY)));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    y_axis->setLinePenColor(QColor(ui::colors::BORDER_MED));
+    y_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY()));
+    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
+    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    y_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
 
     auto* label_format_axis = y_axis;
     Q_UNUSED(label_format_axis);
@@ -885,18 +885,18 @@ void PortfolioFFNView::update_rolling() {
 
     auto* x_axis = new QDateTimeAxis;
     x_axis->setFormat("MMM yy");
-    x_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY));
-    x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY)));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED));
+    x_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY()));
+    x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
+    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
 
     auto* y_axis = new QValueAxis;
     y_axis->setTitleText("Correlation");
     y_axis->setRange(-1.0, 1.0);
-    y_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY));
-    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY)));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    y_axis->setLinePenColor(QColor(ui::colors::BORDER_MED));
+    y_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY()));
+    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
+    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    y_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
 
     chart->addAxis(x_axis, Qt::AlignBottom);
     chart->addAxis(y_axis, Qt::AlignLeft);

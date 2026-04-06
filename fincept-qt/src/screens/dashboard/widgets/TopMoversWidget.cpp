@@ -12,7 +12,7 @@ TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget("TOP MOVERS", par
     tl->setContentsMargins(4, 2, 4, 2);
     tl->setSpacing(0);
 
-    auto active_style = [](const char* color) {
+    auto active_style = [](const QString& color) {
         return QString("QPushButton { background: %1; color: #000; border: none; "
                        "font-size: 9px; font-weight: bold; padding: 4px; }")
             .arg(color);

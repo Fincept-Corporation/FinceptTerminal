@@ -2,6 +2,7 @@
 #pragma once
 #include "screens/portfolio/PortfolioTypes.h"
 #include "services/markets/MarketDataService.h"
+#include "python/PythonRunner.h"
 
 #include <QDateTime>
 #include <QHash>
@@ -41,6 +42,26 @@ class PortfolioService : public QObject {
                             const QString& notes = {});
     void delete_transaction(const QString& id, const QString& portfolio_id);
 
+    // ── Dividend ──────────────────────────────────────────────────────────────
+    void record_dividend(const QString& portfolio_id, const QString& symbol,
+                         double qty, double amount_per_share, double total,
+                         const QString& date = {}, const QString& notes = {});
+
+    // ── Historical correlation ─────────────────────────────────────────────────
+    /// Fetch 30-day daily closes for @p symbols and compute pairwise Pearson
+    /// correlation matrix. Result emitted via correlation_computed().
+    void fetch_correlation(const QStringList& symbols);
+
+    // ── SPY benchmark data ────────────────────────────────────────────────────
+    /// Fetch SPY daily closes for the given period string (e.g. "1y", "6mo").
+    /// Emits spy_history_loaded(dates, closes).
+    void fetch_spy_history(const QString& period = "1y");
+
+    // ── Risk-free rate ────────────────────────────────────────────────────────
+    /// Fetch the current 10-year Treasury yield (DGS10) from FRED.
+    /// Result is cached 24h in SettingsRepository. Emits risk_free_rate_loaded(rate).
+    void fetch_risk_free_rate();
+
     // ── Metrics (async computation) ──────────────────────────────────────────
     void compute_metrics(const portfolio::PortfolioSummary& summary);
 
@@ -74,6 +95,16 @@ class PortfolioService : public QObject {
     void export_complete(QString file_path);
     void import_complete(portfolio::ImportResult result);
 
+    /// Pairwise Pearson correlation matrix keyed by "SYM1|SYM2".
+    /// Values in [-1, 1]. Diagonal (self-correlation) = 1.0.
+    void correlation_computed(QHash<QString, double> matrix);
+
+    /// SPY daily close history: parallel vectors of ISO date strings and prices.
+    void spy_history_loaded(QStringList dates, QVector<double> closes);
+
+    /// Current 10-year risk-free rate as annual decimal (e.g. 0.043 = 4.3%).
+    void risk_free_rate_loaded(double rate);
+
   private:
     PortfolioService();
 
@@ -88,6 +119,13 @@ class PortfolioService : public QObject {
     QHash<QString, CachedSummary> summary_cache_;
     QMutex cache_mutex_;
     static constexpr int kCacheTtlSec = 300; // 5 minutes
+
+    // ── SPY cache (for OLS beta in compute_metrics) ──────────────────────────
+    QStringList     spy_dates_cache_;
+    QVector<double> spy_closes_cache_;
+
+    // ── Risk-free rate cache (annual decimal, e.g. 0.043) ────────────────────
+    double rf_rate_ = 0.04; // default 4% until FRED responds
 };
 
 } // namespace fincept::services

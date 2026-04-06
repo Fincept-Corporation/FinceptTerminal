@@ -1280,6 +1280,7 @@ void EquityTradingScreen::refresh_portfolio() {
         bottom_panel_->set_paper_trades(trades);
         bottom_panel_->set_paper_stats(stats);
     } catch (...) {
+        LOG_WARN("EquityTradingScreen", "Exception refreshing portfolio panel");
     }
 }
 

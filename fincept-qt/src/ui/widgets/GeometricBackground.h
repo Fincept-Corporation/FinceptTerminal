@@ -1,12 +1,13 @@
 #pragma once
+#include "ui/theme/ThemeTokens.h"
+
 #include <QPixmap>
 #include <QWidget>
 
 namespace fincept::ui {
 
 /// Geometric crosshatch background — diagonal lines forming X pattern.
-/// Matches the Tauri BackgroundPattern.tsx design.
-/// Caches rendering as QPixmap — redraws only on resize.
+/// Caches rendering as QPixmap — redraws only on resize or theme change.
 class GeometricBackground : public QWidget {
     Q_OBJECT
   public:
@@ -18,7 +19,8 @@ class GeometricBackground : public QWidget {
 
   private:
     void rebuild_cache();
-    QPixmap cache_;
+    QPixmap     cache_;
+    ThemeTokens tokens_{};
 };
 
 } // namespace fincept::ui

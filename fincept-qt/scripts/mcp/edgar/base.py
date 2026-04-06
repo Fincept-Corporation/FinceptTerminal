@@ -311,3 +311,135 @@ def get_all_company_tickers(limit: int = 1000) -> Dict[str, Any]:
         }
     except Exception as e:
         return {"error": EdgarError("get_company_tickers", str(e), traceback.format_exc()).to_dict()}
+
+
+# ============================================================================
+# CIK RESOLUTION & RAW FILING ACCESS
+# ============================================================================
+
+def resolve_cik(query: str) -> Dict[str, Any]:
+    """Resolve company name or ticker to CIK."""
+    try:
+        check_edgar_available()
+        company = Company(query)
+        return {"success": True, "cik": company.cik, "name": company.name, "query": query}
+    except Exception:
+        # fallback: search by name
+        results = find_company(query)
+        if results:
+            first = results[0] if hasattr(results, '__getitem__') else next(iter(results))
+            return {"success": True, "cik": first.cik, "name": first.name, "query": query}
+        return {"error": EdgarError("resolve_cik", f"Company not found: {query}").to_dict()}
+
+
+def get_filing_text(ticker_or_cik: str, form: str = "10-K") -> Dict[str, Any]:
+    """Fetch full text of the latest filing of a given form type for a company."""
+    try:
+        check_edgar_available()
+        company = Company(ticker_or_cik)
+        filings = company.get_filings(form=form)
+        if not filings:
+            return {"error": EdgarError("get_filing_text", f"No {form} filings found").to_dict()}
+        latest = filings[0]
+        doc = latest.document
+        text = doc.text if hasattr(doc, 'text') else str(doc)
+        return {
+            "success": True,
+            "form": form,
+            "filed": str(latest.filed),
+            "accession_number": str(latest.accession_no),
+            "text": text[:100000],
+            "length": len(text)
+        }
+    except Exception as e:
+        return {"error": EdgarError("get_filing_text", str(e), traceback.format_exc()).to_dict()}
+
+
+def search_filings(ticker_or_cik: str, form: str = "8-K", months_back: int = 12) -> Dict[str, Any]:
+    """Search recent filings for a company by form type."""
+    try:
+        check_edgar_available()
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now() - timedelta(days=months_back * 30)).strftime("%Y-%m-%d")
+        company = Company(ticker_or_cik)
+        filings = company.get_filings(form=form)
+        results = []
+        for f in filings:
+            filed = str(f.filed)
+            if filed < cutoff:
+                break
+            results.append({
+                "form": str(f.form),
+                "filed": filed,
+                "accession_number": str(f.accession_no),
+                "description": str(f.description) if hasattr(f, 'description') else "",
+            })
+        return {"success": True, "company": company.name, "form": form, "count": len(results), "filings": results}
+    except Exception as e:
+        return {"error": EdgarError("search_filings", str(e), traceback.format_exc()).to_dict()}
+
+
+def get_filing_documents(ticker_or_cik: str, form: str = "10-K") -> Dict[str, Any]:
+    """List all documents in the latest filing of a given form type."""
+    try:
+        check_edgar_available()
+        company = Company(ticker_or_cik)
+        filings = company.get_filings(form=form)
+        if not filings:
+            return {"error": EdgarError("get_filing_documents", f"No {form} filings found").to_dict()}
+        latest = filings[0]
+        docs = []
+        if hasattr(latest, 'attachments'):
+            for att in latest.attachments:
+                docs.append({
+                    "filename": str(att.document) if hasattr(att, 'document') else "",
+                    "description": str(att.description) if hasattr(att, 'description') else "",
+                    "type": str(att.document_type) if hasattr(att, 'document_type') else "",
+                })
+        return {
+            "success": True,
+            "form": form,
+            "filed": str(latest.filed),
+            "accession_number": str(latest.accession_no),
+            "documents": docs
+        }
+    except Exception as e:
+        return {"error": EdgarError("get_filing_documents", str(e), traceback.format_exc()).to_dict()}
+
+
+def calc_multiples(ticker_or_cik: str, deal_value: float) -> Dict[str, Any]:
+    """Calculate EV/Revenue, EV/EBITDA, implied P/E given a deal value and company."""
+    try:
+        check_edgar_available()
+        company = Company(ticker_or_cik)
+        fins = company.get_financials()
+        inc = fins.income_statement()
+        bs = fins.balance_sheet()
+
+        result: Dict[str, Any] = {"success": True, "company": company.name, "deal_value": deal_value}
+
+        # Try to extract revenue and net income from income statement
+        inc_df = inc.to_dataframe() if hasattr(inc, 'to_dataframe') else None
+        bs_df = bs.to_dataframe() if hasattr(bs, 'to_dataframe') else None
+
+        if inc_df is not None and not inc_df.empty:
+            for label in ["Revenues", "Revenue", "Net revenue", "Total revenues"]:
+                row = inc_df[inc_df.index.str.contains(label, case=False, na=False)]
+                if not row.empty:
+                    rev = float(row.iloc[0, 0])
+                    if rev > 0:
+                        result["ev_revenue"] = round(deal_value / rev, 2)
+                        result["revenue"] = rev
+                    break
+            for label in ["Net income", "Net Income"]:
+                row = inc_df[inc_df.index.str.contains(label, case=False, na=False)]
+                if not row.empty:
+                    ni = float(row.iloc[0, 0])
+                    if ni > 0:
+                        result["implied_pe"] = round(deal_value / ni, 2)
+                        result["net_income"] = ni
+                    break
+
+        return result
+    except Exception as e:
+        return {"error": EdgarError("calc_multiples", str(e), traceback.format_exc()).to_dict()}

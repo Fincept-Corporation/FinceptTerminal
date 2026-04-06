@@ -35,6 +35,7 @@ class PlanningView : public QWidget {
     QDoubleSpinBox* monthly_contrib_ = nullptr;
     QDoubleSpinBox* expected_return_ = nullptr;
     QDoubleSpinBox* inflation_ = nullptr;
+    QDoubleSpinBox* withdrawal_rate_ = nullptr;
 
     // Results
     QLabel* years_label_ = nullptr;

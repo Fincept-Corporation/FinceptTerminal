@@ -50,6 +50,16 @@ CryptoTickerBar::CryptoTickerBar(QWidget* parent) : QWidget(parent) {
     volume_label_->setObjectName("cryptoStatLabel");
     layout->addWidget(volume_label_);
 
+    mark_price_label_ = new QLabel("Mk:--");
+    mark_price_label_->setObjectName("cryptoStatLabel");
+    mark_price_label_->setVisible(false);
+    layout->addWidget(mark_price_label_);
+
+    index_price_label_ = new QLabel("Idx:--");
+    index_price_label_->setObjectName("cryptoStatLabel");
+    index_price_label_->setVisible(false);
+    layout->addWidget(index_price_label_);
+
     layout->addStretch();
 }
 
@@ -92,6 +102,22 @@ void CryptoTickerBar::update_bid_ask(double bid, double ask, double spread) {
     bid_label_->setText(QString("B:%1").arg(bid, 0, 'f', 2));
     ask_label_->setText(QString("A:%1").arg(ask, 0, 'f', 2));
     spread_label_->setText(QString("S:%1").arg(spread, 0, 'f', 2));
+}
+
+void CryptoTickerBar::update_mark_price(double mark_price, double index_price) {
+    if (mark_price <= 0 && index_price <= 0) {
+        mark_price_label_->setVisible(false);
+        index_price_label_->setVisible(false);
+        return;
+    }
+    if (mark_price > 0) {
+        mark_price_label_->setText(QString("Mk:%1").arg(mark_price, 0, 'f', 2));
+        mark_price_label_->setVisible(true);
+    }
+    if (index_price > 0) {
+        index_price_label_->setText(QString("Idx:%1").arg(index_price, 0, 'f', 2));
+        index_price_label_->setVisible(true);
+    }
 }
 
 } // namespace fincept::screens::crypto

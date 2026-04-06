@@ -64,9 +64,9 @@ static void style_table(QTableWidget* t) {
                 "QHeaderView::section { background:%4; color:%5; border:none;"
                 "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
                 "  font-weight:700; letter-spacing:0.5px; }")
-            .arg(ui::colors::BG_BASE,    ui::colors::TEXT_PRIMARY,
-                 ui::colors::BORDER_DIM, ui::colors::BG_SURFACE,
-                 ui::colors::TEXT_SECONDARY, ui::colors::AMBER));
+            .arg(ui::colors::BG_BASE(),    ui::colors::TEXT_PRIMARY(),
+                 ui::colors::BORDER_DIM(), ui::colors::BG_SURFACE(),
+                 ui::colors::TEXT_SECONDARY(), ui::colors::AMBER));
 }
 
 // Build a centred placeholder label inside a parent widget.
@@ -103,7 +103,7 @@ void QuantStatsView::build_ui() {
     header->setFixedHeight(36);
     header->setStyleSheet(
         QString("background:%1; border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_SURFACE, ui::colors::AMBER));
+            .arg(ui::colors::BG_SURFACE(), ui::colors::AMBER));
 
     auto* h_lay = new QHBoxLayout(header);
     h_lay->setContentsMargins(12, 0, 12, 0);
@@ -129,8 +129,8 @@ void QuantStatsView::build_ui() {
                 "  padding:0 12px; font-size:9px; font-weight:700; }"
                 "QPushButton:hover { background:%2; }"
                 "QPushButton:disabled { background:%3; color:%4; }")
-            .arg(ui::colors::AMBER,       ui::colors::WARNING,
-                 ui::colors::BG_RAISED,   ui::colors::TEXT_TERTIARY));
+            .arg(ui::colors::AMBER(),       ui::colors::WARNING(),
+                 ui::colors::BG_RAISED(),   ui::colors::TEXT_TERTIARY));
     connect(qs_run_btn_, &QPushButton::clicked, this, &QuantStatsView::run_quantstats);
     h_lay->addWidget(qs_run_btn_);
 
@@ -146,8 +146,8 @@ void QuantStatsView::build_ui() {
                 "  letter-spacing:0.5px; }"
                 "QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }"
                 "QTabBar::tab:hover { color:%5; }")
-            .arg(ui::colors::BG_BASE,         ui::colors::BG_SURFACE,
-                 ui::colors::TEXT_SECONDARY,   ui::colors::AMBER,
+            .arg(ui::colors::BG_BASE(),         ui::colors::BG_SURFACE(),
+                 ui::colors::TEXT_SECONDARY(),   ui::colors::AMBER(),
                  ui::colors::TEXT_PRIMARY));
 
     // ── METRICS tab ───────────────────────────────────────────────────────────
@@ -261,8 +261,8 @@ void QuantStatsView::build_ui() {
                     "  padding:0 16px; font-size:10px; font-weight:700; }"
                     "QPushButton:hover { background:%2; }"
                     "QPushButton:disabled { background:%3; color:%4; }")
-                .arg(ui::colors::AMBER,       ui::colors::WARNING,
-                     ui::colors::BG_RAISED,   ui::colors::TEXT_TERTIARY));
+                .arg(ui::colors::AMBER(),       ui::colors::WARNING(),
+                     ui::colors::BG_RAISED(),   ui::colors::TEXT_TERTIARY));
         connect(mc_run_btn_, &QPushButton::clicked, this, &QuantStatsView::run_monte_carlo);
         mc_btn_row->addWidget(mc_run_btn_);
 
@@ -472,8 +472,8 @@ void QuantStatsView::update_metrics() {
             // Section separator spanning all columns
             auto* item = new QTableWidgetItem(row.section);
             item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-            item->setForeground(QColor(ui::colors::AMBER));
-            item->setBackground(QColor(ui::colors::BG_RAISED));
+            item->setForeground(QColor(ui::colors::AMBER()));
+            item->setBackground(QColor(ui::colors::BG_RAISED()));
             QFont f = item->font();
             f.setPointSize(8);
             f.setBold(true);
@@ -485,15 +485,15 @@ void QuantStatsView::update_metrics() {
 
         metrics_table_->setItem(r, 0,
             make_item(row.name, Qt::AlignLeft | Qt::AlignVCenter,
-                      QColor(ui::colors::TEXT_SECONDARY)));
+                      QColor(ui::colors::TEXT_SECONDARY())));
 
         const char* val_color = row.value.isEmpty() ? ui::colors::TEXT_TERTIARY
                                 : row.is_positive   ? ui::colors::POSITIVE
-                                                    : ui::colors::NEGATIVE;
+                                                    : ui::colors::NEGATIVE();
         // Special: neutral colour for counters and "--"
         if (row.value == "--" || row.name.contains("Days") ||
             row.name.contains("Positions") || row.name == "Trading Days") {
-            val_color = ui::colors::TEXT_PRIMARY;
+            val_color = ui::colors::TEXT_PRIMARY();
         }
 
         metrics_table_->setItem(r, 1,
@@ -503,7 +503,7 @@ void QuantStatsView::update_metrics() {
 
         metrics_table_->setItem(r, 2,
             make_item(row.benchmark, Qt::AlignRight | Qt::AlignVCenter,
-                      QColor(ui::colors::TEXT_TERTIARY)));
+                      QColor(ui::colors::TEXT_TERTIARY())));
     }
 }
 
@@ -543,14 +543,14 @@ void QuantStatsView::update_returns() {
 
     struct Card { QString label; QString value; const char* color; };
     QVector<Card> cards = {
-        {"WIN RATE",    pct_str(win_rate),          ui::colors::POSITIVE},
-        {"LOSS RATE",   pct_str(100.0 - win_rate),  ui::colors::NEGATIVE},
-        {"WIN DAYS",    QString::number(win_days),   ui::colors::POSITIVE},
-        {"LOSS DAYS",   QString::number(loss_days),  ui::colors::NEGATIVE},
-        {"AVG WIN",     pct_str(avg_win),            ui::colors::POSITIVE},
-        {"AVG LOSS",    pct_str(avg_loss),           ui::colors::NEGATIVE},
-        {"SKEWNESS",    ratio_str(skew, 3),          ui::colors::TEXT_PRIMARY},
-        {"KURTOSIS",    ratio_str(kurt, 3),          ui::colors::TEXT_PRIMARY},
+        {"WIN RATE",    pct_str(win_rate),          ui::colors::POSITIVE()},
+        {"LOSS RATE",   pct_str(100.0 - win_rate),  ui::colors::NEGATIVE()},
+        {"WIN DAYS",    QString::number(win_days),   ui::colors::POSITIVE()},
+        {"LOSS DAYS",   QString::number(loss_days),  ui::colors::NEGATIVE()},
+        {"AVG WIN",     pct_str(avg_win),            ui::colors::POSITIVE()},
+        {"AVG LOSS",    pct_str(avg_loss),           ui::colors::NEGATIVE()},
+        {"SKEWNESS",    ratio_str(skew, 3),          ui::colors::TEXT_PRIMARY()},
+        {"KURTOSIS",    ratio_str(kurt, 3),          ui::colors::TEXT_PRIMARY()},
     };
 
     auto* grid_w = new QWidget;
@@ -566,7 +566,7 @@ void QuantStatsView::update_returns() {
         auto* card_w = new QWidget;
         card_w->setStyleSheet(
             QString("background:%1; border:1px solid %2;")
-                .arg(ui::colors::BG_RAISED, ui::colors::BORDER_MED));
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED));
         auto* card_l = new QVBoxLayout(card_w);
         card_l->setContentsMargins(12, 10, 12, 10);
         card_l->setSpacing(4);
@@ -612,11 +612,11 @@ void QuantStatsView::update_returns() {
         dist_table->setRowHeight(i, 26);
         dist_table->setItem(i, 0,
             make_item(trows[i].name, Qt::AlignLeft | Qt::AlignVCenter,
-                      QColor(ui::colors::TEXT_SECONDARY)));
+                      QColor(ui::colors::TEXT_SECONDARY())));
         dist_table->setItem(i, 1,
             make_item(trows[i].val, Qt::AlignRight | Qt::AlignVCenter,
-                      QColor(trows[i].positive ? ui::colors::POSITIVE
-                                               : ui::colors::NEGATIVE)));
+                      QColor(trows[i].positive ? ui::colors::POSITIVE()
+                                               : ui::colors::NEGATIVE())));
     }
     cl->addWidget(dist_table);
     cl->addStretch();
@@ -655,7 +655,7 @@ void QuantStatsView::update_drawdown() {
     auto* hero_w = new QWidget;
     hero_w->setStyleSheet(
         QString("background:%1; border:1px solid %2;")
-            .arg(ui::colors::BG_RAISED, ui::colors::NEGATIVE));
+            .arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE));
     auto* hero_l = new QVBoxLayout(hero_w);
     hero_l->setContentsMargins(16, 12, 16, 12);
     hero_l->setSpacing(2);
@@ -669,7 +669,7 @@ void QuantStatsView::update_drawdown() {
     auto* hero_value = new QLabel(pct_str(max_dd));
     hero_value->setStyleSheet(
         QString("color:%1; font-size:28px; font-weight:700;")
-            .arg(max_dd < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE));
+            .arg(max_dd < 0 ? ui::colors::NEGATIVE() : ui::colors::POSITIVE));
     hero_l->addWidget(hero_value);
     cl->addWidget(hero_w);
 
@@ -698,11 +698,11 @@ void QuantStatsView::update_drawdown() {
         dd_table->setRowHeight(i, 26);
         dd_table->setItem(i, 0,
             make_item(drows[i].name, Qt::AlignLeft | Qt::AlignVCenter,
-                      QColor(ui::colors::TEXT_SECONDARY)));
+                      QColor(ui::colors::TEXT_SECONDARY())));
         dd_table->setItem(i, 1,
             make_item(drows[i].val, Qt::AlignRight | Qt::AlignVCenter,
                       QColor(drows[i].positive ? ui::colors::POSITIVE
-                                               : ui::colors::NEGATIVE)));
+                                               : ui::colors::NEGATIVE())));
     }
     cl->addWidget(dd_table);
     cl->addStretch();
@@ -759,11 +759,11 @@ void QuantStatsView::update_rolling() {
         ratios_table->setRowHeight(i, 26);
         ratios_table->setItem(i, 0,
             make_item(rrows[i].name, Qt::AlignLeft | Qt::AlignVCenter,
-                      QColor(ui::colors::TEXT_SECONDARY)));
+                      QColor(ui::colors::TEXT_SECONDARY())));
         ratios_table->setItem(i, 1,
             make_item(rrows[i].val, Qt::AlignRight | Qt::AlignVCenter,
                       QColor(rrows[i].positive ? ui::colors::POSITIVE
-                                               : ui::colors::NEGATIVE)));
+                                               : ui::colors::NEGATIVE())));
     }
     cl->addWidget(ratios_table);
 
@@ -800,10 +800,10 @@ void QuantStatsView::update_rolling() {
         wl_table->setRowHeight(i, 26);
         wl_table->setItem(i, 0,
             make_item(wrows[i].name, Qt::AlignLeft | Qt::AlignVCenter,
-                      QColor(ui::colors::TEXT_SECONDARY)));
+                      QColor(ui::colors::TEXT_SECONDARY())));
         const char* vc = (wrows[i].name.contains("Days") || wrows[i].name == "Win Days")
                          ? ui::colors::TEXT_PRIMARY
-                         : (wrows[i].positive ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+                         : (wrows[i].positive ? ui::colors::POSITIVE() : ui::colors::NEGATIVE);
         wl_table->setItem(i, 1,
             make_item(wrows[i].val, Qt::AlignRight | Qt::AlignVCenter,
                       QColor(vc)));
@@ -839,7 +839,7 @@ void QuantStatsView::update_monte_carlo_chart() {
     stats_bar->setFixedHeight(56);
     stats_bar->setStyleSheet(
         QString("background:%1; border-bottom:1px solid %2;")
-            .arg(ui::colors::BG_RAISED, ui::colors::BORDER_MED));
+            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED));
     auto* sb_lay = new QHBoxLayout(stats_bar);
     sb_lay->setContentsMargins(16, 4, 16, 4);
     sb_lay->setSpacing(24);
@@ -852,11 +852,11 @@ void QuantStatsView::update_monte_carlo_chart() {
 
     struct StatItem { QString label; QString value; const char* color; };
     QVector<StatItem> stats = {
-        {"MEDIAN RETURN",    pct_str(median_ret),  median_ret >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-        {"5TH PERCENTILE",   pct_str(pct5),        pct5 >= 0       ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-        {"95TH PERCENTILE",  pct_str(pct95),       ui::colors::POSITIVE},
-        {"PROB OF LOSS",     pct_str(prob_loss),   ui::colors::WARNING},
-        {"EXP MAX DRAWDOWN", pct_str(exp_max_dd),  ui::colors::NEGATIVE},
+        {"MEDIAN RETURN",    pct_str(median_ret),  median_ret >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()},
+        {"5TH PERCENTILE",   pct_str(pct5),        pct5 >= 0       ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()},
+        {"95TH PERCENTILE",  pct_str(pct95),       ui::colors::POSITIVE()},
+        {"PROB OF LOSS",     pct_str(prob_loss),   ui::colors::WARNING()},
+        {"EXP MAX DRAWDOWN", pct_str(exp_max_dd),  ui::colors::NEGATIVE()},
     };
 
     for (const auto& s : stats) {
@@ -880,7 +880,7 @@ void QuantStatsView::update_monte_carlo_chart() {
 
     // ── Monte Carlo paths chart ───────────────────────────────────────────────
     auto* chart = new QChart;
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
+    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
     chart->setBackgroundRoundness(0);
     chart->setMargins(QMargins(8, 8, 8, 8));
     chart->legend()->hide();
@@ -906,7 +906,7 @@ void QuantStatsView::update_monte_carlo_chart() {
     }
 
     // Dim cyan for background paths
-    QColor path_color(ui::colors::CYAN);
+    QColor path_color(ui::colors::CYAN());
     path_color.setAlpha(40);
     QPen path_pen(path_color);
     path_pen.setWidth(1);
@@ -926,7 +926,7 @@ void QuantStatsView::update_monte_carlo_chart() {
     // Median path — bright cyan
     if (n_steps > 0) {
         auto* median_series = new QLineSeries;
-        QPen med_pen{QColor(ui::colors::CYAN)};
+        QPen med_pen{QColor(ui::colors::CYAN())};
         med_pen.setWidth(2);
         median_series->setPen(med_pen);
         for (int t = 0; t < n_steps; ++t) {
@@ -937,7 +937,7 @@ void QuantStatsView::update_monte_carlo_chart() {
 
     // Zero line
     auto* zero_series = new QLineSeries;
-    QPen zero_pen{QColor(ui::colors::BORDER_BRIGHT)};
+    QPen zero_pen{QColor(ui::colors::BORDER_BRIGHT())};
     zero_pen.setStyle(Qt::DashLine);
     zero_pen.setWidth(1);
     zero_series->setPen(zero_pen);
@@ -949,18 +949,18 @@ void QuantStatsView::update_monte_carlo_chart() {
     auto* x_axis = new QValueAxis;
     x_axis->setRange(1, n_steps > 0 ? n_steps : 252);
     x_axis->setTitleText("Trading Days");
-    x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_SECONDARY)));
-    x_axis->setLabelsBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY)));
-    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED));
+    x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_SECONDARY())));
+    x_axis->setLabelsBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
+    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
     x_axis->setLabelsFont(QFont("Consolas", 8));
 
     auto* y_axis = new QValueAxis;
     y_axis->setTitleText("Cumulative Return (%)");
-    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_SECONDARY)));
-    y_axis->setLabelsBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY)));
-    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM));
-    y_axis->setLinePenColor(QColor(ui::colors::BORDER_MED));
+    y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_SECONDARY())));
+    y_axis->setLabelsBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
+    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    y_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
     y_axis->setLabelsFont(QFont("Consolas", 8));
 
     chart->addAxis(x_axis, Qt::AlignBottom);
@@ -999,13 +999,13 @@ void QuantStatsView::update_monte_carlo_chart() {
 
 QChartView* QuantStatsView::make_chart_view(const QString& title) {
     auto* chart = new QChart;
-    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE)));
+    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
     chart->setBackgroundRoundness(0);
     chart->setMargins(QMargins(8, 8, 8, 8));
     chart->legend()->hide();
     if (!title.isEmpty()) {
         chart->setTitle(title);
-        chart->setTitleBrush(QBrush(QColor(ui::colors::AMBER)));
+        chart->setTitleBrush(QBrush(QColor(ui::colors::AMBER())));
     }
     auto* view = new QChartView(chart, this);
     view->setRenderHint(QPainter::Antialiasing, false);

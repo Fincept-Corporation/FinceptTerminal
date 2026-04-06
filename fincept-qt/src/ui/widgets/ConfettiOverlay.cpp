@@ -111,16 +111,16 @@ void ConfettiOverlay::spawn_burst(int count, float origin_x, float spread, float
         // Mix of shapes: 40% rect, 25% circle, 20% streamer, 15% star
         int shape_roll = rng->bounded(100);
         if (shape_roll < 40)
-            p.shape = Rect;
+            p.shape = Shape::Rect;
         else if (shape_roll < 65)
-            p.shape = Circle;
+            p.shape = Shape::Circle;
         else if (shape_roll < 85)
-            p.shape = Streamer;
+            p.shape = Shape::Streamer;
         else
-            p.shape = Star;
+            p.shape = Shape::Star;
 
         // Streamers are taller and narrower
-        if (p.shape == Streamer)
+        if (p.shape == Shape::Streamer)
             p.size = rng->bounded(3, 6);
 
         particles_.push_back(p);
@@ -222,20 +222,20 @@ void ConfettiOverlay::paintEvent(QPaintEvent*) {
         painter.setBrush(p.color);
 
         switch (p.shape) {
-            case Rect: {
+            case Shape::Rect: {
                 // 3D-ish tumbling rectangle: vary width by rotation
                 float w = p.size * (0.5f + 0.5f * std::abs(std::cos(p.rotation * 0.05f)));
                 float h = p.size * 1.4f;
                 painter.drawRect(QRectF(-w / 2, -h / 2, w, h));
                 break;
             }
-            case Circle:
+            case Shape::Circle:
                 painter.drawEllipse(QPointF(0, 0), p.size * 0.5f, p.size * 0.5f);
                 break;
-            case Star:
+            case Shape::Star:
                 draw_star(painter, p.size * 0.6f);
                 break;
-            case Streamer:
+            case Shape::Streamer:
                 draw_streamer(painter, p.size, p.rotation);
                 break;
         }

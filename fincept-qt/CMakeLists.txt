@@ -143,6 +143,20 @@ FetchContent_MakeAvailable(QSimpleUpdater)
 # QSimpleUpdater's CMakeLists builds a proper STATIC library target with
 # AUTOMOC — we just link against it and add its include dir.
 
+# ── md4c (fast CommonMark markdown parser → HTML) ────────────────────────────
+FetchContent_Declare(
+    md4c
+    GIT_REPOSITORY https://github.com/mity/md4c.git
+    GIT_TAG        release-0.5.2
+)
+FetchContent_MakeAvailable(md4c)
+# md4c builds md4c (parser) and md4c-html (HTML renderer) as static libs.
+# Disable any example/test targets it may expose.
+set_target_properties(md4c PROPERTIES UNITY_BUILD OFF)
+if(TARGET md4c-html)
+    set_target_properties(md4c-html PROPERTIES UNITY_BUILD OFF)
+endif()
+
 # ── QGeoView (interactive map widget with OSM tiles) ─────────────────────────
 FetchContent_Declare(
     QGeoView
@@ -222,6 +236,7 @@ set(STORAGE_SOURCES
     src/storage/repositories/PortfolioRepository.cpp
     src/storage/repositories/WorkflowRepository.cpp
     src/storage/repositories/CustomIndexRepository.cpp
+    src/storage/repositories/DataMappingRepository.cpp
 
     # Workflow migration
     src/storage/sqlite/migrations/v008_workflows.cpp
@@ -234,6 +249,9 @@ set(STORAGE_SOURCES
 
     # Custom Indices — user-defined index creation
     src/storage/sqlite/migrations/v011_custom_indices.cpp
+
+    # Data normalization — mapping persistence and normalized data storage
+    src/storage/sqlite/migrations/v012_data_normalization.cpp
 )
 
 # Python runner
@@ -269,6 +287,7 @@ set(MCP_SOURCES
     src/mcp/tools/PortfolioTools.cpp
     src/mcp/tools/CryptoTradingTools.cpp
     src/mcp/tools/PaperTradingTools.cpp
+    src/mcp/tools/EdgarTools.cpp
     src/mcp/tools/MAAnalyticsTools.cpp
     src/mcp/tools/AltInvestmentsTools.cpp
     src/mcp/tools/DataSourcesTools.cpp
@@ -318,6 +337,7 @@ set(TRADING_SOURCES
 # Services
 set(SERVICE_SOURCES
     src/services/markets/MarketDataService.cpp
+    src/services/data_normalization/DataNormalizationService.cpp
     src/services/news/NewsService.cpp
     src/services/news/NewsClusterService.cpp
     src/services/news/NewsMonitorService.cpp
@@ -373,7 +393,9 @@ set(SERVICE_SOURCES
 
 # UI framework
 set(UI_SOURCES
+    src/ui/markdown/MarkdownRenderer.cpp
     src/ui/theme/Theme.cpp
+    src/ui/theme/ThemeManager.cpp
     src/ui/theme/StyleSheets.cpp
     src/ui/widgets/Card.cpp
     src/ui/widgets/StatusBadge.cpp
@@ -493,6 +515,8 @@ set(SCREEN_SOURCES
     src/screens/data_sources/connectors/CloudStorage.cpp
     src/screens/data_sources/connectors/MarketData.cpp
     src/screens/data_sources/connectors/SearchWarehouse.cpp
+    src/screens/data_sources/connectors/AlternativeData.cpp
+    src/screens/data_sources/connectors/OpenBanking.cpp
     src/screens/notes/NotesScreen.cpp
     src/screens/watchlist/WatchlistScreen.cpp
     src/screens/surface_analytics/SurfaceDemoData.cpp
@@ -646,6 +670,7 @@ set(SCREEN_SOURCES
     src/screens/portfolio/PortfolioPerfChart.cpp
     src/screens/portfolio/PortfolioSectorPanel.cpp
     src/screens/portfolio/PortfolioBlotter.cpp
+    src/screens/portfolio/PortfolioTxnPanel.cpp
     src/screens/portfolio/PortfolioSparkline.cpp
     src/screens/portfolio/PortfolioOrderPanel.cpp
     src/screens/portfolio/PortfolioDetailWrapper.cpp
@@ -755,6 +780,8 @@ set_source_files_properties(
     src/screens/data_sources/connectors/CloudStorage.cpp
     src/screens/data_sources/connectors/MarketData.cpp
     src/screens/data_sources/connectors/SearchWarehouse.cpp
+    src/screens/data_sources/connectors/AlternativeData.cpp
+    src/screens/data_sources/connectors/OpenBanking.cpp
     src/screens/dashboard/DashboardScreen.cpp
     src/screens/dashboard/DashboardStatusBar.cpp
     src/screens/dashboard/DashboardToolBar.cpp
@@ -870,6 +897,7 @@ set_source_files_properties(
     src/screens/portfolio/PortfolioOrderPanel.cpp
     src/screens/portfolio/PortfolioPerfChart.cpp
     src/screens/portfolio/PortfolioScreen.cpp
+    src/screens/portfolio/PortfolioTxnPanel.cpp
     src/screens/portfolio/PortfolioSectorPanel.cpp
     src/screens/portfolio/PortfolioSparkline.cpp
     src/screens/portfolio/PortfolioStatsRibbon.cpp
@@ -922,6 +950,7 @@ set_source_files_properties(
     src/storage/repositories/WatchlistRepository.cpp
     src/storage/repositories/WorkflowRepository.cpp
     src/storage/repositories/CustomIndexRepository.cpp
+    src/storage/repositories/DataMappingRepository.cpp
     # Migration files — each defines sql() helper in anonymous namespace
     src/storage/sqlite/migrations/v001_initial.cpp
     src/storage/sqlite/migrations/v002_llm_chat.cpp
@@ -934,6 +963,7 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v009_instruments.cpp
     src/storage/sqlite/migrations/v010_llm_profiles.cpp
     src/storage/sqlite/migrations/v011_custom_indices.cpp
+    src/storage/sqlite/migrations/v012_data_normalization.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -980,6 +1010,7 @@ set_source_files_properties(
     src/mcp/tools/PortfolioTools.cpp
     src/mcp/tools/CryptoTradingTools.cpp
     src/mcp/tools/PaperTradingTools.cpp
+    src/mcp/tools/EdgarTools.cpp
     src/mcp/tools/MAAnalyticsTools.cpp
     src/mcp/tools/AltInvestmentsTools.cpp
     src/mcp/tools/DataSourcesTools.cpp
@@ -994,7 +1025,20 @@ set_source_files_properties(
 )
 
 # ── Executable ────────────────────────────────────────────────────────────────
-add_executable(FinceptTerminal WIN32
+# WIN32     — suppress console window on Windows
+# MACOSX_BUNDLE — create a proper .app bundle on macOS
+if(WIN32)
+    set(_FINCEPT_EXE_FLAGS WIN32)
+    set(_FINCEPT_PLATFORM_SOURCES resources/app.rc)
+elseif(APPLE)
+    set(_FINCEPT_EXE_FLAGS MACOSX_BUNDLE)
+    set(_FINCEPT_PLATFORM_SOURCES "")
+else()
+    set(_FINCEPT_EXE_FLAGS "")
+    set(_FINCEPT_PLATFORM_SOURCES "")
+endif()
+
+add_executable(FinceptTerminal ${_FINCEPT_EXE_FLAGS}
     ${CORE_SOURCES}
     ${NETWORK_SOURCES}
     ${AUTH_SOURCES}
@@ -1008,7 +1052,7 @@ add_executable(FinceptTerminal WIN32
     ${SCREEN_SOURCES}
     ${APP_SOURCES}
     src/services/updater/UpdateService.cpp
-    resources/app.rc
+    ${_FINCEPT_PLATFORM_SOURCES}
 )
 
 target_include_directories(FinceptTerminal PRIVATE
@@ -1016,6 +1060,47 @@ target_include_directories(FinceptTerminal PRIVATE
     ${whisper_SOURCE_DIR}/include
     ${whisper_SOURCE_DIR}
 )
+
+# ── macOS bundle properties ───────────────────────────────────────────────────
+if(APPLE)
+    set_target_properties(FinceptTerminal PROPERTIES
+        MACOSX_BUNDLE_GUI_IDENTIFIER    "com.fincept.terminal"
+        MACOSX_BUNDLE_BUNDLE_NAME       "Fincept Terminal"
+        MACOSX_BUNDLE_BUNDLE_VERSION    "${CMAKE_PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${CMAKE_PROJECT_VERSION}"
+        MACOSX_BUNDLE_ICON_FILE         "fincept.icns"
+        MACOSX_BUNDLE_COPYRIGHT         "Copyright © 2025 Fincept Corporation"
+    )
+    # Copy .icns into the bundle Resources folder at build time
+    set(_FINCEPT_ICNS "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.icns")
+    if(EXISTS "${_FINCEPT_ICNS}")
+        target_sources(FinceptTerminal PRIVATE "${_FINCEPT_ICNS}")
+        set_source_files_properties("${_FINCEPT_ICNS}"
+            PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+    else()
+        message(WARNING "macOS icon not found at ${_FINCEPT_ICNS} — app will show generic icon. "
+                        "Generate it with: iconutil -c icns -o resources/fincept.icns <iconset>")
+    endif()
+endif()
+
+# ── macOS Qt deployment (equivalent of windeployqt) ──────────────────────────
+if(APPLE AND DEPLOY_QT)
+    find_program(MACDEPLOYQT_EXECUTABLE macdeployqt
+        HINTS "${Qt6_DIR}/../../../bin"
+              "$ENV{QTDIR}/bin"
+    )
+    if(MACDEPLOYQT_EXECUTABLE)
+        add_custom_command(TARGET FinceptTerminal POST_BUILD
+            COMMAND "${MACDEPLOYQT_EXECUTABLE}"
+                "$<TARGET_BUNDLE_DIR:FinceptTerminal>"
+                -no-strip
+            COMMENT "Running macdeployqt to bundle Qt frameworks..."
+        )
+    else()
+        message(WARNING "macdeployqt not found — Qt frameworks will not be bundled. "
+                        "Pass -DCMAKE_PREFIX_PATH=<Qt install dir> to help CMake find it.")
+    endif()
+endif()
 
 # Precompiled header — Qt + std headers parsed once, reused across all TUs
 # QDebug excluded — it adds overhead in Release and is only needed for debugging
@@ -1155,8 +1240,23 @@ target_precompile_headers(FinceptTerminal PRIVATE
 )
 
 # ── OpenSSL (from vcpkg) — needed for Google Sheets JWT signing ───────────────
-set(VCPKG_OPENSSL "C:/windowsdisk/fincept-cpp/vcpkg_installed/x64-windows")
-target_include_directories(FinceptTerminal PRIVATE "${VCPKG_OPENSSL}/include")
+# Override via: cmake -DVCPKG_OPENSSL=<path>  or set VCPKG_INSTALLED_DIR env var.
+if(NOT DEFINED VCPKG_OPENSSL)
+    if(DEFINED ENV{VCPKG_INSTALLED_DIR})
+        set(VCPKG_OPENSSL "$ENV{VCPKG_INSTALLED_DIR}/x64-windows")
+    elseif(DEFINED ENV{VCPKG_ROOT})
+        set(VCPKG_OPENSSL "$ENV{VCPKG_ROOT}/installed/x64-windows")
+    else()
+        # Developer machine default — override on CI via cmake cache variable
+        set(VCPKG_OPENSSL "C:/windowsdisk/fincept-cpp/vcpkg_installed/x64-windows"
+            CACHE PATH "Path to vcpkg x64-windows installed directory")
+    endif()
+endif()
+message(STATUS "VCPKG_OPENSSL resolved to: ${VCPKG_OPENSSL}")
+target_include_directories(FinceptTerminal PRIVATE
+    "${VCPKG_OPENSSL}/include"
+    "${md4c_SOURCE_DIR}/src"
+)
 target_link_libraries(FinceptTerminal PRIVATE
     Qt6::Widgets
     Qt6::Charts
@@ -1169,20 +1269,42 @@ target_link_libraries(FinceptTerminal PRIVATE
     qgeoview
     QSimpleUpdater
     whisper
-    "${VCPKG_OPENSSL}/lib/libcrypto.lib"
-    "${VCPKG_OPENSSL}/lib/libssl.lib"
+    md4c
+    md4c-html
 )
 
-# Copy OpenSSL DLLs to build output
-add_custom_command(TARGET FinceptTerminal POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${VCPKG_OPENSSL}/bin/libcrypto-3-x64.dll"
-        "$<TARGET_FILE_DIR:FinceptTerminal>/libcrypto-3-x64.dll"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${VCPKG_OPENSSL}/bin/libssl-3-x64.dll"
-        "$<TARGET_FILE_DIR:FinceptTerminal>/libssl-3-x64.dll"
-    COMMENT "Copying OpenSSL DLLs..."
-)
+# OpenSSL — Windows only (from vcpkg). macOS uses system OpenSSL; Linux uses system packages.
+if(WIN32)
+    target_link_libraries(FinceptTerminal PRIVATE
+        "${VCPKG_OPENSSL}/lib/libcrypto.lib"
+        "${VCPKG_OPENSSL}/lib/libssl.lib"
+    )
+elseif(APPLE)
+    # macOS Security.framework for Keychain in SecureStorage
+    target_link_libraries(FinceptTerminal PRIVATE
+        "-framework Security"
+    )
+    find_package(OpenSSL QUIET)
+    if(OpenSSL_FOUND)
+        target_link_libraries(FinceptTerminal PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    endif()
+elseif(UNIX)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(FinceptTerminal PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
+# Copy OpenSSL DLLs to build output — Windows only
+if(WIN32)
+    add_custom_command(TARGET FinceptTerminal POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${VCPKG_OPENSSL}/bin/libcrypto-3-x64.dll"
+            "$<TARGET_FILE_DIR:FinceptTerminal>/libcrypto-3-x64.dll"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${VCPKG_OPENSSL}/bin/libssl-3-x64.dll"
+            "$<TARGET_FILE_DIR:FinceptTerminal>/libssl-3-x64.dll"
+        COMMENT "Copying OpenSSL DLLs..."
+    )
+endif()
 
 if(HAS_WEBSOCKETS)
     target_link_libraries(FinceptTerminal PRIVATE Qt6::WebSockets)
@@ -1258,3 +1380,103 @@ add_custom_command(TARGET FinceptTerminal POST_BUILD
         "$<TARGET_FILE_DIR:FinceptTerminal>/scripts"
     COMMENT "Copying Python scripts to build output..."
 )
+
+# Bundle yt-dlp for dashboard YouTube playback on all platforms.
+# Override path with: -DFINCEPT_YTDLP_EXE=/abs/path/to/yt-dlp[.exe]
+set(FINCEPT_YTDLP_EXE "" CACHE FILEPATH "Path to yt-dlp executable to bundle with FinceptTerminal")
+# Default OFF so builds on CI / macOS / Linux succeed without yt-dlp pre-installed.
+# Set ON only for official release builds where yt-dlp must be present.
+option(FINCEPT_REQUIRE_BUNDLED_YTDLP "Fail configure if yt-dlp is missing" OFF)
+
+set(FINCEPT_YTDLP_TO_BUNDLE "")
+if(FINCEPT_YTDLP_EXE)
+    set(FINCEPT_YTDLP_TO_BUNDLE "${FINCEPT_YTDLP_EXE}")
+else()
+    find_program(FINCEPT_YTDLP_AUTO_EXE NAMES yt-dlp yt-dlp.exe)
+    if(FINCEPT_YTDLP_AUTO_EXE)
+        set(FINCEPT_YTDLP_TO_BUNDLE "${FINCEPT_YTDLP_AUTO_EXE}")
+    endif()
+endif()
+
+if(FINCEPT_YTDLP_TO_BUNDLE AND EXISTS "${FINCEPT_YTDLP_TO_BUNDLE}")
+    if(WIN32)
+        set(FINCEPT_YTDLP_OUTPUT_NAME "yt-dlp.exe")
+    else()
+        set(FINCEPT_YTDLP_OUTPUT_NAME "yt-dlp")
+    endif()
+
+    add_custom_command(TARGET FinceptTerminal POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${FINCEPT_YTDLP_TO_BUNDLE}"
+            "$<TARGET_FILE_DIR:FinceptTerminal>/${FINCEPT_YTDLP_OUTPUT_NAME}"
+        COMMENT "Copying yt-dlp for dashboard video playback..."
+    )
+
+    if(UNIX)
+        add_custom_command(TARGET FinceptTerminal POST_BUILD
+            COMMAND chmod +x "$<TARGET_FILE_DIR:FinceptTerminal>/${FINCEPT_YTDLP_OUTPUT_NAME}"
+            COMMENT "Setting executable permission on bundled yt-dlp..."
+        )
+    endif()
+else()
+    set(FINCEPT_YTDLP_MISSING_MSG
+        "yt-dlp not found. Set FINCEPT_YTDLP_EXE or install yt-dlp on build machine. "
+        "Bundling is required so end users need no setup."
+    )
+    if(FINCEPT_REQUIRE_BUNDLED_YTDLP)
+        message(FATAL_ERROR "${FINCEPT_YTDLP_MISSING_MSG}")
+    else()
+        message(WARNING "${FINCEPT_YTDLP_MISSING_MSG}")
+    endif()
+endif()
+
+# ── Install rules ─────────────────────────────────────────────────────────────
+# Used by: cmake --install build --prefix /usr
+# Required for AppImage, .deb, .rpm, and system-wide installation on Linux.
+
+if(WIN32)
+    # Windows: install exe + all DLLs beside it (windeployqt already copies them)
+    install(TARGETS FinceptTerminal RUNTIME DESTINATION ".")
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/"
+            DESTINATION "scripts")
+
+elseif(APPLE)
+    # macOS: install the .app bundle
+    install(TARGETS FinceptTerminal BUNDLE DESTINATION ".")
+
+else()
+    # Linux: FHS-compliant layout
+    install(TARGETS FinceptTerminal
+            RUNTIME DESTINATION "bin")
+
+    # Python analytics scripts
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/"
+            DESTINATION "share/fincept-terminal/scripts"
+            USE_SOURCE_PERMISSIONS)
+
+    # App icon (PNG required for hicolor theme; convert .ico → .png in CI)
+    set(_ICON_PNG "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.png")
+    if(EXISTS "${_ICON_PNG}")
+        install(FILES "${_ICON_PNG}"
+                DESTINATION "share/icons/hicolor/256x256/apps"
+                RENAME "fincept-terminal.png")
+    else()
+        message(STATUS "Linux icon not found at ${_ICON_PNG} — "
+                       "convert resources/fincept.ico to fincept.png for proper desktop integration")
+    endif()
+
+    # .desktop file
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/fincept-terminal.desktop"
+            DESTINATION "share/applications")
+
+    # AppStream metadata
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/fincept-terminal.appdata.xml"
+            DESTINATION "share/metainfo")
+
+    # yt-dlp (if bundled)
+    if(FINCEPT_YTDLP_TO_BUNDLE AND EXISTS "${FINCEPT_YTDLP_TO_BUNDLE}")
+        install(PROGRAMS "${FINCEPT_YTDLP_TO_BUNDLE}"
+                DESTINATION "bin"
+                RENAME "yt-dlp")
+    endif()
+endif()
