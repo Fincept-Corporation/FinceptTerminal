@@ -36,6 +36,14 @@ class CommandBar : public QWidget {
   signals:
     void navigate_to(const QString& screen_id);
 
+    // Emitted when the user types a compound command:
+    //   "markets add settings"   → action="add",     primary="markets", secondary="settings"
+    //   "markets replace news"   → action="replace",  primary="markets", secondary="news"
+    //   "markets remove"         → action="remove",   primary="markets", secondary=""
+    void dock_command(const QString& action,
+                      const QString& primary,
+                      const QString& secondary);
+
   protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
@@ -56,7 +64,13 @@ class CommandBar : public QWidget {
     QVector<ScreenCommand> search(const QString& query) const;
 
     // ── Slash-command asset search ─────────────────────────────────────────────
-    enum class Mode { Screen, SlashPicker, AssetSearch };
+    enum class Mode {
+        Screen,       // normal screen search
+        SlashPicker,  // user typed "/" — picking asset type
+        AssetSearch,  // user picked /type and is typing a symbol
+        DockCommand,  // user typed a valid screen + space — picking add/replace/remove
+        DockSecondary // user picked add/replace — picking the second screen
+    };
     Mode mode_ = Mode::Screen;
 
     QVector<AssetType> asset_types_;
@@ -71,6 +85,15 @@ class CommandBar : public QWidget {
     void fire_asset_search(const QString& query);
     void on_asset_results(const QJsonArray& results);
     void select_asset(const QString& symbol, const QString& type);
+
+    // ── Compound dock command parser ──────────────────────────────────────────
+    bool try_parse_dock_command(const QString& text);
+    QString resolve_screen_id(const QString& token) const;
+    void show_dock_verb_suggestions(const QString& primary_id);
+    void show_dock_secondary_suggestions(const QString& verb, const QString& partial);
+
+    QString dock_primary_id_;  // screen id locked in after user types "<screen> "
+    QString dock_verb_;        // "add" or "replace" — locked in after user picks verb
 
     // ── Dropdown helpers ───────────────────────────────────────────────────────
     void show_dropdown();

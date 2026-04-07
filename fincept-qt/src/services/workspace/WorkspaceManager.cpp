@@ -34,11 +34,21 @@ WorkspaceManager::WorkspaceManager() {
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 void WorkspaceManager::set_main_window(QMainWindow* w) {
-    main_window_ = w;
+    if (w && !windows_.contains(w))
+        windows_.append(w);
 }
 
 void WorkspaceManager::set_router(ScreenRouter* r) {
-    router_ = r;
+    if (r && !routers_.contains(r))
+        routers_.append(r);
+}
+
+void WorkspaceManager::remove_window(QMainWindow* w) {
+    windows_.removeAll(w);
+}
+
+void WorkspaceManager::remove_router(ScreenRouter* r) {
+    routers_.removeAll(r);
 }
 
 // ── Participant registration ──────────────────────────────────────────────────
@@ -281,14 +291,14 @@ void WorkspaceManager::on_screen_changed(const QString& screen_id) {
 void WorkspaceManager::capture_from_ui() {
     if (!current_workspace_.has_value()) return;
 
-    // Window geometry
-    if (main_window_)
+    // Window geometry — use primary window (first registered)
+    if (!windows_.isEmpty())
         current_workspace_->window_geometry_base64 =
-            main_window_->saveGeometry().toBase64();
+            windows_.first()->saveGeometry().toBase64();
 
-    // Active screen
-    if (router_)
-        current_workspace_->active_screen = router_->current_screen_id();
+    // Active screen — use primary router (first registered)
+    if (!routers_.isEmpty())
+        current_workspace_->active_screen = routers_.first()->current_screen_id();
 
     // Per-screen states from participants
     current_workspace_->screen_states.clear();
@@ -341,14 +351,14 @@ void WorkspaceManager::apply_to_ui() {
         }
     }
 
-    // Restore window geometry
-    if (main_window_ && !ws.window_geometry_base64.isEmpty())
-        main_window_->restoreGeometry(
+    // Restore window geometry — apply to primary window
+    if (!windows_.isEmpty() && !ws.window_geometry_base64.isEmpty())
+        windows_.first()->restoreGeometry(
             QByteArray::fromBase64(ws.window_geometry_base64.toLatin1()));
 
-    // Navigate to active screen
-    if (router_ && !ws.active_screen.isEmpty())
-        router_->navigate(ws.active_screen);
+    // Navigate to active screen — apply to primary router
+    if (!routers_.isEmpty() && !ws.active_screen.isEmpty())
+        routers_.first()->navigate(ws.active_screen);
 }
 
 void WorkspaceManager::ensure_workspaces_dir() const {

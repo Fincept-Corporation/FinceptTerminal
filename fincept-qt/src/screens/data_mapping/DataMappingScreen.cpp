@@ -1115,7 +1115,7 @@ QWidget* DataMappingScreen::create_field_mapping_panel() {
     json_tree_->setHeaderLabels({"Key", "Value", "Type"});
     json_tree_->setColumnWidth(0, 160);
     json_tree_->setColumnWidth(1, 200);
-    json_tree_->setMinimumWidth(300);
+    json_tree_->setMinimumWidth(250);
     split->addWidget(json_tree_);
 
     // Mapping table
@@ -1124,7 +1124,7 @@ QWidget* DataMappingScreen::create_field_mapping_panel() {
     mapping_table_->setHorizontalHeaderLabels({"Target Field", "Expression", "Transform", "Default"});
     mapping_table_->horizontalHeader()->setStretchLastSection(true);
     mapping_table_->verticalHeader()->setVisible(false);
-    mapping_table_->setMinimumWidth(400);
+    mapping_table_->setMinimumWidth(300);
     mapping_table_->setMinimumHeight(250);
     split->addWidget(mapping_table_);
 

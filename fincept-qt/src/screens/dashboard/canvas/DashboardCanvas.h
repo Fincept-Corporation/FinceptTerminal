@@ -73,6 +73,16 @@ class DashboardCanvas : public QWidget {
     QTimer* scroll_timer_ = nullptr;
     QPoint last_drag_canvas_pos_;
 
+    // Debounce rapid resize events (e.g. ADS splitter drag).
+    // Column recalculation and compaction only happen after the timer fires,
+    // preventing layout destruction during transient width changes.
+    QTimer* resize_timer_ = nullptr;
+    int pending_resize_w_ = 0;
+
+    // The column count the user last explicitly set (via load/apply/drag).
+    // Responsive shrink is allowed, but we restore this when width permits.
+    int canonical_cols_ = 12;
+
     fincept::ui::ThemeTokens tokens_{};
 };
 

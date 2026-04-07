@@ -1,5 +1,6 @@
 // src/screens/portfolio/PortfolioScreen.h
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "screens/portfolio/PortfolioTypes.h"
 
 #include <QHideEvent>
@@ -25,10 +26,14 @@ class PortfolioFFNView;
 class PortfolioAiPanel;
 class PortfolioAgentPanel;
 
-class PortfolioScreen : public QWidget {
+class PortfolioScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit PortfolioScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "portfolio"; }
 
   protected:
     void showEvent(QShowEvent* event) override;

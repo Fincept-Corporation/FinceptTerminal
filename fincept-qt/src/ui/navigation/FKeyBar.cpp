@@ -6,7 +6,8 @@ namespace fincept::ui {
 
 TabBar::TabBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(32);
-    setStyleSheet("background:#0e0e0e;border-bottom:1px solid #1a1a1a;");
+    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                      .arg(colors::BG_BASE).arg(colors::BORDER_DIM));
     auto* scroll_area = new QScrollArea(this);
     scroll_area->setWidgetResizable(true);
     scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -68,11 +69,14 @@ void TabBar::set_active(const QString& tab_id) {
 void TabBar::update_styles() {
     for (auto* btn : tab_buttons_) {
         bool active = btn->property("tab_id").toString() == active_id_;
-        btn->setStyleSheet(active ? "QPushButton{background:#b45309;color:#e5e5e5;border:1px solid #4d3300;"
-                                    "padding:0 8px;font-weight:600;letter-spacing:0.5px;}"
-                                  : "QPushButton{background:transparent;color:#ffffff;border:none;"
-                                    "padding:0 8px;letter-spacing:0.5px;}"
-                                    "QPushButton:hover{color:#d97706;background:#111111;}");
+        btn->setStyleSheet(active
+            ? QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
+                      "padding:0 8px;font-weight:600;letter-spacing:0.5px;}")
+                  .arg(colors::AMBER).arg(colors::TEXT_PRIMARY).arg(colors::AMBER_DIM)
+            : QString("QPushButton{background:transparent;color:%1;border:none;"
+                      "padding:0 8px;letter-spacing:0.5px;}"
+                      "QPushButton:hover{color:%2;background:%3;}")
+                  .arg(colors::TEXT_PRIMARY).arg(colors::AMBER).arg(colors::BG_RAISED));
     }
 }
 

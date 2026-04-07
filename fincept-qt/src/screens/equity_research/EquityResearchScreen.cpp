@@ -268,4 +268,24 @@ void EquityResearchScreen::update_quote_bar(const services::equity::QuoteData& q
     hl_label_->setText(QString("H:%1%2  L:%1%3").arg(cs).arg(q.high, 0, 'f', 2).arg(q.low, 0, 'f', 2));
 }
 
+QVariantMap EquityResearchScreen::save_state() const {
+    return {
+        {"symbol",    current_symbol_},
+        {"tab_index", tab_widget_ ? tab_widget_->currentIndex() : 0}
+    };
+}
+
+void EquityResearchScreen::restore_state(const QVariantMap& state) {
+    const QString sym = state.value("symbol").toString();
+    if (!sym.isEmpty()) {
+        current_symbol_ = sym;
+        services::equity::EquityResearchService::instance().load_symbol(sym);
+    }
+    if (tab_widget_) {
+        const int idx = state.value("tab_index", 0).toInt();
+        if (idx >= 0 && idx < tab_widget_->count())
+            tab_widget_->setCurrentIndex(idx);
+    }
+}
+
 } // namespace fincept::screens

@@ -35,7 +35,7 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
     go_btn->setFixedWidth(32);
     go_btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: none; "
                                   "font-size: 9px; font-weight: bold; padding: 3px; }"
-                                  "QPushButton:hover { background: #e8860a; }")
+                                  + QString("QPushButton:hover { background: %1; }").arg(ui::colors::AMBER))
                               .arg(ui::colors::AMBER, ui::colors::BG_BASE));
     connect(go_btn, &QPushButton::clicked, this, [this]() {
         QString text = symbols_input_->text().trimmed().toUpper();

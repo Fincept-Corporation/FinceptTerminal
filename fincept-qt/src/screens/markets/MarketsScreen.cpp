@@ -133,7 +133,11 @@ void MarketsScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     if (auto_update_ && auto_refresh_timer_)
         auto_refresh_timer_->start();
-    refresh_all();
+    // Only refresh if no data yet or data is stale (> 5 min old)
+    bool needs_refresh = !last_refresh_time_.isValid() ||
+                         last_refresh_time_.secsTo(QDateTime::currentDateTime()) >= kMinRefreshIntervalSec;
+    if (needs_refresh)
+        refresh_all();
 }
 
 void MarketsScreen::hideEvent(QHideEvent* event) {
@@ -324,6 +328,7 @@ void MarketsScreen::refresh_all() {
     auto finish = [this, counter, remaining]() {
         if (--(*remaining) > 0) return;
         refresh_in_progress_ = false;
+        last_refresh_time_ = QDateTime::currentDateTime();
         delete remaining;
         counter->deleteLater();
         if (status_label_) {

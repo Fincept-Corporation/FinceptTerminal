@@ -14,7 +14,7 @@ NewsWidget::NewsWidget(QWidget* parent) : BaseWidget("MARKET NEWS", parent, ui::
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea { border: none; background: transparent; }"
                           "QScrollBar:vertical { width: 6px; background: transparent; }"
-                          "QScrollBar::handle:vertical { background: #222222; border-radius: 3px; }"
+                          + QString("QScrollBar::handle:vertical { background: %1; border-radius: 3px; }").arg(ui::colors::BORDER_MED) +
                           "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
 
     auto* container = new QWidget;

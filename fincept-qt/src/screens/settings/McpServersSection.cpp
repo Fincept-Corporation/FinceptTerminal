@@ -165,7 +165,7 @@ QWidget* McpServersSection::build_servers_tab() {
     remove_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::NEGATIVE()) + ";border:1px solid " + QString(ui::colors::BG_RAISED()) + ";"
                                "border-radius:3px;padding:5px 10px;}"
                                "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}"
-                               "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:#222;}");
+                               "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";}");
     connect(remove_btn_, &QPushButton::clicked, this, &McpServersSection::on_remove_server);
 
     btns->addWidget(add_btn_);
@@ -202,7 +202,7 @@ QWidget* McpServersSection::build_servers_tab() {
     start_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::POSITIVE()) + ";border:1px solid " + QString(ui::colors::POSITIVE()) + ";"
                               "border-radius:4px;font-weight:600;padding:0 16px;}"
                               "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}"
-                              "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:#222;background:" + QString(ui::colors::BG_BASE()) + ";}");
+                              "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";background:" + QString(ui::colors::BG_BASE()) + ";}");
     connect(start_btn_, &QPushButton::clicked, this, &McpServersSection::on_start_server);
 
     stop_btn_ = new QPushButton("■  Stop");
@@ -211,7 +211,7 @@ QWidget* McpServersSection::build_servers_tab() {
     stop_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::NEGATIVE()) + ";color:" + QString(ui::colors::NEGATIVE()) + ";border:1px solid " + QString(ui::colors::NEGATIVE()) + ";"
                              "border-radius:4px;font-weight:600;padding:0 16px;}"
                              "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}"
-                             "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:#222;background:" + QString(ui::colors::BG_BASE()) + ";}");
+                             "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";background:" + QString(ui::colors::BG_BASE()) + ";}");
     connect(stop_btn_, &QPushButton::clicked, this, &McpServersSection::on_stop_server);
 
     server_btns->addWidget(start_btn_);
@@ -334,8 +334,8 @@ void McpServersSection::on_add_server() {
     auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     btns->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " + QString(ui::colors::BORDER_BRIGHT()) + ";"
                         "border-radius:3px;padding:6px 16px;}"
-                        "QPushButton:hover{background:#222;}"
-                        "QPushButton[text='OK']{background:" + QString(ui::colors::AMBER()) + ";color:#000;border:none;}"
+                        "QPushButton:hover{background:" + QString(ui::colors::BG_HOVER()) + ";}"
+                        "QPushButton[text='OK']{background:" + QString(ui::colors::AMBER()) + ";color:" + QString(ui::colors::BG_BASE()) + ";border:none;}"
                         "QPushButton[text='OK']:hover{background:" + QString(ui::colors::AMBER_DIM()) + ";}");
     connect(btns, &QDialogButtonBox::accepted, dlg, &QDialog::accept);
     connect(btns, &QDialogButtonBox::rejected, dlg, &QDialog::reject);
@@ -407,7 +407,7 @@ void McpServersSection::load_servers() {
         else if (cfg.status == ServerStatus::Error)
             item->setForeground(QColor("" + QString(ui::colors::NEGATIVE()) + ""));
         else
-            item->setForeground(QColor("#888"));
+            item->setForeground(QColor(ui::colors::TEXT_SECONDARY.get()));
 
         item->setToolTip(cfg.command + " " + cfg.args.join(' '));
         server_list_->addItem(item);
@@ -438,7 +438,7 @@ void McpServersSection::load_tools() {
 
         if (t.is_internal) {
             server_item->setForeground(QColor("" + QString(ui::colors::AMBER()) + ""));
-            cat_item->setForeground(QColor("#888"));
+            cat_item->setForeground(QColor(ui::colors::TEXT_SECONDARY.get()));
         } else {
             server_item->setForeground(QColor("" + QString(ui::colors::POSITIVE()) + ""));
             cat_item->setForeground(QColor("" + QString(ui::colors::INFO()) + ""));

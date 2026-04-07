@@ -220,7 +220,18 @@ void PythonRunner::start_next() {
 
         auto* proc = new QProcess(this);
         QStringList full_args;
-        full_args << script_path;
+
+        // If the script is inside a sub-package (contains '/'), use -m <module>
+        // so Python can resolve relative imports (from .core import ...).
+        // Convert "Analytics/economics/trade_geopolitics.py" → "-m Analytics.economics.trade_geopolitics"
+        if (!is_code && req.script.contains('/')) {
+            QString module = req.script;
+            module.remove(".py");
+            module.replace('/', '.');
+            full_args << "-m" << module;
+        } else {
+            full_args << script_path;
+        }
         if (!is_code)
             full_args.append(req.args);
 
@@ -230,7 +241,25 @@ void PythonRunner::start_next() {
         env.insert("PYTHONDONTWRITEBYTECODE", "1");
         env.insert("PYTHONUNBUFFERED", "1");
         env.insert("FINCEPT_DATA_DIR", PythonSetupManager::instance().install_dir());
+        // Add scripts dir to PYTHONPATH so package-relative imports (from .core import ...)
+        // work when scripts inside sub-packages are run directly as script files.
+        QString existing_pypath = env.value("PYTHONPATH");
+        QString new_pypath = scripts_dir_ + (existing_pypath.isEmpty() ? "" : ";" + existing_pypath);
+
+        // For nested packages invoked with -m (e.g. agents/finagent_core/main.py → -m agents.finagent_core.main),
+        // the __init__.py may use absolute imports like "from finagent_core.xxx import ...".
+        // These need the parent directory of the package on PYTHONPATH.
+        // e.g. "from finagent_core.core_agent import ..." needs scripts/agents/ on the path.
+        if (!is_code && req.script.contains('/')) {
+            QString script_dir = QFileInfo(scripts_dir_ + "/" + req.script).dir().absolutePath();
+            QString parent_of_pkg = QFileInfo(script_dir).dir().absolutePath();
+            if (parent_of_pkg != scripts_dir_ && !new_pypath.contains(parent_of_pkg))
+                new_pypath = parent_of_pkg + ";" + new_pypath;
+        }
+
+        env.insert("PYTHONPATH", new_pypath);
         proc->setProcessEnvironment(env);
+        proc->setWorkingDirectory(scripts_dir_);
 
 #ifdef _WIN32
         proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {

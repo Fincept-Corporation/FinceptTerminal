@@ -25,13 +25,11 @@ PARAMETERS:
   - base_currency: Base currency for analysis (default: 'USD')
   - seasonal_adjustment: Seasonal adjustment method (default: true)
   - lookback_period: Historical analysis period (default: 10 years)
-
+"""
 
 from decimal import Decimal
 from typing import Dict, List, Tuple, Optional, Any, Union
 from datetime import datetime, timedelta
-"""
-
 import pandas as pd
 import numpy as np
 from .core import EconomicsBase, ValidationError, CalculationError, DataError, CalculationUtils

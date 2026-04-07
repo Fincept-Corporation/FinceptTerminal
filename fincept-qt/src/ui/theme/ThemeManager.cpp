@@ -112,6 +112,40 @@ const ThemeTokens THEME_MIDNIGHT = {
     .chart_colors  = {"#2563eb","#38bdf8","#22c55e","#ef4444","#f59e0b","#a78bfa"},
 };
 
+const ThemeTokens THEME_LIGHT = {
+    .name          = "Light",
+    // --- Backgrounds (lightest → slightly darker) ---
+    .bg_base       = "#ffffff",
+    .bg_surface    = "#f5f5f5",
+    .bg_raised     = "#ebebeb",
+    .bg_hover      = "#e0e0e0",
+    // --- Borders ---
+    .border_dim    = "#e5e5e5",
+    .border_med    = "#d4d4d4",
+    .border_bright = "#a3a3a3",
+    // --- Text (dark on light) ---
+    .text_primary  = "#171717",
+    .text_secondary= "#525252",
+    .text_tertiary = "#737373",
+    .text_dim      = "#a3a3a3",
+    // --- Accent (darker amber for white-bg contrast, WCAG AA compliant) ---
+    .accent        = "#b45309",
+    .accent_dim    = "#fef3c7",
+    // --- Functional (deepened for white-bg readability) ---
+    .positive      = "#15803d",
+    .negative      = "#dc2626",
+    .warning       = "#a16207",
+    .info          = "#1d4ed8",
+    .cyan          = "#0e7490",
+    // --- Table ---
+    .row_alt       = "#fafafa",
+    // --- Font ---
+    .font_family   = "'Consolas','Courier New',monospace",
+    .font_size_base= 14,
+    // --- Chart colors (deeper shades for white background) ---
+    .chart_colors  = {"#b45309","#0e7490","#15803d","#dc2626","#7c3aed","#a16207"},
+};
+
 // ---------------------------------------------------------------------------
 // ThemeManager implementation
 // ---------------------------------------------------------------------------
@@ -127,10 +161,11 @@ ThemeManager& ThemeManager::instance() {
 }
 
 void ThemeManager::apply_theme(const QString& name) {
-    if (name == "Bloomberg Dark")   current_ = THEME_BLOOMBERG;
-    else if (name == "Matrix")      current_ = THEME_MATRIX;
+    if (name == "Bloomberg Dark")     current_ = THEME_BLOOMBERG;
+    else if (name == "Matrix")        current_ = THEME_MATRIX;
     else if (name == "Midnight Blue") current_ = THEME_MIDNIGHT;
-    else                            current_ = THEME_OBSIDIAN;
+    else if (name == "Light")         current_ = THEME_LIGHT;
+    else                              current_ = THEME_OBSIDIAN;
 
     // Re-apply custom accent override if one was set
     if (!accent_override_.isEmpty())
@@ -165,7 +200,7 @@ QString ThemeManager::current_theme_name() const {
 }
 
 QStringList ThemeManager::available_themes() {
-    return {"Obsidian", "Bloomberg Dark", "Matrix", "Midnight Blue"};
+    return {"Obsidian", "Bloomberg Dark", "Matrix", "Midnight Blue", "Light"};
 }
 
 QStringList ThemeManager::available_densities() {
@@ -286,6 +321,72 @@ QString ThemeManager::build_global_qss() const {
         QMenu { background: %5; color: %2; border: 1px solid %6; }
         QMenu::item:selected { background: %12; }
         QMenu::separator { background: %6; height: 1px; }
+
+        /* ── ADS Docking System ─────────────────────────────────────────── */
+        ads--CDockContainerWidget { background: %1; }
+        ads--CDockAreaWidget { background: %1; }
+        ads--CDockAreaTitleBar {
+            background: %1;
+            border-bottom: 1px solid %6;
+            padding: 0px;
+            min-height: 22px;
+            max-height: 22px;
+        }
+        ads--CDockAreaWidget[focused="true"] ads--CDockAreaTitleBar {
+            border-bottom: 1px solid %9;
+        }
+        ads--CDockWidgetTab {
+            background: %1;
+            border: none;
+            padding: 1px 6px;
+            min-height: 20px;
+            max-height: 20px;
+        }
+        ads--CDockWidgetTab[activeTab="true"] {
+            background: %5;
+            border-bottom: 2px solid %9;
+        }
+        ads--CDockWidgetTab[focused="true"] {
+            background: %9;
+        }
+        ads--CDockWidgetTab #dockWidgetTabLabel {
+            color: %10;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        ads--CDockWidgetTab[activeTab="true"] #dockWidgetTabLabel {
+            color: %2;
+        }
+        ads--CDockWidgetTab[focused="true"] #dockWidgetTabLabel {
+            color: #ffffff;
+        }
+        ads--CDockWidget {
+            background: %1;
+            border: none;
+        }
+        ads--CDockSplitter::handle {
+            background-color: %6;
+        }
+        #tabCloseButton {
+            background: none; border: none; padding: 0px;
+            max-width: 12px; max-height: 12px; color: #bbbbbb;
+        }
+        #tabCloseButton:hover { background: rgba(255, 255, 255, 24); color: #ffffff; }
+        #tabCloseButton:pressed { background: rgba(255, 255, 255, 48); }
+        ads--CDockWidgetTab[focused="true"] > #tabCloseButton:hover {
+            background: rgba(255, 255, 255, 48);
+        }
+        #tabsMenuButton { background: none; border: none; padding: 0px; color: #bbbbbb; }
+        #tabsMenuButton::menu-indicator { image: none; }
+        #tabsMenuButton:hover { background: rgba(255, 255, 255, 24); color: #ffffff; }
+        #dockAreaCloseButton { background: none; border: none; padding: 0px; color: #bbbbbb; }
+        #dockAreaCloseButton:hover { background: rgba(255, 255, 255, 24); color: #ffffff; }
+        #detachGroupButton { background: none; border: none; padding: 0px; color: #bbbbbb; }
+        #detachGroupButton:hover { background: rgba(255, 255, 255, 24); color: #ffffff; }
+        ads--CTitleBarButton { padding: 0px; max-width: 14px; max-height: 14px; color: #bbbbbb; }
+        ads--CTitleBarButton:hover { color: #ffffff; }
+        ads--CAutoHideSideBar { background: %1; border: none; }
+        QScrollArea#dockWidgetScrollArea { padding: 0px; border: none; }
     )")
     // %1  bg_base
     .arg(t.bg_base)

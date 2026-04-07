@@ -6,7 +6,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QStackedWidget>
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -27,24 +26,31 @@ class HDXDataPanel : public QWidget {
     void build_ui();
     void connect_service();
     void populate_table(const QVector<fincept::services::geo::HDXDataset>& datasets);
+    void show_loading(bool on);
 
-    // Views
-    QStackedWidget* view_stack_ = nullptr;
+    // View tab buttons
     QVector<QPushButton*> view_buttons_;
     int active_view_ = 0;
 
     // Search
     QLineEdit* search_edit_ = nullptr;
 
-    // Datasets table
+    // Datasets table + loading overlay
     QTableWidget* datasets_table_ = nullptr;
+    QLabel*       loading_label_  = nullptr;
 
-    // Explorer filters
+    // Explorer filter bar (shown only on Explorer tab)
+    QWidget*  explorer_bar_  = nullptr;
     QComboBox* country_combo_ = nullptr;
-    QComboBox* topic_combo_ = nullptr;
+    QComboBox* topic_combo_   = nullptr;
 
-    // Stats
+    // Stats badge
     QLabel* dataset_count_ = nullptr;
+
+    // Per-view result cache (avoids re-fetching on tab switch)
+    QVector<fincept::services::geo::HDXDataset> cache_conflicts_;
+    QVector<fincept::services::geo::HDXDataset> cache_humanitarian_;
+    QVector<fincept::services::geo::HDXDataset> cache_datasets_;
 };
 
 } // namespace fincept::screens

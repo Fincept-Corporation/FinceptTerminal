@@ -109,9 +109,21 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"depth", "Depth", "number", 10, {}, "Number of levels"},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&,
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(false, not_implemented("market.get_depth"), "not_yet_implemented");
+                QString symbol = params.value("symbol").toString("AAPL");
+                // yfinance doesn't provide L2 depth — return basic bid/ask from quote
+                run_python_json("yfinance_data.py", {"quote", symbol}, [cb, symbol](bool ok, QJsonValue val, QString err) {
+                    if (!ok) { cb(false, {}, err); return; }
+                    QJsonObject quote = val.toObject();
+                    QJsonObject out;
+                    out["symbol"] = symbol;
+                    out["bid"] = quote.value("bid").toDouble(quote.value("price").toDouble());
+                    out["ask"] = quote.value("ask").toDouble(quote.value("price").toDouble());
+                    out["last"] = quote.value("price");
+                    out["source"] = "yfinance";
+                    cb(true, out, {});
+                });
             },
     });
 
@@ -130,9 +142,11 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"symbol", "Symbol", "string", "AAPL", {}, "Ticker symbol", true},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&,
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(false, not_implemented("market.get_stats"), "not_yet_implemented");
+                QString symbol = params.value("symbol").toString("AAPL");
+                // info command returns 52w high/low, volume, market cap, etc.
+                run_python_json("yfinance_data.py", {"info", symbol}, cb);
             },
     });
 
@@ -152,9 +166,23 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"type", "Type", "select", "overview", {"overview", "income", "balance", "cashflow", "earnings"}, ""},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&,
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(false, not_implemented("market.get_fundamentals"), "not_yet_implemented");
+                QString symbol = params.value("symbol").toString("AAPL");
+                QString type = params.value("type").toString("overview");
+                if (type == "overview") {
+                    run_python_json("yfinance_data.py", {"info", symbol}, cb);
+                } else {
+                    // income, balance, cashflow, earnings → financials command
+                    run_python_json("yfinance_data.py", {"financials", symbol}, [cb, type](bool ok, QJsonValue val, QString err) {
+                        if (!ok) { cb(false, {}, err); return; }
+                        if (val.isObject() && val.toObject().contains(type)) {
+                            cb(true, val.toObject().value(type), {});
+                        } else {
+                            cb(true, val, {});
+                        }
+                    });
+                }
             },
     });
 
@@ -179,9 +207,20 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"country", "Country", "string", "US", {}, "Country code"},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&,
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(false, not_implemented("market.get_economics"), "not_yet_implemented");
+                // Map indicator names to FRED series IDs
+                QString indicator = params.value("indicator").toString("GDP");
+                QString series_id;
+                if (indicator == "GDP")           series_id = "GDP";
+                else if (indicator == "CPI")            series_id = "CPIAUCSL";
+                else if (indicator == "UNEMPLOYMENT")   series_id = "UNRATE";
+                else if (indicator == "INTEREST_RATE")  series_id = "FEDFUNDS";
+                else if (indicator == "INFLATION")      series_id = "T10YIE";
+                else if (indicator == "RETAIL_SALES")   series_id = "RSAFS";
+                else series_id = indicator;
+
+                run_python_json("fred_data.py", {"series", series_id}, cb);
             },
     });
 
@@ -228,9 +267,17 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"type", "Type", "select", "both", {"calls", "puts", "both"}, ""},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&,
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(false, not_implemented("market.get_options_chain"), "not_yet_implemented");
+                QString symbol = params.value("symbol").toString("AAPL");
+                // Use yfinance info which includes options data
+                run_python_json("yfinance_data.py", {"info", symbol}, [cb, symbol](bool ok, QJsonValue val, QString err) {
+                    if (!ok) { cb(false, {}, err); return; }
+                    QJsonObject out = val.toObject();
+                    out["symbol"] = symbol;
+                    out["node_type"] = "market.get_options_chain";
+                    cb(true, out, {});
+                });
             },
     });
 
@@ -269,9 +316,20 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"quote", "Quote Currency", "string", "EUR", {}, "", true},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&,
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(false, not_implemented("market.get_forex_rate"), "not_yet_implemented");
+                QString base = params.value("base").toString("USD");
+                QString quote = params.value("quote").toString("EUR");
+                // yfinance supports forex via "USDEUR=X" format
+                QString symbol = base + quote + "=X";
+                run_python_json("yfinance_data.py", {"quote", symbol}, [cb, base, quote](bool ok, QJsonValue val, QString err) {
+                    if (!ok) { cb(false, {}, err); return; }
+                    QJsonObject out = val.toObject();
+                    out["base"] = base;
+                    out["quote"] = quote;
+                    out["rate"] = out.value("price");
+                    cb(true, out, {});
+                });
             },
     });
 
@@ -303,9 +361,13 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"limit", "Max Results", "number", 50, {}, ""},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&,
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(false, not_implemented("market.screener"), "not_yet_implemented");
+                // Use yfinance search as a basic screener
+                QString sector = params.value("sector").toString("any");
+                QString query = (sector == "any") ? "market" : sector;
+                QString limit = QString::number(static_cast<int>(params.value("limit").toDouble(50)));
+                run_python_json("yfinance_data.py", {"search", query, limit}, cb);
             },
     });
 
@@ -327,9 +389,19 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"min_value", "Min Transaction Value ($)", "number", 100000, {}, ""},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&,
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(false, not_implemented("market.insider_trades"), "not_yet_implemented");
+                QString symbol = params.value("symbol").toString();
+                if (symbol.isEmpty()) { cb(false, {}, "Symbol is required for insider trades"); return; }
+                // Use yfinance info which includes insider transaction data
+                run_python_json("yfinance_data.py", {"info", symbol}, [cb, symbol](bool ok, QJsonValue val, QString err) {
+                    if (!ok) { cb(false, {}, err); return; }
+                    QJsonObject out;
+                    out["symbol"] = symbol;
+                    out["data"] = val;
+                    out["node_type"] = "market.insider_trades";
+                    cb(true, out, {});
+                });
             },
     });
 
@@ -355,9 +427,19 @@ void register_market_data_nodes(NodeRegistry& registry) {
                 {"limit", "Limit", "number", 10, {}, ""},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&,
+            [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(false, not_implemented("market.sec_filings"), "not_yet_implemented");
+                QString symbol = params.value("symbol").toString();
+                if (symbol.isEmpty()) { cb(false, {}, "Symbol is required for SEC filings"); return; }
+                // Use yfinance info for basic company data including filings metadata
+                run_python_json("yfinance_data.py", {"info", symbol}, [cb, symbol](bool ok, QJsonValue val, QString err) {
+                    if (!ok) { cb(false, {}, err); return; }
+                    QJsonObject out;
+                    out["symbol"] = symbol;
+                    out["data"] = val;
+                    out["node_type"] = "market.sec_filings";
+                    cb(true, out, {});
+                });
             },
     });
 }

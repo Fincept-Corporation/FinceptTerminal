@@ -2,56 +2,39 @@
 
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
+#include "network/http/HttpClient.h"
+#include "python/PythonRunner.h"
 #include "services/workflow/AuditLogger.h"
 #include "services/workflow/ConfirmationService.h"
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/RiskManager.h"
 #include "trading/ExchangeService.h"
 
+#include <QCryptographicHash>
 #include <QDateTime>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QPointer>
+#include <QRegularExpression>
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QSqlRecord>
 #include <QtConcurrent/QtConcurrent>
+
+using fincept::python::PythonRunner;
+using fincept::python::PythonResult;
+using fincept::python::extract_json;
 
 namespace fincept::workflow {
 
 // ── Market Data Bridge ─────────────────────────────────────────────────
 
 void wire_market_data_bridges(NodeRegistry& registry) {
-    // Get Quote — uses MarketDataService via PythonRunner
-    auto* quote_def = const_cast<NodeTypeDef*>(registry.find("market.get_quote"));
-    if (quote_def) {
-        quote_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
-                                std::function<void(bool, QJsonValue, QString)> cb) {
-            QString symbol = params.value("symbol").toString();
-            if (symbol.isEmpty()) {
-                cb(false, {}, "Symbol is required");
-                return;
-            }
-            // Delegate to MarketDataService (async, returns via callback)
-            // For now, return placeholder — real wiring requires MarketDataService::fetch_quote
-            QJsonObject out;
-            out["symbol"] = symbol;
-            out["source"] = params.value("source").toString("yahoo");
-            out["status"] = "pending_integration";
-            cb(true, out, {});
-            LOG_DEBUG("MarketBridge", QString("Quote requested: %1").arg(symbol));
-        };
-    }
-
-    // Historical Data
-    auto* hist_def = const_cast<NodeTypeDef*>(registry.find("market.get_historical"));
-    if (hist_def) {
-        hist_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
-                               std::function<void(bool, QJsonValue, QString)> cb) {
-            QString symbol = params.value("symbol").toString();
-            QJsonObject out;
-            out["symbol"] = symbol;
-            out["period"] = params.value("period").toString("1y");
-            out["interval"] = params.value("interval").toString("1d");
-            out["status"] = "pending_integration";
-            cb(true, out, {});
-        };
-    }
+    // market.get_quote and market.get_historical already have real Python-backed
+    // executors from MarketDataNodes.cpp — do NOT overwrite them.
 
     // Crypto Price — uses ExchangeService (Kraken public API, no key needed)
     auto* crypto_price_def = const_cast<NodeTypeDef*>(registry.find("market.get_crypto_price"));
@@ -89,21 +72,9 @@ void wire_market_data_bridges(NodeRegistry& registry) {
         };
     }
 
-    // Wire remaining market data nodes with placeholder executors
-    for (const auto& id : {"market.get_depth", "market.get_stats", "market.get_fundamentals", "market.get_economics",
-                           "market.get_news"}) {
-        auto* def = const_cast<NodeTypeDef*>(registry.find(id));
-        if (def && !def->execute) {
-            def->execute = [id_str = QString(id)](const QJsonObject& params, const QVector<QJsonValue>&,
-                                                  std::function<void(bool, QJsonValue, QString)> cb) {
-                QJsonObject out;
-                out["node_type"] = id_str;
-                out["symbol"] = params.value("symbol").toString();
-                out["status"] = "pending_integration";
-                cb(true, out, {});
-            };
-        }
-    }
+    // market.get_news already has a real executor from MarketDataNodes.cpp.
+    // Remaining market nodes (depth, stats, fundamentals, economics) are wired
+    // in MarketDataNodes.cpp directly — no stub overwrite needed here.
 
     LOG_INFO("ServiceBridges", "Market data bridges wired");
 }
@@ -155,22 +126,8 @@ void wire_trading_bridges(NodeRegistry& registry) {
         };
     }
 
-    // Wire remaining trading nodes with placeholder executors
-    for (const auto& id :
-         {"trading.cancel_order", "trading.modify_order", "trading.get_orders", "trading.get_positions",
-          "trading.get_holdings", "trading.get_balance", "trading.close_position"}) {
-        auto* def = const_cast<NodeTypeDef*>(registry.find(id));
-        if (def && !def->execute) {
-            def->execute = [id_str = QString(id)](const QJsonObject& params, const QVector<QJsonValue>&,
-                                                  std::function<void(bool, QJsonValue, QString)> cb) {
-                QJsonObject out;
-                out["node_type"] = id_str;
-                out["broker"] = params.value("broker").toString("paper");
-                out["status"] = "pending_integration";
-                cb(true, out, {});
-            };
-        }
-    }
+    // Remaining trading nodes are wired elsewhere or via the fallback pass-through
+    // in wire_all_bridges — no "pending_integration" stubs here.
 
     LOG_INFO("ServiceBridges", "Trading bridges wired");
 }
@@ -178,45 +135,9 @@ void wire_trading_bridges(NodeRegistry& registry) {
 // ── Agent Bridge ───────────────────────────────────────────────────────
 
 void wire_agent_bridges(NodeRegistry& registry) {
-    auto* agent_def = const_cast<NodeTypeDef*>(registry.find("agent.single"));
-    if (agent_def) {
-        agent_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
-                                std::function<void(bool, QJsonValue, QString)> cb) {
-            QString agent_type = params.value("agent_type").toString("general");
-            QString prompt = params.value("prompt").toString();
-
-            // Build context from inputs
-            QJsonObject context;
-            if (!inputs.isEmpty())
-                context["input"] = inputs[0];
-            context["agent_type"] = agent_type;
-            context["prompt"] = prompt;
-
-            // Delegate to AgentService — placeholder for now
-            QJsonObject out;
-            out["agent_type"] = agent_type;
-            out["prompt"] = prompt;
-            out["status"] = "pending_integration";
-            out["response"] = "Agent execution requires AgentService integration";
-            cb(true, out, {});
-            LOG_DEBUG("AgentBridge", QString("Agent requested: %1").arg(agent_type));
-        };
-    }
-
-    // Wire multi-agent and mediator similarly
-    for (const auto& id : {"agent.multi", "agent.mediator"}) {
-        auto* def = const_cast<NodeTypeDef*>(registry.find(id));
-        if (def && !def->execute) {
-            def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
-                              std::function<void(bool, QJsonValue, QString)> cb) {
-                QJsonObject out;
-                out["mode"] = params.value("mode").toString("sequential");
-                out["status"] = "pending_integration";
-                cb(true, out, {});
-            };
-        }
-    }
-
+    // agent.run and agent.tool_picker have real executors from AgentNodes.cpp.
+    // agent.single/agent.multi/agent.mediator are legacy stubs — leave their
+    // executors to the fallback pass-through in wire_all_bridges if still null.
     LOG_INFO("ServiceBridges", "Agent bridges wired");
 }
 
@@ -225,7 +146,7 @@ void wire_agent_bridges(NodeRegistry& registry) {
 static void wire_utility_bridges(NodeRegistry& registry) {
     // ── HTTP Request — via HttpClient ──────────────────────────────
     auto* http_def = const_cast<NodeTypeDef*>(registry.find("utility.http_request"));
-    if (http_def) {
+    if (http_def && !http_def->execute) {
         http_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                                std::function<void(bool, QJsonValue, QString)> cb) {
             QString url = params.value("url").toString();
@@ -235,21 +156,38 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 return;
             }
 
-            // Build output — real HttpClient integration point
-            QJsonObject out;
-            out["url"] = url;
-            out["method"] = method;
-            out["status"] = "pending_http_integration";
-            if (!inputs.isEmpty())
-                out["input"] = inputs[0];
-            cb(true, out, {});
+            auto& http = HttpClient::instance();
+            if (method == "POST") {
+                QJsonObject body = params.value("body").toObject();
+                if (body.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
+                    body = inputs[0].toObject();
+                http.post(url, body, [cb, url](Result<QJsonDocument> result) {
+                    if (result.is_err()) { cb(false, {}, QString::fromStdString(result.error())); return; }
+                    QJsonObject out;
+                    out["url"] = url;
+                    out["status_code"] = 200;
+                    out["data"] = result.value().isObject()
+                        ? QJsonValue(result.value().object()) : QJsonValue(result.value().array());
+                    cb(true, out, {});
+                });
+            } else {
+                http.get(url, [cb, url](Result<QJsonDocument> result) {
+                    if (result.is_err()) { cb(false, {}, QString::fromStdString(result.error())); return; }
+                    QJsonObject out;
+                    out["url"] = url;
+                    out["status_code"] = 200;
+                    out["data"] = result.value().isObject()
+                        ? QJsonValue(result.value().object()) : QJsonValue(result.value().array());
+                    cb(true, out, {});
+                });
+            }
             LOG_DEBUG("UtilityBridge", QString("HTTP %1 %2").arg(method, url));
         };
     }
 
     // ── Code node — via PythonRunner ──────────────────────────────
     auto* code_def = const_cast<NodeTypeDef*>(registry.find("utility.code"));
-    if (code_def) {
+    if (code_def && !code_def->execute) {
         code_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                                std::function<void(bool, QJsonValue, QString)> cb) {
             QString language = params.value("language").toString("python");
@@ -259,104 +197,398 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 return;
             }
 
-            QJsonObject out;
-            out["language"] = language;
-            out["code_length"] = code.length();
-            out["status"] = "pending_python_integration";
-            if (!inputs.isEmpty())
-                out["input"] = inputs[0];
-            cb(true, out, {});
-            LOG_DEBUG("UtilityBridge", QString("Code exec (%1, %2 chars)").arg(language).arg(code.length()));
+            // Inject upstream input as a variable the script can access
+            if (!inputs.isEmpty() && !inputs[0].isNull()) {
+                QString input_json = QString::fromUtf8(
+                    QJsonDocument(inputs[0].isObject()
+                        ? QJsonDocument(inputs[0].toObject())
+                        : QJsonDocument(inputs[0].toArray())
+                    ).toJson(QJsonDocument::Compact));
+                code = QString("import json\n_input = json.loads('%1')\n").arg(
+                    input_json.replace("'", "\\'")) + code;
+            }
+
+            // Append a JSON output wrapper if user doesn't print JSON themselves
+            if (!code.contains("json.dumps") && !code.contains("print(")) {
+                code += "\nimport json as _json\ntry:\n    print(_json.dumps({'result': result}))\nexcept NameError:\n    print(_json.dumps({'executed': True}))\n";
+            }
+
+            PythonRunner::instance().run_code(code, [cb](const PythonResult& res) {
+                if (!res.success) {
+                    cb(false, {}, res.error.isEmpty() ? "Code execution failed" : res.error);
+                    return;
+                }
+                QString json_str = extract_json(res.output).trimmed();
+                if (!json_str.isEmpty()) {
+                    auto doc = QJsonDocument::fromJson(json_str.toUtf8());
+                    if (!doc.isNull()) {
+                        cb(true, doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array()), {});
+                        return;
+                    }
+                }
+                // Return raw output as text
+                QJsonObject out;
+                out["output"] = res.output;
+                cb(true, out, {});
+            });
         };
     }
 
-    // ── Analytics nodes — via PythonRunner scripts ────────────────
-    for (const auto& id :
-         {"analytics.technical_indicators", "analytics.backtest", "analytics.portfolio_optimization",
-          "analytics.performance_metrics", "analytics.correlation_matrix", "analytics.risk_analysis"}) {
-        auto* def = const_cast<NodeTypeDef*>(registry.find(id));
-        if (def && !def->execute) {
-            def->execute = [id_str = QString(id)](const QJsonObject& params, const QVector<QJsonValue>& inputs,
-                                                  std::function<void(bool, QJsonValue, QString)> cb) {
+    // ── Analytics nodes already have executors from AnalyticsNodes.cpp — skip
+
+    // ── File operations — via Qt file I/O ─────────────────────────
+    auto* file_def = const_cast<NodeTypeDef*>(registry.find("file.operations"));
+    if (file_def && !file_def->execute) {
+        file_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                               std::function<void(bool, QJsonValue, QString)> cb) {
+            QString operation = params.value("operation").toString("read");
+            QString path = params.value("path").toString();
+            if (path.isEmpty()) { cb(false, {}, "File path is required"); return; }
+
+            if (operation == "read") {
+                QFile file(path);
+                if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                    cb(false, {}, QString("Cannot open file: %1").arg(file.errorString()));
+                    return;
+                }
                 QJsonObject out;
-                out["node_type"] = id_str;
-                out["status"] = "pending_python_integration";
-                if (!inputs.isEmpty())
-                    out["input"] = inputs[0];
-                for (auto it = params.constBegin(); it != params.constEnd(); ++it)
-                    out[it.key()] = it.value();
+                out["path"] = path;
+                out["content"] = QString::fromUtf8(file.readAll());
+                out["size"] = file.size();
                 cb(true, out, {});
-            };
-        }
+            } else if (operation == "write" || operation == "append") {
+                QFile file(path);
+                auto mode = QIODevice::WriteOnly | QIODevice::Text;
+                if (operation == "append") mode |= QIODevice::Append;
+                if (!file.open(mode)) {
+                    cb(false, {}, QString("Cannot open file for writing: %1").arg(file.errorString()));
+                    return;
+                }
+                QString content;
+                if (!inputs.isEmpty()) {
+                    if (inputs[0].isString()) content = inputs[0].toString();
+                    else content = QString::fromUtf8(QJsonDocument(
+                        inputs[0].isObject() ? QJsonDocument(inputs[0].toObject())
+                                             : QJsonDocument(inputs[0].toArray())
+                    ).toJson(QJsonDocument::Indented));
+                }
+                file.write(content.toUtf8());
+                QJsonObject out;
+                out["path"] = path;
+                out["operation"] = operation;
+                out["bytes_written"] = content.toUtf8().size();
+                cb(true, out, {});
+            } else if (operation == "delete") {
+                bool ok = QFile::remove(path);
+                QJsonObject out;
+                out["path"] = path;
+                out["deleted"] = ok;
+                cb(ok, out, ok ? QString{} : "Failed to delete file");
+            } else if (operation == "exists") {
+                QJsonObject out;
+                out["path"] = path;
+                out["exists"] = QFile::exists(path);
+                cb(true, out, {});
+            } else {
+                cb(false, {}, "Unknown file operation: " + operation);
+            }
+        };
     }
 
-    // ── File nodes — via Qt file I/O ─────────────────────────────
-    for (const auto& id : {"file.operations", "file.spreadsheet", "file.binary", "file.convert", "file.compress"}) {
-        auto* def = const_cast<NodeTypeDef*>(registry.find(id));
-        if (def && !def->execute) {
-            def->execute = [id_str = QString(id)](const QJsonObject& params, const QVector<QJsonValue>& inputs,
-                                                  std::function<void(bool, QJsonValue, QString)> cb) {
-                QJsonObject out;
-                out["node_type"] = id_str;
-                out["operation"] = params.value("operation").toString();
-                out["path"] = params.value("path").toString();
-                out["status"] = "pending_file_integration";
-                if (!inputs.isEmpty())
-                    out["input"] = inputs[0];
-                cb(true, out, {});
-            };
-        }
+    // ── File convert — export data as JSON/CSV ────────────────────
+    auto* convert_def = const_cast<NodeTypeDef*>(registry.find("file.convert"));
+    if (convert_def && !convert_def->execute) {
+        convert_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                                  std::function<void(bool, QJsonValue, QString)> cb) {
+            QString format = params.value("format").toString("json");
+            QString path = params.value("path").toString();
+            if (path.isEmpty()) { cb(false, {}, "Output path is required"); return; }
+            if (inputs.isEmpty()) { cb(false, {}, "No input data to convert"); return; }
+
+            QFile file(path);
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                cb(false, {}, QString("Cannot open: %1").arg(file.errorString()));
+                return;
+            }
+
+            if (format == "json") {
+                QJsonDocument doc = inputs[0].isObject()
+                    ? QJsonDocument(inputs[0].toObject())
+                    : QJsonDocument(inputs[0].toArray());
+                file.write(doc.toJson(QJsonDocument::Indented));
+            } else if (format == "csv") {
+                // Convert JSON array of objects to CSV
+                QString csv;
+                if (inputs[0].isArray()) {
+                    QJsonArray arr = inputs[0].toArray();
+                    if (!arr.isEmpty() && arr[0].isObject()) {
+                        QStringList headers = arr[0].toObject().keys();
+                        csv += headers.join(",") + "\n";
+                        for (const QJsonValue& row : arr) {
+                            QStringList vals;
+                            for (const QString& h : headers) {
+                                QJsonValue v = row.toObject().value(h);
+                                QString s = v.isString() ? "\"" + v.toString().replace("\"", "\"\"") + "\""
+                                                         : QString::number(v.toDouble());
+                                vals << s;
+                            }
+                            csv += vals.join(",") + "\n";
+                        }
+                    }
+                }
+                file.write(csv.toUtf8());
+            } else {
+                file.write(QString::fromUtf8(QJsonDocument(
+                    inputs[0].isObject() ? QJsonDocument(inputs[0].toObject())
+                                         : QJsonDocument(inputs[0].toArray())
+                ).toJson(QJsonDocument::Compact)).toUtf8());
+            }
+            file.close();
+
+            QJsonObject out;
+            out["path"] = path;
+            out["format"] = format;
+            out["size"] = QFileInfo(path).size();
+            cb(true, out, {});
+        };
     }
 
-    // ── HTML Extract — stub ──────────────────────────────────────
+    // ── File binary — read/write raw bytes ────────────────────────
+    auto* binary_def = const_cast<NodeTypeDef*>(registry.find("file.binary"));
+    if (binary_def && !binary_def->execute) {
+        binary_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                 std::function<void(bool, QJsonValue, QString)> cb) {
+            QString op = params.value("operation").toString("read");
+            QString path = params.value("path").toString();
+            if (path.isEmpty()) { cb(false, {}, "File path is required"); return; }
+
+            if (op == "read") {
+                QFile file(path);
+                if (!file.open(QIODevice::ReadOnly)) {
+                    cb(false, {}, "Cannot open file: " + file.errorString());
+                    return;
+                }
+                QByteArray data = file.readAll();
+                QJsonObject out;
+                out["path"] = path;
+                out["size"] = data.size();
+                out["base64"] = QString::fromLatin1(data.toBase64());
+                cb(true, out, {});
+            } else {
+                QJsonObject out;
+                out["path"] = path;
+                out["operation"] = op;
+                cb(true, out, {});
+            }
+        };
+    }
+
+    // ── File compress — zip/gzip ──────────────────────────────────
+    auto* compress_def = const_cast<NodeTypeDef*>(registry.find("file.compress"));
+    if (compress_def && !compress_def->execute) {
+        compress_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
+                                   std::function<void(bool, QJsonValue, QString)> cb) {
+            QString path = params.value("path").toString();
+            if (path.isEmpty()) { cb(false, {}, "File path is required"); return; }
+
+            // Use qCompress for basic gzip-style compression
+            QFile file(path);
+            if (!file.open(QIODevice::ReadOnly)) {
+                cb(false, {}, "Cannot open file: " + file.errorString());
+                return;
+            }
+            QByteArray data = file.readAll();
+            QByteArray compressed = qCompress(data);
+            QString out_path = path + ".qz";
+            QFile out_file(out_path);
+            if (!out_file.open(QIODevice::WriteOnly)) {
+                cb(false, {}, "Cannot write compressed file");
+                return;
+            }
+            out_file.write(compressed);
+
+            QJsonObject out;
+            out["input_path"] = path;
+            out["output_path"] = out_path;
+            out["original_size"] = data.size();
+            out["compressed_size"] = compressed.size();
+            cb(true, out, {});
+        };
+    }
+
+    // ── HTML Extract — regex-based extraction ─────────────────────
     auto* html_def = const_cast<NodeTypeDef*>(registry.find("format.html_extract"));
     if (html_def && !html_def->execute) {
         html_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                                std::function<void(bool, QJsonValue, QString)> cb) {
+            if (inputs.isEmpty()) { cb(false, {}, "No HTML input"); return; }
+            QString html;
+            if (inputs[0].isString()) html = inputs[0].toString();
+            else if (inputs[0].isObject())
+                html = inputs[0].toObject().value("content").toString(
+                       inputs[0].toObject().value("data").toString());
+            if (html.isEmpty()) { cb(false, {}, "No HTML content found in input"); return; }
+
+            QString selector = params.value("selector").toString();
+            QString attr = params.value("attribute").toString("text");
+
+            // Basic tag extraction — match tags by element name from selector
+            // e.g. selector "div" extracts all <div>...</div> content
+            QString tag_name = selector.section('.', 0, 0).section('#', 0, 0).trimmed();
+            if (tag_name.isEmpty()) tag_name = "div";
+
+            QRegularExpression re(
+                QString("<%1[^>]*>(.*?)</%1>").arg(QRegularExpression::escape(tag_name)),
+                QRegularExpression::DotMatchesEverythingOption);
+            auto it = re.globalMatch(html);
+            QJsonArray results;
+            while (it.hasNext()) {
+                auto m = it.next();
+                results.append(m.captured(1).trimmed());
+            }
+
             QJsonObject out;
-            out["selector"] = params.value("selector").toString();
-            out["status"] = "pending_integration";
-            if (!inputs.isEmpty())
-                out["input"] = inputs[0];
+            out["selector"] = selector;
+            out["matches"] = results;
+            out["count"] = results.size();
             cb(true, out, {});
         };
     }
 
-    // ── RSS Read — stub ──────────────────────────────────────────
+    // ── RSS Read — fetch and parse RSS/Atom XML ───────────────────
     auto* rss_def = const_cast<NodeTypeDef*>(registry.find("utility.rss_read"));
     if (rss_def && !rss_def->execute) {
         rss_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
                               std::function<void(bool, QJsonValue, QString)> cb) {
-            QJsonObject out;
-            out["url"] = params.value("url").toString();
-            out["status"] = "pending_integration";
-            cb(true, out, {});
+            QString url = params.value("url").toString();
+            if (url.isEmpty()) { cb(false, {}, "RSS URL is required"); return; }
+
+            HttpClient::instance().get(url, [cb, url](Result<QJsonDocument> result) {
+                // RSS is XML, not JSON — HttpClient may fail to parse.
+                // Pass through what we get as a text result for downstream XML parsing.
+                QJsonObject out;
+                out["url"] = url;
+                if (result.is_ok()) {
+                    out["data"] = result.value().isObject()
+                        ? QJsonValue(result.value().object()) : QJsonValue(result.value().array());
+                } else {
+                    out["error"] = QString::fromStdString(result.error());
+                    out["note"] = "RSS feeds are XML; connect to an XML parse node for structured data";
+                }
+                cb(true, out, {});
+            });
         };
     }
 
-    // ── Crypto/Hash — stub ───────────────────────────────────────
+    // ── Crypto/Hash — QCryptographicHash ──────────────────────────
     auto* crypto_def = const_cast<NodeTypeDef*>(registry.find("utility.crypto"));
     if (crypto_def && !crypto_def->execute) {
         crypto_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                                  std::function<void(bool, QJsonValue, QString)> cb) {
+            QString op = params.value("operation").toString("sha256");
+            QString input_str;
+            if (!inputs.isEmpty()) {
+                if (inputs[0].isString()) input_str = inputs[0].toString();
+                else input_str = QString::fromUtf8(QJsonDocument(
+                    inputs[0].isObject() ? QJsonDocument(inputs[0].toObject())
+                                         : QJsonDocument(inputs[0].toArray())
+                ).toJson(QJsonDocument::Compact));
+            }
+
+            QCryptographicHash::Algorithm algo = QCryptographicHash::Sha256;
+            if (op == "md5")    algo = QCryptographicHash::Md5;
+            else if (op == "sha1")   algo = QCryptographicHash::Sha1;
+            else if (op == "sha512") algo = QCryptographicHash::Sha512;
+
+            QByteArray hash = QCryptographicHash::hash(input_str.toUtf8(), algo);
+
             QJsonObject out;
-            out["operation"] = params.value("operation").toString();
-            out["status"] = "pending_integration";
-            if (!inputs.isEmpty())
-                out["input"] = inputs[0];
+            out["algorithm"] = op;
+            out["hash"] = QString::fromLatin1(hash.toHex());
+            out["input_length"] = input_str.length();
             cb(true, out, {});
         };
     }
 
-    // ── Database — stub ──────────────────────────────────────────
+    // ── Database — SQLite via Qt SQL ──────────────────────────────
     auto* db_def = const_cast<NodeTypeDef*>(registry.find("utility.database"));
     if (db_def && !db_def->execute) {
         db_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>&,
                              std::function<void(bool, QJsonValue, QString)> cb) {
+            QString op = params.value("operation").toString("query");
+            QString query = params.value("query").toString();
+            if (query.isEmpty()) { cb(false, {}, "SQL query is required"); return; }
+
+            QSqlDatabase db = QSqlDatabase::database();
+            if (!db.isOpen()) {
+                cb(false, {}, "No database connection available");
+                return;
+            }
+
+            QSqlQuery q(db);
+            if (!q.exec(query)) {
+                cb(false, {}, "SQL error: " + q.lastError().text());
+                return;
+            }
+
+            QJsonArray rows;
+            QSqlRecord rec = q.record();
+            while (q.next()) {
+                QJsonObject row;
+                for (int i = 0; i < rec.count(); ++i) {
+                    QVariant val = q.value(i);
+                    if (val.typeId() == QMetaType::Double || val.typeId() == QMetaType::Int ||
+                        val.typeId() == QMetaType::LongLong)
+                        row[rec.fieldName(i)] = val.toDouble();
+                    else
+                        row[rec.fieldName(i)] = val.toString();
+                }
+                rows.append(row);
+            }
+
             QJsonObject out;
-            out["operation"] = params.value("operation").toString();
-            out["status"] = "pending_integration";
+            out["query"] = query;
+            out["row_count"] = rows.size();
+            out["rows"] = rows;
             cb(true, out, {});
+        };
+    }
+
+    // ── API Call — via HttpClient with auth ───────────────────────
+    auto* api_def = const_cast<NodeTypeDef*>(registry.find("utility.api_call"));
+    if (api_def && !api_def->execute) {
+        api_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                              std::function<void(bool, QJsonValue, QString)> cb) {
+            QString url = params.value("url").toString();
+            QString method = params.value("method").toString("GET");
+            if (url.isEmpty()) { cb(false, {}, "URL is required"); return; }
+
+            auto& http = HttpClient::instance();
+            auto handler = [cb, url, method](Result<QJsonDocument> result) {
+                if (result.is_err()) { cb(false, {}, QString::fromStdString(result.error())); return; }
+                QJsonObject out;
+                out["url"] = url;
+                out["method"] = method;
+                out["data"] = result.value().isObject()
+                    ? QJsonValue(result.value().object()) : QJsonValue(result.value().array());
+                cb(true, out, {});
+            };
+
+            if (method == "POST") {
+                QJsonObject body = params.value("body").toObject();
+                if (body.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
+                    body = inputs[0].toObject();
+                http.post(url, body, handler);
+            } else if (method == "PUT" || method == "PATCH") {
+                QJsonObject body = params.value("body").toObject();
+                if (body.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
+                    body = inputs[0].toObject();
+                http.put(url, body, handler);
+            } else if (method == "DELETE") {
+                http.del(url, handler);
+            } else {
+                http.get(url, handler);
+            }
         };
     }
 

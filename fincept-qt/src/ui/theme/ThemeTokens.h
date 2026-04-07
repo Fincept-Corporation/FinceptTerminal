@@ -55,5 +55,6 @@ extern const ThemeTokens THEME_OBSIDIAN;
 extern const ThemeTokens THEME_BLOOMBERG;
 extern const ThemeTokens THEME_MATRIX;
 extern const ThemeTokens THEME_MIDNIGHT;
+extern const ThemeTokens THEME_LIGHT;
 
 } // namespace fincept::ui

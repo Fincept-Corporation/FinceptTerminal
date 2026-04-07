@@ -1,4 +1,5 @@
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFrame>
@@ -8,6 +9,7 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTimer>
+#include <QVBoxLayout>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -15,10 +17,14 @@ namespace fincept::screens {
 /// Full-featured settings screen.
 /// Sections: Credentials | Appearance | Notifications | Storage & Cache |
 ///           Data Sources | LLM Config | MCP Servers | Logging
-class SettingsScreen : public QWidget {
+class SettingsScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit SettingsScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "settings"; }
 
   protected:
     void showEvent(QShowEvent* e) override;
@@ -36,6 +42,7 @@ class SettingsScreen : public QWidget {
     QWidget* build_llm_config();
     QWidget* build_mcp_servers();
     QWidget* build_logging();
+    QWidget* build_profiles();
 
     // ── Shared layout helper ──────────────────────────────────────────────────
     static QWidget* make_row(const QString& label, QWidget* control, const QString& description = {});
@@ -82,7 +89,18 @@ class SettingsScreen : public QWidget {
     QFrame*    news_subopts_frame_    = nullptr;
 
     // ── Storage state ─────────────────────────────────────────────────────────
-    QLabel* storage_count_ = nullptr;
+    QLabel*      storage_count_       = nullptr;
+    QLabel*      storage_main_db_     = nullptr;
+    QLabel*      storage_cache_db_    = nullptr;
+    QLabel*      storage_log_size_    = nullptr;
+    QLabel*      storage_ws_size_     = nullptr;
+    QLabel*      storage_total_size_  = nullptr;
+    QVBoxLayout* storage_categories_  = nullptr;
+    // SQL console
+    QLineEdit*   sql_input_           = nullptr;
+    QComboBox*   sql_db_selector_     = nullptr;
+    QLabel*      sql_status_          = nullptr;
+    QVBoxLayout* sql_results_layout_  = nullptr;
 
     // ── Logging state ─────────────────────────────────────────────────────────
     QComboBox*   log_global_level_  = nullptr;

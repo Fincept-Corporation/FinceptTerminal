@@ -1,6 +1,7 @@
 #include "ui/widgets/NotifToast.h"
 
 #include "ui/theme/ThemeManager.h"
+#include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QPainter>
@@ -35,19 +36,19 @@ NotifToast::NotifToast(QWidget* parent) : QWidget(parent, Qt::ToolTip | Qt::Fram
     tvl->setSpacing(2);
 
     title_lbl_ = new QLabel;
-    title_lbl_->setStyleSheet("color: #e0e0e0; font-size: 13px; font-weight: bold; background: transparent;");
+    title_lbl_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;").arg(colors::TEXT_PRIMARY.get()));
     title_lbl_->setWordWrap(false);
     tvl->addWidget(title_lbl_);
 
     msg_lbl_ = new QLabel;
-    msg_lbl_->setStyleSheet("color: #a0a0a0; font-size: 12px; background: transparent;");
+    msg_lbl_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_SECONDARY.get()));
     msg_lbl_->setWordWrap(true);
     tvl->addWidget(msg_lbl_);
 
     outer->addWidget(text_col, 1);
 
     time_lbl_ = new QLabel;
-    time_lbl_->setStyleSheet("color: #555; font-size: 10px; background: transparent;");
+    time_lbl_->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(colors::TEXT_TERTIARY.get()));
     time_lbl_->setAlignment(Qt::AlignTop | Qt::AlignRight);
     outer->addWidget(time_lbl_, 0, Qt::AlignTop);
 
@@ -69,10 +70,10 @@ void NotifToast::show_notification(const NotificationRecord& record) {
 
     const QString dot_color = [&]() -> QString {
         switch (current_level_) {
-            case NotifLevel::Warning:  return "#F59E0B";
-            case NotifLevel::Alert:    return "#F97316";
-            case NotifLevel::Critical: return "#EF4444";
-            default:                   return "#06B6D4";
+            case NotifLevel::Warning:  return colors::WARNING.get();
+            case NotifLevel::Alert:    return colors::AMBER.get();
+            case NotifLevel::Critical: return colors::NEGATIVE.get();
+            default:                   return colors::CYAN.get();
         }
     }();
 
@@ -120,16 +121,16 @@ void NotifToast::paintEvent(QPaintEvent*) {
 
     const QString border_color = [&]() -> QString {
         switch (current_level_) {
-            case NotifLevel::Warning:  return "#F59E0B";
-            case NotifLevel::Alert:    return "#F97316";
-            case NotifLevel::Critical: return "#EF4444";
-            default:                   return "#1a1a2a";
+            case NotifLevel::Warning:  return colors::WARNING.get();
+            case NotifLevel::Alert:    return colors::AMBER.get();
+            case NotifLevel::Critical: return colors::NEGATIVE.get();
+            default:                   return colors::CYAN.get();
         }
     }();
 
     // Background
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor("#0d0d1a"));
+    p.setBrush(QColor(colors::BG_SURFACE.get()));
     p.drawRoundedRect(rect(), 6, 6);
 
     // Left accent bar
@@ -138,7 +139,7 @@ void NotifToast::paintEvent(QPaintEvent*) {
 
     // Border
     p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(QColor("#1a1a2a"), 1));
+    p.setPen(QPen(QColor(colors::BORDER_MED.get()), 1));
     p.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 6, 6);
 }
 

@@ -22,6 +22,8 @@ class CacheDatabase {
     Result<QSqlQuery> execute(const QString& sql, const QVariantList& params = {});
     Result<void> exec(const QString& sql);
 
+    QSqlDatabase& raw_db() { return db_; }
+
   private:
     CacheDatabase() = default;
     Result<void> apply_pragmas();

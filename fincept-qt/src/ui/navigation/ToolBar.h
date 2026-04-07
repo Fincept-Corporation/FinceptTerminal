@@ -21,6 +21,7 @@ class ToolBar : public QWidget {
 
   signals:
     void navigate_to(const QString& tab_id);
+    void dock_command(const QString& action, const QString& primary, const QString& secondary);
     void action_triggered(const QString& action);
     void logout_clicked();
     void plan_clicked();

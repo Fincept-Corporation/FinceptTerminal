@@ -224,7 +224,7 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
     delete_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::NEGATIVE()) + ";border:1px solid " + QString(ui::colors::BG_RAISED()) + ";"
                                "border-radius:3px;padding:5px 10px;}"
                                "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}"
-                               "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:#222;}");
+                               "QPushButton:disabled{color:" + QString(ui::colors::BORDER_BRIGHT()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";}");
     connect(delete_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_delete_provider);
 
     btn_row->addWidget(add_btn_);
@@ -312,7 +312,7 @@ QWidget* LlmConfigSection::build_form_panel() {
     fetch_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::BORDER_BRIGHT()) + ";"
                               "border-radius:3px;font-weight:600;}"
                               "QPushButton:hover{background:" + QString(ui::colors::BG_RAISED()) + ";}"
-                              "QPushButton:disabled{color:" + QString(ui::colors::TEXT_TERTIARY()) + ";border-color:#222;}");
+                              "QPushButton:disabled{color:" + QString(ui::colors::TEXT_TERTIARY()) + ";border-color:" + QString(ui::colors::BORDER_MED()) + ";}");
     connect(fetch_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_fetch_models);
     model_row->addWidget(fetch_btn_);
 
@@ -331,7 +331,7 @@ QWidget* LlmConfigSection::build_form_panel() {
     auto* btn_row = new QHBoxLayout;
     save_btn_ = new QPushButton("Save & Set Active");
     save_btn_->setFixedHeight(34);
-    save_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::AMBER()) + ";color:#000;border:none;border-radius:4px;"
+    save_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::AMBER()) + ";color:" + QString(ui::colors::BG_BASE()) + ";border:none;border-radius:4px;"
                              "font-weight:700;padding:0 16px;}"
                              "QPushButton:hover{background:" + QString(ui::colors::AMBER_DIM()) + ";}"
                              "QPushButton:disabled{background:" + QString(ui::colors::BORDER_BRIGHT()) + ";color:" + QString(ui::colors::TEXT_TERTIARY()) + ";}");
@@ -341,7 +341,7 @@ QWidget* LlmConfigSection::build_form_panel() {
     test_btn_->setFixedHeight(34);
     test_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " + QString(ui::colors::BORDER_BRIGHT()) + ";"
                              "border-radius:4px;padding:0 16px;}"
-                             "QPushButton:hover{background:#222;}");
+                             "QPushButton:hover{background:" + QString(ui::colors::BG_HOVER()) + ";}");
     connect(test_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_test_connection);
 
     btn_row->addWidget(save_btn_);
@@ -904,7 +904,7 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
     auto* btn_row = new QHBoxLayout;
     profile_save_btn_ = new QPushButton("SAVE PROFILE");
     profile_save_btn_->setStyleSheet(
-        "QPushButton{background:" + QString(ui::colors::AMBER()) + ";color:#000;border:none;padding:8px 20px;"
+        "QPushButton{background:" + QString(ui::colors::AMBER()) + ";color:" + QString(ui::colors::BG_BASE()) + ";border:none;padding:8px 20px;"
         "font-weight:700;letter-spacing:1px;}"
         "QPushButton:hover{background:" + QString(ui::colors::AMBER_DIM()) + ";}");
     connect(profile_save_btn_, &QPushButton::clicked, this, &LlmConfigSection::on_save_profile);

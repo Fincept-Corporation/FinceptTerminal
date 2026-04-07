@@ -47,6 +47,7 @@ class GeopoliticsScreen : public QWidget {
     QWidget* build_filter_panel();
     QWidget* build_status_bar();
     void connect_service();
+    void refresh_theme();
 
     // Filter inputs
     QLineEdit* country_edit_ = nullptr;
@@ -70,6 +71,8 @@ class GeopoliticsScreen : public QWidget {
 
     // Auto-refresh
     QTimer* refresh_timer_ = nullptr;
+    // Clock (1s tick, started/stopped in showEvent/hideEvent)
+    QTimer* clock_timer_ = nullptr;
     bool first_show_ = true;
 };
 

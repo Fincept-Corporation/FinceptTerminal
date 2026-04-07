@@ -1,0 +1,320 @@
+name: Build Installers (QtIFW)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  BUILD_TYPE: Release
+  QT_VERSION: "6.8.3"
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia"
+  QT_IFW_VERSION: "4.8"
+
+jobs:
+  build-installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---- Windows x64 ----
+          - os: windows-2022
+            arch: x64
+            platform: Windows
+            artifact: FinceptTerminal-Windows-x64-setup
+            exe: FinceptTerminal.exe
+            qt_arch: win64_msvc2022_64
+            cmake_extra: ""
+            installer_ext: ".exe"
+
+          # ---- Linux x64 ----
+          - os: ubuntu-22.04
+            arch: x64
+            platform: Linux
+            artifact: FinceptTerminal-Linux-x64-setup
+            exe: FinceptTerminal
+            qt_arch: ""
+            cmake_extra: ""
+            installer_ext: ".run"
+
+          # ---- macOS ARM64 (Apple Silicon) ----
+          - os: macos-15
+            arch: arm64
+            platform: macOS
+            artifact: FinceptTerminal-macOS-arm64-setup
+            exe: FinceptTerminal
+            qt_arch: clang_64
+            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=arm64"
+            installer_ext: ".app"
+
+    runs-on: ${{ matrix.os }}
+    name: Installer ${{ matrix.platform }} ${{ matrix.arch }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ---- ccache (macOS / Linux) ----
+      - name: Set up ccache
+        if: runner.os != 'Windows'
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: installer-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.QT_VERSION }}
+          max-size: 500M
+          update-package-index: true
+
+      # ---- System dependencies (Linux) ----
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo add-apt-repository universe -y
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            cmake ninja-build g++ \
+            qt6-base-dev qt6-base-private-dev \
+            qt6-tools-dev qt6-tools-dev-tools \
+            libqt6charts6-dev libqt6websockets6-dev \
+            qt6-multimedia-dev libqt6multimediawidgets6 \
+            libqt6svg6-dev libqt6concurrent6 \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-xinerama0 libxcb-xkb1 \
+            pkg-config zip
+
+      # ---- Qt6 (Windows / macOS) ----
+      - name: Install Qt6
+        if: runner.os != 'Linux'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: ${{ matrix.qt_arch }}
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: qt-installer-${{ matrix.platform }}-${{ matrix.arch }}
+
+      # ---- Qt Installer Framework ----
+      - name: Install Qt Installer Framework
+        shell: bash
+        run: |
+          pip install aqtinstall
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            aqt install-tool windows desktop qt.tools.ifw.${{ env.QT_IFW_VERSION }} \
+              --outputdir "${{ runner.temp }}/qtifw"
+            echo "QT_IFW_DIR=${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}" >> $GITHUB_ENV
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            aqt install-tool mac desktop qt.tools.ifw.${{ env.QT_IFW_VERSION }} \
+              --outputdir "${{ runner.temp }}/qtifw"
+            echo "QT_IFW_DIR=${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}" >> $GITHUB_ENV
+          else
+            aqt install-tool linux desktop qt.tools.ifw.${{ env.QT_IFW_VERSION }} \
+              --outputdir "${{ runner.temp }}/qtifw"
+            echo "QT_IFW_DIR=${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/${{ env.QT_IFW_VERSION }}" >> $GITHUB_ENV
+          fi
+          echo "QtIFW installed at: ${{ runner.temp }}/qtifw"
+          ls "${{ runner.temp }}/qtifw/Tools/QtInstallerFramework/" || true
+
+      # ---- Configure CMake ----
+      - name: Configure CMake (Linux)
+        if: runner.os == 'Linux'
+        working-directory: fincept-qt
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DDEPLOY_QT=ON \
+            -DFINCEPT_BUILD_INSTALLER=ON \
+            ${{ matrix.cmake_extra }}
+
+      - name: Configure CMake (Windows / macOS)
+        if: runner.os != 'Linux'
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DDEPLOY_QT=ON \
+            -DFINCEPT_BUILD_INSTALLER=ON \
+            ${{ runner.os == 'macOS' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }} \
+            ${{ matrix.cmake_extra }}
+
+      # ---- Build ----
+      - name: Build
+        shell: bash
+        working-directory: fincept-qt
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 3)
+
+      # ---- Verify binary ----
+      - name: Verify build output
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            BINARY="build/Release/${{ matrix.exe }}"
+          else
+            BINARY="build/${{ matrix.exe }}"
+          fi
+          if [ ! -f "$BINARY" ]; then
+            echo "::error::Binary not found at $BINARY"
+            exit 1
+          fi
+          echo "Binary verified: $BINARY"
+          ls -lh "$BINARY"
+
+      # ---- Windows: deploy Qt DLLs before packaging ----
+      - name: Deploy Qt DLLs (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          BUILD_DIR="build/Release"
+
+          # Run windeployqt
+          WDQT="${QT_ROOT_DIR}/bin/windeployqt.exe"
+          if [ -f "$WDQT" ]; then
+            echo "Running windeployqt..."
+            "$WDQT" \
+              --release \
+              --no-translations \
+              --compiler-runtime \
+              --include-soft-plugins \
+              --force \
+              "${BUILD_DIR}/${{ matrix.exe }}"
+          else
+            echo "::warning::windeployqt not found"
+          fi
+
+          QT_BIN="${QT_ROOT_DIR}/bin"
+          QT_PLUGINS="${QT_ROOT_DIR}/plugins"
+
+          # Qt Core DLLs (belt+suspenders — windeployqt should handle these)
+          for qt_dll in \
+            Qt6Core.dll Qt6Gui.dll Qt6Widgets.dll \
+            Qt6Charts.dll Qt6PrintSupport.dll \
+            Qt6Network.dll Qt6Sql.dll Qt6Concurrent.dll \
+            Qt6WebSockets.dll \
+            Qt6Multimedia.dll Qt6MultimediaWidgets.dll \
+            Qt6OpenGL.dll Qt6OpenGLWidgets.dll \
+            Qt6Svg.dll Qt6Xml.dll Qt6TextToSpeech.dll; do
+            if [ -f "${QT_BIN}/${qt_dll}" ] && [ ! -f "${BUILD_DIR}/${qt_dll}" ]; then
+              cp "${QT_BIN}/${qt_dll}" "${BUILD_DIR}/"
+            fi
+          done
+
+          # OpenSSL DLLs
+          for ssl_dll in \
+            libssl-3-x64.dll libcrypto-3-x64.dll \
+            libssl-3.dll libcrypto-3.dll; do
+            if [ -f "${QT_BIN}/${ssl_dll}" ] && [ ! -f "${BUILD_DIR}/${ssl_dll}" ]; then
+              cp "${QT_BIN}/${ssl_dll}" "${BUILD_DIR}/"
+            fi
+          done
+
+          # MSVC Runtime DLLs
+          for vcrt_dll in \
+            vcruntime140.dll vcruntime140_1.dll vcruntime140_2.dll \
+            msvcp140.dll msvcp140_1.dll msvcp140_2.dll \
+            concrt140.dll vccorlib140.dll; do
+            SYS32="/c/Windows/System32/${vcrt_dll}"
+            if [ -f "$SYS32" ] && [ ! -f "${BUILD_DIR}/${vcrt_dll}" ]; then
+              cp "$SYS32" "${BUILD_DIR}/"
+            fi
+          done
+
+          # Qt plugin directories
+          for plugin_dir in platforms sqldrivers imageformats iconengines styles tls \
+            multimedia texttospeech networkinformation platforminputcontexts \
+            printsupport generic; do
+            if [ -d "${QT_PLUGINS}/${plugin_dir}" ]; then
+              mkdir -p "${BUILD_DIR}/${plugin_dir}"
+              cp -n "${QT_PLUGINS}/${plugin_dir}/"*.dll "${BUILD_DIR}/${plugin_dir}/" 2>/dev/null || true
+            fi
+          done
+
+          # D3D / OpenGL fallback
+          for d3d_dll in d3dcompiler_47.dll opengl32sw.dll libEGL.dll libGLESv2.dll \
+            dxcompiler.dll dxil.dll; do
+            if [ -f "${QT_BIN}/${d3d_dll}" ] && [ ! -f "${BUILD_DIR}/${d3d_dll}" ]; then
+              cp "${QT_BIN}/${d3d_dll}" "${BUILD_DIR}/"
+            fi
+          done
+
+          # ICU DLLs
+          for icu_dll in "${QT_BIN}"/icu*.dll; do
+            base=$(basename "$icu_dll")
+            if [ -f "$icu_dll" ] && [ ! -f "${BUILD_DIR}/${base}" ]; then
+              cp "$icu_dll" "${BUILD_DIR}/"
+            fi
+          done
+
+          # qt.conf
+          printf '[Paths]\nPrefix = .\nPlugins = .\nLibraries = .\n' > "${BUILD_DIR}/qt.conf"
+
+          echo "=== Build dir contents ($(find "${BUILD_DIR}" -type f | wc -l) files) ==="
+
+      # ---- Generate installer ----
+      - name: Generate Installer (CPack IFW)
+        shell: bash
+        working-directory: fincept-qt/build
+        run: |
+          echo "QT_IFW_DIR=${QT_IFW_DIR}"
+          ls "${QT_IFW_DIR}/bin/" || true
+
+          # Add QtIFW bin to PATH so CPack can find binarycreator
+          export PATH="${QT_IFW_DIR}/bin:${PATH}"
+          which binarycreator || echo "::warning::binarycreator not on PATH"
+
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cpack -G IFW -C ${{ env.BUILD_TYPE }} --verbose
+          else
+            cpack -G IFW --verbose
+          fi
+
+          echo ""
+          echo "=== Generated installer ==="
+          ls -lh FinceptTerminal-*
+
+      # ---- Upload installer artifact ----
+      - name: Upload Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            fincept-qt/build/FinceptTerminal-*-setup*
+          retention-days: 30
+
+  # ---- Release: attach installers to GitHub Release ----
+  release:
+    needs: build-installer
+    runs-on: ubuntu-latest
+    name: Attach Installers to Release
+    if: "!cancelled() && needs.build-installer.result == 'success' && startsWith(github.ref, 'refs/tags/')"
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: installers
+
+      - name: List installers
+        run: |
+          echo "=== Downloaded installer artifacts ==="
+          find installers -type f | sort
+          ls -lhR installers/
+
+      - name: Attach installers to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            installers/**/*-setup*
+          fail_on_unmatched_files: false

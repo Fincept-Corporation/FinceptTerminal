@@ -842,3 +842,38 @@ class TradingBlocAnalyzer(EconomicsBase):
         result = self.analyze_bloc_performance(kwargs.get('bloc_data', {}))
         result['metadata'] = self.get_metadata()
         return result
+
+
+if __name__ == "__main__":
+    import sys
+    import json
+
+    def to_serializable(obj):
+        """Recursively convert Decimal and other non-serializable types."""
+        from decimal import Decimal
+        if isinstance(obj, Decimal):
+            return float(obj)
+        if isinstance(obj, dict):
+            return {k: to_serializable(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [to_serializable(i) for i in obj]
+        return obj
+
+    analysis_type = sys.argv[1] if len(sys.argv) > 1 else "benefits_costs"
+    params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+
+    analyzer = TradeAnalyzer()
+
+    # Map analysis_type to correct method with correct data key
+    if analysis_type == "benefits_costs":
+        result = analyzer.analyze_trade_benefits_costs(params)
+    elif analysis_type == "restrictions":
+        result = analyzer.analyze_trade_restrictions(params)
+    elif analysis_type == "trading_blocs":
+        result = analyzer.analyze_trading_blocs(params)
+    elif analysis_type == "barrier_removal":
+        result = analyzer.assess_trade_barrier_removal(params)
+    else:
+        result = {"error": f"Unknown analysis type: {analysis_type}"}
+
+    print(json.dumps(to_serializable(result), indent=2))

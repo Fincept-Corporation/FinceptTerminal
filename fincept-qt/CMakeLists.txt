@@ -189,12 +189,53 @@ FetchContent_MakeAvailable(QGeoView)
 # QGeoView has anonymous-namespace symbol clashes under unity build
 set_target_properties(qgeoview PROPERTIES UNITY_BUILD OFF)
 
+# ── SingleApplication (single-process enforcement + new-window IPC) ──────────
+# When the user re-launches the exe, the secondary instance sends "--new-window"
+# to the primary, which opens a new MainWindow instead of a second process.
+# QAPPLICATION_CLASS must be set before FetchContent_MakeAvailable so the lib
+# compiles inheriting QApplication (not QCoreApplication).
+set(QT_DEFAULT_MAJOR_VERSION 6 CACHE STRING "" FORCE)
+set(QAPPLICATION_CLASS QApplication CACHE STRING "" FORCE)
+FetchContent_Declare(
+    SingleApplication
+    GIT_REPOSITORY https://github.com/itay-grudev/SingleApplication.git
+    GIT_TAG        v3.5.4
+    GIT_SHALLOW    TRUE
+    UPDATE_DISCONNECTED TRUE
+)
+FetchContent_MakeAvailable(SingleApplication)
+if(MSVC)
+    target_compile_options(SingleApplication PRIVATE /W0)
+endif()
+
+# ── Qt Advanced Docking System (Bloomberg-style detachable panels) ────────────
+# Panels become CDockWidgets — drag to float, dock, move to any monitor.
+# LGPL — compatible with AGPL. Used in Qt Creator itself.
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_STATIC   ON  CACHE BOOL "" FORCE)  # static lib: simpler deployment, no extra DLL
+set(QT_VERSION_MAJOR 6 CACHE STRING "" FORCE)
+FetchContent_Declare(
+    QtADS
+    GIT_REPOSITORY https://github.com/githubuser0xFFFF/Qt-Advanced-Docking-System.git
+    GIT_TAG        4.5.0
+    GIT_SHALLOW    TRUE
+    UPDATE_DISCONNECTED TRUE
+)
+FetchContent_MakeAvailable(QtADS)
+# ADS target name is version-stamped: qtadvanceddocking-qt6
+# Disable unity build — ADS uses anonymous namespaces internally
+set_target_properties(qtadvanceddocking-qt6 PROPERTIES UNITY_BUILD OFF)
+if(MSVC)
+    target_compile_options(qtadvanceddocking-qt6 PRIVATE /W0)
+endif()
+
 # ── Source files by module ────────────────────────────────────────────────────
 
 # Core
 set(CORE_SOURCES
     src/core/config/AppConfig.cpp
     src/core/config/AppPaths.cpp
+    src/core/config/ProfileManager.cpp
     src/core/logging/Logger.cpp
     src/core/events/EventBus.cpp
     src/core/session/SessionManager.cpp
@@ -231,6 +272,8 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v006_portfolio_multi.cpp
     src/storage/sqlite/migrations/v007_news_baselines.cpp
 
+    # Storage manager
+    src/storage/StorageManager.cpp
     # Cache + tab sessions
     src/storage/cache/CacheManager.cpp
     src/storage/cache/TabSessionStore.cpp
@@ -457,6 +500,8 @@ set(UI_SOURCES
     src/ui/navigation/StatusBar.cpp
     src/ui/navigation/ToolBar.cpp
     src/ui/navigation/CommandBar.cpp
+    src/ui/navigation/DockToolBar.cpp
+    src/ui/navigation/DockStatusBar.cpp
 
     src/ui/workspace/WorkspaceNewDialog.cpp
     src/ui/workspace/WorkspaceOpenDialog.cpp
@@ -778,6 +823,7 @@ set(APP_SOURCES
     src/app/main.cpp
     src/app/MainWindow.cpp
     src/app/ScreenRouter.cpp
+    src/app/DockScreenRouter.cpp
 )
 
 # All screen files compiled individually — they have local statics/functions that
@@ -1058,6 +1104,14 @@ set_source_files_properties(
     src/trading/brokers/saxo/SaxoBankBroker.cpp
     # WhisperService has a static local QStringList — exclude from unity to avoid ODR issues
     src/services/stt/WhisperService.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+)
+
+# ADS files use anonymous namespaces and heavy Qt meta-object includes —
+# exclude from unity to avoid ODR / symbol clashes in large batches
+set_source_files_properties(
+    src/app/MainWindow.cpp
+    src/app/DockScreenRouter.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -1395,6 +1449,8 @@ target_link_libraries(FinceptTerminal PRIVATE
     whisper
     md4c
     md4c-html
+    SingleApplication::SingleApplication
+    qtadvanceddocking-qt6
 )
 
 # OpenSSL — Windows only (from vcpkg). macOS uses system OpenSSL; Linux uses system packages.
@@ -1560,30 +1616,30 @@ endif()
 
 if(WIN32)
     # Windows: install exe + all DLLs beside it (windeployqt already copies them)
-    install(TARGETS FinceptTerminal RUNTIME DESTINATION ".")
+    install(TARGETS FinceptTerminal RUNTIME DESTINATION "." COMPONENT core)
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/"
-            DESTINATION "scripts")
+            DESTINATION "scripts" COMPONENT scripts)
 
 elseif(APPLE)
     # macOS: install the .app bundle
-    install(TARGETS FinceptTerminal BUNDLE DESTINATION ".")
+    install(TARGETS FinceptTerminal BUNDLE DESTINATION "." COMPONENT core)
 
 else()
     # Linux: FHS-compliant layout
     install(TARGETS FinceptTerminal
-            RUNTIME DESTINATION "bin")
+            RUNTIME DESTINATION "bin" COMPONENT core)
 
     # Python analytics scripts
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/"
             DESTINATION "share/fincept-terminal/scripts"
-            USE_SOURCE_PERMISSIONS)
+            USE_SOURCE_PERMISSIONS COMPONENT scripts)
 
     # App icon (PNG required for hicolor theme; convert .ico → .png in CI)
     set(_ICON_PNG "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.png")
     if(EXISTS "${_ICON_PNG}")
         install(FILES "${_ICON_PNG}"
                 DESTINATION "share/icons/hicolor/256x256/apps"
-                RENAME "fincept-terminal.png")
+                RENAME "fincept-terminal.png" COMPONENT core)
     else()
         message(STATUS "Linux icon not found at ${_ICON_PNG} — "
                        "convert resources/fincept.ico to fincept.png for proper desktop integration")
@@ -1591,16 +1647,156 @@ else()
 
     # .desktop file
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/fincept-terminal.desktop"
-            DESTINATION "share/applications")
+            DESTINATION "share/applications" COMPONENT core)
 
     # AppStream metadata
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/fincept-terminal.appdata.xml"
-            DESTINATION "share/metainfo")
+            DESTINATION "share/metainfo" COMPONENT core)
 
     # yt-dlp (if bundled)
     if(FINCEPT_YTDLP_TO_BUNDLE AND EXISTS "${FINCEPT_YTDLP_TO_BUNDLE}")
         install(PROGRAMS "${FINCEPT_YTDLP_TO_BUNDLE}"
                 DESTINATION "bin"
-                RENAME "yt-dlp")
+                RENAME "yt-dlp" COMPONENT core)
     endif()
 endif()
+
+# ── Installer (QtIFW via CPackIFW) ───────────────────────────────────────────
+# Generate cross-platform installer with uninstaller:
+#   cmake -B build -DFINCEPT_BUILD_INSTALLER=ON -DDEPLOY_QT=ON ...
+#   cmake --build build --config Release
+#   cd build && cpack -G IFW -C Release
+#
+# Requires: Qt Installer Framework (binarycreator on PATH or in Qt install)
+# Output:   FinceptTerminal-<ver>-<platform>-setup.exe/.run/.app
+
+option(FINCEPT_BUILD_INSTALLER "Generate QtIFW installer via CPack" OFF)
+
+if(FINCEPT_BUILD_INSTALLER)
+
+    # ── Windows: capture windeployqt output for the installer ────────────────
+    if(WIN32 AND DEPLOY_QT)
+        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/"
+                DESTINATION "."
+                COMPONENT core
+                FILES_MATCHING
+                PATTERN "*.dll")
+        # Qt plugin directories
+        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/platforms"
+                DESTINATION "." COMPONENT core OPTIONAL)
+        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/sqldrivers"
+                DESTINATION "." COMPONENT core OPTIONAL)
+        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/imageformats"
+                DESTINATION "." COMPONENT core OPTIONAL)
+        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/styles"
+                DESTINATION "." COMPONENT core OPTIONAL)
+        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/tls"
+                DESTINATION "." COMPONENT core OPTIONAL)
+        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/multimedia"
+                DESTINATION "." COMPONENT core OPTIONAL)
+        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/networkinformation"
+                DESTINATION "." COMPONENT core OPTIONAL)
+        install(DIRECTORY "$<TARGET_FILE_DIR:FinceptTerminal>/generic"
+                DESTINATION "." COMPONENT core OPTIONAL)
+    endif()
+
+    # ── CPack general metadata ───────────────────────────────────────────────
+    set(CPACK_PACKAGE_NAME "FinceptTerminal")
+    set(CPACK_PACKAGE_VENDOR "Fincept Corporation")
+    set(CPACK_PACKAGE_VERSION "${CMAKE_PROJECT_VERSION}")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+        "Professional financial intelligence terminal with AI analytics")
+    set(CPACK_PACKAGE_HOMEPAGE_URL
+        "https://github.com/Fincept-Corporation/FinceptTerminal")
+    set(CPACK_RESOURCE_FILE_LICENSE
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/packages/com.fincept.terminal.core/meta/license.txt")
+    set(CPACK_PACKAGE_ICON
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.ico")
+
+    # ── Generator: IFW only ──────────────────────────────────────────────────
+    set(CPACK_GENERATOR "IFW")
+
+    # ── QtIFW tool discovery ─────────────────────────────────────────────────
+    find_program(BINARYCREATOR_EXE binarycreator
+        HINTS
+            "$ENV{QT_IFW_DIR}/bin"
+            "$ENV{QT_ROOT_DIR}/../../Tools/QtInstallerFramework/4.8/bin"
+            "C:/Qt/Tools/QtInstallerFramework/4.8/bin"
+            "C:/Qt/Tools/QtInstallerFramework/4.7/bin"
+            "/opt/Qt/Tools/QtInstallerFramework/4.8/bin"
+            "$ENV{HOME}/Qt/Tools/QtInstallerFramework/4.8/bin"
+    )
+    if(BINARYCREATOR_EXE)
+        get_filename_component(_IFW_BIN_DIR "${BINARYCREATOR_EXE}" DIRECTORY)
+        set(CPACK_IFW_ROOT "${_IFW_BIN_DIR}/..")
+        message(STATUS "QtIFW found: ${BINARYCREATOR_EXE}")
+    else()
+        message(WARNING "binarycreator not found — set QT_IFW_DIR or install Qt Installer Framework")
+    endif()
+
+    # ── CPackIFW installer configuration ─────────────────────────────────────
+    set(CPACK_IFW_PACKAGE_TITLE "Fincept Terminal")
+    set(CPACK_IFW_PACKAGE_NAME "com.fincept.terminal")
+    set(CPACK_IFW_PACKAGE_PUBLISHER "Fincept Corporation")
+    set(CPACK_IFW_PACKAGE_START_MENU_DIRECTORY "Fincept")
+    set(CPACK_IFW_PACKAGE_ICON
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.ico")
+    set(CPACK_IFW_PACKAGE_MAINTENANCE_TOOL_NAME "FinceptMaintenanceTool")
+    set(CPACK_IFW_PACKAGE_WIZARD_STYLE "Modern")
+    set(CPACK_IFW_PACKAGE_ALLOW_SPACE_IN_PATH ON)
+    set(CPACK_IFW_PACKAGE_ALLOW_NON_ASCII_CHARACTERS ON)
+
+    # Target directory defaults per platform
+    if(WIN32)
+        set(CPACK_IFW_TARGET_DIRECTORY "@ApplicationsDirX64@/FinceptTerminal")
+    elseif(APPLE)
+        set(CPACK_IFW_TARGET_DIRECTORY "/Applications/FinceptTerminal")
+    else()
+        set(CPACK_IFW_TARGET_DIRECTORY "@HomeDir@/FinceptTerminal")
+    endif()
+
+    # Output file naming
+    if(WIN32)
+        set(CPACK_PACKAGE_FILE_NAME
+            "FinceptTerminal-${CMAKE_PROJECT_VERSION}-win64-setup")
+    elseif(APPLE)
+        set(CPACK_PACKAGE_FILE_NAME
+            "FinceptTerminal-${CMAKE_PROJECT_VERSION}-macOS-setup")
+    else()
+        set(CPACK_PACKAGE_FILE_NAME
+            "FinceptTerminal-${CMAKE_PROJECT_VERSION}-linux-x64-setup")
+    endif()
+
+    # ── Include CPack + IFW module ───────────────────────────────────────────
+    include(CPack)
+    include(CPackIFW)
+
+    # ── Define install components ────────────────────────────────────────────
+    cpack_add_component(core
+        DISPLAY_NAME "Fincept Terminal"
+        DESCRIPTION  "Core application executable and Qt runtime libraries"
+        REQUIRED)
+
+    cpack_add_component(scripts
+        DISPLAY_NAME "Python Analytics Scripts"
+        DESCRIPTION  "1300+ CFA-level Python analytics scripts (equity, derivatives, portfolio, quant)"
+        DEPENDS core)
+
+    # ── CPackIFW component configuration ─────────────────────────────────────
+    cpack_ifw_configure_component(core
+        NAME "com.fincept.terminal.core"
+        VERSION "${CMAKE_PROJECT_VERSION}"
+        SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/packages/com.fincept.terminal.core/meta/installscript.qs"
+        LICENSES "AGPL-3.0" "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/packages/com.fincept.terminal.core/meta/license.txt"
+        PRIORITY 100
+        DEFAULT TRUE
+        FORCED_INSTALLATION)
+
+    cpack_ifw_configure_component(scripts
+        NAME "com.fincept.terminal.scripts"
+        VERSION "${CMAKE_PROJECT_VERSION}"
+        PRIORITY 50
+        DEFAULT TRUE
+        DEPENDS "com.fincept.terminal.core")
+
+endif() # FINCEPT_BUILD_INSTALLER

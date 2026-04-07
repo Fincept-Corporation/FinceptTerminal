@@ -2,6 +2,7 @@
 
 #include "core/events/EventBus.h"
 #include "network/http/HttpClient.h"
+#include "ui/theme/Theme.h"
 
 #include <QApplication>
 #include <QEvent>
@@ -10,6 +11,7 @@
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QListWidgetItem>
+#include <QRegularExpression>
 #include <QScreen>
 #include <QVBoxLayout>
 
@@ -20,41 +22,55 @@ static constexpr int kSearchDebounceMs = 300;
 
 // ── styling ─────────────────────────────────────────────────────────────────
 
-static const char* INPUT_SS =
-    "QLineEdit{"
-    "  background:#111111;"
-    "  color:#e5e5e5;"
-    "  border:1px solid #2a2a2a;"
-    "  padding:2px 8px 2px 24px;"
-    "  font-size:12px;"
-    "  font-family:'Consolas',monospace;"
-    "}"
-    "QLineEdit:focus{"
-    "  border:1px solid #d97706;"
-    "}";
+static QString input_ss() {
+    return QString(
+        "QLineEdit{"
+        "  background:%1;"
+        "  color:%2;"
+        "  border:1px solid %3;"
+        "  padding:2px 8px 2px 24px;"
+        "  font-size:12px;"
+        "  font-family:'Consolas',monospace;"
+        "}"
+        "QLineEdit:focus{"
+        "  border:1px solid %4;"
+        "}")
+        .arg(colors::BG_RAISED.get())
+        .arg(colors::TEXT_PRIMARY.get())
+        .arg(colors::BORDER_MED.get())
+        .arg(colors::AMBER.get());
+}
 
-static const char* DROP_SS =
-    "QFrame{"
-    "  background:#0e0e0e;"
-    "  border:1px solid #2a2a2a;"
-    "  border-top:none;"
-    "}";
+static QString drop_ss() {
+    return QString(
+        "QFrame{"
+        "  background:%1;"
+        "  border:1px solid %2;"
+        "  border-top:none;"
+        "}")
+        .arg(colors::BG_SURFACE.get())
+        .arg(colors::BORDER_MED.get());
+}
 
-static const char* LIST_SS =
-    "QListWidget{"
-    "  background:transparent;"
-    "  border:none;"
-    "  outline:none;"
-    "}"
-    "QListWidget::item{"
-    "  padding:0px;"
-    "  border:none;"
-    "  background:transparent;"
-    "}"
-    "QListWidget::item:selected{"
-    "  background:#1a1a1a;"
-    "  border-left:3px solid #d97706;"
-    "}";
+static QString list_ss() {
+    return QString(
+        "QListWidget{"
+        "  background:transparent;"
+        "  border:none;"
+        "  outline:none;"
+        "}"
+        "QListWidget::item{"
+        "  padding:0px;"
+        "  border:none;"
+        "  background:transparent;"
+        "}"
+        "QListWidget::item:selected{"
+        "  background:%1;"
+        "  border-left:3px solid %2;"
+        "}")
+        .arg(colors::BG_RAISED.get())
+        .arg(colors::AMBER.get());
+}
 
 // ── yfinance symbol conversion ───────────────────────────────────────────────
 
@@ -239,7 +255,7 @@ CommandBar::CommandBar(QWidget* parent) : QWidget(parent) {
     input_ = new QLineEdit(this);
     input_->setFixedHeight(24);
     input_->setPlaceholderText("> Enter Command or /type ...");
-    input_->setStyleSheet(INPUT_SS);
+    input_->setStyleSheet(input_ss());
     input_->installEventFilter(this);
     hl->addWidget(input_);
 
@@ -247,14 +263,14 @@ CommandBar::CommandBar(QWidget* parent) : QWidget(parent) {
     dropdown_ = new QFrame(nullptr);
     dropdown_->setWindowFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
     dropdown_->setAttribute(Qt::WA_ShowWithoutActivating);
-    dropdown_->setStyleSheet(DROP_SS);
+    dropdown_->setStyleSheet(drop_ss());
 
     auto* vl = new QVBoxLayout(dropdown_);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
     list_ = new QListWidget(dropdown_);
-    list_->setStyleSheet(LIST_SS);
+    list_->setStyleSheet(list_ss());
     list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     list_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     list_->setMouseTracking(true);
@@ -331,6 +347,8 @@ bool CommandBar::eventFilter(QObject* obj, QEvent* event) {
         input_->clear();
         mode_ = Mode::Screen;
         active_asset_type_.clear();
+        dock_primary_id_.clear();
+        dock_verb_.clear();
         search_debounce_->stop();
         hide_dropdown();
         input_->clearFocus();
@@ -381,7 +399,7 @@ void CommandBar::on_text_changed(const QString& text) {
             auto* rl = new QHBoxLayout(row);
             rl->setContentsMargins(10, 6, 10, 6);
             auto* hint = new QLabel(QString("Type a symbol or name to search %1s...").arg(active_asset_type_));
-            hint->setStyleSheet("color:#525252;font-size:11px;font-family:'Consolas',monospace;background:transparent;");
+            hint->setStyleSheet(QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
             rl->addWidget(hint);
             item->setSizeHint(QSize(0, 30));
             list_->setItemWidget(item, row);
@@ -415,8 +433,102 @@ void CommandBar::on_text_changed(const QString& text) {
         return;
     }
 
+    // ── DockSecondary: user picked a verb and is typing the second screen ──────
+    if (mode_ == Mode::DockSecondary && !dock_primary_id_.isEmpty() && !dock_verb_.isEmpty()) {
+        // Text looks like: "<primary> <verb> <partial>"
+        // Find the verb position and extract everything after it
+        const QString lower = trimmed.toLower();
+        for (const QString& v : {QString("add"), QString("replace")}) {
+            const int vi = lower.indexOf(" " + v + " ");
+            if (vi >= 0) {
+                const QString partial = trimmed.mid(vi + v.length() + 2);
+                show_dock_secondary_suggestions(v, partial);
+                return;
+            }
+            // verb at end with no second token yet
+            if (lower.endsWith(" " + v)) {
+                show_dock_secondary_suggestions(v, {});
+                return;
+            }
+        }
+    }
+
+    // ── DockCommand: user already resolved primary, picking verb ────────────
+    if (mode_ == Mode::DockCommand && !dock_primary_id_.isEmpty()) {
+        // Stay in DockCommand until they type something non-verb-like
+        const QString after_space = trimmed.mid(trimmed.indexOf(' ') + 1).toLower().trimmed();
+        // If they've typed "add " or "replace " transition to DockSecondary
+        if (after_space.startsWith("add ") || after_space.startsWith("replace ")) {
+            dock_verb_ = after_space.startsWith("add") ? "add" : "replace";
+            mode_ = Mode::DockSecondary;
+            const QString partial = after_space.mid(after_space.indexOf(' ') + 1);
+            show_dock_secondary_suggestions(dock_verb_, partial);
+            return;
+        }
+        // Still picking verb — re-show verb suggestions
+        show_dock_verb_suggestions(dock_primary_id_);
+        return;
+    }
+
+    // ── Detect "<valid_screen> " (space after a known screen) ───────────────
+    if (trimmed.endsWith(' ') || trimmed.contains(' ')) {
+        const int space = trimmed.indexOf(' ');
+        if (space > 0) {
+            const QString first_token = trimmed.left(space);
+            const QString resolved = resolve_screen_id(first_token);
+            if (!resolved.isEmpty()) {
+                // Check if the second token is "remove" — that's a complete command
+                const QString rest = trimmed.mid(space + 1).trimmed().toLower();
+                if (rest == "remove") {
+                    // Show hint that Enter will execute
+                    list_->clear();
+                    auto* item = new QListWidgetItem(list_);
+                    item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
+                    auto* row = new QWidget;
+                    row->setStyleSheet("background:transparent;");
+                    auto* hl2 = new QHBoxLayout(row);
+                    hl2->setContentsMargins(10, 6, 10, 6);
+                    auto* lbl = new QLabel(QString("Press Enter to close all except %1")
+                                           .arg(resolve_screen_id(first_token).toUpper().replace("_", " ")));
+                    lbl->setStyleSheet(QString("color:%1;font-size:11px;"
+                                              "font-family:'Consolas',monospace;background:transparent;")
+                                       .arg(colors::AMBER.get()));
+                    hl2->addWidget(lbl);
+                    item->setSizeHint(QSize(0, 30));
+                    list_->setItemWidget(item, row);
+                    show_dropdown();
+                    dock_primary_id_ = resolved;
+                    mode_ = Mode::DockCommand;
+                    return;
+                }
+                // Transition to DockCommand — show verb suggestions
+                if (rest.isEmpty() || rest == "a" || rest == "ad" ||
+                    rest == "r" || rest == "re" || rest == "rep") {
+                    dock_primary_id_ = resolved;
+                    dock_verb_.clear();
+                    mode_ = Mode::DockCommand;
+                    show_dock_verb_suggestions(resolved);
+                    return;
+                }
+                // They're typing "add X" or "replace X"
+                if (rest.startsWith("add") || rest.startsWith("replace")) {
+                    dock_primary_id_ = resolved;
+                    const QString verb = rest.startsWith("add") ? "add" : "replace";
+                    dock_verb_ = verb;
+                    mode_ = Mode::DockSecondary;
+                    const int vi = rest.indexOf(' ');
+                    const QString partial = vi >= 0 ? rest.mid(vi + 1) : QString();
+                    show_dock_secondary_suggestions(verb, partial);
+                    return;
+                }
+            }
+        }
+    }
+
     // ── Normal screen command search ────────────────────────────────────────
     mode_ = Mode::Screen;
+    dock_primary_id_.clear();
+    dock_verb_.clear();
     active_asset_type_.clear();
 
     const auto results = search(text);
@@ -438,16 +550,16 @@ void CommandBar::on_text_changed(const QString& text) {
         hl->setSpacing(6);
 
         auto* alias_lbl = new QLabel(cmd.aliases.first().toUpper());
-        alias_lbl->setStyleSheet("color:#e5e5e5;font-size:11px;font-weight:700;"
-                                 "font-family:'Consolas',monospace;background:transparent;");
+        alias_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;"
+                                 "font-family:'Consolas',monospace;background:transparent;").arg(colors::TEXT_PRIMARY.get()));
         alias_lbl->setFixedWidth(72);
 
         auto* sep_lbl = new QLabel(QStringLiteral("\u203A"));
-        sep_lbl->setStyleSheet("color:#525252;font-size:12px;background:transparent;");
+        sep_lbl->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
 
         auto* name_lbl = new QLabel(cmd.name);
-        name_lbl->setStyleSheet("color:#a3a3a3;font-size:11px;background:transparent;"
-                                "font-family:'Consolas',monospace;");
+        name_lbl->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;"
+                                "font-family:'Consolas',monospace;").arg(colors::TEXT_SECONDARY.get()));
 
         hl->addWidget(alias_lbl);
         hl->addWidget(sep_lbl);
@@ -455,8 +567,8 @@ void CommandBar::on_text_changed(const QString& text) {
 
         if (!cmd.shortcut.isEmpty()) {
             auto* sc_lbl = new QLabel(cmd.shortcut);
-            sc_lbl->setStyleSheet("color:#404040;font-size:10px;font-family:'Consolas',monospace;"
-                                  "background:transparent;");
+            sc_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-family:'Consolas',monospace;"
+                                  "background:transparent;").arg(colors::TEXT_DIM.get()));
             hl->addWidget(sc_lbl);
         }
 
@@ -484,9 +596,12 @@ void CommandBar::on_return_pressed() {
     }
 
     if (!dropdown_->isVisible() || !list_->currentItem()) {
-        // In screen mode only: allow direct alias lookup without dropdown
         if (mode_ == Mode::Screen) {
-            const auto results = search(input_->text());
+            const QString text = input_->text().trimmed();
+            // Try compound dock command first: "X add Y", "X replace Y", "X remove"
+            if (try_parse_dock_command(text)) return;
+            // Fall back to simple screen navigation
+            const auto results = search(text);
             if (!results.isEmpty()) {
                 emit navigate_to(results.first().id);
                 input_->clear();
@@ -542,6 +657,39 @@ void CommandBar::on_item_clicked(QListWidgetItem* item) {
         return;
     }
 
+    if (mode_ == Mode::DockCommand) {
+        // User clicked a verb (add/replace/remove)
+        const QString verb = item->data(Qt::UserRole).toString();
+        const QString primary = item->data(Qt::UserRole + 1).toString();
+        if (verb == "remove") {
+            emit dock_command("remove", primary, {});
+            input_->clear(); mode_ = Mode::Screen;
+            dock_primary_id_.clear(); dock_verb_.clear();
+            hide_dropdown(); input_->clearFocus();
+        } else {
+            // Transition to secondary — append verb to input
+            dock_verb_ = verb;
+            mode_ = Mode::DockSecondary;
+            const QString current = input_->text().trimmed();
+            input_->setText(current.endsWith(' ') ? current + verb + " "
+                                                  : current + " " + verb + " ");
+            input_->setCursorPosition(input_->text().length());
+            input_->setFocus();
+            show_dock_secondary_suggestions(verb, {});
+        }
+        return;
+    }
+
+    if (mode_ == Mode::DockSecondary) {
+        const QString secondary_id = item->data(Qt::UserRole).toString();
+        if (secondary_id.isEmpty()) return; // header row
+        emit dock_command(dock_verb_, dock_primary_id_, secondary_id);
+        input_->clear(); mode_ = Mode::Screen;
+        dock_primary_id_.clear(); dock_verb_.clear();
+        hide_dropdown(); input_->clearFocus();
+        return;
+    }
+
     // Screen mode
     emit navigate_to(item->data(Qt::UserRole).toString());
     input_->clear();
@@ -574,16 +722,16 @@ void CommandBar::show_slash_suggestions(const QString& partial) {
         hl->setSpacing(8);
 
         auto* slash_lbl = new QLabel(at.slash);
-        slash_lbl->setStyleSheet("color:#d97706;font-size:12px;font-weight:700;"
-                                 "font-family:'Consolas',monospace;background:transparent;");
+        slash_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;"
+                                 "font-family:'Consolas',monospace;background:transparent;").arg(colors::AMBER.get()));
         slash_lbl->setFixedWidth(80);
 
         auto* sep_lbl = new QLabel(QStringLiteral("\u203A"));
-        sep_lbl->setStyleSheet("color:#525252;font-size:12px;background:transparent;");
+        sep_lbl->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
 
         auto* desc_lbl = new QLabel(at.description);
-        desc_lbl->setStyleSheet("color:#a3a3a3;font-size:11px;background:transparent;"
-                                "font-family:'Consolas',monospace;");
+        desc_lbl->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;"
+                                "font-family:'Consolas',monospace;").arg(colors::TEXT_SECONDARY.get()));
 
         hl->addWidget(slash_lbl);
         hl->addWidget(sep_lbl);
@@ -651,7 +799,7 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(10, 6, 10, 6);
         auto* lbl = new QLabel("No results found");
-        lbl->setStyleSheet("color:#525252;font-size:11px;font-family:'Consolas',monospace;background:transparent;");
+        lbl->setStyleSheet(QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
         rl->addWidget(lbl);
         item->setSizeHint(QSize(0, 30));
         list_->setItemWidget(item, row);
@@ -684,13 +832,13 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
         hl->setSpacing(8);
 
         auto* sym_lbl = new QLabel(yf_symbol);
-        sym_lbl->setStyleSheet("color:#e5e5e5;font-size:12px;font-weight:700;"
-                               "font-family:'Consolas',monospace;background:transparent;");
+        sym_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;"
+                               "font-family:'Consolas',monospace;background:transparent;").arg(colors::TEXT_PRIMARY.get()));
         sym_lbl->setFixedWidth(110);
 
         auto* name_lbl = new QLabel(name);
-        name_lbl->setStyleSheet("color:#a3a3a3;font-size:11px;background:transparent;"
-                                "font-family:'Consolas',monospace;");
+        name_lbl->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;"
+                                "font-family:'Consolas',monospace;").arg(colors::TEXT_SECONDARY.get()));
         name_lbl->setMaximumWidth(200);
 
         hl->addWidget(sym_lbl);
@@ -698,16 +846,17 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
 
         if (!exchange.isEmpty()) {
             auto* exch_lbl = new QLabel(exchange);
-            exch_lbl->setStyleSheet("color:#525252;font-size:10px;font-family:'Consolas',monospace;"
-                                    "background:transparent;");
+            exch_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-family:'Consolas',monospace;"
+                                    "background:transparent;").arg(colors::TEXT_TERTIARY.get()));
             hl->addWidget(exch_lbl);
         }
 
         // Type badge
         auto* type_lbl = new QLabel(type.toUpper());
-        type_lbl->setStyleSheet("color:#d97706;font-size:9px;font-weight:700;"
-                                "font-family:'Consolas',monospace;background:#1a1a1a;"
-                                "padding:1px 4px;border-radius:2px;");
+        type_lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;"
+                                "font-family:'Consolas',monospace;background:%2;"
+                                "padding:1px 4px;border-radius:2px;")
+                                .arg(colors::AMBER.get()).arg(colors::BG_RAISED.get()));
         hl->addWidget(type_lbl);
 
         item->setSizeHint(QSize(0, 32));
@@ -737,6 +886,179 @@ void CommandBar::select_asset(const QString& symbol, const QString& type) {
 }
 
 // ── dropdown helpers ─────────────────────────────────────────────────────────
+
+void CommandBar::show_dock_verb_suggestions(const QString& primary_id) {
+    // Show add / replace / remove as clickable suggestions after "<screen> "
+    list_->clear();
+
+    struct Verb { QString verb; QString label; QString hint; };
+    const QList<Verb> verbs = {
+        {"add",     "ADD",     "Open a second screen alongside"},
+        {"replace", "REPLACE", "Close this screen, open another"},
+        {"remove",  "REMOVE",  "Close all other screens"},
+    };
+
+    for (const auto& v : verbs) {
+        auto* item = new QListWidgetItem(list_);
+        item->setData(Qt::UserRole,     v.verb);      // verb
+        item->setData(Qt::UserRole + 1, primary_id);  // primary screen id
+
+        auto* row = new QWidget;
+        row->setStyleSheet("background:transparent;");
+        auto* hl = new QHBoxLayout(row);
+        hl->setContentsMargins(10, 5, 10, 5);
+        hl->setSpacing(8);
+
+        auto* verb_lbl = new QLabel(v.verb.toUpper());
+        verb_lbl->setStyleSheet(
+            QString("color:%1;font-size:11px;font-weight:700;"
+                    "font-family:'Consolas',monospace;background:transparent;")
+            .arg(colors::AMBER.get()));
+        verb_lbl->setFixedWidth(64);
+
+        auto* sep = new QLabel(QStringLiteral("\u203A"));
+        sep->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;")
+                           .arg(colors::TEXT_TERTIARY.get()));
+
+        auto* hint_lbl = new QLabel(v.hint);
+        hint_lbl->setStyleSheet(
+            QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
+            .arg(colors::TEXT_SECONDARY.get()));
+
+        hl->addWidget(verb_lbl);
+        hl->addWidget(sep);
+        hl->addWidget(hint_lbl, 1);
+        item->setSizeHint(QSize(0, 30));
+        list_->setItemWidget(item, row);
+    }
+
+    list_->setCurrentRow(0);
+    show_dropdown();
+}
+
+void CommandBar::show_dock_secondary_suggestions(const QString& verb, const QString& partial) {
+    // Show filtered screen list as the second screen for add/replace
+    const auto results = search(partial.trimmed().isEmpty() ? QString() : partial);
+    list_->clear();
+
+    // Header hint row
+    {
+        auto* item = new QListWidgetItem(list_);
+        item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
+        auto* row = new QWidget;
+        row->setStyleSheet("background:transparent;");
+        auto* hl = new QHBoxLayout(row);
+        hl->setContentsMargins(10, 4, 10, 4);
+        auto* lbl = new QLabel(QString("%1 — pick a screen:").arg(verb.toUpper()));
+        lbl->setStyleSheet(
+            QString("color:%1;font-size:10px;font-family:'Consolas',monospace;background:transparent;")
+            .arg(colors::AMBER.get()));
+        hl->addWidget(lbl);
+        item->setSizeHint(QSize(0, 24));
+        list_->setItemWidget(item, row);
+    }
+
+    const auto& pool = results.isEmpty() ? commands_ : results;
+    for (const auto& cmd : pool) {
+        auto* item = new QListWidgetItem(list_);
+        item->setData(Qt::UserRole,     cmd.id);
+        item->setData(Qt::UserRole + 1, cmd.aliases.first());
+
+        auto* row = new QWidget;
+        row->setStyleSheet("background:transparent;");
+        auto* hl = new QHBoxLayout(row);
+        hl->setContentsMargins(10, 5, 10, 5);
+        hl->setSpacing(6);
+
+        auto* alias_lbl = new QLabel(cmd.aliases.first().toUpper());
+        alias_lbl->setStyleSheet(
+            QString("color:%1;font-size:11px;font-weight:700;"
+                    "font-family:'Consolas',monospace;background:transparent;")
+            .arg(colors::TEXT_PRIMARY.get()));
+        alias_lbl->setFixedWidth(72);
+
+        auto* sep = new QLabel(QStringLiteral("\u203A"));
+        sep->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;")
+                           .arg(colors::TEXT_TERTIARY.get()));
+
+        auto* name_lbl = new QLabel(cmd.name);
+        name_lbl->setStyleSheet(
+            QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
+            .arg(colors::TEXT_SECONDARY.get()));
+
+        hl->addWidget(alias_lbl);
+        hl->addWidget(sep);
+        hl->addWidget(name_lbl, 1);
+        item->setSizeHint(QSize(0, 30));
+        list_->setItemWidget(item, row);
+    }
+
+    if (list_->count() > 1) list_->setCurrentRow(1); // skip header
+    show_dropdown();
+}
+
+QString CommandBar::resolve_screen_id(const QString& token) const {
+    const QString t = token.trimmed().toLower();
+    // Direct id match
+    for (const auto& cmd : commands_)
+        if (cmd.id == t) return cmd.id;
+    // Alias / name match (same logic as search())
+    for (const auto& cmd : commands_) {
+        if (cmd.name.toLower() == t) return cmd.id;
+        for (const auto& a : cmd.aliases)
+            if (a.toLower() == t) return cmd.id;
+    }
+    // Keyword prefix
+    const auto results = search(t);
+    if (!results.isEmpty()) return results.first().id;
+    return {};
+}
+
+bool CommandBar::try_parse_dock_command(const QString& text) {
+    // Only active in Screen mode — not during asset search or slash picker
+    if (mode_ != Mode::Screen) return false;
+
+    const QString t = text.trimmed();
+
+    // Match: "<primary> add <secondary>"
+    static const QRegularExpression re_add(
+        R"(^(.+?)\s+add\s+(.+)$)", QRegularExpression::CaseInsensitiveOption);
+    // Match: "<primary> replace <secondary>"
+    static const QRegularExpression re_replace(
+        R"(^(.+?)\s+replace\s+(.+)$)", QRegularExpression::CaseInsensitiveOption);
+    // Match: "<primary> remove"
+    static const QRegularExpression re_remove(
+        R"(^(.+?)\s+remove$)", QRegularExpression::CaseInsensitiveOption);
+
+    auto m_add     = re_add.match(t);
+    auto m_replace = re_replace.match(t);
+    auto m_remove  = re_remove.match(t);
+
+    if (m_add.hasMatch()) {
+        const QString primary   = resolve_screen_id(m_add.captured(1));
+        const QString secondary = resolve_screen_id(m_add.captured(2));
+        if (primary.isEmpty() || secondary.isEmpty()) return false;
+        emit dock_command("add", primary, secondary);
+        input_->clear(); hide_dropdown(); input_->clearFocus();
+        return true;
+    }
+    if (m_replace.hasMatch()) {
+        const QString primary   = resolve_screen_id(m_replace.captured(1));
+        const QString secondary = resolve_screen_id(m_replace.captured(2));
+        if (primary.isEmpty() || secondary.isEmpty()) return false;
+        emit dock_command("replace", primary, secondary);
+        input_->clear(); hide_dropdown(); input_->clearFocus();
+        return true;
+    }
+    if (m_remove.hasMatch()) {
+        const QString primary = resolve_screen_id(m_remove.captured(1));
+        if (primary.isEmpty()) return false;
+        emit dock_command("remove", primary, {});
+        input_->clear(); hide_dropdown(); input_->clearFocus();
+        return true;
+    }
+    return false;
+}
 
 void CommandBar::execute_index(int index) {
     auto* item = list_->item(index);

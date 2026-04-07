@@ -20,10 +20,26 @@ class SessionManager : public QObject {
     void save_tab_state(const QString& tab_id, const QVariantMap& state);
     QVariantMap load_tab_state(const QString& tab_id) const;
 
-    // Window geometry
-    void save_geometry(const QByteArray& geometry, const QByteArray& state);
-    QByteArray load_geometry() const;
-    QByteArray load_state() const;
+    // Window geometry — scoped per window_id (0 = primary)
+    void save_geometry(int window_id, const QByteArray& geometry, const QByteArray& state);
+    QByteArray load_geometry(int window_id) const;
+    QByteArray load_state(int window_id) const;
+
+    // Track how many windows were open at last shutdown
+    void save_window_count(int count);
+    int load_window_count() const;
+
+    // ADS dock layout — scoped per window_id
+    void save_dock_layout(int window_id, const QByteArray& layout);
+    QByteArray load_dock_layout(int window_id) const;
+
+    // Dock layout version — used to auto-discard stale layouts after code changes
+    void set_dock_layout_version(int window_id, int version);
+    int dock_layout_version(int window_id) const;
+
+    // Named perspectives (Bloomberg-style saved layouts)
+    void save_perspectives(const QSettings& source);
+    void load_perspectives(QSettings& target) const;
 
     // Last active screen
     void set_last_screen(const QString& screen_id);

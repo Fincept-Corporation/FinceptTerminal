@@ -18,13 +18,13 @@ using fincept::services::FileManagerService;
 static const char* MF = "font-family:'Consolas','Courier New',monospace;";
 
 RecentFilesWidget::RecentFilesWidget(QWidget* parent)
-    : BaseWidget("Recent Files", parent, "#d97706") {
+    : BaseWidget("Recent Files", parent, ui::colors::AMBER.get()) {
 
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setStyleSheet("QScrollArea{border:none;background:transparent;}"
                           "QScrollBar:vertical{background:transparent;width:4px;}"
-                          "QScrollBar::handle:vertical{background:#222;}");
+                          + QString("QScrollBar::handle:vertical{background:%1;}").arg(ui::colors::BORDER_MED));
 
     auto* container = new QWidget;
     container->setStyleSheet("background:transparent;");
@@ -83,7 +83,8 @@ void RecentFilesWidget::refresh_data() {
     for (const QJsonObject& f : files) {
         auto* row = new QWidget;
         row->setStyleSheet(
-            "background:#0d0d0d;border:1px solid #1a1a1a;border-radius:2px;");
+            QString("background:%1;border:1px solid %2;border-radius:2px;")
+                .arg(ui::colors::BG_SURFACE, ui::colors::BORDER_DIM));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 5, 8, 5);
         rl->setSpacing(6);
@@ -96,13 +97,13 @@ void RecentFilesWidget::refresh_data() {
         badge->setAlignment(Qt::AlignCenter);
         badge->setStyleSheet(
             QString("color:%1;font-size:9px;font-weight:700;background:transparent;%2")
-                .arg("#d97706", MF));
+                .arg(ui::colors::AMBER, MF));
         rl->addWidget(badge);
 
         // Name
         auto* name_lbl = new QLabel(f["originalName"].toString());
         name_lbl->setStyleSheet(
-            QString("color:#e5e5e5;font-size:11px;background:transparent;%1").arg(MF));
+            QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_PRIMARY, MF));
         name_lbl->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         rl->addWidget(name_lbl, 1);
 

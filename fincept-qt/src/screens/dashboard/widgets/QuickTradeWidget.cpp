@@ -159,7 +159,7 @@ QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget("QUICK TRADE", 
                                        "QPushButton:hover { background: %2; }"
                                        "QPushButton:disabled { background: %3; color: %4; }")
                                    .arg(ui::colors::POSITIVE())
-                                   .arg("#15803d")
+                                   .arg(ui::colors::POSITIVE())
                                    .arg(ui::colors::BG_RAISED())
                                    .arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(submit_btn_);
@@ -237,7 +237,7 @@ void QuickTradeWidget::on_side_changed(int idx) {
                                        "font-size: 11px; font-weight: bold; }"
                                        "QPushButton:hover { background: %2; }")
                                    .arg(color)
-                                   .arg(idx == 0 ? "#15803d" : "#b91c1c"));
+                                   .arg(color));
 }
 
 void QuickTradeWidget::submit_order() {

@@ -1,5 +1,12 @@
 #include "app/MainWindow.h"
 
+#include "app/DockScreenRouter.h"
+#include "ui/navigation/DockToolBar.h"
+#include "ui/navigation/DockStatusBar.h"
+#include <DockManager.h>
+#include <DockWidget.h>
+#include <DockAreaWidget.h>
+
 #include "screens/chat_mode/ChatModeScreen.h"
 #include "services/updater/UpdateService.h"
 #include "ai_chat/AiChatBubble.h"
@@ -73,11 +80,13 @@
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
+#include "core/config/ProfileManager.h"
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QScreen>
 #include <QShortcut>
@@ -87,8 +96,13 @@
 
 namespace fincept {
 
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-    setWindowTitle("Fincept Terminal");
+MainWindow::MainWindow(int window_id, QWidget* parent)
+    : QMainWindow(parent), window_id_(window_id) {
+    // Show active profile in title bar when using a non-default profile
+    const QString profile = ProfileManager::instance().active();
+    setWindowTitle(profile == "default"
+                   ? "Fincept Terminal"
+                   : QString("Fincept Terminal [%1]").arg(profile));
     // Load icon from the embedded Windows resource (IDI_ICON1 in app.rc).
     // Falls back to the .ico beside the executable on other platforms.
     QIcon app_icon;
@@ -109,13 +123,27 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 #endif
     if (!app_icon.isNull())
         setWindowIcon(app_icon);
-    setMinimumSize(1280, 720);
+    // Minimum size must be small enough to allow OS window-snap (half/third screen).
+    // On a 1920-wide display, left-snap = 960px. Use 800x500 as minimum so snapping
+    // works on any 1080p+ monitor without the window bouncing back to centre.
+    setMinimumSize(800, 500);
 
-    QScreen* screen = QApplication::primaryScreen();
-    if (screen) {
-        QRect geom = screen->availableGeometry();
-        resize(geom.width() * 9 / 10, geom.height() * 9 / 10);
-        move(geom.center() - rect().center());
+    // Primary windows (id 0) restore saved geometry from last session.
+    // Secondary windows (id > 0) restore their own saved geometry if available,
+    // otherwise use smart multi-monitor placement (handled by the caller after show()).
+    const QByteArray saved_geom = SessionManager::instance().load_geometry(window_id_);
+    if (!saved_geom.isEmpty()) {
+        restoreGeometry(saved_geom);
+    } else {
+        QScreen* screen = QApplication::primaryScreen();
+        if (screen) {
+            QRect geom = screen->availableGeometry();
+            resize(geom.width() * 9 / 10, geom.height() * 9 / 10);
+            // Only centre-place for the primary window; secondary windows
+            // are positioned by the "new window" action after construction.
+            if (window_id_ == 0)
+                move(geom.center() - rect().center());
+        }
     }
 
     auto* master_stack = new QStackedWidget;
@@ -125,51 +153,29 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setup_auth_screens();
     master_stack->addWidget(auth_stack_);
 
-    // ── App shell ────────────────────────────────────────────────────────────
-    app_container_ = new QWidget;
-    auto* app_container = app_container_;
-    auto* vl = new QVBoxLayout(app_container);
-    vl->setContentsMargins(0, 0, 0, 0);
-    vl->setSpacing(0);
-
-    // Toolbar (menus + branding + clock + user + logout)
-    auto* toolbar = new ui::ToolBar;
-    vl->addWidget(toolbar);
-
-    // Tab bar (14 tabs)
-    auto* tab_bar = new ui::TabBar;
-    vl->addWidget(tab_bar);
-    tab_bar_widget_ = tab_bar;
-
-    // Screen content
-    app_stack_ = new QStackedWidget;
-    vl->addWidget(app_stack_, 1);
-
-    // Status bar
-    auto* status_bar = new ui::StatusBar;
-    vl->addWidget(status_bar);
-    status_bar_widget_ = status_bar;
-
-    master_stack->addWidget(app_container);
-
     // ── Chat Mode ─────────────────────────────────────────────────────────────
     chat_mode_screen_ = new chat_mode::ChatModeScreen;
-    master_stack->addWidget(chat_mode_screen_);  // index 2
+
+    // ── ADS Docking mode ─────────────────────────────────────────────────────
+    setup_docking_mode();
+    master_stack->addWidget(dock_manager_->parentWidget());  // index 1 — dock_wrapper
+    master_stack->addWidget(chat_mode_screen_); // index 2
     connect(chat_mode_screen_, &chat_mode::ChatModeScreen::exit_requested,
             this, &MainWindow::toggle_chat_mode);
 
     setCentralWidget(master_stack);
-    statusBar()->hide();
+
+    dock_toolbar_ = new ui::DockToolBar(this);
+    addToolBar(Qt::TopToolBarArea, dock_toolbar_);
+
+    dock_status_bar_ = new ui::DockStatusBar(this);
+    setStatusBar(dock_status_bar_);
 
     stack_ = master_stack;
-    router_ = new ScreenRouter(app_stack_, this);
-    setup_app_screens();
+    auto* toolbar = dock_toolbar_->inner();
 
-    // WorkspaceManager — wire router + main window
+    // ── Workspace + signal wiring ───────────────────────────────────────────
     WorkspaceManager::instance().set_main_window(this);
-    WorkspaceManager::instance().set_router(router_);
-    connect(router_, &ScreenRouter::screen_changed,
-            &WorkspaceManager::instance(), &WorkspaceManager::on_screen_changed);
     connect(&WorkspaceManager::instance(), &WorkspaceManager::workspace_loaded,
             this, [this](const WorkspaceDef& ws) {
                 setWindowTitle(QString("Fincept Terminal — %1").arg(ws.metadata.name));
@@ -179,8 +185,23 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
                 QMessageBox::warning(this, "Workspace Error", msg);
             });
 
-    // AI Chat Bubble — floats over app_stack_ content area
-    chat_bubble_ = new AiChatBubble(app_stack_);
+    dock_router_ = new DockScreenRouter(dock_manager_, this);
+    setup_dock_screens();
+
+    // Tab bar navigation: open the selected screen exclusively — closes all other
+    // panels and fills the full area. Each tab is a fresh independent screen,
+    // not nested into whatever was previously open.
+    connect(tab_bar_, &ui::TabBar::tab_changed, this, [this](const QString& id) {
+        dock_router_->navigate(id, true);
+    });
+    connect(dock_router_, &DockScreenRouter::screen_changed, tab_bar_, &ui::TabBar::set_active);
+
+    connect(this, &QObject::destroyed, this, [this]() {
+        WorkspaceManager::instance().remove_window(this);
+    });
+
+    // Chat bubble — floats over dock_manager_ content area
+    chat_bubble_ = new AiChatBubble(dock_manager_);
     {
         auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
         bool show = !r.is_ok() || r.value() != "false";
@@ -188,38 +209,40 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         if (show) chat_bubble_->raise();
     }
 
-    // Tab bar ↔ router
-    connect(tab_bar, &ui::TabBar::tab_changed, router_, &ScreenRouter::navigate);
-    connect(router_, &ScreenRouter::screen_changed, tab_bar, &ui::TabBar::set_active);
-
-    // Re-raise bubble on every screen switch; respect show_chat_bubble setting
-    connect(router_, &ScreenRouter::screen_changed, this, [this](const QString&) {
+    // Re-raise and reposition the bubble after each navigation — dock geometry
+    // shifts when panels open/close, so the bubble needs to re-anchor itself.
+    connect(dock_router_, &DockScreenRouter::screen_changed, this, [this](const QString&) {
         if (!chat_bubble_) return;
         auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
         bool show = !r.is_ok() || r.value() != "false";
         chat_bubble_->setVisible(show);
-        if (show) {
-            chat_bubble_->reposition();
-            chat_bubble_->raise();
-        }
+        if (show) { chat_bubble_->reposition(); chat_bubble_->raise(); }
     });
 
-    // Chat Mode toggle button in toolbar
     connect(toolbar, &ui::ToolBar::chat_mode_toggled, this, &MainWindow::toggle_chat_mode);
+    connect(toolbar, &ui::ToolBar::navigate_to, this, [this](const QString& id) {
+        dock_router_->navigate(id, true);
+    });
 
-    // Toolbar Navigate menu → router
-    connect(toolbar, &ui::ToolBar::navigate_to, router_, &ScreenRouter::navigate);
+    connect(toolbar, &ui::ToolBar::dock_command, this,
+            [this](const QString& action, const QString& primary, const QString& secondary) {
+        if (action == "add")
+            dock_router_->add_alongside(primary, secondary);
+        else if (action == "remove")
+            dock_router_->remove_screen(primary);
+        else if (action == "replace")
+            dock_router_->replace_screen(primary, secondary);
+    });
 
-    // MCP navigation tool → router (published from any thread, must invoke on UI thread)
+    // MCP navigation tool → dock_router (cross-thread safe)
     EventBus::instance().subscribe("nav.switch_screen", [this](const QVariantMap& data) {
         QString screen_id = data["screen_id"].toString();
         if (!screen_id.isEmpty())
-            QMetaObject::invokeMethod(router_, [this, screen_id]() {
-                router_->navigate(screen_id);
+            QMetaObject::invokeMethod(dock_router_, [this, screen_id]() {
+                dock_router_->navigate(screen_id);
             }, Qt::QueuedConnection);
     });
 
-    // ── Keyboard shortcuts ────────────────────────────────────────────────────
     auto* sc_chat = new QShortcut(QKeySequence(Qt::Key_F9), this);
     connect(sc_chat, &QShortcut::activated, this, &MainWindow::toggle_chat_mode);
 
@@ -234,16 +257,17 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     auto* sc_focus = new QShortcut(QKeySequence(Qt::Key_F10), this);
     connect(sc_focus, &QShortcut::activated, this, [this]() {
         focus_mode_ = !focus_mode_;
-        if (tab_bar_widget_)
-            tab_bar_widget_->setVisible(!focus_mode_);
-        if (status_bar_widget_)
-            status_bar_widget_->setVisible(!focus_mode_);
+        if (dock_toolbar_)     dock_toolbar_->setVisible(!focus_mode_);
+        if (dock_status_bar_)  dock_status_bar_->setVisible(!focus_mode_);
     });
 
     auto* sc_refresh = new QShortcut(QKeySequence(Qt::Key_F5), this);
     connect(sc_refresh, &QShortcut::activated, this, [this]() {
-        if (auto* w = app_stack_->currentWidget())
-            QMetaObject::invokeMethod(w, "refresh", Qt::QueuedConnection);
+        if (dock_manager_) {
+            auto* focused = dock_manager_->focusedDockWidget();
+            if (focused && focused->widget())
+                QMetaObject::invokeMethod(focused->widget(), "refresh", Qt::QueuedConnection);
+        }
     });
 
     auto* sc_screenshot = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), this);
@@ -264,7 +288,79 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     // Toolbar actions
     connect(toolbar, &ui::ToolBar::action_triggered, this, [this](const QString& action) {
-        if (action == "logout") {
+        if (action == "new_window") {
+            auto* w = new MainWindow(MainWindow::next_window_id());
+            w->setAttribute(Qt::WA_DeleteOnClose);
+            // Place on the next available screen, or alongside this window
+            const QList<QScreen*> screens = QGuiApplication::screens();
+            if (screens.size() > 1) {
+                // Find a screen that doesn't already contain this window's centre
+                const QPoint this_centre = geometry().center();
+                for (QScreen* s : screens) {
+                    if (!s->geometry().contains(this_centre)) {
+                        const QRect sg = s->availableGeometry();
+                        w->resize(sg.width() * 9 / 10, sg.height() * 9 / 10);
+                        w->move(sg.center() - w->rect().center());
+                        break;
+                    }
+                }
+            }
+            w->show();
+            w->raise();
+            w->activateWindow();
+        } else if (action.startsWith("panel_")) {
+            // Float a screen — in ADS mode, navigate dock_router; in legacy, spawn window
+            static const QMap<QString, QPair<QString,QString>> panel_map = {
+                {"panel_dashboard",  {"Dashboard",      "dashboard"}},
+                {"panel_watchlist",  {"Watchlist",      "watchlist"}},
+                {"panel_news",       {"News Feed",      "news"}},
+                {"panel_portfolio",  {"Portfolio",      "portfolio"}},
+                {"panel_markets",    {"Markets",        "markets"}},
+                {"panel_crypto",     {"Crypto Trading", "crypto_trading"}},
+                {"panel_equity",     {"Equity Trading", "equity_trading"}},
+                {"panel_algo",       {"Algo Trading",   "algo_trading"}},
+                {"panel_research",   {"Equity Research","equity_research"}},
+                {"panel_economics",  {"Economics",      "economics"}},
+                {"panel_geopolitics",{"Geopolitics",    "geopolitics"}},
+                {"panel_ai_chat",    {"AI Chat",        "ai_chat"}},
+            };
+            if (panel_map.contains(action)) {
+                const auto [title, route] = panel_map[action];
+                if (dock_router_)
+                    dock_router_->navigate(route);
+            }
+        } else if (action == "perspective_save") {
+            if (dock_manager_) {
+                bool ok = false;
+                const QString name = QInputDialog::getText(
+                    this, "Save Layout", "Layout name:", QLineEdit::Normal,
+                    QString(), &ok);
+                if (ok && !name.trimmed().isEmpty()) {
+                    dock_manager_->addPerspective(name.trimmed());
+                    LOG_INFO("MainWindow", QString("Saved perspective: %1").arg(name.trimmed()));
+                }
+            }
+        } else if (action.startsWith("perspective_")) {
+            static const QMap<QString, QString> persp_names = {
+                {"perspective_trading",   "Trading"},
+                {"perspective_research",  "Research"},
+                {"perspective_news",      "News"},
+                {"perspective_portfolio", "Portfolio"},
+            };
+            const QString persp = persp_names.value(action);
+            if (!persp.isEmpty() && dock_manager_) {
+                if (!dock_manager_->perspectiveNames().contains(persp)) {
+                    static const QMap<QString, QString> screen_map = {
+                        {"Trading", "crypto_trading"}, {"Research", "equity_research"},
+                        {"News", "news"}, {"Portfolio", "portfolio"},
+                    };
+                    if (dock_router_) dock_router_->navigate(screen_map.value(persp));
+                    dock_manager_->addPerspective(persp);
+                }
+                dock_manager_->openPerspective(persp);
+                LOG_INFO("MainWindow", QString("Opened perspective: %1").arg(persp));
+            }
+        } else if (action == "logout") {
             auth::AuthManager::instance().logout();
         } else if (action == "fullscreen") {
             if (isFullScreen())
@@ -273,10 +369,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
                 showFullScreen();
         } else if (action == "focus_mode") {
             focus_mode_ = !focus_mode_;
-            if (tab_bar_widget_)
-                tab_bar_widget_->setVisible(!focus_mode_);
-            if (status_bar_widget_)
-                status_bar_widget_->setVisible(!focus_mode_);
+            if (dock_toolbar_)    dock_toolbar_->setVisible(!focus_mode_);
+            if (dock_status_bar_) dock_status_bar_->setVisible(!focus_mode_);
         } else if (action == "always_on_top") {
             always_on_top_ = !always_on_top_;
             Qt::WindowFlags flags = windowFlags();
@@ -287,23 +381,26 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             setWindowFlags(flags);
             show(); // required after setWindowFlags to re-show the window
         } else if (action == "refresh") {
-            if (auto* w = app_stack_->currentWidget())
-                QMetaObject::invokeMethod(w, "refresh", Qt::QueuedConnection);
+            if (dock_manager_) {
+                auto* focused = dock_manager_->focusedDockWidget();
+                if (focused && focused->widget())
+                    QMetaObject::invokeMethod(focused->widget(), "refresh", Qt::QueuedConnection);
+            }
         } else if (action == "new_workspace") {
-            auto* dlg = new WorkspaceNewDialog(this);
+            auto* dlg = new ui::WorkspaceNewDialog(this);
             if (dlg->exec() == QDialog::Accepted)
                 WorkspaceManager::instance().new_workspace(
                     dlg->workspace_name(), dlg->workspace_description(), dlg->selected_template_id());
             dlg->deleteLater();
         } else if (action == "open_workspace") {
-            auto* dlg = new WorkspaceOpenDialog(this);
+            auto* dlg = new ui::WorkspaceOpenDialog(this);
             if (dlg->exec() == QDialog::Accepted && !dlg->selected_path().isEmpty())
                 WorkspaceManager::instance().open_workspace(dlg->selected_path());
             dlg->deleteLater();
         } else if (action == "save_workspace") {
             WorkspaceManager::instance().save_workspace();
         } else if (action == "save_workspace_as") {
-            auto* dlg = new WorkspaceSaveAsDialog(this);
+            auto* dlg = new ui::WorkspaceSaveAsDialog(this);
             if (dlg->exec() == QDialog::Accepted)
                 WorkspaceManager::instance().save_workspace_as(dlg->new_name(), dlg->chosen_path());
             dlg->deleteLater();
@@ -347,12 +444,83 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             &MainWindow::on_auth_state_changed);
     connect(&auth::AuthManager::instance(), &auth::AuthManager::logged_out, this, &MainWindow::on_auth_state_changed);
 
-    // If a saved session exists, optimistically show the dashboard to avoid
-    // flashing the login screen while session validation is in progress.
+    // Restore window state (maximised, toolbar positions, etc.)
+    // Note: restoreState() also restores QToolBar visibility, which can
+    // hide the toolbar from stale/corrupt saved state. We force it visible
+    // afterward unless the user is intentionally in focus/chat mode.
+    const QByteArray saved_state = SessionManager::instance().load_state(window_id_);
+    if (!saved_state.isEmpty())
+        restoreState(saved_state);
+
+    // Always ensure toolbar and status bar are visible after state restore.
+    // Focus mode and chat mode will hide them explicitly when toggled.
+    if (dock_toolbar_)    dock_toolbar_->setVisible(true);
+    if (dock_status_bar_) dock_status_bar_->setVisible(true);
+
+    // Restore ADS dock layout — must happen after all screens are registered
+    // but BEFORE the initial navigate, so we don't create a widget that
+    // conflicts with restoreState's layout.
+    // Layout version: bump this whenever the dock layout format changes to
+    // automatically discard stale/corrupt saved state from previous versions.
+    static constexpr int kDockLayoutVersion = 4;
+    bool dock_restored = false;
+
+    if (dock_manager_) {
+        QSettings persp_settings;
+        SessionManager::instance().load_perspectives(persp_settings);
+        dock_manager_->loadPerspectives(persp_settings);
+
+        const int saved_version = SessionManager::instance().dock_layout_version(window_id_);
+        if (saved_version == kDockLayoutVersion) {
+            const QByteArray saved_dock = SessionManager::instance().load_dock_layout(window_id_);
+            if (!saved_dock.isEmpty()) {
+                dock_router_->ensure_all_registered();
+                dock_restored = dock_manager_->restoreState(saved_dock);
+
+                // Sanity check: if restoreState produced an unreasonable number
+                // of visible dock areas (>6), the layout is likely corrupt.
+                if (dock_restored && dock_manager_->openedDockAreas().size() > 6) {
+                    LOG_WARN("MainWindow", QString("Dock layout corrupt: %1 open areas — resetting")
+                             .arg(dock_manager_->openedDockAreas().size()));
+                    dock_restored = false;
+                }
+            }
+        } else if (saved_version != 0) {
+            LOG_INFO("MainWindow", QString("Dock layout version mismatch (saved %1, expected %2) — resetting")
+                     .arg(saved_version).arg(kDockLayoutVersion));
+        }
+
+        if (!dock_restored) {
+            // Close all dock widgets that may have been opened by a failed restore
+            for (auto* dw : dock_manager_->dockWidgetsMap())
+                dw->toggleView(false);
+        }
+
+        // Save the current version so next startup knows the format.
+        SessionManager::instance().set_dock_layout_version(window_id_, kDockLayoutVersion);
+    }
+
+    // Show the app or auth stack based on authentication state.
+    // If dock layout was restored, the saved tabs are already visible.
+    // Otherwise, navigate to dashboard as default.
     auto& auth_mgr = auth::AuthManager::instance();
     if (auth_mgr.is_authenticated() || auth_mgr.is_loading()) {
         stack_->setCurrentIndex(1);
-        router_->navigate("dashboard");
+        if (!dock_restored) {
+            dock_router_->navigate("dashboard");
+            LOG_INFO("MainWindow", "Applied clean default dock layout");
+        } else {
+            // Restore last-active screen as the focused tab and sync tab bar
+            const QString last = SessionManager::instance().last_screen();
+            if (!last.isEmpty()) {
+                auto* dw = dock_router_->find_dock_widget(last);
+                if (dw && !dw->isClosed()) {
+                    dw->raise();
+                    dw->setAsCurrentTab();
+                }
+                tab_bar_->set_active(last);
+            }
+        }
     } else {
         on_auth_state_changed();
     }
@@ -382,17 +550,15 @@ void MainWindow::toggle_chat_mode() {
     chat_mode_ = !chat_mode_;
 
     if (chat_mode_) {
-        // Enter chat mode: hide terminal chrome, show chat screen (index 2)
-        if (tab_bar_widget_)    tab_bar_widget_->setVisible(false);
-        if (status_bar_widget_) status_bar_widget_->setVisible(false);
+        if (dock_toolbar_)     dock_toolbar_->setVisible(false);
+        if (dock_status_bar_)  dock_status_bar_->setVisible(false);
         if (chat_bubble_)       chat_bubble_->setVisible(false);
         stack_->setCurrentIndex(2);
         LOG_INFO("MainWindow", "Entered Chat Mode");
     } else {
-        // Exit chat mode: restore terminal
         stack_->setCurrentIndex(1);
-        if (tab_bar_widget_)    tab_bar_widget_->setVisible(true);
-        if (status_bar_widget_) status_bar_widget_->setVisible(true);
+        if (dock_toolbar_)     dock_toolbar_->setVisible(true);
+        if (dock_status_bar_)  dock_status_bar_->setVisible(true);
         // Restore chat bubble based on setting
         if (chat_bubble_) {
             auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
@@ -437,7 +603,7 @@ void MainWindow::setup_auth_screens() {
     connect(forgot, &screens::ForgotPasswordScreen::navigate_login, this, &MainWindow::show_login);
     connect(pricing, &screens::PricingScreen::navigate_dashboard, this, [this]() {
         stack_->setCurrentIndex(1);
-        router_->navigate("dashboard");
+        dock_router_->navigate("dashboard");
     });
 
     // ── Info screen navigation ───────────────────────────────────────────────
@@ -455,78 +621,113 @@ void MainWindow::setup_auth_screens() {
     connect(help, &screens::HelpScreen::navigate_forgot_password, this, &MainWindow::show_forgot_password);
 }
 
-void MainWindow::setup_app_screens() {
-    // ── Heavy screens: lazy-construct on first navigation ────────────────────
-    // These spawn Python processes / timers / network requests in their constructors.
-    router_->register_factory("dashboard", []() { return new screens::DashboardScreen; });
-    router_->register_factory("markets", []() { return new screens::MarketsScreen; });
-    router_->register_factory("crypto_trading", []() { return new screens::CryptoTradingScreen; });
-    router_->register_factory("news", []() { return new screens::NewsScreen; });
-    router_->register_factory("forum", []() { return new screens::ForumScreen; });
-    router_->register_factory("watchlist", []() { return new screens::WatchlistScreen; });
+void MainWindow::setup_docking_mode() {
+    // ADS global config must be set before the first CDockManager is constructed.
+    // Guard with a static flag since multiple MainWindow instances share one process.
+    static bool s_ads_configured = false;
+    if (!s_ads_configured) {
+        ads::CDockManager::setConfigFlags(
+            ads::CDockManager::DefaultOpaqueConfig
+            | ads::CDockManager::FocusHighlighting
+            | ads::CDockManager::AlwaysShowTabs
+            | ads::CDockManager::DockAreaHasTabsMenuButton
+            | ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility
+            | ads::CDockManager::FloatingContainerHasWidgetTitle
+            | ads::CDockManager::FloatingContainerHasWidgetIcon
+            | ads::CDockManager::EqualSplitOnInsertion       // prevents new panels from spawning tiny slivers
+            | ads::CDockManager::DoubleClickUndocksWidget    // double-click tab to float
+        );
+        // Disable auto-hide entirely: the pin button converts panels to collapsible
+        // sidebars which collapse when another panel is opened beside them.
+        ads::CDockManager::setAutoHideConfigFlags(
+            ads::CDockManager::AutoHideFlags(0)
+        );
+        s_ads_configured = true;
+    }
 
-    // ── Lightweight screens: eager construction is fine ──────────────────────
-    router_->register_screen("report_builder", new screens::ReportBuilderScreen);
-    router_->register_screen("profile", new screens::ProfileScreen);
-    router_->register_screen("settings", new screens::SettingsScreen);
-    router_->register_screen("about", new screens::AboutScreen);
-    router_->register_screen("support", new screens::SupportScreen);
-    router_->register_screen("notes", new screens::NotesScreen);
+    // Create CDockManager — parent is a plain QWidget wrapper (not QMainWindow)
+    // so ADS does NOT call setCentralWidget(). The wrapper goes into master_stack.
+    auto* dock_wrapper = new QWidget;
+    auto* dock_layout = new QVBoxLayout(dock_wrapper);
+    dock_layout->setContentsMargins(0, 0, 0, 0);
+    dock_layout->setSpacing(0);
 
-    // ── Coming-soon placeholders (trivial widgets) ──────────────────────────
-    router_->register_factory("portfolio", []() { return new screens::PortfolioScreen; });
-    router_->register_factory("ai_chat", []() { return new screens::AiChatScreen; });
-    router_->register_factory("backtesting", []() { return new screens::BacktestingScreen; });
-    router_->register_factory("algo_trading", []() { return new screens::AlgoTradingScreen; });
-    router_->register_factory("node_editor", []() { return new workflow::NodeEditorScreen; });
-    router_->register_factory("code_editor", []() { return new screens::CodeEditorScreen; });
-    router_->register_factory("ai_quant_lab", []() { return new screens::AIQuantLabScreen; });
-    router_->register_factory("quantlib", []() { return new screens::QuantLibScreen; });
-    router_->register_factory("economics", []() { return new screens::EconomicsScreen; });
-    router_->register_factory("gov_data", []() { return new screens::GovDataScreen; });
-    router_->register_factory("dbnomics", []() { return new screens::DBnomicsScreen; });
-    router_->register_factory("akshare", []() { return new screens::AkShareScreen; });
-    router_->register_factory("asia_markets", []() { return new screens::AsiaMarketsScreen; });
-    router_->register_factory("relationship_map", []() { return new screens::RelationshipMapScreen; });
-    router_->register_factory("equity_trading", []() { return new screens::EquityTradingScreen; });
-    router_->register_factory("alpha_arena", []() { return new screens::AlphaArenaScreen; });
-    router_->register_factory("polymarket", []() { return new screens::PolymarketScreen; });
-    router_->register_factory("derivatives", []() { return new screens::DerivativesScreen; });
-    router_->register_factory("equity_research", []() { return new screens::EquityResearchScreen; });
-    router_->register_factory("ma_analytics", []() { return new screens::MAAnalyticsScreen; });
-    router_->register_factory("alt_investments", []() { return new screens::AltInvestmentsScreen; });
-    router_->register_factory("geopolitics", []() { return new screens::GeopoliticsScreen; });
-    router_->register_factory("maritime", []() { return new screens::MaritimeScreen; });
-    router_->register_factory("surface_analytics", []() { return new fincept::surface::SurfaceAnalyticsScreen; });
-    router_->register_factory("agent_config", []() { return new screens::AgentConfigScreen; });
-    router_->register_factory("mcp_servers", []() { return new screens::McpServersScreen; });
-    router_->register_factory("data_mapping", []() { return new screens::DataMappingScreen; });
-    router_->register_factory("data_sources", []() { return new screens::DataSourcesScreen; });
-    router_->register_factory("file_manager", [this]() {
+    tab_bar_ = new ui::TabBar(dock_wrapper);
+    dock_layout->addWidget(tab_bar_);
+
+    dock_manager_ = new ads::CDockManager(dock_wrapper);
+    dock_layout->addWidget(dock_manager_);
+
+    // ADS styling is handled by ThemeManager's global QSS — no widget-level
+    // stylesheet needed here. The global QSS has higher priority and won't be
+    // overridden by theme changes.
+}
+
+void MainWindow::setup_dock_screens() {
+    dock_router_->register_factory("dashboard", []() { return new screens::DashboardScreen; });
+    dock_router_->register_factory("markets", []() { return new screens::MarketsScreen; });
+    dock_router_->register_factory("crypto_trading", []() { return new screens::CryptoTradingScreen; });
+    dock_router_->register_factory("news", []() { return new screens::NewsScreen; });
+    dock_router_->register_factory("forum", []() { return new screens::ForumScreen; });
+    dock_router_->register_factory("watchlist", []() { return new screens::WatchlistScreen; });
+
+    // Eagerly constructed: lightweight screens with no data fetching or timers.
+    dock_router_->register_screen("report_builder", new screens::ReportBuilderScreen);
+    dock_router_->register_screen("profile", new screens::ProfileScreen);
+    dock_router_->register_screen("settings", new screens::SettingsScreen);
+    dock_router_->register_screen("about", new screens::AboutScreen);
+    dock_router_->register_screen("support", new screens::SupportScreen);
+    dock_router_->register_screen("notes", new screens::NotesScreen);
+
+    dock_router_->register_factory("portfolio", []() { return new screens::PortfolioScreen; });
+    dock_router_->register_factory("ai_chat", []() { return new screens::AiChatScreen; });
+    dock_router_->register_factory("backtesting", []() { return new screens::BacktestingScreen; });
+    dock_router_->register_factory("algo_trading", []() { return new screens::AlgoTradingScreen; });
+    dock_router_->register_factory("node_editor", []() { return new workflow::NodeEditorScreen; });
+    dock_router_->register_factory("code_editor", []() { return new screens::CodeEditorScreen; });
+    dock_router_->register_factory("ai_quant_lab", []() { return new screens::AIQuantLabScreen; });
+    dock_router_->register_factory("quantlib", []() { return new screens::QuantLibScreen; });
+    dock_router_->register_factory("economics", []() { return new screens::EconomicsScreen; });
+    dock_router_->register_factory("gov_data", []() { return new screens::GovDataScreen; });
+    dock_router_->register_factory("dbnomics", []() { return new screens::DBnomicsScreen; });
+    dock_router_->register_factory("akshare", []() { return new screens::AkShareScreen; });
+    dock_router_->register_factory("asia_markets", []() { return new screens::AsiaMarketsScreen; });
+    dock_router_->register_factory("relationship_map", []() { return new screens::RelationshipMapScreen; });
+    dock_router_->register_factory("equity_trading", []() { return new screens::EquityTradingScreen; });
+    dock_router_->register_factory("alpha_arena", []() { return new screens::AlphaArenaScreen; });
+    dock_router_->register_factory("polymarket", []() { return new screens::PolymarketScreen; });
+    dock_router_->register_factory("derivatives", []() { return new screens::DerivativesScreen; });
+    dock_router_->register_factory("equity_research", []() { return new screens::EquityResearchScreen; });
+    dock_router_->register_factory("ma_analytics", []() { return new screens::MAAnalyticsScreen; });
+    dock_router_->register_factory("alt_investments", []() { return new screens::AltInvestmentsScreen; });
+    dock_router_->register_factory("geopolitics", []() { return new screens::GeopoliticsScreen; });
+    dock_router_->register_factory("maritime", []() { return new screens::MaritimeScreen; });
+    dock_router_->register_factory("surface_analytics", []() { return new fincept::surface::SurfaceAnalyticsScreen; });
+    dock_router_->register_factory("agent_config", []() { return new screens::AgentConfigScreen; });
+    dock_router_->register_factory("mcp_servers", []() { return new screens::McpServersScreen; });
+    dock_router_->register_factory("data_mapping", []() { return new screens::DataMappingScreen; });
+    dock_router_->register_factory("data_sources", []() { return new screens::DataSourcesScreen; });
+    dock_router_->register_factory("file_manager", [this]() {
         auto* fm = new screens::FileManagerScreen;
-        // "Open With" buttons emit this — navigate to the target screen.
-        // The file path is intentionally not forwarded here because each screen
-        // manages its own open dialog; the navigation itself is sufficient to
-        // bring the user to the right place.
         connect(fm, &screens::FileManagerScreen::open_file_in_screen,
                 this, [this](const QString& route_id, const QString& /*file_path*/) {
-                    router_->navigate(route_id);
+                    dock_router_->navigate(route_id);
                 });
         return fm;
     });
-    router_->register_factory("excel", []() { return new screens::ExcelScreen; });
-    router_->register_factory("trade_viz", []() { return new screens::TradeVizScreen; });
+    dock_router_->register_factory("excel", []() { return new screens::ExcelScreen; });
+    dock_router_->register_factory("trade_viz", []() { return new screens::TradeVizScreen; });
+    dock_router_->register_factory("docs", []() { return new screens::DocsScreen; });
 
-    router_->register_factory("docs", []() { return new screens::DocsScreen; });
-
-    // Info / legal pages (accessible from app navigation menu too)
-    router_->register_screen("contact", new screens::ContactScreen);
-    router_->register_screen("terms", new screens::TermsScreen);
-    router_->register_screen("privacy", new screens::PrivacyScreen);
-    router_->register_screen("trademarks", new screens::TrademarksScreen);
-    router_->register_screen("help", new screens::HelpScreen);
+    // Info/legal pages: static content, safe to construct eagerly.
+    dock_router_->register_screen("contact", new screens::ContactScreen);
+    dock_router_->register_screen("terms", new screens::TermsScreen);
+    dock_router_->register_screen("privacy", new screens::PrivacyScreen);
+    dock_router_->register_screen("trademarks", new screens::TrademarksScreen);
+    dock_router_->register_screen("help", new screens::HelpScreen);
 }
 
+void MainWindow::setup_app_screens() {}
 void MainWindow::setup_navigation() {}
 
 void MainWindow::on_auth_state_changed() {
@@ -599,7 +800,13 @@ void MainWindow::show_info_help() {
 
 void MainWindow::closeEvent(QCloseEvent* event) {
     WorkspaceManager::instance().save_workspace();
-    SessionManager::instance().save_geometry(saveGeometry(), saveState());
+    SessionManager::instance().save_geometry(window_id_, saveGeometry(), saveState());
+    if (dock_manager_) {
+        SessionManager::instance().save_dock_layout(window_id_, dock_manager_->saveState());
+        QSettings tmp;
+        dock_manager_->savePerspectives(tmp);
+        SessionManager::instance().save_perspectives(tmp);
+    }
     event->accept();
 }
 

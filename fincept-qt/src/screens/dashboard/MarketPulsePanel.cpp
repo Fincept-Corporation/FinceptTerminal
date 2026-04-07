@@ -35,7 +35,11 @@ static const QStringList kSnapshotSymbols = services::MarketDataService::global_
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
-    setMinimumWidth(260);
+    setMinimumWidth(180);
+    // Constrain preferred width so the QSplitter doesn't give this panel
+    // the majority of space before the user sees the dashboard.
+    // The user can still drag the splitter handle wider if needed.
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);

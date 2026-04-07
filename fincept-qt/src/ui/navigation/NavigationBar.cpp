@@ -9,7 +9,8 @@ namespace fincept::ui {
 
 NavigationBar::NavigationBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(38);
-    setStyleSheet("background:#0a0a0a;border-bottom:1px solid #1a1a1a;");
+    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                      .arg(colors::BG_BASE).arg(colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(this);
     hl->setContentsMargins(14, 0, 14, 0);
     hl->setSpacing(0);
@@ -22,31 +23,33 @@ NavigationBar::NavigationBar(QWidget* parent) : QWidget(parent) {
         return l;
     };
 
-    hl->addWidget(mk("FINCEPT", "#d97706", true));
-    hl->addWidget(mk("TERMINAL", "#ffffff"));
-    hl->addWidget(mk("   ", "#000000"));
-    hl->addWidget(mk("\xe2\x97\x8f", "#16a34a"));
-    hl->addWidget(mk(" LIVE", "#16a34a", true));
+    hl->addWidget(mk("FINCEPT", colors::AMBER.get(), true));
+    hl->addWidget(mk("TERMINAL", colors::TEXT_PRIMARY.get()));
+    hl->addWidget(mk("   ", colors::BG_BASE.get()));
+    hl->addWidget(mk("\xe2\x97\x8f", colors::POSITIVE.get()));
+    hl->addWidget(mk(" LIVE", colors::POSITIVE.get(), true));
     hl->addStretch();
-    clock_label_ = mk("", "#404040");
+    clock_label_ = mk("", colors::TEXT_TERTIARY.get());
     hl->addWidget(clock_label_);
     hl->addStretch();
-    user_label_ = mk("---", "#d97706");
+    user_label_ = mk("---", colors::AMBER.get());
     hl->addWidget(user_label_);
-    hl->addWidget(mk("  |  ", "#1a1a1a"));
-    credits_label_ = mk("---", "#16a34a");
+    hl->addWidget(mk("  |  ", colors::BORDER_DIM.get()));
+    credits_label_ = mk("---", colors::POSITIVE.get());
     hl->addWidget(credits_label_);
-    hl->addWidget(mk("  |  ", "#1a1a1a"));
-    plan_label_ = mk("---", "#ffffff");
+    hl->addWidget(mk("  |  ", colors::BORDER_DIM.get()));
+    plan_label_ = mk("---", colors::TEXT_PRIMARY.get());
     hl->addWidget(plan_label_);
-    hl->addWidget(mk("  |  ", "#1a1a1a"));
+    hl->addWidget(mk("  |  ", colors::BORDER_DIM.get()));
 
     auto* logout_btn = new QPushButton("LOGOUT");
     logout_btn->setFixedHeight(24);
     logout_btn->setCursor(Qt::PointingHandCursor);
-    logout_btn->setStyleSheet("QPushButton{background:transparent;color:#dc2626;border:1px solid #7f1d1d;"
-                              "padding:0 10px;font-weight:700;}"
-                              "QPushButton:hover{background:#dc2626;color:#e5e5e5;border-color:#dc2626;}");
+    logout_btn->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
+                "padding:0 10px;font-weight:700;}"
+                "QPushButton:hover{background:%1;color:%2;border-color:%1;}")
+            .arg(colors::NEGATIVE).arg(colors::TEXT_PRIMARY));
     connect(logout_btn, &QPushButton::clicked, this, &NavigationBar::logout_clicked);
     hl->addWidget(logout_btn);
 
@@ -77,7 +80,9 @@ void NavigationBar::refresh_user_display() {
     credits_label_->setText(QString("%1 CR").arg(s.user_info.credit_balance, 0, 'f', 2));
     credits_label_->setStyleSheet(
         QString("color:%1;background:transparent;")
-            .arg(s.user_info.credit_balance > 0 ? "#16a34a" : "#dc2626"));
+            .arg(s.user_info.credit_balance > 0
+                     ? colors::POSITIVE.get()
+                     : colors::NEGATIVE.get()));
     plan_label_->setText(s.account_type().toUpper());
 }
 

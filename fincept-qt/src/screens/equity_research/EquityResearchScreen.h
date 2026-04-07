@@ -1,5 +1,6 @@
 // src/screens/equity_research/EquityResearchScreen.h
 #pragma once
+#include "screens/IStatefulScreen.h"
 #include "services/equity/EquityResearchModels.h"
 
 #include <QHideEvent>
@@ -19,10 +20,14 @@ class EquityTalippTab;
 class EquityPeersTab;
 class EquityNewsTab;
 
-class EquityResearchScreen : public QWidget {
+class EquityResearchScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit EquityResearchScreen(QWidget* parent = nullptr);
+
+    void restore_state(const QVariantMap& state) override;
+    QVariantMap save_state() const override;
+    QString state_key() const override { return "equity_research"; }
 
   protected:
     void showEvent(QShowEvent* event) override;

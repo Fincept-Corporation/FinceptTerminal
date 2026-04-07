@@ -807,7 +807,7 @@ void ReportBuilderScreen::show_template_dialog() {
 
     // Left: category + template list
     auto* left = new QWidget;
-    left->setMinimumWidth(320);
+    left->setMinimumWidth(280);
     auto* lvl = new QVBoxLayout(left);
     lvl->setContentsMargins(12, 12, 8, 12);
     lvl->setSpacing(6);

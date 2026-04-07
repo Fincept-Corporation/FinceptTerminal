@@ -5,11 +5,16 @@
 
 #include "ai_chat/LlmService.h"
 #include "core/config/AppConfig.h"
+#include "core/events/EventBus.h"
+#include "core/config/ProfileManager.h"
 #include "core/logging/Logger.h"
 #include "services/notifications/NotificationService.h"
 #include "screens/settings/LlmConfigSection.h"
 #include "screens/settings/McpServersSection.h"
 #include "storage/cache/CacheManager.h"
+#include "storage/StorageManager.h"
+#include "storage/sqlite/CacheDatabase.h"
+#include "storage/sqlite/Database.h"
 #include "storage/repositories/DataSourceRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/secure/SecureStorage.h"
@@ -19,12 +24,18 @@
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QFontDatabase>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMap>
+#include <QMessageBox>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QSqlRecord>
+#include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QShowEvent>
@@ -148,6 +159,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     sections_->addWidget(build_llm_config());    // 5
     sections_->addWidget(build_mcp_servers());   // 6
     sections_->addWidget(build_logging());       // 7
+    sections_->addWidget(build_profiles());      // 8
 
     QList<QPushButton*> nav_btns;
     auto make_btn = [&](const QString& text, int idx) {
@@ -178,6 +190,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     make_btn("LLM Config", 5);
     make_btn("MCP Servers", 6);
     make_btn("Logging", 7);
+    make_btn("Profiles", 8);
 
     first->setChecked(true);
 
@@ -907,7 +920,8 @@ QWidget* SettingsScreen::build_notifications() {
     news_subopts_frame_ = new QFrame;
     news_subopts_frame_->setObjectName("newsSuboptsFrame");
     news_subopts_frame_->setStyleSheet(
-        "#newsSuboptsFrame { border-left: 2px solid #374151; margin-left: 24px; padding-left: 8px; }");
+        QString("#newsSuboptsFrame { border-left: 2px solid %1; margin-left: 24px; padding-left: 8px; }")
+            .arg(ui::colors::BORDER_BRIGHT()));
     auto* sub_vl = new QVBoxLayout(news_subopts_frame_);
     sub_vl->setContentsMargins(0, 4, 0, 4);
     sub_vl->setSpacing(4);
@@ -1034,6 +1048,153 @@ void SettingsScreen::save_provider_fields(const QString& provider_id,
 
 // ── Storage & Cache ───────────────────────────────────────────────────────────
 
+static QString format_bytes(qint64 bytes) {
+    if (bytes < 1024)        return QString::number(bytes) + " B";
+    if (bytes < 1048576)     return QString::number(bytes / 1024.0, 'f', 1) + " KB";
+    if (bytes < 1073741824)  return QString::number(bytes / 1048576.0, 'f', 1) + " MB";
+    return QString::number(bytes / 1073741824.0, 'f', 2) + " GB";
+}
+
+// Obsidian-standard panel with 34px header bar
+static QFrame* make_panel(const QString& title, QWidget* status_widget = nullptr) {
+    auto* panel = new QFrame;
+    panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;}")
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+
+    auto* pvl = new QVBoxLayout(panel);
+    pvl->setContentsMargins(0, 0, 0, 0);
+    pvl->setSpacing(0);
+
+    auto* hdr = new QWidget;
+    hdr->setFixedHeight(34);
+    hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+        .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    auto* hhl = new QHBoxLayout(hdr);
+    hhl->setContentsMargins(12, 0, 12, 0);
+
+    auto* lbl = new QLabel(title);
+    lbl->setStyleSheet(QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
+        .arg(ui::colors::AMBER()));
+    hhl->addWidget(lbl);
+    hhl->addStretch();
+    if (status_widget) {
+        status_widget->setStyleSheet(status_widget->styleSheet() + "background:transparent;");
+        hhl->addWidget(status_widget);
+    }
+    pvl->addWidget(hdr);
+
+    return panel;
+}
+
+// Obsidian-standard data row: LABEL ······ VALUE, 26px, bottom border
+static QWidget* make_data_row(const QString& label_text, QLabel* value_lbl,
+                               bool alt_bg = false) {
+    auto* row = new QWidget;
+    row->setFixedHeight(26);
+    row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+        .arg(alt_bg ? ui::colors::ROW_ALT() : "transparent",
+             ui::colors::BORDER_DIM()));
+
+    auto* hl = new QHBoxLayout(row);
+    hl->setContentsMargins(12, 0, 12, 0);
+    hl->setSpacing(0);
+
+    auto* lbl = new QLabel(label_text);
+    lbl->setStyleSheet(QString("color:%1;font-weight:600;letter-spacing:0.5px;background:transparent;")
+        .arg(ui::colors::TEXT_SECONDARY()));
+    hl->addWidget(lbl);
+    hl->addStretch();
+
+    value_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    value_lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
+        .arg(ui::colors::TEXT_PRIMARY()));
+    hl->addWidget(value_lbl);
+
+    return row;
+}
+
+// Category row: NAME ··· COUNT ··· [CLEAR]  — 26px, terminal table style
+static QWidget* make_category_row(const QString& name, QLabel* count_lbl,
+                                   QPushButton* clear_btn, bool alt) {
+    auto* row = new QWidget;
+    row->setFixedHeight(26);
+    row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+        .arg(alt ? ui::colors::ROW_ALT() : ui::colors::BG_BASE(),
+             ui::colors::BORDER_DIM()));
+
+    auto* hl = new QHBoxLayout(row);
+    hl->setContentsMargins(12, 0, 12, 0);
+    hl->setSpacing(8);
+
+    auto* lbl = new QLabel(name);
+    lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+    hl->addWidget(lbl, 1);
+
+    count_lbl->setObjectName("cat_count");
+    count_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    count_lbl->setFixedWidth(70);
+    count_lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
+        .arg(ui::colors::CYAN()));
+    hl->addWidget(count_lbl);
+
+    clear_btn->setFixedSize(56, 20);
+    clear_btn->setStyleSheet(
+        QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid #7f1d1d;font-weight:700;}"
+                "QPushButton:hover{background:%1;color:%2;}")
+        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+    hl->addWidget(clear_btn);
+
+    return row;
+}
+
+// Group header row for category tables — amber dim label
+static QWidget* make_group_header(const QString& title) {
+    auto* row = new QWidget;
+    row->setFixedHeight(26);
+    row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+        .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    auto* hl = new QHBoxLayout(row);
+    hl->setContentsMargins(12, 0, 12, 0);
+    auto* lbl = new QLabel(title);
+    lbl->setStyleSheet(QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
+        .arg(ui::colors::AMBER_DIM()));
+    hl->addWidget(lbl);
+    return row;
+}
+
+// File action row: LABEL ··· SIZE ··· [BUTTON]
+static QWidget* make_file_action_row(const QString& name, QLabel* size_lbl,
+                                      QPushButton* btn, bool alt) {
+    auto* row = new QWidget;
+    row->setFixedHeight(26);
+    row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+        .arg(alt ? ui::colors::ROW_ALT() : ui::colors::BG_BASE(),
+             ui::colors::BORDER_DIM()));
+
+    auto* hl = new QHBoxLayout(row);
+    hl->setContentsMargins(12, 0, 12, 0);
+    hl->setSpacing(8);
+
+    auto* lbl = new QLabel(name);
+    lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+    hl->addWidget(lbl, 1);
+
+    size_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    size_lbl->setFixedWidth(80);
+    size_lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
+        .arg(ui::colors::TEXT_SECONDARY()));
+    hl->addWidget(size_lbl);
+
+    btn->setFixedSize(56, 20);
+    btn->setStyleSheet(
+        QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid #7f1d1d;font-weight:700;}"
+                "QPushButton:hover{background:%1;color:%2;}")
+        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+    hl->addWidget(btn);
+
+    return row;
+}
+
 QWidget* SettingsScreen::build_storage() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
@@ -1046,84 +1207,650 @@ QWidget* SettingsScreen::build_storage() {
 
     auto* page = new QWidget;
     auto* vl = new QVBoxLayout(page);
-    vl->setContentsMargins(24, 24, 24, 24);
+    vl->setContentsMargins(14, 14, 14, 14);
     vl->setSpacing(10);
 
-    auto* t = new QLabel("STORAGE & CACHE");
+    // Title
+    auto* t = new QLabel("STORAGE & DATA MANAGEMENT");
     t->setStyleSheet(section_title_ss());
     vl->addWidget(t);
-    vl->addWidget(make_sep());
-    vl->addSpacing(8);
-
-    // ── Cache overview card ───────────────────────────────────────────────────
-    auto* t2 = new QLabel("CACHE OVERVIEW");
-    t2->setStyleSheet(sub_title_ss());
-    vl->addWidget(t2);
     vl->addSpacing(4);
 
-    auto* card = new QFrame;
-    card->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:4px;}").arg(ui::colors::BG_SURFACE(),ui::colors::BORDER_DIM()));
-    auto* cvl = new QVBoxLayout(card);
-    cvl->setContentsMargins(16, 12, 16, 12);
-    cvl->setSpacing(8);
+    auto* info = new QLabel("Manage all persistent data, databases, and files. "
+                            "Execute SQL queries directly against terminal databases.");
+    info->setWordWrap(true);
+    info->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+    vl->addWidget(info);
+    vl->addSpacing(10);
 
-    storage_count_ = new QLabel("—");
-    storage_count_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
-    cvl->addWidget(make_row("Cache Entries", storage_count_));
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SECTION 1: DISK USAGE — stat boxes + data rows
+    // ═══════════════════════════════════════════════════════════════════════════
+    {
+        auto* refresh_lbl = new QLabel("REFRESH");
+        refresh_lbl->setStyleSheet(QString("color:%1;font-weight:600;cursor:pointer;")
+            .arg(ui::colors::AMBER()));
+        refresh_lbl->setCursor(Qt::PointingHandCursor);
+        refresh_lbl->installEventFilter(this); // for click
 
-    auto* refresh_btn = new QPushButton("Refresh");
-    refresh_btn->setFixedWidth(90);
-    refresh_btn->setStyleSheet(btn_secondary_ss());
-    connect(refresh_btn, &QPushButton::clicked, this, [this]() { refresh_storage_stats(); });
-    cvl->addWidget(refresh_btn);
-    vl->addWidget(card);
+        auto* panel = make_panel("DISK USAGE", refresh_lbl);
+        auto* body = new QWidget;
+        body->setStyleSheet("background:transparent;");
+        auto* bvl = new QVBoxLayout(body);
+        bvl->setContentsMargins(0, 0, 0, 0);
+        bvl->setSpacing(0);
 
-    vl->addSpacing(12);
-    vl->addWidget(make_sep());
-    vl->addSpacing(8);
+        // Stat boxes row
+        auto* stat_row = new QWidget;
+        stat_row->setStyleSheet("background:transparent;");
+        auto* shl = new QHBoxLayout(stat_row);
+        shl->setContentsMargins(10, 10, 10, 10);
+        shl->setSpacing(10);
 
-    // ── Clear all ─────────────────────────────────────────────────────────────
-    auto* t3 = new QLabel("CLEAR CACHE");
-    t3->setStyleSheet(sub_title_ss());
-    vl->addWidget(t3);
-    vl->addSpacing(4);
+        auto make_stat_box = [&](const QString& label, QLabel*& val_out) {
+            auto* box = new QFrame;
+            box->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;}")
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+            auto* bx = new QVBoxLayout(box);
+            bx->setContentsMargins(12, 12, 12, 14);
+            bx->setSpacing(4);
+            bx->setAlignment(Qt::AlignCenter);
 
-    auto* clear_all = new QPushButton("Clear All Cache");
-    clear_all->setStyleSheet(btn_danger_ss());
-    connect(clear_all, &QPushButton::clicked, this, [this]() {
-        CacheManager::instance().clear();
-        refresh_storage_stats();
-        LOG_INFO("Settings", "All cache cleared");
-    });
-    vl->addWidget(clear_all);
+            val_out = new QLabel("—");
+            val_out->setAlignment(Qt::AlignCenter);
+            val_out->setStyleSheet(QString("color:%1;font-size:18px;font-weight:700;background:transparent;")
+                .arg(ui::colors::CYAN()));
+            bx->addWidget(val_out);
 
-    auto* note = new QLabel("Clears all cached market data, quotes, and news. "
-                            "Live data will be re-fetched on next access.");
-    note->setWordWrap(true);
-    note->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
-    vl->addWidget(note);
+            auto* ll = new QLabel(label);
+            ll->setAlignment(Qt::AlignCenter);
+            ll->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
+                .arg(ui::colors::TEXT_SECONDARY()));
+            bx->addWidget(ll);
 
-    vl->addSpacing(12);
-    vl->addWidget(make_sep());
-    vl->addSpacing(8);
+            shl->addWidget(box, 1);
+        };
 
-    // ── Clear by category ─────────────────────────────────────────────────────
-    auto* t4 = new QLabel("CLEAR BY CATEGORY");
-    t4->setStyleSheet(sub_title_ss());
-    vl->addWidget(t4);
-    vl->addSpacing(4);
+        make_stat_box("MAIN DB",     storage_main_db_);
+        make_stat_box("CACHE DB",    storage_cache_db_);
+        make_stat_box("LOG FILES",   storage_log_size_);
+        make_stat_box("WORKSPACES",  storage_ws_size_);
+        make_stat_box("TOTAL",       storage_total_size_);
 
-    static const QStringList CACHE_CATS = {"market_data", "news", "quotes", "charts", "general"};
-    for (const QString& cat : CACHE_CATS) {
-        auto* btn = new QPushButton("Clear  " + cat);
-        btn->setStyleSheet(btn_secondary_ss());
-        btn->setFixedWidth(200);
-        connect(btn, &QPushButton::clicked, this, [this, cat]() {
-            CacheManager::instance().clear_category(cat);
+        bvl->addWidget(stat_row);
+
+        // Detail rows
+        storage_count_ = new QLabel("—");
+        bvl->addWidget(make_data_row("Cache Entries", storage_count_, false));
+
+        // Connect refresh click
+        connect(refresh_lbl, &QLabel::linkActivated, this, [this]() { refresh_storage_stats(); });
+        // Since QLabel doesn't emit linkActivated for plain text, use eventFilter
+        // Actually, let's just use a proper clickable mechanism:
+        auto* refresh_btn = new QPushButton("Refresh");
+        refresh_btn->setFixedSize(70, 22);
+        refresh_btn->setStyleSheet(
+            QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;font-weight:700;}"
+                    "QPushButton:hover{background:%1;color:%3;}")
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+
+        connect(refresh_btn, &QPushButton::clicked, this, [this]() { refresh_storage_stats(); });
+
+        // Replace the header status widget
+        if (auto* hdr_layout = panel->findChild<QWidget*>()->findChild<QHBoxLayout*>()) {
+            hdr_layout->removeWidget(refresh_lbl);
+            refresh_lbl->deleteLater();
+            hdr_layout->addWidget(refresh_btn);
+        }
+
+        static_cast<QVBoxLayout*>(panel->layout())->addWidget(body);
+        vl->addWidget(panel);
+    }
+
+    vl->addSpacing(10);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SECTION 2: DATA CATEGORIES — grouped table with counts + clear
+    // ═══════════════════════════════════════════════════════════════════════════
+    {
+        auto* panel = make_panel("DATA CATEGORIES");
+        auto* body = new QWidget;
+        body->setStyleSheet("background:transparent;");
+
+        storage_categories_ = new QVBoxLayout(body);
+        storage_categories_->setContentsMargins(0, 0, 0, 0);
+        storage_categories_->setSpacing(0);
+
+        // Table header
+        auto* th = new QWidget;
+        th->setFixedHeight(26);
+        th->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        auto* thl = new QHBoxLayout(th);
+        thl->setContentsMargins(12, 0, 12, 0);
+        thl->setSpacing(8);
+        auto* th1 = new QLabel("CATEGORY");
+        th1->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(th1, 1);
+        auto* th2 = new QLabel("ENTRIES");
+        th2->setFixedWidth(70);
+        th2->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        th2->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(th2);
+        auto* th3 = new QLabel("ACTION");
+        th3->setFixedWidth(56);
+        th3->setAlignment(Qt::AlignCenter);
+        th3->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(th3);
+        storage_categories_->addWidget(th);
+
+        auto& sm = StorageManager::instance();
+        auto stats = sm.all_stats();
+
+        QString current_group;
+        int row_idx = 0;
+        for (const auto& cat : stats) {
+            if (cat.group != current_group) {
+                current_group = cat.group;
+                storage_categories_->addWidget(make_group_header(cat.group.toUpper()));
+                row_idx = 0;
+            }
+
+            auto* count_lbl = new QLabel(QString::number(cat.count));
+            auto* clear_btn = new QPushButton("CLR");
+
+            QString cat_id = cat.id;
+            QString cat_label = cat.label;
+            connect(clear_btn, &QPushButton::clicked, this, [this, cat_id, cat_label, count_lbl]() {
+                auto answer = QMessageBox::warning(
+                    this, "Clear " + cat_label,
+                    "Permanently delete all " + cat_label.toLower() + "?\n\n"
+                    "This cannot be undone.",
+                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                if (answer != QMessageBox::Yes) return;
+
+                auto r = StorageManager::instance().clear_category(cat_id);
+                if (r.is_ok()) {
+                    count_lbl->setText("0");
+                    LOG_INFO("Settings", "Cleared: " + cat_label);
+                } else {
+                    QMessageBox::critical(this, "Error",
+                        "Failed to clear " + cat_label + ":\n" +
+                        QString::fromStdString(r.error()));
+                }
+                refresh_storage_stats();
+            });
+
+            storage_categories_->addWidget(
+                make_category_row(cat.label, count_lbl, clear_btn, (row_idx % 2) == 1));
+            ++row_idx;
+        }
+
+        static_cast<QVBoxLayout*>(panel->layout())->addWidget(body);
+        vl->addWidget(panel);
+    }
+
+    vl->addSpacing(10);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SECTION 3: FILE & STATE MANAGEMENT
+    // ═══════════════════════════════════════════════════════════════════════════
+    {
+        auto* panel = make_panel("FILE & STATE MANAGEMENT");
+        auto* body = new QWidget;
+        body->setStyleSheet("background:transparent;");
+        auto* bvl = new QVBoxLayout(body);
+        bvl->setContentsMargins(0, 0, 0, 0);
+        bvl->setSpacing(0);
+
+        // Table header
+        auto* th = new QWidget;
+        th->setFixedHeight(26);
+        th->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        auto* thl = new QHBoxLayout(th);
+        thl->setContentsMargins(12, 0, 12, 0);
+        thl->setSpacing(8);
+        auto* th1 = new QLabel("STORE");
+        th1->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(th1, 1);
+        auto* th2 = new QLabel("SIZE");
+        th2->setFixedWidth(80);
+        th2->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        th2->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(th2);
+        auto* th3 = new QLabel("ACTION");
+        th3->setFixedWidth(56);
+        th3->setAlignment(Qt::AlignCenter);
+        th3->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        thl->addWidget(th3);
+        bvl->addWidget(th);
+
+        // Helper to create file rows with confirmation
+        auto add_file_row = [&](const QString& name, QLabel* size_lbl,
+                                 const QString& confirm_title, const QString& confirm_msg,
+                                 std::function<void()> action, bool alt) {
+            auto* btn = new QPushButton("CLR");
+            connect(btn, &QPushButton::clicked, this, [this, confirm_title, confirm_msg, action]() {
+                auto answer = QMessageBox::warning(this, confirm_title, confirm_msg,
+                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                if (answer != QMessageBox::Yes) return;
+                action();
+                refresh_storage_stats();
+            });
+            bvl->addWidget(make_file_action_row(name, size_lbl, btn, alt));
+        };
+
+        auto* log_sz  = new QLabel("—");
+        auto* ws_sz   = new QLabel("—");
+        auto* qs_lbl  = new QLabel("Registry");
+
+        add_file_row("Log Files", log_sz,
+            "Clear Logs", "Clear all application log files?\nCurrent log data will be lost.",
+            [this]() { StorageManager::instance().clear_log_files(); LOG_INFO("Settings", "Logs cleared"); },
+            false);
+
+        add_file_row("Workspace Files (.fwsp)", ws_sz,
+            "Delete Workspaces", "Delete all saved workspace files?\nThis cannot be undone.",
+            [this]() { StorageManager::instance().clear_workspace_files(); LOG_INFO("Settings", "Workspaces deleted"); },
+            true);
+
+        add_file_row("Window & UI State", qs_lbl,
+            "Reset UI State", "Reset all window positions, dock layouts, and perspectives?\n"
+            "Takes effect on next restart.",
+            [this]() { StorageManager::instance().clear_qsettings(); LOG_INFO("Settings", "QSettings cleared"); },
+            false);
+
+        // Cache subcategories as inline buttons
+        auto* cache_row = new QWidget;
+        cache_row->setFixedHeight(30);
+        cache_row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+            .arg(ui::colors::ROW_ALT(), ui::colors::BORDER_DIM()));
+        auto* chl = new QHBoxLayout(cache_row);
+        chl->setContentsMargins(12, 0, 12, 0);
+        chl->setSpacing(4);
+        auto* cache_label = new QLabel("Cache:");
+        cache_label->setStyleSheet(QString("color:%1;font-weight:600;background:transparent;")
+            .arg(ui::colors::TEXT_SECONDARY()));
+        chl->addWidget(cache_label);
+
+        static const QStringList CACHE_CATS = {"market_data", "news", "quotes", "charts", "general"};
+        for (const QString& cat : CACHE_CATS) {
+            auto* btn = new QPushButton(cat);
+            btn->setFixedHeight(18);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setStyleSheet(
+                QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 6px;}"
+                        "QPushButton:hover{color:%4;border-color:%4;}")
+                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(),
+                     ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+            connect(btn, &QPushButton::clicked, this, [this, cat]() {
+                CacheManager::instance().clear_category(cat);
+                refresh_storage_stats();
+                LOG_INFO("Settings", "Cache cleared: " + cat);
+            });
+            chl->addWidget(btn);
+        }
+        chl->addStretch();
+        bvl->addWidget(cache_row);
+
+        static_cast<QVBoxLayout*>(panel->layout())->addWidget(body);
+        vl->addWidget(panel);
+    }
+
+    vl->addSpacing(10);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SECTION 4: SQL CONSOLE — direct database access
+    // ═══════════════════════════════════════════════════════════════════════════
+    {
+        auto* panel = make_panel("SQL CONSOLE");
+        auto* body = new QWidget;
+        body->setStyleSheet("background:transparent;");
+        auto* bvl = new QVBoxLayout(body);
+        bvl->setContentsMargins(10, 8, 10, 8);
+        bvl->setSpacing(6);
+
+        auto* hint = new QLabel("Execute SQL queries directly against terminal databases. "
+                                "Use SELECT to inspect data, or INSERT/UPDATE/DELETE to modify.");
+        hint->setWordWrap(true);
+        hint->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        bvl->addWidget(hint);
+
+        // DB selector + input + execute
+        auto* input_row = new QWidget;
+        input_row->setStyleSheet("background:transparent;");
+        auto* irl = new QHBoxLayout(input_row);
+        irl->setContentsMargins(0, 0, 0, 0);
+        irl->setSpacing(6);
+
+        sql_db_selector_ = new QComboBox;
+        sql_db_selector_->addItem("fincept.db", "main");
+        sql_db_selector_->addItem("cache.db",   "cache");
+        sql_db_selector_->setFixedWidth(110);
+        sql_db_selector_->setStyleSheet(combo_ss());
+        irl->addWidget(sql_db_selector_);
+
+        sql_input_ = new QLineEdit;
+        sql_input_->setPlaceholderText("SELECT * FROM chat_sessions LIMIT 10");
+        sql_input_->setStyleSheet(input_ss());
+        irl->addWidget(sql_input_, 1);
+
+        auto* exec_btn = new QPushButton("EXEC");
+        exec_btn->setFixedSize(56, 28);
+        exec_btn->setStyleSheet(
+            QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;font-weight:700;}"
+                    "QPushButton:hover{background:%1;color:%3;}")
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+        irl->addWidget(exec_btn);
+
+        bvl->addWidget(input_row);
+
+        // Status line
+        sql_status_ = new QLabel("Ready");
+        sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        bvl->addWidget(sql_status_);
+
+        // Results area — scrollable table
+        auto* results_scroll = new QScrollArea;
+        results_scroll->setWidgetResizable(true);
+        results_scroll->setFixedHeight(200);
+        results_scroll->setStyleSheet(
+            QString("QScrollArea{border:1px solid %1;background:%2;}"
+                    "QScrollBar:vertical{width:5px;background:transparent;}"
+                    "QScrollBar::handle:vertical{background:%3;}"
+                    "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
+                    "QScrollBar:horizontal{height:5px;background:transparent;}"
+                    "QScrollBar::handle:horizontal{background:%3;}"
+                    "QScrollBar::add-line:horizontal,QScrollBar::sub-line:horizontal{width:0;}")
+            .arg(ui::colors::BORDER_DIM(), ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
+
+        auto* results_widget = new QWidget;
+        results_widget->setStyleSheet("background:transparent;");
+        sql_results_layout_ = new QVBoxLayout(results_widget);
+        sql_results_layout_->setContentsMargins(0, 0, 0, 0);
+        sql_results_layout_->setSpacing(0);
+        sql_results_layout_->addStretch();
+        results_scroll->setWidget(results_widget);
+        bvl->addWidget(results_scroll);
+
+        // Quick-access table list buttons
+        auto* tables_row = new QWidget;
+        tables_row->setStyleSheet("background:transparent;");
+        auto* trhl = new QHBoxLayout(tables_row);
+        trhl->setContentsMargins(0, 0, 0, 0);
+        trhl->setSpacing(4);
+        auto* trl = new QLabel("Quick:");
+        trl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        trhl->addWidget(trl);
+
+        static const QStringList QUICK_TABLES = {
+            "chat_sessions", "news_articles", "financial_notes", "portfolios",
+            "watchlists", "pt_portfolios", "workflows", "settings"
+        };
+        for (const QString& tbl : QUICK_TABLES) {
+            auto* btn = new QPushButton(tbl);
+            btn->setFixedHeight(18);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setStyleSheet(
+                QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 4px;}"
+                        "QPushButton:hover{color:%4;border-color:%4;}")
+                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(),
+                     ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+            connect(btn, &QPushButton::clicked, this, [this, tbl]() {
+                sql_input_->setText("SELECT * FROM " + tbl + " LIMIT 20");
+                sql_db_selector_->setCurrentIndex(0); // main db
+            });
+            trhl->addWidget(btn);
+        }
+        trhl->addStretch();
+        bvl->addWidget(tables_row);
+
+        // Execute handler
+        auto execute_sql = [this]() {
+            QString sql = sql_input_->text().trimmed();
+            if (sql.isEmpty()) return;
+
+            // Clear previous results
+            while (sql_results_layout_->count() > 0) {
+                auto* item = sql_results_layout_->takeAt(0);
+                if (item->widget()) item->widget()->deleteLater();
+                delete item;
+            }
+
+            bool use_cache = (sql_db_selector_->currentData().toString() == "cache");
+
+            // Determine if this is a write operation
+            QString upper = sql.toUpper().trimmed();
+            bool is_write = upper.startsWith("INSERT") || upper.startsWith("UPDATE") ||
+                            upper.startsWith("DELETE") || upper.startsWith("DROP") ||
+                            upper.startsWith("ALTER") || upper.startsWith("CREATE");
+
+            if (is_write) {
+                // Confirm write operations
+                auto answer = QMessageBox::warning(
+                    this, "Execute Write Query",
+                    "This will modify the database:\n\n" + sql + "\n\nContinue?",
+                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                if (answer != QMessageBox::Yes) {
+                    sql_status_->setText("Cancelled");
+                    sql_status_->setStyleSheet(QString("color:%1;background:transparent;")
+                        .arg(ui::colors::WARNING()));
+                    return;
+                }
+            }
+
+            // Execute
+            QSqlQuery query(use_cache
+                ? CacheDatabase::instance().raw_db()
+                : Database::instance().raw_db());
+            if (!query.exec(sql)) {
+                sql_status_->setText("Error: " + query.lastError().text());
+                sql_status_->setStyleSheet(QString("color:%1;background:transparent;")
+                    .arg(ui::colors::NEGATIVE()));
+                LOG_ERROR("SQL Console", "Query failed: " + query.lastError().text());
+                return;
+            }
+
+            if (is_write) {
+                int affected = query.numRowsAffected();
+                sql_status_->setText(QString("OK — %1 row(s) affected").arg(affected));
+                sql_status_->setStyleSheet(QString("color:%1;background:transparent;")
+                    .arg(ui::colors::POSITIVE()));
+                refresh_storage_stats();
+                LOG_INFO("SQL Console", QString("Write query: %1 rows affected").arg(affected));
+                return;
+            }
+
+            // Build results table for SELECT
+            auto rec = query.record();
+            int cols = rec.count();
+            if (cols == 0) {
+                sql_status_->setText("OK — no columns returned");
+                sql_status_->setStyleSheet(QString("color:%1;background:transparent;")
+                    .arg(ui::colors::TEXT_SECONDARY()));
+                return;
+            }
+
+            // Column header
+            auto* hdr_row = new QWidget;
+            hdr_row->setFixedHeight(22);
+            hdr_row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+            auto* hhl = new QHBoxLayout(hdr_row);
+            hhl->setContentsMargins(6, 0, 6, 0);
+            hhl->setSpacing(4);
+            for (int c = 0; c < cols; ++c) {
+                auto* cl = new QLabel(rec.fieldName(c));
+                cl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;")
+                    .arg(ui::colors::TEXT_DIM()));
+                hhl->addWidget(cl, 1);
+            }
+            sql_results_layout_->addWidget(hdr_row);
+
+            // Data rows (limit 100)
+            int row_count = 0;
+            while (query.next() && row_count < 100) {
+                auto* dr = new QWidget;
+                dr->setFixedHeight(20);
+                dr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                    .arg((row_count % 2) ? ui::colors::ROW_ALT() : "transparent",
+                         ui::colors::BORDER_DIM()));
+                auto* dhl = new QHBoxLayout(dr);
+                dhl->setContentsMargins(6, 0, 6, 0);
+                dhl->setSpacing(4);
+                for (int c = 0; c < cols; ++c) {
+                    QString val = query.value(c).toString();
+                    if (val.length() > 60) val = val.left(57) + "...";
+                    auto* vl2 = new QLabel(val);
+                    vl2->setStyleSheet(QString("color:%1;background:transparent;")
+                        .arg(ui::colors::TEXT_PRIMARY()));
+                    dhl->addWidget(vl2, 1);
+                }
+                sql_results_layout_->addWidget(dr);
+                ++row_count;
+            }
+
+            sql_status_->setText(QString("OK — %1 row(s) returned%2")
+                .arg(row_count).arg(row_count >= 100 ? " (limited to 100)" : ""));
+            sql_status_->setStyleSheet(QString("color:%1;background:transparent;")
+                .arg(ui::colors::POSITIVE()));
+        };
+
+        connect(exec_btn, &QPushButton::clicked, this, execute_sql);
+        connect(sql_input_, &QLineEdit::returnPressed, this, execute_sql);
+
+        static_cast<QVBoxLayout*>(panel->layout())->addWidget(body);
+        vl->addWidget(panel);
+    }
+
+    vl->addSpacing(10);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SECTION 5: DANGER ZONE
+    // ═══════════════════════════════════════════════════════════════════════════
+    {
+        auto* panel = new QFrame;
+        panel->setStyleSheet(QString("QFrame{background:%1;border:1px solid #7f1d1d;}")
+            .arg(ui::colors::BG_SURFACE()));
+        auto* pvl = new QVBoxLayout(panel);
+        pvl->setContentsMargins(0, 0, 0, 0);
+        pvl->setSpacing(0);
+
+        // Red header
+        auto* hdr = new QWidget;
+        hdr->setFixedHeight(34);
+        hdr->setStyleSheet("background:rgba(220,38,38,0.08);border-bottom:1px solid #7f1d1d;");
+        auto* hhl = new QHBoxLayout(hdr);
+        hhl->setContentsMargins(12, 0, 12, 0);
+        auto* hlbl = new QLabel("DANGER ZONE");
+        hlbl->setStyleSheet(QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
+            .arg(ui::colors::NEGATIVE()));
+        hhl->addWidget(hlbl);
+        pvl->addWidget(hdr);
+
+        auto* body = new QWidget;
+        body->setStyleSheet("background:transparent;");
+        auto* bvl = new QVBoxLayout(body);
+        bvl->setContentsMargins(12, 10, 12, 10);
+        bvl->setSpacing(8);
+
+        // Clear all cache
+        auto* cache_row = new QWidget;
+        cache_row->setStyleSheet("background:transparent;");
+        auto* cr_hl = new QHBoxLayout(cache_row);
+        cr_hl->setContentsMargins(0, 0, 0, 0);
+        cr_hl->setSpacing(8);
+        auto* cache_desc = new QWidget;
+        auto* cd_vl = new QVBoxLayout(cache_desc);
+        cd_vl->setContentsMargins(0, 0, 0, 0);
+        cd_vl->setSpacing(2);
+        auto* cd1 = new QLabel("Clear All Cache");
+        cd1->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+        cd_vl->addWidget(cd1);
+        auto* cd2 = new QLabel("Delete all temporary cached data. Will be re-fetched on next access.");
+        cd2->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        cd_vl->addWidget(cd2);
+        cr_hl->addWidget(cache_desc, 1);
+        auto* cache_btn = new QPushButton("CLEAR CACHE");
+        cache_btn->setFixedSize(110, 26);
+        cache_btn->setStyleSheet(
+            QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid #7f1d1d;font-weight:700;}"
+                    "QPushButton:hover{background:%1;color:%2;}")
+            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+        connect(cache_btn, &QPushButton::clicked, this, [this]() {
+            auto answer = QMessageBox::warning(this, "Clear All Cache",
+                "Delete all temporary cached data?\nData will be re-fetched on next access.",
+                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (answer != QMessageBox::Yes) return;
+            CacheManager::instance().clear();
             refresh_storage_stats();
-            LOG_INFO("Settings", "Cache cleared: " + cat);
+            LOG_INFO("Settings", "All cache cleared");
         });
-        vl->addWidget(btn);
+        cr_hl->addWidget(cache_btn);
+        bvl->addWidget(cache_row);
+
+        bvl->addWidget(make_sep());
+
+        // Nuclear: clear ALL data
+        auto* nuke_row = new QWidget;
+        nuke_row->setStyleSheet("background:transparent;");
+        auto* nr_hl = new QHBoxLayout(nuke_row);
+        nr_hl->setContentsMargins(0, 0, 0, 0);
+        nr_hl->setSpacing(8);
+        auto* nuke_desc = new QWidget;
+        auto* nd_vl = new QVBoxLayout(nuke_desc);
+        nd_vl->setContentsMargins(0, 0, 0, 0);
+        nd_vl->setSpacing(2);
+        auto* nd1 = new QLabel("Clear ALL User Data");
+        nd1->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::NEGATIVE()));
+        nd_vl->addWidget(nd1);
+        auto* nd2 = new QLabel("Permanently delete all databases, files, cache, and UI state. OS keychain is preserved.");
+        nd2->setWordWrap(true);
+        nd2->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        nd_vl->addWidget(nd2);
+        nr_hl->addWidget(nuke_desc, 1);
+        auto* nuke_btn = new QPushButton("DELETE ALL");
+        nuke_btn->setFixedSize(110, 26);
+        nuke_btn->setStyleSheet(
+            QString("QPushButton{background:%1;color:%2;border:2px solid %1;font-weight:700;}"
+                    "QPushButton:hover{background:%2;color:%3;}")
+            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE()));
+        connect(nuke_btn, &QPushButton::clicked, this, [this]() {
+            auto a1 = QMessageBox::critical(this, "Clear ALL User Data",
+                "WARNING: This will permanently delete ALL data:\n\n"
+                "  Chat history, notes, reports, watchlists\n"
+                "  Portfolios, transactions, paper trades\n"
+                "  Workflows, dashboard layouts\n"
+                "  News articles, RSS feeds, monitors\n"
+                "  Data sources, MCP servers\n"
+                "  Agent configs, LLM configs & profiles\n"
+                "  App settings, credentials, key-value storage\n"
+                "  All cache, log files, workspaces, UI state\n\n"
+                "OS keychain credentials are NOT affected.\n"
+                "This action CANNOT be undone.",
+                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (a1 != QMessageBox::Yes) return;
+
+            auto a2 = QMessageBox::critical(this, "Final Confirmation",
+                "ALL data will be permanently deleted.\nAre you absolutely sure?",
+                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (a2 != QMessageBox::Yes) return;
+
+            auto& sm = StorageManager::instance();
+            for (const auto& info : sm.all_stats())
+                sm.clear_category(info.id);
+            sm.clear_log_files();
+            sm.clear_workspace_files();
+            sm.clear_qsettings();
+            refresh_storage_stats();
+            LOG_INFO("Settings", "ALL user data cleared");
+        });
+        nr_hl->addWidget(nuke_btn);
+        bvl->addWidget(nuke_row);
+
+        pvl->addWidget(body);
+        vl->addWidget(panel);
     }
 
     vl->addStretch();
@@ -1132,11 +1859,50 @@ QWidget* SettingsScreen::build_storage() {
 }
 
 void SettingsScreen::refresh_storage_stats() {
+    auto& sm = StorageManager::instance();
+
+    // Stat boxes
+    if (storage_main_db_)
+        storage_main_db_->setText(format_bytes(sm.main_db_size()));
+    if (storage_cache_db_)
+        storage_cache_db_->setText(format_bytes(sm.cache_db_size()));
+    if (storage_log_size_)
+        storage_log_size_->setText(format_bytes(sm.log_files_size()));
+    if (storage_ws_size_)
+        storage_ws_size_->setText(format_bytes(sm.workspace_files_size()));
+    if (storage_total_size_)
+        storage_total_size_->setText(format_bytes(
+            sm.main_db_size() + sm.cache_db_size() + sm.log_files_size() + sm.workspace_files_size()));
+
+    // Cache entry count
     if (storage_count_)
-        storage_count_->setText(QString::number(CacheManager::instance().entry_count()) + " entries");
+        storage_count_->setText(QString::number(CacheManager::instance().entry_count()));
+
+    // Update per-category counts
+    if (storage_categories_) {
+        auto stats = sm.all_stats();
+        int stat_idx = 0;
+        for (int i = 0; i < storage_categories_->count() && stat_idx < stats.size(); ++i) {
+            auto* item = storage_categories_->itemAt(i);
+            if (!item || !item->widget()) continue;
+            // Find count label by object name
+            auto* count_lbl = item->widget()->findChild<QLabel*>("cat_count");
+            if (!count_lbl) continue;
+            count_lbl->setText(QString::number(stats[stat_idx].count));
+            ++stat_idx;
+        }
+    }
 }
 
 // ── Data Sources ──────────────────────────────────────────────────────────────
+
+// Transport type badge text from data source type string
+static QString ds_transport_badge(const QString& type) {
+    if (type == "websocket") return "WS";
+    if (type == "rest_api")  return "REST";
+    if (type == "sql")       return "SQL";
+    return type.left(4).toUpper();
+}
 
 QWidget* SettingsScreen::build_data_sources() {
     auto* scroll = new QScrollArea;
@@ -1150,102 +1916,344 @@ QWidget* SettingsScreen::build_data_sources() {
 
     auto* page = new QWidget;
     auto* vl = new QVBoxLayout(page);
-    vl->setContentsMargins(24, 24, 24, 24);
-    vl->setSpacing(0);
+    vl->setContentsMargins(14, 14, 14, 14);
+    vl->setSpacing(10);
 
+    // Title + Open Full Screen button
+    auto* title_row = new QWidget;
+    title_row->setStyleSheet("background:transparent;");
+    auto* trl = new QHBoxLayout(title_row);
+    trl->setContentsMargins(0, 0, 0, 0);
     auto* t = new QLabel("DATA SOURCES");
     t->setStyleSheet(section_title_ss());
-    vl->addWidget(t);
-    vl->addSpacing(4);
+    trl->addWidget(t);
+    trl->addStretch();
 
-    auto* info = new QLabel("Toggle which external data providers are active. "
-                            "Changes take effect immediately.");
+    auto* open_full = new QPushButton("OPEN FULL SCREEN");
+    open_full->setFixedHeight(24);
+    open_full->setCursor(Qt::PointingHandCursor);
+    open_full->setStyleSheet(
+        QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;border:1px solid %2;font-weight:700;padding:0 10px;}"
+                "QPushButton:hover{background:%1;color:%3;}")
+        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+    connect(open_full, &QPushButton::clicked, this, []() {
+        EventBus::instance().publish("nav.switch_screen", {{"screen", "data_sources"}});
+    });
+    trl->addWidget(open_full);
+    vl->addWidget(title_row);
+
+    auto* info = new QLabel("Quick management of configured connections. "
+                            "For full browsing, adding, testing, and import/export use the full screen.");
     info->setWordWrap(true);
     info->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(info);
-    vl->addSpacing(16);
-    vl->addWidget(make_sep());
-    vl->addSpacing(16);
+    vl->addSpacing(4);
 
-    // Load from repository
+    // ── Stats strip ──────────────────────────────────────────────────────────
     auto result = DataSourceRepository::instance().list_all();
-    if (!result.is_ok() || result.value().isEmpty()) {
-        auto* empty = new QLabel("No data sources configured.\n"
-                                 "Sources are seeded automatically at application startup.");
-        empty->setWordWrap(true);
-        empty->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
-        vl->addWidget(empty);
-        vl->addStretch();
-        scroll->setWidget(page);
-        return scroll;
+    auto connections = result.is_ok() ? result.value() : QVector<DataSource>{};
+
+    int total = connections.size();
+    int active = 0;
+    QSet<QString> providers;
+    QMap<QString, int> cat_counts;
+    for (const auto& ds : connections) {
+        if (ds.enabled) ++active;
+        providers.insert(ds.provider);
+        QString cat = ds.category.isEmpty() ? "other" : ds.category;
+        cat_counts[cat]++;
     }
 
-    // Group by category
-    QMap<QString, QVector<DataSource>> grouped;
-    for (const auto& ds : result.value())
-        grouped[ds.category.isEmpty() ? "General" : ds.category].append(ds);
+    {
+        auto* stat_row = new QWidget;
+        stat_row->setStyleSheet("background:transparent;");
+        auto* shl = new QHBoxLayout(stat_row);
+        shl->setContentsMargins(0, 0, 0, 0);
+        shl->setSpacing(8);
 
-    for (auto it = grouped.constBegin(); it != grouped.constEnd(); ++it) {
-        // Category header
-        auto* cat_lbl = new QLabel(it.key().toUpper());
-        cat_lbl->setStyleSheet(sub_title_ss());
-        vl->addWidget(cat_lbl);
-        vl->addSpacing(6);
+        auto make_stat = [&](const QString& label, int value, const QString& color) {
+            auto* box = new QFrame;
+            box->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;}")
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+            auto* bx = new QVBoxLayout(box);
+            bx->setContentsMargins(10, 8, 10, 10);
+            bx->setSpacing(2);
+            bx->setAlignment(Qt::AlignCenter);
 
-        for (const auto& ds : it.value()) {
-            // Source card
-            auto* card = new QFrame;
-            card->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:4px;}").arg(ui::colors::BG_SURFACE(),ui::colors::BORDER_DIM()));
-            auto* cvl2 = new QVBoxLayout(card);
-            cvl2->setContentsMargins(0, 0, 0, 0);
-            cvl2->setSpacing(0);
+            auto* val = new QLabel(QString::number(value));
+            val->setAlignment(Qt::AlignCenter);
+            val->setStyleSheet(QString("color:%1;font-size:18px;font-weight:700;background:transparent;").arg(color));
+            bx->addWidget(val);
 
-            // Card header row
-            auto* hdr = new QWidget;
-            hdr->setFixedHeight(40);
-            hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(),ui::colors::BORDER_DIM()));
-            auto* hhl = new QHBoxLayout(hdr);
-            hhl->setContentsMargins(12, 0, 12, 0);
+            auto* ll = new QLabel(label);
+            ll->setAlignment(Qt::AlignCenter);
+            ll->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+            bx->addWidget(ll);
 
-            auto* name_lbl = new QLabel(ds.display_name.isEmpty() ? ds.alias : ds.display_name);
-            name_lbl->setStyleSheet(QString("color:%1;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
-            hhl->addWidget(name_lbl);
+            shl->addWidget(box, 1);
+        };
 
-            // Type badge
-            auto* type_badge = new QLabel(ds.type == "websocket" ? "WS" : "REST");
-            type_badge->setStyleSheet(
-                QString("color:%1;font-weight:700;background:%2;border:1px solid %3;border-radius:2px;padding:1px 5px;")
-                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_MED()));
-            hhl->addWidget(type_badge);
-            hhl->addStretch();
+        make_stat("TOTAL",      total,            ui::colors::CYAN());
+        make_stat("ACTIVE",     active,           ui::colors::POSITIVE());
+        make_stat("INACTIVE",   total - active,   ui::colors::TEXT_DIM());
+        make_stat("PROVIDERS",  providers.size(),  ui::colors::AMBER());
+        vl->addWidget(stat_row);
+    }
 
-            // Enable toggle
-            auto* toggle = new QCheckBox;
-            toggle->setChecked(ds.enabled);
-            toggle->setStyleSheet(check_ss());
-            hhl->addWidget(toggle);
+    vl->addSpacing(6);
 
-            // Wire toggle → repo
-            QString source_id = ds.id;
-            connect(toggle, &QCheckBox::toggled, this, [source_id](bool checked) {
-                DataSourceRepository::instance().set_enabled(source_id, checked);
-                LOG_INFO("DataSources", (checked ? "Enabled: " : "Disabled: ") + source_id);
-            });
-
-            cvl2->addWidget(hdr);
-
-            // Description (if any)
-            if (!ds.description.isEmpty()) {
-                auto* desc = new QLabel(ds.description);
-                desc->setWordWrap(true);
-                desc->setStyleSheet(QString("color:%1;padding:8px 12px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
-                cvl2->addWidget(desc);
-            }
-
-            vl->addWidget(card);
-            vl->addSpacing(8);
+    // ── Connections table ────────────────────────────────────────────────────
+    if (connections.isEmpty()) {
+        auto* empty_panel = make_panel("CONNECTIONS");
+        auto* empty_body = new QWidget;
+        empty_body->setStyleSheet("background:transparent;");
+        auto* evl = new QVBoxLayout(empty_body);
+        evl->setContentsMargins(12, 16, 12, 16);
+        auto* elbl = new QLabel("No data sources configured. Open the full Data Sources screen to browse and add connectors.");
+        elbl->setWordWrap(true);
+        elbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+        evl->addWidget(elbl);
+        static_cast<QVBoxLayout*>(empty_panel->layout())->addWidget(empty_body);
+        vl->addWidget(empty_panel);
+    } else {
+        // Group by category
+        QMap<QString, QVector<DataSource>> grouped;
+        for (const auto& ds : connections) {
+            QString cat = ds.category.isEmpty() ? "other" : ds.category;
+            grouped[cat].append(ds);
         }
-        vl->addSpacing(8);
+
+        auto* panel = make_panel("CONNECTIONS");
+        auto* body = new QWidget;
+        body->setStyleSheet("background:transparent;");
+        auto* bvl = new QVBoxLayout(body);
+        bvl->setContentsMargins(0, 0, 0, 0);
+        bvl->setSpacing(0);
+
+        // Table header
+        auto* th = new QWidget;
+        th->setFixedHeight(26);
+        th->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        auto* thl = new QHBoxLayout(th);
+        thl->setContentsMargins(12, 0, 12, 0);
+        thl->setSpacing(6);
+
+        auto add_th = [&](const QString& text, int width = 0) {
+            auto* lbl = new QLabel(text);
+            lbl->setStyleSheet(QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+            if (width > 0) { lbl->setFixedWidth(width); lbl->setAlignment(Qt::AlignCenter); }
+            thl->addWidget(lbl, width > 0 ? 0 : 1);
+        };
+        add_th("SOURCE");
+        add_th("TYPE", 44);
+        add_th("CATEGORY", 80);
+        add_th("ON", 30);
+        add_th("DEL", 30);
+        bvl->addWidget(th);
+
+        int row_idx = 0;
+        for (auto it = grouped.constBegin(); it != grouped.constEnd(); ++it) {
+            // Category group header
+            auto* grp = new QWidget;
+            grp->setFixedHeight(24);
+            grp->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+            auto* ghl = new QHBoxLayout(grp);
+            ghl->setContentsMargins(12, 0, 12, 0);
+            auto* glbl = new QLabel(it.key().toUpper() + QString("  (%1)").arg(it.value().size()));
+            glbl->setStyleSheet(QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;")
+                .arg(ui::colors::AMBER_DIM()));
+            ghl->addWidget(glbl);
+            bvl->addWidget(grp);
+
+            for (const auto& ds : it.value()) {
+                auto* row = new QWidget;
+                row->setFixedHeight(26);
+                row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                    .arg((row_idx % 2) ? ui::colors::ROW_ALT() : ui::colors::BG_BASE(),
+                         ui::colors::BORDER_DIM()));
+
+                auto* rhl = new QHBoxLayout(row);
+                rhl->setContentsMargins(12, 0, 12, 0);
+                rhl->setSpacing(6);
+
+                // Name
+                QString name = ds.display_name.isEmpty() ? ds.alias : ds.display_name;
+                auto* name_lbl = new QLabel(name);
+                name_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(
+                    ds.enabled ? ui::colors::TEXT_PRIMARY() : ui::colors::TEXT_TERTIARY()));
+                rhl->addWidget(name_lbl, 1);
+
+                // Type badge
+                auto* badge = new QLabel(ds_transport_badge(ds.type));
+                badge->setFixedWidth(44);
+                badge->setAlignment(Qt::AlignCenter);
+                badge->setStyleSheet(QString("color:%1;font-weight:700;background:%2;border:1px solid %3;")
+                    .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+                rhl->addWidget(badge);
+
+                // Category
+                auto* cat_lbl = new QLabel(ds.category.isEmpty() ? "—" : ds.category);
+                cat_lbl->setFixedWidth(80);
+                cat_lbl->setAlignment(Qt::AlignCenter);
+                cat_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+                rhl->addWidget(cat_lbl);
+
+                // Enable toggle
+                auto* toggle = new QCheckBox;
+                toggle->setChecked(ds.enabled);
+                toggle->setFixedWidth(30);
+                toggle->setStyleSheet(check_ss());
+                QString source_id = ds.id;
+                connect(toggle, &QCheckBox::toggled, this, [source_id, name_lbl](bool checked) {
+                    DataSourceRepository::instance().set_enabled(source_id, checked);
+                    name_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(
+                        checked ? ui::colors::TEXT_PRIMARY() : ui::colors::TEXT_TERTIARY()));
+                    LOG_INFO("DataSources", (checked ? "Enabled: " : "Disabled: ") + source_id);
+                });
+                rhl->addWidget(toggle);
+
+                // Delete button
+                auto* del_btn = new QPushButton("X");
+                del_btn->setFixedSize(22, 18);
+                del_btn->setCursor(Qt::PointingHandCursor);
+                del_btn->setStyleSheet(
+                    QString("QPushButton{background:transparent;color:%1;border:none;font-weight:700;}"
+                            "QPushButton:hover{color:%2;}")
+                    .arg(ui::colors::TEXT_DIM(), ui::colors::NEGATIVE()));
+                connect(del_btn, &QPushButton::clicked, this, [this, source_id, name, row]() {
+                    auto answer = QMessageBox::warning(this, "Delete Connection",
+                        "Delete connection \"" + name + "\"?\n\nThis cannot be undone.",
+                        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                    if (answer != QMessageBox::Yes) return;
+
+                    DataSourceRepository::instance().remove(source_id);
+                    row->hide();
+                    LOG_INFO("DataSources", "Deleted: " + source_id);
+                });
+                rhl->addWidget(del_btn);
+
+                bvl->addWidget(row);
+                ++row_idx;
+            }
+        }
+
+        static_cast<QVBoxLayout*>(panel->layout())->addWidget(body);
+        vl->addWidget(panel);
+    }
+
+    vl->addSpacing(10);
+
+    // ── Bulk actions ─────────────────────────────────────────────────────────
+    {
+        auto* panel = make_panel("BULK ACTIONS");
+        auto* body = new QWidget;
+        body->setStyleSheet("background:transparent;");
+        auto* bvl = new QVBoxLayout(body);
+        bvl->setContentsMargins(10, 8, 10, 8);
+        bvl->setSpacing(6);
+
+        auto* btn_row = new QWidget;
+        btn_row->setStyleSheet("background:transparent;");
+        auto* brhl = new QHBoxLayout(btn_row);
+        brhl->setContentsMargins(0, 0, 0, 0);
+        brhl->setSpacing(8);
+
+        // Enable all
+        auto* enable_all = new QPushButton("ENABLE ALL");
+        enable_all->setFixedHeight(24);
+        enable_all->setStyleSheet(
+            QString("QPushButton{background:rgba(22,163,74,0.1);color:%1;border:1px solid %1;font-weight:700;padding:0 10px;}"
+                    "QPushButton:hover{background:%1;color:%2;}")
+            .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE()));
+        connect(enable_all, &QPushButton::clicked, this, [this]() {
+            auto r = DataSourceRepository::instance().list_all();
+            if (!r.is_ok()) return;
+            for (const auto& ds : r.value())
+                DataSourceRepository::instance().set_enabled(ds.id, true);
+            LOG_INFO("DataSources", "All sources enabled");
+            // Rebuild section to reflect changes
+            if (sections_) {
+                auto* old = sections_->widget(4);
+                auto* fresh = build_data_sources();
+                sections_->insertWidget(4, fresh);
+                sections_->removeWidget(old);
+                old->deleteLater();
+                sections_->setCurrentIndex(4);
+            }
+        });
+        brhl->addWidget(enable_all);
+
+        // Disable all
+        auto* disable_all = new QPushButton("DISABLE ALL");
+        disable_all->setFixedHeight(24);
+        disable_all->setStyleSheet(
+            QString("QPushButton{background:rgba(220,38,38,0.1);color:%1;border:1px solid #7f1d1d;font-weight:700;padding:0 10px;}"
+                    "QPushButton:hover{background:%1;color:%2;}")
+            .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+        connect(disable_all, &QPushButton::clicked, this, [this]() {
+            auto answer = QMessageBox::warning(this, "Disable All",
+                "Disable all data source connections?",
+                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (answer != QMessageBox::Yes) return;
+            auto r = DataSourceRepository::instance().list_all();
+            if (!r.is_ok()) return;
+            for (const auto& ds : r.value())
+                DataSourceRepository::instance().set_enabled(ds.id, false);
+            LOG_INFO("DataSources", "All sources disabled");
+            if (sections_) {
+                auto* old = sections_->widget(4);
+                auto* fresh = build_data_sources();
+                sections_->insertWidget(4, fresh);
+                sections_->removeWidget(old);
+                old->deleteLater();
+                sections_->setCurrentIndex(4);
+            }
+        });
+        brhl->addWidget(disable_all);
+
+        // Delete all
+        auto* delete_all = new QPushButton("DELETE ALL");
+        delete_all->setFixedHeight(24);
+        delete_all->setStyleSheet(
+            QString("QPushButton{background:%1;color:%2;border:2px solid %2;font-weight:700;padding:0 10px;}"
+                    "QPushButton:hover{background:%2;color:%3;}")
+            .arg(ui::colors::BG_RAISED(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY()));
+        connect(delete_all, &QPushButton::clicked, this, [this]() {
+            auto answer = QMessageBox::critical(this, "Delete All Connections",
+                "Permanently delete ALL data source connections?\n\n"
+                "This cannot be undone. You can re-add them from the full Data Sources screen.",
+                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+            if (answer != QMessageBox::Yes) return;
+
+            auto r = DataSourceRepository::instance().list_all();
+            if (!r.is_ok()) return;
+            for (const auto& ds : r.value())
+                DataSourceRepository::instance().remove(ds.id);
+            LOG_INFO("DataSources", "All connections deleted");
+            if (sections_) {
+                auto* old = sections_->widget(4);
+                auto* fresh = build_data_sources();
+                sections_->insertWidget(4, fresh);
+                sections_->removeWidget(old);
+                old->deleteLater();
+                sections_->setCurrentIndex(4);
+            }
+        });
+        brhl->addWidget(delete_all);
+
+        brhl->addStretch();
+        bvl->addWidget(btn_row);
+
+        auto* note = new QLabel("For adding new connections, testing connectivity, and import/export, "
+                                "use the full Data Sources screen.");
+        note->setWordWrap(true);
+        note->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_DIM()));
+        bvl->addWidget(note);
+
+        static_cast<QVBoxLayout*>(panel->layout())->addWidget(body);
+        vl->addWidget(panel);
     }
 
     vl->addStretch();
@@ -1424,6 +2432,132 @@ QWidget* SettingsScreen::build_logging() {
     vl->addStretch();
     scroll->setWidget(page);
     return scroll;
+}
+
+// ── Profiles ──────────────────────────────────────────────────────────────────
+QWidget* SettingsScreen::build_profiles() {
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+
+    auto* page = new QWidget;
+    auto* vl   = new QVBoxLayout(page);
+    vl->setContentsMargins(24, 20, 24, 20);
+    vl->setSpacing(16);
+
+    auto* title = new QLabel("Profiles");
+    title->setStyleSheet(section_title_ss());
+    vl->addWidget(title);
+
+    auto* desc = new QLabel(
+        "Each profile has its own isolated database, credentials, logs and workspaces.\n"
+        "Launch the terminal with  --profile <name>  to open a specific profile.\n"
+        "Different profiles can run simultaneously — useful for separate trading accounts.");
+    desc->setWordWrap(true);
+    desc->setStyleSheet(label_ss());
+    vl->addWidget(desc);
+    vl->addWidget(make_sep());
+
+    // Active profile display
+    auto& pm = ProfileManager::instance();
+    auto* active_lbl = new QLabel(
+        QString("Active profile:  <b>%1</b>").arg(pm.active()));
+    active_lbl->setStyleSheet(label_ss());
+    vl->addWidget(active_lbl);
+
+    // Profile list
+    auto* list_title = new QLabel("All profiles");
+    list_title->setStyleSheet(sub_title_ss());
+    vl->addWidget(list_title);
+
+    auto* list_widget = new QWidget;
+    auto* list_vl     = new QVBoxLayout(list_widget);
+    list_vl->setContentsMargins(0, 0, 0, 0);
+    list_vl->setSpacing(6);
+
+    const QStringList profiles = pm.list_profiles();
+    for (const QString& name : profiles) {
+        auto* row = new QWidget;
+        auto* hl  = new QHBoxLayout(row);
+        hl->setContentsMargins(0, 0, 0, 0);
+        hl->setSpacing(8);
+
+        auto* name_lbl = new QLabel(name);
+        name_lbl->setStyleSheet(label_ss());
+        hl->addWidget(name_lbl, 1);
+
+        if (name == pm.active()) {
+            auto* badge = new QLabel("ACTIVE");
+            badge->setStyleSheet(QString("color:%1;font-weight:700;font-size:10px;"
+                                         "background:transparent;")
+                                     .arg(ui::colors::AMBER()));
+            hl->addWidget(badge);
+        } else {
+            // "Switch" launches a new process with --profile <name> then quits this one
+            auto* switch_btn = new QPushButton("Switch");
+            switch_btn->setFixedWidth(72);
+            switch_btn->setStyleSheet(btn_secondary_ss());
+            connect(switch_btn, &QPushButton::clicked, this, [name]() {
+                const QString exe = QCoreApplication::applicationFilePath();
+                QProcess::startDetached(exe, {"--profile", name});
+                QCoreApplication::quit();
+            });
+            hl->addWidget(switch_btn);
+        }
+        list_vl->addWidget(row);
+    }
+    vl->addWidget(list_widget);
+    vl->addWidget(make_sep());
+
+    // Create new profile
+    auto* new_title = new QLabel("Create new profile");
+    new_title->setStyleSheet(sub_title_ss());
+    vl->addWidget(new_title);
+
+    auto* new_row = new QWidget;
+    auto* new_hl  = new QHBoxLayout(new_row);
+    new_hl->setContentsMargins(0, 0, 0, 0);
+    new_hl->setSpacing(8);
+
+    auto* name_input = new QLineEdit;
+    name_input->setPlaceholderText("profile-name  (alphanumeric, - and _ only)");
+    name_input->setStyleSheet(input_ss());
+    new_hl->addWidget(name_input, 1);
+
+    auto* create_btn = new QPushButton("Create & Switch");
+    create_btn->setStyleSheet(btn_primary_ss());
+    connect(create_btn, &QPushButton::clicked, this, [name_input]() {
+        const QString name = name_input->text().trimmed().toLower();
+        if (name.isEmpty()) return;
+        ProfileManager::instance().create_profile(name);
+        const QString exe = QCoreApplication::applicationFilePath();
+        QProcess::startDetached(exe, {"--profile", name});
+        QCoreApplication::quit();
+    });
+    new_hl->addWidget(create_btn);
+    vl->addWidget(new_row);
+
+    auto* hint = new QLabel(
+        "Creating a profile sets up a fresh data directory. "
+        "The app will restart with the new profile active.");
+    hint->setWordWrap(true);
+    hint->setStyleSheet(label_ss());
+    vl->addWidget(hint);
+
+    vl->addStretch();
+    scroll->setWidget(page);
+    return scroll;
+}
+
+QVariantMap SettingsScreen::save_state() const {
+    return {{"section", sections_ ? sections_->currentIndex() : 0}};
+}
+
+void SettingsScreen::restore_state(const QVariantMap& state) {
+    if (!sections_) return;
+    const int idx = state.value("section", 0).toInt();
+    if (idx >= 0 && idx < sections_->count())
+        sections_->setCurrentIndex(idx);
 }
 
 } // namespace fincept::screens

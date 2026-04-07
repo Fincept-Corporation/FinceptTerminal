@@ -1,6 +1,7 @@
 #pragma once
 #include "screens/markets/MarketPanel.h"
 
+#include <QDateTime>
 #include <QHideEvent>
 #include <QLabel>
 #include <QShowEvent>
@@ -29,6 +30,8 @@ class MarketsScreen : public QWidget {
     bool refresh_in_progress_ = false;
     bool auto_update_ = true;
     int update_interval_ms_ = 600000; // 10 min default
+    QDateTime last_refresh_time_;
+    static constexpr int kMinRefreshIntervalSec = 300; // 5 min
 
     QWidget* build_header();
     QWidget* build_controls();

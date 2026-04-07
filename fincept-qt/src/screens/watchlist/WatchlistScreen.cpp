@@ -87,7 +87,7 @@ void WatchlistScreen::build_ui() {
 
     splitter->addWidget(build_sidebar());
     splitter->addWidget(build_main_panel());
-    splitter->setSizes({220, 800});
+    splitter->setStretchFactor(0, 0);
     splitter->setStretchFactor(1, 1);
 
     root->addWidget(splitter);
@@ -97,7 +97,8 @@ void WatchlistScreen::build_ui() {
 
 QWidget* WatchlistScreen::build_sidebar() {
     auto* panel = new QWidget;
-    panel->setFixedWidth(220);
+    panel->setMinimumWidth(180);
+    panel->setMaximumWidth(280);
     panel->setStyleSheet(QString("background: %1; border-right: 1px solid %2;").arg(BG_SURFACE, BORDER_DIM));
 
     auto* lay = new QVBoxLayout(panel);

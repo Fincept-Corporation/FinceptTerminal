@@ -202,21 +202,37 @@ static QVector<HDXDataset> parse_hdx_results(const QString& output) {
     auto json_str = python::extract_json(output);
     auto doc = QJsonDocument::fromJson(json_str.toUtf8());
     QVector<HDXDataset> datasets;
-    auto arr = doc.object()["datasets"].toArray();
-    if (arr.isEmpty())
+
+    // Script returns: {"success": true, "data": {"datasets": [...]}}
+    // Try unwrapping the data envelope first, then fall back to bare array/object
+    auto root = doc.object();
+    QJsonArray arr;
+    if (root.contains("data")) {
+        auto data = root["data"].toObject();
+        arr = data["datasets"].toArray();
+    } else if (root.contains("datasets")) {
+        arr = root["datasets"].toArray();
+    } else {
         arr = doc.array();
+    }
+
     datasets.reserve(arr.size());
     for (const auto& v : arr) {
         auto o = v.toObject();
         HDXDataset d;
-        d.id = o["id"].toString();
-        d.title = o["title"].toString();
+        d.id           = o["id"].toString();
+        d.title        = o["title"].toString();
         d.organization = o["organization"].toString();
-        d.notes = o["notes"].toString();
-        d.date = o["dataset_date"].toString();
+        d.notes        = o["notes"].toString();
+        d.date         = o["dataset_date"].toString();
         d.num_resources = o["num_resources"].toInt();
-        for (const auto& t : o["tags"].toArray())
-            d.tags.append(t.toObject()["name"].toString());
+        // Tags in summary are plain strings; in full detail they are objects with "name"
+        for (const auto& t : o["tags"].toArray()) {
+            if (t.isString())
+                d.tags.append(t.toString());
+            else
+                d.tags.append(t.toObject()["name"].toString());
+        }
         d.raw = o;
         datasets.append(d);
     }
@@ -224,7 +240,7 @@ static QVector<HDXDataset> parse_hdx_results(const QString& output) {
 }
 
 void GeopoliticsService::search_hdx_conflicts() {
-    run_python("hdx_data.py", {"search_conflict"}, "hdx_conflicts", [this](bool ok, const QString& out) {
+    run_python("hdx_data.py", {"search_conflict", "", "20"}, "hdx_conflicts", [this](bool ok, const QString& out) {
         if (!ok) {
             emit error_occurred("hdx_conflicts", out);
             return;
@@ -234,7 +250,7 @@ void GeopoliticsService::search_hdx_conflicts() {
 }
 
 void GeopoliticsService::search_hdx_humanitarian() {
-    run_python("hdx_data.py", {"search_humanitarian"}, "hdx_humanitarian", [this](bool ok, const QString& out) {
+    run_python("hdx_data.py", {"search_humanitarian", "", "20"}, "hdx_humanitarian", [this](bool ok, const QString& out) {
         if (!ok) {
             emit error_occurred("hdx_humanitarian", out);
             return;
@@ -264,7 +280,8 @@ void GeopoliticsService::search_hdx_by_topic(const QString& topic) {
 }
 
 void GeopoliticsService::search_hdx_advanced(const QString& query) {
-    run_python("hdx_data.py", {"advanced_search", query}, "hdx_search", [this](bool ok, const QString& out) {
+    // Use search_datasets for free-text queries (advanced_search expects key:value pairs)
+    run_python("hdx_data.py", {"search_datasets", query, "20"}, "hdx_search", [this](bool ok, const QString& out) {
         if (!ok) {
             emit error_occurred("hdx_search", out);
             return;

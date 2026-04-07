@@ -1,4 +1,5 @@
 #include "core/config/AppPaths.h"
+#include "core/config/ProfileManager.h"
 
 #include <QDir>
 #include <QStandardPaths>
@@ -22,19 +23,19 @@ QString AppPaths::root() {
 }
 
 QString AppPaths::data() {
-    return root() + "/data";
+    return ProfileManager::instance().profile_root() + "/data";
 }
 
 QString AppPaths::logs() {
-    return root() + "/logs";
+    return ProfileManager::instance().profile_root() + "/logs";
 }
 
 QString AppPaths::files() {
-    return root() + "/files";
+    return ProfileManager::instance().profile_root() + "/files";
 }
 
 QString AppPaths::cache() {
-    return root() + "/cache";
+    return ProfileManager::instance().profile_root() + "/cache";
 }
 
 QString AppPaths::models() {
@@ -46,7 +47,7 @@ QString AppPaths::runtime() {
 }
 
 QString AppPaths::workspaces() {
-    return root() + "/workspaces";
+    return ProfileManager::instance().profile_root() + "/workspaces";
 }
 
 void AppPaths::ensure_all() {

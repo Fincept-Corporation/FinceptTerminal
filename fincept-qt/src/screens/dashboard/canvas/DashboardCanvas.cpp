@@ -36,6 +36,35 @@ DashboardCanvas::DashboardCanvas(QWidget* parent) : QWidget(parent) {
     scroll_timer_ = new QTimer(this);
     scroll_timer_->setInterval(40);
     connect(scroll_timer_, &QTimer::timeout, this, &DashboardCanvas::on_scroll_tick);
+
+    // Debounce resize events so ADS splitter drags don't trigger repeated
+    // column recalculations and layout compaction on every pixel of movement.
+    resize_timer_ = new QTimer(this);
+    resize_timer_->setSingleShot(true);
+    resize_timer_->setInterval(150);
+    connect(resize_timer_, &QTimer::timeout, this, [this]() {
+        const int w = pending_resize_w_;
+        if (w <= 0) return;
+
+        // Restore to canonical columns if width now permits it — user's layout
+        // should snap back when they expand the panel again.
+        const int target_cols = (w >= 1000) ? canonical_cols_
+                              : (w >= 600)  ? std::min(canonical_cols_, 9)
+                                            : std::min(canonical_cols_, 6);
+
+        if (target_cols != layout_.cols) {
+            layout_.cols = target_cols;
+            for (auto& item : layout_.items) {
+                item.cell.w = std::min(item.cell.w, layout_.cols);
+                item.cell.x = std::min(item.cell.x, layout_.cols - item.cell.w);
+            }
+            layout_.items = compact_vertical(layout_.items);
+        }
+
+        if (!dragging_tile_ && !resizing_tile_)
+            reflow_tiles();
+        update_canvas_height();
+    });
 }
 
 DashboardCanvas::~DashboardCanvas() {
@@ -52,7 +81,12 @@ void DashboardCanvas::load_layout(const GridLayout& layout) {
     tiles_.clear();
     layout_ = layout;
 
-    // Ensure responsive columns
+    // Record the canonical column count from the saved layout — this is what
+    // the user designed for. Responsive shrink is allowed on narrow viewports
+    // but we restore to this when the panel expands back to full width.
+    canonical_cols_ = layout_.cols > 0 ? layout_.cols : 12;
+
+    // Apply responsive columns for current width without clamping canonical_cols_
     if (width() > 0)
         layout_.cols = responsive_cols(width());
 
@@ -80,7 +114,8 @@ void DashboardCanvas::apply_template(const QString& template_id) {
     for (const auto& t : tmpls) {
         if (t.id == template_id) {
             GridLayout layout;
-            layout.cols = width() > 0 ? responsive_cols(width()) : 12;
+            layout.cols = 12; // templates are designed for 12 columns
+            canonical_cols_ = 12;
             layout.row_h = layout_.row_h;
             layout.margin = layout_.margin;
             for (auto item : t.items) {
@@ -386,24 +421,18 @@ void DashboardCanvas::on_scroll_tick() {
 void DashboardCanvas::resizeEvent(QResizeEvent* e) {
     QWidget::resizeEvent(e);
 
-    // Update responsive columns
-    int new_cols = responsive_cols(width());
-    if (new_cols != layout_.cols) {
-        layout_.cols = new_cols;
-        // Clamp items to new column count
-        for (auto& item : layout_.items) {
-            item.cell.w = std::min(item.cell.w, layout_.cols);
-            item.cell.x = std::min(item.cell.x, layout_.cols - item.cell.w);
-        }
-        layout_.items = compact_vertical(layout_.items);
-    }
-
-    // During an active drag or resize, don't reflow — the operation handlers
-    // manage tile positions themselves. A full reflow would fight the user.
+    // Immediately reflow tiles to the new pixel width without changing column
+    // count. This keeps widget positions visually correct as the panel is dragged.
+    // Column recalculation (and potentially layout compaction) is deferred to
+    // resize_timer_ so transient ADS splitter movements don't destroy the layout.
     if (!dragging_tile_ && !resizing_tile_)
         reflow_tiles();
 
     update_canvas_height();
+
+    // Kick the debounce timer — column recalc fires after 150ms of stable width.
+    pending_resize_w_ = width();
+    resize_timer_->start();
 }
 
 void DashboardCanvas::paintEvent(QPaintEvent* event) {

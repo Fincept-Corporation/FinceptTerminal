@@ -13,9 +13,9 @@ TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget("TOP MOVERS", par
     tl->setSpacing(0);
 
     auto active_style = [](const QString& color) {
-        return QString("QPushButton { background: %1; color: #000; border: none; "
+        return QString("QPushButton { background: %1; color: %2; border: none; "
                        "font-size: 9px; font-weight: bold; padding: 4px; }")
-            .arg(color);
+            .arg(color, ui::colors::BG_BASE);
     };
     auto inactive_style = QString("QPushButton { background: %1; color: %2; border: none; "
                                   "font-size: 9px; font-weight: bold; padding: 4px; }")
@@ -68,12 +68,12 @@ void TopMoversWidget::refresh_data() {
 void TopMoversWidget::show_tab(bool gainers) {
     showing_gainers_ = gainers;
 
-    auto active_g = QString("QPushButton { background: %1; color: #000; border: none; "
+    auto active_g = QString("QPushButton { background: %1; color: %2; border: none; "
                             "font-size: 9px; font-weight: bold; padding: 4px; }")
-                        .arg(ui::colors::POSITIVE);
-    auto active_l = QString("QPushButton { background: %1; color: #000; border: none; "
+                        .arg(ui::colors::POSITIVE, ui::colors::BG_BASE);
+    auto active_l = QString("QPushButton { background: %1; color: %2; border: none; "
                             "font-size: 9px; font-weight: bold; padding: 4px; }")
-                        .arg(ui::colors::NEGATIVE);
+                        .arg(ui::colors::NEGATIVE, ui::colors::BG_BASE);
     auto inactive = QString("QPushButton { background: %1; color: %2; border: none; "
                             "font-size: 9px; font-weight: bold; padding: 4px; }")
                         .arg(ui::colors::BG_SURFACE, ui::colors::TEXT_TERTIARY);

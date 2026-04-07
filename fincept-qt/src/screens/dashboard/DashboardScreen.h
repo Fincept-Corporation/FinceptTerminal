@@ -44,6 +44,7 @@ class DashboardScreen : public QWidget {
     QTimer*                  save_timer_   = nullptr;
     bool pulse_visible_    = true;
     bool layout_restored_  = false;
+    bool split_sized_      = false;
 };
 
 } // namespace fincept::screens

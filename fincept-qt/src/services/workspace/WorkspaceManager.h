@@ -24,9 +24,13 @@ class WorkspaceManager : public QObject {
   public:
     static WorkspaceManager& instance();
 
-    /// Must be called once before any workspace operation.
+    /// Register a window/router. Multiple windows supported (multi-window mode).
     void set_main_window(QMainWindow* w);
     void set_router(ScreenRouter* r);
+
+    /// Unregister a closing window/router to prevent dangling pointers.
+    void remove_window(QMainWindow* w);
+    void remove_router(ScreenRouter* r);
 
     // ── Screen participation ──────────────────────────────────────────────────
 
@@ -88,8 +92,10 @@ class WorkspaceManager : public QObject {
     QHash<QString, IWorkspaceParticipant*> participants_;
     QHash<QString, QJsonObject> pending_states_;  // states waiting for lazy screens
 
-    QMainWindow*  main_window_ = nullptr;
-    ScreenRouter* router_      = nullptr;
+    // Multi-window aware: stores all registered windows and routers.
+    // The first registered window is treated as primary for workspace operations.
+    QList<QMainWindow*>  windows_;
+    QList<ScreenRouter*> routers_;
     QTimer*       autosave_timer_ = nullptr;
 };
 

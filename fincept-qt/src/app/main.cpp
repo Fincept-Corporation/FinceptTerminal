@@ -3,6 +3,7 @@
 #include "auth/SessionGuard.h"
 #include "core/config/AppConfig.h"
 #include "core/config/AppPaths.h"
+#include "core/config/ProfileManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
 #include "mcp/McpInit.h"
@@ -19,25 +20,76 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
-#include <QApplication>
+#include <SingleApplication.h>
 #include <QDir>
 #include <QFile>
+#include <QLockFile>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QStandardPaths>
 
+#ifdef Q_OS_WIN
+#  include <Windows.h>
+#endif
+
 int main(int argc, char* argv[]) {
-    QApplication app(argc, argv);
+    // ── Parse --profile <name> from argv before Qt initialises ───────────────
+    // This must happen first so that:
+    //   1. AppPaths returns the correct per-profile directories
+    //   2. SingleApplication uses a profile-scoped IPC key so two different
+    //      profiles can run simultaneously as independent primary instances
+    {
+        for (int i = 1; i < argc - 1; ++i) {
+            if (qstrcmp(argv[i], "--profile") == 0) {
+                fincept::ProfileManager::instance().set_active(
+                    QString::fromUtf8(argv[i + 1]));
+                break;
+            }
+        }
+        // AppPaths::root() must exist before ensure_all() so ProfileManager can
+        // write the manifest. Create root now (single mkdir, idempotent).
+        QDir().mkpath(fincept::AppPaths::root());
+    }
+
+    // Required before QApplication when any dock panel contains an OpenGL widget
+    // (Qt Charts, QOpenGLWidget) — prevents black rendering in floating windows.
+    QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+
+    // SingleApplication enforces one process per profile.
+    // The instance key is scoped to the active profile name, so
+    // "FinceptTerminal --profile work" and "FinceptTerminal --profile personal"
+    // are treated as two separate primary instances and run simultaneously.
+    // allowSecondary=true: secondary instances send "--new-window" and exit.
+    const QString profile_key = QString("FinceptTerminal-%1")
+                                    .arg(fincept::ProfileManager::instance().active());
+    SingleApplication app(argc, argv, /*allowSecondary=*/true,
+                          SingleApplication::Mode::User,
+                          100,
+                          profile_key.toUtf8());
     app.setApplicationName("FinceptTerminal");
     app.setOrganizationName("Fincept");
     app.setApplicationVersion("4.0.0");
 
+    // ── Secondary instance: signal primary to open a new window, then exit ───
+    // The primary receives receivedMessage() and calls open_new_window().
+    if (app.isSecondary()) {
+#ifdef Q_OS_WIN
+        // Grant the primary process permission to bring its new window to the
+        // foreground — Windows blocks focus-steal without this.
+        AllowSetForegroundWindow(static_cast<DWORD>(app.primaryPid()));
+#endif
+        app.sendMessage(QByteArray("--new-window"));
+        return 0;
+    }
+
+    // ── Primary instance from here on ────────────────────────────────────────
+
     // Create all application directories under %LOCALAPPDATA%\com.fincept.terminal\
     fincept::AppPaths::ensure_all();
 
-    // ── One-time migration: move files from old scattered locations ──────────
-    // Old log location: %APPDATA%\Fincept\FinceptTerminal\fincept.log
-    // Old DB  location: %APPDATA%\Fincept\FinceptTerminal\fincept.db / cache.db
+    // ── One-time migration from legacy %APPDATA% location ─────────────────
+    // Current locations (under %LOCALAPPDATA%\com.fincept.terminal\):
+    //   Log: <root>/logs/fincept.log    DB: <root>/data/fincept.db
     {
         const QString old_base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
         const auto migrate_file = [](const QString& old_path, const QString& new_path) {
@@ -55,12 +107,20 @@ int main(int argc, char* argv[]) {
         QFile::remove(old_base + "/cache.db-shm");
     }
 
-    // Remove stale SQLite WAL/SHM lock files left by a previous crash.
-    // qsqlite.dll crashes on WAL recovery if the lock files are orphaned.
-    QFile::remove(fincept::AppPaths::data() + "/fincept.db-wal");
-    QFile::remove(fincept::AppPaths::data() + "/fincept.db-shm");
-    QFile::remove(fincept::AppPaths::data() + "/cache.db-wal");
-    QFile::remove(fincept::AppPaths::data() + "/cache.db-shm");
+    // ── WAL/SHM cleanup — gated behind QLockFile ────────────────────────────
+    // Deleting WAL/SHM files while another process has the DB open corrupts it.
+    // We only clean up orphaned files from a previous crash when we are the sole
+    // running instance. The lock file is held for the entire process lifetime.
+    QLockFile db_lock(fincept::AppPaths::data() + "/fincept.db.lock");
+    db_lock.setStaleLockTime(0); // never auto-expire; we control the lifecycle
+    const bool sole_instance = db_lock.tryLock(0);
+    if (sole_instance) {
+        QFile::remove(fincept::AppPaths::data() + "/fincept.db-wal");
+        QFile::remove(fincept::AppPaths::data() + "/fincept.db-shm");
+        QFile::remove(fincept::AppPaths::data() + "/cache.db-wal");
+        QFile::remove(fincept::AppPaths::data() + "/cache.db-shm");
+    }
+    // db_lock remains held (stack-allocated) until main() returns.
     // Also clean legacy v3 DB location
     {
         const QString local_dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
@@ -238,8 +298,23 @@ int main(int argc, char* argv[]) {
             setup_screen->hide();
             setup_screen->deleteLater();
 
-            auto* window = new fincept::MainWindow;
+            auto* window = new fincept::MainWindow(0); // primary window
+            window->setAttribute(Qt::WA_DeleteOnClose);
             window->show();
+
+            // Wire new-window handler now that the primary window exists
+            QObject::connect(&app, &SingleApplication::receivedMessage,
+                [](quint32 /*instanceId*/, QByteArray /*message*/) {
+                    auto* w = new fincept::MainWindow(fincept::MainWindow::next_window_id());
+                    w->setAttribute(Qt::WA_DeleteOnClose);
+                    w->show();
+                    w->raise();
+                    w->activateWindow();
+                    LOG_INFO("App", "New window opened via secondary instance request");
+                });
+            QObject::connect(&app, &QApplication::lastWindowClosed,
+                &app, &QApplication::quit);
+
             if (!fincept::ai_chat::LlmService::instance().is_configured())
                 LOG_WARN("App", "LLM provider not configured — AI chat will prompt user to configure Settings → LLM Config");
             LOG_INFO("App", "Application ready (after setup)");
@@ -251,6 +326,24 @@ int main(int argc, char* argv[]) {
     // Python already set up — launch main window directly
     fincept::MainWindow window;
     window.show();
+
+    // ── New-window handler: fires when the user re-launches the exe ──────────
+    // The secondary instance sends "--new-window" and exits. We construct a new
+    // independent MainWindow in this process. WA_DeleteOnClose ensures cleanup.
+    // QApplication::lastWindowClosed() → quit() handles the final exit.
+    QObject::connect(&app, &SingleApplication::receivedMessage,
+        [](quint32 /*instanceId*/, QByteArray /*message*/) {
+            auto* w = new fincept::MainWindow(fincept::MainWindow::next_window_id());
+            w->setAttribute(Qt::WA_DeleteOnClose);
+            w->show();
+            w->raise();
+            w->activateWindow();
+            LOG_INFO("App", "New window opened via secondary instance request");
+        });
+
+    // Quit when the last window is closed (standard Qt SDI behaviour).
+    QObject::connect(&app, &QApplication::lastWindowClosed,
+        &app, &QApplication::quit);
 
     // If requirements files changed (app update), sync packages in background
     // without blocking the user.

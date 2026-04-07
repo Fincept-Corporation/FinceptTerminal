@@ -21,7 +21,7 @@ class ThemeManager : public QObject {
 public:
     static ThemeManager& instance();
 
-    /// Apply a named preset ("Obsidian", "Bloomberg Dark", "Matrix", "Midnight Blue").
+    /// Apply a named preset ("Obsidian", "Bloomberg Dark", "Matrix", "Midnight Blue", "Light").
     /// Builds global QSS from tokens and calls qApp->setStyleSheet().
     /// Emits theme_changed(tokens) so custom painters can update.
     void apply_theme(const QString& name);

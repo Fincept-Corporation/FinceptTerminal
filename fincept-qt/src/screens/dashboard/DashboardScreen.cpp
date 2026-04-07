@@ -47,6 +47,7 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     // Scroll area wraps canvas — provides vertical scroll when content exceeds viewport
     scroll_area_ = new QScrollArea;
     scroll_area_->setWidgetResizable(false); // canvas controls its own size
+    scroll_area_->setMinimumWidth(0);        // allow ADS to shrink this panel freely
     scroll_area_->setWidget(canvas_);
     scroll_area_->setStyleSheet(
         QString("QScrollArea{border:none;background:transparent;}"
@@ -64,7 +65,9 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     content_split_->addWidget(market_pulse_);
     content_split_->setStretchFactor(0, 3);
     content_split_->setStretchFactor(1, 1);
-    content_split_->setSizes({900, 280});
+    content_split_->setCollapsible(0, false);
+    content_split_->setCollapsible(1, false);
+    market_pulse_->setMinimumWidth(180);
 
     vl->addWidget(content_split_, 1);
 
@@ -149,6 +152,19 @@ void DashboardScreen::showEvent(QShowEvent* event) {
     if (ticker_bar_)
         ticker_bar_->resume();
 
+    // Set splitter sizes on first show using actual pixel width.
+    // Must be done here (not in constructor) because the widget has no size yet
+    // during construction. MarketPulsePanel's large sizeHint otherwise causes it
+    // to claim ~70% of the splitter before the user sees it.
+    if (!split_sized_) {
+        split_sized_ = true;
+        const int total = content_split_->width();
+        if (total > 400) {
+            const int pulse_w = qBound(180, total / 4, 320);
+            content_split_->setSizes({total - pulse_w, pulse_w});
+        }
+    }
+
     if (!layout_restored_) {
         layout_restored_ = true;
         restore_layout();
@@ -167,9 +183,15 @@ bool DashboardScreen::eventFilter(QObject* obj, QEvent* event) {
     if (obj == scroll_area_->viewport() && event->type() == QEvent::Resize) {
         int vp_w = scroll_area_->viewport()->width();
         // Only update if width actually changed — avoids triggering
-        // resizeEvent → rebuild_grid_cache → reflow_tiles on every scroll tick
-        if (vp_w > 0 && vp_w != canvas_->width())
-            canvas_->setFixedWidth(vp_w);
+        // resizeEvent → rebuild_grid_cache → reflow_tiles on every scroll tick.
+        // Use setMaximumWidth + resize instead of setFixedWidth so the canvas
+        // never imposes a minimum-width constraint that fights ADS splitters
+        // when two screens are placed side-by-side.
+        if (vp_w > 0 && vp_w != canvas_->width()) {
+            canvas_->setMinimumWidth(0);
+            canvas_->setMaximumWidth(QWIDGETSIZE_MAX);
+            canvas_->resize(vp_w, canvas_->height());
+        }
     }
     return QWidget::eventFilter(obj, event);
 }

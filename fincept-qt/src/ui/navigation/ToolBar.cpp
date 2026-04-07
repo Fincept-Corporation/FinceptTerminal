@@ -1,6 +1,7 @@
 #include "ui/navigation/ToolBar.h"
 
 #include "auth/AuthManager.h"
+#include "ui/theme/Theme.h"
 
 #include <QAction>
 #include <QDateTime>
@@ -11,28 +12,39 @@
 
 namespace fincept::ui {
 
-static const char* MENU_SS = "QMenuBar{background:transparent;color:#808080;border:none;"
-                             "spacing:0;}"
-                             "QMenuBar::item{background:transparent;padding:4px 10px;}"
-                             "QMenuBar::item:selected{background:#1a1a1a;color:#e5e5e5;}";
+static QString menu_ss() {
+    return QString("QMenuBar{background:transparent;color:%1;border:none;spacing:0;}"
+                   "QMenuBar::item{background:transparent;padding:4px 10px;}"
+                   "QMenuBar::item:selected{background:%2;color:%3;}")
+        .arg(colors::TEXT_SECONDARY)
+        .arg(colors::BG_RAISED)
+        .arg(colors::TEXT_PRIMARY);
+}
 
-static const char* POPUP_SS = "QMenu{background:#0a0a0a;color:#e5e5e5;border:1px solid #1a1a1a;"
-                              "padding:4px 0;}"
-                              "QMenu::item{padding:5px 24px 5px 12px;}"
-                              "QMenu::item:selected{background:#1a1a1a;}"
-                              "QMenu::item:disabled{color:#404040;}"
-                              "QMenu::separator{background:#1a1a1a;height:1px;margin:4px 8px;}";
+static QString popup_ss() {
+    return QString("QMenu{background:%1;color:%2;border:1px solid %3;padding:4px 0;}"
+                   "QMenu::item{padding:5px 24px 5px 12px;}"
+                   "QMenu::item:selected{background:%4;}"
+                   "QMenu::item:disabled{color:%5;}"
+                   "QMenu::separator{background:%3;height:1px;margin:4px 8px;}")
+        .arg(colors::BG_SURFACE)
+        .arg(colors::TEXT_PRIMARY)
+        .arg(colors::BORDER_DIM)
+        .arg(colors::BG_RAISED)
+        .arg(colors::TEXT_DIM);
+}
 
 ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(32);
-    setStyleSheet("background:#0a0a0a;border-bottom:1px solid #1a1a1a;");
+    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
+                      .arg(colors::BG_BASE).arg(colors::BORDER_DIM));
     auto* hl = new QHBoxLayout(this);
     hl->setContentsMargins(4, 0, 6, 0);
     hl->setSpacing(0);
 
     // Menus
     menu_bar_ = new QMenuBar(this);
-    menu_bar_->setStyleSheet(MENU_SS);
+    menu_bar_->setStyleSheet(menu_ss());
     menu_bar_->addMenu(build_file_menu());
     menu_bar_->addMenu(build_navigate_menu());
     menu_bar_->addMenu(build_view_menu());
@@ -44,12 +56,14 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     command_bar_->setMinimumWidth(80);
     command_bar_->setMaximumWidth(240);
     command_bar_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    connect(command_bar_, &CommandBar::navigate_to, this, &ToolBar::navigate_to);
+    connect(command_bar_, &CommandBar::navigate_to,  this, &ToolBar::navigate_to);
+    connect(command_bar_, &CommandBar::dock_command, this, &ToolBar::dock_command);
     hl->addWidget(command_bar_);
 
     auto sep = [&]() -> QLabel* {
         auto* s = new QLabel("|");
-        s->setStyleSheet("color:#333333;background:transparent;padding:0 3px;");
+        s->setStyleSheet(QString("color:%1;background:transparent;padding:0 3px;")
+                             .arg(colors::TEXT_DIM));
         s->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         hl->addWidget(s);
         separators_.append(s);
@@ -66,31 +80,31 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     };
 
     sep();
-    auto* fincept_lbl = mk("FINCEPT ", "#d97706", true);
+    auto* fincept_lbl = mk("FINCEPT ", colors::AMBER.get(), true);
     hl->addWidget(fincept_lbl);
-    branding_label_ = mk("TERMINAL", "#e5e5e5", true);
+    branding_label_ = mk("TERMINAL", colors::TEXT_PRIMARY.get(), true);
     hl->addWidget(branding_label_);
-    subtitle_label_ = mk("  |  PROFESSIONAL RESEARCH DESK", "#666666");
+    subtitle_label_ = mk("  |  PROFESSIONAL RESEARCH DESK", colors::TEXT_SECONDARY.get());
     hl->addWidget(subtitle_label_);
-    hl->addWidget(mk("  ", "#000000"));
-    live_dot_ = mk("\xe2\x97\x8f", "#16a34a");
+    hl->addWidget(mk("  ", colors::BG_BASE.get()));
+    live_dot_ = mk("\xe2\x97\x8f", colors::POSITIVE.get());
     hl->addWidget(live_dot_);
-    live_label_ = mk(" LIVE", "#16a34a", true);
+    live_label_ = mk(" LIVE", colors::POSITIVE.get(), true);
     hl->addWidget(live_label_);
 
     hl->addStretch(1);
 
-    clock_label_ = mk("", "#ffffff");
+    clock_label_ = mk("", colors::TEXT_PRIMARY.get());
     clock_label_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     hl->addWidget(clock_label_);
 
     hl->addStretch(1);
 
-    user_label_ = mk("---", "#d97706");
+    user_label_ = mk("---", colors::AMBER.get());
     user_label_->setMaximumWidth(120);
     hl->addWidget(user_label_);
     sep();
-    credits_label_ = mk("---", "#16a34a");
+    credits_label_ = mk("---", colors::POSITIVE.get());
     credits_label_->setMaximumWidth(100);
     hl->addWidget(credits_label_);
     sep();
@@ -98,8 +112,9 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     plan_btn_->setCursor(Qt::PointingHandCursor);
     plan_btn_->setToolTip("View Plans & Pricing");
     plan_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    plan_btn_->setStyleSheet("QPushButton{color:#ffffff;background:transparent;border:none;padding:0 2px;}"
-                             "QPushButton:hover{color:#d97706;}");
+    plan_btn_->setStyleSheet(QString("QPushButton{color:%1;background:transparent;border:none;padding:0 2px;}"
+                                    "QPushButton:hover{color:%2;}")
+                                 .arg(colors::TEXT_PRIMARY).arg(colors::AMBER));
     connect(plan_btn_, &QPushButton::clicked, this, &ToolBar::plan_clicked);
     hl->addWidget(plan_btn_);
     sep();
@@ -110,9 +125,10 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     chat_mode_btn_->setToolTip("Switch to Chat Mode (F9)");
     chat_mode_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     chat_mode_btn_->setStyleSheet(
-        "QPushButton{background:transparent;color:#d97706;border:1px solid #7a4700;"
-        "padding:0 8px;font-weight:700;}"
-        "QPushButton:hover{background:#7a4700;color:#fff;border-color:#d97706;}");
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                "padding:0 8px;font-weight:700;}"
+                "QPushButton:hover{background:%2;color:%3;border-color:%1;}")
+            .arg(colors::AMBER).arg(colors::AMBER_DIM).arg(colors::TEXT_PRIMARY));
     connect(chat_mode_btn_, &QPushButton::clicked, this, &ToolBar::chat_mode_toggled);
     hl->addWidget(chat_mode_btn_);
     sep();
@@ -121,9 +137,11 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     logout_btn->setFixedHeight(20);
     logout_btn->setCursor(Qt::PointingHandCursor);
     logout_btn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    logout_btn->setStyleSheet("QPushButton{background:transparent;color:#dc2626;border:1px solid #7f1d1d;"
-                              "padding:0 8px;font-weight:700;}"
-                              "QPushButton:hover{background:#dc2626;color:#e5e5e5;border-color:#dc2626;}");
+    logout_btn->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %1;"
+                "padding:0 8px;font-weight:700;}"
+                "QPushButton:hover{background:%1;color:%2;border-color:%1;}")
+            .arg(colors::NEGATIVE).arg(colors::TEXT_PRIMARY));
     connect(logout_btn, &QPushButton::clicked, this, &ToolBar::logout_clicked);
     hl->addWidget(logout_btn);
 
@@ -197,7 +215,9 @@ void ToolBar::refresh_user_display() {
     int credits = static_cast<int>(s.user_info.credit_balance);
     credits_label_->setText(QString("%1 CR").arg(credits));
     credits_label_->setStyleSheet(QString("color:%1;background:transparent;")
-                                      .arg(s.user_info.credit_balance > 0 ? "#16a34a" : "#dc2626"));
+                                      .arg(s.user_info.credit_balance > 0
+                                               ? colors::POSITIVE.get()
+                                               : colors::NEGATIVE.get()));
 
     QString plan_text = s.account_type().toUpper();
     plan_btn_->setText(plan_text.isEmpty() ? "FREE" : plan_text);
@@ -205,7 +225,9 @@ void ToolBar::refresh_user_display() {
 
 QMenu* ToolBar::build_file_menu() {
     auto* m = new QMenu("File", this);
-    m->setStyleSheet(POPUP_SS);
+    m->setStyleSheet(popup_ss());
+    m->addAction("New Window",        this, [this]() { emit action_triggered("new_window"); });
+    m->addSeparator();
     m->addAction("New Workspace",     this, [this]() { emit action_triggered("new_workspace"); });
     m->addAction("Open Workspace",    this, [this]() { emit action_triggered("open_workspace"); });
     m->addAction("Save Workspace",    this, [this]() { emit action_triggered("save_workspace"); });
@@ -222,13 +244,19 @@ QMenu* ToolBar::build_file_menu() {
 
 QMenu* ToolBar::build_navigate_menu() {
     auto* m = new QMenu("Navigate", this);
-    m->setStyleSheet("QMenu{background:#0a0a0a;color:#e5e5e5;border:1px solid #1a1a1a;padding:2px 0;}"
-                     "QMenu::item{padding:3px 20px 3px 10px;}"
-                     "QMenu::item:selected{background:#1a1a1a;}"
-                     "QMenu::item:disabled{color:#d97706;font-weight:700;padding:6px 10px 2px 10px;}"
-                     "QMenu::separator{background:#1a1a1a;height:1px;margin:2px 6px;}"
-                     "QMenu::scroller{background:#0a0a0a;height:14px;}"
-                     "QMenu::scroller:hover{background:#1a1a1a;}");
+    m->setStyleSheet(QString(
+        "QMenu{background:%1;color:%2;border:1px solid %3;padding:2px 0;}"
+        "QMenu::item{padding:3px 20px 3px 10px;}"
+        "QMenu::item:selected{background:%4;}"
+        "QMenu::item:disabled{color:%5;font-weight:700;padding:6px 10px 2px 10px;}"
+        "QMenu::separator{background:%3;height:1px;margin:2px 6px;}"
+        "QMenu::scroller{background:%1;height:14px;}"
+        "QMenu::scroller:hover{background:%4;}")
+        .arg(colors::BG_SURFACE)
+        .arg(colors::TEXT_PRIMARY)
+        .arg(colors::BORDER_DIM)
+        .arg(colors::BG_RAISED)
+        .arg(colors::AMBER));
 
     // Use submenus for each group — cleaner and no scroll needed
     auto add_sub = [&](const QString& title) -> QMenu* {
@@ -292,12 +320,43 @@ QMenu* ToolBar::build_navigate_menu() {
 
 QMenu* ToolBar::build_view_menu() {
     auto* m = new QMenu("View", this);
-    m->setStyleSheet(POPUP_SS);
+    m->setStyleSheet(popup_ss());
     m->addAction("Fullscreen\tF11", this, [this]() { emit action_triggered("fullscreen"); });
     m->addSeparator();
     m->addAction("Focus Mode\tF10", this, [this]() { emit action_triggered("focus_mode"); });
     m->addAction("Always on Top", this, [this]() { emit action_triggered("always_on_top"); });
     m->addSeparator();
+
+    // Float any screen as a separate window on another monitor
+    auto* panels = m->addMenu("Float Panel");
+    panels->setStyleSheet(popup_ss());
+    panels->addAction("Dashboard",       this, [this]() { emit action_triggered("panel_dashboard"); });
+    panels->addAction("Watchlist",       this, [this]() { emit action_triggered("panel_watchlist"); });
+    panels->addAction("News Feed",       this, [this]() { emit action_triggered("panel_news"); });
+    panels->addAction("Portfolio",       this, [this]() { emit action_triggered("panel_portfolio"); });
+    panels->addAction("Markets",         this, [this]() { emit action_triggered("panel_markets"); });
+    panels->addSeparator();
+    panels->addAction("Crypto Trading",  this, [this]() { emit action_triggered("panel_crypto"); });
+    panels->addAction("Equity Trading",  this, [this]() { emit action_triggered("panel_equity"); });
+    panels->addAction("Algo Trading",    this, [this]() { emit action_triggered("panel_algo"); });
+    panels->addSeparator();
+    panels->addAction("Equity Research", this, [this]() { emit action_triggered("panel_research"); });
+    panels->addAction("Economics",       this, [this]() { emit action_triggered("panel_economics"); });
+    panels->addAction("Geopolitics",     this, [this]() { emit action_triggered("panel_geopolitics"); });
+    panels->addAction("AI Chat",         this, [this]() { emit action_triggered("panel_ai_chat"); });
+    m->addSeparator();
+
+    // Quick Switch — jump to a preset screen
+    auto* persp = m->addMenu("Quick Switch");
+    persp->setStyleSheet(popup_ss());
+    persp->addAction("Save Workspace", this, [this]() { emit action_triggered("perspective_save"); });
+    persp->addSeparator();
+    persp->addAction("Trading View",    this, [this]() { emit action_triggered("perspective_trading"); });
+    persp->addAction("Research View",   this, [this]() { emit action_triggered("perspective_research"); });
+    persp->addAction("News View",       this, [this]() { emit action_triggered("perspective_news"); });
+    persp->addAction("Portfolio View",  this, [this]() { emit action_triggered("perspective_portfolio"); });
+    m->addSeparator();
+
     m->addAction("Refresh Screen\tF5", this, [this]() { emit action_triggered("refresh"); });
     m->addAction("Take Screenshot\tCtrl+P", this, [this]() { emit action_triggered("screenshot"); });
     return m;
@@ -305,7 +364,7 @@ QMenu* ToolBar::build_view_menu() {
 
 QMenu* ToolBar::build_help_menu() {
     auto* m = new QMenu("Help", this);
-    m->setStyleSheet(POPUP_SS);
+    m->setStyleSheet(popup_ss());
     m->addAction("About Fincept", this, [this]() { emit navigate_to("about"); });
     m->addAction("Help Center", this, [this]() { emit navigate_to("help"); });
     m->addSeparator();

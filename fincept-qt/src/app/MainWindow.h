@@ -7,6 +7,9 @@
 #include <QStackedWidget>
 #include <QTimer>
 
+namespace ads { class CDockManager; }
+namespace fincept { class DockScreenRouter; }
+namespace fincept::ui { class DockToolBar; class DockStatusBar; class TabBar; }
 namespace fincept::chat_mode { class ChatModeScreen; }
 
 namespace fincept {
@@ -14,7 +17,14 @@ namespace fincept {
 class MainWindow : public QMainWindow {
     Q_OBJECT
   public:
-    explicit MainWindow(QWidget* parent = nullptr);
+    /// @param window_id  Unique id for this window instance (0 = primary, 1+ = secondary).
+    ///                   Primary restores saved geometry; secondary uses smart placement.
+    explicit MainWindow(int window_id = 0, QWidget* parent = nullptr);
+
+    int window_id() const { return window_id_; }
+
+    /// Returns the next unique window ID (thread-safe via Qt UI thread only).
+    static int next_window_id() { static int s_id = 1; return s_id++; }
 
   protected:
     void closeEvent(QCloseEvent* event) override;
@@ -22,27 +32,31 @@ class MainWindow : public QMainWindow {
 
   private:
     QStackedWidget* stack_ = nullptr;
-    ScreenRouter* router_ = nullptr;
-
-    // Two stacks: auth screens and main app screens
     QStackedWidget* auth_stack_ = nullptr;
-    QStackedWidget* app_stack_ = nullptr;
+
+    int window_id_ = 0;
+
+    // ADS dock system
+    ads::CDockManager*      dock_manager_     = nullptr;
+    DockScreenRouter*       dock_router_      = nullptr;
+    ui::DockToolBar*        dock_toolbar_     = nullptr;
+    ui::DockStatusBar*      dock_status_bar_  = nullptr;
+    ui::TabBar*             tab_bar_          = nullptr;
 
     // View state
     bool focus_mode_  = false;
     bool chat_mode_   = false;
     bool always_on_top_ = false;
-    QWidget* tab_bar_widget_    = nullptr;
-    QWidget* status_bar_widget_ = nullptr;
     AiChatBubble* chat_bubble_  = nullptr;
     QTimer* user_refresh_timer_ = nullptr;
 
     // Chat mode
     chat_mode::ChatModeScreen* chat_mode_screen_ = nullptr;
-    QWidget*                   app_container_    = nullptr; // the normal terminal shell
 
     void setup_auth_screens();
     void setup_app_screens();
+    void setup_docking_mode();
+    void setup_dock_screens();
     void setup_navigation();
     void on_auth_state_changed();
     void toggle_chat_mode();

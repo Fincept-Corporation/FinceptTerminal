@@ -465,8 +465,8 @@ QWidget* AlphaArenaScreen::create_leaderboard_panel() {
 QWidget* AlphaArenaScreen::create_right_panel() {
     auto* panel = new QWidget;
     panel->setObjectName("aaRightPanel");
-    panel->setMinimumWidth(360);
-    panel->setMaximumWidth(440);
+    panel->setMinimumWidth(280);
+    panel->setMaximumWidth(400);
 
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);

@@ -842,4 +842,20 @@ void PortfolioScreen::load_demo_portfolio() {
     svc.create_portfolio("Demo Portfolio", "Fincept User", "USD", "Sample portfolio for demonstration");
 }
 
+QVariantMap PortfolioScreen::save_state() const {
+    return {
+        {"portfolio_id", selected_id_},
+        {"symbol",       selected_symbol_}
+    };
+}
+
+void PortfolioScreen::restore_state(const QVariantMap& state) {
+    const QString id  = state.value("portfolio_id").toString();
+    const QString sym = state.value("symbol").toString();
+    if (!id.isEmpty())
+        on_portfolio_selected(id);
+    if (!sym.isEmpty())
+        selected_symbol_ = sym;
+}
+
 } // namespace fincept::screens

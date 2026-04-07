@@ -75,7 +75,6 @@ MarketPanel::MarketPanel(const QString& title, const QStringList& symbols, bool 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed,
             this, [this](const ui::ThemeTokens&) { refresh_theme(); });
     refresh_theme();
-    refresh();
 }
 
 void MarketPanel::refresh_theme() {

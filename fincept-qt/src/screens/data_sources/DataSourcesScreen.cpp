@@ -725,7 +725,8 @@ QWidget* DataSourcesScreen::build_browse_page() {
 QWidget* DataSourcesScreen::build_category_panel() {
     auto* panel = new QWidget;
     panel->setObjectName("dsSidebar");
-    panel->setFixedWidth(180);
+    panel->setMinimumWidth(150);
+    panel->setMaximumWidth(220);
 
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(0, 0, 0, 0);

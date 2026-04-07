@@ -116,7 +116,8 @@ void DBnomicsScreen::build_ui() {
 
     // Left sidebar
     selection_panel_ = new DBnomicsSelectionPanel(content_widget);
-    selection_panel_->setFixedWidth(280);
+    selection_panel_->setMinimumWidth(220);
+    selection_panel_->setMaximumWidth(340);
     content_hl->addWidget(selection_panel_);
 
     // Right panel
