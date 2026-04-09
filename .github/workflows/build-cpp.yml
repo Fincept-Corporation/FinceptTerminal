@@ -104,46 +104,20 @@ jobs:
             pkg-config zip
 
       # ---- OpenSSL dev libs (Windows) ----
-      # windows-2022 runners ship a "Light" OpenSSL with no .lib files.
-      # Install the full version via winget (pre-installed on windows-2022 runners).
+      # windows-2022 runners ship only the "Light" OpenSSL (no .lib files).
+      # vcpkg is pre-installed on every windows-2022 runner at C:\vcpkg.
       - name: Install OpenSSL (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: bash
         run: |
-          $ErrorActionPreference = 'Continue'
-          # Try winget first (reliable on windows-2022)
-          $installed = $false
-          try {
-            winget install --id ShiningLight.OpenSSL.Dev --exact --silent `
-              --accept-package-agreements --accept-source-agreements 2>&1
-            $root = if (Test-Path "C:\Program Files\OpenSSL-Win64\lib\libcrypto.lib") {
-              "C:\Program Files\OpenSSL-Win64"
-            } elseif (Test-Path "C:\Program Files\OpenSSL\lib\libcrypto.lib") {
-              "C:\Program Files\OpenSSL"
-            } else { $null }
-            if ($root) {
-              echo "OPENSSL_ROOT_DIR=$root" >> $env:GITHUB_ENV
-              Write-Host "OpenSSL installed via winget at: $root"
-              $installed = $true
-            }
-          } catch { Write-Host "winget attempt failed: $_" }
-
-          if (-not $installed) {
-            # Fallback: Scoop (also pre-installed on windows-2022)
-            try {
-              scoop install openssl 2>&1
-              $scoopRoot = "$env:USERPROFILE\scoop\apps\openssl\current"
-              if (Test-Path "$scoopRoot\lib\libcrypto.lib") {
-                echo "OPENSSL_ROOT_DIR=$scoopRoot" >> $env:GITHUB_ENV
-                Write-Host "OpenSSL installed via scoop at: $scoopRoot"
-                $installed = $true
-              }
-            } catch { Write-Host "scoop attempt failed: $_" }
-          }
-
-          if (-not $installed) {
-            Write-Host "::warning::Could not install OpenSSL dev libs — CMake will attempt its own search"
-          }
+          set -euo pipefail
+          VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+          echo "Using vcpkg at: $VCPKG_ROOT"
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows --no-print-usage
+          OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
+          echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          echo "OpenSSL installed at: $OPENSSL_DIR"
+          ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
 
       # ---- Qt6 target (Windows/macOS) ----
       - name: Install Qt6
@@ -227,15 +201,26 @@ jobs:
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
             BINARY="build/Release/${{ matrix.exe }}"
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            # Qt on macOS produces a .app bundle; the binary is inside it.
+            # Try both plain binary and .app bundle locations.
+            if [ -f "build/${{ matrix.exe }}" ]; then
+              BINARY="build/${{ matrix.exe }}"
+            elif [ -f "build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}" ]; then
+              BINARY="build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}"
+            else
+              BINARY="build/${{ matrix.exe }}"  # will fail the check below with a clear error
+            fi
           else
             BINARY="build/${{ matrix.exe }}"
           fi
           if [ ! -f "$BINARY" ]; then
-            echo "::error::Binary not found at $BINARY"
+            echo "::error::Binary not found — searched: build/${{ matrix.exe }} and build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}"
+            echo "Build directory contents:"
+            find build -maxdepth 3 -name "${{ matrix.exe }}" 2>/dev/null || true
             exit 1
           fi
-          echo "Binary verified: $BINARY"
-          ls -lh "$BINARY"
+          echo "Binary verified: $BINARY ($(du -sh "$BINARY" | cut -f1))"
 
       # ---- Package: Windows (windeployqt + manual DLL sweep) ----
       - name: Package (Windows)

@@ -387,23 +387,63 @@ QString ThemeManager::build_global_qss() const {
             background-color: %3;
         }
         #tabCloseButton {
-            background: none; border: none; padding: 0px;
-            max-width: 12px; max-height: 12px; color: %10;
+            background: none; border: none; padding: 2px;
+            width: 16px; height: 16px; min-width: 16px; min-height: 16px;
+            max-width: 16px; max-height: 16px;
+            image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><line x1='4' y1='4' x2='12' y2='12' stroke='%2380808080' stroke-width='1.5' stroke-linecap='round'/><line x1='12' y1='4' x2='4' y2='12' stroke='%2380808080' stroke-width='1.5' stroke-linecap='round'/></svg>");
         }
-        #tabCloseButton:hover { background: %11; color: %19; }
+        #tabCloseButton:hover {
+            background: %11;
+            image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><line x1='4' y1='4' x2='12' y2='12' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round'/><line x1='12' y1='4' x2='4' y2='12' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round'/></svg>");
+        }
         #tabCloseButton:pressed { background: %12; }
-        ads--CDockWidgetTab[focused="true"] > #tabCloseButton:hover {
-            background: %12;
+        ads--CDockWidgetTab[focused="true"] > #tabCloseButton:hover { background: %12; }
+        #tabsMenuButton {
+            background: none; border: none; padding: 2px;
+            width: 16px; height: 16px; min-width: 16px; min-height: 16px;
+            max-width: 16px; max-height: 16px;
+            image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><line x1='3' y1='5' x2='13' y2='5' stroke='%2380808080' stroke-width='1.5' stroke-linecap='round'/><line x1='3' y1='8' x2='13' y2='8' stroke='%2380808080' stroke-width='1.5' stroke-linecap='round'/><line x1='3' y1='11' x2='13' y2='11' stroke='%2380808080' stroke-width='1.5' stroke-linecap='round'/></svg>");
         }
-        #tabsMenuButton { background: none; border: none; padding: 0px; color: %10; }
         #tabsMenuButton::menu-indicator { image: none; }
-        #tabsMenuButton:hover { background: %11; color: %19; }
-        #dockAreaCloseButton { background: none; border: none; padding: 0px; color: %10; }
-        #dockAreaCloseButton:hover { background: %11; color: %19; }
-        #detachGroupButton { background: none; border: none; padding: 0px; color: %10; }
-        #detachGroupButton:hover { background: %11; color: %19; }
-        ads--CTitleBarButton { padding: 0px; max-width: 14px; max-height: 14px; color: %10; }
-        ads--CTitleBarButton:hover { color: %19; }
+        #tabsMenuButton:hover {
+            background: %11;
+            image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><line x1='3' y1='5' x2='13' y2='5' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round'/><line x1='3' y1='8' x2='13' y2='8' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round'/><line x1='3' y1='11' x2='13' y2='11' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round'/></svg>");
+        }
+        #dockAreaCloseButton {
+            background: none; border: none; padding: 2px;
+            width: 16px; height: 16px; min-width: 16px; min-height: 16px;
+            max-width: 16px; max-height: 16px;
+            image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><line x1='4' y1='4' x2='12' y2='12' stroke='%2380808080' stroke-width='1.5' stroke-linecap='round'/><line x1='12' y1='4' x2='4' y2='12' stroke='%2380808080' stroke-width='1.5' stroke-linecap='round'/></svg>");
+        }
+        #dockAreaCloseButton:hover {
+            background: %11;
+            image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><line x1='4' y1='4' x2='12' y2='12' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round'/><line x1='12' y1='4' x2='4' y2='12' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round'/></svg>");
+        }
+        #detachGroupButton {
+            background: none; border: none; padding: 2px;
+            width: 16px; height: 16px; min-width: 16px; min-height: 16px;
+            max-width: 16px; max-height: 16px;
+            image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='3' y='7' width='6' height='6' fill='none' stroke='%2380808080' stroke-width='1.5' stroke-linejoin='round'/><polyline points='9,3 13,3 13,7' fill='none' stroke='%2380808080' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/><line x1='8' y1='8' x2='13' y2='3' stroke='%2380808080' stroke-width='1.5' stroke-linecap='round'/></svg>");
+        }
+        #detachGroupButton:hover {
+            background: %11;
+            image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='3' y='7' width='6' height='6' fill='none' stroke='%23e5e5e5' stroke-width='1.5' stroke-linejoin='round'/><polyline points='9,3 13,3 13,7' fill='none' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/><line x1='8' y1='8' x2='13' y2='3' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round'/></svg>");
+        }
+        #dockAreaAutoHideButton, #dockAreaMinimizeButton {
+            background: none; border: none; padding: 2px;
+            width: 16px; height: 16px; min-width: 16px; min-height: 16px;
+            max-width: 16px; max-height: 16px;
+            image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><line x1='3' y1='12' x2='13' y2='12' stroke='%2380808080' stroke-width='1.5' stroke-linecap='round'/></svg>");
+        }
+        #dockAreaAutoHideButton:hover, #dockAreaMinimizeButton:hover {
+            background: %11;
+            image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><line x1='3' y1='12' x2='13' y2='12' stroke='%23e5e5e5' stroke-width='1.5' stroke-linecap='round'/></svg>");
+        }
+        ads--CTitleBarButton {
+            padding: 2px; max-width: 16px; max-height: 16px;
+            min-width: 16px; min-height: 16px;
+        }
+        ads--CTitleBarButton:hover { background: %11; }
         ads--CAutoHideSideBar { background: %1; border: none; }
         QScrollArea#dockWidgetScrollArea { padding: 0px; border: none; }
 

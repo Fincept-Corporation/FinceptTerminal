@@ -89,35 +89,20 @@ jobs:
             pkg-config zip
 
       # ---- OpenSSL dev libs (Windows) ----
-      # The runner ships a "Light" OpenSSL (no .lib files). Install the full version.
+      # windows-2022 runners ship only the "Light" OpenSSL (no .lib files).
+      # vcpkg is pre-installed on every windows-2022 runner at C:\vcpkg.
       - name: Install OpenSSL (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: bash
         run: |
-          # Use winget (pre-installed on windows-2022) to install OpenSSL with dev libs
-          # winget is more reliable than choco for OpenSSL on current runners
-          $ErrorActionPreference = 'Stop'
-          try {
-            winget install --id ShiningLight.OpenSSL.Dev --exact --silent --accept-package-agreements --accept-source-agreements
-            $root = "C:\Program Files\OpenSSL-Win64"
-            if (-not (Test-Path "$root\lib\libcrypto.lib")) {
-              $root = "C:\Program Files\OpenSSL"
-            }
-            echo "OPENSSL_ROOT_DIR=$root" >> $env:GITHUB_ENV
-            echo "Installed OpenSSL at: $root"
-          } catch {
-            # Fallback: download the official Win64 OpenSSL installer directly
-            Write-Host "winget failed, trying direct download..."
-            $url = "https://github.com/nicowillis/openssl-windows-binaries/releases/download/3.3.1/Win64OpenSSL-3_3_1.exe"
-            # Use Scoop as a clean fallback
-            Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-            iex "& {$(irm get.scoop.sh)} -RunAsAdmin" 2>$null || true
-            scoop bucket add main
-            scoop install openssl
-            $scoopDir = "$env:USERPROFILE\scoop\apps\openssl\current"
-            echo "OPENSSL_ROOT_DIR=$scoopDir" >> $env:GITHUB_ENV
-            echo "Installed OpenSSL via scoop at: $scoopDir"
-          }
+          set -euo pipefail
+          VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+          echo "Using vcpkg at: $VCPKG_ROOT"
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows --no-print-usage
+          OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
+          echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          echo "OpenSSL installed at: $OPENSSL_DIR"
+          ls "$OPENSSL_DIR/lib/libcrypto.lib" && echo "libcrypto.lib confirmed"
 
       # ---- Qt6 (Windows / macOS) ----
       - name: Install Qt6
@@ -195,11 +180,20 @@ jobs:
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
             BINARY="build/Release/${{ matrix.exe }}"
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            if [ -f "build/${{ matrix.exe }}" ]; then
+              BINARY="build/${{ matrix.exe }}"
+            elif [ -f "build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}" ]; then
+              BINARY="build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}"
+            else
+              BINARY="build/${{ matrix.exe }}"
+            fi
           else
             BINARY="build/${{ matrix.exe }}"
           fi
           if [ ! -f "$BINARY" ]; then
-            echo "::error::Binary not found at $BINARY"
+            echo "::error::Binary not found — searched: build/${{ matrix.exe }} and build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}"
+            find build -maxdepth 3 -name "${{ matrix.exe }}" 2>/dev/null || true
             exit 1
           fi
           echo "Binary verified: $BINARY ($(du -sh "$BINARY" | cut -f1))"

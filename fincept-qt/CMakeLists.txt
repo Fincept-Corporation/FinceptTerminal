@@ -1242,6 +1242,7 @@ target_include_directories(FinceptTerminal PRIVATE
     src
     ${whisper_SOURCE_DIR}/include
     ${whisper_SOURCE_DIR}
+    ${SingleApplication_SOURCE_DIR}
 )
 
 # ── macOS bundle properties ───────────────────────────────────────────────────

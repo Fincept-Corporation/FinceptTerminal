@@ -6,10 +6,6 @@
 #include <DockManager.h>
 #include <DockWidget.h>
 #include <DockAreaWidget.h>
-#include <IconProvider.h>
-#include <ads_globals.h>
-#include <QPainter>
-#include <QPixmap>
 
 #include "screens/chat_mode/ChatModeScreen.h"
 #include "screens/auth/LockScreen.h"
@@ -716,74 +712,7 @@ void MainWindow::setup_docking_mode() {
     dock_manager_ = new ads::CDockManager(dock_wrapper);
     dock_layout->addWidget(dock_manager_);
 
-    // Register white ADS icons so they're visible on dark backgrounds.
-    // ADS uses QStyle::StandardPixmap (black system icons by default); CSS
-    // `color` has no effect on them — registerCustomIcon() is the only fix.
-    auto make_icon = [](std::function<void(QPainter&, const QRect&)> draw) -> QIcon {
-        QPixmap px(16, 16);
-        px.fill(Qt::transparent);
-        QPainter p(&px);
-        p.setRenderHint(QPainter::Antialiasing);
-        p.setPen(QPen(QColor("#b0b0b0"), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        p.setBrush(Qt::NoBrush);
-        draw(p, QRect(3, 3, 10, 10));
-        p.end();
-        QIcon icon;
-        icon.addPixmap(px, QIcon::Normal);
-        // Hover: bright white version
-        QPixmap px_hover(16, 16);
-        px_hover.fill(Qt::transparent);
-        QPainter ph(&px_hover);
-        ph.setRenderHint(QPainter::Antialiasing);
-        ph.setPen(QPen(QColor("#e5e5e5"), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        ph.setBrush(Qt::NoBrush);
-        draw(ph, QRect(3, 3, 10, 10));
-        ph.end();
-        icon.addPixmap(px_hover, QIcon::Active);
-        return icon;
-    };
-
-    // Close icon: × (two diagonal lines)
-    auto close_icon = make_icon([](QPainter& p, const QRect& r) {
-        p.drawLine(r.topLeft(), r.bottomRight());
-        p.drawLine(r.topRight(), r.bottomLeft());
-    });
-
-    // Menu/tabs icon: three horizontal lines (hamburger)
-    auto menu_icon = make_icon([](QPainter& p, const QRect& r) {
-        int y1 = r.top() + 1, y2 = r.center().y(), y3 = r.bottom() - 1;
-        p.drawLine(r.left(), y1, r.right(), y1);
-        p.drawLine(r.left(), y2, r.right(), y2);
-        p.drawLine(r.left(), y3, r.right(), y3);
-    });
-
-    // Undock/detach icon: arrow pointing out of a box
-    auto undock_icon = make_icon([](QPainter& p, const QRect& r) {
-        // small box bottom-left
-        QRect box(r.left(), r.top() + 4, r.width() - 4, r.height() - 4);
-        p.drawRect(box);
-        // arrow top-right
-        int ax = r.right(), ay = r.top();
-        p.drawLine(ax - 4, ay, ax, ay);
-        p.drawLine(ax, ay, ax, ay + 4);
-        p.drawLine(ax - 4, ay + 4, ax, ay);
-    });
-
-    // Minimize icon: horizontal bar at bottom
-    auto minimize_icon = make_icon([](QPainter& p, const QRect& r) {
-        int y = r.bottom() - 1;
-        p.drawLine(r.left(), y, r.right(), y);
-    });
-
-    auto& ip = ads::CDockManager::iconProvider();
-    ip.registerCustomIcon(ads::TabCloseIcon,         close_icon);
-    ip.registerCustomIcon(ads::DockAreaCloseIcon,    close_icon);
-    ip.registerCustomIcon(ads::DockAreaMenuIcon,     menu_icon);
-    ip.registerCustomIcon(ads::DockAreaUndockIcon,   undock_icon);
-    ip.registerCustomIcon(ads::DockAreaMinimizeIcon, minimize_icon);
-    ip.registerCustomIcon(ads::AutoHideIcon,         minimize_icon);
-
-    // ADS styling is handled by ThemeManager's global QSS — no widget-level
+// ADS styling is handled by ThemeManager's global QSS — no widget-level
     // stylesheet needed here. The global QSS has higher priority and won't be
     // overridden by theme changes.
 }
