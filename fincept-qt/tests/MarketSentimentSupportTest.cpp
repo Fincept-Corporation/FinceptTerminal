@@ -9,6 +9,7 @@ using fincept::services::equity::MarketSentimentSnapshot;
 using fincept::services::equity::SentimentSourceSnapshot;
 using fincept::services::equity::sentiment::compute_source_alignment;
 using fincept::services::equity::sentiment::parse_compare_payload;
+using fincept::services::equity::sentiment::source_has_signal;
 using fincept::services::equity::sentiment::snapshot_from_json;
 using fincept::services::equity::sentiment::snapshot_to_json;
 
@@ -56,6 +57,22 @@ bool test_polymarket_activity_fallback() {
     const auto snapshot = parse_compare_payload("polymarket", payload);
     return expect(snapshot.available, "polymarket source should be available") &&
            expect(snapshot.activity_count == 87.0, "trade_count should backfill activity count");
+}
+
+bool test_placeholder_payload_is_not_available() {
+    QJsonObject stock;
+    stock["ticker"] = "MSFT";
+    stock["buzz_score"] = 0.0;
+    stock["bullish_pct"] = 0.0;
+    stock["sentiment_score"] = 0.0;
+    stock["mentions"] = 0;
+
+    QJsonObject payload;
+    payload["stocks"] = QJsonArray{stock};
+
+    const auto snapshot = parse_compare_payload("news", payload);
+    return expect(!snapshot.available, "placeholder payload should not count as available coverage") &&
+           expect(!source_has_signal(snapshot), "placeholder payload should not be treated as signal");
 }
 
 bool test_alignment_and_roundtrip() {
@@ -109,6 +126,9 @@ int main() {
         return 1;
     }
     if (!test_polymarket_activity_fallback()) {
+        return 1;
+    }
+    if (!test_placeholder_payload_is_not_available()) {
         return 1;
     }
     if (!test_alignment_and_roundtrip()) {

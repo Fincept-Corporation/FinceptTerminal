@@ -27,8 +27,8 @@ struct PendingSnapshotRequest {
     QMap<QString, SentimentSourceSnapshot> sources;
 };
 
-QString cache_key_for_symbol(const QString& symbol) {
-    return "equity:adanos:sentiment:" + symbol.toUpper();
+QString cache_key_for_symbol(const QString& symbol, int days) {
+    return QString("equity:adanos:sentiment:%1:%2").arg(symbol.toUpper(), QString::number(days));
 }
 
 QByteArray variant_to_json_bytes(const QVariant& value) {
@@ -97,7 +97,7 @@ void MarketSentimentService::fetch_snapshot(const QString& symbol, int days, boo
         return;
     }
 
-    const QString key = cache_key_for_symbol(normalized_symbol);
+    const QString key = cache_key_for_symbol(normalized_symbol, days);
     if (!force && CacheManager::instance().has(key)) {
         const auto cached = variant_to_json_bytes(CacheManager::instance().get(key));
         const auto doc = QJsonDocument::fromJson(cached);

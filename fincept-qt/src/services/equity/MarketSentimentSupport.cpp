@@ -68,6 +68,11 @@ QString source_label(const QString& source_id) {
     return source_id.toUpper();
 }
 
+bool source_has_signal(const SentimentSourceSnapshot& snapshot) {
+    return snapshot.activity_count > 0.0 || snapshot.buzz_score > 0.0 || snapshot.bullish_pct > 0.0 ||
+           snapshot.sentiment_score != 0.0;
+}
+
 SentimentSourceSnapshot parse_compare_payload(const QString& source_id, const QJsonObject& payload) {
     SentimentSourceSnapshot snapshot;
     snapshot.source_id = source_id;
@@ -79,13 +84,13 @@ SentimentSourceSnapshot parse_compare_payload(const QString& source_id, const QJ
     }
 
     const auto stock = stocks.first().toObject();
-    snapshot.available = !stock.isEmpty();
     snapshot.buzz_score = first_numeric(stock, {"buzz_score"});
     snapshot.bullish_pct = first_numeric(stock, {"bullish_pct"});
     snapshot.sentiment_score = first_numeric(stock, {"sentiment_score", "sentiment"});
     snapshot.activity_count = first_numeric(
         stock,
         {"mentions", "trade_count", "unique_posts", "source_count", "subreddit_count", "market_count", "unique_traders"});
+    snapshot.available = source_has_signal(snapshot);
 
     return snapshot;
 }
