@@ -182,4 +182,29 @@ struct NewsArticle {
     QString published_date;
 };
 
+// ── Optional market sentiment snapshot ──────────────────────────────────────
+struct SentimentSourceSnapshot {
+    QString source_id;
+    QString label;
+    bool available = false;
+    double buzz_score = 0.0;
+    double bullish_pct = 0.0;
+    double sentiment_score = 0.0;
+    double activity_count = 0.0;
+};
+
+struct MarketSentimentSnapshot {
+    QString symbol;
+    bool configured = false;
+    bool available = false;
+    QString status;
+    QString message;
+    double average_buzz = 0.0;
+    double average_bullish_pct = 0.0;
+    int coverage = 0;
+    QString source_alignment;
+    QVector<SentimentSourceSnapshot> sources;
+    QString fetched_at;
+};
+
 } // namespace fincept::services::equity

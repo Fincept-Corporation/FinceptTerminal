@@ -6,6 +6,7 @@
 #include "screens/equity_research/EquityNewsTab.h"
 #include "screens/equity_research/EquityOverviewTab.h"
 #include "screens/equity_research/EquityPeersTab.h"
+#include "screens/equity_research/EquitySentimentTab.h"
 #include "screens/equity_research/EquityTalippTab.h"
 #include "screens/equity_research/EquityTechnicalsTab.h"
 #include "core/events/EventBus.h"
@@ -91,6 +92,7 @@ void EquityResearchScreen::build_ui() {
     talipp_tab_ = new EquityTalippTab;
     peers_tab_ = new EquityPeersTab;
     news_tab_ = new EquityNewsTab;
+    sentiment_tab_ = new EquitySentimentTab;
 
     tab_widget_->addTab(overview_tab_, "Overview");
     tab_widget_->addTab(financials_tab_, "Financials");
@@ -99,6 +101,7 @@ void EquityResearchScreen::build_ui() {
     tab_widget_->addTab(talipp_tab_, "TALIpp");
     tab_widget_->addTab(peers_tab_, "Peers");
     tab_widget_->addTab(news_tab_, "News");
+    tab_widget_->addTab(sentiment_tab_, "Sentiment");
 
     connect(tab_widget_, &QTabWidget::currentChanged, this, &EquityResearchScreen::on_tab_changed);
 
@@ -210,6 +213,9 @@ void EquityResearchScreen::on_tab_changed(int index) {
         case 6:
             news_tab_->set_symbol(current_symbol_);
             svc.fetch_news(current_symbol_);
+            break;
+        case 7:
+            sentiment_tab_->set_symbol(current_symbol_);
             break;
         default:
             break;

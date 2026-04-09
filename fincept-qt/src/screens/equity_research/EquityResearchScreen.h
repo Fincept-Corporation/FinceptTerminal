@@ -19,6 +19,7 @@ class EquityTechnicalsTab;
 class EquityTalippTab;
 class EquityPeersTab;
 class EquityNewsTab;
+class EquitySentimentTab;
 
 class EquityResearchScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
@@ -66,6 +67,7 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen {
     EquityTalippTab* talipp_tab_ = nullptr;
     EquityPeersTab* peers_tab_ = nullptr;
     EquityNewsTab* news_tab_ = nullptr;
+    EquitySentimentTab* sentiment_tab_ = nullptr;
 
     QTimer* refresh_timer_ = nullptr;
     QString current_symbol_;
