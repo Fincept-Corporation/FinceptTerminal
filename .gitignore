@@ -126,6 +126,10 @@ fincept-qt/scripts/agents/agents/
 # ── Firecrawl research artifacts ─────────────────────────────
 .firecrawl/
 
+# ── Clangd cache ─────────────────────────────────────────────
+.cache/
+fincept-qt/.cache/
+
 # ── Exchange runtime cache ────────────────────────────────────
 fincept-qt/scripts/exchange/.cache/
 
