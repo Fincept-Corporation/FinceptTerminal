@@ -2124,6 +2124,8 @@ static QString provider_probe_url(const QString& provider_id, const QJsonObject&
         return "https://data.thinknum.com/";
     if (provider_id == "revelio-labs")
         return "https://api.reveliolabs.com/";
+    if (provider_id == "adanos-market-sentiment")
+        return "https://api.adanos.org/news/stocks/v1/health";
 
     // ── Open banking ─────────────────────────────────────────────────────────
     if (provider_id == "plaid")

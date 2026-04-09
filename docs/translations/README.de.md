@@ -10,7 +10,7 @@
 
 Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Automatisierung und unbegrenzter Datenkonnektivität.
 
-[📥 Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 Dokumente](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 Diskussionen](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 Zwietracht](https://discord.gg/ae87a8ygbN)·[🤝 Partner](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+[📥 Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 Dokumente](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 Diskussionen](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 Zwietracht](https://discord.gg/ae87a8ygbN)·[🤝Partner](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png)
 
@@ -30,7 +30,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 📊**Analysen auf CFA-Ebene**   | DCF-Modelle, Portfoliooptimierung, Risikometriken (VaR, Sharpe), Derivatpreisgestaltung über eingebettetes Python                                                                                     |
 | 🤖**KI-Agenten**               | Über 20 Investorenpersönlichkeiten (Buffett, Dalio, Graham), Hedgefonds-Strategien, lokale LLM-Unterstützung, Multi-Provider (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
-| 🌐**Über 100 Datenanschlüsse** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IWF, Weltbank, AkShare, Regierungs-APIs                                                                                                               |
+| 🌐**Über 100 Datenanschlüsse** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IWF, Weltbank, AkShare, Regierungs-APIs sowie optionale alternative Daten-Overlays wie Adanos-Marktstimmung für Aktienanalysen                        |
 | 📈**Echtzeithandel**           | Krypto (Kraken/HyperLiquid WebSocket), Aktien, Algo-Handel, Papierhandelsmaschine                                                                                                                     |
 | 🔬**QuantLib Suite**           | 18 quantitative Analysemodule – Preisgestaltung, Risiko, Stochastik, Volatilität, festverzinsliche Wertpapiere                                                                                        |
 | 🚢**Globale Intelligenz**      | Maritime Verfolgung, geopolitische Analyse, Beziehungskartierung, Satellitendaten                                                                                                                     |
@@ -165,6 +165,8 @@ cmake --build build --config Release --parallel
 
 **Fincept-Terminal**ist eine Open-Source-Finanzplattform, die für diejenigen entwickelt wurde, die sich nicht durch traditionelle Software einschränken lassen. Wir konkurrieren weiter**Analysetiefe**Und**Datenzugänglichkeit**– nicht auf Insiderinformationen oder exklusiven Feeds.
 
+Aktuelle Builds unterstützen auch optional**Adanos-Marktstimmung**Konnektivität in**Datenquellen → Alternative Daten**. Bei entsprechender Konfiguration kann Equity Research quellenübergreifende Schnappschüsse der Einzelhandelsstimmung auf Reddit, X, Finanznachrichten und Polymarket anzeigen. Ohne aktive Adanos-Verbindung bleibt die Funktion inaktiv und der Rest der App verhält sich genauso wie zuvor.
+
 -   **Native Leistung**– C++20 mit Qt6, kein Electron/Web-Overhead
 -   **Einzelne Binärdatei**– kein Node.js, keine Browser-Laufzeitumgebung, kein JavaScript-Bundler
 -   **Analysen auf CFA-Ebene**— Vollständige Lehrplanabdeckung über Python-Module
@@ -179,7 +181,7 @@ cmake --build build --config Release --parallel
 | ------------------- | ----------------------------------------------------------------------------------- |
 | **1. Quartal 2026** | Echtzeit-Streaming, erweitertes Backtesting, Broker-Integrationen                   |
 | **Erbrechen 2026**  | Optionsstrategie-Builder, Multi-Portfolio-Management, über 50 KI-Agenten            |
-| **Kz 2026**         | Programmatische API, Benutzeroberfläche für ML-Training, institutionelle Funktionen |
+| **KZ 2026**         | Programmatische API, Benutzeroberfläche für ML-Training, institutionelle Funktionen |
 | **Zukunft**         | Mobiler Begleiter, Cloud-Synchronisierung, Community-Marktplatz                     |
 
 * * *

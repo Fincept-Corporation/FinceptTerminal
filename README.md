@@ -34,7 +34,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 |-------------|-----------------|
 | 📊 **CFA-Level Analytics** | DCF models, portfolio optimization, risk metrics (VaR, Sharpe), derivatives pricing via embedded Python |
 | 🤖 **AI Agents** | 20+ investor personas (Buffett, Dalio, Graham), hedge fund strategies, local LLM support, multi-provider (OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
-| 🌐 **100+ Data Connectors** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IMF, World Bank, AkShare, government APIs |
+| 🌐 **100+ Data Connectors** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IMF, World Bank, AkShare, government APIs, plus optional alternative-data overlays such as Adanos market sentiment for equity research |
 | 📈 **Real-Time Trading** | Crypto (Kraken/HyperLiquid WebSocket), equity, algo trading, paper trading engine |
 | 🔬 **QuantLib Suite** | 18 quantitative analysis modules — pricing, risk, stochastic, volatility, fixed income |
 | 🚢 **Global Intelligence** | Maritime tracking, geopolitical analysis, relationship mapping, satellite data |
@@ -165,6 +165,8 @@ cmake --build build --config Release --parallel
 ## What Sets Us Apart
 
 **Fincept Terminal** is an open-source financial platform built for those who refuse to be limited by traditional software. We compete on **analytics depth** and **data accessibility** — not on insider info or exclusive feeds.
+
+Recent builds also support optional **Adanos Market Sentiment** connectivity in **Data Sources → Alternative Data**. When configured, Equity Research can surface cross-source retail sentiment snapshots across Reddit, X, finance news, and Polymarket. Without an active Adanos connection, the feature remains dormant and the rest of the app behaves exactly as before.
 
 - **Native performance** — C++20 with Qt6, no Electron/web overhead
 - **Single binary** — no Node.js, no browser runtime, no JavaScript bundler
