@@ -1056,19 +1056,23 @@ void EquityTradingScreen::on_mode_toggled() {
 }
 
 void EquityTradingScreen::handle_token_expired() {
-    // Guard: only show one re-auth prompt at a time
+    // Guard: only update the status label once — do NOT auto-open the dialog.
+    // Polling timers keep firing TOKEN_EXPIRED errors; opening the dialog from here
+    // creates an infinite re-auth loop every time the user closes without connecting.
+    // The user must click "API KEYS" manually to re-authenticate.
     bool expected = false;
     if (!token_expired_shown_.compare_exchange_strong(expected, true))
         return;
 
-    conn_label_->setText("⚠ TOKEN EXPIRED");
+    conn_label_->setText("⚠ TOKEN EXPIRED — click API KEYS");
     conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE));
-    LOG_WARN(TAG, QString("Access token expired for broker %1 — prompting re-auth").arg(broker_id_));
+    LOG_WARN(TAG, QString("Access token expired for broker %1 — user must re-authenticate via API KEYS button").arg(broker_id_));
 
-    // Re-open the credentials dialog so the user can paste a new request_token
-    on_api_clicked();
-
-    token_expired_shown_.store(false);
+    // Stop polling timers to avoid flooding the broker with failing requests
+    if (quote_timer_)     quote_timer_->stop();
+    if (watchlist_timer_) watchlist_timer_->stop();
+    if (portfolio_timer_) portfolio_timer_->stop();
+    // token_expired_shown_ stays true until successful auth resets it in on_api_clicked
 }
 
 void EquityTradingScreen::on_api_clicked() {
@@ -1126,6 +1130,18 @@ void EquityTradingScreen::on_api_clicked() {
                             // Update dialog status — stays open so user can add other env
                             if (dlg_ptr)
                                 dlg_ptr->mark_connected(token_result.additional_data, acct);
+
+                            // Reset token-expired guard and restart polling timers that
+                            // were stopped by handle_token_expired()
+                            self->token_expired_shown_.store(false);
+                            if (self->isVisible()) {
+                                const bool use_polling = !self->ws_active();
+                                if (use_polling) {
+                                    if (self->quote_timer_)     self->quote_timer_->start();
+                                    if (self->watchlist_timer_) self->watchlist_timer_->start();
+                                }
+                                if (self->portfolio_timer_) self->portfolio_timer_->start();
+                            }
 
                             // (Re)start WebSocket with fresh credentials
                             self->ws_teardown();

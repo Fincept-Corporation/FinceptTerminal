@@ -1431,22 +1431,38 @@ target_precompile_headers(FinceptTerminal PRIVATE
     <span>
 )
 
-# ── OpenSSL (from vcpkg) — needed for Google Sheets JWT signing ───────────────
-# Override via: cmake -DVCPKG_OPENSSL=<path>  or set VCPKG_INSTALLED_DIR env var.
-if(NOT DEFINED VCPKG_OPENSSL)
-    if(DEFINED ENV{VCPKG_INSTALLED_DIR})
-        set(VCPKG_OPENSSL "$ENV{VCPKG_INSTALLED_DIR}/x64-windows")
-    elseif(DEFINED ENV{VCPKG_ROOT})
-        set(VCPKG_OPENSSL "$ENV{VCPKG_ROOT}/installed/x64-windows")
-    else()
-        # Developer machine default — override on CI via cmake cache variable
-        set(VCPKG_OPENSSL "C:/windowsdisk/fincept-cpp/vcpkg_installed/x64-windows"
-            CACHE PATH "Path to vcpkg x64-windows installed directory")
+# ── OpenSSL — needed for Google Sheets JWT signing ────────────────────────────
+# Strategy (all platforms): find_package first (works on CI runners and system installs).
+# On Windows, also search Qt's bundled OpenSSL and vcpkg as fallbacks.
+if(WIN32)
+    # 1. Try Qt-bundled OpenSSL (set by jurplel/install-qt-action via QT_ROOT_DIR)
+    if(DEFINED ENV{QT_ROOT_DIR} AND NOT OPENSSL_ROOT_DIR)
+        set(OPENSSL_ROOT_DIR "$ENV{QT_ROOT_DIR}" CACHE PATH "" FORCE)
+    endif()
+    # 2. Try VCPKG paths (dev machine / vcpkg toolchain)
+    if(NOT OPENSSL_ROOT_DIR)
+        if(DEFINED ENV{VCPKG_INSTALLED_DIR})
+            set(OPENSSL_ROOT_DIR "$ENV{VCPKG_INSTALLED_DIR}/x64-windows" CACHE PATH "" FORCE)
+        elseif(DEFINED ENV{VCPKG_ROOT})
+            set(OPENSSL_ROOT_DIR "$ENV{VCPKG_ROOT}/installed/x64-windows" CACHE PATH "" FORCE)
+        elseif(EXISTS "C:/windowsdisk/fincept-cpp/vcpkg_installed/x64-windows")
+            set(OPENSSL_ROOT_DIR "C:/windowsdisk/fincept-cpp/vcpkg_installed/x64-windows" CACHE PATH "" FORCE)
+        endif()
+    endif()
+    # 3. GitHub Actions runners have OpenSSL pre-installed here
+    if(NOT OPENSSL_ROOT_DIR AND EXISTS "C:/Program Files/OpenSSL")
+        set(OPENSSL_ROOT_DIR "C:/Program Files/OpenSSL" CACHE PATH "" FORCE)
+    endif()
+    if(NOT OPENSSL_ROOT_DIR AND EXISTS "C:/Program Files/OpenSSL-Win64")
+        set(OPENSSL_ROOT_DIR "C:/Program Files/OpenSSL-Win64" CACHE PATH "" FORCE)
     endif()
 endif()
-message(STATUS "VCPKG_OPENSSL resolved to: ${VCPKG_OPENSSL}")
+
+find_package(OpenSSL REQUIRED)
+message(STATUS "OpenSSL found: ${OPENSSL_VERSION} — include: ${OPENSSL_INCLUDE_DIR}")
+
 target_include_directories(FinceptTerminal PRIVATE
-    "${VCPKG_OPENSSL}/include"
+    "${OPENSSL_INCLUDE_DIR}"
     "${md4c_SOURCE_DIR}/src"
 )
 target_link_libraries(FinceptTerminal PRIVATE
@@ -1465,39 +1481,58 @@ target_link_libraries(FinceptTerminal PRIVATE
     md4c-html
     SingleApplication::SingleApplication
     qtadvanceddocking-qt6
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
-# OpenSSL — Windows only (from vcpkg). macOS uses system OpenSSL; Linux uses system packages.
-if(WIN32)
-    target_link_libraries(FinceptTerminal PRIVATE
-        "${VCPKG_OPENSSL}/lib/libcrypto.lib"
-        "${VCPKG_OPENSSL}/lib/libssl.lib"
-    )
-elseif(APPLE)
-    # macOS Security.framework for Keychain in SecureStorage
-    target_link_libraries(FinceptTerminal PRIVATE
-        "-framework Security"
-    )
-    find_package(OpenSSL QUIET)
-    if(OpenSSL_FOUND)
-        target_link_libraries(FinceptTerminal PRIVATE OpenSSL::SSL OpenSSL::Crypto)
-    endif()
-elseif(UNIX)
-    find_package(OpenSSL REQUIRED)
-    target_link_libraries(FinceptTerminal PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+# macOS: also link Security.framework for Keychain in SecureStorage
+if(APPLE)
+    target_link_libraries(FinceptTerminal PRIVATE "-framework Security")
 endif()
 
 # Copy OpenSSL DLLs to build output — Windows only
 if(WIN32)
-    add_custom_command(TARGET FinceptTerminal POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${VCPKG_OPENSSL}/bin/libcrypto-3-x64.dll"
-            "$<TARGET_FILE_DIR:FinceptTerminal>/libcrypto-3-x64.dll"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${VCPKG_OPENSSL}/bin/libssl-3-x64.dll"
-            "$<TARGET_FILE_DIR:FinceptTerminal>/libssl-3-x64.dll"
-        COMMENT "Copying OpenSSL DLLs..."
-    )
+    get_target_property(OPENSSL_CRYPTO_DLL OpenSSL::Crypto IMPORTED_LOCATION)
+    get_target_property(OPENSSL_SSL_DLL    OpenSSL::SSL    IMPORTED_LOCATION)
+
+    # IMPORTED_LOCATION may point to the .lib on Windows — find the matching .dll
+    if(OPENSSL_CRYPTO_DLL MATCHES "\\.lib$" OR NOT OPENSSL_CRYPTO_DLL)
+        # Search common locations for the DLL
+        find_file(OPENSSL_CRYPTO_DLL_FILE
+            NAMES libcrypto-3-x64.dll libcrypto-3.dll libcrypto.dll
+            HINTS
+                "${OPENSSL_ROOT_DIR}/bin"
+                "$ENV{QT_ROOT_DIR}/bin"
+                "C:/Program Files/OpenSSL/bin"
+                "C:/Program Files/OpenSSL-Win64/bin"
+        )
+        find_file(OPENSSL_SSL_DLL_FILE
+            NAMES libssl-3-x64.dll libssl-3.dll libssl.dll
+            HINTS
+                "${OPENSSL_ROOT_DIR}/bin"
+                "$ENV{QT_ROOT_DIR}/bin"
+                "C:/Program Files/OpenSSL/bin"
+                "C:/Program Files/OpenSSL-Win64/bin"
+        )
+    else()
+        set(OPENSSL_CRYPTO_DLL_FILE "${OPENSSL_CRYPTO_DLL}")
+        set(OPENSSL_SSL_DLL_FILE    "${OPENSSL_SSL_DLL}")
+    endif()
+
+    if(OPENSSL_CRYPTO_DLL_FILE AND OPENSSL_SSL_DLL_FILE)
+        add_custom_command(TARGET FinceptTerminal POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${OPENSSL_CRYPTO_DLL_FILE}"
+                "$<TARGET_FILE_DIR:FinceptTerminal>"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${OPENSSL_SSL_DLL_FILE}"
+                "$<TARGET_FILE_DIR:FinceptTerminal>"
+            COMMENT "Copying OpenSSL DLLs..."
+        )
+        message(STATUS "OpenSSL DLLs to deploy: ${OPENSSL_CRYPTO_DLL_FILE}, ${OPENSSL_SSL_DLL_FILE}")
+    else()
+        message(WARNING "OpenSSL DLLs not found for POST_BUILD copy — deploy manually")
+    endif()
 endif()
 
 if(HAS_WEBSOCKETS)

@@ -87,6 +87,30 @@ jobs:
             libxcb-xinerama0 libxcb-xkb1 \
             pkg-config zip
 
+      # ---- OpenSSL (Windows) — runners have it pre-installed; expose the path ----
+      - name: Set OpenSSL root (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          # windows-2022 runners ship OpenSSL at one of these locations
+          for d in \
+            "C:/Program Files/OpenSSL" \
+            "C:/Program Files/OpenSSL-Win64" \
+            "C:/hostedtoolcache/windows/openssl" \
+            "C:/Tools/openssl"; do
+            if [ -f "$d/lib/libcrypto.lib" ] || [ -f "$d/lib/VC/x64/MD/libcrypto.lib" ]; then
+              echo "OPENSSL_ROOT_DIR=$d" >> $GITHUB_ENV
+              echo "Found OpenSSL at: $d"
+              break
+            fi
+          done
+          # Fallback: use choco to install if not found
+          if [ -z "$OPENSSL_ROOT_DIR" ]; then
+            echo "OpenSSL not found in standard paths — installing via choco"
+            choco install openssl --no-progress -y
+            echo "OPENSSL_ROOT_DIR=C:/Program Files/OpenSSL-Win64" >> $GITHUB_ENV
+          fi
+
       # ---- Qt6 (Windows / macOS) ----
       - name: Install Qt6
         if: runner.os != 'Linux'
@@ -137,11 +161,17 @@ jobs:
         shell: bash
         working-directory: fincept-qt
         run: |
+          OPENSSL_ARG=""
+          if [ -n "${OPENSSL_ROOT_DIR:-}" ]; then
+            OPENSSL_ARG="-DOPENSSL_ROOT_DIR=${OPENSSL_ROOT_DIR}"
+          fi
+
           cmake -B build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DDEPLOY_QT=ON \
             -DFINCEPT_BUILD_INSTALLER=ON \
+            ${OPENSSL_ARG} \
             ${{ runner.os == 'macOS' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }} \
             ${{ matrix.cmake_extra }}
 
